@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "../models/User";
-import { sendOtpEmail } from "../services/emailService";
+import { User } from "../models/user.model";
+import { sendOtpEmail } from "../services/email.service";
 
 // Helper function to generate JWT Access Token
 const generateAccessToken = (userId: string, role: string, tokenVersion: number) => {
@@ -663,4 +663,3 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
   }
 };
-

@@ -10,8 +10,8 @@ import {
   changePassword,
   forgotPassword,
   verifyOtp,
-} from "../controllers/authController";
-import { protect } from "../middleware/authMiddleware";
+} from "../controllers/auth.controller";
+import { protect } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ router.post("/firebase-login", firebaseLogin);
 router.post("/sso/:provider", ssoLogin);
 router.get("/me", protect, getMe);
 
-// New endpoints for Module 1 completion
+// Endpoints
 router.post("/logout/all", protect, logoutAll);
 router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);

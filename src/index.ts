@@ -1,42 +1,42 @@
 import express from "express";
-import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import authRoutes from "./routes/authRoutes";
+import { connectDB } from "./config/db";
+import routes from "./routes";
+import { errorHandler } from "./middlewares/error.middleware";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/neuro";
+const PORT = process.env.PORT || 3000;
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use("/auth", authRoutes);
+// Main Router (includes /auth and /api/v1)
+app.use("/", routes);
 
 // Test route
 app.get("/", (req, res) => {
-  res.json({ message: "Kết nối thành công đến API NeuroScan AI!" });
+  res.json({ message: "Kết nối thành công đến API NeuroScan AI (BE)!" });
 });
 
 app.get("/ping", (req, res) => {
   res.json({ message: "pong", timestamp: new Date() });
 });
 
-// Database connection
-mongoose
-  .connect(MONGO_URI)
+// Global Error Handler Middleware
+app.use(errorHandler);
+
+// Database connection & start server
+connectDB()
   .then(() => {
-    console.log("Successfully connected to MongoDB Cloud Database");
-    // Start Express server
     app.listen(PORT, () => {
       console.log(`Backend server is running on http://localhost:${PORT}`);
     });
   })
   .catch((error) => {
-    console.error("Database connection failed:", error);
+    console.error("Database connection failed during boot:", error);
     process.exit(1);
   });
