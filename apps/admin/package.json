@@ -1,0 +1,44 @@
+{
+  "name": "@neuroscan/admin",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run build:css && expo start --web",
+    "dev": "npm run build:css && expo start --web",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "npm run build:css && expo start --web",
+    "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
+    "build:css:watch": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css --watch",
+    "clean": "rm -rf .expo"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~4.0.0",
+    "@neuroscan/api": "workspace:*",
+    "@neuroscan/auth": "workspace:*",
+    "@neuroscan/constants": "workspace:*",
+    "@neuroscan/types": "workspace:*",
+    "@neuroscan/ui": "workspace:*",
+    "@neuroscan/utils": "workspace:*",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.11.0",
+    "expo": "~54.0.0",
+    "expo-status-bar": "~3.0.9",
+    "lucide-react": "^0.546.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.4",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "0.21.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2"
+  },
+  "private": true
+}

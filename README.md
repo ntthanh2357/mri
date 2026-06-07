@@ -1,148 +1,65 @@
-# MRI Project
+# NeuroScan AI
 
-Dự án gồm 2 phần: **FE** (Expo React Native) và **BE** (Node.js Express), tổ chức theo mô hình MVC.
+Dự án NeuroScan AI được tổ chức dưới dạng monorepo sử dụng Turborepo và pnpm, và toàn bộ mã nguồn được viết bằng TypeScript.
 
----
-
-## Cấu trúc dự án
+## Cấu trúc thư mục
 
 ```
-mri/
-├── FE/          ← Frontend (Expo React Native)
-└── BE/          ← Backend (Node.js Express)
+neuroscan-ai/
+├── apps/                    # Các ứng dụng frontend
+│   ├── patient/            # Ứng dụng dành cho bệnh nhân (Expo React Native)
+│   ├── doctor/             # Ứng dụng dành cho bác sĩ (Expo React Native)
+│   ├── admin/              # Ứng dụng quản trị (Expo React Native)
+│   └── partner/            # Ứng dụng dành cho đối tác (Expo React Native)
+├── packages/                # Các package chia sẻ
+│   ├── ui/                 # Component UI dùng chung
+│   ├── api/                # API client dùng chung
+│   ├── auth/               # Logic xác thực dùng chung
+│   ├── utils/              # Helper functions dùng chung
+│   └── constants/          # Hằng số dùng chung (màu sắc, API URL,...)
+├── backend/                 # Backend API (Node.js Express + TypeScript)
+├── docs/                    # Tài liệu dự án
+├── turbo.json               # Cấu hình Turborepo
+├── pnpm-workspace.yaml     # Cấu hình pnpm workspace
+└── package.json             # Package.json gốc
 ```
 
----
+## Cài đặt
 
-## BE — Node.js Express
+1. Cài đặt pnpm (nếu chưa):
+   ```bash
+   npm install -g pnpm
+   ```
 
-### Cấu trúc thư mục
+2. Cài đặt các dependencies ở thư mục gốc:
+   ```bash
+   pnpm install
+   ```
 
-```
-BE/
-├── src/
-│   ├── config/
-│   │   └── db.js                     ← Cấu hình kết nối DB
-│   ├── controllers/
-│   │   └── example.controller.js     ← Xử lý request/response
-│   ├── models/
-│   │   └── example.model.js          ← Schema / tương tác dữ liệu
-│   ├── routes/
-│   │   ├── index.js                  ← Mount routes /api/v1
-│   │   └── example.routes.js         ← Định nghĩa endpoints
-│   ├── middlewares/
-│   │   ├── auth.middleware.js         ← Xác thực token
-│   │   └── error.middleware.js        ← Global error handler
-│   ├── services/
-│   │   └── example.service.js        ← Business logic
-│   ├── utils/
-│   │   └── response.util.js          ← Format JSON response chuẩn
-│   └── index.js                      ← Entry point
-├── .env
-└── package.json
-```
+## Chạy dự án
 
-### Luồng xử lý
-
-```
-Request → routes/ → middlewares/ → controllers/ → services/ → models/ → DB
-                                        ↓
-Response ←──────────────────── controllers/
-```
-
-### Cài đặt & Chạy
-
+### Chạy backend
 ```bash
-cd BE
-npm install
+cd backend
+pnpm dev
 ```
 
-| Lệnh | Mô tả |
-|------|-------|
-| `npm run dev` | Chạy development (nodemon, tự reload) |
-| `npm start` | Chạy production |
-
-Server mặc định chạy tại: `http://localhost:3000`
-
-### Endpoints
-
-| Method | URL | Mô tả |
-|--------|-----|-------|
-| GET | `/api/v1/` | Health check |
-| GET | `/api/v1/examples` | Lấy tất cả |
-| GET | `/api/v1/examples/:id` | Lấy theo ID |
-| POST | `/api/v1/examples` | Tạo mới |
-| PUT | `/api/v1/examples/:id` | Cập nhật |
-| DELETE | `/api/v1/examples/:id` | Xoá |
-
-### Biến môi trường (`.env`)
-
-```env
-PORT=3000
-NODE_ENV=development
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=mri_db
-DB_USER=root
-DB_PASSWORD=
-```
-
----
-
-## FE — Expo React Native
-
-### Cấu trúc thư mục
-
-```
-FE/
-├── src/
-│   ├── screens/
-│   │   └── HomeScreen.js             ← (View) Màn hình chính
-│   ├── components/
-│   │   └── Button.js                 ← (View) UI tái sử dụng
-│   ├── controllers/
-│   │   └── useHome.js                ← (Controller) Custom hook
-│   ├── models/
-│   │   └── User.js                   ← (Model) Cấu trúc data
-│   ├── services/
-│   │   └── api.service.js            ← (Model) Gọi API tới BE
-│   ├── navigation/
-│   │   └── AppNavigator.js           ← Cấu hình React Navigation
-│   ├── constants/
-│   │   ├── colors.js                 ← Bảng màu
-│   │   └── config.js                 ← API_URL và hằng số app
-│   └── utils/
-│       └── format.js                 ← Helper functions
-├── App.js                            ← Entry point
-└── package.json
-```
-
-### Luồng xử lý
-
-```
-Screen (View) ←→ useXxx Hook (Controller) ←→ api.service.js (Model) ←→ BE API
-```
-
-### Cài đặt & Chạy
-
+### Chạy một ứng dụng frontend (ví dụ: patient)
 ```bash
-cd FE
-npm install
+cd apps/patient
+pnpm start
+# Hoặc chạy trên nền tảng cụ thể:
+pnpm android
+pnpm ios
+pnpm web
 ```
 
-| Lệnh | Nền tảng |
-|------|----------|
-| `npm start` | Mở Expo DevTools, chọn nền tảng |
-| `npm run android` | Android (cần Android Studio hoặc thiết bị thật) |
-| `npm run ios` | iOS (chỉ trên macOS) |
-| `npm run web` | Trình duyệt web |
+### Chạy tất cả các ứng dụng cùng lúc bằng Turbo
+```bash
+pnpm dev
+```
 
-### Packages chính
-
-| Package | Mô tả |
-|---------|-------|
-| `expo` ~56.0.8 | Framework chính |
-| `react-native` 0.85.3 | UI framework |
-| `@react-navigation/native` | Navigation |
-| `@react-navigation/native-stack` | Stack navigator |
-| `react-native-web` | Hỗ trợ chạy trên web |
+## Lệnh hữu ích
+- `pnpm build`: Build toàn bộ dự án
+- `pnpm clean`: Xóa các file build
+- `pnpm lint`: Kiểm tra lint toàn bộ dự án
