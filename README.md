@@ -44,20 +44,22 @@ cd backend
 pnpm dev
 ```
 
-### Chạy một ứng dụng frontend (ví dụ: patient)
+### Chạy một ứng dụng frontend (ví dụ: admin)
 ```bash
-cd apps/patient
-pnpm start
+cd apps/admin
+pnpm dev
 # Hoặc chạy trên nền tảng cụ thể:
 pnpm android
 pnpm ios
 pnpm web
 ```
 
-### Chạy tất cả các ứng dụng cùng lúc bằng Turbo
+### Chạy tất cả các ứng dụng cùng lúc bằng Turbo (Lưu ý: có thể xảy ra xung đột cổng)
 ```bash
 pnpm dev
 ```
+
+> Lưu ý: Các ứng dụng Expo mặc định sử dụng cùng cổng 8081. Để chạy nhiều ứng dụng cùng lúc, hãy cấu hình mỗi app dùng cổng riêng trong app.json hoặc chạy từng app riêng lẻ.
 
 ## Lệnh hữu ích
 - `pnpm build`: Build toàn bộ dự án
