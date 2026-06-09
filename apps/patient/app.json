@@ -16,6 +16,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "packagerOpts": {
+      "port": 8085
     }
   }
 }

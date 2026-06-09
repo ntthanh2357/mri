@@ -54,12 +54,17 @@ pnpm ios
 pnpm web
 ```
 
-### Chạy tất cả các ứng dụng cùng lúc bằng Turbo (Lưu ý: có thể xảy ra xung đột cổng)
+### Chạy tất cả các ứng dụng cùng lúc bằng Turbo
 ```bash
 pnpm dev
 ```
 
-> Lưu ý: Các ứng dụng Expo mặc định sử dụng cùng cổng 8081. Để chạy nhiều ứng dụng cùng lúc, hãy cấu hình mỗi app dùng cổng riêng trong app.json hoặc chạy từng app riêng lẻ.
+**Thông tin cổng:**
+- Backend: 3000
+- Admin: 8083
+- Doctor: 8084
+- Patient: 8085
+- Partner: 8086
 
 ## Lệnh hữu ích
 - `pnpm build`: Build toàn bộ dự án
