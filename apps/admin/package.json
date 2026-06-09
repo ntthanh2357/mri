@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "npm run build:css && expo start --web",
-    "dev": "npm run build:css && expo start --web",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "npm run build:css && expo start --web",
+    "start": "npm run build:css && expo start --web --port 8083",
+    "dev": "npm run build:css && expo start --web --port 8083",
+    "android": "expo start --android --port 8083",
+    "ios": "expo start --ios --port 8083",
+    "web": "npm run build:css && expo start --web --port 8083",
     "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
     "build:css:watch": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css --watch",
     "clean": "rm -rf .expo"

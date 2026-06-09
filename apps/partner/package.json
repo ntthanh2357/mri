@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "dev": "expo start --web",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
+    "start": "expo start --port 8086",
+    "dev": "expo start --web --port 8086",
+    "android": "expo start --android --port 8086",
+    "ios": "expo start --ios --port 8086",
+    "web": "expo start --web --port 8086",
     "clean": "rm -rf .expo"
   },
   "dependencies": {
