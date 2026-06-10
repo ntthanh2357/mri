@@ -1,10 +1,25 @@
 import Config from '../constants/config';
 
+let authToken = '';
+
+export const setAuthToken = (token) => {
+  authToken = token;
+};
+
 const request = async (endpoint, options = {}) => {
   const url = `${Config.API_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers,
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Request failed');
