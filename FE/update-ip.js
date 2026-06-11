@@ -47,9 +47,11 @@ try {
   const ip = getLocalIP();
   const configPath = path.join(__dirname, 'src', 'constants', 'config.js');
   
-  const configContent = `const Config = {
+  const configContent = `import { Platform } from 'react-native';
+
+const Config = {
   // Tự động cập nhật bởi script update-ip.js
-  API_URL: 'http://${ip}:3000',
+  API_URL: Platform.OS === 'web' ? 'http://localhost:3000' : 'http://${ip}:3000',
   APP_NAME: 'NeuroScan AI',
 };
 
@@ -57,7 +59,7 @@ export default Config;
 `;
 
   fs.writeFileSync(configPath, configContent, 'utf8');
-  console.log(`\x1b[32m[IP Auto-Updater] Successfully updated config.js with current local IP: http://${ip}:3000\x1b[0m`);
+  console.log(`\x1b[32m[IP Auto-Updater] Successfully updated config.js with current local IP: http://${ip}:3000 (Localhost for Web)\x1b[0m`);
 } catch (error) {
   console.error('\x1b[31m[IP Auto-Updater] Failed to update config.js:\x1b[0m', error);
 }

@@ -1,0 +1,61 @@
+export const MEDICAL_RECORD_STORAGE_KEY = '@neuroscan_medical_record_form';
+
+export const createEmptyMedicalRecord = () => ({
+  hanhChinh: {
+    hoTen: '',
+    tuoi: '',
+    gioiTinh: '',
+    ngheNghiep: '',
+    diaChi: '',
+    ngayGioVaoVien: '',
+    ngayLamBenhAn: '',
+  },
+  lyDoVaoVien: '',
+  benhSu: {
+    thoiGianKhoiPhat: '',
+    tinhChatDauDau: '',
+    dauHieuThanKinhKhuTru: '',
+    dauHieuTamThan: '',
+    conCoGiat: '',
+    hoiChungTangApLuc: '',
+    quaTrinhDieuTri: '',
+  },
+  tienSu: {
+    benhLyThanKinh: '',
+    ungThuCoQuanKhac: '',
+    tiepXucTiaXa: '',
+    thoiQuen: '',
+    diUng: '',
+    hoiChungDiTruyen: '',
+    benhLyUngThuKhacGiaDinh: '',
+  },
+  khamBenh: {
+    thoiDiemKham: '',
+    triGiac: '',
+    glasgow: '',
+    mach: '',
+    nhietDo: '',
+    huyetAp: '',
+    nhipTho: '',
+    theTrang: '',
+    bmi: '',
+    daNiemMac: '',
+  },
+  khamChuyenKhoa: '',
+  canLamSang: '',
+  chanDoan: {
+    xacDinh: '',
+    phanBiet: '',
+    nguyenNhan: '',
+  },
+  huongDieuTri: {
+    noiKhoaCapCuu: '',
+    chuyenKhoa: '',
+    chamSocGiamNhe: '',
+  },
+  tienLuong: {
+    mucDo: '',
+    keHoachTiepTheo: '',
+  },
+  updatedAt: null,
+});
