@@ -12,7 +12,53 @@ importers:
         specifier: ^2.0.0
         version: 2.9.16
 
-  apps/admin:
+  BE:
+    dependencies:
+      '@neuroscan/types':
+        specifier: workspace:*
+        version: link:../packages/types
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
+      mongoose:
+        specifier: ^8.4.1
+        version: 8.24.0
+    devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/jsonwebtoken':
+        specifier: ^9.0.6
+        version: 9.0.10
+      '@types/node':
+        specifier: ^20.14.2
+        version: 20.19.42
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@20.19.42)(typescript@5.8.3)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.8.3
+
+  FE/admin:
     dependencies:
       '@expo/metro-runtime':
         specifier: ~4.0.0
@@ -88,7 +134,7 @@ importers:
         specifier: ~5.8.2
         version: 5.8.3
 
-  apps/doctor:
+  FE/doctor:
     dependencies:
       '@expo/metro-runtime':
         specifier: ~6.1.2
@@ -146,7 +192,7 @@ importers:
         specifier: ^5.4.5
         version: 5.8.3
 
-  apps/partner:
+  FE/partner:
     dependencies:
       '@expo/metro-runtime':
         specifier: ~6.1.2
@@ -204,7 +250,7 @@ importers:
         specifier: ^5.4.5
         version: 5.8.3
 
-  apps/patient:
+  FE/patient:
     dependencies:
       '@expo/metro-runtime':
         specifier: ~6.1.2
@@ -258,52 +304,6 @@ importers:
       '@types/react':
         specifier: ^19.1.0
         version: 19.2.17
-      typescript:
-        specifier: ^5.4.5
-        version: 5.8.3
-
-  backend:
-    dependencies:
-      '@neuroscan/types':
-        specifier: workspace:*
-        version: link:../packages/types
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.5
-        version: 16.6.1
-      express:
-        specifier: ^4.19.2
-        version: 4.22.2
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
-      mongoose:
-        specifier: ^8.4.1
-        version: 8.24.0
-    devDependencies:
-      '@types/bcryptjs':
-        specifier: ^2.4.6
-        version: 2.4.6
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/jsonwebtoken':
-        specifier: ^9.0.6
-        version: 9.0.10
-      '@types/node':
-        specifier: ^20.14.2
-        version: 20.19.42
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@20.19.42)(typescript@5.8.3)
       typescript:
         specifier: ^5.4.5
         version: 5.8.3
@@ -6068,7 +6068,7 @@ snapshots:
 
   dotenv-expand@11.0.7:
     dependencies:
-      dotenv: 16.4.7
+      dotenv: 16.6.1
 
   dotenv@16.4.7: {}
 

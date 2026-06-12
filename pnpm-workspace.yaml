@@ -1,6 +1,6 @@
 packages:
-  - 'apps/*'
+  - 'FE/*'
   - 'packages/*'
-  - 'backend'
+  - 'BE'
 allowBuilds:
   '@parcel/watcher': true

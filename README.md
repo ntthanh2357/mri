@@ -6,7 +6,7 @@ Dự án NeuroScan AI được tổ chức dưới dạng monorepo sử dụng T
 
 ```
 neuroscan-ai/
-├── apps/                    # Các ứng dụng frontend
+├── FE/                      # Các ứng dụng frontend
 │   ├── patient/            # Ứng dụng dành cho bệnh nhân (Expo React Native)
 │   ├── doctor/             # Ứng dụng dành cho bác sĩ (Expo React Native)
 │   ├── admin/              # Ứng dụng quản trị (Expo React Native)
@@ -17,7 +17,7 @@ neuroscan-ai/
 │   ├── auth/               # Logic xác thực dùng chung
 │   ├── utils/              # Helper functions dùng chung
 │   └── constants/          # Hằng số dùng chung (màu sắc, API URL,...)
-├── backend/                 # Backend API (Node.js Express + TypeScript)
+├── BE/                      # Backend API (Node.js Express + TypeScript)
 ├── docs/                    # Tài liệu dự án
 ├── turbo.json               # Cấu hình Turborepo
 ├── pnpm-workspace.yaml     # Cấu hình pnpm workspace
@@ -40,13 +40,13 @@ neuroscan-ai/
 
 ### Chạy backend
 ```bash
-cd backend
+cd BE
 pnpm dev
 ```
 
 ### Chạy một ứng dụng frontend (ví dụ: admin)
 ```bash
-cd apps/admin
+cd FE/admin
 pnpm dev
 # Hoặc chạy trên nền tảng cụ thể:
 pnpm android

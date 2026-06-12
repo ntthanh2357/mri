@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import express, { Application } from 'express';
 import cors from 'cors';
 import connectDB from './config/db';
+import apiRoutes from './routes';
 
 dotenv.config();
 
@@ -10,9 +11,10 @@ const PORT: number = parseInt(process.env.PORT || '3000', 10);
 
 app.use(cors());
 app.use(express.json());
+app.use('/api/v1', apiRoutes);
 
-app.get('/api/v1', (req, res) => {
-  res.json({ success: true, message: 'NeuroScan AI API v1', version: '1.0.0' });
+app.get('/', (req, res) => {
+  res.json({ success: true, message: 'NeuroScan AI Backend is healthy' });
 });
 
 const startServer = async () => {
