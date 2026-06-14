@@ -61,8 +61,9 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/login', { email, password });
       setAuthToken(data.accessToken);
+      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-        navigation.replace('Home');
+        navigation.replace(destination);
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -87,9 +88,9 @@ const LoginScreen = ({ navigation }) => {
 
       const data = await post('/auth/sso/google', { idToken });
       setAuthToken(data.accessToken);
-      
+      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
-        navigation.replace('Home');
+        navigation.replace(destination);
       });
     } catch (error) {
       console.error('Google SSO error:', error);
@@ -105,8 +106,9 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/sso/zalo', { accessToken: 'mock_zalo_token_123' });
       setAuthToken(data.accessToken);
+      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Zalo thành công.', () => {
-        navigation.replace('Home');
+        navigation.replace(destination);
       });
     } catch (error) {
       console.error('Zalo SSO error:', error);

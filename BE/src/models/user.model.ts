@@ -6,6 +6,7 @@ export interface IUser extends Document {
   passwordHash: string;
   role: "patient" | "doctor" | "admin";
   isVerified: boolean;
+  isLocked: boolean;
   tokenVersion: number;
   otpCode?: string;
   otpExpires?: Date;
@@ -51,6 +52,10 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 0,
       required: true,
+    },
+    isLocked: {
+      type: Boolean,
+      default: false,
     },
     otpCode: {
       type: String,

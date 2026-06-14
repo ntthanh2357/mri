@@ -105,6 +105,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Reject login if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
+    }
+
     // Verify password
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {

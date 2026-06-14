@@ -14,13 +14,23 @@
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
-    "react-native-web": "^0.21.0"
+    "react-native-web": "^0.21.0",
+    "lucide-react": "^0.546.0"
   },
   "scripts": {
-    "start": "node update-ip.js && expo start",
-    "android": "node update-ip.js && expo start --android",
-    "ios": "node update-ip.js && expo start --ios",
-    "web": "node update-ip.js && expo start --web"
+    "start": "npm run build:css && node update-ip.js && expo start",
+    "dev": "npm run build:css && node update-ip.js && expo start --web --port 8083",
+    "android": "npm run build:css && node update-ip.js && expo start --android",
+    "ios": "npm run build:css && node update-ip.js && expo start --ios",
+    "web": "npm run build:css && node update-ip.js && expo start --web --port 8083",
+    "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "@types/react": "~19.1.10",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.9.2"
+  }
 }
