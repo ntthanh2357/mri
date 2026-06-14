@@ -6,6 +6,7 @@ export interface IUser extends Document {
   passwordHash: string;
   role: "patient" | "doctor" | "admin";
   isVerified: boolean;
+  isLocked: boolean;
   tokenVersion: number;
   otpCode?: string;
   otpExpires?: Date;
