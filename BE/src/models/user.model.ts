@@ -52,6 +52,10 @@ const userSchema = new Schema<IUser>(
       default: 0,
       required: true,
     },
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
     otpCode: {
       type: String,
       default: null,

@@ -63,6 +63,14 @@ const ResponsiveLayout = ({
         { label: 'Mua Premium', route: 'Premium', icon: '💎' },
         { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '👨‍⚕️' },
       ]
+    : localUser?.role === 'admin'
+    ? [
+        { label: 'Tổng quan', route: 'Home', icon: '📊' },
+        { label: 'Admin Backoffice', route: 'AdminBackoffice', icon: '🛠️' },
+        { label: 'Hệ thống Quản trị', route: 'SystemAdmin', icon: '⚙️' },
+        { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
+        { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+      ]
     : [
         { label: 'Tổng quan', route: 'Home', icon: '📊' },
         { label: 'Phòng khám', route: 'ClinicDashboard', icon: '🏥' },

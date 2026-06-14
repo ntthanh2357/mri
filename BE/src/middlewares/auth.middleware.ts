@@ -22,10 +22,15 @@ export const protect = async (req: any, res: Response, next: NextFunction): Prom
       // Verify token
       const decoded = jwt.verify(token, secret) as { id: string; role: string; tokenVersion?: number };
 
-      // Fetch user from database to check token version
-      const user = await User.findById(decoded.id).select("tokenVersion");
+      // Fetch user from database to check token version and locked status
+      const user = await User.findById(decoded.id).select("tokenVersion isLocked");
       if (!user) {
         res.status(401).json({ message: "Người dùng không tồn tại hoặc tài khoản đã bị khóa." });
+        return;
+      }
+
+      if (user.isLocked) {
+        res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
         return;
       }
 

@@ -11,6 +11,7 @@ import SystemAdminScreen from '../screens/SystemAdminScreen';
 import PatientRecordsScreen from '../screens/PatientRecordsScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
+import AdminBackofficeScreen from '../screens/AdminBackofficeScreen';
 import Colors from '../constants/colors';
 
 const Stack = createNativeStackNavigator();
@@ -33,6 +34,7 @@ const AppNavigator = () => {
         <Stack.Screen name="AIAnalysis" component={AIAnalysisScreen} options={{ title: 'Phân tích AI', headerShown: false }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Hội viên Premium', headerShown: false }} />
         <Stack.Screen name="SystemAdmin" component={SystemAdminScreen} options={{ title: 'Hệ thống Quản trị', headerShown: false }} />
+        <Stack.Screen name="AdminBackoffice" component={AdminBackofficeScreen} options={{ title: 'Admin Backoffice', headerShown: false }} />
         <Stack.Screen name="PatientRecords" component={PatientRecordsScreen} options={{ title: 'Hồ sơ bệnh nhân', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
