@@ -567,47 +567,24 @@ export default function App() {
           
           {activeTab === 'metrics' && (
             <AdminMetricsView 
-              patients={patients} 
-              doctors={doctors} 
-              datasetsCount={datasetsCount}
-              totalDatasetSales={totalDatasetSales}
               onSelectTab={(tab) => setActiveTab(tab)}
             />
           )}
 
           {activeTab === 'users' && (
-            <AdminUsersView 
-              patients={patients}
-              doctors={doctors}
-              addSystemLog={addSystemLog}
-            />
+            <AdminUsersView />
           )}
 
           {activeTab === 'doctors' && (
-            <AdminDoctorsView 
-              doctors={doctors}
-              addSystemLog={addSystemLog}
-              setVerifiedCount={setVerifiedCount}
-            />
+            <AdminDoctorsView />
           )}
 
           {activeTab === 'datasets' && (
-            <AdminDatasetsView 
-              addSystemLog={addSystemLog}
-              datasetsCount={datasetsCount}
-              setDatasetsCount={setDatasetsCount}
-              setTotalDatasetSales={setTotalDatasetSales}
-            />
+            <AdminDatasetsView />
           )}
 
           {activeTab === 'audit-logs' && (
-            <AdminAuditLogsView 
-              logs={logs}
-              onTriggerAnonymization={handleTriggerAnonymization}
-              onResetAnonymization={handleResetAnonymization}
-              isPipelineRunning={isPipelineRunning}
-              setIsPipelineRunning={setIsPipelineRunning}
-            />
+            <AdminAuditLogsView />
           )}
 
         </div></section>

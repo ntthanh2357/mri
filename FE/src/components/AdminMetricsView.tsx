@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Stethoscope,
@@ -16,26 +16,37 @@ import {
   Activity,
   UserCheck
 } from 'lucide-react';
-import { Patient, Doctor } from '../types';
+import { apiRequest } from '../utils/apiClient';
 
 interface AdminMetricsViewProps {
-  patients: Patient[];
-  doctors: Doctor[];
-  datasetsCount: number;
-  totalDatasetSales: number;
   onSelectTab?: (tab: 'metrics' | 'users' | 'doctors' | 'datasets' | 'audit-logs') => void;
 }
 
 export default function AdminMetricsView({
-  patients,
-  doctors,
-  datasetsCount,
-  totalDatasetSales,
   onSelectTab
 }: AdminMetricsViewProps) {
 
   // High-fidelity state for interactive elements
   const [hoveredMonth, setHoveredMonth] = useState<string | null>('T12/25');
+
+  // Live stats state
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [totalDoctors, setTotalDoctors] = useState<number | null>(null);
+
+  useEffect(() => {
+    apiRequest<{ success: boolean; stats: { totalUsers: number; totalDoctors: number } }>('/admin/stats')
+      .then((data) => {
+        setTotalUsers(data.stats.totalUsers);
+        setTotalDoctors(data.stats.totalDoctors);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err?.message ?? 'Failed to fetch stats');
+        setLoading(false);
+      });
+  }, []);
 
   // Chart values and points matching the visual screenshot
   const aiScansData = [
@@ -71,7 +82,13 @@ export default function AdminMetricsView({
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">15.842</h3>
+            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">
+              {loading
+                ? '...'
+                : totalUsers !== null
+                  ? totalUsers.toLocaleString('vi-VN')
+                  : '--'}
+            </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Tổng người dùng</span>
           </div>
         </div>
@@ -88,7 +105,13 @@ export default function AdminMetricsView({
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">2.650</h3>
+            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">
+              {loading
+                ? '...'
+                : totalDoctors !== null
+                  ? totalDoctors.toLocaleString('vi-VN')
+                  : '--'}
+            </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Bác sĩ & Phòng khám</span>
           </div>
         </div>
@@ -135,101 +158,126 @@ export default function AdminMetricsView({
         {/* Left: Lượt AI Scans Area Curve Graph (70% = col-span-7) */}
         <div className="bg-white border border-[#e8edf5] rounded-2xl p-5 shadow-3xs lg:col-span-7 flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-[15px] font-bold text-[#0f172a] font-sans">Lượt AI Scans theo tháng</h3>
-                <p className="text-slate-450 text-xs font-normal">12 tháng gần nhất</p>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#0ea5e9]" />
-                <span>AI Scans</span>
-              </div>
-            </div>
-
-            {/* Curvaceous Graph Content */}
-            <div className="relative h-[240px] mt-6 select-none">
-
-              {/* Backgrid grid-lines */}
-              <div className="absolute inset-x-8 top-2 bottom-8 flex flex-col justify-between pointer-events-none">
-                <div className="border-b border-slate-100/70 w-full h-px" />
-                <div className="border-b border-slate-100/70 w-full h-px" />
-                <div className="border-b border-slate-100/70 w-full h-px" />
-                <div className="border-b border-slate-200 w-full h-px" />
-              </div>
-
-              {/* Y Axis Numeric Values */}
-              <div className="absolute left-0 top-2 bottom-8 flex flex-col justify-between text-[10px] font-bold font-mono text-slate-400 w-6 text-right pr-1">
-                <span>16K</span>
-                <span>12K</span>
-                <span>8K</span>
-                <span>4K</span>
-                <span>0K</span>
-              </div>
-
-              {/* SVG Area Line Chart Container */}
-              <div className="absolute inset-y-0 left-8 right-2">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.18" />
-                      <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Shaded Area */}
-                  <path
-                    d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38 L 93,75 Z"
-                    fill="url(#areaGrad)"
-                    stroke="none"
-                  />
-
-                  {/* Elegant Curve Stroke Line */}
-                  <path
-                    d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38"
-                    fill="none"
-                    stroke="#0ea5e9"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                  />
-
-                  {/* Draw dashed vertical tracking line on hover item */}
-                  <line x1="45" y1="30" x2="45" y2="75" stroke="#0ea5e9" strokeWidth="0.5" strokeDasharray="1,1" />
-
-                  {/* Circular highlighted peak interactive node */}
-                  <circle cx="45" cy="30" r="1.5" fill="#ffffff" stroke="#0ea5e9" strokeWidth="1" />
-                </svg>
-
-                {/* Absolutely positioned beautiful custom HTML tooltip */}
-                <div className="absolute left-[45%] top-[10%] -translate-x-1/2 bg-[#0b0f19] text-white rounded-lg p-2 shadow-xl border border-slate-800 pointer-events-none select-none z-10 text-left min-w-[70px]">
-                  <p className="text-[10px] font-bold text-slate-300 font-sans leading-none">T12/25</p>
-                  <p className="text-[11px] font-black font-mono mt-1 text-emerald-400">AI Scans: 12.500</p>
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#0f172a] font-sans">Lượt AI Scans theo tháng</h3>
+                    <p className="text-slate-450 text-xs font-normal">12 tháng gần nhất</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#14b8a6]" />
+                    <span>AI Scans</span>
+                  </div>
                 </div>
 
-                {/* Monthly Month Dots trigger points */}
-                <div className="absolute inset-x-0 bottom-8 h-[50px] flex justify-between">
-                  {aiScansData.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="flex-1 flex justify-center items-end group cursor-pointer relative"
-                      onMouseEnter={() => setHoveredMonth(m.label)}
-                    >
-                      {/* Anchor hover feedback circle */}
-                      <span className={`w-3 h-3 rounded-full bg-[#0ea5e9] scale-0 group-hover:scale-100 transition-all absolute top-1 ${hoveredMonth === m.label ? 'scale-[0.6] opacity-35 animate-ping' : 'opacity-0'}`} />
+                {/* Curvaceous Graph Content */}
+                <div className="relative h-[240px] mt-6 select-none">
+
+                  {/* Backgrid grid-lines */}
+                  <div className="absolute inset-x-8 top-2 bottom-8 flex flex-col justify-between pointer-events-none">
+                    <div className="border-b border-slate-100/70 w-full h-px" />
+                    <div className="border-b border-slate-100/70 w-full h-px" />
+                    <div className="border-b border-slate-100/70 w-full h-px" />
+                    <div className="border-b border-slate-200 w-full h-px" />
+                  </div>
+
+                  {/* Y Axis Numeric Values */}
+                  <div className="absolute left-0 top-2 bottom-8 flex flex-col justify-between text-[10px] font-bold font-mono text-slate-400 w-6 text-right pr-1">
+                    <span>16K</span>
+                    <span>12K</span>
+                    <span>8K</span>
+                    <span>4K</span>
+                    <span>0K</span>
+                  </div>
+
+                  {/* SVG Area Line Chart Container */}
+                  <div className="absolute inset-y-0 left-8 right-2">
+                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.18" />
+                          <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Shaded Area */}
+                      <path
+                        d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38 L 93,75 Z"
+                        fill="url(#areaGrad)"
+                        stroke="none"
+                      />
+
+                      {/* Elegant Curve Stroke Line */}
+                      <path
+                        d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38"
+                        fill="none"
+                        stroke="#14b8a6"
+                        strokeWidth="1.25"
+                        strokeLinecap="round"
+                      />
+
+                      {/* Draw dashed vertical tracking line on hover item */}
+                      {hoveredMonth && (
+                        <>
+                          <line 
+                            x1={aiScansData.find(m => m.label === hoveredMonth)?.x} 
+                            y1={aiScansData.find(m => m.label === hoveredMonth)?.y} 
+                            x2={aiScansData.find(m => m.label === hoveredMonth)?.x} 
+                            y2="75" 
+                            stroke="#14b8a6" 
+                            strokeWidth="0.5" 
+                            strokeDasharray="1,1" 
+                          />
+                          <circle 
+                            cx={aiScansData.find(m => m.label === hoveredMonth)?.x} 
+                            cy={aiScansData.find(m => m.label === hoveredMonth)?.y} 
+                            r="2" 
+                            fill="#ffffff" 
+                            stroke="#14b8a6" 
+                            strokeWidth="1.2" 
+                          />
+                        </>
+                      )}
+                    </svg>
+
+                    {/* Absolutely positioned beautiful custom HTML tooltip */}
+                    {hoveredMonth && (
+                      <div 
+                        className="absolute top-0 bg-white text-[#0f172a] rounded-lg p-3 shadow-xl border border-slate-200 pointer-events-none select-none z-10 text-left min-w-[100px] transform -translate-x-1/2 -translate-y-full mb-2"
+                        style={{ left: `${(aiScansData.find(m => m.label === hoveredMonth)?.x || 50)}%` }}
+                      >
+                        <p className="text-[10px] font-bold text-slate-500 font-sans leading-none">{hoveredMonth}</p>
+                        <p className="text-[11px] font-black font-mono mt-1 text-[#14b8a6]">
+                          {aiScansData.find(m => m.label === hoveredMonth)?.value.toLocaleString()} scans
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Monthly Month Dots trigger points */}
+                    <div className="absolute inset-x-0 bottom-8 h-[50px] flex justify-between">
+                      {aiScansData.map((m, idx) => (
+                        <div
+                          key={idx}
+                          className="flex-1 flex justify-center items-end group cursor-pointer relative"
+                          onMouseEnter={() => setHoveredMonth(m.label)}
+                          onMouseLeave={() => setHoveredMonth(null)}
+                        >
+                          {/* Anchor hover feedback circle */}
+                          <span className={`w-3 h-3 rounded-full bg-[#14b8a6] scale-0 group-hover:scale-100 transition-all absolute top-1 ${hoveredMonth === m.label ? 'scale-[0.6] opacity-35 animate-ping' : 'opacity-0'}`} />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+
+                  </div>
+
+                  {/* X Axis Labels */}
+                  <div className="absolute inset-x-8 bottom-0 flex justify-between text-[10px] font-bold text-slate-400 font-sans">
+                    {aiScansData.map((m, i) => (
+                      <span key={i} className="flex-1 text-center truncate">{m.label}</span>
+                    ))}
+                  </div>
+
                 </div>
-
               </div>
-
-              {/* X Axis Labels */}
-              <div className="absolute inset-x-8 bottom-0 flex justify-between text-[10px] font-bold text-slate-400 font-sans">
-                {aiScansData.map((m, i) => (
-                  <span key={i} className="flex-1 text-center truncate">{m.label}</span>
-                ))}
-              </div>
-
-            </div>
-          </div>
         </div>
 
         {/* Right: User distribution Pie Donut diagram (30% = col-span-3) */}

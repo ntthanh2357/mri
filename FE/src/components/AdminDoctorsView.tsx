@@ -1,440 +1,457 @@
-import React, { useState } from 'react';
-import { 
-  Stethoscope, 
-  Check, 
-  X, 
-  FileText, 
-  Search, 
-  ShieldCheck, 
-  AlertCircle, 
+import React, { useState, useEffect } from 'react';
+import {
+  Stethoscope,
+  Check,
+  X,
+  FileText,
+  Search,
+  ShieldCheck,
+  AlertCircle,
   Award,
   ExternalLink,
   ChevronDown,
-  Building
+  Building,
+  Loader2,
 } from 'lucide-react';
-import { Doctor } from '../types';
+import { apiRequest } from '../utils/apiClient';
 
-interface BackofficeDoctor {
-  id: string;
-  name: string;
-  avatarUrl: string;
-  specialty: string;
-  experience: string;
-  hospital: string;
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ApiDoctorProfile {
+  name?: string;
+  photoUrl?: string;
+  licenseUrl?: string;
+}
+
+interface ApiDoctor {
+  _id: string;
   email: string;
-  phone: string;
-  cchnNumber: string; // Mã số Chứng chỉ hành nghề
-  cchnType: string;   // Phạm vi hành nghề
-  issuedBy: string;   // Nơi cấp CCHN (e.g., Bộ Y Tế, Sở Y Tế Hà Nội)
-  issuedDate: string;
-  status: 'Pending' | 'Verified' | 'Rejected';
+  phone?: string;
+  role: string;
+  isVerified: boolean;
+  isLocked: boolean;
+  profile?: ApiDoctorProfile;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-interface AdminDoctorsViewProps {
-  doctors: Doctor[];
-  addSystemLog: (action: string, moduleName: string, details: string) => void;
-  setVerifiedCount: React.Dispatch<React.SetStateAction<number>>;
-}
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
-export default function AdminDoctorsView({ 
-  doctors, 
-  addSystemLog,
-  setVerifiedCount
-}: AdminDoctorsViewProps) {
-  // Convert basic doctors data to high-fidelity backoffice mock
-  const [panelDoctors, setPanelDoctors] = useState<BackofficeDoctor[]>(() => {
-    return [
-      {
-        id: 'DOC-01',
-        name: 'BS. Lê Mạnh Minh',
-        specialty: 'Chẩn Đoán Hình Ảnh (MRI/CT)',
-        experience: '12 năm bác sĩ khoa thần kinh',
-        avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=120&auto=format&fit=crop&q=80',
-        hospital: 'Bệnh viện Bạch Mai - Khoa Thần Kinh',
-        email: 'leminh.neuro@bachmai.org.vn',
-        phone: '0912445566',
-        cchnNumber: '001425/BYT-CCHN',
-        cchnType: 'Chẩn đoán hình ảnh thần kinh học',
-        issuedBy: 'Cục Quản Lý Khám Chữa Bệnh - Bộ Y Tế',
-        issuedDate: '2016-12-15',
-        status: 'Verified'
-      },
-      {
-        id: 'DOC-02',
-        name: 'BS. Nguyễn Trọng Nhân',
-        specialty: 'Thần Kinh Học Lâm Sàng',
-        experience: '8 năm thâm niên ngoại khoa',
-        avatarUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=120&auto=format&fit=crop&q=80',
-        hospital: 'Bệnh viện Chợ Rẫy - Phòng MRI 3',
-        email: 'nhan.nguyen@choray.vn',
-        phone: '0988776655',
-        cchnNumber: '018942/HCM-CCHN',
-        cchnType: 'Nội khoa chuyên ngành Thần kinh',
-        issuedBy: 'Sở Y Tế Thành phố Hồ Chí Minh',
-        issuedDate: '2020-05-18',
-        status: 'Verified'
-      },
-      {
-        id: 'DOC-03',
-        name: 'ThS. BS. Trần Thị Mai',
-        specialty: 'Phục Hồi Chức Năng Thần Kinh',
-        experience: '15 năm nghiên cứu u não hố sau',
-        avatarUrl: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?w=120&auto=format&fit=crop&q=80',
-        hospital: 'Bệnh viện Đại Học Y Hà Nội',
-        email: 'maitran.rehab@hmu.edu.vn',
-        phone: '0904005522',
-        cchnNumber: '025619/BYT-CCHN',
-        cchnType: 'Y học phục hồi & Phẫu thuật thần kinh',
-        issuedBy: 'Cục Quản Lý Khám Chữa Bệnh - Bộ Y Tế',
-        issuedDate: '2014-08-30',
-        status: 'Pending' // Initially pending verification
-      },
-      {
-        id: 'DOC-04',
-        name: 'BS. Phan Hoàng Long',
-        specialty: 'Bác Sĩ Đọc MRI Não 3D',
-        experience: '6 năm kỹ thuật phân tích khối u',
-        avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=120&auto=format&fit=crop&q=80',
-        hospital: 'Phòng khám Đa khoa Tâm Anh',
-        email: 'longph@tamanhhospital.vn',
-        phone: '0912998811',
-        cchnNumber: '031084/HN-CCHN',
-        cchnType: 'Y khoa Chẩn đoán hình ảnh thần kinh sâu',
-        issuedBy: 'Sở Y Tế Thành phố Hà Nội',
-        issuedDate: '2022-11-10',
-        status: 'Pending' // Initially pending verification
-      },
-      {
-        id: 'DOC-05',
-        name: 'BS. Phạm Mỹ Liên',
-        specialty: 'Ung Bướu Học Thần Kinh',
-        experience: '4 năm thâm niên xạ trị',
-        avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80',
-        hospital: 'Bệnh viện K Trung Ương',
-        email: 'lienpham.oncology@bvk.vn',
-        phone: '0904112233',
-        cchnNumber: '048592/BYT-CCHN',
-        cchnType: 'Ung bướu & Xạ trị thần kinh',
-        issuedBy: 'Bộ Y Tế Việt Nam',
-        issuedDate: '2023-01-05',
-        status: 'Rejected' // Initially rejected for lack of notary sign
-      }
-    ];
-  });
+export default function AdminDoctorsView() {
+  const [doctors, setDoctors] = useState<ApiDoctor[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Per-doctor action error (keyed by doctor _id)
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  // Per-doctor action in-progress flag
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedDoc, setSelectedDoc] = useState<BackofficeDoctor | null>(null);
-  const [verificationFeedback, setVerificationFeedback] = useState('');
+  const [selectedDoc, setSelectedDoc] = useState<ApiDoctor | null>(null);
 
-  // ADM-03 verify function
-  const handleVerifyCCHN = (id: string) => {
-    setPanelDoctors(prev => 
-      prev.map(d => {
-        if (d.id === id) {
-          addSystemLog(
-            'Duyệt chứng chỉ hành nghề', 
-            'System', 
-            `Đã phê duyệt CCHN mã số ${d.cchnNumber} cho BS. ${d.name} (${d.hospital}). Vị trí hoạt động hợp lệ.`
-          );
-          setVerifiedCount(c => c + 1);
+  // -------------------------------------------------------------------------
+  // Fetch doctors on mount
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
 
-          const updated = { ...d, status: 'Verified' as const };
-          if (selectedDoc?.id === id) {
-            setSelectedDoc(updated);
-          }
-          return updated;
-        }
-        return d;
-      })
-    );
+  const fetchDoctors = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiRequest<{ success: boolean; doctors: ApiDoctor[] }>('/admin/doctors');
+      setDoctors(data.doctors);
+    } catch (err: any) {
+      setError(err.message || 'Đã xảy ra lỗi khi tải danh sách bác sĩ');
+      // Ensure no stale list is shown on error
+      setDoctors([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Reject CCHN
-  const handleRejectCCHN = (id: string) => {
-    setPanelDoctors(prev => 
-      prev.map(d => {
-        if (d.id === id) {
-          addSystemLog(
-            'Từ chối chứng chỉ hành nghề', 
-            'System', 
-            `Từ chối hồ sơ số hiệu ${d.cchnNumber} của BS. ${d.name}. Lý do: ${verificationFeedback || 'Chứng chỉ mờ hoặc hết hạn hiệu lực'}.`
-          );
+  // -------------------------------------------------------------------------
+  // Verify / Unverify
+  // -------------------------------------------------------------------------
+  const handleVerify = async (doctor: ApiDoctor, verified: boolean) => {
+    const id = doctor._id;
 
-          const updated = { ...d, status: 'Rejected' as const };
-          if (selectedDoc?.id === id) {
-            setSelectedDoc(updated);
-          }
-          return updated;
-        }
-        return d;
-      })
-    );
-    setVerificationFeedback('');
+    setActionLoading(prev => ({ ...prev, [id]: true }));
+    setActionErrors(prev => ({ ...prev, [id]: '' }));
+
+    try {
+      const data = await apiRequest<{ success: boolean; doctor: ApiDoctor }>(
+        `/admin/doctors/${id}/verify`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ verified }),
+        },
+      );
+
+      // Update in-place — no full page reload
+      setDoctors(prev =>
+        prev.map(d => (d._id === id ? { ...d, isVerified: data.doctor.isVerified } : d)),
+      );
+
+      // Keep the detail pane in sync
+      setSelectedDoc(prev =>
+        prev?._id === id ? { ...prev, isVerified: data.doctor.isVerified } : prev,
+      );
+    } catch (err: any) {
+      setActionErrors(prev => ({
+        ...prev,
+        [id]: err.message || 'Đã xảy ra lỗi khi cập nhật trạng thái xác minh',
+      }));
+    } finally {
+      setActionLoading(prev => ({ ...prev, [id]: false }));
+    }
   };
 
-  const filteredDocs = panelDoctors.filter(d => {
+  // -------------------------------------------------------------------------
+  // Derived / helpers
+  // -------------------------------------------------------------------------
+  const filteredDocs = doctors.filter(d => {
     const query = searchQuery.toLowerCase();
-    const matchSearch = d.name.toLowerCase().includes(query) || 
-                        d.hospital.toLowerCase().includes(query) || 
-                        d.cchnNumber.toLowerCase().includes(query);
-    const matchStatus = statusFilter === '' || d.status === statusFilter;
+    const name = d.profile?.name?.toLowerCase() ?? '';
+    const email = d.email.toLowerCase();
+    const matchSearch = name.includes(query) || email.includes(query);
+    const matchStatus =
+      statusFilter === '' ||
+      (statusFilter === 'Verified' && d.isVerified) ||
+      (statusFilter === 'Pending' && !d.isVerified);
     return matchSearch && matchStatus;
   });
 
+  const pendingCount = doctors.filter(d => !d.isVerified).length;
+
+  const avatarFallback =
+    'https://ui-avatars.com/api/?background=e2e8f0&color=475569&name=Dr&size=120';
+
+  const avatarSrc = (doc: ApiDoctor) => doc.profile?.photoUrl || avatarFallback;
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   return (
     <div className="space-y-6">
-      
+
       {/* View Header */}
       <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-3xs flex justify-between items-center">
         <div>
-          <h2 className="text-base font-extrabold text-slate-800">Duyệt Chứng Chỉ Hành Nghề (CCHN) Bác Sĩ</h2>
-          <p className="text-slate-405 text-xs">Cơ sở dữ liệu xem xét, xác thực danh tính lâm sàng & cấp mã chuyên môn khám chữa bệnh trước khi cho phép khai thác AI (Mã Task: ADM-03)</p>
+          <h2 className="text-base font-extrabold text-slate-800">
+            Duyệt Chứng Chỉ Hành Nghề (CCHN) Bác Sĩ
+          </h2>
+          <p className="text-slate-405 text-xs">
+            Cơ sở dữ liệu xem xét, xác thực danh tính lâm sàng &amp; cấp mã chuyên môn khám chữa
+            bệnh trước khi cho phép khai thác AI (Mã Task: ADM-03)
+          </p>
         </div>
         <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 font-bold px-3 py-1 rounded-lg shrink-0">
-          Chờ duyệt CCHN: {panelDoctors.filter(d => d.status === 'Pending').length} trường hợp
+          Chờ duyệt CCHN: {pendingCount} trường hợp
         </span>
       </div>
 
-      {/* Roster Controls */}
+      {/* Search & Filter Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 text-xs">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input 
+          <input
             type="text"
-            placeholder="Tìm theo Mã CCHN, Họ tên y bác sĩ, Bệnh viện liên đới..."
+            placeholder="Tìm theo tên bác sĩ, email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-700"
           />
         </div>
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={e => setStatusFilter(e.target.value)}
           className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full sm:w-48"
         >
           <option value="">Tất cả Trạng thái duyệt</option>
-          <option value="Pending">Chờ duyệt CCHN (Pending)</option>
+          <option value="Pending">Chờ duyệt (Pending)</option>
           <option value="Verified">Đã duyệt (Verified)</option>
-          <option value="Rejected">Bị từ chối (Rejected)</option>
         </select>
       </div>
 
-      {/* Layout Split */}
+      {/* Split Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* Doctors Grid Left Column */}
+        {/* Left — Doctors list */}
         <div className="xl:col-span-2 space-y-4">
           <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
-            <h3 className="text-sm font-bold text-slate-850 mb-4 font-sans">Yêu Cầu Xét Phê Duyệt CCHN</h3>
-            
-            <div className="space-y-3">
-              {filteredDocs.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 font-bold">Không có hồ sơ chứng nhận khoa nào hợp chuẩn.</div>
-              ) : (
-                filteredDocs.map((doc) => (
-                  <div 
-                    key={doc.id}
+            <h3 className="text-sm font-bold text-slate-850 mb-4 font-sans">
+              Yêu Cầu Xét Phê Duyệt CCHN
+            </h3>
+
+            {/* Loading */}
+            {loading && (
+              <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-xs font-bold">Đang tải danh sách bác sĩ...</span>
+              </div>
+            )}
+
+            {/* Fetch error */}
+            {!loading && error && (
+              <div className="flex items-start gap-2.5 p-4 rounded-xl bg-rose-50 border border-rose-100 text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold">Không thể tải danh sách bác sĩ</p>
+                  <p className="text-[11px] mt-0.5">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!loading && !error && filteredDocs.length === 0 && doctors.length === 0 && (
+              <div className="text-center py-8 text-slate-400 font-bold text-xs">
+                Chưa có bác sĩ nào
+              </div>
+            )}
+
+            {/* No results after filter */}
+            {!loading && !error && doctors.length > 0 && filteredDocs.length === 0 && (
+              <div className="text-center py-8 text-slate-400 font-bold text-xs">
+                Không có hồ sơ nào khớp với bộ lọc.
+              </div>
+            )}
+
+            {/* Doctor cards */}
+            {!loading && !error && filteredDocs.length > 0 && (
+              <div className="space-y-3">
+                {filteredDocs.map(doc => (
+                  <div
+                    key={doc._id}
                     onClick={() => setSelectedDoc(doc)}
                     className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all cursor-pointer hover:shadow-xs ${
-                      selectedDoc?.id === doc.id 
-                        ? 'border-blue-500 bg-blue-50/10' 
+                      selectedDoc?._id === doc._id
+                        ? 'border-blue-500 bg-blue-50/10'
                         : 'border-slate-150 bg-[#fbfcfd]/40'
-                    } ${doc.status === 'Verified' ? 'border-emerald-100' : ''}`}
+                    } ${doc.isVerified ? 'border-emerald-100' : ''}`}
                   >
                     <div className="flex items-start gap-3.5">
-                      {/* Avatar with absolute status indicator */}
+                      {/* Avatar */}
                       <div className="relative shrink-0">
-                        <img 
-                          src={doc.avatarUrl} 
-                          alt={doc.name} 
+                        <img
+                          src={avatarSrc(doc)}
+                          alt={doc.profile?.name || doc.email}
                           className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-3xs"
+                          onError={e => {
+                            (e.currentTarget as HTMLImageElement).src = avatarFallback;
+                          }}
                         />
-                        <span className={`absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${
-                          doc.status === 'Verified' ? 'bg-emerald-500' :
-                          doc.status === 'Rejected' ? 'bg-rose-500' :
-                          'bg-amber-500 animate-pulse'
-                        }`}>
-                          {doc.status === 'Verified' ? '✓' : doc.status === 'Rejected' ? '✗' : '?'}
+                        <span
+                          className={`absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${
+                            doc.isVerified ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                          }`}
+                        >
+                          {doc.isVerified ? '✓' : '?'}
                         </span>
                       </div>
 
-                      {/* Info lines */}
+                      {/* Info */}
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-extrabold text-slate-800 leading-none">{doc.name}</h4>
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold leading-none">{doc.id}</span>
+                          <h4 className="text-sm font-extrabold text-slate-800 leading-none">
+                            {doc.profile?.name || '(Chưa cập nhật tên)'}
+                          </h4>
                         </div>
-                        <p className="text-slate-450 text-xs font-semibold flex items-center gap-1">
-                          <Building className="w-3.5 h-3.5 text-slate-350" />
-                          {doc.hospital}
-                        </p>
+                        <p className="text-slate-450 text-xs font-semibold">{doc.email}</p>
                         <div className="flex flex-wrap gap-2 pt-0.5">
-                          <span className="text-[9.5px] bg-[#eff6ff] text-[#2563eb] border border-blue-100/50 px-2 py-0.5 rounded font-bold uppercase">{doc.specialty}</span>
-                          <span className="text-[9.5px] text-slate-450 font-mono font-bold">Số CCHN: {doc.cchnNumber}</span>
+                          <span
+                            className={`text-[9.5px] px-2 py-0.5 rounded font-bold uppercase border ${
+                              doc.isVerified
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border-amber-100'
+                            }`}
+                          >
+                            {doc.isVerified ? 'Verified' : 'Pending'}
+                          </span>
+                          {doc.profile?.licenseUrl && (
+                            <a
+                              href={doc.profile.licenseUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-[9.5px] text-blue-600 flex items-center gap-0.5 font-bold hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Xem CCHN
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Interactive validation values */}
-                    <div className="mt-3 sm:mt-0 flex sm:flex-col items-end gap-2 shrink-0 border-t sm:border-0 pt-2.5 sm:pt-0 border-slate-100">
-                      <div className="text-right hidden sm:block">
-                        <span className="text-[9.5px] text-slate-400 font-bold uppercase block">Phạm vi lâm nghiệp</span>
-                        <span className="text-xs font-semibold text-slate-700 block truncate max-w-[190px]">{doc.cchnType}</span>
-                      </div>
-                      
-                      <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 w-full justify-end">
-                        {doc.status === 'Pending' ? (
-                          <>
-                            {/* Approve */}
-                            <button 
-                              onClick={() => handleVerifyCCHN(doc.id)}
-                              className="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-3xs"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Phê Duyệt</span>
-                            </button>
-                            {/* Decline popup proxy */}
-                            <button 
-                              onClick={() => setSelectedDoc(doc)}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-150 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-3xs"
-                            >
-                              Từ chối
-                            </button>
-                          </>
-                        ) : (
-                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded inline-flex items-center gap-1 ${
-                            doc.status === 'Verified' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                          }`}>
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            {doc.status === 'Verified' ? 'Đã duyệt CCHN' : 'Hồ sơ bị từ chối'}
-                          </span>
-                        )}
-                      </div>
+                    {/* Action buttons */}
+                    <div
+                      className="mt-3 sm:mt-0 flex sm:flex-col items-end gap-2 shrink-0 border-t sm:border-0 pt-2.5 sm:pt-0 border-slate-100"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {/* Per-doctor action error */}
+                      {actionErrors[doc._id] && (
+                        <p className="text-[10px] text-rose-600 font-bold max-w-[160px] text-right">
+                          {actionErrors[doc._id]}
+                        </p>
+                      )}
+
+                      {actionLoading[doc._id] ? (
+                        <span className="flex items-center gap-1 text-xs text-slate-400 font-bold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Đang xử lý...
+                        </span>
+                      ) : doc.isVerified ? (
+                        <button
+                          onClick={() => handleVerify(doc, false)}
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-150 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-3xs"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Hủy duyệt</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleVerify(doc, true)}
+                          className="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-3xs"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Phê Duyệt</span>
+                        </button>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Doctor certification visual assessment (Right pane) */}
+        {/* Right — Detail pane */}
         <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-4">
-            <h3 className="text-sm font-bold text-slate-800 font-sans">Bằng Chứng Chỉ Số Gốc</h3>
+            <h3 className="text-sm font-bold text-slate-800 font-sans">Chi Tiết Bác Sĩ</h3>
             <Award className="w-4.5 h-4.5 text-blue-500" />
           </div>
 
           {selectedDoc ? (
-            <div className="space-y-5" id="cchn-document-pane">
-              
-              {/* Doctor Header */}
+            <div className="space-y-5">
+
+              {/* Doctor header */}
               <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl flex items-center gap-3">
-                <img 
-                  src={selectedDoc.avatarUrl} 
-                  alt={selectedDoc.name} 
+                <img
+                  src={avatarSrc(selectedDoc)}
+                  alt={selectedDoc.profile?.name || selectedDoc.email}
                   className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                  onError={e => {
+                    (e.currentTarget as HTMLImageElement).src = avatarFallback;
+                  }}
                 />
                 <div>
-                  <h4 className="text-xs font-extrabold text-slate-850 leading-tight">{selectedDoc.name}</h4>
-                  <p className="text-[10px] font-bold text-slate-500 block truncate max-w-[170px] mt-0.5">{selectedDoc.hospital}</p>
+                  <h4 className="text-xs font-extrabold text-slate-850 leading-tight">
+                    {selectedDoc.profile?.name || '(Chưa cập nhật tên)'}
+                  </h4>
+                  <p className="text-[10px] font-bold text-slate-500 mt-0.5">{selectedDoc.email}</p>
                 </div>
               </div>
 
-              {/* Verified Documents Frame */}
-              <div className="border border-slate-150 rounded-xl p-3 bg-slate-50 font-sans relative overflow-hidden" id="cchn-certification-frame">
-                {/* Decorative background watermark */}
-                <div className="absolute right-[-15px] bottom-[-15px] text-slate-150 transform rotate-12 select-none pointer-events-none">
-                  <Award className="w-24 h-24" />
+              {/* Detail fields */}
+              <div className="space-y-2 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold">Trạng thái</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                      selectedDoc.isVerified
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    {selectedDoc.isVerified ? 'Đã xác minh' : 'Chờ duyệt'}
+                  </span>
                 </div>
-
-                <div className="border-2 border-amber-200/50 p-2.5 rounded-lg bg-white relative">
-                  <div className="text-center pb-2 border-b border-amber-100">
-                    <span className="text-[7.5px] uppercase font-bold tracking-widest text-[#134e4a] block">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</span>
-                    <span className="text-[6.5px] font-extrabold text-[#115e59] block mt-0.5">Độc lập - Tự do - Hạnh phúc</span>
+                {selectedDoc.phone && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-bold">Điện thoại</span>
+                    <span className="text-slate-700 font-semibold">{selectedDoc.phone}</span>
                   </div>
-
-                  <div className="pt-3 pb-2 text-center">
-                    <span className="text-[9.5px] font-black text-amber-900 tracking-wide block">CHỨNG CHỈ HÀNH NGHỀ KHÁM BỆNH, CHỮA BỆNH</span>
-                    <span className="text-[9px] text-amber-850 font-bold block mt-1">SỐ HIỆU: {selectedDoc.cchnNumber}</span>
-                  </div>
-
-                  <div className="space-y-1.5 text-[10px] text-slate-600 font-medium">
-                    <p><strong className="text-slate-800 font-bold">Bác sĩ sở hữu:</strong> {selectedDoc.name}</p>
-                    <p><strong className="text-slate-800 font-bold">Chuyên môn:</strong> {selectedDoc.cchnType}</p>
-                    <p><strong className="text-slate-800 font-bold">Nơi cấp:</strong> {selectedDoc.issuedBy}</p>
-                    <p><strong className="text-slate-800 font-bold">Ngày ban hành:</strong> {selectedDoc.issuedDate}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Secondary data verification and checklist */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Yêu cầu xác minh an toàn</span>
-                <label className="flex items-start gap-2 text-[11px] font-semibold text-slate-600">
-                  <input type="checkbox" defaultChecked className="mt-0.5 accent-blue-600" />
-                  <span>Xác minh mã số CCHN khớp với cơ sở Bộ Y Tế</span>
-                </label>
-                <label className="flex items-start gap-2 text-[11px] font-semibold text-slate-600">
-                  <input type="checkbox" defaultChecked className="mt-0.5 accent-blue-600" />
-                  <span>Bác sĩ đạt chứng chỉ thực hành y khoa lâm sàng</span>
-                </label>
-              </div>
-
-              {/* Bottom interactive states */}
-              {selectedDoc.status === 'Pending' ? (
-                <div className="pt-3 border-t border-slate-100 space-y-3">
-                  <textarea 
-                    placeholder="Nhập lý do từ chối nếu có..."
-                    value={verificationFeedback}
-                    onChange={(e) => setVerificationFeedback(e.target.value)}
-                    className="w-full text-xs p-2 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans font-medium"
-                    rows={2}
-                  />
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleRejectCCHN(selectedDoc.id)}
-                      className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                )}
+                {selectedDoc.profile?.licenseUrl && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 font-bold">Tài liệu CCHN</span>
+                    <a
+                      href={selectedDoc.profile.licenseUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 font-bold flex items-center gap-1 hover:underline text-[10px]"
                     >
-                      Từ Chối Duyệt
-                    </button>
-                    <button 
-                      onClick={() => handleVerifyCCHN(selectedDoc.id)}
-                      className="flex-1 bg-emerald-55 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
-                    >
-                      Duyệt CCHN
-                    </button>
+                      <ExternalLink className="w-3 h-3" />
+                      Xem tài liệu
+                    </a>
                   </div>
-                </div>
-              ) : (
-                <div className={`p-3 rounded-xl text-xs flex items-start gap-2.5 ${
-                  selectedDoc.status === 'Verified' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50/50 text-rose-800 border border-rose-100'
-                }`}>
+                )}
+                {selectedDoc.createdAt && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-bold">Ngày tạo</span>
+                    <span className="text-slate-700 font-semibold">
+                      {new Date(selectedDoc.createdAt).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Per-doctor action error shown in detail pane too */}
+              {actionErrors[selectedDoc._id] && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-700">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>
-                    <h5 className="font-extrabold">{selectedDoc.status === 'Verified' ? 'Chứng Chỉ Hợp Lệ' : 'Yêu Cầu Bị Từ Chối'}</h5>
-                    <p className="text-[10.5px] mt-0.5 leading-relaxed text-slate-550 font-medium">
-                      {selectedDoc.status === 'Verified' 
-                        ? `Bác sĩ này đã được cấp quyền kiểm duyệt chẩn đoán hình ảnh thần kinh, bảo lãnh hành pháp bởi ${selectedDoc.issuedBy}.`
-                        : `Từ chối cấp phép tham gia. Mã số văn bản liên quan có hiệu lực bị treo.`}
-                    </p>
-                  </div>
+                  <p className="text-[11px] font-bold">{actionErrors[selectedDoc._id]}</p>
                 </div>
               )}
+
+              {/* Verify / Unverify action */}
+              <div className="pt-3 border-t border-slate-100">
+                {actionLoading[selectedDoc._id] ? (
+                  <div className="flex items-center justify-center gap-2 py-3 text-slate-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-xs font-bold">Đang xử lý...</span>
+                  </div>
+                ) : selectedDoc.isVerified ? (
+                  <button
+                    onClick={() => handleVerify(selectedDoc, false)}
+                    className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Hủy duyệt (Unverify)
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleVerify(selectedDoc, true)}
+                    className="w-full bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 border border-emerald-200 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Phê Duyệt
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="h-72 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center p-4">
               <FileText className="w-10 h-10 text-slate-350 stroke-[1.5] mb-2" />
-              <p className="text-xs font-bold text-slate-500">Chưa Chọn Hồ Sơ CCHN</p>
-              <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">Hãy click chọn một y bác sĩ bên bảng danh sách để tra cứu bản scan Chứng chỉ hành nghề và tiến hành xét duyệt pháp lý.</p>
+              <p className="text-xs font-bold text-slate-500">Chưa Chọn Bác Sĩ</p>
+              <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">
+                Hãy click chọn một bác sĩ bên bảng danh sách để xem chi tiết và thực hiện xét duyệt.
+              </p>
             </div>
           )}
         </div>
 
       </div>
-
     </div>
   );
 }

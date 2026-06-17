@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -15,165 +15,231 @@ import {
   Calendar,
   Lock,
   Unlock,
-  Plus
+  Plus,
+  Loader2,
+  ShieldCheck,
+  ShieldX
 } from 'lucide-react';
-import { Patient, Doctor } from '../types';
+import { apiRequest } from '../utils/apiClient';
 
-// Define a unified User model for Backoffice
+// Unified User model for Backoffice table display
 interface BackofficeUser {
   id: string;
   name: string;
   email: string;
   phone: string;
-  role: 'Bệnh nhân' | 'Bác sĩ' | 'Kỹ thuật viên' | 'Nhà nghiên cứu';
+  role: string;
   avatarUrl: string;
   status: 'Active' | 'Locked';
-  gender?: 'Nam' | 'Nữ';
-  age?: number;
-  bloodGroup?: string;
-  address?: string;
-  medicalHistory?: string;
-  specialty?: string;
-  experience?: string;
-  lastActive: string;
-  ipAddress: string;
+  lastActive?: string;
 }
 
-interface AdminUsersViewProps {
-  patients: Patient[];
-  doctors: Doctor[];
-  addSystemLog: (action: string, moduleName: string, details: string) => void;
+// Full user detail returned by GET /admin/users/:id
+interface ApiUserDetail {
+  _id: string;
+  email: string;
+  phone: string;
+  role: string;
+  isVerified: boolean;
+  isLocked: boolean;
+  profile?: {
+    name?: string;
+    photoUrl?: string;
+    phone?: string;
+  };
+  createdAt: string;
 }
 
-export default function AdminUsersView({ patients, doctors, addSystemLog }: AdminUsersViewProps) {
-  // Synthesize our unified list of users
-  const [usersList, setUsersList] = useState<BackofficeUser[]>(() => {
-    const list: BackofficeUser[] = [];
-    
-    // Convert patients to BackofficeUsers
-    patients.forEach((p, idx) => {
-      // Nguyễn Văn An should remain standard active, but let's have some other locked/active users
-      list.push({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        phone: p.phone,
-        role: 'Bệnh nhân',
-        avatarUrl: p.avatarUrl,
-        status: p.id === 'PT-4432' ? 'Locked' : 'Active', // Let card PT-4432 be initially locked
-        gender: p.gender,
-        age: p.age,
-        bloodGroup: p.bloodGroup,
-        address: p.address,
-        medicalHistory: p.medicalHistory,
-        lastActive: p.lastVisit,
-        ipAddress: `192.168.1.${10 + idx}`
-      });
-    });
+// Shape returned by GET /admin/users
+interface GetUsersResponse {
+  success: boolean;
+  users: ApiUser[];
+}
 
-    // Convert doctors to BackofficeUsers
-    doctors.forEach((d, idx) => {
-      list.push({
-        id: d.id,
-        name: d.name,
-        email: d.email,
-        phone: d.phone,
-        role: 'Bác sĩ',
-        avatarUrl: d.avatarUrl,
-        status: 'Active',
-        specialty: d.specialty,
-        experience: d.experience,
-        lastActive: '2026-06-07',
-        ipAddress: `192.168.1.${50 + idx}`
-      });
-    });
+// Shape returned by GET /admin/users/:id, PUT lock/unlock
+interface GetUserResponse {
+  success: boolean;
+  user: ApiUser;
+}
 
-    // Add researcher bonus
-    list.push({
-      id: 'RES-049',
-      name: 'TS. Nguyễn Văn Khải',
-      email: 'khai.nguyen@neuroscan.vn',
-      phone: '0933221155',
-      role: 'Nhà nghiên cứu',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
-      status: 'Active',
-      specialty: 'Y sinh học nano',
-      experience: '12 năm nghiên cứu',
-      lastActive: '2026-06-05',
-      ipAddress: '192.168.1.99'
-    });
+interface ApiUser {
+  _id: string;
+  email: string;
+  phone?: string;
+  role: string;
+  isVerified: boolean;
+  isLocked: boolean;
+  profile?: {
+    name?: string;
+    photoUrl?: string;
+    phone?: string;
+  };
+  createdAt: string;
+  updatedAt?: string;
+}
 
-    return list;
-  });
+// Map an API user to the BackofficeUser list row shape
+function mapApiUser(u: ApiUser): BackofficeUser {
+  return {
+    id: u._id,
+    name: u.profile?.name || u.email,
+    email: u.email,
+    phone: u.profile?.phone || u.phone || '',
+    role: u.role,
+    avatarUrl:
+      u.profile?.photoUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(u.profile?.name || u.email)}&background=e2e8f0&color=475569&bold=true`,
+    status: u.isLocked ? 'Locked' : 'Active',
+    lastActive: u.createdAt,
+  };
+}
+
+// Map an API user to the ApiUserDetail shape used by the detail panel
+function mapApiUserDetail(u: ApiUser): ApiUserDetail {
+  return {
+    _id: u._id,
+    email: u.email,
+    phone: u.profile?.phone || u.phone || '',
+    role: u.role,
+    isVerified: u.isVerified,
+    isLocked: u.isLocked,
+    profile: u.profile,
+    createdAt: u.createdAt,
+  };
+}
+
+// Human-readable role label
+function roleLabel(role: string): string {
+  switch (role) {
+    case 'patient':
+      return 'Bệnh nhân';
+    case 'doctor':
+      return 'Bác sĩ';
+    case 'admin':
+      return 'Quản trị viên';
+    default:
+      return role;
+  }
+}
+
+export default function AdminUsersView() {
+  // ─── State ────────────────────────────────────────────────────────────────
+  const [usersList, setUsersList] = useState<BackofficeUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<ApiUserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedUser, setSelectedUser] = useState<BackofficeUser | null>(null);
 
-  // Lock user handler (ADM-04)
-  const handleLockUser = (userId: string) => {
-    setUsersList(prev => 
-      prev.map(u => {
-        if (u.id === userId) {
-          addSystemLog(
-            'Khóa tài khoản',
-            'System',
-            `Đã khóa truy cập của người dùng ${u.name} (ID: ${u.id}) do vi phạm chính sách.`
-          );
-          
-          const updated = { ...u, status: 'Locked' as const };
-          if (selectedUser?.id === userId) {
-            setSelectedUser(updated);
-          }
-          return updated;
-        }
-        return u;
-      })
-    );
+  // ─── 8.1  Fetch user list on mount ────────────────────────────────────────
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiRequest<GetUsersResponse>('/admin/users');
+        setUsersList((data.users ?? []).map(mapApiUser));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Không thể tải danh sách người dùng.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // ─── 8.2  Fetch user detail when a row is clicked ─────────────────────────
+  const handleSelectUser = async (userId: string) => {
+    setSelectedUserId(userId);
+    setSelectedUserDetail(null);
+    setDetailError(null);
+    setActionError(null);
+    setDetailLoading(true);
+    try {
+      const data = await apiRequest<GetUserResponse>(`/admin/users/${userId}`);
+      setSelectedUserDetail(mapApiUserDetail(data.user));
+    } catch (err: unknown) {
+      setDetailError(err instanceof Error ? err.message : 'Không thể tải chi tiết người dùng.');
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
-  // Unlock user handler (ADM-05)
-  const handleUnlockUser = (userId: string) => {
-    setUsersList(prev => 
-      prev.map(u => {
-        if (u.id === userId) {
-          addSystemLog(
-            'Mở khóa tài khoản',
-            'System',
-            `Đã phục hồi quyền đăng nhập cho người dùng ${u.name} (ID: ${u.id}).`
-          );
-          
-          const updated = { ...u, status: 'Active' as const };
-          if (selectedUser?.id === userId) {
-            setSelectedUser(updated);
-          }
-          return updated;
-        }
-        return u;
-      })
-    );
+  // ─── 8.3  Lock action ─────────────────────────────────────────────────────
+  const handleLockUser = async (userId: string) => {
+    setActionError(null);
+    try {
+      const data = await apiRequest<GetUserResponse>(`/admin/users/${userId}/lock`, {
+        method: 'PUT',
+      });
+      const updatedStatus: 'Locked' | 'Active' = data.user.isLocked ? 'Locked' : 'Active';
+
+      // Update list row
+      setUsersList(prev =>
+        prev.map(u => (u.id === userId ? { ...u, status: updatedStatus } : u))
+      );
+
+      // Update detail panel if it shows the same user
+      if (selectedUserId === userId && selectedUserDetail) {
+        setSelectedUserDetail({ ...selectedUserDetail, isLocked: data.user.isLocked });
+      }
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Không thể khóa tài khoản.');
+    }
   };
 
-  // Filter accounts
+  // ─── 8.3  Unlock action ───────────────────────────────────────────────────
+  const handleUnlockUser = async (userId: string) => {
+    setActionError(null);
+    try {
+      const data = await apiRequest<GetUserResponse>(`/admin/users/${userId}/unlock`, {
+        method: 'PUT',
+      });
+      const updatedStatus: 'Locked' | 'Active' = data.user.isLocked ? 'Locked' : 'Active';
+
+      // Update list row
+      setUsersList(prev =>
+        prev.map(u => (u.id === userId ? { ...u, status: updatedStatus } : u))
+      );
+
+      // Update detail panel if it shows the same user
+      if (selectedUserId === userId && selectedUserDetail) {
+        setSelectedUserDetail({ ...selectedUserDetail, isLocked: data.user.isLocked });
+      }
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Không thể mở khóa tài khoản.');
+    }
+  };
+
+  // ─── Filtered rows ────────────────────────────────────────────────────────
   const filteredUsers = usersList.filter(u => {
     const query = searchQuery.toLowerCase();
-    const matchSearch = u.name.toLowerCase().includes(query) || 
-                        u.email.toLowerCase().includes(query) || 
-                        u.id.toLowerCase().includes(query) || 
-                        u.phone.includes(query);
+    const matchSearch =
+      u.name.toLowerCase().includes(query) ||
+      u.email.toLowerCase().includes(query) ||
+      u.id.toLowerCase().includes(query) ||
+      u.phone.includes(query);
     const matchRole = roleFilter === '' || u.role === roleFilter;
     const matchStatus = statusFilter === '' || u.status === statusFilter;
     return matchSearch && matchRole && matchStatus;
   });
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      
+
       {/* Page Header */}
       <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-3xs flex justify-between items-center">
         <div>
-          <h2 className="text-base font-extrabold text-slate-800">Quản lý Tài Khoản & Khóa User</h2>
+          <h2 className="text-base font-extrabold text-slate-800">Quản lý Tài Khoản &amp; Khóa User</h2>
           <p className="text-slate-400 text-xs">Phân hệ hiển thị, can thiệp khóa/mở quyền đăng nhập của y bác sĩ lẫn bệnh án B2C (ADM-01, ADM-02, ADM-04, ADM-05)</p>
         </div>
         <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 font-bold px-3 py-1 rounded-lg">
@@ -186,7 +252,7 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
         {/* Search */}
         <div className="relative flex-1 text-xs">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input 
+          <input
             type="text"
             placeholder="Tìm theo Mã ID, Tên, Số điện thoại, Email tài khoản..."
             value={searchQuery}
@@ -202,9 +268,9 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
           className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full lg:w-48"
         >
           <option value="">Tất cả các Role</option>
-          <option value="Bệnh nhân">Bệnh nhân</option>
-          <option value="Bác sĩ">Bác sĩ</option>
-          <option value="Nhà nghiên cứu">Nhà nghiên cứu</option>
+          <option value="patient">Bệnh nhân</option>
+          <option value="doctor">Bác sĩ</option>
+          <option value="admin">Quản trị viên</option>
         </select>
 
         {/* Filter Status */}
@@ -221,11 +287,11 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
 
       {/* Main table and details flex */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
+
         {/* Users Roster List Table (Covers ADM-01) */}
         <div className="xl:col-span-2 bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
           <h3 className="text-sm font-bold text-slate-850 mb-4 font-sans">Danh sách Người dùng Hệ thống</h3>
-          
+
           <div className="overflow-x-auto border border-slate-100 rounded-xl">
             <table className="w-full text-left text-xs">
               <thead>
@@ -239,48 +305,66 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
-                {filteredUsers.length === 0 ? (
+                {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400 font-bold">Không tìm thấy người dùng nào phù hợp.</td>
+                    <td colSpan={6} className="py-10 text-center">
+                      <div className="flex items-center justify-center gap-2 text-slate-400">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-xs font-semibold">Đang tải danh sách người dùng…</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center">
+                      <p className="text-xs font-bold text-rose-500">{error}</p>
+                    </td>
+                  </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400 font-bold">
+                      Không tìm thấy người dùng nào phù hợp.
+                    </td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr 
-                      key={user.id} 
-                      onClick={() => setSelectedUser(user)}
+                    <tr
+                      key={user.id}
+                      onClick={() => handleSelectUser(user.id)}
                       className={`hover:bg-blue-50/20 cursor-pointer transition-colors ${
-                        selectedUser?.id === user.id ? 'bg-blue-50/50' : ''
+                        selectedUserId === user.id ? 'bg-blue-50/50' : ''
                       } ${user.status === 'Locked' ? 'bg-red-50/20 opacity-80' : ''}`}
                     >
                       {/* ID */}
                       <td className="py-3.5 px-3 font-mono font-bold text-slate-700">
-                        {user.id}
+                        <span className="truncate max-w-[100px] block" title={user.id}>{user.id}</span>
                       </td>
 
                       {/* Avatar & Name */}
                       <td className="py-3.5 px-3">
                         <div className="flex items-center gap-2.5">
-                          <img 
-                            src={user.avatarUrl} 
-                            alt={user.name} 
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.name}
                             referrerPolicy="no-referrer"
-                            className="w-8.5 h-8.5 rounded-full object-cover border border-slate-200"
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
                           />
-                          <div>
-                            <span className="font-extrabold text-slate-800 hover:text-blue-600 transition-colors block">{user.name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono block">IP: {user.ipAddress}</span>
-                          </div>
+                          <span className="font-extrabold text-slate-800 hover:text-blue-600 transition-colors block">{user.name}</span>
                         </div>
                       </td>
 
                       {/* Role Badge */}
                       <td className="py-3.5 px-3">
                         <span className={`text-[9.5px] px-2 py-0.5 rounded-md font-bold ${
-                          user.role === 'Bác sĩ' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                          user.role === 'Bệnh nhân' ? 'bg-blue-50 text-blue-700 border border-blue-105' :
-                          'bg-amber-50 text-amber-700 border border-amber-100'
+                          user.role === 'doctor'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            : user.role === 'patient'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                            : user.role === 'admin'
+                            ? 'bg-violet-50 text-violet-700 border border-violet-100'
+                            : 'bg-amber-50 text-amber-700 border border-amber-100'
                         }`}>
-                          {user.role}
+                          {roleLabel(user.role)}
                         </span>
                       </td>
 
@@ -293,7 +377,7 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
                           </span>
                           <span className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
                             <Phone className="w-3 h-3 text-slate-400" />
-                            {user.phone}
+                            {user.phone || '—'}
                           </span>
                         </div>
                       </td>
@@ -301,7 +385,9 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
                       {/* Status */}
                       <td className="py-3.5 px-3 text-center">
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                          user.status === 'Active' ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' : 'bg-rose-50 text-rose-800 border border-rose-100'
+                          user.status === 'Active'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
+                            : 'bg-rose-50 text-rose-800 border border-rose-100'
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                           {user.status}
@@ -312,7 +398,7 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
                       <td className="py-3.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex gap-1.5">
                           {user.status === 'Active' ? (
-                            <button 
+                            <button
                               onClick={() => handleLockUser(user.id)}
                               title="Khóa tài khoản này"
                               className="w-7 h-7 hover:bg-rose-50 text-slate-400 hover:text-rose-600 bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center justify-center shadow-3xs"
@@ -320,7 +406,7 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
                               <Lock className="w-3.5 h-3.5" />
                             </button>
                           ) : (
-                            <button 
+                            <button
                               onClick={() => handleUnlockUser(user.id)}
                               title="Mở khóa tài khoản"
                               className="w-7 h-7 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center justify-center shadow-3xs"
@@ -342,126 +428,140 @@ export default function AdminUsersView({ patients, doctors, addSystemLog }: Admi
         <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
           <div className="flex justify-between items-center pb-2.5 border-b border-slate-100 mb-4">
             <h3 className="text-sm font-bold text-slate-800 font-sans">Chi tiết Hồ sơ Quản trị</h3>
-            {selectedUser && (
-              <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold text-[9.5px]">
-                {selectedUser.id}
+            {selectedUserId && (
+              <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold text-[9.5px] truncate max-w-[120px]" title={selectedUserId}>
+                {selectedUserId}
               </span>
             )}
           </div>
 
-          {selectedUser ? (
-            <div className="space-y-5" id="user-details-pane">
-              {/* Header card with avatar */}
-              <div className="flex items-center gap-3 bg-slate-50/60 p-3 rounded-xl border border-slate-100">
-                <img 
-                  src={selectedUser.avatarUrl} 
-                  alt={selectedUser.name} 
-                  className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
-                />
-                <div>
-                  <h4 className="text-sm font-extrabold text-slate-850 leading-tight">{selectedUser.name}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{selectedUser.role}</p>
-                </div>
-              </div>
-
-              {/* Specific detail tables */}
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Email liên hệ</span>
-                  <span className="text-slate-700 font-bold">{selectedUser.email}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Số điện thoại</span>
-                  <span className="text-slate-700 font-bold">{selectedUser.phone}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Trạng thái bảo mật</span>
-                  <span className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${
-                    selectedUser.status === 'Active' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'
-                  }`}>
-                    {selectedUser.status}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Địa chỉ IP đăng nhập</span>
-                  <span className="text-slate-700 font-mono font-bold">{selectedUser.ipAddress}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Hoạt động lần cuối</span>
-                  <span className="text-slate-600 font-semibold">{selectedUser.lastActive}</span>
-                </div>
-
-                {/* Patient-specific specs */}
-                {selectedUser.role === 'Bệnh nhân' && (
-                  <>
-                    <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Giới tính / Tuổi</span>
-                      <span className="text-slate-700 font-bold">{selectedUser.gender} • {selectedUser.age} tuổi</span>
-                    </div>
-                    <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Nhóm máu</span>
-                      <span className="text-slate-700 font-bold">{selectedUser.bloodGroup || 'Không có dữ liệu'}</span>
-                    </div>
-                    <div className="space-y-1 py-1.5 border-b border-dashed border-slate-100">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider block">Địa chỉ liên hệ</span>
-                      <span className="text-slate-650 font-medium block leading-normal">{selectedUser.address}</span>
-                    </div>
-                    <div className="space-y-1 py-1.5">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider block">Tiền sử lâm sàng</span>
-                      <p className="text-slate-650 font-medium leading-relaxed bg-blue-50/30 p-2.5 rounded-lg border border-blue-105/50 italic">
-                        "{selectedUser.medicalHistory || 'Chưa cập nhật sơ đồ bệnh sử.'}"
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {/* Doctor-specific specs */}
-                {selectedUser.role === 'Bác sĩ' && (
-                  <>
-                    <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Phân khoa chính</span>
-                      <span className="text-[#0d9488] font-bold">{selectedUser.specialty}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Thâm niên lâm nghiệp</span>
-                      <span className="text-slate-755 font-bold">{selectedUser.experience}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Bottom Actions inside detailed card */}
-              <div className="pt-4 border-t border-slate-100 flex gap-2">
-                {selectedUser.status === 'Active' ? (
-                  <button 
-                    onClick={() => handleLockUser(selectedUser.id)}
-                    className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2 rounded-xl text-xs sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
-                  >
-                    <Lock className="w-4 h-4 shrink-0" />
-                    <span>Khóa Tài Khoản</span>
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => handleUnlockUser(selectedUser.id)}
-                    className="flex-1 bg-emerald-55 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"
-                  >
-                    <Unlock className="w-4 h-4 shrink-0" />
-                    <span>Mở Khóa Quy Thư</span>
-                  </button>
-                )}
-              </div>
+          {/* Loading state for detail panel */}
+          {detailLoading && (
+            <div className="h-72 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="text-xs font-semibold">Đang tải thông tin…</span>
             </div>
-          ) : (
+          )}
+
+          {/* Error state for detail panel */}
+          {!detailLoading && detailError && (
+            <div className="h-72 flex flex-col items-center justify-center border border-dashed border-rose-200 rounded-xl bg-rose-50/30 text-center p-4">
+              <p className="text-xs font-bold text-rose-500">{detailError}</p>
+            </div>
+          )}
+
+          {/* No user selected yet */}
+          {!detailLoading && !detailError && !selectedUserDetail && !selectedUserId && (
             <div className="h-72 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center p-4">
               <User className="w-10 h-10 text-slate-350 stroke-[1.5] mb-2" />
               <p className="text-xs font-bold text-slate-500">Chưa Chọn Hồ sơ</p>
               <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">Click chọn bất kỳ người dùng nào bên bảng danh sách để tra cứu sâu thông tin bảo mật chuẩn HIPAA.</p>
             </div>
           )}
+
+          {/* Detail content */}
+          {!detailLoading && !detailError && selectedUserDetail && (
+            <div className="space-y-5" id="user-details-pane">
+
+              {/* Inline action error */}
+              {actionError && (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  <p className="text-xs font-bold text-rose-600">{actionError}</p>
+                </div>
+              )}
+
+              {/* Header card with avatar */}
+              <div className="flex items-center gap-3 bg-slate-50/60 p-3 rounded-xl border border-slate-100">
+                <img
+                  src={
+                    selectedUserDetail.profile?.photoUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      selectedUserDetail.profile?.name || selectedUserDetail.email
+                    )}&background=e2e8f0&color=475569&bold=true`
+                  }
+                  alt={selectedUserDetail.profile?.name || selectedUserDetail.email}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
+                />
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-850 leading-tight">
+                    {selectedUserDetail.profile?.name || selectedUserDetail.email}
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {roleLabel(selectedUserDetail.role)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Detail rows */}
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Email liên hệ</span>
+                  <span className="text-slate-700 font-bold truncate max-w-[160px]" title={selectedUserDetail.email}>{selectedUserDetail.email}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Số điện thoại</span>
+                  <span className="text-slate-700 font-bold">{selectedUserDetail.phone || '—'}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Trạng thái khóa</span>
+                  <span className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${
+                    selectedUserDetail.isLocked
+                      ? 'text-rose-600 bg-rose-50 border border-rose-100'
+                      : 'text-emerald-600 bg-emerald-50 border border-emerald-100'
+                  }`}>
+                    {selectedUserDetail.isLocked ? 'Locked' : 'Active'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Xác minh danh tính</span>
+                  <span className={`inline-flex items-center gap-1 font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${
+                    selectedUserDetail.isVerified
+                      ? 'text-blue-600 bg-blue-50 border border-blue-100'
+                      : 'text-slate-500 bg-slate-50 border border-slate-200'
+                  }`}>
+                    {selectedUserDetail.isVerified
+                      ? <><ShieldCheck className="w-3 h-3" /> Verified</>
+                      : <><ShieldX className="w-3 h-3" /> Unverified</>
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Ngày tạo tài khoản</span>
+                  <span className="text-slate-600 font-semibold">
+                    {new Date(selectedUserDetail.createdAt).toLocaleDateString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom Actions inside detailed card */}
+              <div className="pt-4 border-t border-slate-100 flex gap-2">
+                {selectedUserDetail.isLocked ? (
+                  <button
+                    onClick={() => handleUnlockUser(selectedUserDetail._id)}
+                    className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"
+                  >
+                    <Unlock className="w-4 h-4 shrink-0" />
+                    <span>Mở Khóa Tài Khoản</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleLockUser(selectedUserDetail._id)}
+                    className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                  >
+                    <Lock className="w-4 h-4 shrink-0" />
+                    <span>Khóa Tài Khoản</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
-
     </div>
   );
 }

@@ -17,15 +17,6 @@ import {
 } from 'lucide-react';
 import '../tailwind-built.css';
 
-import { 
-  initialPatients, 
-  initialDoctors, 
-  initialAppointments, 
-  initialPrescriptions, 
-  initialInvoices, 
-  initialSystemLogs 
-} from '../constants/mockData';
-import { Patient, Doctor, Appointment, Prescription, Invoice, SystemLog } from '../types';
 import AdminMetricsView from '../components/AdminMetricsView';
 import AdminUsersView from '../components/AdminUsersView';
 import AdminDoctorsView from '../components/AdminDoctorsView';
@@ -36,107 +27,7 @@ const AdminBackofficeScreen = ({ navigation }: { navigation: any }) => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'doctors' | 'datasets' | 'audit-logs'>('metrics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Neuroscan Specific Durable States
-  const [walletBalance, setWalletBalance] = useState<number>(2450000); // in VNĐ
-  const [verifiedCount, setVerifiedCount] = useState<number>(3); // Matches backoffice verified docs count
-  const [totalDatasetSales, setTotalDatasetSales] = useState<number>(120000000); // VNĐ
-  const [datasetsCount, setDatasetsCount] = useState<number>(4);
-  
-  // Durable States
-  const [patients, setPatients] = useState<Patient[]>(initialPatients);
-  const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors);
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(initialPrescriptions);
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [logs, setLogs] = useState<SystemLog[]>(initialSystemLogs);
-  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
 
-  // Helper IP for logs
-  const getSimulatedIP = () => `192.168.1.${Math.floor(10 + Math.random() * 89)}`;
-
-  // Log append helper
-  const addSystemLog = (action: string, moduleName: string, details: string) => {
-    const newLog: SystemLog = {
-      id: `LOG-0${logs.length + 1}`,
-      user: 'BS. Lê Mạnh Minh',
-      role: 'Bác Sĩ Trực',
-      module: moduleName as any,
-      action,
-      details,
-      timestamp: new Date().toLocaleTimeString('vi-VN'),
-      ipAddress: getSimulatedIP(),
-      status: 'Success'
-    };
-    setLogs([newLog, ...logs]);
-  };
-
-  // HIPAA Anonymizer Pipeline
-  const handleTriggerAnonymization = () => {
-    // 1. Map over all patients in state, redact names and mask phone indexes
-    const maskedPatients = patients.map(p => {
-      // Name scramble: "Nguyễn Văn Hải" -> "N. V. Hải"
-      const nameParts = p.name.split(' ');
-      let redactedName = p.name;
-      if (nameParts.length > 1) {
-        const initials = nameParts.slice(0, nameParts.length - 1).map(part => part.charAt(0) + '.').join(' ');
-        redactedName = `${initials} ${nameParts[nameParts.length - 1]}`;
-      }
-      // Phone scramble: "0912345678" -> "0912***678"
-      let maskedPhone = p.phone;
-      if (p.phone.length >= 7) {
-        maskedPhone = `${p.phone.substring(0, 4)}***${p.phone.substring(p.phone.length - 3)}`;
-      }
-
-      return {
-        ...p,
-        name: redactedName,
-        phone: maskedPhone,
-        address: 'Bảo mật HIPAA Redacted',
-        email: 'redacted@hipaa-dreams.com'
-      };
-    });
-
-    setPatients(maskedPatients);
-
-    // Write-back matching appointments is necessary so names match up perfectly
-    const maskedAppointments = appointments.map(a => {
-      const pObj = maskedPatients.find(p => p.id === a.patientId);
-      return pObj ? { ...a, patientName: pObj.name } : a;
-    });
-    setAppointments(maskedAppointments);
-
-    // Update historical prescriptions too
-    const maskedPrescriptions = prescriptions.map(r => {
-      const pObj = patients.find(p => p.name === r.patientName);
-      if (pObj) {
-        const maskedP = maskedPatients.find(mp => mp.id === pObj.id);
-        if (maskedP) {
-          return { ...r, patientName: maskedP.name };
-        }
-      }
-      return r;
-    });
-    setPrescriptions(maskedPrescriptions);
-
-    // Update invoices
-    const maskedInvoices = invoices.map(i => {
-      const pObj = maskedPatients.find(p => p.id === i.patientId);
-      return pObj ? { ...i, patientName: pObj.name, patientPhone: pObj.phone } : i;
-    });
-    setInvoices(maskedInvoices);
-
-    addSystemLog('Bảo mật HIPAA Shield', 'System', 'Hoàn tất an danh hóa toàn diện cơ sở dữ liệu y tế. Kích hoạt HIPAA compliance.');
-  };
-
-  // Reset anonymization back to original identities
-  const handleResetAnonymization = () => {
-    setPatients(initialPatients);
-    setAppointments(initialAppointments);
-    setPrescriptions(initialPrescriptions);
-    setInvoices(initialInvoices);
-    addSystemLog('Phục hồi dữ liệu', 'System', 'Hoàn trả định tính nhân văn hồ sơ bệnh nhân từ backup gốc.');
-  };
 
   // Fullscreen support matching F11 request
   const toggleFullscreen = () => {
@@ -155,7 +46,6 @@ const AdminBackofficeScreen = ({ navigation }: { navigation: any }) => {
 
   // Logout function
   const handleLogout = () => {
-    addSystemLog('Đăng xuất tài khoản', 'System', 'Quản trị viên đã đăng xuất an toàn khỏi hệ thống.');
     navigation.replace('Login');
   };
 
@@ -280,11 +170,6 @@ const AdminBackofficeScreen = ({ navigation }: { navigation: any }) => {
                   <Stethoscope className="w-[18px] h-[18px] shrink-0" />
                   {!sidebarCollapsed && <span className="truncate">Bác sĩ & PK</span>}
                 </div>
-                {Math.max(0, 5 - verifiedCount) > 0 && !sidebarCollapsed && (
-                  <span className="min-w-[20px] h-[20px] rounded-full text-[11px] px-[6px] bg-[#ef4444] text-white font-bold flex items-center justify-center shrink-0">
-                    {Math.max(0, 5 - verifiedCount)}
-                  </span>
-                )}
               </button>
 
               <button 
@@ -398,7 +283,7 @@ const AdminBackofficeScreen = ({ navigation }: { navigation: any }) => {
 
             {/* Crescent Moon Dark Mode dummy button */}
             <button 
-              onClick={() => addSystemLog('Giao diện hiển thị', 'System', 'Đổi chế độ màu')}
+              onClick={() => {}}
               className="w-9 h-9 flex items-center justify-center text-slate-500 border border-[#e8edf5] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
               title="Toggle theme (Light/Dark)"
             >
@@ -429,47 +314,24 @@ const AdminBackofficeScreen = ({ navigation }: { navigation: any }) => {
           <div className="w-full px-6 py-6">
             {activeTab === 'metrics' && (
               <AdminMetricsView
-                patients={patients}
-                doctors={doctors}
-                datasetsCount={datasetsCount}
-                totalDatasetSales={totalDatasetSales}
                 onSelectTab={(tab) => setActiveTab(tab)}
               />
             )}
 
             {activeTab === 'users' && (
-              <AdminUsersView
-                patients={patients}
-                doctors={doctors}
-                addSystemLog={addSystemLog}
-              />
+              <AdminUsersView />
             )}
 
             {activeTab === 'doctors' && (
-              <AdminDoctorsView
-                doctors={doctors}
-                addSystemLog={addSystemLog}
-                setVerifiedCount={setVerifiedCount}
-              />
+              <AdminDoctorsView />
             )}
 
             {activeTab === 'datasets' && (
-              <AdminDatasetsView
-                addSystemLog={addSystemLog}
-                datasetsCount={datasetsCount}
-                setDatasetsCount={setDatasetsCount}
-                setTotalDatasetSales={setTotalDatasetSales}
-              />
+              <AdminDatasetsView />
             )}
 
             {activeTab === 'audit-logs' && (
-              <AdminAuditLogsView
-                logs={logs}
-                onTriggerAnonymization={handleTriggerAnonymization}
-                onResetAnonymization={handleResetAnonymization}
-                isPipelineRunning={isPipelineRunning}
-                setIsPipelineRunning={setIsPipelineRunning}
-              />
+              <AdminAuditLogsView />
             )}
           </div>
         </section>

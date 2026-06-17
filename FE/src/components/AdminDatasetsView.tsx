@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Database,
   PlusCircle,
@@ -12,50 +12,99 @@ import {
   ShieldAlert,
   Eye,
   UploadCloud,
-  Sparkles
+  Sparkles,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-import { initialDatasets } from '../constants/mockData';
+import { apiRequest } from '../utils/apiClient';
 
-interface AdminDatasetsViewProps {
-  addSystemLog: (action: string, module: string, details: string) => void;
-  datasetsCount: number;
-  setDatasetsCount: (count: number) => void;
-  setTotalDatasetSales: (sales: number) => void;
-}
-
-// Dataset type for this view
+// Dataset type mapped from API response
 interface DatasetItem {
-  id: string;
+  id: string;         // mapped from _id
   name: string;
   description: string;
-  sampleCount: number;
-  priceVND: number;
-  createdBy: string;
+  priceVND: number;   // mapped from price
+  status: 'pending' | 'published' | 'draft' | 'archived';
   createdAt: string;
-  isPublic: boolean;
-  status: 'published' | 'draft' | 'archived';
-  tags: string[];
+  // Fields not in API response — kept for display compatibility with fallback values
+  sampleCount: number;
   salesCount: number;
+  tags: string[];
   thumbnail: string;
+  isPublic: boolean;
+  createdBy: string;
 }
 
-export default function AdminDatasetsView({ addSystemLog, datasetsCount, setDatasetsCount, setTotalDatasetSales }: AdminDatasetsViewProps) {
-  const [datasets, setDatasets] = useState<DatasetItem[]>(initialDatasets as any);
+function mapApiDataset(raw: any): DatasetItem {
+  return {
+    id: raw._id ?? raw.id ?? '',
+    name: raw.name ?? '',
+    description: raw.description ?? '',
+    priceVND: typeof raw.price === 'number' ? raw.price : 0,
+    status: raw.status ?? 'pending',
+    createdAt: raw.createdAt
+      ? new Date(raw.createdAt).toLocaleDateString('vi-VN')
+      : '',
+    // Fallback values for fields not in API
+    sampleCount: raw.sampleCount ?? 0,
+    salesCount: raw.salesCount ?? 0,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    thumbnail:
+      raw.thumbnail ??
+      'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=200&auto=format&fit=crop&q=60',
+    isPublic: raw.isPublic ?? true,
+    createdBy: raw.createdBy ?? 'Admin',
+  };
+}
+
+export default function AdminDatasetsView() {
+  // ── Core state ──────────────────────────────────────────────────────────────
+  const [datasets, setDatasets] = useState<DatasetItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── UI state ─────────────────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState<'create' | 'edit' | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<DatasetItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'published' | 'draft' | 'archived'>('all');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    sampleCount: 1000,
     priceVND: 100000,
     isPublic: true,
-    tags: ['MRI', 'Brain']
   });
+  const [formError, setFormError] = useState<string | null>(null);
 
+  // ── Price-update state (per dataset id) ──────────────────────────────────────
+  const [priceEditId, setPriceEditId] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState<string>('');
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+
+  // ── Task 10.1 — Fetch datasets on mount ─────────────────────────────────────
+  const fetchDatasets = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiRequest<{ success: boolean; datasets: any[] }>('/admin/datasets');
+      const mapped = (response.datasets ?? []).map(mapApiDataset);
+      setDatasets(mapped);
+    } catch (err: any) {
+      setError(err.message ?? 'Không thể tải danh sách dataset.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDatasets();
+  }, []);
+
+  // ── Filtering ────────────────────────────────────────────────────────────────
   const filteredDatasets = datasets.filter(d => {
-    const matchesSearch = !searchQuery ||
+    const matchesSearch =
+      !searchQuery ||
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -64,84 +113,92 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreate = () => {
-    const newId = `DS${String(datasets.length + 1).padStart(3, '0')}`;
-    const newDataset: DatasetItem = {
-      id: newId,
-      name: formData.name,
-      description: formData.description,
-      sampleCount: formData.sampleCount,
-      priceVND: formData.priceVND,
-      isPublic: formData.isPublic,
-      tags: formData.tags,
-      createdBy: 'Admin',
-      createdAt: new Date().toLocaleDateString('vi-VN'),
-      status: 'published',
-      salesCount: 0,
-      thumbnail: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=200&auto=format&fit=crop&q=60'
-    };
-
-    const updated = [...datasets, newDataset];
-    setDatasets(updated);
-    setDatasetsCount(updated.length);
-    setShowModal(null);
-
-    addSystemLog('Tạo Dataset', 'Datasets', `Tạo mới dataset ${newDataset.name} (${newId})`);
+  // ── Task 10.2 — Create dataset ───────────────────────────────────────────────
+  const handleCreate = async () => {
+    setFormError(null);
+    try {
+      await apiRequest<{ success: boolean; dataset: any }>('/admin/datasets', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          price: formData.priceVND,
+          status: 'pending',
+        }),
+      });
+      // On success: refresh list and close modal
+      await fetchDatasets();
+      setShowModal(null);
+    } catch (err: any) {
+      // On failure: show error in modal, keep it open
+      setFormError(err.message ?? 'Tạo dataset thất bại.');
+    }
   };
 
-  const handleUpdate = () => {
-    if (!selectedDataset) return;
-    const updated = datasets.map(d => d.id === selectedDataset.id ? { ...d, ...formData } : d);
-    setDatasets(updated);
-    setShowModal(null);
-    addSystemLog('Cập nhật Dataset', 'Datasets', `Cập nhật thông tin dataset ${selectedDataset.name}`);
+  // ── Task 10.3 — Update price ─────────────────────────────────────────────────
+  const handlePriceUpdate = async (id: string) => {
+    const newPrice = parseFloat(priceInput);
+    if (isNaN(newPrice) || newPrice < 0) {
+      setPriceError('Giá không hợp lệ.');
+      return;
+    }
+    setPriceLoading(true);
+    setPriceError(null);
+    try {
+      await apiRequest<{ success: boolean; dataset: any }>(`/admin/datasets/${id}/price`, {
+        method: 'PUT',
+        body: JSON.stringify({ price: newPrice }),
+      });
+      // On success: update only that dataset's price in local state — no full reload
+      setDatasets(prev =>
+        prev.map(d => (d.id === id ? { ...d, priceVND: newPrice } : d))
+      );
+      setPriceEditId(null);
+      setPriceInput('');
+    } catch (err: any) {
+      // On failure: show error, preserve old price
+      setPriceError(err.message ?? 'Cập nhật giá thất bại.');
+    } finally {
+      setPriceLoading(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const target = datasets.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = datasets.filter(d => d.id !== id);
-    setDatasets(updated);
-    setDatasetsCount(updated.length);
-    addSystemLog('Xóa Dataset', 'Datasets', `Xóa dataset ${target.name} (${id})`);
-  };
-
-  const handleArchive = (id: string) => {
-    const updated = datasets.map(d => d.id === id ? { ...d, status: 'archived' as any } : d);
-    setDatasets(updated);
-    const target = datasets.find(d => d.id === id);
-    addSystemLog('Archive Dataset', 'Datasets', `Đã archive dataset ${target?.name} (${id})`);
-  };
-
+  // ── Modal helpers ────────────────────────────────────────────────────────────
   const handleOpenCreate = () => {
-    setFormData({
-      name: '',
-      description: '',
-      sampleCount: 1000,
-      priceVND: 100000,
-      isPublic: true,
-      tags: ['MRI', 'Brain']
-    });
+    setFormData({ name: '', description: '', priceVND: 100000, isPublic: true });
+    setFormError(null);
     setSelectedDataset(null);
     setShowModal('create');
   };
 
-  const handleOpenEdit = (dataset: DatasetItem) => {
-    setFormData({
-      name: dataset.name,
-      description: dataset.description,
-      sampleCount: dataset.sampleCount,
-      priceVND: dataset.priceVND,
-      isPublic: dataset.isPublic,
-      tags: dataset.tags
-    });
-    setSelectedDataset(dataset);
-    setShowModal('edit');
+  // ── Inline price edit helpers ────────────────────────────────────────────────
+  const openPriceEdit = (ds: DatasetItem) => {
+    setPriceEditId(ds.id);
+    setPriceInput(String(ds.priceVND));
+    setPriceError(null);
   };
 
-  const totalRevenue = datasets.reduce((sum, d) => sum + (d.salesCount * d.priceVND), 0);
+  const cancelPriceEdit = () => {
+    setPriceEditId(null);
+    setPriceInput('');
+    setPriceError(null);
+  };
 
+  // ── Stats ────────────────────────────────────────────────────────────────────
+  const totalRevenue = datasets.reduce((sum, d) => sum + d.salesCount * d.priceVND, 0);
+
+  // ── Status badge helper ──────────────────────────────────────────────────────
+  const statusClass = (status: DatasetItem['status']) => {
+    switch (status) {
+      case 'published': return 'bg-emerald-100 text-emerald-700';
+      case 'pending':   return 'bg-blue-100 text-blue-700';
+      case 'draft':     return 'bg-amber-100 text-amber-700';
+      case 'archived':  return 'bg-slate-100 text-slate-600';
+      default:          return 'bg-slate-100 text-slate-600';
+    }
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -180,7 +237,9 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
         <div className="bg-white border border-[#e8edf5] shadow-3xs rounded-2xl p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Tổng mẫu</p>
-            <p className="text-xl font-extrabold font-mono text-slate-800">{datasets.reduce((s, d) => s + d.sampleCount, 0).toLocaleString('vi-VN')}</p>
+            <p className="text-xl font-extrabold font-mono text-slate-800">
+              {datasets.reduce((s, d) => s + d.sampleCount, 0).toLocaleString('vi-VN')}
+            </p>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
             <FileText className="w-5 h-5" />
@@ -200,7 +259,9 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
         <div className="bg-white border border-[#e8edf5] shadow-3xs rounded-2xl p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Lượt bán</p>
-            <p className="text-xl font-extrabold font-mono text-slate-800">{datasets.reduce((s, d) => s + d.salesCount, 0)}</p>
+            <p className="text-xl font-extrabold font-mono text-slate-800">
+              {datasets.reduce((s, d) => s + d.salesCount, 0)}
+            </p>
           </div>
           <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
             <Activity className="w-5 h-5" />
@@ -223,102 +284,176 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
           className="bg-white border border-[#e8edf5] px-3 py-2 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
           <option value="all">Tất cả trạng thái</option>
+          <option value="pending">Chờ duyệt</option>
           <option value="published">Đã xuất bản</option>
           <option value="draft">Nháp</option>
           <option value="archived">Đã archive</option>
         </select>
       </div>
 
-      {/* Dataset Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredDatasets.map(ds => (
-          <div key={ds.id} className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs overflow-hidden flex flex-col">
-            <div className="relative">
-              <img src={ds.thumbnail} alt={ds.name} className="h-36 w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              <div className="absolute bottom-3 left-4 right-4">
-                <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-0.5">{ds.id}</p>
-                <h3 className="text-sm font-extrabold text-white leading-tight truncate">{ds.name}</h3>
-              </div>
-            </div>
+      {/* Loading indicator — Requirement 13.5 */}
+      {loading && (
+        <div className="flex items-center justify-center gap-3 py-12 text-slate-500 text-sm">
+          <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+          <span>Đang tải danh sách dataset...</span>
+        </div>
+      )}
 
-            <div className="p-5 flex-1 flex flex-col gap-4">
-              <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{ds.description}</p>
+      {/* Error state */}
+      {!loading && error && (
+        <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-2xl px-5 py-4 text-rose-700 text-xs font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+          <button
+            onClick={fetchDatasets}
+            className="ml-auto text-rose-600 underline hover:no-underline"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
 
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1 text-slate-500">
-                  <FileText className="w-3.5 h-3.5" />
-                  <span className="font-semibold">{ds.sampleCount.toLocaleString('vi-VN')} mẫu</span>
+      {/* Dataset Grid — shown when not loading */}
+      {!loading && !error && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredDatasets.map(ds => (
+            <div key={ds.id} className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs overflow-hidden flex flex-col">
+              {/* Thumbnail */}
+              <div className="relative">
+                <img src={ds.thumbnail} alt={ds.name} className="h-36 w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute bottom-3 left-4 right-4">
+                  <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-0.5 truncate">{ds.id}</p>
+                  <h3 className="text-sm font-extrabold text-white leading-tight truncate">{ds.name}</h3>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ds.status === 'published' ? 'bg-emerald-100 text-emerald-700' : ds.status === 'draft' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {ds.status.toUpperCase()}
-                </span>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
-                {ds.tags.map(tag => (
-                  <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold">
-                    {tag}
+              <div className="p-5 flex-1 flex flex-col gap-3">
+                <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{ds.description}</p>
+
+                {/* Status + sample count row */}
+                <div className="flex items-center justify-between text-xs">
+                  {ds.sampleCount > 0 ? (
+                    <div className="flex items-center gap-1 text-slate-500">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="font-semibold">{ds.sampleCount.toLocaleString('vi-VN')} mẫu</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span className="font-medium">{ds.createdAt}</span>
+                    </div>
+                  )}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(ds.status)}`}>
+                    {ds.status.toUpperCase()}
                   </span>
-                ))}
-              </div>
-
-              <div className="border-t border-[#e8edf5] pt-3 mt-auto flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-slate-400 font-medium mb-0.5">Giá bán</p>
-                  <p className="text-lg font-extrabold text-slate-800 font-mono">{(ds.priceVND / 1000).toFixed(0)}K VND</p>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleOpenEdit(ds)}
-                    className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
-                    title="Chỉnh sửa"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  {ds.status !== 'archived' && (
+                {/* Tags (only if available) */}
+                {ds.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ds.tags.map(tag => (
+                      <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* CreatedAt date */}
+                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <Calendar className="w-3 h-3" />
+                  <span>Tạo lúc: {ds.createdAt || '—'}</span>
+                </div>
+
+                {/* Price + actions */}
+                <div className="border-t border-[#e8edf5] pt-3 mt-auto flex flex-col gap-2">
+
+                  {/* Price row */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-medium mb-0.5">Giá bán</p>
+                      <p className="text-lg font-extrabold text-slate-800 font-mono">
+                        {(ds.priceVND / 1000).toFixed(0)}K VND
+                      </p>
+                    </div>
+
+                    {/* Price error for this card */}
+                    {priceEditId === ds.id && priceError && (
+                      <span className="text-[10px] text-rose-600 font-medium max-w-[120px] text-right">{priceError}</span>
+                    )}
+                  </div>
+
+                  {/* Inline price update — Task 10.3 */}
+                  {priceEditId === ds.id ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="number"
+                        value={priceInput}
+                        onChange={(e) => { setPriceInput(e.target.value); setPriceError(null); }}
+                        className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                        placeholder="Nhập giá mới (VND)"
+                        disabled={priceLoading}
+                      />
+                      <button
+                        onClick={() => handlePriceUpdate(ds.id)}
+                        disabled={priceLoading}
+                        className="px-3 py-1.5 text-[10px] font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-1 whitespace-nowrap"
+                      >
+                        {priceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                        Lưu
+                      </button>
+                      <button
+                        onClick={cancelPriceEdit}
+                        disabled={priceLoading}
+                        className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-60 transition-colors whitespace-nowrap"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => handleArchive(ds.id)}
-                      className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
-                      title="Archive"
+                      onClick={() => openPriceEdit(ds)}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <DollarSign className="w-3 h-3" />
+                      Cập nhật giá
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(ds.id)}
-                    className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                    title="Xóa"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {filteredDatasets.length === 0 && (
-          <div className="col-span-full bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-10 text-center text-slate-400 text-xs">
-            Không tìm thấy dataset nào phù hợp.
-          </div>
-        )}
-      </div>
+          {filteredDatasets.length === 0 && (
+            <div className="col-span-full bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-10 text-center text-slate-400 text-xs">
+              Không tìm thấy dataset nào phù hợp.
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Create/Edit Modal */}
-      {showModal && (
+      {/* Create Modal — Task 10.2 */}
+      {showModal === 'create' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl border border-slate-150 max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                {showModal === 'create' ? <PlusCircle className="w-4.5 h-4.5 text-indigo-600" /> : <Edit3 className="w-4.5 h-4.5 text-indigo-600" />}
-                {showModal === 'create' ? 'Tạo Dataset mới' : 'Chỉnh sửa Dataset'}
+                <PlusCircle className="w-4.5 h-4.5 text-indigo-600" />
+                Tạo Dataset mới
               </h3>
               <button onClick={() => setShowModal(null)} className="text-slate-400 hover:text-slate-600">
                 ✕
               </button>
             </div>
+
+            {/* Form error banner */}
+            {formError && (
+              <div className="mb-4 flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 text-rose-700 text-xs font-medium">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="space-y-1">
@@ -341,25 +476,14 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600">Số lượng mẫu</label>
-                  <input
-                    type="number"
-                    value={formData.sampleCount}
-                    onChange={(e) => setFormData({ ...formData, sampleCount: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600">Giá bán (VND)</label>
-                  <input
-                    type="number"
-                    value={formData.priceVND}
-                    onChange={(e) => setFormData({ ...formData, priceVND: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600">Giá bán (VND)</label>
+                <input
+                  type="number"
+                  value={formData.priceVND}
+                  onChange={(e) => setFormData({ ...formData, priceVND: Number(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                />
               </div>
 
               <div className="flex items-center gap-2 pt-2">
@@ -381,10 +505,10 @@ export default function AdminDatasetsView({ addSystemLog, datasetsCount, setData
                   Hủy
                 </button>
                 <button
-                  onClick={showModal === 'create' ? handleCreate : handleUpdate}
+                  onClick={handleCreate}
                   className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 text-white hover:opacity-90 transition-opacity"
                 >
-                  {showModal === 'create' ? 'Tạo Dataset' : 'Lưu thay đổi'}
+                  Tạo Dataset
                 </button>
               </div>
             </div>
