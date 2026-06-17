@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Config from '../constants/config';
 import { post, setAuthToken } from '../services/api.service';
+import { signInWithGoogleWeb } from '../firebase';
 
 const LoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -24,6 +25,7 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Forgot password states
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -80,10 +82,19 @@ const LoginScreen = ({ navigation }) => {
       let idToken = 'mock_google_token_123';
       
       if (Platform.OS === 'web') {
-        const { signInWithPopup } = require('firebase/auth');
-        const { auth, googleProvider } = require('../firebase');
-        const result = await signInWithPopup(auth, googleProvider);
-        idToken = await result.user.getIdToken();
+        try {
+          idToken = await signInWithGoogleWeb();
+          if (!idToken) {
+            showAlert('info', 'Thông báo', 'Đăng nhập Google bị hủy.');
+            setLoading(false);
+            return;
+          }
+        } catch (firebaseErr) {
+          console.error('Firebase sign in popup error:', firebaseErr);
+          showAlert('error', 'Lỗi đăng nhập', 'Không thể mở popup hoặc quá trình đăng nhập Google bị gián đoạn.');
+          setLoading(false);
+          return;
+        }
       }
 
       const data = await post('/auth/sso/google', { idToken });
@@ -167,156 +178,268 @@ const LoginScreen = ({ navigation }) => {
       setForgotLoading(false);
     }
   };
-
   return (
-    <SafeAreaView style={isDesktop ? styles.desktopContainer : styles.container}>
-      <View style={isDesktop ? styles.desktopCard : styles.fullWidth}>
-        {/* Left Panel */}
-        {isDesktop && (
-          <View style={styles.leftPanel}>
-            <Image
-              source={require('../../assets/nero.png')}
-              style={styles.leftPanelBg}
-              resizeMode="cover"
-            />
-            <View style={styles.leftPanelOverlay} />
-            <View style={styles.leftPanelContent}>
-              <View style={styles.statsBadgeContainer}>
-                <View style={styles.statMiniCard}>
-                  <Text style={styles.statMiniLabel}>ĐỘ CHÍNH XÁC</Text>
-                  <Text style={styles.statMiniValue}>99.8%</Text>
-                </View>
-                <View style={styles.statMiniCard}>
-                  <Text style={styles.statMiniLabel}>THỜI GIAN XỬ LÝ</Text>
-                  <Text style={styles.statMiniValue}>&lt; 2 Giây</Text>
-                </View>
-              </View>
-              <Text style={styles.leftPanelTextTitle}>
-                Chẩn đoán thông minh hơn với{' '}
-                <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
-              </Text>
-              <Text style={styles.leftPanelTextDesc}>
-                Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng với độ chính xác tuyệt đối.
-              </Text>
+    <SafeAreaView style={styles.container}>
+      {/* 1. TOP HEADER (Navigation Bar) */}
+      <View style={styles.navbar}>
+        <View style={styles.navbarContainer}>
+          {/* Logo & Brand */}
+          <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
+            <View style={styles.logoCircle}>
+              <View style={styles.logoInner} />
             </View>
+            <View>
+              <Text style={styles.brandName}>NeuroScan AI</Text>
+              <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Back to Home Button on the Right */}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.homeLinkBtn}
+              onPress={() => navigation.navigate('Welcome')}
+            >
+              <Text style={styles.homeLinkBtnText}>← Quay lại Trang chủ</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* Right Panel (Form) */}
-        <View style={isDesktop ? styles.rightPanel : styles.fullWidth}>
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={[styles.scrollContainer, isDesktop && styles.desktopScrollContainer]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={!isDesktop}
-          >
-            {/* Header Logo */}
-            <View style={[styles.header, isDesktop && styles.desktopHeader]}>
-              <View style={styles.logoCircle}>
-                <View style={styles.logoInner} />
-              </View>
-              <Text style={styles.appName}>{Config.APP_NAME}</Text>
-            </View>
-
-            {/* Title */}
-            <Text style={[styles.title, isDesktop && styles.desktopTitle]}>Chào mừng trở lại</Text>
-            <Text style={[styles.subtitle, isDesktop && styles.desktopSubtitle]}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
-
-            {/* Inputs */}
-            <View style={[styles.form, isDesktop && styles.desktopForm]}>
-              <Text style={[styles.label, isDesktop && styles.desktopLabel]}>Số điện thoại hoặc Email</Text>
-              <TextInput
-                style={[styles.input, isDesktop && styles.desktopInput]}
-                placeholder="Nhập email hoặc SĐT"
-                placeholderTextColor="#94A3B8"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-
-              <View style={styles.passwordHeader}>
-                <Text style={[styles.label, isDesktop && styles.desktopLabel]}>Mật khẩu</Text>
-                <TouchableOpacity onPress={() => setShowForgotModal(true)}>
-                  <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={[styles.passwordContainer, isDesktop && styles.desktopPasswordContainer]}>
-                <TextInput
-                  style={[styles.passwordInput, isDesktop && styles.desktopPasswordInput]}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity style={[styles.eyeButton, isDesktop && styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
-                  <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Login Button */}
-              <TouchableOpacity style={[styles.loginButton, isDesktop && styles.desktopLoginButton]} onPress={handleLogin} disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.loginButtonText}>Đăng nhập →</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Divider */}
-            <View style={[styles.dividerContainer, isDesktop && styles.desktopDividerContainer]}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* SSO Grid */}
-            <View style={[styles.ssoContainer, isDesktop && styles.desktopSsoContainer]}>
-              <TouchableOpacity style={[styles.ssoButton, isDesktop && styles.desktopSsoButton]} onPress={handleGoogleLogin}>
-                <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.ssoButtonText}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.ssoButton, styles.zaloButton, isDesktop && styles.desktopSsoButton]} onPress={handleZaloLogin}>
-                <View style={styles.zaloCircle}>
-                  <Text style={styles.zaloLetter}>Z</Text>
-                </View>
-                <Text style={styles.ssoButtonText}>Zalo</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Sign up Link */}
-            <View style={[styles.registerContainer, isDesktop && styles.desktopRegisterContainer]}>
-              <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>Đăng ký ngay →</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Quick Demo Login */}
-            <View style={[styles.quickLoginContainer, isDesktop && styles.desktopQuickLoginContainer]}>
-              <Text style={[styles.quickLoginTitle, isDesktop && styles.desktopQuickLoginTitle]}>Đăng nhập nhanh (demo):</Text>
-              <View style={styles.quickButtonsRow}>
-                <TouchableOpacity style={[styles.quickButton, isDesktop && styles.desktopQuickButton]} onPress={() => {
-                  setAuthToken('');
-                  navigation.replace('Home', { user: { role: 'doctor', email: 'doctor@neuroscan.com', profile: { name: 'Bác sĩ Demo' } } });
-                }}>
-                  <Text style={styles.quickButtonText}>Bảng điều khiển</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.quickButton, isDesktop && styles.desktopQuickButton]} onPress={() => {
-                  setAuthToken('');
-                  navigation.replace('Home', { user: { role: 'patient', email: 'patient@neuroscan.com', profile: { name: 'Bệnh nhân Demo' } } });
-                }}>
-                  <Text style={styles.quickButtonText}>Cổng bệnh nhân</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
         </View>
       </View>
+
+      {/* Main Body */}
+      {isDesktop ? (
+        <View style={styles.desktopMainBody}>
+          <View style={styles.desktopCard}>
+            {/* Left Panel */}
+            <View style={styles.leftPanel}>
+              <Image
+                source={require('../../assets/nero.png')}
+                style={styles.leftPanelBg}
+                resizeMode="cover"
+              />
+              <View style={styles.leftPanelOverlay} />
+              <View style={styles.leftPanelContent}>
+                <View style={styles.statsBadgeContainer}>
+                  <View style={styles.statMiniCard}>
+                    <Text style={styles.statMiniLabel}>ĐỘ CHÍNH XÁC</Text>
+                    <Text style={styles.statMiniValue}>99.8%</Text>
+                  </View>
+                  <View style={styles.statMiniCard}>
+                    <Text style={styles.statMiniLabel}>THỜI GIAN XỬ LÝ</Text>
+                    <Text style={styles.statMiniValue}>&lt; 2 Giây</Text>
+                  </View>
+                </View>
+                <Text style={styles.leftPanelTextTitle}>
+                  Chẩn đoán thông minh hơn với{' '}
+                  <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
+                </Text>
+                <Text style={styles.leftPanelTextDesc}>
+                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng với độ chính xác tuyệt đối.
+                </Text>
+              </View>
+            </View>
+
+            {/* Right Panel (Form) */}
+            <View style={styles.rightPanel}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.desktopScrollContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Title */}
+                <View style={styles.desktopTitleContainer}>
+                  <Text style={styles.desktopTitle}>Chào mừng trở lại</Text>
+                  <Text style={styles.desktopSubtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
+                </View>
+
+                {/* Inputs */}
+                <View style={styles.desktopForm}>
+                  <Text style={styles.desktopLabel}>Số điện thoại hoặc Email</Text>
+                  <TextInput
+                    style={[styles.input, styles.desktopInput]}
+                    placeholder="Nhập email hoặc SĐT"
+                    placeholderTextColor="#94A3B8"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+
+                  <View style={styles.passwordHeader}>
+                    <Text style={styles.desktopLabel}>Mật khẩu</Text>
+                    <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                      <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.passwordContainer, styles.desktopPasswordContainer]}>
+                    <TextInput
+                      style={[styles.passwordInput, styles.desktopPasswordInput]}
+                      placeholder="••••••••"
+                      placeholderTextColor="#94A3B8"
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
+                      <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Login Button */}
+                  <TouchableOpacity style={[styles.loginButton, styles.desktopLoginButton]} onPress={handleLogin} disabled={loading}>
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={styles.loginButtonText}>Đăng nhập →</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Divider */}
+                <View style={styles.desktopDividerContainer}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* SSO Grid */}
+                <View style={styles.desktopSsoContainer}>
+                  <TouchableOpacity style={[styles.ssoButton, styles.desktopSsoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
+                    <Text style={styles.googleIcon}>G</Text>
+                    <Text style={styles.ssoButtonText}>Google</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Sign up Link */}
+                <View style={styles.desktopRegisterContainer}>
+                  <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                    <Text style={styles.registerLink}>Đăng ký ngay →</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Demo Login */}
+                <View style={styles.desktopQuickLoginContainer}>
+                  <Text style={styles.desktopQuickLoginTitle}>Đăng nhập nhanh (demo):</Text>
+                  <View style={styles.quickButtonsRow}>
+                    <TouchableOpacity style={[styles.quickButton, styles.desktopQuickButton]} onPress={() => {
+                      setAuthToken('');
+                      navigation.replace('Home', { user: { role: 'doctor', email: 'doctor@neuroscan.com', profile: { name: 'Bác sĩ Demo' } } });
+                    }}>
+                      <Text style={styles.quickButtonText}>Bảng điều khiển</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.quickButton, styles.desktopQuickButton]} onPress={() => {
+                      setAuthToken('');
+                      navigation.replace('Home', { user: { role: 'patient', email: 'patient@neuroscan.com', profile: { name: 'Bệnh nhân Demo' } } });
+                    }}>
+                      <Text style={styles.quickButtonText}>Cổng bệnh nhân</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.mainBody}
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+        >
+          {/* Title */}
+          <Text style={styles.title}>Chào mừng trở lại</Text>
+          <Text style={styles.subtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
+
+          {/* Inputs */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Số điện thoại hoặc Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập email hoặc SĐT"
+              placeholderTextColor="#94A3B8"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <View style={styles.passwordHeader}>
+              <Text style={styles.label}>Mật khẩu</Text>
+              <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+                <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Login Button */}
+            <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Đăng nhập →</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* SSO Grid */}
+          <View style={styles.ssoContainer}>
+            <TouchableOpacity style={[styles.ssoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
+              <Text style={styles.googleIcon}>G</Text>
+              <Text style={styles.ssoButtonText}>Google</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sign up Link */}
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerLink}>Đăng ký ngay →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Demo Login */}
+          <View style={styles.quickLoginContainer}>
+            <Text style={styles.quickLoginTitle}>Đăng nhập nhanh (demo):</Text>
+            <View style={styles.quickButtonsRow}>
+              <TouchableOpacity style={styles.quickButton} onPress={() => {
+                setAuthToken('');
+                navigation.replace('Home', { user: { role: 'doctor', email: 'doctor@neuroscan.com', profile: { name: 'Bác sĩ Demo' } } });
+              }}>
+                <Text style={styles.quickButtonText}>Bảng điều khiển</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickButton} onPress={() => {
+                setAuthToken('');
+                navigation.replace('Home', { user: { role: 'patient', email: 'patient@neuroscan.com', profile: { name: 'Bệnh nhân Demo' } } });
+              }}>
+                <Text style={styles.quickButtonText}>Cổng bệnh nhân</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      )}
 
       {/* Forgot Password Modal */}
       <Modal visible={showForgotModal} animationType="slide" transparent>
@@ -464,6 +587,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+    height: Platform.OS === 'web' ? '100vh' : '100%',
   },
   scrollContainer: {
     paddingHorizontal: 24,
@@ -530,7 +654,6 @@ const styles = StyleSheet.create({
   },
   passwordHeader: {
     flexDirection: 'row',
-    justifyContent: 'between',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
@@ -590,6 +713,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
   },
   dividerText: {
     fontSize: 12,
@@ -599,7 +723,7 @@ const styles = StyleSheet.create({
   },
   ssoContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginBottom: 32,
     gap: 12,
   },
@@ -625,22 +749,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4285F4',
   },
-  zaloButton: {
-    // can customize zalo container styles
-  },
-  zaloCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#2563EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  zaloLetter: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-  },
+
   quickLoginContainer: {
     marginTop: 16,
     borderTopWidth: 1,
@@ -895,26 +1004,35 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   desktopScrollContainer: {
-    paddingVertical: 24,
-    paddingHorizontal: 32,
+    paddingVertical: 32,
+    paddingHorizontal: 40,
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 20,
   },
   desktopHeader: {
     marginBottom: 20,
     marginTop: 0,
   },
   desktopTitle: {
-    fontSize: 22,
-    marginBottom: 4,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#15803D',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   desktopSubtitle: {
-    marginBottom: 20,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 0,
   },
   desktopLabel: {
     marginBottom: 6,
     fontSize: 13,
   },
   desktopForm: {
-    marginBottom: 10,
+    marginBottom: 0,
   },
   desktopInput: {
     height: 42,
@@ -933,24 +1051,33 @@ const styles = StyleSheet.create({
     height: 42,
   },
   desktopDividerContainer: {
-    marginVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 0,
   },
   desktopSsoContainer: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 0,
+    gap: 12,
   },
   desktopSsoButton: {
     height: 42,
   },
   desktopRegisterContainer: {
-    marginVertical: 6,
-    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 0,
   },
   desktopQuickLoginContainer: {
-    marginTop: 12,
     paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   desktopQuickLoginTitle: {
     marginBottom: 6,
+    textAlign: 'center',
   },
   desktopQuickButton: {
     height: 32,
@@ -1011,6 +1138,160 @@ const styles = StyleSheet.create({
   alertButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: 'bold',
+  },
+  // NAVBAR STYLES
+  navbar: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    zIndex: 10,
+    width: '100%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        position: 'sticky',
+        top: 0,
+      }
+    }),
+  },
+  navbarContainer: {
+    height: 70,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    maxWidth: 1200,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#15803D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  logoInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  brandName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    lineHeight: 18,
+  },
+  brandSub: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#15803D',
+  },
+  navLinks: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  navLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+    paddingVertical: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bookingBtn: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  bookingBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  loginBtn: {
+    backgroundColor: '#15803D',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  loginBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  mobileMenuBtn: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  menuIconText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#334155',
+  },
+  mobileDropdown: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  mobileNavLink: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  mobileNavLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  desktopMainBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    width: '100%',
+    paddingVertical: 20,
+  },
+  mainBody: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  homeLinkBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#15803D',
+    backgroundColor: '#FFFFFF',
+  },
+  homeLinkBtnText: {
+    color: '#15803D',
+    fontSize: 13,
     fontWeight: 'bold',
   },
 });

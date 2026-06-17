@@ -23,20 +23,72 @@ const RegisterScreen = ({ navigation }) => {
   const [licenseUrl, setLicenseUrl] = useState(''); // Doctor only
   const [loading, setLoading] = useState(false);
 
+  // Validation errors
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [licenseUrlError, setLicenseUrlError] = useState('');
+
   const handleRegister = async () => {
-    if (!email || !password || !name) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ Email, Mật khẩu và Họ tên.');
+    // Reset errors
+    setNameError('');
+    setEmailError('');
+    setPhoneError('');
+    setPasswordError('');
+    setLicenseUrlError('');
+
+    let hasError = false;
+
+    if (!name.trim()) {
+      setNameError('Vui lòng nhập Họ và tên.');
+      hasError = true;
+    }
+
+    if (!email.trim()) {
+      setEmailError('Vui lòng nhập địa chỉ Email.');
+      hasError = true;
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        setEmailError('Địa chỉ Email không đúng định dạng chuẩn.');
+        hasError = true;
+      }
+    }
+
+    if (phone.trim()) {
+      const phoneRegex = /^[0-9]{10}$/;
+      if (!phoneRegex.test(phone.trim())) {
+        setPhoneError('Số điện thoại phải chứa đúng 10 số.');
+        hasError = true;
+      }
+    }
+
+    if (!password) {
+      setPasswordError('Vui lòng nhập Mật khẩu.');
+      hasError = true;
+    } else if (password.length < 6) {
+      setPasswordError('Mật khẩu phải chứa ít nhất 6 ký tự.');
+      hasError = true;
+    }
+
+    if (role === 'doctor' && !licenseUrl.trim()) {
+      setLicenseUrlError('Vui lòng cung cấp đường dẫn Chứng chỉ hành nghề.');
+      hasError = true;
+    }
+
+    if (hasError) {
       return;
     }
 
     const payload = {
-      email,
+      email: email.trim(),
       password,
-      name,
-      phone: phone || undefined,
+      name: name.trim(),
+      phone: phone.trim() || undefined,
       role,
-      bhytNumber: role === 'patient' ? bhytNumber : undefined,
-      licenseUrl: role === 'doctor' ? licenseUrl : undefined,
+      bhytNumber: role === 'patient' ? bhytNumber.trim() : undefined,
+      licenseUrl: role === 'doctor' ? licenseUrl.trim() : undefined,
     };
 
     setLoading(true);
@@ -71,44 +123,60 @@ const RegisterScreen = ({ navigation }) => {
         <View style={styles.form}>
           <Text style={styles.label}>Họ và tên *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, nameError ? styles.inputError : null]}
             placeholder="Nguyễn Văn A"
             placeholderTextColor="#94A3B8"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              if (nameError) setNameError('');
+            }}
           />
+          {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
 
           <Text style={styles.label}>Địa chỉ Email *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, emailError ? styles.inputError : null]}
             placeholder="vidu@neuroscan.com"
             placeholderTextColor="#94A3B8"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (emailError) setEmailError('');
+            }}
             autoCapitalize="none"
             keyboardType="email-address"
           />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
           <Text style={styles.label}>Số điện thoại</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, phoneError ? styles.inputError : null]}
             placeholder="09XXXXXXXX"
             placeholderTextColor="#94A3B8"
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(text) => {
+              setPhone(text);
+              if (phoneError) setPhoneError('');
+            }}
             keyboardType="phone-pad"
           />
+          {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
 
           <Text style={styles.label}>Mật khẩu *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, passwordError ? styles.inputError : null]}
             placeholder="••••••••"
             placeholderTextColor="#94A3B8"
             secureTextEntry
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (passwordError) setPasswordError('');
+            }}
             autoCapitalize="none"
           />
+          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
           {/* Role selector */}
           <Text style={styles.label}>Bạn đăng ký với tư cách là *</Text>
@@ -148,13 +216,17 @@ const RegisterScreen = ({ navigation }) => {
             <View>
               <Text style={styles.label}>Đường dẫn Chứng chỉ hành nghề (CCHN) *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, licenseUrlError ? styles.inputError : null]}
                 placeholder="https://drive.google.com/... hoặc file path"
                 placeholderTextColor="#94A3B8"
                 value={licenseUrl}
-                onChangeText={setLicenseUrl}
+                onChangeText={(text) => {
+                  setLicenseUrl(text);
+                  if (licenseUrlError) setLicenseUrlError('');
+                }}
                 autoCapitalize="none"
               />
+              {licenseUrlError ? <Text style={styles.errorText}>{licenseUrlError}</Text> : null}
               <Text style={styles.helperText}>
                 * Tài khoản bác sĩ sẽ được Ban quản trị phê duyệt thủ công sau khi kiểm tra CCHN.
               </Text>
@@ -314,6 +386,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#15803D',
     fontWeight: 'bold',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: -16,
+    marginBottom: 16,
+    fontWeight: '500',
+    paddingLeft: 4,
   },
 });
 

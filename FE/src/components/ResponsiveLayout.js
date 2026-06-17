@@ -43,7 +43,7 @@ const ResponsiveLayout = ({
       onLogout();
     } else {
       setAuthToken('');
-      navigation.replace('Login');
+      navigation.replace('Welcome');
     }
   };
 
