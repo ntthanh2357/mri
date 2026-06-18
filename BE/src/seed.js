@@ -19,7 +19,7 @@ const seedDatabase = async () => {
 
     // 1. Dọn dẹp dữ liệu cũ
     console.log("Cleaning up old data...");
-    await User.deleteMany({ email: { $in: ["admin@neuroscan.com", "doctor@neuroscan.com", "patient@neuroscan.com"] } });
+    await User.deleteMany({ email: { $in: ["admin@neuroscan.com", "doctor@neuroscan.com", "patient@neuroscan.com", "receptionist@neuroscan.com", "nurse@neuroscan.com", "technician@neuroscan.com"] } });
     await Biomarker.deleteMany({});
     await LabOrder.deleteMany({});
     await VitalSign.deleteMany({});
@@ -64,6 +64,30 @@ const seedDatabase = async () => {
           bhytNumber: "GD4797932200123",
           medicalId: "26025699",
         },
+      },
+      {
+        email: "receptionist@neuroscan.com",
+        phone: "+84999999994",
+        passwordHash,
+        role: "receptionist",
+        isVerified: true,
+        profile: { name: "Tiếp Tân Hoa", photoUrl: "" },
+      },
+      {
+        email: "nurse@neuroscan.com",
+        phone: "+84999999995",
+        passwordHash,
+        role: "nurse",
+        isVerified: true,
+        profile: { name: "Y tá Lê Thị Hoa", photoUrl: "" },
+      },
+      {
+        email: "technician@neuroscan.com",
+        phone: "+84999999996",
+        passwordHash,
+        role: "technician",
+        isVerified: true,
+        profile: { name: "KTV Lê Quốc Tuấn", photoUrl: "" },
       },
     ];
 
