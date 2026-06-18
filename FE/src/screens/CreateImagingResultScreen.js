@@ -108,27 +108,32 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     setImages(images.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // Auto-fill template docx data based on modality
-  const handleAutoFillTemplate = () => {
-    if (imagingType === 'MRI') {
-      setProcedure('Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)');
-      setTechnique('Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.');
-      setFindings('Phát hiện một cấu trúc dạng khối u chiếm chỗ tại thùy thái dương bên trái, kích thước khoảng 22x24mm. Khối u có ranh giới tương đối rõ, gây phù nề nhẹ nhu mô não xung quanh nhưng chưa đè ép đáng kể đường giữa và não thất bên.');
-      setConclusion('Hình ảnh khối u thùy thái dương trái, hướng tới u màng não (Meningioma) lành tính.');
-    } else {
-      setProcedure('Chụp cắt lớp vi tính sọ não (CT-Scan không thuốc)');
-      setTechnique('Chụp cắt lớp vi tính đầu không tiêm chất cản quang với các lát cắt song song với mặt phẳng obito-meatal, bề dày lát cắt 5mm.');
-      setFindings('Hình ảnh vùng giảm tỷ trọng nhẹ dạng khối tại thùy thái dương trái, kích thước tương đương 20x22mm. Hệ thống não thất và các bể não chưa thấy bất thường lớn.');
-      setConclusion('Hình ảnh giảm tỷ trọng thùy thái dương trái (phù hợp với chẩn đoán u não vùng thái dương đã phát hiện trên MRI).');
-    }
-    
+  // Simulated OCR & Fill function
+  const handleOcrFill = () => {
+    setMedicalId('26025699');
+    setPatientName('Bệnh nhân Tuấn Thành');
+    setBirthYear('1995');
+    setGender('Nam');
+    setAddress('291 Nguyễn Văn Linh, Thanh Khê, Đà Nẵng');
+    setImagingType('MRI');
+    setProcedure('Chụp cộng hưởng từ sọ não (MRI) có cản từ');
+    setTechnique('Chụp cộng hưởng từ sọ não đa xung, lát cắt mỏng qua các bể sọ và nhu mô não thất.');
+    setFindings('Phát hiện khối u vùng thùy trán bên trái, kích thước tương đương 15x18mm. Khối u có ranh giới rõ ràng, bắt thuốc cản từ mạnh và đồng nhất sau tiêm, gây phù nề nhẹ xung quanh.');
+    setConclusion('U màng não thùy trán trái (Meningioma) lành tính. Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.');
+    setRadiologist('Bs. Lê Quốc Tuấn');
+
     // Clear validation errors when template fields are filled
     setErrors(prev => ({
       ...prev,
+      medicalId: null,
+      patientName: null,
       procedure: null,
       findings: null,
       conclusion: null,
+      radiologist: null,
     }));
+
+    showAlert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin hành chính & chẩn đoán hình ảnh từ phim chụp giấy!');
   };
 
   const handleSaveResult = async () => {
@@ -214,8 +219,8 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
             
             {/* Auto Fill Buttons */}
             <View style={styles.helperRow}>
-              <TouchableOpacity style={styles.helperBtn} onPress={handleAutoFillTemplate}>
-                <Text style={styles.helperBtnText}>📝 Nạp mẫu theo file .docx</Text>
+              <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#0F172A', borderColor: '#1E293B', flex: 1 }]} onPress={handleOcrFill}>
+                <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>⚡ Quét tự động (OCR & Fill)</Text>
               </TouchableOpacity>
             </View>
 

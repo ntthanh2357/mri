@@ -236,27 +236,28 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* Role selector */}
           <Text style={styles.label}>Bạn đăng ký với tư cách là *</Text>
-          <View style={styles.roleContainer}>
-            <TouchableOpacity
-              style={[styles.roleTab, role === 'patient' && styles.activeRoleTab]}
-              onPress={() => setRole('patient')}
-            >
-              <Text style={[styles.roleTabText, role === 'patient' && styles.activeRoleTabText]}>
-                Bệnh nhân
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.roleTab, role === 'doctor' && styles.activeRoleTab]}
-              onPress={() => setRole('doctor')}
-            >
-              <Text style={[styles.roleTabText, role === 'doctor' && styles.activeRoleTabText]}>
-                Bác sĩ chuyên khoa
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.roleGrid}>
+            {[
+              { id: 'patient', label: 'Bệnh nhân' },
+              { id: 'doctor', label: 'Bác sĩ' },
+              { id: 'nurse', label: 'Điều dưỡng' },
+              { id: 'technician', label: 'Kỹ thuật viên' },
+              { id: 'receptionist', label: 'Tiếp tân' },
+            ].map((r) => (
+              <TouchableOpacity
+                key={r.id}
+                style={[styles.roleGridTab, role === r.id && styles.activeRoleGridTab]}
+                onPress={() => setRole(r.id)}
+              >
+                <Text style={[styles.roleGridTabText, role === r.id && styles.activeRoleGridTabText]}>
+                  {r.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* Conditional inputs */}
-          {role === 'patient' ? null : (
+          {/* Conditional inputs for Doctor only */}
+          {role === 'doctor' && (
             <View>
               <Text style={styles.label}>Đường dẫn Chứng chỉ hành nghề (CCHN) *</Text>
               <TextInput
@@ -457,35 +458,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     marginBottom: 20,
   },
-  roleContainer: {
+  roleGrid: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 24,
   },
-  roleTab: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+  roleGridTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeRoleTab: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+  activeRoleGridTab: {
+    backgroundColor: '#15803D',
   },
-  roleTabText: {
-    fontSize: 14,
+  roleGridTabText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
   },
-  activeRoleTabText: {
-    color: '#15803D',
+  activeRoleGridTabText: {
+    color: '#FFFFFF',
   },
   helperText: {
     fontSize: 12,

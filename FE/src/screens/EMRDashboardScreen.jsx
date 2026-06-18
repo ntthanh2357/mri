@@ -624,6 +624,22 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
     });
   };
 
+  const handleOcrFill = () => {
+    setFormData({
+      patientId: 'PT-' + Math.floor(1000 + Math.random() * 9000),
+      patientName: 'Lê Trần Gia Huy',
+      gender: 'Nam',
+      age: '29',
+      admissionType: 'Ngoại trú',
+      department: 'Khoa Ngoại Thần Kinh',
+      paymentMethod: 'Viện phí',
+      doctorInCharge: 'Bs. Văn Trung Nghĩa',
+      diagnosis: 'Chấn động não nhẹ vùng trán sau tai nạn sinh hoạt',
+      treatmentPlan: 'Nghỉ ngơi theo dõi sinh hiệu tại nhà, chụp MRI lại sau 24h nếu triệu chứng đau đầu tăng lên.',
+    });
+    Alert.alert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin từ Phiếu khám bệnh giấy!');
+  };
+
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
@@ -633,6 +649,9 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
+          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+        </TouchableOpacity>
         <FormField
           label="Mã bệnh nhân"
           placeholder="VD: PT-1234"
@@ -738,6 +757,21 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
     });
   };
 
+  const handleOcrFill = () => {
+    setFormData({
+      careLevel: 2,
+      pulse: '78',
+      bloodPressure: '125/80',
+      temperature: '36.8',
+      respiratoryRate: '19',
+      spo2: '97',
+      nurse: 'Đd. Lê Thị Hoa',
+      progressNotes: 'Bệnh nhân tỉnh táo, tiếp xúc tốt, đau đầu nhẹ vùng thái dương, ăn uống khá.',
+      careActions: 'Cho bệnh nhân uống nước ấm, hướng dẫn nằm nghỉ ngơi tại giường, theo dõi mạch & HA mỗi 4h.',
+    });
+    Alert.alert('Xác thực OCR', 'Đã tự động điền sinh hiệu và diễn biến chăm sóc từ ghi chép giấy của điều dưỡng!');
+  };
+
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
@@ -747,6 +781,9 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
+          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+        </TouchableOpacity>
         <FormField
           label="Cấp chăm sóc (1-3)"
           placeholder="3"
@@ -841,6 +878,17 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
     });
   };
 
+  const handleOcrFill = () => {
+    setFormData({
+      meetingDate: new Date().toISOString().split('T')[0],
+      participants: 'Bs. Nguyễn Hoàng Nam, Bs. Trần Minh Nghĩa, Bs. Văn Trung Nghĩa',
+      clinicalSummary: 'Bệnh nhân nam 29 tuổi nhập viện vì đau đầu dữ dội kèm buồn nôn sau chấn thương vùng đầu ngày thứ 2.',
+      diagnosis: 'Chấn động não nặng / Theo dõi tụ máu dưới màng cứng thùy trán',
+      treatmentConclusion: 'Chỉ định chụp MRI sọ não lát cắt mỏng khẩn cấp, hội chẩn liên chuyên khoa để quyết định phẫu thuật hay điều trị nội khoa bảo tồn.',
+    });
+    Alert.alert('Xác thực OCR', 'Đã tự động điền nội dung trích xuất từ Biên bản hội chẩn giấy!');
+  };
+
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
@@ -850,6 +898,9 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
+          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+        </TouchableOpacity>
         <FormField
           label="Ngày hội chẩn"
           placeholder="YYYY-MM-DD"
@@ -1410,6 +1461,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  ocrFillBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  ocrFillBtnText: {
+    color: '#4ADE80',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

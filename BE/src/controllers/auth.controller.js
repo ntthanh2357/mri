@@ -38,7 +38,7 @@ export const register = async (req, res) => {
       return;
     }
 
-    if (!["patient", "doctor", "admin"].includes(role)) {
+    if (!["patient", "doctor", "admin", "receptionist", "technician", "nurse"].includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
     }
@@ -68,7 +68,7 @@ export const register = async (req, res) => {
       phone: phone ? hashPhone(phone) : undefined,
       passwordHash,
       role,
-      isVerified: role === "patient" ? true : false, // Patients are auto-verified, Doctors need admin verification for CCHN
+      isVerified: ["patient", "receptionist", "technician", "nurse"].includes(role) ? true : false, // Patients and clinical assistants are auto-verified, Doctors need admin verification
       profile: {
         name,
         photoUrl: "",
