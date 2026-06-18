@@ -1,117 +1,89 @@
-# Luồng Bệnh Nhân — Kho Hồ Sơ Sức Khỏe Cá Nhân
+# Luồng Bệnh Nhân B2C — Sổ Sức Khỏe Đám Mây Di Động NeuroScan AI
 
-## Mục đích
+## 1. Mục đích
+Phân hệ B2C của **NeuroScan AI** đóng vai trò là một "sổ sức khỏe hình ảnh đám mây di động" dành riêng cho bệnh nhân. Hệ thống này giúp bệnh nhân **lưu trữ dài hạn và số hóa thông tin từ các tài liệu/phim chụp bản cứng** nhận được từ các cơ sở khám chữa bệnh khác nhau để theo dõi tiến triển bệnh lý cá nhân và chia sẻ liên viện dễ dàng.
 
-Kho lưu trữ cá nhân để bệnh nhân **giữ các bản sao tài liệu nhận được từ bệnh viện** sau mỗi lần khám hoặc điều trị. Hệ thống này **song song** với EMR của bệnh viện, **không thay thế** quy trình khám chữa bệnh.
-
-Giá trị chính: gộp dữ liệu từ **nhiều cơ sở y tế** vào một nơi duy nhất, phục vụ tái khám, chuyển viện, làm thủ tục BHXH/BHYT và theo dõi sức khỏe dài hạn.
-
----
-
-## Khóa định danh
-
-Mỗi bệnh nhân có một hồ sơ gốc gắn với:
-
-- **CCCD** (khóa chính cho phía người dùng)
-- **Mã y tế** (do từng BV cấp — có thể có nhiều mã ở nhiều BV)
-- **Số BHYT**
-- **Họ tên · Ngày sinh · Giới tính · Địa chỉ · Số điện thoại**
-
-Mỗi lần đến viện = **một lượt khám/điều trị**, được gom nhóm theo:
-
-- Ngày khám
-- Cơ sở y tế
-- Loại lượt (ngoại trú / nội trú)
+> [!NOTE]
+> Phân hệ này hoạt động song song với hệ thống bệnh án điện tử (EMR) của phòng khám/bệnh viện. Dữ liệu y tế ở đây do bệnh nhân tự chủ và tự quản lý, không thay thế trực tiếp quy trình chẩn đoán y khoa chính thức.
 
 ---
 
-## Cấu trúc tài liệu lưu trữ
+## 2. Bảo mật & Định danh an toàn (Không dùng CCCD & BHYT)
+Để đảm bảo an toàn tuyệt đối thông tin nhạy cảm của người bệnh và tuân thủ các quy định về bảo vệ dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP):
+* **Định danh chính**: Tài khoản bệnh nhân liên kết qua **Số điện thoại (đã mã hóa hash trong database)**, **Email** và **Họ tên**.
+* **Định danh y khoa**: Liên kết hồ sơ khám chữa bệnh thông qua **Mã y tế (Medical ID)** được cấp bởi mỗi cơ sở y tế khi khám bệnh.
+* **Loại bỏ dữ liệu nhạy cảm**: Hệ thống hoàn toàn không lưu trữ số CCCD/CMND hay số thẻ BHYT để loại bỏ rủi ro pháp lý.
 
-Bệnh nhân lưu **12 loại tài liệu** thuộc 4 nhóm. Hai loại tài liệu nội bộ của BV (phiếu chăm sóc, biên bản hội chẩn) không được phát cho bệnh nhân và không có trong kho cá nhân.
+---
+
+## 3. Cấu trúc 12 loại tài liệu B2C (Kho cá nhân Bệnh nhân)
+Bệnh nhân có quyền upload và quản lý **12 loại giấy tờ** thuộc 4 nhóm chính, tương ứng với biểu mẫu `.docx` thực tế trong dự án:
 
 ### Nhóm 1 — Hành chính & tài chính
-
-Bệnh nhân giữ bản gốc hoặc bản scan.
-
-| Tài liệu | Tên file mẫu | Khi nào nhận |
+| Tài liệu | Tên file mẫu .docx tương ứng | Chức năng lưu trữ |
 |---|---|---|
-| Phiếu thông tin khám bệnh | `mẫu_khám_bệnh` | Khi đăng ký khám |
-| Phiếu thu viện phí | `phieu_thu_viện_phí` | Mỗi lần thanh toán |
-| Tóm tắt hồ sơ bệnh án | `tóm_tắt_hồ_sơ_bệnh_án` | Khi BN làm đơn xin |
+| Phiếu thông tin khám bệnh | `mẫu-khám-bệnh.docx` | Lưu lại thông tin phòng khám ban đầu, thời gian tiếp nhận. |
+| Phiếu thu viện phí | `phieu-thu-viện-phí.docx` | Lưu hóa đơn/biên lai thanh toán số để theo dõi chi phí điều trị. |
+| Tóm tắt hồ sơ bệnh án | `tóm tắt hồ sơ bệnh án.docx` | Giấy đề nghị/bản tóm tắt bệnh án do bệnh viện cung cấp khi kết thúc đợt điều trị. |
 
-### Nhóm 2 — Lâm sàng (nhận từ bác sĩ)
-
-Bản BN giữ — phục vụ tái khám, chuyển viện.
-
-| Tài liệu | Tên file mẫu | Khi nào nhận |
+### Nhóm 2 — Lâm sàng (Do bác sĩ cung cấp)
+| Tài liệu | Tên file mẫu .docx tương ứng | Chức năng lưu trữ |
 |---|---|---|
-| Phiếu chỉ định dịch vụ | `phiếu_chỉ_định_dịch_vụ` | Khi BS chỉ định XN/CĐHA |
-| Toa thuốc | `toa_thuốc` | Khi kết thúc khám/điều trị (cả ngoại trú và nội trú) |
-| Giấy ra viện | `mẫu_giấy_ra_viện` | Khi xuất viện |
-| Phiếu chuyển tuyến TT01 | `chuyển_tuyến_TT01` | Khi được chuyển sang BV khác |
+| Phiếu chỉ định dịch vụ | `phiếu-chỉ-định-dịch-vụ.docx` | Lưu phiếu yêu cầu xét nghiệm máu hoặc chẩn đoán hình ảnh (MRI/CT). |
+| Toa thuốc điều trị | `toa-thuốc.docx` | Đơn thuốc ngoại trú hoặc nội trú, dùng để đối chiếu liều lượng uống. |
+| Giấy ra viện | `mẫu giấy ra viện.docx` | Ghi nhận thời gian nằm viện, chẩn đoán ra viện và hướng dẫn điều trị. |
+| Phiếu chuyển tuyến | `chuyển_tuyến_TT01.docx` | Giấy giới thiệu chuyển viện bảo hiểm y tế phục vụ chuyển tuyến. |
 
-### Nhóm 3 — Cận lâm sàng
-
-BN nhận bản in / phim / file PDF.
-
-| Tài liệu | Tên file mẫu | Định dạng |
+### Nhóm 3 — Cận lâm sàng (Kết quả xét nghiệm & hình ảnh)
+| Tài liệu | Tên file mẫu .docx tương ứng | Chức năng lưu trữ |
 |---|---|---|
-| Kết quả xét nghiệm huyết học | `phiếu_kết_quả_xét_nghiệm_máu` | PDF / bản in |
-| Kết quả hóa sinh máu | `hóa_sinh` | PDF / bản in |
-| Kết quả CT-Scan | `CT-Scan_` | Phim + kết luận |
-| Kết quả MRI | `mri` | Phim + kết luận |
+| Phiếu xét nghiệm máu | `phiếu-kết-quả-xét-nghiệm-máu.docx` | Lưu các chỉ số tế bào máu ngoại vi (Huyết học). |
+| Kết quả hóa sinh máu | `hóa sinh.docx` | Lưu các chỉ số hóa sinh (Glucose, AST, ALT, Creatinin, Urê...). |
+| Kết quả CT-Scan | `CT-Scan .docx` | Lưu ảnh chụp cắt lớp sọ não kèm theo mô tả và kết luận của bác sĩ. |
+| Kết quả MRI | `mri.docx` | Lưu ảnh chụp cộng hưởng từ sọ não kèm theo mô tả và kết luận của bác sĩ. |
 
-### Nhóm 5 — Pháp lý / có chữ ký
-
-BN giữ bản đã ký.
-
-| Tài liệu | Tên file mẫu | Khi nào nhận |
+### Nhóm 5 — Pháp lý & Đồng thuận
+| Tài liệu | Tên file mẫu .docx tương ứng | Chức năng lưu trữ |
 |---|---|---|
-| Giấy cam kết chấp thuận phẫu thuật | `cam_đoan_phẫu_thuật` | Trước khi mổ |
+| Cam kết phẫu thuật | `cam đoan phẫu thuật.docx` | Bản giấy cam kết chấp thuận phẫu thuật, thủ thuật và gây mê hồi sức đã ký. |
+
+> [!WARNING]
+> Hai biểu mẫu nội bộ phục vụ chuyên môn của bệnh viện là **Phiếu chăm sóc điều dưỡng** (`phiếu chăm sóc cấp 1, 2, 3.docx`) và **Biên bản hội chẩn** (`hội chẩn.docx`) sẽ không hiển thị tại phân hệ B2C của bệnh nhân.
 
 ---
 
-## Quy trình lưu trữ
+## 4. Quy trình số hóa tự động & Nhập liệu song song
+
+Để tạo lập một lượt khám mới (`Visit`), bệnh nhân thực hiện qua luồng sau:
 
 ```
-Bệnh nhân đến viện
-   ↓
-Nhận tài liệu (theo từng bước khám/điều trị)
-   ↓
-Mỗi tài liệu → gắn metadata (ngày, BV, loại, lượt khám)
-   ↓
-Lưu vào kho cá nhân (theo nhóm 1/2/3/5)
-   ↓
-Tra cứu khi cần (tái khám, chuyển viện, BHYT, theo dõi)
+[Chọn Tạo lượt khám] ──► [Nhập: Bệnh viện, Ngày khám, Bác sĩ khám]
+                                     │
+                                     ▼
+        ┌────────────────────────────┴───────────────────────────┐
+        ▼                                                        ▼
+[Cách 1: Quét tự động (OCR)]                             [Cách 2: Nhập thủ công]
+  - Tải ảnh chụp/PDF giấy tờ.                             - Tự gõ thông tin đơn thuốc,
+  - OCR đọc text & tự điền trường dữ liệu.                 chỉ số xét nghiệm vào biểu mẫu.
+  - Tự động lọc bỏ các trường CCCD/BHYT.                         │
+        │                                                        │
+        └────────────────────────────┬───────────────────────────┘
+                                     ▼
+                        [Bệnh nhân duyệt & Lưu kho]
 ```
 
-### Mỗi tài liệu khi lưu cần có
+### 4.1 Quét tự động (OCR & Form Parser)
+1. Bệnh nhân tải ảnh chụp phim/giấy kết quả hoặc tệp PDF lên phân hệ di động.
+2. Hệ thống chạy công cụ quét OCR để bóc tách văn bản thô.
+3. Bộ lọc dữ liệu (Parser) tự động tìm kiếm các chỉ số xét nghiệm, chẩn đoán, toa thuốc để điền (Auto-fill) vào form:
+   - *Ví dụ*: Bóc tách chỉ số `Glucose: 5.2 mmol/L` điền vào bảng kết quả hóa sinh máu; bóc tách `Meningioma` điền vào chẩn đoán hình ảnh.
+4. Hệ thống tự động phát hiện và xóa bỏ (strip) các thông tin nhạy cảm như CCCD/BHYT trước khi hiển thị form xác nhận.
 
-- Ảnh chụp / file PDF của bản gốc
-- Ngày phát hành
-- Cơ sở y tế phát hành
-- Loại tài liệu (nhóm + tên)
-- Mã y tế / số bệnh án (nếu có)
-- Bác sĩ ký (nếu có)
-- Liên kết với lượt khám/điều trị tương ứng
-
----
-
-## Khác biệt so với EMR của bệnh viện
-
-| Tiêu chí | Kho cá nhân BN | EMR bệnh viện |
-|---|---|---|
-| Mục đích | Theo dõi sức khỏe cá nhân | Vận hành khám chữa bệnh |
-| Khóa chính | CCCD + Mã y tế | Mã y tế + SBA |
-| Phạm vi | Một cá nhân, nhiều BV | Tất cả BN tại một BV |
-| Tài liệu nội bộ BV | Không có | Có (phiếu chăm sóc, hội chẩn) |
-| Định dạng | Bản scan/PDF người dùng tải lên | Dữ liệu gốc nhập từ phần mềm |
+### 4.2 Nhập thủ công (Manual Input)
+Trường hợp ảnh chụp mờ hoặc bệnh nhân muốn tự cập nhật, ứng dụng cung cấp giao diện nhập tay trực quan để điền chẩn đoán, toa thuốc và các chỉ số sinh hiệu.
 
 ---
 
-## Phạm vi không hỗ trợ
-
-- Không thay thế EMR của bệnh viện
-- Không kê toa, không chẩn đoán
-- Không lưu phiếu chăm sóc điều dưỡng (`phiếu_chăm_sóc_cấp_1_2_3`) — đây là tài liệu nội bộ BV
-- Không lưu biên bản hội chẩn (`hội_chẩn`) — đây là tài liệu nội bộ BV. BN có thể xin tóm tắt HSBA nếu cần
+## 5. Cơ chế chia sẻ QR liên viện
+* Khi bệnh nhân đến tái khám hoặc chuyển sang cơ sở y tế mới, bệnh nhân chỉ cần nhấn **"Tạo mã QR chia sẻ"**.
+* Bác sĩ tại cơ sở y tế mới quét mã QR này bằng điện thoại/máy tính để truy xuất toàn bộ 12 tài liệu y tế đã được số hóa rõ nét và sắp xếp khoa học, giúp tiết kiệm thời gian và loại bỏ rủi ro thất lạc phim ảnh.
