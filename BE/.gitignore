@@ -8,6 +8,11 @@ dist/
 .env
 .env.local
 
+# Firebase / GCS service account keys
+firebase-service-account.json
+*-service-account.json
+gcs-service-account.json
+
 # Logs
 *.log
 npm-debug.log*
