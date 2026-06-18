@@ -71,7 +71,7 @@ const HomeScreen = ({ route, navigation }) => {
 
   const handleLogout = () => {
     setAuthToken('');
-    navigation.replace('Login');
+    navigation.replace('Welcome');
   };
 
   const getInitials = (name) => {
@@ -96,7 +96,7 @@ const HomeScreen = ({ route, navigation }) => {
         <Text style={styles.errorIcon}>⚠️</Text>
         <Text style={styles.errorText}>{error || 'Không tìm thấy thông tin người dùng.'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={handleLogout}>
-          <Text style={styles.retryButtonText}>Quay lại đăng nhập</Text>
+          <Text style={styles.retryButtonText}>Quay lại trang chủ</Text>
         </TouchableOpacity>
       </View>
     );

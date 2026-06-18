@@ -8,7 +8,7 @@ import nodemailer from "nodemailer";
  * @param otpCode The 6-digit OTP code
  * @returns Promise<boolean> indicating whether a real email was sent (true) or fallback/error occurred (false)
  */
-export const sendOtpEmail = async (to: string, otpCode: string): Promise<boolean> => {
+export const sendOtpEmail = async (to, otpCode) => {
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
 

@@ -1,24 +1,6 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model } from "mongoose";
 
-export interface IUser extends Document {
-  email: string;
-  phone?: string;
-  passwordHash: string;
-  role: "patient" | "doctor" | "admin";
-  isVerified: boolean;
-  tokenVersion: number;
-  otpCode?: string;
-  otpExpires?: Date;
-  profile: {
-    name: string;
-    photoUrl?: string;
-    bhytNumber?: string; // For patients
-    licenseUrl?: string; // For doctors (CCHN file path/url)
-  };
-  createdAt: Date;
-}
-
-const userSchema = new Schema<IUser>(
+const userSchema = new Schema(
   {
     email: {
       type: String,
@@ -85,4 +67,4 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-export const User = model<IUser>("User", userSchema);
+export const User = model("User", userSchema);

@@ -1,16 +1,7 @@
-import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model";
+import { User } from "../models/user.model.js";
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    role: string;
-    tokenVersion: number;
-  };
-}
-
-export const protect = async (req: any, res: Response, next: NextFunction): Promise<void> => {
+export const protect = async (req, res, next) => {
   let token;
 
   // Check for Bearer token in headers
@@ -20,7 +11,7 @@ export const protect = async (req: any, res: Response, next: NextFunction): Prom
       const secret = process.env.JWT_SECRET || "access_secret";
 
       // Verify token
-      const decoded = jwt.verify(token, secret) as { id: string; role: string; tokenVersion?: number };
+      const decoded = jwt.verify(token, secret);
 
       // Fetch user from database to check token version
       const user = await User.findById(decoded.id).select("tokenVersion");

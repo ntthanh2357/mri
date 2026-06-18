@@ -1,12 +1,12 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import { User } from "./models/user.model";
+import { User } from "./models/user.model.js";
 
 dotenv.config();
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/neuro";
-// mongodb+srv://admin:[EMAIL_ADDRESS]/neuro
+
 const seedDatabase = async () => {
   try {
     console.log("Connecting to MongoDB for seeding...");

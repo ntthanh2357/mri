@@ -1,17 +1,16 @@
-import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model";
-import { sendOtpEmail } from "../services/email.service";
+import { User } from "../models/user.model.js";
+import { sendOtpEmail } from "../services/email.service.js";
 
 // Helper function to generate JWT Access Token
-const generateAccessToken = (userId: string, role: string, tokenVersion: number) => {
+const generateAccessToken = (userId, role, tokenVersion) => {
   const secret = process.env.JWT_SECRET || "access_secret";
   return jwt.sign({ id: userId, role, tokenVersion }, secret, { expiresIn: "1h" });
 };
 
 // Helper function to generate JWT Refresh Token
-const generateRefreshToken = (userId: string, role: string, tokenVersion: number) => {
+const generateRefreshToken = (userId, role, tokenVersion) => {
   const secret = process.env.JWT_REFRESH_SECRET || "refresh_secret";
   return jwt.sign({ id: userId, role, tokenVersion }, secret, { expiresIn: "7d" });
 };
@@ -19,7 +18,7 @@ const generateRefreshToken = (userId: string, role: string, tokenVersion: number
 // @desc    Register a new user
 // @route   POST /auth/register
 // @access  Public
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req, res) => {
   try {
     const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
 
@@ -32,6 +31,22 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (!["patient", "doctor", "admin"].includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ message: "Địa chỉ email không đúng định dạng chuẩn." });
+      return;
+    }
+
+    // Validate phone format (must be exactly 10 digits)
+    if (phone) {
+      const phoneRegex = /^[0-9]{10}$/;
+      if (!phoneRegex.test(phone)) {
+        res.status(400).json({ message: "Số điện thoại phải chứa đúng 10 chữ số." });
+        return;
+      }
     }
 
     // Check if user already exists
@@ -80,7 +95,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         profile: newUser.profile,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi đăng ký:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng ký tài khoản.", error: error.message });
   }
@@ -89,7 +104,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 // @desc    Login user
 // @route   POST /auth/login
 // @access  Public
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -98,10 +113,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Find user by email or phone
+    const user = await User.findOne({
+      $or: [
+        { email: email.toLowerCase() },
+        { phone: email }
+      ]
+    });
     if (!user) {
-      res.status(400).json({ message: "Email hoặc mật khẩu không chính xác." });
+      res.status(400).json({ message: "Email/SĐT hoặc mật khẩu không chính xác." });
       return;
     }
 
@@ -128,7 +148,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         profile: user.profile,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi đăng nhập:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập.", error: error.message });
   }
@@ -137,7 +157,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 // @desc    Get current user details
 // @route   GET /auth/me
 // @access  Private
-export const getMe = async (req: any, res: Response): Promise<void> => {
+export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-passwordHash");
     if (!user) {
@@ -145,7 +165,7 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
       return;
     }
     res.status(200).json({ user });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi lấy thông tin cá nhân:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi khi lấy thông tin người dùng.", error: error.message });
   }
@@ -154,7 +174,7 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
 // @desc    Refresh token
 // @route   POST /auth/refresh
 // @access  Public
-export const refresh = async (req: Request, res: Response): Promise<void> => {
+export const refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
@@ -166,7 +186,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     const secret = process.env.JWT_REFRESH_SECRET || "refresh_secret";
 
     // Verify refresh token
-    const decoded = jwt.verify(refreshToken, secret) as { id: string; role: string; tokenVersion?: number };
+    const decoded = jwt.verify(refreshToken, secret);
 
     // Fetch user to verify active session version
     const user = await User.findById(decoded.id).select("tokenVersion role");
@@ -187,7 +207,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       accessToken,
     });
-  } catch (error: any) {
+  } catch (error) {
     res.status(401).json({ message: "Refresh Token không hợp lệ hoặc đã hết hạn.", error: error.message });
   }
 };
@@ -195,7 +215,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 // @desc    Firebase/Google SSO Login
 // @route   POST /auth/firebase-login
 // @access  Public
-export const firebaseLogin = async (req: Request, res: Response): Promise<void> => {
+export const firebaseLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
     if (!idToken) {
@@ -217,7 +237,7 @@ export const firebaseLogin = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const data = (await firebaseResponse.json()) as any;
+    const data = await firebaseResponse.json();
     if (!data.users || data.users.length === 0) {
       res.status(400).json({ message: "Không tìm thấy thông tin người dùng từ Token." });
       return;
@@ -267,7 +287,7 @@ export const firebaseLogin = async (req: Request, res: Response): Promise<void> 
         profile: user.profile,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi đăng nhập Google:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
   }
@@ -276,7 +296,7 @@ export const firebaseLogin = async (req: Request, res: Response): Promise<void> 
 // @desc    SSO Login (Google/Zalo)
 // @route   POST /auth/sso/:provider
 // @access  Public
-export const ssoLogin = async (req: Request, res: Response): Promise<void> => {
+export const ssoLogin = async (req, res) => {
   const { provider } = req.params;
 
   if (provider === "google") {
@@ -336,7 +356,7 @@ export const ssoLogin = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      const data = (await firebaseResponse.json()) as any;
+      const data = await firebaseResponse.json();
       if (!data.users || data.users.length === 0) {
         res.status(400).json({ message: "Không tìm thấy thông tin người dùng từ Token." });
         return;
@@ -386,124 +406,9 @@ export const ssoLogin = async (req: Request, res: Response): Promise<void> => {
           profile: user.profile,
         },
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error("Lỗi đăng nhập Google:", error);
       res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
-    }
-    return;
-  }
-
-  if (provider === "zalo") {
-    const { accessToken } = req.body;
-    if (!accessToken) {
-      res.status(400).json({ message: "Thiếu Zalo Access Token." });
-      return;
-    }
-
-    // 1. Handle mock token first for easy testing without hitting real Zalo API
-    if (accessToken === "mock_zalo_token_123") {
-      try {
-        let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
-        if (!user) {
-          user = new User({
-            email: "zalo_test@neuroscan.com",
-            passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
-            role: "patient",
-            isVerified: true,
-            profile: {
-              name: "Zalo Test User",
-              photoUrl: "",
-            },
-          });
-          await user.save();
-        }
-        const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Zalo thành công! (MOCK)",
-          accessToken: jwtAccessToken,
-          refreshToken: jwtRefreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
-      } catch (err: any) {
-        console.error("Lỗi đăng nhập Zalo Mock:", err);
-        res.status(500).json({ message: "Đã xảy ra lỗi khi đăng nhập Zalo Mock.", error: err.message });
-        return;
-      }
-    }
-
-    // 2. Real Zalo login flow
-    try {
-      // In real-world, call Zalo Graph API to verify token
-      const zaloResponse = await fetch("https://graph.zalo.me/v2.0/me?fields=id,name,picture", {
-        method: "GET",
-        headers: { access_token: accessToken },
-      });
-
-      if (!zaloResponse.ok) {
-        res.status(400).json({ message: "Token xác thực Zalo không hợp lệ." });
-        return;
-      }
-
-      const zaloData = (await zaloResponse.json()) as any;
-      
-      // Safety check: Zalo Graph API sometimes returns 200 OK with error body
-      if (zaloData.error || !zaloData.id) {
-        res.status(400).json({ 
-          message: "Xác thực Zalo thất bại từ Zalo Server.", 
-          error: zaloData.message || "Invalid Zalo Token response" 
-        });
-        return;
-      }
-
-      const zaloId = zaloData.id;
-      const name = zaloData.name || "Zalo User";
-      const photoUrl = zaloData.picture?.data?.url || "";
-
-      // Since Zalo doesn't guarantee return of email (needs special permission), 
-      // we can map the user by their unique zaloId or mock an email like zalo_id@gmail.com
-      const email = `zalo_${zaloId}@gmail.com`;
-
-      let user = await User.findOne({ email });
-      if (!user) {
-        user = new User({
-          email,
-          passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
-          role: "patient",
-          isVerified: true,
-          profile: {
-            name,
-            photoUrl,
-          },
-        });
-        await user.save();
-      }
-
-      const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-      const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-
-      res.status(200).json({
-        message: "Đăng nhập Zalo thành công!",
-        accessToken: jwtAccessToken,
-        refreshToken: jwtRefreshToken,
-        user: {
-          id: user._id,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-          profile: user.profile,
-        },
-      });
-    } catch (err: any) {
-      console.error("Lỗi xác thực Zalo:", err);
-      res.status(500).json({ message: "Đã xảy ra lỗi khi xác thực tài khoản Zalo.", error: err.message });
     }
     return;
   }
@@ -514,7 +419,7 @@ export const ssoLogin = async (req: Request, res: Response): Promise<void> => {
 // @desc    Logout from all devices by invalidating all active sessions
 // @route   POST /auth/logout/all
 // @access  Private
-export const logoutAll = async (req: any, res: Response): Promise<void> => {
+export const logoutAll = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -527,7 +432,7 @@ export const logoutAll = async (req: any, res: Response): Promise<void> => {
     await user.save();
 
     res.status(200).json({ message: "Đã đăng xuất khỏi tất cả các thiết bị thành công." });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi đăng xuất toàn bộ thiết bị:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng xuất.", error: error.message });
   }
@@ -536,7 +441,7 @@ export const logoutAll = async (req: any, res: Response): Promise<void> => {
 // @desc    Change password
 // @route   PUT /auth/password
 // @access  Private
-export const changePassword = async (req: any, res: Response): Promise<void> => {
+export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -568,7 +473,7 @@ export const changePassword = async (req: any, res: Response): Promise<void> => 
     await user.save();
 
     res.status(200).json({ message: "Đổi mật khẩu thành công!" });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi đổi mật khẩu:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đổi mật khẩu.", error: error.message });
   }
@@ -577,7 +482,7 @@ export const changePassword = async (req: any, res: Response): Promise<void> => 
 // @desc    Forgot password (request OTP)
 // @route   POST /auth/forgot-password
 // @access  Public
-export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -609,7 +514,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
         : "Mã OTP đã được tạo thành công (Xem tại terminal của Server do chưa cấu hình SMTP).",
       debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi quên mật khẩu:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP.", error: error.message });
   }
@@ -618,7 +523,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 // @desc    Verify OTP and reset password
 // @route   POST /auth/verify-otp
 // @access  Public
-export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
+export const verifyOtp = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
@@ -658,7 +563,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     await user.save();
 
     res.status(200).json({ message: "Đặt lại mật khẩu thành công!" });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Lỗi xác thực OTP:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
   }
