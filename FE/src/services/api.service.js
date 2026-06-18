@@ -27,6 +27,17 @@ const request = async (endpoint, options = {}) => {
 };
 
 export const get = (endpoint) => request(endpoint);
-export const post = (endpoint, body) => request(endpoint, { method: 'POST', body: JSON.stringify(body) });
+export const post = (endpoint, body, method = 'POST') =>
+  request(endpoint, { method, body: JSON.stringify(body) });
 export const put = (endpoint, body) => request(endpoint, { method: 'PUT', body: JSON.stringify(body) });
 export const del = (endpoint) => request(endpoint, { method: 'DELETE' });
+
+export const postFormData = async (endpoint, formData) => {
+  const url = `${Config.API_URL}${endpoint}`;
+  const headers = {};
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const response = await fetch(url, { method: 'POST', headers, body: formData });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Upload failed');
+  return data;
+};

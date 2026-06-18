@@ -8,326 +8,572 @@ import {
   SafeAreaView,
   TextInput,
   Alert,
+  ActivityIndicator,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { usePatientRecords } from '../controllers/usePatientRecords';
 
-const PatientRecordsScreen = ({ navigation }) => {
-  const [search, setSearch] = useState('');
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-  const patients = [
-    { id: 'NS-2401', name: 'Nguyễn Văn A', age: 64, gender: 'Nam', phone: '0901 234 567', diagnosis: 'U màng não', lastScan: '01/06/2026', status: 'Cấp cứu', badgeColor: '#FEE2E2', textColor: '#EF4444' },
-    { id: 'NS-2400', name: 'Trần Thị B', age: 45, gender: 'Nữ', phone: '0912 345 678', diagnosis: 'Đột quỵ não', lastScan: '31/05/2026', status: 'Đang điều trị', badgeColor: '#FEF3C7', textColor: '#D97706' },
-    { id: 'NS-2399', name: 'Lê Minh C', age: 52, gender: 'Nam', phone: '0923 456 789', diagnosis: 'Parkinson GĐ 2', lastScan: '30/05/2026', status: 'Ổn định', badgeColor: '#DCFCE7', textColor: '#15803D' },
-    { id: 'NS-2398', name: 'Phạm Thị D', age: 38, gender: 'Nữ', phone: '0934 567 890', diagnosis: 'Đau đầu mãn tính', lastScan: '29/05/2026', status: 'Theo dõi', badgeColor: '#EFF6FF', textColor: '#2563EB' },
-    { id: 'NS-2397', name: 'Hoàng Văn E', age: 71, gender: 'Nam', phone: '0945 678 901', diagnosis: 'Alzheimer nhẹ', lastScan: '28/05/2026', status: 'Ổn định', badgeColor: '#DCFCE7', textColor: '#15803D' },
-  ];
+const GROUP_META = {
+  nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', icon: '🗂️', color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
+  nhom2: { label: 'Nhóm 2 — Lâm sàng', icon: '🩺', color: '#F0FDF4', border: '#BBF7D0', text: '#15803D' },
+  nhom3: { label: 'Nhóm 3 — Cận lâm sàng', icon: '🔬', color: '#FFF7ED', border: '#FED7AA', text: '#C2410C' },
+  nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', icon: '📝', color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
+};
 
-  const filtered = patients.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.id.toLowerCase().includes(search.toLowerCase()) ||
-    p.diagnosis.toLowerCase().includes(search.toLowerCase())
-  );
+const ALL_DOCS = {
+  nhom1: [
+    { docKey: 'mau_kham_benh', label: 'Phiếu thông tin khám bệnh' },
+    { docKey: 'phieu_thu_vien_phi', label: 'Phiếu thu viện phí' },
+    { docKey: 'tom_tat_hsba', label: 'Tóm tắt hồ sơ bệnh án' },
+  ],
+  nhom2: [
+    { docKey: 'phieu_chi_dinh', label: 'Phiếu chỉ định dịch vụ' },
+    { docKey: 'toa_thuoc', label: 'Toa thuốc' },
+    { docKey: 'giay_ra_vien', label: 'Giấy ra viện' },
+    { docKey: 'chuyen_tuyen', label: 'Phiếu chuyển tuyến TT01' },
+  ],
+  nhom3: [
+    { docKey: 'xet_nghiem_mau', label: 'Kết quả XN huyết học' },
+    { docKey: 'hoa_sinh', label: 'Kết quả hóa sinh máu' },
+    { docKey: 'ct_scan', label: 'Kết quả CT-Scan' },
+    { docKey: 'mri', label: 'Kết quả MRI' },
+  ],
+  nhom5: [
+    { docKey: 'cam_ket_phau_thuat', label: 'Cam kết chấp thuận phẫu thuật' },
+  ],
+};
 
-  const handlePatientPress = (patient) => {
-    if (patient.id === 'NS-2401') {
-      Alert.alert(
-        'Xem bệnh án',
-        `Mở hồ sơ chẩn đoán hình ảnh cho bệnh nhân ${patient.name}?`,
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Phân tích MRI', onPress: () => navigation.navigate('AIAnalysis') },
-        ]
-      );
-    } else {
-      Alert.alert('Hồ sơ bệnh nhân', `Mã BN: ${patient.id}\nHọ tên: ${patient.name}\nChẩn đoán: ${patient.diagnosis}\nSĐT: ${patient.phone}`);
-    }
+// ── Components ────────────────────────────────────────────────────────────────
+
+const DocCard = ({ slot, savedDocs = [], onPress, onDelete }) => {
+  const hasSaved = savedDocs.length > 0;
+  const firstDoc = savedDocs[0];
+  const uploadCount = savedDocs.filter((d) => d.storageType === 'upload').length;
+  const hasManual = savedDocs.some((d) => d.storageType === 'manual');
+
+  const statusText = () => {
+    if (!hasSaved) return 'Chưa có — nhấn để thêm';
+    const parts = [];
+    if (uploadCount > 0) parts.push(`${uploadCount} file`);
+    if (hasManual) parts.push('Đã điền tay');
+    return parts.join(' · ');
   };
 
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
+  return (
+    <TouchableOpacity
+      style={[styles.docCard, hasSaved ? styles.docCardHas : styles.docCardMissing]}
+      onPress={() => onPress(slot, savedDocs)}
+    >
+      <View style={styles.docCardLeft}>
+        <Text style={styles.docIcon}>
+          {!hasSaved ? '📤' : uploadCount > 0 ? '📎' : '📋'}
+        </Text>
+        <View style={styles.docInfo}>
+          <Text style={[styles.docLabel, !hasSaved && styles.docLabelMissing]} numberOfLines={2}>
+            {slot.label}
+          </Text>
+          <Text style={hasSaved ? styles.docStatusHas : styles.docStatusMissing}>
+            {statusText()}
+          </Text>
+        </View>
+      </View>
+      {hasSaved && savedDocs.length > 1 && (
+        <View style={styles.countBadge}>
+          <Text style={styles.countBadgeText}>{savedDocs.length}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+const VisitCard = ({ visit, expanded, onToggle, onDocPress, onDeleteDoc, onDelete }) => {
+  const [expandedGroups, setExpandedGroups] = useState({ nhom1: true, nhom2: false, nhom3: false, nhom5: false });
+
+  // savedMap: docKey → array of docs (multiple files per slot)
+  const savedMap = {};
+  (visit.documents || []).forEach((d) => {
+    if (!savedMap[d.docKey]) savedMap[d.docKey] = [];
+    savedMap[d.docKey].push(d);
+  });
+
+  const totalSlots = Object.values(ALL_DOCS).flat().length;
+  const savedCount = Object.keys(savedMap).length;
+  const visitDate = visit.date ? new Date(visit.date).toLocaleDateString('vi-VN') : '';
 
   return (
-    <ResponsiveLayout
-      navigation={navigation}
-      activeRoute="PatientRecords"
-    >
+    <View style={styles.visitCard}>
+      <TouchableOpacity style={styles.visitHeader} onPress={onToggle} activeOpacity={0.7}>
+        <View style={styles.visitHeaderLeft}>
+          <View style={[styles.visitTypeBadge, visit.visitType === 'noi_tru' ? styles.badgeInpatient : styles.badgeOutpatient]}>
+            <Text style={[styles.visitTypeText, visit.visitType === 'noi_tru' ? styles.badgeInpatientText : styles.badgeOutpatientText]}>
+              {visit.visitType === 'noi_tru' ? 'Nội trú' : 'Ngoại trú'}
+            </Text>
+          </View>
+          <View style={styles.visitMeta}>
+            <Text style={styles.visitDate}>{visitDate}</Text>
+            <Text style={styles.visitFacility}>{visit.facility}</Text>
+            {visit.diagnosis ? <Text style={styles.visitDiagnosis} numberOfLines={1}>{visit.diagnosis}</Text> : null}
+          </View>
+        </View>
+        <View style={styles.visitHeaderRight}>
+          <Text style={styles.visitDocCount}>{savedCount}/{totalSlots}</Text>
+          <Text style={styles.visitDocCountLabel}>tài liệu</Text>
+          <Text style={styles.visitToggle}>{expanded ? '▲' : '▼'}</Text>
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.visitBody}>
+          {(visit.medicalId || visit.doctor) && (
+            <View style={styles.visitInfoRow}>
+              {visit.medicalId ? (
+                <View style={styles.visitInfoItem}>
+                  <Text style={styles.visitInfoLabel}>Mã y tế</Text>
+                  <Text style={styles.visitInfoValue}>{visit.medicalId}</Text>
+                </View>
+              ) : null}
+              {visit.doctor ? (
+                <View style={styles.visitInfoItem}>
+                  <Text style={styles.visitInfoLabel}>Bác sĩ phụ trách</Text>
+                  <Text style={styles.visitInfoValue}>{visit.doctor}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBg}>
+              <View style={[styles.progressFill, { width: `${(savedCount / totalSlots) * 100}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{Math.round((savedCount / totalSlots) * 100)}% đã lưu</Text>
+          </View>
+
+          {Object.entries(ALL_DOCS).map(([groupKey, slots]) => {
+            const meta = GROUP_META[groupKey];
+            const groupSaved = slots.filter((s) => savedMap[s.docKey]).length;
+            return (
+              <View key={groupKey} style={[styles.groupCard, { borderColor: meta.border, backgroundColor: meta.color }]}>
+                <TouchableOpacity
+                  style={styles.groupHeader}
+                  onPress={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.groupIcon}>{meta.icon}</Text>
+                  <Text style={[styles.groupLabel, { color: meta.text }]}>{meta.label}</Text>
+                  <Text style={[styles.groupCount, { color: meta.text }]}>{groupSaved}/{slots.length}</Text>
+                  <Text style={[styles.groupToggle, { color: meta.text }]}>{expandedGroups[groupKey] ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {expandedGroups[groupKey] && (
+                  <View style={styles.docList}>
+                    {slots.map((slot) => (
+                      <DocCard
+                        key={slot.docKey}
+                        slot={slot}
+                        savedDocs={savedMap[slot.docKey] || []}
+                        onPress={(s, docs) => onDocPress(visit._id, { ...s, groupKey }, docs)}
+                        onDelete={(docId) => onDeleteDoc(visit._id, docId)}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          <TouchableOpacity
+            style={styles.deleteVisitBtn}
+            onPress={() =>
+              Alert.alert('Xóa lượt khám', `Xóa lượt khám ngày ${visitDate}?\nTất cả tài liệu đi kèm cũng bị xóa.`, [
+                { text: 'Hủy', style: 'cancel' },
+                { text: 'Xóa', style: 'destructive', onPress: onDelete },
+              ])
+            }
+          >
+            <Text style={styles.deleteVisitBtnText}>🗑 Xóa lượt khám này</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ── Add Visit Modal ────────────────────────────────────────────────────────────
+
+const AddVisitModal = ({ visible, onClose, onSubmit }) => {
+  const [form, setForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    facility: '',
+    visitType: 'ngoai_tru',
+    diagnosis: '',
+    medicalId: '',
+    doctor: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (key, val) => setForm((prev) => ({ ...prev, [key]: val }));
+
+  const handleSubmit = async () => {
+    if (!form.facility.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên cơ sở y tế.');
+    setSaving(true);
+    await onSubmit(form);
+    setSaving(false);
+    setForm({ date: new Date().toISOString().split('T')[0], facility: '', visitType: 'ngoai_tru', diagnosis: '', medicalId: '', doctor: '' });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose}><Text style={styles.modalCancel}>Hủy</Text></TouchableOpacity>
+          <Text style={styles.modalTitle}>Thêm lượt khám</Text>
+          <TouchableOpacity onPress={handleSubmit} disabled={saving}>
+            {saving ? <ActivityIndicator color="#15803D" size="small" /> : <Text style={styles.modalSave}>Thêm</Text>}
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+          <Text style={styles.modalFieldLabel}>Ngày khám *</Text>
+          <TextInput style={styles.modalInput} value={form.date} onChangeText={(v) => set('date', v)} placeholder="YYYY-MM-DD" placeholderTextColor="#94A3B8" />
+          <Text style={styles.modalFieldLabel}>Cơ sở y tế *</Text>
+          <TextInput style={styles.modalInput} value={form.facility} onChangeText={(v) => set('facility', v)} placeholder="VD: Bệnh viện Chợ Rẫy" placeholderTextColor="#94A3B8" />
+          <Text style={styles.modalFieldLabel}>Loại khám *</Text>
+          <View style={styles.toggleRow}>
+            {[['ngoai_tru', 'Ngoại trú'], ['noi_tru', 'Nội trú']].map(([val, lbl]) => (
+              <TouchableOpacity key={val} style={[styles.toggleBtn, form.visitType === val && styles.toggleBtnActive]} onPress={() => set('visitType', val)}>
+                <Text style={[styles.toggleBtnText, form.visitType === val && styles.toggleBtnTextActive]}>{lbl}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.modalFieldLabel}>Chẩn đoán (nếu biết)</Text>
+          <TextInput style={styles.modalInput} value={form.diagnosis} onChangeText={(v) => set('diagnosis', v)} placeholder="VD: Tăng huyết áp giai đoạn II" placeholderTextColor="#94A3B8" />
+          <Text style={styles.modalFieldLabel}>Mã y tế</Text>
+          <TextInput style={styles.modalInput} value={form.medicalId} onChangeText={(v) => set('medicalId', v)} placeholder="VD: CR-2026-04821" placeholderTextColor="#94A3B8" />
+          <Text style={styles.modalFieldLabel}>Bác sĩ phụ trách</Text>
+          <TextInput style={styles.modalInput} value={form.doctor} onChangeText={(v) => set('doctor', v)} placeholder="VD: BS. Nguyễn Văn A" placeholderTextColor="#94A3B8" />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+
+const PatientRecordsScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
+  const [search, setSearch] = useState('');
+  const [expandedVisit, setExpandedVisit] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const { visits, identity, loading, error, reload, addVisit, removeVisit, uploadDoc, saveManualDoc, removeDoc } =
+    usePatientRecords();
+
+  const filtered = visits.filter(
+    (v) =>
+      (v.facility || '').toLowerCase().includes(search.toLowerCase()) ||
+      (v.diagnosis || '').toLowerCase().includes(search.toLowerCase()) ||
+      (v.date ? new Date(v.date).toLocaleDateString('vi-VN').includes(search) : false)
+  );
+
+  const totalSlots = visits.length * Object.values(ALL_DOCS).flat().length;
+  const savedCount = visits.reduce((sum, v) => sum + (v.documents?.length || 0), 0);
+
+  const handleDocPress = (visitId, slot, savedDocs) => {
+    navigation.navigate('DocumentDetail', {
+      visitId,
+      doc: { ...slot },
+      savedDocs: savedDocs || [],
+      onUpload: uploadDoc,
+      onSaveManual: saveManualDoc,
+      onDelete: removeDoc,
+    });
+  };
+
+  if (loading) {
+    return (
+      <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#15803D" />
+          <Text style={styles.centerText}>Đang tải hồ sơ...</Text>
+        </View>
+      </ResponsiveLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+        <View style={styles.centerState}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.centerText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={reload}>
+            <Text style={styles.retryBtnText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      </ResponsiveLayout>
+    );
+  }
+
+  return (
+    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
         {!isDesktop && (
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <Text style={styles.backButtonText}>← Quay lại</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Hồ sơ Bệnh nhân</Text>
+            <Text style={styles.headerTitle}>Kho hồ sơ sức khỏe</Text>
           </View>
         )}
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-        {/* Quick Stats Grid */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Tổng số BN</Text>
-            <Text style={styles.statValue}>1,284</Text>
+        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+          <View style={styles.pageTitleBlock}>
+            <Text style={styles.pageTitle}>Kho Hồ Sơ Sức Khỏe Cá Nhân</Text>
+            <Text style={styles.pageSubtitle}>
+              Lưu trữ tài liệu nhận từ bệnh viện — tra cứu khi tái khám, chuyển viện hoặc làm thủ tục BHYT.
+            </Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Đang điều trị</Text>
-            <Text style={[styles.statValue, { color: '#D97706' }]}>342</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Cấp cứu</Text>
-            <Text style={[styles.statValue, { color: '#EF4444' }]}>18</Text>
-          </View>
-        </View>
 
-        {/* Search & Filter bar */}
-        <View style={styles.searchRow}>
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{visits.length}</Text>
+              <Text style={styles.statLabel}>Lượt khám</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statValue, { color: '#15803D' }]}>{savedCount}</Text>
+              <Text style={styles.statLabel}>Tài liệu đã lưu</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statValue, { color: '#D97706' }]}>{Math.max(0, totalSlots - savedCount)}</Text>
+              <Text style={styles.statLabel}>Còn thiếu</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statValue, { color: '#2563EB' }]}>
+                {totalSlots > 0 ? Math.round((savedCount / totalSlots) * 100) : 0}%
+              </Text>
+              <Text style={styles.statLabel}>Hoàn thiện</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.identityCard} onPress={() => navigation.navigate('PatientIdentity')} activeOpacity={0.85}>
+            <View style={styles.identityRow}>
+              <View style={styles.identityField}>
+                <Text style={styles.identityLabel}>Họ và tên</Text>
+                <Text style={styles.identityValue}>{identity?.name || '—'}</Text>
+              </View>
+              <View style={styles.identityField}>
+                <Text style={styles.identityLabel}>Ngày sinh</Text>
+                <Text style={styles.identityValue}>
+                  {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.identityRow}>
+              <View style={styles.identityField}>
+                <Text style={styles.identityLabel}>CCCD</Text>
+                <Text style={styles.identityValue}>{identity?.cccd || '—'}</Text>
+              </View>
+              <View style={styles.identityField}>
+                <Text style={styles.identityLabel}>Số BHYT</Text>
+                <Text style={styles.identityValue}>{identity?.bhytNumber || '—'}</Text>
+              </View>
+            </View>
+            <Text style={styles.identityEditHint}>Nhấn để chỉnh sửa thông tin →</Text>
+          </TouchableOpacity>
+
           <View style={styles.searchContainer}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Tìm theo tên, mã BN, chẩn đoán..."
+              placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
               placeholderTextColor="#94A3B8"
               value={search}
               onChangeText={setSearch}
             />
           </View>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => Alert.alert('Bộ lọc', 'Sắp xếp danh sách bệnh nhân...')}>
-            <Text style={styles.filterBtnText}>🎛️ Lọc</Text>
+
+          <Text style={styles.sectionTitle}>Lịch sử khám & Tài liệu ({filtered.length} lượt)</Text>
+
+          {filtered.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🗂️</Text>
+              <Text style={styles.emptyText}>
+                {visits.length === 0
+                  ? 'Chưa có lượt khám nào.\nNhấn "+ Thêm lượt khám" để bắt đầu.'
+                  : 'Không tìm thấy lượt khám phù hợp.'}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.timelineContainer}>
+            {filtered.map((visit, index) => (
+              <View key={visit._id} style={styles.timelineItem}>
+                <View style={styles.timelineBar}>
+                  <View style={[styles.timelineDot, visit.visitType === 'noi_tru' ? styles.dotInpatient : styles.dotOutpatient]} />
+                  {index < filtered.length - 1 && <View style={styles.timelineLine} />}
+                </View>
+                <View style={styles.timelineCard}>
+                  <VisitCard
+                    visit={visit}
+                    expanded={expandedVisit === visit._id}
+                    onToggle={() => setExpandedVisit(expandedVisit === visit._id ? null : visit._id)}
+                    onDocPress={handleDocPress}
+                    onDeleteDoc={removeDoc}
+                    onDelete={() => removeVisit(visit._id)}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.addVisitBtn} onPress={() => setShowAddModal(true)}>
+            <Text style={styles.addVisitBtnText}>+ Thêm lượt khám mới</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Patient List */}
-        <Text style={styles.sectionTitle}>Danh sách bệnh án ({filtered.length})</Text>
-        
-        <View style={styles.listContainer}>
-          {filtered.map((p, index) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[styles.patientRow, index === filtered.length - 1 && styles.lastPatientRow]}
-              onPress={() => handlePatientPress(p)}
-            >
-              <View style={styles.rowLeft}>
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarLetter}>{p.name.charAt(0)}</Text>
-                </View>
-                <View style={styles.metaInfo}>
-                  <Text style={styles.patientName}>{p.name}</Text>
-                  <Text style={styles.patientDetails}>
-                    {p.id} • {p.age} tuổi • {p.gender}
-                  </Text>
-                  <Text style={styles.patientDiagnosis}>
-                    Chẩn đoán: <Text style={styles.diagnosisText}>{p.diagnosis}</Text>
-                  </Text>
-                </View>
-              </View>
+          <View style={styles.infoNote}>
+            <Text style={styles.infoNoteIcon}>ℹ️</Text>
+            <Text style={styles.infoNoteText}>
+              Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Không thay thế EMR và không dùng để kê toa hay chẩn đoán.
+            </Text>
+          </View>
+        </ScrollView>
 
-              <View style={styles.rowRight}>
-                <View style={[styles.statusBadge, { backgroundColor: p.badgeColor }]}>
-                  <Text style={[styles.statusText, { color: p.textColor }]}>{p.status}</Text>
-                </View>
-                <Text style={styles.scanDate}>Quét: {p.lastScan}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Pagination helper */}
-        <View style={styles.paginationContainer}>
-          <Text style={styles.paginationInfo}>Hiển thị {filtered.length} / {patients.length} bệnh nhân</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        <AddVisitModal visible={showAddModal} onClose={() => setShowAddModal(false)} onSubmit={addVisit} />
+      </SafeAreaView>
     </ResponsiveLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centerState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 },
+  centerText: { fontSize: 14, color: '#64748B', textAlign: 'center' },
+  errorIcon: { fontSize: 36 },
+  retryBtn: { backgroundColor: '#15803D', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  retryBtnText: { color: '#FFF', fontWeight: '600' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
   },
-  backButton: {
-    paddingVertical: 4,
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
+  backButton: { paddingVertical: 4, marginRight: 16 },
+  backButtonText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
+  scrollContainer: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40 },
+  pageTitleBlock: { marginBottom: 16 },
+  pageTitle: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  pageSubtitle: { fontSize: 13, color: '#64748B', lineHeight: 19 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
+  statLabel: { fontSize: 10, color: '#64748B', marginTop: 2, textAlign: 'center' },
+  identityCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 16, marginBottom: 16, gap: 10 },
+  identityRow: { flexDirection: 'row', gap: 12 },
+  identityField: { flex: 1 },
+  identityLabel: { fontSize: 10, color: '#94A3B8', marginBottom: 2, fontWeight: '600' },
+  identityValue: { fontSize: 13, color: '#FFFFFF', fontWeight: 'bold' },
+  identityEditHint: { fontSize: 10, color: '#4ADE80', marginTop: 4 },
   searchContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF',
+    borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12,
+    paddingHorizontal: 12, height: 46, marginBottom: 20,
   },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 8,
+  searchIcon: { fontSize: 14, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
+  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#0F172A', marginBottom: 14 },
+  emptyState: { alignItems: 'center', paddingVertical: 32 },
+  emptyIcon: { fontSize: 40, marginBottom: 12 },
+  emptyText: { fontSize: 14, color: '#94A3B8', textAlign: 'center', lineHeight: 20 },
+  timelineContainer: { gap: 0 },
+  timelineItem: { flexDirection: 'row', gap: 12 },
+  timelineBar: { width: 20, alignItems: 'center', paddingTop: 20 },
+  timelineDot: { width: 14, height: 14, borderRadius: 7 },
+  dotInpatient: { backgroundColor: '#EF4444' },
+  dotOutpatient: { backgroundColor: '#2563EB' },
+  timelineLine: { width: 2, flex: 1, backgroundColor: '#E2E8F0', marginTop: 4 },
+  timelineCard: { flex: 1, paddingBottom: 16 },
+  visitCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, overflow: 'hidden' },
+  visitHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14 },
+  visitHeaderLeft: { flexDirection: 'row', gap: 10, flex: 1 },
+  visitTypeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  badgeInpatient: { backgroundColor: '#FEE2E2' },
+  badgeOutpatient: { backgroundColor: '#EFF6FF' },
+  visitTypeText: { fontSize: 10, fontWeight: 'bold' },
+  badgeInpatientText: { color: '#EF4444' },
+  badgeOutpatientText: { color: '#2563EB' },
+  visitMeta: { flex: 1 },
+  visitDate: { fontSize: 13, fontWeight: 'bold', color: '#0F172A' },
+  visitFacility: { fontSize: 12, color: '#64748B', marginTop: 1 },
+  visitDiagnosis: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+  visitHeaderRight: { alignItems: 'center', minWidth: 50 },
+  visitDocCount: { fontSize: 16, fontWeight: 'bold', color: '#15803D' },
+  visitDocCountLabel: { fontSize: 9, color: '#64748B' },
+  visitToggle: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
+  visitBody: { borderTopWidth: 1, borderTopColor: '#F1F5F9', padding: 14, gap: 12 },
+  visitInfoRow: { flexDirection: 'row', gap: 12 },
+  visitInfoItem: { flex: 1 },
+  visitInfoLabel: { fontSize: 10, color: '#94A3B8', marginBottom: 2 },
+  visitInfoValue: { fontSize: 12, color: '#334155', fontWeight: '600' },
+  progressContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  progressBg: { flex: 1, height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#15803D', borderRadius: 3 },
+  progressText: { fontSize: 11, color: '#15803D', fontWeight: '600', minWidth: 60 },
+  groupCard: { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8 },
+  groupIcon: { fontSize: 16 },
+  groupLabel: { flex: 1, fontSize: 12, fontWeight: 'bold' },
+  groupCount: { fontSize: 11, fontWeight: '600' },
+  groupToggle: { fontSize: 10, marginLeft: 4 },
+  docList: { padding: 10, paddingTop: 0, gap: 8 },
+  docCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
+  docCardHas: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  docCardMissing: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderStyle: 'dashed' },
+  docCardLeft: { flexDirection: 'row', gap: 10, flex: 1, alignItems: 'center' },
+  docIcon: { fontSize: 16 },
+  docInfo: { flex: 1 },
+  docLabel: { fontSize: 12, color: '#334155', fontWeight: '500' },
+  docLabelMissing: { color: '#94A3B8' },
+  docStatusHas: { fontSize: 10, color: '#15803D', marginTop: 2 },
+  docStatusMissing: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
+  deleteDocBtn: { paddingHorizontal: 6, paddingVertical: 4 },
+  deleteDocBtnText: { fontSize: 14 },
+  countBadge: {
+    minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#15803D',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, marginRight: 6,
   },
-  filterBtn: {
-    height: 46,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 14,
+  countBadgeText: { fontSize: 11, color: '#FFF', fontWeight: 'bold' },
+  deleteVisitBtn: { borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
+  deleteVisitBtnText: { fontSize: 12, color: '#EF4444', fontWeight: '600' },
+  addVisitBtn: { backgroundColor: '#15803D', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, marginBottom: 16 },
+  addVisitBtnText: { fontSize: 14, color: '#FFFFFF', fontWeight: 'bold' },
+  infoNote: { flexDirection: 'row', gap: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12 },
+  infoNoteIcon: { fontSize: 14 },
+  infoNoteText: { flex: 1, fontSize: 11, color: '#64748B', lineHeight: 17 },
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
   },
-  filterBtnText: {
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '500',
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
+  modalCancel: { fontSize: 15, color: '#64748B' },
+  modalSave: { fontSize: 15, color: '#15803D', fontWeight: 'bold' },
+  modalBody: { padding: 16, paddingBottom: 40 },
+  modalFieldLabel: { fontSize: 12, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 14 },
+  modalInput: {
+    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#0F172A',
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  listContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-  },
-  patientRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  lastPatientRow: {
-    borderBottomWidth: 0,
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    gap: 12,
-    flex: 1.2,
-  },
-  avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#DCFCE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarLetter: {
-    color: '#15803D',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  metaInfo: {
-    flex: 1,
-  },
-  patientName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  patientDetails: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  patientDiagnosis: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  diagnosisText: {
-    color: '#334155',
-    fontWeight: '500',
-  },
-  rowRight: {
-    alignItems: 'flex-end',
-    flex: 0.8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  scanDate: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  paginationContainer: {
-    alignItems: 'center',
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  paginationInfo: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
+  toggleRow: { flexDirection: 'row', gap: 10 },
+  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  toggleBtnActive: { backgroundColor: '#DCFCE7', borderColor: '#15803D' },
+  toggleBtnText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  toggleBtnTextActive: { color: '#15803D', fontWeight: 'bold' },
 });
 
 export default PatientRecordsScreen;

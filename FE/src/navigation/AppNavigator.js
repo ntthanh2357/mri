@@ -13,6 +13,7 @@ import PatientRecordsScreen from '../screens/PatientRecordsScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import MedicalRecordFormScreen from '../screens/MedicalRecordFormScreen';
+import DocumentDetailScreen from '../screens/DocumentDetailScreen';
 import Colors from '../constants/colors';
 
 const Stack = createNativeStackNavigator();
@@ -40,6 +41,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
         <Stack.Screen name="MedicalRecordForm" component={MedicalRecordFormScreen} options={{ title: 'Bệnh án Ung thư Não', headerShown: false }} />
+        <Stack.Screen name="DocumentDetail" component={DocumentDetailScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
