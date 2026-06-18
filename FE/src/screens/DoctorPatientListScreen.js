@@ -60,7 +60,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
             dbId: p._id,
             name: p.profile?.name || p.email,
             age: '31',
-            gender: p.profile?.gender || (p.profile?.bhytNumber?.startsWith('GD') ? 'Nữ' : 'Nam'),
+            gender: p.profile?.gender || 'Nam',
             phone: p.phone || 'N/A',
             diagnosis: diagnosisStr,
             lastScan: lastVital

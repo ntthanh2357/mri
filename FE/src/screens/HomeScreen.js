@@ -314,14 +314,14 @@ const HomeScreen = ({ route, navigation }) => {
                       <Text style={styles.gridSub}>Bệnh sử, tiền sử</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => Alert.alert('Bảo hiểm', 'Thẻ BHYT: ' + (user.profile?.bhytNumber || 'Chưa liên kết BHYT'))}
-                    >
-                      <Text style={styles.gridIcon}>🛡️</Text>
-                      <Text style={styles.gridLabel}>Liên kết BHYT</Text>
-                      <Text style={styles.gridSub}>Đã cấu hình</Text>
-                    </TouchableOpacity>
+                     <TouchableOpacity
+                       style={styles.gridCard}
+                       onPress={() => Alert.alert('Thông tin liên hệ', 'Email: ' + user.email + '\nSố điện thoại: ' + (user.phone || 'Chưa cập nhật'))}
+                     >
+                       <Text style={styles.gridIcon}>📞</Text>
+                       <Text style={styles.gridLabel}>Thông tin liên hệ</Text>
+                       <Text style={styles.gridSub}>Xem thông tin</Text>
+                     </TouchableOpacity>
                   </View>
                 </>
               )}

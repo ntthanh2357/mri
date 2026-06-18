@@ -21,7 +21,7 @@ const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('patient'); // 'patient' or 'doctor'
-  const [bhytNumber, setBhytNumber] = useState(''); // Patient only
+  // BHYT removed for privacy regulations
   const [licenseUrl, setLicenseUrl] = useState(''); // Doctor only
   const [loading, setLoading] = useState(false);
 
@@ -139,7 +139,7 @@ const RegisterScreen = ({ navigation }) => {
       password,
       name: name.trim(),
       role,
-      bhytNumber: role === 'patient' ? bhytNumber.trim() : undefined,
+      // bhytNumber removed for privacy regulations
       licenseUrl: role === 'doctor' ? licenseUrl.trim() : undefined,
     };
 
@@ -256,19 +256,7 @@ const RegisterScreen = ({ navigation }) => {
           </View>
 
           {/* Conditional inputs */}
-          {role === 'patient' ? (
-            <View>
-              <Text style={styles.label}>Số thẻ BHYT (nếu có)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="GD401XXXXXXXXXX"
-                placeholderTextColor="#94A3B8"
-                value={bhytNumber}
-                onChangeText={setBhytNumber}
-                autoCapitalize="characters"
-              />
-            </View>
-          ) : (
+          {role === 'patient' ? null : (
             <View>
               <Text style={styles.label}>Đường dẫn Chứng chỉ hành nghề (CCHN) *</Text>
               <TextInput

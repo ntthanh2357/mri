@@ -658,12 +658,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
           value={formData.age}
           onChangeText={(text) => setFormData({ ...formData, age: text })}
         />
-        <FormField
-          label="Số BHYT"
-          placeholder="VD: 1234567890"
-          value={formData.bhytNumber}
-          onChangeText={(text) => setFormData({ ...formData, bhytNumber: text })}
-        />
+        {/* BHYT removed for privacy regulations */}
         <FormField
           label="Khoa khám"
           placeholder="Khoa Nội Thần Kinh"

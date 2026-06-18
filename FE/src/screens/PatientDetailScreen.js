@@ -341,7 +341,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       await post(`/api/patients/${targetPatientId}/lab-orders`, {
         category,
         barcode,
-        patient_gender: patient.profile?.bhytNumber?.startsWith('GD') || Math.random() > 0.5 ? 'Nữ' : 'Nam' // Đoán giới tính
+        patient_gender: patient.profile?.gender || (Math.random() > 0.5 ? 'Nữ' : 'Nam')
       });
 
       Alert.alert('Thành công', `Đã tạo phiếu xét nghiệm mới (${category}) với mã Barcode: ${barcode}`);
@@ -572,7 +572,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.patientNameText}>{patient?.profile?.name || 'Chưa rõ họ tên'}</Text>
                 <View style={styles.genderBadge}>
                   <Text style={styles.genderBadgeText}>
-                    {patient?.profile?.bhytNumber?.startsWith('GD') || Math.random() > 0.5 ? 'Nữ' : 'Nam'}
+                    {patient?.profile?.gender || 'Nam'}
                   </Text>
                 </View>
               </View>
@@ -584,8 +584,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   <Text style={styles.metaValue}>NS-{patient?._id?.substring(18).toUpperCase() || 'N/A'}</Text>
                 </View>
                 <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>SỐ THẺ BHYT</Text>
-                  <Text style={styles.metaValue}>{patient?.profile?.bhytNumber || 'Chưa liên kết'}</Text>
+                  <Text style={styles.metaLabel}>EMAIL</Text>
+                  <Text style={styles.metaValue}>{patient?.email || 'N/A'}</Text>
                 </View>
                 <View style={styles.metaCell}>
                   <Text style={styles.metaLabel}>VAI TRÒ</Text>
@@ -869,8 +869,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
                           <Text style={styles.demoVal}>{selectedOrder.patient_gender}</Text>
                         </View>
                         <View style={styles.demoRow}>
-                          <Text style={styles.demoLabel}>Số thẻ BHYT:</Text>
-                          <Text style={styles.demoVal}>{patient?.profile?.bhytNumber || 'Không có BHYT'}</Text>
+                          <Text style={styles.demoLabel}>Số điện thoại:</Text>
+                          <Text style={styles.demoVal}>{patient?.phone || 'Chưa cập nhật'}</Text>
 
                           <Text style={styles.demoLabel}>Thời gian chỉ định:</Text>
                           <Text style={styles.demoVal}>
