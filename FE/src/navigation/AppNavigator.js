@@ -14,6 +14,7 @@ import PatientRecordsScreen from '../screens/PatientRecordsScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import AdminBackofficeScreen from '../screens/AdminBackofficeScreen';
+import EMRDashboardScreen from '../screens/EMRDashboardScreen';
 import Colors from '../constants/colors';
 
 const Stack = createNativeStackNavigator();
@@ -34,6 +35,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI' }} />
         <Stack.Screen name="ClinicDashboard" component={ClinicDashboardScreen} options={{ title: 'Phòng khám', headerShown: false }} />
+        <Stack.Screen name="EMRDashboard" component={EMRDashboardScreen} options={{ title: 'EMR Management', headerShown: false }} />
         <Stack.Screen name="AIAnalysis" component={AIAnalysisScreen} options={{ title: 'Phân tích AI', headerShown: false }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Hội viên Premium', headerShown: false }} />
         <Stack.Screen name="SystemAdmin" component={SystemAdminScreen} options={{ title: 'Hệ thống Quản trị', headerShown: false }} />
