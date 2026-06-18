@@ -307,6 +307,15 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.gridCard}
+                      onPress={() => navigation.navigate('MedicalRecordForm')}
+                    >
+                      <Text style={styles.gridIcon}>📋</Text>
+                      <Text style={styles.gridLabel}>Khai báo bệnh án</Text>
+                      <Text style={styles.gridSub}>Bệnh sử, tiền sử</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.gridCard}
                       onPress={() => Alert.alert('Bảo hiểm', 'Thẻ BHYT: ' + (user.profile?.bhytNumber || 'Chưa liên kết BHYT'))}
                     >
                       <Text style={styles.gridIcon}>🛡️</Text>
