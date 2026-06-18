@@ -48,3 +48,20 @@ export const protect = async (req, res, next) => {
     return;
   }
 };
+
+export const checkRole = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      res.status(403).json({ message: "Quyền truy cập bị từ chối, thiếu vai trò người dùng." });
+      return;
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      res.status(403).json({ message: "Quyền truy cập bị từ chối, bạn không có quyền thực hiện hành động này." });
+      return;
+    }
+
+    next();
+  };
+};
+

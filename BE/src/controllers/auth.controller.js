@@ -2,6 +2,16 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 import { sendOtpEmail } from "../services/email.service.js";
+import { Otp } from "../models/otp.model.js";
+import crypto from "crypto";
+
+const hashPhone = (phone) => {
+  if (!phone) return null;
+  const salt = process.env.PHONE_SALT || "neuroscan_phone_salt";
+  return crypto.createHmac("sha256", salt).update(phone).digest("hex");
+};
+
+
 
 // Helper function to generate JWT Access Token
 const generateAccessToken = (userId, role, tokenVersion) => {
@@ -41,7 +51,7 @@ export const register = async (req, res) => {
     }
 
     if (phone) {
-      const phoneExists = await User.findOne({ phone });
+      const phoneExists = await User.findOne({ phone: hashPhone(phone) });
       if (phoneExists) {
         res.status(400).json({ message: "Số điện thoại này đã được đăng ký sử dụng." });
         return;
@@ -55,7 +65,7 @@ export const register = async (req, res) => {
     // Create new user
     const newUser = new User({
       email,
-      phone,
+      phone: phone ? hashPhone(phone) : undefined,
       passwordHash,
       role,
       isVerified: role === "patient" ? true : false, // Patients are auto-verified, Doctors need admin verification for CCHN
@@ -97,8 +107,13 @@ export const login = async (req, res) => {
       return;
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Find user by email or phone
+    const user = await User.findOne({
+      $or: [
+        { email: email.toLowerCase() },
+        { phone: hashPhone(email) }
+      ]
+    });
     if (!user) {
       res.status(400).json({ message: "Email hoặc mật khẩu không chính xác." });
       return;
@@ -668,3 +683,236 @@ export const verifyOtp = async (req, res) => {
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
   }
 };
+
+// @desc    Request OTP for Phone registration
+// @route   POST /auth/phone-register-request
+// @access  Public
+export const requestPhoneRegisterOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+      return;
+    }
+
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(phone)) {
+      res.status(400).json({ message: "Số điện thoại phải chứa đúng 10 chữ số." });
+      return;
+    }
+
+    // Check if user already exists (using hashed phone)
+    const userExists = await User.findOne({ phone: hashPhone(phone) });
+    if (userExists) {
+      res.status(400).json({ message: "Số điện thoại này đã được đăng ký sử dụng." });
+      return;
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiration
+
+    // Upsert OTP in database (using hashed phone)
+    await Otp.findOneAndUpdate(
+      { phone: hashPhone(phone) },
+      { otpCode, otpExpires },
+      { upsert: true, new: true }
+    );
+
+    // Print OTP in terminal console for easy local testing
+    console.log(`\n\x1b[33m[SMS OTP MOCK] Mã OTP đăng ký của số điện thoại ${phone} là: ${otpCode}\x1b[0m\n`);
+
+    res.status(200).json({
+      message: "Mã OTP đã được tạo thành công (Xem tại terminal của Server).",
+      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi yêu cầu OTP đăng ký:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP đăng ký.", error: error.message });
+  }
+};
+
+// @desc    Verify Phone OTP and register user
+// @route   POST /auth/phone-register-verify
+// @access  Public
+export const verifyPhoneRegisterOtp = async (req, res) => {
+  try {
+    const { phone, otp, name, email, password, role, bhytNumber, licenseUrl } = req.body;
+
+    if (!phone || !otp || !name || !email || !password || !role) {
+      res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin bắt buộc." });
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ message: "Địa chỉ email không đúng định dạng chuẩn." });
+      return;
+    }
+
+    // Check if email already exists
+    const emailExists = await User.findOne({ email });
+    if (emailExists) {
+      res.status(400).json({ message: "Email này đã được đăng ký sử dụng." });
+      return;
+    }
+
+    // Find and check OTP (using hashed phone)
+    const otpDoc = await Otp.findOne({ phone: hashPhone(phone) });
+    if (!otpDoc || otpDoc.otpCode !== otp) {
+      res.status(400).json({ message: "Mã OTP không chính xác." });
+      return;
+    }
+
+    if (otpDoc.otpExpires < new Date()) {
+      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      return;
+    }
+
+    // Remove OTP document
+    await Otp.deleteOne({ _id: otpDoc._id });
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    // Create user (using hashed phone)
+    const newUser = new User({
+      email: email.toLowerCase(),
+      phone: hashPhone(phone),
+      passwordHash,
+      role,
+      isVerified: true, // Phone OTP is verified successfully
+      profile: {
+        name,
+        photoUrl: "",
+        bhytNumber: role === "patient" ? bhytNumber || "" : "",
+        licenseUrl: role === "doctor" ? licenseUrl || "" : "",
+      },
+    });
+
+    await newUser.save();
+
+    // Automatically log user in
+    const accessToken = generateAccessToken(newUser._id.toString(), newUser.role, newUser.tokenVersion || 0);
+    const refreshToken = generateRefreshToken(newUser._id.toString(), newUser.role, newUser.tokenVersion || 0);
+
+    res.status(201).json({
+      message: "Xác minh OTP và đăng ký tài khoản thành công!",
+      accessToken,
+      refreshToken,
+      user: {
+        id: newUser._id,
+        email: newUser.email,
+        role: newUser.role,
+        isVerified: newUser.isVerified,
+        profile: newUser.profile,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi xác thực OTP đăng ký:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng ký tài khoản.", error: error.message });
+  }
+};
+
+// @desc    Request OTP for Phone Login
+// @route   POST /auth/phone-login-request
+// @access  Public
+export const requestPhoneLoginOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+      return;
+    }
+
+    // Find user by phone (using hashed phone)
+    const user = await User.findOne({ phone: hashPhone(phone) });
+    if (!user) {
+      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký." });
+      return;
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiration
+
+    // Upsert OTP in database (using hashed phone)
+    await Otp.findOneAndUpdate(
+      { phone: hashPhone(phone) },
+      { otpCode, otpExpires },
+      { upsert: true, new: true }
+    );
+
+    // Print OTP in terminal console for easy local testing
+    console.log(`\n\x1b[32m[SMS OTP MOCK] Mã OTP đăng nhập của số điện thoại ${phone} là: ${otpCode}\x1b[0m\n`);
+
+    res.status(200).json({
+      message: "Mã OTP đã được tạo thành công (Xem tại terminal của Server).",
+      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi yêu cầu OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP đăng nhập.", error: error.message });
+  }
+};
+
+// @desc    Verify Phone OTP and login user
+// @route   POST /auth/phone-login-verify
+// @access  Public
+export const verifyPhoneLoginOtp = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      res.status(400).json({ message: "Vui lòng nhập đầy đủ số điện thoại và mã OTP." });
+      return;
+    }
+
+    // Check OTP (using hashed phone)
+    const otpDoc = await Otp.findOne({ phone: hashPhone(phone) });
+    if (!otpDoc || otpDoc.otpCode !== otp) {
+      res.status(400).json({ message: "Mã OTP không chính xác." });
+      return;
+    }
+
+    if (otpDoc.otpExpires < new Date()) {
+      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      return;
+    }
+
+    // Find user (using hashed phone)
+    const user = await User.findOne({ phone: hashPhone(phone) });
+    if (!user) {
+      res.status(404).json({ message: "Không tìm thấy người dùng sở hữu số điện thoại này." });
+      return;
+    }
+
+    // Remove OTP document
+    await Otp.deleteOne({ _id: otpDoc._id });
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+
+    res.status(200).json({
+      message: "Đăng nhập thành công bằng OTP!",
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        profile: user.profile,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi xác minh OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác thực OTP đăng nhập.", error: error.message });
+  }
+};
+

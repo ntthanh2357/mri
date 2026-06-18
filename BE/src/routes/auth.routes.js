@@ -10,6 +10,10 @@ import {
   changePassword,
   forgotPassword,
   verifyOtp,
+  requestPhoneRegisterOtp,
+  verifyPhoneRegisterOtp,
+  requestPhoneLoginOtp,
+  verifyPhoneLoginOtp,
 } from "../controllers/auth.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -28,4 +32,11 @@ router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
 
+// Phone & OTP routes
+router.post("/phone-register-request", requestPhoneRegisterOtp);
+router.post("/phone-register-verify", verifyPhoneRegisterOtp);
+router.post("/phone-login-request", requestPhoneLoginOtp);
+router.post("/phone-login-verify", verifyPhoneLoginOtp);
+
 export default router;
+
