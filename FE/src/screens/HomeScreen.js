@@ -248,12 +248,12 @@ const HomeScreen = ({ route, navigation }) => {
                         <Text style={styles.mriSpecValue}>98.4%</Text>
                       </View>
                     </View>
-                    <TouchableOpacity
-                      style={styles.mriReportBtn}
-                      onPress={() => navigation.navigate('AIAnalysis')}
-                    >
-                      <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
-                    </TouchableOpacity>
+                     <TouchableOpacity
+                       style={styles.mriReportBtn}
+                       onPress={() => navigation.navigate('ImagingHistory')}
+                     >
+                       <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
+                     </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -287,14 +287,14 @@ const HomeScreen = ({ route, navigation }) => {
                       <Text style={styles.gridSub}>Phân tích bằng AI</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => navigation.navigate('PatientRecords')}
-                    >
-                      <Text style={styles.gridIcon}>📜</Text>
-                      <Text style={styles.gridLabel}>Lịch sử khám</Text>
-                      <Text style={styles.gridSub}>Xem kết quả AI</Text>
-                    </TouchableOpacity>
+                     <TouchableOpacity
+                       style={styles.gridCard}
+                       onPress={() => navigation.navigate('ImagingHistory')}
+                     >
+                       <Text style={styles.gridIcon}>🧠</Text>
+                       <Text style={styles.gridLabel}>Phim MRI & CT</Text>
+                       <Text style={styles.gridSub}>Xem phim & kết quả</Text>
+                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.gridCard}

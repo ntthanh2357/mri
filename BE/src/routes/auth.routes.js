@@ -14,6 +14,7 @@ import {
   verifyPhoneRegisterOtp,
   requestPhoneLoginOtp,
   verifyPhoneLoginOtp,
+  getPatients,
 } from "../controllers/auth.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -25,6 +26,7 @@ router.post("/refresh", refresh);
 router.post("/firebase-login", firebaseLogin);
 router.post("/sso/:provider", ssoLogin);
 router.get("/me", protect, getMe);
+router.get("/patients", protect, getPatients);
 
 // Endpoints
 router.post("/logout/all", protect, logoutAll);

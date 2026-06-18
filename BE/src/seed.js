@@ -5,6 +5,7 @@ import { User } from "./models/user.model.js";
 import { Biomarker } from "./models/biomarker.model.js";
 import { LabOrder } from "./models/labOrder.model.js";
 import { VitalSign } from "./models/vitalSign.model.js";
+import { ImagingResult } from "./models/imagingResult.model.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ const seedDatabase = async () => {
     await Biomarker.deleteMany({});
     await LabOrder.deleteMany({});
     await VitalSign.deleteMany({});
+    await ImagingResult.deleteMany({ medicalId: "26025699" });
     console.log("Cleanup finished.");
 
     // 2. Mã hóa mật khẩu
@@ -60,6 +62,7 @@ const seedDatabase = async () => {
           name: "Bệnh nhân Tuấn Thành",
           photoUrl: "",
           bhytNumber: "GD4797932200123",
+          medicalId: "26025699",
         },
       },
     ];
@@ -343,6 +346,80 @@ const seedDatabase = async () => {
     console.log(`   - Biomarkers: ${mockBiomarkers.length} (${mockBiomarkers.filter(b => b.category === "HOA_SINH").length} Hóa sinh + ${mockBiomarkers.filter(b => b.category === "HUYET_HOC").length} Huyết học)`);
     console.log(`   - Vitals: ${mockVitals.length}`);
     console.log(`   - Lab Orders: ${mockLabOrders.length}`);
+
+    // 7. Create mock Imaging Results (MRI and CT-Scan)
+    const mockImagingResults = [
+      {
+        medicalId: "26025699",
+        patientName: "Bệnh nhân Tuấn Thành",
+        birthYear: 1995,
+        gender: "Nam",
+        address: "., Phường Hòa Xuân, Tp Đà Nẵng",
+        orderDate: new Date("2026-06-10T15:31:00"),
+        orderingDoctor: "Bác sĩ Nguyễn Văn A",
+        orderingDepartment: "Khoa Khám Bệnh",
+        medicalRecordNumber: "SBA-2026-98765",
+        diagnosis: "U não vùng thái dương",
+        procedure: "Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)",
+        technique: "Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.",
+        findings: "Phát hiện một cấu trúc dạng khối u chiếm chỗ tại thùy thái dương bên trái, kích thước khoảng 22x24mm. Khối u có ranh giới tương đối rõ, gây phù nề nhẹ nhu mô não xung quanh nhưng chưa đè ép đáng kể đường giữa và não thất bên. Không thấy dấu hiệu xuất huyết nội u hay vôi hóa lớn.",
+        conclusion: "Hình ảnh khối u thùy thái dương trái, hướng tới u màng não (Meningioma) lành tính. Đề nghị kết hợp lâm sàng và hội chẩn chuyên khoa ngoại thần kinh.",
+        radiologist: "Bác sĩ Gia Huy",
+        reportDate: new Date("2026-06-10T16:37:00"),
+        images: [
+          "/uploads/tumor_01.png",
+          "/uploads/tumor_03.png",
+          "/uploads/tumor_05.png",
+          "/uploads/tumor_07.png",
+          "/uploads/tumor_09.png"
+        ],
+        imagingType: "MRI",
+        dicomMetadata: {
+          studyInstanceUID: "1.2.826.0.1.3680043.8.498.497205367665",
+          seriesInstanceUID: "1.2.826.0.1.3680043.8.498.5687695331470",
+          sopInstanceUIDs: [
+            "1.2.826.0.1.3680043.8.498.112233445566.1",
+            "1.2.826.0.1.3680043.8.498.112233445566.2"
+          ]
+        }
+      },
+      {
+        medicalId: "26025699",
+        patientName: "Bệnh nhân Tuấn Thành",
+        birthYear: 1995,
+        gender: "Nam",
+        address: "., Phường Hòa Xuân, Tp Đà Nẵng",
+        orderDate: new Date("2026-06-10T15:31:00"),
+        orderingDoctor: "Bác sĩ Nguyễn Văn A",
+        orderingDepartment: "Khoa Cấp Cứu",
+        medicalRecordNumber: "SBA-2026-98765",
+        diagnosis: "Theo dõi u não / Đau đầu nhiều",
+        procedure: "Chụp cắt lớp vi tính sọ não (CT-Scan không thuốc)",
+        technique: "Chụp cắt lớp vi tính đầu không tiêm chất cản quang với các lát cắt song song với mặt phẳng obito-meatal, bề dày lát cắt 5mm.",
+        findings: "Hình ảnh vùng giảm tỷ trọng nhẹ dạng khối tại thùy thái dương trái, kích thước tương đương 20x22mm. Hệ thống não thất và các bể não chưa thấy bất thường lớn. Không thấy tụ máu ngoài màng cứng, dưới màng cứng hay xuất huyết khoang dưới nhện.",
+        conclusion: "Hình ảnh giảm tỷ trọng thùy thái dương trái (phù hợp với chẩn đoán u não vùng thái dương đã phát hiện trên MRI). Đề nghị phối hợp kết quả MRI để đánh giá chính xác tính chất khối u.",
+        radiologist: "Bác sĩ Gia Huy",
+        reportDate: new Date("2026-06-10T16:37:00"),
+        images: [
+          "/uploads/tumor_02.png",
+          "/uploads/tumor_04.png",
+          "/uploads/tumor_06.png",
+          "/uploads/tumor_08.png",
+          "/uploads/tumor_10.png"
+        ],
+        imagingType: "CT",
+        dicomMetadata: {
+          studyInstanceUID: "1.2.826.0.1.3680043.8.498.8750302641600",
+          seriesInstanceUID: "1.2.826.0.1.3680043.8.498.9988776655443"
+        }
+      }
+    ];
+
+    console.log("Inserting seed imaging results...");
+    const createdResults = await ImagingResult.insertMany(mockImagingResults);
+    console.log("Created imaging results:", createdResults.map(r => `${r.imagingType} for patient ${r.patientName}`));
+
+    console.log("Seeding completed successfully!");
     process.exit(0);
   } catch (error) {
     console.error("Seeding failed:", error);

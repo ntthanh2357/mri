@@ -916,3 +916,19 @@ export const verifyPhoneLoginOtp = async (req, res) => {
   }
 };
 
+// @desc    Get all patients
+// @route   GET /auth/patients
+// @access  Private (Doctor/Admin only)
+export const getPatients = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor" && req.user.role !== "admin") {
+      res.status(403).json({ message: "Bạn không có quyền thực hiện hành động này." });
+      return;
+    }
+    const patients = await User.find({ role: "patient" }).select("-passwordHash");
+    res.status(200).json({ success: true, data: patients });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách bệnh nhân:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi lấy danh sách bệnh nhân.", error: error.message });
+  }
+};

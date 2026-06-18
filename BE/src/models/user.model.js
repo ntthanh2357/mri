@@ -60,6 +60,12 @@ const userSchema = new Schema(
         type: String,
         default: "",
       },
+      medicalId: {
+        type: String,
+        default: "",
+        trim: true,
+        index: true,
+      },
       licenseUrl: {
         type: String,
         default: "",

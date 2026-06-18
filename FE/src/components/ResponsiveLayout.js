@@ -58,6 +58,7 @@ const ResponsiveLayout = ({
   const menuItems = isPatient
     ? [
         { label: 'Tổng quan', route: 'Home', icon: '📊' },
+        { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: '🧠' },
         { label: 'Phân tích AI', route: 'AIAnalysis', icon: '📸' },
         { label: 'Lịch sử khám', route: 'PatientRecords', icon: '📜' },
         { label: 'Khai báo bệnh án', route: 'MedicalRecordForm', icon: '📋' },

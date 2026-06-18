@@ -7,7 +7,7 @@ import patientRoutes from "./patient.routes.js";
 import lisRoutes from "./lis.routes.js";
 
 import patientRecordRoutes from "./patientRecord.routes.js";
-
+import imagingRoutes from "./imaging.routes.js";
 
 const router = Router();
 
@@ -24,6 +24,9 @@ router.use("/admin", adminRoutes);
 
 // Mount EMR routes (internal clinical records, care sheets, consultations)
 router.use("/emr", emrRoutes);
+
+// Mount imaging routes
+router.use("/api/v1/imaging", imagingRoutes);
 
 // Health check endpoint under /api/v1
 
