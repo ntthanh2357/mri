@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   TextInput,
@@ -16,6 +15,7 @@ import {
 import { post } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
+import styles from './CreateImagingResultScreen.styles';
 
 const CreateImagingResultScreen = ({ route, navigation }) => {
   const { patientInfo } = route.params || {};
@@ -131,24 +131,6 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     }));
   };
 
-  // Helper to pre-fill the 10 mock tumor images we created
-  const handleLoadMockImages = () => {
-    const mockImages = [
-      '/uploads/tumor_01.png',
-      '/uploads/tumor_02.png',
-      '/uploads/tumor_03.png',
-      '/uploads/tumor_04.png',
-      '/uploads/tumor_05.png',
-      '/uploads/tumor_06.png',
-      '/uploads/tumor_07.png',
-      '/uploads/tumor_08.png',
-      '/uploads/tumor_09.png',
-      '/uploads/tumor_10.png'
-    ];
-    setImages(mockImages);
-    showAlert('Thành công', 'Đã nạp 10 đường dẫn ảnh khối u mẫu vào bệnh án.');
-  };
-
   const handleSaveResult = async () => {
     // Validate required fields
     const newErrors = {};
@@ -234,9 +216,6 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
             <View style={styles.helperRow}>
               <TouchableOpacity style={styles.helperBtn} onPress={handleAutoFillTemplate}>
                 <Text style={styles.helperBtnText}>📝 Nạp mẫu theo file .docx</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]} onPress={handleLoadMockImages}>
-                <Text style={[styles.helperBtnText, { color: '#4F46E5' }]}>🖼️ Nạp 10 ảnh khối u mẫu</Text>
               </TouchableOpacity>
             </View>
 
@@ -429,7 +408,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                     return (
                       <View key={idx} style={styles.thumbnailContainer}>
                         <Image
-                          source={{ uri: fullUri }}
+                           source={{ uri: fullUri }}
                           style={styles.uploadedThumbnail}
                           resizeMode="cover"
                         />
@@ -465,278 +444,5 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     </ResponsiveLayout>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  backBtnText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  saveBtn: {
-    backgroundColor: '#15803D',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  saveBtnDisabled: {
-    backgroundColor: '#86EFAC',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  scrollContainer: {
-    padding: 16,
-  },
-  scrollContainerDesktop: {
-    maxWidth: 800,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  formSheet: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  helperRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  helperBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  helperBtnText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#475569',
-  },
-  sectionHeading: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inputGroup: {
-    marginBottom: 16,
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-  },
-  textArea: {
-    height: 60,
-    paddingVertical: 8,
-    textAlignVertical: 'top',
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  genderBtn: {
-    flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  activeGenderBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
-  },
-  genderBtnText: {
-    fontSize: 13,
-    color: '#475569',
-  },
-  activeGenderBtnText: {
-    color: '#15803D',
-    fontWeight: 'bold',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  typeBtn: {
-    flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  activeTypeBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
-  },
-  typeBtnText: {
-    fontSize: 14,
-    color: '#475569',
-  },
-  activeTypeBtnText: {
-    color: '#15803D',
-    fontWeight: 'bold',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 16,
-  },
-  imageCountText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#16A34A',
-    height: 40,
-    lineHeight: 40,
-  },
-  uploadAreaContainer: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-    width: '100%',
-  },
-  thumbnailGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    width: '100%',
-    marginBottom: 16,
-  },
-  thumbnailContainer: {
-    position: 'relative',
-    width: 70,
-    height: 70,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#000000',
-  },
-  uploadedThumbnail: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 6,
-  },
-  removeBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#EF4444',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  removeBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  uploadButton: {
-    width: '100%',
-    height: 44,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#15803D',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  uploadButtonDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#94A3B8',
-  },
-  uploadButtonText: {
-    color: '#15803D',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  uploadTipText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 8,
-  },
-  inputError: {
-    borderColor: '#EF4444',
-    borderWidth: 1.5,
-    backgroundColor: '#FEF2F2',
-  },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: '600',
-  },
-});
 
 export default CreateImagingResultScreen;

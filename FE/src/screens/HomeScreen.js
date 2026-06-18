@@ -494,7 +494,7 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.doctorGrid}>
                 <TouchableOpacity
                   style={styles.doctorGridCard}
-                  onPress={() => navigation.navigate('PatientRecords')}
+                  onPress={() => navigation.navigate('DoctorPatientList')}
                 >
                   <Text style={styles.doctorGridIcon}>📂</Text>
                   <Text style={styles.doctorGridLabel}>Bệnh án Điện tử</Text>
