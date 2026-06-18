@@ -54,3 +54,4 @@ const careSheetSchema = new Schema(
 );
 
 export const CareSheet = model("CareSheet", careSheetSchema);
+export default CareSheet;

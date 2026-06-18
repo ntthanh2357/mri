@@ -75,3 +75,4 @@ const medicalRecordSchema = new Schema(
 );
 
 export const MedicalRecord = model("MedicalRecord", medicalRecordSchema);
+export default MedicalRecord;

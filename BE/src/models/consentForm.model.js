@@ -42,3 +42,4 @@ const consentFormSchema = new Schema(
 );
 
 export const ConsentForm = model("ConsentForm", consentFormSchema);
+export default ConsentForm;

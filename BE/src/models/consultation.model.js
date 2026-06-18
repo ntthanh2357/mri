@@ -39,3 +39,4 @@ const consultationSchema = new Schema(
 );
 
 export const Consultation = model("Consultation", consultationSchema);
+export default Consultation;

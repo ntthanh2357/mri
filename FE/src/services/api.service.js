@@ -1,9 +1,39 @@
 import Config from '../constants/config';
+import { Platform } from 'react-native';
 
-let authToken = '';
+// AsyncStorage fallback for non-web
+const asyncStorageNoOp = {
+  getItem: () => Promise.resolve(null),
+  setItem: () => Promise.resolve(),
+  removeItem: () => Promise.resolve(),
+};
 
-export const setAuthToken = (token) => {
-  authToken = token;
+// Helper functions for token
+const getToken = async () => {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem('token');
+  }
+  return asyncStorageNoOp.getItem('token');
+};
+
+const setToken = async (token) => {
+  if (Platform.OS === 'web') {
+    if (token) {
+      localStorage.setItem('token', token);
+    } else {
+      localStorage.removeItem('token');
+    }
+  } else {
+    if (token) {
+      await asyncStorageNoOp.setItem('token', token);
+    } else {
+      await asyncStorageNoOp.removeItem('token');
+    }
+  }
+};
+
+export const setAuthToken = async (token) => {
+  await setToken(token);
 };
 
 const request = async (endpoint, options = {}) => {
@@ -13,8 +43,9 @@ const request = async (endpoint, options = {}) => {
     ...options.headers,
   };
   
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
+  const token = await getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch(url, {

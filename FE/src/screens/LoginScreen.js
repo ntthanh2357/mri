@@ -62,7 +62,7 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const data = await post('/auth/login', { email, password });
-      setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
         navigation.replace(destination);
@@ -98,7 +98,7 @@ const LoginScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
-      setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.replace(destination);
@@ -116,7 +116,7 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const data = await post('/auth/sso/zalo', { accessToken: 'mock_zalo_token_123' });
-      setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Zalo thành công.', () => {
         navigation.replace(destination);
@@ -321,23 +321,6 @@ const LoginScreen = ({ navigation }) => {
                 </View>
 
                 {/* Quick Demo Login */}
-                <View style={styles.desktopQuickLoginContainer}>
-                  <Text style={styles.desktopQuickLoginTitle}>Đăng nhập nhanh (demo):</Text>
-                  <View style={styles.quickButtonsRow}>
-                    <TouchableOpacity style={[styles.quickButton, styles.desktopQuickButton]} onPress={() => {
-                      setAuthToken('');
-                      navigation.replace('Home', { user: { role: 'doctor', email: 'doctor@neuroscan.com', profile: { name: 'Bác sĩ Demo' } } });
-                    }}>
-                      <Text style={styles.quickButtonText}>Bảng điều khiển</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.quickButton, styles.desktopQuickButton]} onPress={() => {
-                      setAuthToken('');
-                      navigation.replace('Home', { user: { role: 'patient', email: 'patient@neuroscan.com', profile: { name: 'Bệnh nhân Demo' } } });
-                    }}>
-                      <Text style={styles.quickButtonText}>Cổng bệnh nhân</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
               </ScrollView>
             </View>
           </View>
@@ -421,23 +404,6 @@ const LoginScreen = ({ navigation }) => {
           </View>
 
           {/* Quick Demo Login */}
-          <View style={styles.quickLoginContainer}>
-            <Text style={styles.quickLoginTitle}>Đăng nhập nhanh (demo):</Text>
-            <View style={styles.quickButtonsRow}>
-              <TouchableOpacity style={styles.quickButton} onPress={() => {
-                setAuthToken('');
-                navigation.replace('Home', { user: { role: 'doctor', email: 'doctor@neuroscan.com', profile: { name: 'Bác sĩ Demo' } } });
-              }}>
-                <Text style={styles.quickButtonText}>Bảng điều khiển</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quickButton} onPress={() => {
-                setAuthToken('');
-                navigation.replace('Home', { user: { role: 'patient', email: 'patient@neuroscan.com', profile: { name: 'Bệnh nhân Demo' } } });
-              }}>
-                <Text style={styles.quickButtonText}>Cổng bệnh nhân</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </ScrollView>
       )}
 
