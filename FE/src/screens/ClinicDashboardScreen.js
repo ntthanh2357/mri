@@ -62,6 +62,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 <Text style={styles.actionButtonSolidText}>👤 Thêm bác sĩ</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
+              <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
+            </TouchableOpacity>
 
             {/* Stats Section */}
             <View style={styles.statsContainer}>

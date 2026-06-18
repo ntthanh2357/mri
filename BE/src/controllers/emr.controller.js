@@ -1,0 +1,249 @@
+import { MedicalRecord } from "../models/medicalRecord.model.js";
+import { CareSheet } from "../models/careSheet.model.js";
+import { Consultation } from "../models/consultation.model.js";
+import { ConsentForm } from "../models/consentForm.model.js";
+
+// --- Medical Record (HSBA) Controllers ---
+
+export const getRecords = async (req, res) => {
+  try {
+    const { search } = req.query;
+    let query = {};
+    
+    if (search) {
+      query = {
+        $or: [
+          { patientName: { $regex: search, $options: "i" } },
+          { patientId: { $regex: search, $options: "i" } },
+          { diagnosis: { $regex: search, $options: "i" } },
+        ],
+      };
+    }
+
+    const records = await MedicalRecord.find(query).sort({ createdAt: -1 });
+    res.status(200).json({ status: "success", data: records });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách bệnh án:", error);
+    res.status(500).json({ message: "Không thể lấy danh sách bệnh án." });
+  }
+};
+
+export const createRecord = async (req, res) => {
+  try {
+    const {
+      patientId,
+      patientName,
+      gender,
+      age,
+      bhytNumber,
+      admissionType,
+      department,
+      paymentMethod,
+      diagnosis,
+      treatmentPlan,
+      doctorInCharge,
+    } = req.body;
+
+    if (!patientId || !patientName || !age || !diagnosis || !doctorInCharge) {
+      return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin bắt buộc." });
+    }
+
+    const newRecord = new MedicalRecord({
+      patientId,
+      patientName,
+      gender,
+      age,
+      bhytNumber,
+      admissionType,
+      department,
+      paymentMethod,
+      diagnosis,
+      treatmentPlan,
+      doctorInCharge,
+      status: "Đang điều trị",
+      signStatus: "Chưa duyệt",
+    });
+
+    await newRecord.save();
+    res.status(201).json({ status: "success", data: newRecord });
+  } catch (error) {
+    console.error("Lỗi tạo bệnh án:", error);
+    res.status(500).json({ message: "Không thể tạo bệnh án mới." });
+  }
+};
+
+export const getRecordById = async (req, res) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    res.status(200).json({ status: "success", data: record });
+  } catch (error) {
+    console.error("Lỗi chi tiết bệnh án:", error);
+    res.status(500).json({ message: "Lỗi hệ thống khi lấy chi tiết bệnh án." });
+  }
+};
+
+export const updateRecord = async (req, res) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+
+    const updates = req.body;
+    
+    // If setting to discharge, record discharge date
+    if (updates.status === "Xuất viện" && record.status !== "Xuất viện") {
+      updates.dischargeDate = new Date();
+    }
+
+    const updatedRecord = await MedicalRecord.findByIdAndUpdate(req.params.id, updates, { new: true });
+    res.status(200).json({ status: "success", data: updatedRecord });
+  } catch (error) {
+    console.error("Lỗi cập nhật bệnh án:", error);
+    res.status(500).json({ message: "Không thể cập nhật bệnh án." });
+  }
+};
+
+// --- Care Sheet (Phiếu chăm sóc) Controllers ---
+
+export const getCareSheets = async (req, res) => {
+  try {
+    const careSheets = await CareSheet.find({ medicalRecordId: req.params.id }).sort({ createdAt: -1 });
+    res.status(200).json({ status: "success", data: careSheets });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách phiếu chăm sóc:", error);
+    res.status(500).json({ message: "Không thể lấy danh sách phiếu chăm sóc." });
+  }
+};
+
+export const createCareSheet = async (req, res) => {
+  try {
+    const { careLevel, pulse, bloodPressure, temperature, respiratoryRate, spo2, progressNotes, careActions, nurse } = req.body;
+
+    if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
+      return res.status(400).json({ message: "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh." });
+    }
+
+    const newCareSheet = new CareSheet({
+      medicalRecordId: req.params.id,
+      careLevel,
+      pulse,
+      bloodPressure,
+      temperature,
+      respiratoryRate,
+      spo2,
+      progressNotes,
+      careActions,
+      nurse,
+    });
+
+    await newCareSheet.save();
+    res.status(201).json({ status: "success", data: newCareSheet });
+  } catch (error) {
+    console.error("Lỗi tạo phiếu chăm sóc:", error);
+    res.status(500).json({ message: "Không thể lưu phiếu chăm sóc." });
+  }
+};
+
+// --- Consultation (Hội chẩn) Controllers ---
+
+export const getConsultations = async (req, res) => {
+  try {
+    const consultations = await Consultation.find({ medicalRecordId: req.params.id }).sort({ meetingDate: -1 });
+    res.status(200).json({ status: "success", data: consultations });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách hội chẩn:", error);
+    res.status(500).json({ message: "Không thể lấy danh sách biên bản hội chẩn." });
+  }
+};
+
+export const createConsultation = async (req, res) => {
+  try {
+    const { meetingDate, participants, clinicalSummary, diagnosis, treatmentConclusion } = req.body;
+
+    if (!participants || participants.length === 0 || !clinicalSummary || !diagnosis || !treatmentConclusion) {
+      return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin hội chẩn." });
+    }
+
+    const newConsultation = new Consultation({
+      medicalRecordId: req.params.id,
+      meetingDate: meetingDate || new Date(),
+      participants,
+      clinicalSummary,
+      diagnosis,
+      treatmentConclusion,
+    });
+
+    await newConsultation.save();
+    res.status(201).json({ status: "success", data: newConsultation });
+  } catch (error) {
+    console.error("Lỗi tạo biên bản hội chẩn:", error);
+    res.status(500).json({ message: "Không thể lưu biên bản hội chẩn." });
+  }
+};
+
+// --- Consent Form (Cam đoan) Controllers ---
+
+export const getConsents = async (req, res) => {
+  try {
+    const consents = await ConsentForm.find({ medicalRecordId: req.params.id }).sort({ createdAt: -1 });
+    res.status(200).json({ status: "success", data: consents });
+  } catch (error) {
+    console.error("Lỗi lấy giấy cam đoan:", error);
+    res.status(500).json({ message: "Không thể lấy danh sách giấy cam đoan." });
+  }
+};
+
+export const createConsent = async (req, res) => {
+  try {
+    const { procedureName, risks, doctorExplanation } = req.body;
+
+    if (!procedureName || !risks || !doctorExplanation) {
+      return res.status(400).json({ message: "Vui lòng nhập đầy đủ tên thủ thuật, nguy cơ và giải thích của bác sĩ." });
+    }
+
+    const newConsent = new ConsentForm({
+      medicalRecordId: req.params.id,
+      procedureName,
+      risks,
+      doctorExplanation,
+      doctorSigned: false,
+      patientSigned: false,
+    });
+
+    await newConsent.save();
+    res.status(201).json({ status: "success", data: newConsent });
+  } catch (error) {
+    console.error("Lỗi tạo giấy cam đoan:", error);
+    res.status(500).json({ message: "Không thể tạo giấy cam đoan." });
+  }
+};
+
+export const signConsent = async (req, res) => {
+  try {
+    const { role, signature } = req.body; // role: "doctor" | "patient", signature: Tên người ký
+    const consent = await ConsentForm.findById(req.params.consentId);
+    if (!consent) {
+      return res.status(404).json({ message: "Không tìm thấy giấy cam đoan." });
+    }
+
+    if (role === "doctor") {
+      consent.doctorSigned = true;
+      consent.doctorSignature = signature || "Bs. Phụ trách";
+    } else if (role === "patient") {
+      consent.patientSigned = true;
+      consent.patientSignature = signature || "Người bệnh/Đại diện";
+    } else {
+      return res.status(400).json({ message: "Vai trò ký không hợp lệ." });
+    }
+
+    await consent.save();
+    res.status(200).json({ status: "success", data: consent });
+  } catch (error) {
+    console.error("Lỗi ký giấy cam đoan:", error);
+    res.status(500).json({ message: "Không thể thực hiện ký duyệt." });
+  }
+};

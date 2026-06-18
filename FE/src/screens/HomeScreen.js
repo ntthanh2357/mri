@@ -510,6 +510,17 @@ const HomeScreen = ({ route, navigation }) => {
                   <Text style={styles.doctorGridSub}>Xem thông số</Text>
                 </TouchableOpacity>
 
+                {user.role === 'admin' && (
+                  <TouchableOpacity
+                    style={styles.doctorGridCard}
+                    onPress={() => navigation.navigate('AdminBackoffice')}
+                  >
+                    <Text style={styles.doctorGridIcon}>🛠️</Text>
+                    <Text style={styles.doctorGridLabel}>Admin Backoffice</Text>
+                    <Text style={styles.doctorGridSub}>Dashboard quản trị</Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                   style={styles.doctorGridCard}
                   onPress={() => navigation.navigate('Financials')}

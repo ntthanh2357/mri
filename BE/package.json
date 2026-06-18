@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "Backend API for NeuroScan AI",
   "main": "src/index.js",
-  "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
+    "dev": "node src/index.js",
     "seed": "node src/seed.js",
-    "start": "node src/index.js"
+    "seed:emr": "node src/seedEMR.js",
+    "start": "node src/index.js",
+    "test": "jest"
   },
+  "type": "module",
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
     "bcryptjs": "^2.4.3",

@@ -33,22 +33,6 @@ export const register = async (req, res) => {
       return;
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      res.status(400).json({ message: "Địa chỉ email không đúng định dạng chuẩn." });
-      return;
-    }
-
-    // Validate phone format (must be exactly 10 digits)
-    if (phone) {
-      const phoneRegex = /^[0-9]{10}$/;
-      if (!phoneRegex.test(phone)) {
-        res.status(400).json({ message: "Số điện thoại phải chứa đúng 10 chữ số." });
-        return;
-      }
-    }
-
     // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -113,15 +97,16 @@ export const login = async (req, res) => {
       return;
     }
 
-    // Find user by email or phone
-    const user = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        { phone: email }
-      ]
-    });
+    // Find user by email
+    const user = await User.findOne({ email });
     if (!user) {
-      res.status(400).json({ message: "Email/SĐT hoặc mật khẩu không chính xác." });
+      res.status(400).json({ message: "Email hoặc mật khẩu không chính xác." });
+      return;
+    }
+
+    // Reject login if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
       return;
     }
 
@@ -409,6 +394,121 @@ export const ssoLogin = async (req, res) => {
     } catch (error) {
       console.error("Lỗi đăng nhập Google:", error);
       res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
+    }
+    return;
+  }
+
+  if (provider === "zalo") {
+    const { accessToken } = req.body;
+    if (!accessToken) {
+      res.status(400).json({ message: "Thiếu Zalo Access Token." });
+      return;
+    }
+
+    // 1. Handle mock token first for easy testing without hitting real Zalo API
+    if (accessToken === "mock_zalo_token_123") {
+      try {
+        let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
+        if (!user) {
+          user = new User({
+            email: "zalo_test@neuroscan.com",
+            passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
+            role: "patient",
+            isVerified: true,
+            profile: {
+              name: "Zalo Test User",
+              photoUrl: "",
+            },
+          });
+          await user.save();
+        }
+        const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
+        const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+        res.status(200).json({
+          message: "Đăng nhập Zalo thành công! (MOCK)",
+          accessToken: jwtAccessToken,
+          refreshToken: jwtRefreshToken,
+          user: {
+            id: user._id,
+            email: user.email,
+            role: user.role,
+            isVerified: user.isVerified,
+            profile: user.profile,
+          },
+        });
+        return;
+      } catch (err) {
+        console.error("Lỗi đăng nhập Zalo Mock:", err);
+        res.status(500).json({ message: "Đã xảy ra lỗi khi đăng nhập Zalo Mock.", error: err.message });
+        return;
+      }
+    }
+
+    // 2. Real Zalo login flow
+    try {
+      // In real-world, call Zalo Graph API to verify token
+      const zaloResponse = await fetch("https://graph.zalo.me/v2.0/me?fields=id,name,picture", {
+        method: "GET",
+        headers: { access_token: accessToken },
+      });
+
+      if (!zaloResponse.ok) {
+        res.status(400).json({ message: "Token xác thực Zalo không hợp lệ." });
+        return;
+      }
+
+      const zaloData = await zaloResponse.json();
+      
+      // Safety check: Zalo Graph API sometimes returns 200 OK with error body
+      if (zaloData.error || !zaloData.id) {
+        res.status(400).json({ 
+          message: "Xác thực Zalo thất bại từ Zalo Server.", 
+          error: zaloData.message || "Invalid Zalo Token response" 
+        });
+        return;
+      }
+
+      const zaloId = zaloData.id;
+      const name = zaloData.name || "Zalo User";
+      const photoUrl = zaloData.picture?.data?.url || "";
+
+      // Since Zalo doesn't guarantee return of email (needs special permission), 
+      // we can map the user by their unique zaloId or mock an email like zalo_id@gmail.com
+      const email = `zalo_${zaloId}@gmail.com`;
+
+      let user = await User.findOne({ email });
+      if (!user) {
+        user = new User({
+          email,
+          passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
+          role: "patient",
+          isVerified: true,
+          profile: {
+            name,
+            photoUrl,
+          },
+        });
+        await user.save();
+      }
+
+      const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
+      const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+
+      res.status(200).json({
+        message: "Đăng nhập Zalo thành công!",
+        accessToken: jwtAccessToken,
+        refreshToken: jwtRefreshToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          isVerified: user.isVerified,
+          profile: user.profile,
+        },
+      });
+    } catch (err) {
+      console.error("Lỗi xác thực Zalo:", err);
+      res.status(500).json({ message: "Đã xảy ra lỗi khi xác thực tài khoản Zalo.", error: err.message });
     }
     return;
   }
