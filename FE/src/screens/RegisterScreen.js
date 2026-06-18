@@ -9,9 +9,11 @@ import {
   Alert,
   ScrollView,
   SafeAreaView,
+  Modal,
 } from 'react-native';
 import Config from '../constants/config';
 import { post } from '../services/api.service';
+
 
 const RegisterScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -22,6 +24,30 @@ const RegisterScreen = ({ navigation }) => {
   const [bhytNumber, setBhytNumber] = useState(''); // Patient only
   const [licenseUrl, setLicenseUrl] = useState(''); // Doctor only
   const [loading, setLoading] = useState(false);
+
+  // OTP Verification states
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+
+  // Custom Alert state
+  const [customAlert, setCustomAlert] = useState({
+    visible: false,
+    type: 'success', // 'success' | 'error' | 'info'
+    title: '',
+    message: '',
+    onClose: null,
+  });
+
+  const showAlert = (type, title, message, onClose = null) => {
+    setCustomAlert({
+      visible: true,
+      type,
+      title,
+      message,
+      onClose,
+    });
+  };
 
   // Validation errors
   const [nameError, setNameError] = useState('');
@@ -56,7 +82,11 @@ const RegisterScreen = ({ navigation }) => {
       }
     }
 
-    if (phone.trim()) {
+    // Phone number is required for Phone+OTP verification
+    if (!phone.trim()) {
+      setPhoneError('Vui lòng nhập Số điện thoại.');
+      hasError = true;
+    } else {
       const phoneRegex = /^[0-9]{10}$/;
       if (!phoneRegex.test(phone.trim())) {
         setPhoneError('Số điện thoại phải chứa đúng 10 số.');
@@ -81,11 +111,33 @@ const RegisterScreen = ({ navigation }) => {
       return;
     }
 
+    setLoading(true);
+    try {
+      // Step 1: Send registration OTP
+      const data = await post('/auth/phone-register-request', { phone: phone.trim() });
+      setOtpSent(true);
+      setOtpModalVisible(true);
+      showAlert('success', 'Gửi OTP thành công', data.message || 'Mã OTP xác thực số điện thoại đã được gửi.');
+    } catch (error) {
+      console.error('Register OTP request error:', error);
+      showAlert('error', 'Đăng ký thất bại', error.message || 'Không thể gửi mã OTP xác thực.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyRegisterOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      showAlert('info', 'Thông báo', 'Vui lòng nhập mã OTP gồm 6 chữ số.');
+      return;
+    }
+
     const payload = {
+      phone: phone.trim(),
+      otp: otpCode.trim(),
       email: email.trim(),
       password,
       name: name.trim(),
-      phone: phone.trim() || undefined,
       role,
       bhytNumber: role === 'patient' ? bhytNumber.trim() : undefined,
       licenseUrl: role === 'doctor' ? licenseUrl.trim() : undefined,
@@ -93,12 +145,16 @@ const RegisterScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const data = await post('/auth/register', payload);
-      Alert.alert('Thành công', 'Đăng ký tài khoản thành công! Vui lòng đăng nhập.');
-      navigation.navigate('Login');
+      // Step 2: Verify OTP and save registration details
+      await post('/auth/phone-register-verify', payload);
+      setOtpModalVisible(false);
+      setOtpCode('');
+      showAlert('success', 'Thành công', 'Đăng ký tài khoản thành công! Vui lòng đăng nhập.', () => {
+        navigation.navigate('Login');
+      });
     } catch (error) {
-      console.error('Register error:', error);
-      Alert.alert('Đăng ký thất bại', error.message || 'Đã xảy ra lỗi khi kết nối.');
+      console.error('Register verify OTP error:', error);
+      showAlert('error', 'Xác thực thất bại', error.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
     } finally {
       setLoading(false);
     }
@@ -251,6 +307,104 @@ const RegisterScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* OTP Verification Modal */}
+      <Modal visible={otpModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Xác minh Số điện thoại</Text>
+              <TouchableOpacity onPress={() => {
+                setOtpModalVisible(false);
+                setOtpCode('');
+              }}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.otpNotice}>
+                <Text style={styles.otpNoticeText}>
+                  Mã OTP đã được gửi đến số điện thoại {phone}.
+                </Text>
+                <Text style={styles.otpNoticeSubtext}>
+                  * Vui lòng kiểm tra mã OTP tại terminal console của Server.
+                </Text>
+              </View>
+
+              <Text style={styles.label}>Mã OTP (6 số)</Text>
+              <TextInput
+                style={[styles.input, styles.otpInput]}
+                placeholder="Nhập 6 số"
+                placeholderTextColor="#94A3B8"
+                maxLength={6}
+                keyboardType="number-pad"
+                value={otpCode}
+                onChangeText={setOtpCode}
+              />
+
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.modalBackButton}
+                  onPress={() => {
+                    setOtpModalVisible(false);
+                    setOtpCode('');
+                  }}
+                >
+                  <Text style={styles.modalBackText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalConfirmButton}
+                  onPress={handleVerifyRegisterOtp}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.modalConfirmText}>Xác nhận</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Alert Modal */}
+      <Modal visible={customAlert.visible} transparent animationType="fade">
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <View style={[
+              styles.alertIconCircle,
+              customAlert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
+              customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
+            ]}>
+              {customAlert.type === 'success' && <Text style={[styles.alertIconText, { color: '#16A34A' }]}>✓</Text>}
+              {customAlert.type === 'error' && <Text style={[styles.alertIconText, { color: '#DC2626' }]}>✕</Text>}
+              {customAlert.type === 'info' && <Text style={[styles.alertIconText, { color: '#2563EB' }]}>ℹ</Text>}
+            </View>
+            <Text style={styles.alertTitle}>{customAlert.title}</Text>
+            <Text style={styles.alertMessage}>{customAlert.message}</Text>
+            <TouchableOpacity
+              style={[
+                styles.alertButton,
+                customAlert.type === 'success' && { backgroundColor: '#15803D' },
+                customAlert.type === 'error' && { backgroundColor: '#DC2626' },
+                customAlert.type === 'info' && { backgroundColor: '#2563EB' },
+              ]}
+              onPress={() => {
+                setCustomAlert(prev => ({ ...prev, visible: false }));
+                if (customAlert.onClose) {
+                  customAlert.onClose();
+                }
+              }}
+            >
+              <Text style={styles.alertButtonText}>Tiếp tục</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -397,6 +551,154 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontWeight: '500',
     paddingLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  closeButton: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: 'bold',
+  },
+  modalBody: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+  },
+  otpNotice: {
+    backgroundColor: '#F0FDF4',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  otpNoticeText: {
+    color: '#166534',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  otpNoticeSubtext: {
+    color: '#15803D',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  otpInput: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 8,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalBackButton: {
+    flex: 1,
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackText: {
+    color: '#475569',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    flex: 2,
+    height: 52,
+    backgroundColor: '#15803D',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  alertCard: {
+    width: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  alertIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIconText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  alertTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  alertMessage: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  alertButton: {
+    width: '100%',
+    height: 42,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
 });
 
