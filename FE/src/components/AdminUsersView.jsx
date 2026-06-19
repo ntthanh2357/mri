@@ -17,8 +17,7 @@ import {
   Unlock,
   Plus,
   Loader2,
-  ShieldCheck,
-  ShieldX
+  ShieldCheck
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
@@ -490,7 +489,7 @@ export default function AdminUsersView() {
                   }`}>
                     {selectedUserDetail.isVerified
                       ? <><ShieldCheck className="w-3 h-3" /> Verified</>
-                      : <><ShieldX className="w-3 h-3" /> Unverified</>
+                      : <><ShieldAlert className="w-3 h-3" /> Unverified</>
                     }
                   </span>
                 </div>
@@ -535,7 +534,7 @@ export default function AdminUsersView() {
                         onClick={() => handleVerifyUser(selectedUserDetail._id, false)}
                         className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                       >
-                        <ShieldX className="w-4 h-4 shrink-0 text-amber-600" />
+                        <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
                         <span>Hủy duyệt Quản lý bệnh viện</span>
                       </button>
                     ) : (
