@@ -46,6 +46,8 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   const [coordW, setCoordW] = useState('100');
   const [coordH, setCoordH] = useState('100');
   const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [approvingAI, setApprovingAI] = useState(false);
+  const [approveSuccess, setApproveSuccess] = useState(false);
 
   const showAlert = (title, message, callback) => {
     if (Platform.OS === 'web') {
@@ -232,6 +234,34 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleApproveAI = async () => {
+    if (!aiResult) return;
+    setApprovingAI(true);
+    setApproveSuccess(false);
+    try {
+      // Extract filename from imageUrl
+      const imageUrl = images[0] || '';
+      const filename = imageUrl.split('/').pop() || 'scan.jpg';
+      const payload = {
+        filename,
+        predicted_class: aiResult.class_name,
+        confidence: aiResult.confidence ?? 0,
+      };
+      const response = await post('/api/v1/imaging/approve-ai', payload);
+      if (response.success) {
+        setApproveSuccess(true);
+        showAlert('Xác nhận thành công', `Đã ghi nhận kết quả AI (${aiResult.class_name?.toUpperCase()}) là ĐÚNG. Hệ thống cảm ơn bác sĩ đã xác nhận!`);
+      } else {
+        showAlert('Lỗi', response.message || 'Không thể ghi nhận xác nhận.');
+      }
+    } catch (err) {
+      console.error('Approve AI error:', err);
+      showAlert('Lỗi kết nối', 'Không thể gửi xác nhận đến máy chủ. Vui lòng thử lại.');
+    } finally {
+      setApprovingAI(false);
+    }
+  };
+
   const handleSaveResult = async () => {
     // Validate required fields
     const newErrors = {};
@@ -357,14 +387,43 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                   </Text>
                 ) : null}
 
-                <TouchableOpacity 
-                  style={{ alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#3B82F6', borderRadius: 6 }}
-                  onPress={() => setShowFeedbackForm(!showFeedbackForm)}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                    {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ Hiệu chỉnh khoanh vùng & phân loại (AI sai?)'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                  {/* APPROVE button - AI was correct */}
+                  {!approveSuccess ? (
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 7,
+                        paddingHorizontal: 14,
+                        backgroundColor: approvingAI ? '#D1FAE5' : '#10B981',
+                        borderRadius: 6,
+                        opacity: approvingAI ? 0.7 : 1,
+                      }}
+                      onPress={handleApproveAI}
+                      disabled={approvingAI}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                        {approvingAI ? '⏳ Đang ghi nhận...' : '✅ AI đúng — Xác nhận'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, borderWidth: 1, borderColor: '#6EE7B7' }}>
+                      <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng</Text>
+                    </View>
+                  )}
+
+                  {/* FEEDBACK button - AI was wrong */}
+                  <TouchableOpacity
+                    style={{ alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#3B82F6', borderRadius: 6 }}
+                    onPress={() => setShowFeedbackForm(!showFeedbackForm)}
+                    disabled={approveSuccess}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', opacity: approveSuccess ? 0.5 : 1 }}>
+                      {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ AI sai — Hiệu chỉnh lại'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
                 {showFeedbackForm && (
                   <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' }}>

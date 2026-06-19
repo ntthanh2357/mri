@@ -7,11 +7,16 @@ import {
   uploadImagingImage,
   analyzeImagingResultAI,
   feedbackImagingResultAI,
-  explainImagingResultAI
+  approveImagingResultAI,
+  explainImagingResultAI,
+  getAllImagingResults
 } from "../controllers/imaging.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
 const router = Router();
+
+// Get all imaging results (Doctor/Admin/Nurse/Technician/Receptionist only)
+router.get("/", protect, getAllImagingResults);
 
 // Get patient's own imaging results (Requires login)
 router.get("/my-results", protect, getPatientResults);
@@ -27,6 +32,9 @@ router.post("/analyze-ai", protect, analyzeImagingResultAI);
 
 // Submit doctor feedback on AI results (Requires login)
 router.post("/feedback-ai", protect, feedbackImagingResultAI);
+
+// Doctor approves AI result as correct (Requires login - Doctor/Admin/Technician only)
+router.post("/approve-ai", protect, approveImagingResultAI);
 
 // Explain imaging result in simple, Hippocratic terms for patient (Requires login)
 router.post("/:id/explain-ai", protect, explainImagingResultAI);

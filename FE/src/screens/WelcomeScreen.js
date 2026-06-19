@@ -15,71 +15,34 @@ import {
 import Config from '../constants/config';
 import { get } from '../services/api.service';
 
-// Mock Data for the medical portal
+// Mock Data for the medical portal - Exclusively focused on Brain Cancer and MRI
 const servicesData = [
-  { id: 1, title: 'Chăm sóc ngoại trú', icon: '🏥' },
-  { id: 2, title: 'Chăm sóc nội trú', icon: '🛌' },
-  { id: 3, title: 'Xét nghiệm chẩn đoán', icon: '🔬' },
-  { id: 4, title: 'Khám sức khỏe tổng quát', icon: '🩺' },
-  { id: 5, title: 'Dịch vụ cấp cứu 24/7', icon: '🚑' },
-  { id: 6, title: 'Dịch vụ Bảo hiểm Y tế', icon: '🛡️' },
-  { id: 7, title: 'Chăm sóc tại nhà', icon: '🏠' },
+  { id: 1, title: 'Chụp cộng hưởng từ MRI Não', icon: '🧠' },
+  { id: 2, title: 'Phân tích & Tầm soát U não AI', icon: '🤖' },
+  { id: 3, title: 'Chẩn đoán hình ảnh Ung thư Não', icon: '🔬' },
 ];
 
 const packagesData = [
   {
     id: 1,
-    title: 'Gói khám Thần kinh - Tiết niệu',
-    desc: 'Tầm soát chuyên sâu hệ thần kinh và hệ bài tiết bằng hệ thống chụp chiếu hiện đại.',
-    tag: 'Bệnh viện NeuroScan',
+    title: 'Gói tầm soát sớm U não & Ung thư não MRI',
+    desc: 'Tầm soát toàn diện các khối u sọ não, dị dạng mạch máu và ung thư não bằng công nghệ chụp cộng hưởng từ MRI kết hợp trợ lý chẩn đoán AI.',
+    tag: 'Khuyên dùng',
     image: require('../../assets/nero3.png'),
-  },
-  {
-    id: 2,
-    title: 'Gói khám Phổi - Lồng ngực',
-    desc: 'Phát hiện sớm các bệnh lý hô hấp, tổn thương nhu mô phổi bằng AI hỗ trợ.',
-    tag: 'Bệnh viện NeuroScan',
-    image: require('../../assets/nero4.png'),
-  },
-  {
-    id: 3,
-    title: 'Gói khám Ung thư Vú - Phụ khoa',
-    desc: 'Khám và tầm soát sớm các bệnh lý ung thư phụ khoa phổ biến ở phụ nữ.',
-    tag: 'Bệnh viện NeuroScan',
-    image: require('../../assets/nero.png'),
-  },
-  {
-    id: 4,
-    title: 'Gói khám Gan - Mật - Tụy',
-    desc: 'Siêu âm và xét nghiệm sinh hóa hỗ trợ chẩn đoán chính xác chức năng gan mật.',
-    tag: 'Bệnh viện NeuroScan',
-    image: require('../../assets/nero2.png'),
-  },
+  }
 ];
 
 const doctorsData = [
   {
     id: 1,
-    name: 'BS.CKII. Nguyễn Hoàng Nam',
-    role: 'Giám đốc Điều hành',
-    image: null, // Placeholder to be added by user
+    name: 'TS.BS. Văn Trung Nghĩa',
+    role: 'Trưởng khoa Ung bướu Thần kinh',
+    image: null,
   },
   {
     id: 2,
-    name: 'ThS.BS. Trần Minh Nghĩa',
-    role: 'Phó Giám đốc Chuyên môn',
-    image: null,
-  },
-  {
-    id: 3,
-    name: 'TS.BS. Văn Trung Nghĩa',
-    role: 'Trưởng khoa Cấp cứu & Thần kinh',
-    image: null,
-  },
-  {
-    id: 4,
     name: 'ThS.BSNT. Lê Quốc Tuấn',
-    role: 'Trưởng khoa Hồi sức tích cực',
+    role: 'Phó khoa Chẩn đoán hình ảnh MRI',
     image: null,
   },
 ];
@@ -397,10 +360,9 @@ const WelcomeScreen = ({ navigation }) => {
             {/* Column 2: Quick Links */}
             <View style={styles.footerCol}>
               <Text style={styles.footerColTitle}>Chuyên khoa</Text>
-              <Text style={styles.footerLink}>Cấp cứu & Hồi sức</Text>
-              <Text style={styles.footerLink}>Nội thần kinh & Đột quỵ</Text>
-              <Text style={styles.footerLink}>Chẩn đoán hình ảnh</Text>
-              <Text style={styles.footerLink}>Ngoại thần kinh</Text>
+              <Text style={styles.footerLink}>Nội thần kinh & U não</Text>
+              <Text style={styles.footerLink}>Chẩn đoán hình ảnh MRI</Text>
+              <Text style={styles.footerLink}>Ngoại khoa sọ não</Text>
             </View>
 
             {/* Column 3: Contact */}

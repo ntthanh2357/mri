@@ -536,6 +536,72 @@ async def save_doctor_feedback(
         
     return {"message": "Đã ghi nhận phản hồi để AI học lại", "file": file.filename}
 
+
+@app.post("/approve")
+async def save_doctor_approval(
+    filename: str = Form(...),
+    predicted_class: str = Form(...),
+    confidence: float = Form(...)
+):
+    """Bác sĩ xác nhận kết quả AI là đúng (không cần sửa)."""
+    hard_dir = "hard_examples"
+    if not os.path.exists(hard_dir):
+        os.makedirs(hard_dir)
+
+    csv_file = os.path.join(hard_dir, "approval_log.csv")
+    file_exists = os.path.isfile(csv_file)
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(csv_file, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["filename", "predicted_class", "confidence", "timestamp"])
+        writer.writerow([filename, predicted_class, round(confidence, 4), timestamp])
+
+    return {"message": "Đã ghi nhận xác nhận đúng từ bác sĩ", "file": filename}
+
+
+@app.get("/training-stats")
+async def get_training_stats():
+    """Trả về thống kê số ca đúng/sai từ phản hồi bác sĩ."""
+    hard_dir = "hard_examples"
+    approval_csv = os.path.join(hard_dir, "approval_log.csv")
+    feedback_csv = os.path.join(hard_dir, "feedback_log.csv")
+
+    # Count approved correct cases
+    approved_count = 0
+    approved_by_class = {}
+    if os.path.isfile(approval_csv):
+        with open(approval_csv, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                approved_count += 1
+                cls = row.get("predicted_class", "unknown")
+                approved_by_class[cls] = approved_by_class.get(cls, 0) + 1
+
+    # Count corrected (wrong) cases
+    corrected_count = 0
+    corrected_by_class = {}
+    if os.path.isfile(feedback_csv):
+        with open(feedback_csv, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                corrected_count += 1
+                cls = row.get("correct_class", "unknown")
+                corrected_by_class[cls] = corrected_by_class.get(cls, 0) + 1
+
+    total = approved_count + corrected_count
+    accuracy = round((approved_count / total * 100), 1) if total > 0 else 0.0
+
+    return {
+        "total": total,
+        "approved": approved_count,
+        "corrected": corrected_count,
+        "accuracy": accuracy,
+        "approved_by_class": approved_by_class,
+        "corrected_by_class": corrected_by_class,
+    }
+
 # =====================================================================
 # AGENT 1: Bác sĩ AI (Luồng Chẩn đoán Chuyên sâu)
 # =====================================================================

@@ -48,6 +48,11 @@ const HomeScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(!route.params?.user);
   const [error, setError] = useState(null);
 
+  // Dynamic statistics states
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [pendingRecords, setPendingRecords] = useState([]);
+  const [loadingStats, setLoadingStats] = useState(false);
+
   useEffect(() => {
     // If user is already provided via navigation params (quick login), skip fetching
     if (user) return;
@@ -68,6 +73,35 @@ const HomeScreen = ({ route, navigation }) => {
 
     fetchProfile();
   }, []);
+
+  useEffect(() => {
+    if (!user || user.role === 'patient') return;
+
+    const fetchStats = async () => {
+      setLoadingStats(true);
+      try {
+        const [patientsRes, emrRes] = await Promise.all([
+          get('/api/patients'),
+          get('/emr/records')
+        ]);
+
+        if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
+          setTotalPatients(patientsRes.data.length);
+        }
+
+        if (emrRes && emrRes.status === 'success' && Array.isArray(emrRes.data)) {
+          const pending = emrRes.data.filter(r => r.signStatus === 'Chưa duyệt');
+          setPendingRecords(pending);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải thống kê HomeScreen:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+  }, [user]);
 
   const handleLogout = () => {
     setAuthToken('');
@@ -700,7 +734,7 @@ const HomeScreen = ({ route, navigation }) => {
                 <View style={styles.desktopGreeting}>
                   <Text style={styles.greetingTitle}>Bảng điều khiển Phòng khám</Text>
                   <Text style={styles.greetingSubtitle}>
-                    Chào mừng trở lại, Bs. Vane. Đây là tổng quan hiệu suất phòng khám của bạn.
+                    Chào mừng trở lại, Bs. {user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.
                   </Text>
                 </View>
               )}
@@ -709,9 +743,13 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.doctorStatsRow}>
                 <TouchableOpacity
                   style={styles.doctorStatCard}
-                  onPress={() => navigation.navigate('ClinicDashboard')}
+                  onPress={() => navigation.navigate('EMRDashboard')}
                 >
-                  <Text style={styles.doctorStatVal}>3</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" />
+                  ) : (
+                    <Text style={styles.doctorStatVal}>{pendingRecords.length}</Text>
+                  )}
                   <Text style={styles.doctorStatLabel}>Ca chờ duyệt</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -723,9 +761,13 @@ const HomeScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.doctorStatCard}
-                  onPress={() => navigation.navigate('ClinicDashboard')}
+                  onPress={() => navigation.navigate('DoctorPatientList')}
                 >
-                  <Text style={styles.doctorStatVal}>12</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" />
+                  ) : (
+                    <Text style={styles.doctorStatVal}>{totalPatients}</Text>
+                  )}
                   <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
                 </TouchableOpacity>
               </View>
@@ -733,44 +775,36 @@ const HomeScreen = ({ route, navigation }) => {
               {/* Diagnostics Queue */}
               <Text style={styles.sectionTitle}>Danh sách ca bệnh chờ duyệt</Text>
               <View style={styles.queueCard}>
-                <TouchableOpacity
-                  style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('AIAnalysis')}
-                >
-                  <View style={styles.queueLeftInfo}>
-                    <Text style={styles.queuePatientName}>Nguyễn Văn A</Text>
-                    <Text style={styles.queueDetailsText}>U màng não - CẤP CỨU (AI: 98.2%)</Text>
+                {loadingStats ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#15803D" />
                   </View>
-                  <View style={[styles.statusBadge, styles.statusDanger]}>
-                    <Text style={styles.statusBadgeText}>Khẩn cấp</Text>
+                ) : pendingRecords.length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có ca bệnh nào chờ duyệt.</Text>
                   </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('AIAnalysis')}
-                >
-                  <View style={styles.queueLeftInfo}>
-                    <Text style={styles.queuePatientName}>Trần Thị B</Text>
-                    <Text style={styles.queueDetailsText}>Không phát hiện dị dạng (AI: 99.8%)</Text>
-                  </View>
-                  <View style={[styles.statusBadge, styles.statusOk]}>
-                    <Text style={styles.statusBadgeText}>Bình thường</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.queueItemRow, styles.lastQueueItemRow]}
-                  onPress={() => navigation.navigate('AIAnalysis')}
-                >
-                  <View style={styles.queueLeftInfo}>
-                    <Text style={styles.queuePatientName}>Lê Hoàng C</Text>
-                    <Text style={styles.queueDetailsText}>Phình động mạch não (AI: 94.1%)</Text>
-                  </View>
-                  <View style={[styles.statusBadge, styles.statusWarn]}>
-                    <Text style={styles.statusBadgeText}>Chờ duyệt</Text>
-                  </View>
-                </TouchableOpacity>
+                ) : (
+                  pendingRecords.map((record, index) => {
+                    const isLast = index === pendingRecords.length - 1;
+                    return (
+                      <TouchableOpacity
+                        key={record._id}
+                        style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
+                        onPress={() => navigation.navigate('EMRDashboard')}
+                      >
+                        <View style={styles.queueLeftInfo}>
+                          <Text style={styles.queuePatientName}>{record.patientName}</Text>
+                          <Text style={styles.queueDetailsText}>{record.diagnosis} ({record.admissionType})</Text>
+                        </View>
+                        <View style={[styles.statusBadge, record.admissionType === 'Cấp cứu' ? styles.statusDanger : styles.statusWarn]}>
+                          <Text style={styles.statusBadgeText}>
+                            {record.admissionType === 'Cấp cứu' ? 'Khẩn cấp' : 'Chờ duyệt'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </View>
             </View>
 
@@ -795,15 +829,6 @@ const HomeScreen = ({ route, navigation }) => {
                   <Text style={styles.doctorGridIcon}>🏥</Text>
                   <Text style={styles.doctorGridLabel}>Quản lý EMR</Text>
                   <Text style={styles.doctorGridSub}>Biểu mẫu & Bệnh án</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.doctorGridCard}
-                  onPress={() => navigation.navigate('SystemAdmin')}
-                >
-                  <Text style={styles.doctorGridIcon}>⚙️</Text>
-                  <Text style={styles.doctorGridLabel}>Cấu hình AI & RAG</Text>
-                  <Text style={styles.doctorGridSub}>Xem thông số</Text>
                 </TouchableOpacity>
 
                 {user.role === 'admin' && (

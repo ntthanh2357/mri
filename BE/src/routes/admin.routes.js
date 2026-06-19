@@ -19,6 +19,7 @@ import {
   getChatbotConfig,
   saveChatbotConfig,
   verifyAdminUser,
+  getAiTrainingStats,
 } from "../controllers/admin.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireAdmin } from "../middlewares/role.middleware.js";
@@ -51,5 +52,6 @@ router.get("/ai-feedback", getAiFeedback);
 router.post("/ai-retrain", retrainAiModel);
 router.get("/chatbot-config", getChatbotConfig);
 router.post("/chatbot-config", saveChatbotConfig);
+router.get("/ai-training-stats", getAiTrainingStats);
 
 export default router;

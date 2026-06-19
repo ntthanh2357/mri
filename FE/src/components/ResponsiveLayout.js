@@ -69,7 +69,6 @@ const ResponsiveLayout = ({
     ? [
         { label: 'Tổng quan', route: 'Home', icon: '📊' },
         { label: 'Admin Backoffice', route: 'AdminBackoffice', icon: '🛠️' },
-        { label: 'Hệ thống Quản trị', route: 'SystemAdmin', icon: '⚙️' },
         { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
         { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
       ]
@@ -77,7 +76,6 @@ const ResponsiveLayout = ({
         { label: 'Tổng quan', route: 'Home', icon: '📊' },
         { label: 'Phòng khám', route: 'ClinicDashboard', icon: '🏥' },
         { label: 'Bệnh án Điện tử', route: 'PatientRecords', icon: '📂' },
-        { label: 'Cấu hình AI & RAG', route: 'SystemAdmin', icon: '⚙️' },
         { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
         { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
       ];

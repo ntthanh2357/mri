@@ -12,20 +12,8 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 
 const FinancialsScreen = ({ navigation }) => {
-  const services = [
-    { name: 'Báo cáo PDF', value: 420, maxVal: 500 },
-    { name: 'MRI Não', value: 340, maxVal: 500 },
-    { name: 'Tư vấn AI', value: 290, maxVal: 500 },
-    { name: 'CT Đầu', value: 210, maxVal: 500 },
-    { name: 'MRI Cột sống', value: 180, maxVal: 500 },
-  ];
-
-  const transactions = [
-    { id: 'TX-8821', name: 'Nguyễn Văn A', service: 'Phân tích MRI AI', amount: '850.000đ', date: '01/06/2026', method: 'Chuyển khoản', isSuccess: true },
-    { id: 'TX-8820', name: 'Trần Thị B', service: 'Báo cáo PDF chuyên sâu', amount: '320.000đ', date: '01/06/2026', method: 'Thẻ tín dụng', isSuccess: true },
-    { id: 'TX-8819', name: 'Lê Minh C', service: 'Gói Premium năm', amount: '99.000đ', date: '31/05/2026', method: 'Ví điện tử', isSuccess: true },
-    { id: 'TX-8818', name: 'Phạm Thị D', service: 'Tư vấn AI 24/7', amount: '150.000đ', date: '31/05/2026', method: 'Tiền mặt', isSuccess: false },
-  ];
+  const services = [];
+  const transactions = [];
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -42,7 +30,7 @@ const FinancialsScreen = ({ navigation }) => {
             <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton}>
               <Text style={styles.backButtonText}>← Quay lại</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Tài chính Phòng khám</Text>
+            <Text style={styles.headerTitle}>Tài chính Bệnh viện</Text>
           </View>
         )}
 
@@ -54,24 +42,18 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <View style={styles.metricHeader}>
                 <Text style={styles.metricEmoji}>💵</Text>
-                <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>+34%</Text>
-                </View>
               </View>
-              <Text style={styles.metricLabel}>Doanh thu tháng 6</Text>
-              <Text style={styles.metricVal}>89Mđ</Text>
+              <Text style={styles.metricLabel}>Doanh thu tháng này</Text>
+              <Text style={styles.metricVal}>0đ</Text>
             </View>
 
             {/* Card 2 */}
             <View style={styles.metricCard}>
               <View style={styles.metricHeader}>
                 <Text style={styles.metricEmoji}>💳</Text>
-                <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>+12%</Text>
-                </View>
               </View>
               <Text style={styles.metricLabel}>Số giao dịch</Text>
-              <Text style={styles.metricVal}>1,042</Text>
+              <Text style={styles.metricVal}>0</Text>
             </View>
           </View>
 
@@ -80,24 +62,18 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <View style={styles.metricHeader}>
                 <Text style={styles.metricEmoji}>📈</Text>
-                <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>+8%</Text>
-                </View>
               </View>
               <Text style={styles.metricLabel}>Trung bình / GD</Text>
-              <Text style={styles.metricVal}>85,000đ</Text>
+              <Text style={styles.metricVal}>0đ</Text>
             </View>
 
             {/* Card 4 */}
             <View style={styles.metricCard}>
               <View style={styles.metricHeader}>
                 <Text style={styles.metricEmoji}>📉</Text>
-                <View style={styles.badgeRed}>
-                  <Text style={styles.badgeRedText}>-2%</Text>
-                </View>
               </View>
               <Text style={styles.metricLabel}>Hoàn tiền</Text>
-              <Text style={styles.metricVal}>3.2Mđ</Text>
+              <Text style={styles.metricVal}>0đ</Text>
             </View>
           </View>
         </View>
@@ -105,48 +81,23 @@ const FinancialsScreen = ({ navigation }) => {
         {/* Popular Services Chart */}
         <Text style={styles.sectionTitle}>Dịch vụ phổ biến (Tháng này)</Text>
         <View style={styles.chartCard}>
-          {services.map((item, index) => {
-            const pct = (item.value / item.maxVal) * 100;
-            return (
-              <View key={index} style={styles.chartRow}>
-                <Text style={styles.chartLabel}>{item.name}</Text>
-                <View style={styles.barContainer}>
-                  <View style={styles.barBg}>
-                    <View style={[styles.barFill, { width: `${pct}%` }]} />
-                  </View>
-                  <Text style={styles.barValue}>{item.value}</Text>
-                </View>
-              </View>
-            );
-          })}
+          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+            <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có dữ liệu thống kê dịch vụ.</Text>
+          </View>
         </View>
 
         {/* Transactions list */}
         <View style={styles.recentHeaderRow}>
           <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Tất cả giao dịch', 'Lịch sử giao dịch chi tiết đang tải...')}>
+          <TouchableOpacity onPress={() => Alert.alert('Thông báo', 'Hiện tại chưa có giao dịch nào phát sinh.')}>
             <Text style={styles.viewAllText}>Xem tất cả</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.transactionsCard}>
-          {transactions.map((tx, idx) => (
-            <View key={tx.id} style={[styles.txRow, idx === transactions.length - 1 && styles.lastTxRow]}>
-              <View style={styles.txLeft}>
-                <Text style={styles.txId}>{tx.id} • {tx.name}</Text>
-                <Text style={styles.txSub}>{tx.service} ({tx.method})</Text>
-                <Text style={styles.txDate}>{tx.date}</Text>
-              </View>
-              <View style={styles.txRight}>
-                <Text style={styles.txAmount}>{tx.amount}</Text>
-                <View style={[styles.statusBadge, tx.isSuccess ? styles.statusSuccess : styles.statusPending]}>
-                  <Text style={[styles.statusText, tx.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
-                    {tx.isSuccess ? 'Thành công' : 'Đang xử lý'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
+          <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+            <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có dữ liệu giao dịch thực tế.</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

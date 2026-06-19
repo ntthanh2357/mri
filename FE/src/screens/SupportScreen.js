@@ -24,11 +24,7 @@ const SupportScreen = ({ navigation }) => {
     { icon: '✉️', title: 'Gửi email', desc: 'support@neuroscan.ai', action: 'Soạn email', color: '#7C3AED' },
   ];
 
-  const tickets = [
-    { id: 'TK-0091', subject: 'Lỗi hiển thị kết quả MRI trên Safari', priority: 'Cao', status: 'Đang xử lý', color: '#FEF3C7', textColor: '#B45309' },
-    { id: 'TK-0090', subject: 'Không thể xuất báo cáo PDF cho BN NS-2399', priority: 'Trung bình', status: 'Chờ phản hồi', color: '#EFF6FF', textColor: '#2563EB' },
-    { id: 'TK-0089', subject: 'Yêu cầu thêm tài khoản bác sĩ mới', priority: 'Bình thường', status: 'Đã giải quyết', color: '#DCFCE7', textColor: '#15803D' },
-  ];
+  const tickets = [];
 
   const faqs = [
     { q: 'Làm thế nào để thêm bác sĩ mới vào hệ thống?', a: 'Vào Bảng điều khiển phòng khám → nhấn nút "Thêm bác sĩ" góc trên bên phải. Điền đầy đủ thông tin để cấp quyền tài khoản.' },
@@ -100,18 +96,24 @@ const SupportScreen = ({ navigation }) => {
         {/* Support Tickets */}
         <Text style={styles.sectionTitle}>Yêu cầu hỗ trợ của tôi (Ticket)</Text>
         <View style={styles.ticketsCard}>
-          {tickets.map((tk, idx) => (
-            <View key={tk.id} style={[styles.ticketRow, idx === tickets.length - 1 && styles.lastTicketRow]}>
-              <View style={styles.ticketLeft}>
-                <Text style={styles.ticketId}>{tk.id}</Text>
-                <Text style={styles.ticketSubject} numberOfLines={1}>{tk.subject}</Text>
-                <Text style={styles.ticketPriority}>Độ ưu tiên: {tk.priority}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: tk.color }]}>
-                <Text style={[styles.statusText, { color: tk.textColor }]}>{tk.status}</Text>
-              </View>
+          {tickets.length === 0 ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <Text style={{ color: '#94A3B8', fontSize: 13 }}>Hiện tại bạn chưa gửi yêu cầu hỗ trợ nào.</Text>
             </View>
-          ))}
+          ) : (
+            tickets.map((tk, idx) => (
+              <View key={tk.id} style={[styles.ticketRow, idx === tickets.length - 1 && styles.lastTicketRow]}>
+                <View style={styles.ticketLeft}>
+                  <Text style={styles.ticketId}>{tk.id}</Text>
+                  <Text style={styles.ticketSubject} numberOfLines={1}>{tk.subject}</Text>
+                  <Text style={styles.ticketPriority}>Độ ưu tiên: {tk.priority}</Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: tk.color }]}>
+                  <Text style={[styles.statusText, { color: tk.textColor }]}>{tk.status}</Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         {/* FAQs */}

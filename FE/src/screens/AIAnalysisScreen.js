@@ -31,6 +31,8 @@ const AIAnalysisScreen = ({ navigation }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [approvingAI, setApprovingAI] = useState(false);
+  const [approveSuccess, setApproveSuccess] = useState(false);
 
   // Form fields (matching the standard document schema)
   const [findings, setFindings] = useState('');
@@ -142,6 +144,32 @@ const AIAnalysisScreen = ({ navigation }) => {
       showAlert('Lỗi kết nối', 'Không thể kết nối đến máy chủ AI.');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleApproveAI = async () => {
+    if (!aiResult) return;
+    setApprovingAI(true);
+    setApproveSuccess(false);
+    try {
+      const imageUrl = images[0] || '';
+      const filename = imageUrl.split('/').pop() || 'scan.jpg';
+      const response = await post('/api/v1/imaging/approve-ai', {
+        filename,
+        predicted_class: aiResult.class_name,
+        confidence: aiResult.confidence ?? 0,
+      });
+      if (response.success) {
+        setApproveSuccess(true);
+        showAlert('Xác nhận thành công', `Kết quả AI (${aiResult.class_name?.toUpperCase()}) đã được ghi nhận là chính xác!`);
+      } else {
+        showAlert('Lỗi', response.message || 'Không thể ghi nhận xác nhận.');
+      }
+    } catch (err) {
+      console.error('Approve AI error:', err);
+      showAlert('Lỗi', 'Không thể gửi xác nhận.');
+    } finally {
+      setApprovingAI(false);
     }
   };
 
@@ -275,6 +303,32 @@ const AIAnalysisScreen = ({ navigation }) => {
                   <Text style={styles.aiDisclaimer}>
                     ⚠️ Lưu ý: Kết quả AI chỉ mang tính chất tham khảo cá nhân, không thay thế cho kết luận của bác sĩ điều trị.
                   </Text>
+
+                  {/* Approve button */}
+                  <View style={{ marginTop: 10 }}>
+                    {!approveSuccess ? (
+                      <TouchableOpacity
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 14,
+                          backgroundColor: approvingAI ? '#D1FAE5' : '#10B981',
+                          borderRadius: 6,
+                          alignSelf: 'flex-start',
+                          opacity: approvingAI ? 0.7 : 1,
+                        }}
+                        onPress={handleApproveAI}
+                        disabled={approvingAI}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                          {approvingAI ? '⏳ Đang ghi nhận...' : '✅ Kết quả đúng — Xác nhận cho AI học'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#6EE7B7' }}>
+                        <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng — Cảm ơn!</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
             </View>

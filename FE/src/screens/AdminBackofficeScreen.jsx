@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
-import { 
+import {
   LayoutDashboard, 
   Users, 
   Stethoscope, 
@@ -14,7 +14,8 @@ import {
   LogOut,
   Database,
   ShieldAlert,
-  Brain
+  Brain,
+  TrendingUp
 } from 'lucide-react';
 import '../tailwind-built.css';
 
@@ -222,7 +223,7 @@ const AdminBackofficeScreen = ({ navigation }) => {
             </div>
           </div>
 
-          {/* CATEGORY: CẤU HÌNH AI */}
+          {/* CATEGORY: HỆ THỐNG AI */}
           <div>
             {sidebarCollapsed ? (
               <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
@@ -242,10 +243,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
                     : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Cấu hình AI" : undefined}
+                title={sidebarCollapsed ? 'Huấn luyện & Chatbot AI' : undefined}
               >
                 <Brain className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Cấu hình AI</span>}
+                {!sidebarCollapsed && <span className="truncate">Huấn luyện & Chatbot</span>}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import { post } from '../services/api.service';
+import { post, get } from '../services/api.service';
 
 const ClinicDashboardScreen = ({ navigation }) => {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -23,6 +23,100 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState('doctor');
   const [creatingUser, setCreatingUser] = useState(false);
+
+  // Dynamic dashboard states
+  const [currentUser, setCurrentUser] = useState(null);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [totalScans, setTotalScans] = useState(0);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [demographics, setDemographics] = useState([
+    { name: 'Người lớn (18–60)', value: 0, color: '#15803D' },
+    { name: 'Người cao tuổi (60+)', value: 0, color: '#475569' },
+    { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
+  ]);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  const fetchDashboardData = async () => {
+    setLoadingStats(true);
+    try {
+      // 1. Fetch current user
+      const userRes = await get('/auth/me');
+      if (userRes && userRes.user) {
+        setCurrentUser(userRes.user);
+      }
+
+      // 2. Fetch total patients list
+      const patientsRes = await get('/api/patients');
+      let patientCount = 0;
+      if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
+        patientCount = patientsRes.data.length;
+      }
+      setTotalPatients(patientCount);
+
+      // 3. Fetch all imaging results
+      const scansRes = await get('/api/v1/imaging');
+      let scanList = [];
+      if (scansRes && scansRes.success && Array.isArray(scansRes.data)) {
+        scanList = scansRes.data;
+      }
+      setTotalScans(scanList.length);
+
+      // 4. Fetch EMR records for demographics calculation
+      const emrRes = await get('/emr/records');
+      let emrList = [];
+      if (emrRes && emrRes.status === 'success' && Array.isArray(emrRes.data)) {
+        emrList = emrRes.data;
+      }
+
+      // Calculate demographics
+      if (emrList.length > 0) {
+        let adult = 0, senior = 0, pediatric = 0;
+        emrList.forEach(r => {
+          const age = Number(r.age) || 0;
+          if (age < 18) pediatric++;
+          else if (age >= 60) senior++;
+          else adult++;
+        });
+        const total = emrList.length;
+        setDemographics([
+          { name: 'Người lớn (18–60)', value: Math.round((adult / total) * 100), color: '#15803D' },
+          { name: 'Người cao tuổi (60+)', value: Math.round((senior / total) * 100), color: '#475569' },
+          { name: 'Nhi khoa', value: Math.round((pediatric / total) * 100), color: '#CBD5E1' },
+        ]);
+      } else {
+        setDemographics([
+          { name: 'Người lớn (18–60)', value: 0, color: '#15803D' },
+          { name: 'Người cao tuổi (60+)', value: 0, color: '#475569' },
+          { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
+        ]);
+      }
+
+      // 5. Construct recent activities from real scans
+      const formattedActivities = scanList.slice(0, 3).map((scan) => {
+        const scanDate = new Date(scan.reportDate || scan.createdAt);
+        const timeStr = `${scanDate.getDate()}/${scanDate.getMonth() + 1} ${scanDate.getHours().toString().padStart(2, '0')}:${scanDate.getMinutes().toString().padStart(2, '0')}`;
+        
+        return {
+          id: scan.medicalRecordNumber || scan.medicalId || `NS-${scan._id.substring(18).toUpperCase()}`,
+          doctor: scan.radiologist || scan.orderingDoctor || 'Bác sĩ',
+          scanType: scan.imagingType || 'Phim chụp',
+          status: 'Hoàn thành',
+          time: timeStr,
+          isSuccess: true
+        };
+      });
+      setRecentActivity(formattedActivities);
+
+    } catch (err) {
+      console.error('Lỗi khi tải thông tin tổng quan phòng khám:', err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   const handleCreateUser = async () => {
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
@@ -44,6 +138,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
         setNewUserName('');
         setNewUserEmail('');
         setNewUserPassword('');
+        // Refresh dashboard data
+        fetchDashboardData();
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể tạo tài khoản.');
       }
@@ -55,20 +151,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
     }
   };
 
-  const demographics = [
-    { name: 'Người lớn (18–60)', value: 75, color: '#15803D' },
-    { name: 'Người cao tuổi (60+)', value: 20, color: '#475569' },
-    { name: 'Nhi khoa', value: 5, color: '#CBD5E1' },
-  ];
-
-  const recentActivity = [
-    { id: 'NS-2401', doctor: 'Bs. Minh', scanType: 'MRI Não', status: 'Hoàn thành', time: '2 phút trước', isSuccess: true },
-    { id: 'NS-2400', doctor: 'Bs. Lan', scanType: 'CT Đầu', status: 'Đang xử lý', time: '8 phút trước', isSuccess: false },
-    { id: 'NS-2399', doctor: 'Bs. Hùng', scanType: 'MRI Cột sống', status: 'Hoàn thành', time: '15 phút trước', isSuccess: true },
-  ];
-
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+
 
   return (
     <ResponsiveLayout
@@ -89,7 +174,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
         {/* Title */}
         <View style={styles.titleContainer}>
           <Text style={styles.title}>Bảng điều khiển Phòng khám</Text>
-          <Text style={styles.subtitle}>Chào mừng trở lại, Bs. Vane. Đây là tổng quan phòng khám.</Text>
+          <Text style={styles.subtitle}>
+            Chào mừng trở lại, Bs. {currentUser?.profile?.name || currentUser?.email || 'Bác sĩ'}. Đây là tổng quan phòng khám.
+          </Text>
         </View>
 
         <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
@@ -116,9 +203,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   <Text style={styles.statEmojiIcon}>👥</Text>
                 </View>
                 <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
-                <Text style={styles.statValue}>1,284</Text>
+                {loadingStats ? (
+                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                ) : (
+                  <Text style={styles.statValue}>{totalPatients}</Text>
+                )}
                 <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>+12% vs tháng trước</Text>
+                  <Text style={styles.badgeGreenText}>Hoạt động thực tế</Text>
                 </View>
               </View>
 
@@ -128,9 +219,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   <Text style={styles.statEmojiIcon}>🧠</Text>
                 </View>
                 <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
-                <Text style={styles.statValue}>8,432</Text>
+                {loadingStats ? (
+                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                ) : (
+                  <Text style={styles.statValue}>{totalScans}</Text>
+                )}
                 <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>+8% hôm nay</Text>
+                  <Text style={styles.badgeGreenText}>Từ dữ liệu quét thật</Text>
                 </View>
               </View>
             </View>
@@ -140,7 +235,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <View style={styles.walletHeader}>
                 <View>
                   <Text style={styles.walletTitle}>Số dư ví hiện tại</Text>
-                  <Text style={styles.walletBalance}>2.500.000đ</Text>
+                  <Text style={styles.walletBalance}>0đ</Text>
                 </View>
                 <TouchableOpacity style={styles.walletDepositBtn} onPress={() => navigation.navigate('Financials')}>
                   <Text style={styles.walletDepositText}>Nạp tiền</Text>
@@ -149,12 +244,12 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
               <View style={styles.walletFooter}>
                 <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#22C55E' }]} />
-                  <Text style={styles.walletFooterText}>Đã bật tự động nạp</Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
+                  <Text style={styles.walletFooterText}>Tự động nạp: Chưa kích hoạt</Text>
                 </View>
                 <View style={styles.walletFooterItem}>
                   <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
-                  <Text style={styles.walletFooterText}>Chu kỳ: 15 Th10</Text>
+                  <Text style={styles.walletFooterText}>Chu kỳ: N/A</Text>
                 </View>
               </View>
             </View>
@@ -168,22 +263,32 @@ const ClinicDashboardScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.activityCard}>
-              {recentActivity.map((activity, index) => (
-                <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
-                  <View style={styles.activityLeft}>
-                    <Text style={styles.patientId}>{activity.id}</Text>
-                    <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
-                  </View>
-                  <View style={styles.activityRight}>
-                    <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
-                      <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
-                        {activity.status}
-                      </Text>
-                    </View>
-                    <Text style={styles.activityTime}>{activity.time}</Text>
-                  </View>
+              {loadingStats ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#15803D" />
                 </View>
-              ))}
+              ) : recentActivity.length === 0 ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động quét AI nào gần đây.</Text>
+                </View>
+              ) : (
+                recentActivity.map((activity, index) => (
+                  <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
+                    <View style={styles.activityLeft}>
+                      <Text style={styles.patientId}>{activity.id}</Text>
+                      <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
+                    </View>
+                    <View style={styles.activityRight}>
+                      <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
+                        <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
+                          {activity.status}
+                        </Text>
+                      </View>
+                      <Text style={styles.activityTime}>{activity.time}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
             </View>
           </View>
 
@@ -193,7 +298,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Nhân khẩu học bệnh nhân</Text>
             <View style={styles.demographicCard}>
               <View style={styles.totalRow}>
-                <Text style={styles.totalVal}>1.2k</Text>
+                <Text style={styles.totalVal}>{totalPatients}</Text>
                 <Text style={styles.totalLabel}>TỔNG CỘNG</Text>
               </View>
 
