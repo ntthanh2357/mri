@@ -382,6 +382,57 @@ export const feedbackImagingResultAI = async (req, res) => {
   }
 };
 
+// @desc    Doctor approves AI result as correct (no correction needed)
+// @route   POST /api/v1/imaging/approve-ai
+// @access  Private (Doctor, Technician, Admin only)
+export const approveImagingResultAI = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    }
+
+    const { filename, predicted_class, confidence } = req.body;
+    if (!filename || !predicted_class) {
+      return errorResponse(res, "Thiếu thông tin tên file hoặc kết quả phân loại AI.", 400);
+    }
+
+    const AI_BASE = process.env.AI_SERVER_URL
+      ? process.env.AI_SERVER_URL.replace("/predict", "")
+      : "http://localhost:8000";
+
+    const formData = new FormData();
+    formData.append("filename", filename);
+    formData.append("predicted_class", predicted_class);
+    formData.append("confidence", String(confidence ?? 0));
+
+    console.log(`✅ Gửi xác nhận đúng tới AI server (${AI_BASE}/approve) ...`);
+    const aiResponse = await fetch(`${AI_BASE}/approve`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error("Lỗi gửi approve tới AI Server:", errorText);
+      return errorResponse(
+        res,
+        `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
+        500
+      );
+    }
+
+    const aiData = await aiResponse.json();
+    return successResponse(res, aiData, "Ghi nhận xác nhận kết quả AI đúng thành công.");
+  } catch (error) {
+    console.error("Lỗi khi gửi xác nhận approve AI:", error);
+    return errorResponse(
+      res,
+      `Không thể gửi xác nhận tới AI: ${error.message}`,
+      500
+    );
+  }
+};
+
 // @desc    Explain imaging result in simple, Hippocratic terms for patient
 // @route   POST /api/v1/imaging/:id/explain-ai
 // @access  Private (Patient, Doctor, Admin)
@@ -433,4 +484,21 @@ export const explainImagingResultAI = async (req, res) => {
     return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, 500);
   }
 };
+
+// @desc    Get all imaging results for dashboard
+// @route   GET /api/v1/imaging
+// @access  Private (Doctor, Admin, Nurse, Technician, Receptionist)
+export const getAllImagingResults = async (req, res) => {
+  try {
+    if (req.user.role === "patient") {
+      return errorResponse(res, "Bạn không có quyền truy cập thông tin này.", 403);
+    }
+    const results = await ImagingResult.find({}).sort({ reportDate: -1 });
+    return successResponse(res, results, "Lấy tất cả kết quả chẩn đoán hình ảnh thành công.");
+  } catch (error) {
+    console.error("Lỗi khi lấy tất cả kết quả chẩn đoán hình ảnh:", error);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+  }
+};
+
 

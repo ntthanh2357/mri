@@ -27,11 +27,7 @@ const SystemAdminScreen = ({ navigation }) => {
     Alert.alert('Thêm tài liệu RAG', 'Vui lòng tải lên tệp văn bản y học (.pdf, .xlsx) để tiến hành vector hóa...');
   };
 
-  const ragDocs = [
-    { name: 'Neurology_Standard.pdf', size: '2.4 MB', vectors: 420, isSuccess: true },
-    { name: 'Clinical_Guideline.pdf', size: '15.8 MB', vectors: 1200, isSuccess: true },
-    { name: 'Patient_Feedback.xlsx', size: '1.2 MB', vectors: 85, isSuccess: false },
-  ];
+  const ragDocs = [];
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -72,18 +68,18 @@ const SystemAdminScreen = ({ navigation }) => {
           <View style={styles.metricRow}>
             {/* Card 1 */}
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>HÀNG ĐỢI: 128 MỤC</Text>
-              <Text style={styles.metricValue}>41.0%</Text>
+              <Text style={styles.metricLabel}>TẢI GPU AI</Text>
+              <Text style={styles.metricValue}>0.0%</Text>
               <View style={styles.barBg}>
-                <View style={[styles.barFill, { width: '41%' }]} />
+                <View style={[styles.barFill, { width: '0%' }]} />
               </View>
             </View>
             {/* Card 2 */}
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>HÀNG ĐỢI: 128 MỤC</Text>
-              <Text style={styles.metricValue}>88.2%</Text>
+              <Text style={styles.metricLabel}>TẢI BỘ NHỚ RAM</Text>
+              <Text style={styles.metricValue}>0.0%</Text>
               <View style={styles.barBg}>
-                <View style={[styles.barFill, { width: '88%' }]} />
+                <View style={[styles.barFill, { width: '0%' }]} />
               </View>
             </View>
           </View>
@@ -91,15 +87,15 @@ const SystemAdminScreen = ({ navigation }) => {
           <View style={styles.metricRow}>
             {/* Card 3 */}
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>HÀNG ĐỢI: 128 MỤC</Text>
-              <Text style={styles.metricValue}>124 ms</Text>
-              <Text style={styles.metricSub}>↘ Phản hồi nhanh</Text>
+              <Text style={styles.metricLabel}>ĐỘ TRỄ TRUY VẤN AI</Text>
+              <Text style={styles.metricValue}>0 ms</Text>
+              <Text style={styles.metricSub}>↘ Chờ truy vấn thực tế</Text>
             </View>
             {/* Card 4 */}
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>HÀNG ĐỢI: 128 MỤC</Text>
-              <Text style={styles.metricValue}>1,042</Text>
-              <Text style={styles.metricSub}>👥 +39 Đang hoạt động</Text>
+              <Text style={styles.metricLabel}>TÁC NHÂN ĐANG CHẠY</Text>
+              <Text style={styles.metricValue}>0</Text>
+              <Text style={styles.metricSub}>👥 Chưa có phiên làm việc</Text>
             </View>
           </View>
         </View>
@@ -204,7 +200,7 @@ const SystemAdminScreen = ({ navigation }) => {
             <Text style={styles.hardCasesDesc}>Các ca biên được bác sĩ chỉnh sửa đang chờ huấn luyện lại model.</Text>
           </View>
           <View style={styles.hardCasesRight}>
-            <Text style={styles.hardCasesCount}>128 ca</Text>
+            <Text style={styles.hardCasesCount}>0 ca</Text>
             <TouchableOpacity style={styles.deployBtnMini} onPress={handleGlobalUpdate}>
               <Text style={styles.deployBtnTextMini}>Triển khai</Text>
             </TouchableOpacity>
@@ -224,7 +220,7 @@ const SystemAdminScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.ragStatusCard}>
-            <Text style={styles.ragVectorCount}>64,281 Vector</Text>
+            <Text style={styles.ragVectorCount}>0 Vector</Text>
             <Text style={styles.ragVectorDesc}>
               Cấu hình các tham số suy luận cho các quy trình chẩn đoán cụ thể.
             </Text>
@@ -232,24 +228,30 @@ const SystemAdminScreen = ({ navigation }) => {
 
           <View style={styles.documentHeaderRow}>
             <Text style={styles.docHeaderTitle}>DỮ LIỆU MỚI NẠP</Text>
-            <Text style={styles.docSyncStatus}>ĐANG ĐỒNG BỘ...</Text>
+            <Text style={styles.docSyncStatus}>HỆ THỐNG TRỐNG</Text>
           </View>
 
           <View style={styles.docList}>
-            {ragDocs.map((doc, idx) => (
-              <View key={idx} style={styles.docRow}>
-                <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#166534' : '#991B1B' }]}>
-                  <Text style={styles.docIconText}>📁</Text>
-                </View>
-                <View style={styles.docInfo}>
-                  <Text style={styles.docName}>{doc.name}</Text>
-                  <Text style={styles.docMeta}>{doc.size} • {doc.vectors} Vectors</Text>
-                </View>
-                <TouchableOpacity onPress={() => Alert.alert('Tùy chọn tài liệu', 'Bạn có thể xóa hoặc nạp lại vector cho tài liệu: ' + doc.name)}>
-                  <Text style={styles.moreIcon}>⋮</Text>
-                </TouchableOpacity>
+            {ragDocs.length === 0 ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có tài liệu RAG thực tế được nạp.</Text>
               </View>
-            ))}
+            ) : (
+              ragDocs.map((doc, idx) => (
+                <View key={idx} style={styles.docRow}>
+                  <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#166534' : '#991B1B' }]}>
+                    <Text style={styles.docIconText}>📁</Text>
+                  </View>
+                  <View style={styles.docInfo}>
+                    <Text style={styles.docName}>{doc.name}</Text>
+                    <Text style={styles.docMeta}>{doc.size} • {doc.vectors} Vectors</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => Alert.alert('Tùy chọn tài liệu', 'Bạn có thể xóa hoặc nạp lại vector cho tài liệu: ' + doc.name)}>
+                    <Text style={styles.moreIcon}>⋮</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
           </View>
 
           {/* Context search depth */}

@@ -250,6 +250,31 @@ export const anonymizeData = async (req, res) => {
   }
 };
 
+// @desc    Get AI Training Stats (approved vs corrected)
+// @route   GET /api/v1/admin/ai-training-stats
+// @access  Private (Admin only)
+export const getAiTrainingStats = async (req, res) => {
+  try {
+    const AI_SERVER = process.env.AI_SERVER_URL || "http://localhost:8000";
+    const response = await fetch(`${AI_SERVER}/training-stats`);
+    if (!response.ok) {
+      return res.status(200).json({
+        success: true,
+        stats: { total: 0, approved: 0, corrected: 0, accuracy: 0, approved_by_class: {}, corrected_by_class: {} }
+      });
+    }
+    const data = await response.json();
+    res.status(200).json({ success: true, stats: data });
+  } catch (error) {
+    // If AI server is down, return zeroed stats gracefully
+    res.status(200).json({
+      success: true,
+      stats: { total: 0, approved: 0, corrected: 0, accuracy: 0, approved_by_class: {}, corrected_by_class: {} },
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get AI Feedback logs
 // @route   GET /api/v1/admin/ai-feedback
 // @access  Private (Admin only)
