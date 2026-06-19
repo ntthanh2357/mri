@@ -14,6 +14,11 @@ import {
   verifyDoctorById,
   updateDatasetPrice,
   anonymizeData,
+  getAiFeedback,
+  retrainAiModel,
+  getChatbotConfig,
+  saveChatbotConfig,
+  verifyAdminUser,
 } from "../controllers/admin.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireAdmin } from "../middlewares/role.middleware.js";
@@ -35,9 +40,16 @@ router.get("/audit-logs", fetchAuditLogs);
 router.get("/users/:id", fetchUserById);
 router.put("/users/:id/lock", lockUserById);
 router.put("/users/:id/unlock", unlockUserById);
+router.put("/users/:id/verify", verifyAdminUser);
 router.get("/stats", fetchStats);
 router.put("/doctors/:id/verify", verifyDoctorById);
 router.put("/datasets/:id/price", updateDatasetPrice);
 router.post("/anonymize", anonymizeData);
+
+// ─── AI & Chatbot Management routes ──────────────────────────────────────────
+router.get("/ai-feedback", getAiFeedback);
+router.post("/ai-retrain", retrainAiModel);
+router.get("/chatbot-config", getChatbotConfig);
+router.post("/chatbot-config", saveChatbotConfig);
 
 export default router;

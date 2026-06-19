@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,11 +8,53 @@ import {
   SafeAreaView,
   Alert,
   useWindowDimensions,
+  TextInput,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { post } from '../services/api.service';
 
 const ClinicDashboardScreen = ({ navigation }) => {
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('doctor');
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  const handleCreateUser = async () => {
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
+      Alert.alert('Yêu cầu', 'Vui lòng nhập đầy đủ các trường thông tin.');
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const response = await post('/auth/register', {
+        email: newUserEmail,
+        password: newUserPassword,
+        name: newUserName,
+        role: newUserRole,
+      });
+
+      if (response.success || response.user) {
+        Alert.alert('Thành công', `Đã cấp tài khoản thành công cho ${newUserName} (${newUserRole.toUpperCase()})!`);
+        setShowAddUserModal(false);
+        setNewUserName('');
+        setNewUserEmail('');
+        setNewUserPassword('');
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể tạo tài khoản.');
+      }
+    } catch (err) {
+      console.error('Error creating user:', err);
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   const demographics = [
     { name: 'Người lớn (18–60)', value: 75, color: '#15803D' },
     { name: 'Người cao tuổi (60+)', value: 20, color: '#475569' },
@@ -58,8 +100,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <TouchableOpacity style={styles.actionButtonOutline} onPress={() => Alert.alert('Thông báo', 'Đang tải sao kê về điện thoại...')}>
                 <Text style={styles.actionButtonOutlineText}>📥 Xuất sao kê</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => Alert.alert('Thêm bác sĩ', 'Mở biểu mẫu mời bác sĩ chuyên khoa tham gia...')}>
-                <Text style={styles.actionButtonSolidText}>👤 Thêm bác sĩ</Text>
+              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => setShowAddUserModal(true)}>
+                <Text style={styles.actionButtonSolidText}>👤 Cấp tài khoản nhân sự</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
@@ -183,8 +225,91 @@ const ClinicDashboardScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+        <Modal
+          visible={showAddUserModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAddUserModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 480 : '100%', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 6 }}>Cấp tài khoản nhân sự phòng khám</Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>Nhập thông tin chi tiết của nhân viên y tế để tạo tài khoản trực tiếp.</Text>
+
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
+              <TextInput
+                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
+                placeholder="Ví dụ: Bác sĩ Lê Mạnh Minh"
+                value={newUserName}
+                onChangeText={setNewUserName}
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
+              <TextInput
+                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
+                placeholder="email@benhvien.vn"
+                value={newUserEmail}
+                onChangeText={setNewUserEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
+              <TextInput
+                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
+                placeholder="Nhập mật khẩu từ 6 ký tự"
+                secureTextEntry
+                value={newUserPassword}
+                onChangeText={setNewUserPassword}
+                autoCapitalize="none"
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Vai trò công việc *</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                {['doctor', 'nurse', 'technician'].map((role) => (
+                  <TouchableOpacity
+                    key={role}
+                    style={{
+                      flex: 1,
+                      height: 36,
+                      borderRadius: 6,
+                      backgroundColor: newUserRole === role ? '#15803D' : '#F1F5F9',
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}
+                    onPress={() => setNewUserRole(role)}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: newUserRole === role ? '#FFFFFF' : '#475569' }}>
+                      {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Y tá' : 'KTV'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setShowAddUserModal(false)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Hủy</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ flex: 1, height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
+                  onPress={handleCreateUser}
+                  disabled={creatingUser}
+                >
+                  {creatingUser ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Tạo tài khoản</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
     </ResponsiveLayout>
   );
 };

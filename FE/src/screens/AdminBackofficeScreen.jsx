@@ -13,7 +13,8 @@ import {
   ClipboardList,
   LogOut,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  Brain
 } from 'lucide-react';
 import '../tailwind-built.css';
 
@@ -22,6 +23,7 @@ import AdminUsersView from '../components/AdminUsersView';
 import AdminDoctorsView from '../components/AdminDoctorsView';
 import AdminDatasetsView from '../components/AdminDatasetsView';
 import AdminAuditLogsView from '../components/AdminAuditLogsView';
+import AdminAIConfigView from '../components/AdminAIConfigView';
 import { setAuthToken } from '../services/api.service';
 
 const AdminBackofficeScreen = ({ navigation }) => {
@@ -220,6 +222,34 @@ const AdminBackofficeScreen = ({ navigation }) => {
             </div>
           </div>
 
+          {/* CATEGORY: CẤU HÌNH AI */}
+          <div>
+            {sidebarCollapsed ? (
+              <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
+            ) : (
+              <span className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider opacity-60 mb-3 block">
+                HỆ THỐNG AI
+              </span>
+            )}
+            <div className="space-y-1.5">
+              <button 
+                onClick={() => setActiveTab('ai-config')}
+                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
+                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
+                } ${
+                  activeTab === 'ai-config'
+                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
+                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                }`}
+                style={{ height: '44px', transition: 'all 0.25s ease' }}
+                title={sidebarCollapsed ? "Cấu hình AI" : undefined}
+              >
+                <Brain className="w-[18px] h-[18px] shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Cấu hình AI</span>}
+              </button>
+            </div>
+          </div>
+
         </nav>
 
         {/* 9. KIỂM LOGOUT AREA */}
@@ -334,6 +364,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
 
             {activeTab === 'audit-logs' && (
               <AdminAuditLogsView />
+            )}
+
+            {activeTab === 'ai-config' && (
+              <AdminAIConfigView />
             )}
           </div>
         </section>

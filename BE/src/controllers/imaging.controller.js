@@ -67,7 +67,12 @@ export const getResultById = async (req, res) => {
 export const createImagingResult = async (req, res) => {
   try {
     // 1. Check roles
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+    if (req.user.role === "patient") {
+      const user = await User.findById(req.user.id);
+      if (!user || user.profile?.medicalId !== medicalId) {
+        return errorResponse(res, "Bạn chỉ có thể tự lưu trữ kết quả cho chính mình.", 403);
+      }
+    } else if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
@@ -209,3 +214,223 @@ export const uploadImagingImage = async (req, res) => {
     return errorResponse(res, "Có lỗi xảy ra khi lưu ảnh.", 500);
   }
 };
+
+// @desc    Analyze imaging scan using AI (FastAPI microservice proxy)
+// @route   POST /api/v1/imaging/analyze-ai
+// @access  Private (Doctor, Technician, Admin only)
+export const analyzeImagingResultAI = async (req, res) => {
+  try {
+    // 1. Check roles
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician" && req.user.role !== "patient") {
+      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    }
+
+    const { imageUrl } = req.body;
+    if (!imageUrl) {
+      return errorResponse(res, "Thiếu đường dẫn hình ảnh cần phân tích.", 400);
+    }
+
+    let fileBuffer;
+    let fileName = "scan.jpg";
+
+    // 2. Resolve image source (Local path vs Firebase vs external URL)
+    if (imageUrl.startsWith("/uploads/")) {
+      // Local path
+      const absolutePath = path.join(__dirname, "../..", imageUrl);
+      if (!fs.existsSync(absolutePath)) {
+        return errorResponse(res, `Không tìm thấy tệp ảnh tại đường dẫn cục bộ: ${imageUrl}`, 404);
+      }
+      fileBuffer = fs.readFileSync(absolutePath);
+      fileName = path.basename(absolutePath);
+    } else if (imageUrl.startsWith("http")) {
+      // External URL or Firebase Storage URL
+      try {
+        const downloadRes = await fetch(imageUrl);
+        if (!downloadRes.ok) {
+          throw new Error(`Tải ảnh từ URL thất bại với mã trạng thái ${downloadRes.status}`);
+        }
+        const arrayBuffer = await downloadRes.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+        fileName = path.basename(new URL(imageUrl).pathname) || "scan.jpg";
+      } catch (err) {
+        console.error("Lỗi khi tải ảnh từ URL:", err);
+        return errorResponse(res, `Không thể tải ảnh từ URL cung cấp: ${err.message}`, 400);
+      }
+    } else {
+      return errorResponse(res, "Đường dẫn hình ảnh không hợp lệ.", 400);
+    }
+
+    // Determine mime-type
+    const ext = path.extname(fileName).toLowerCase();
+    const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
+
+    // 3. Forward to Python FastAPI server using native fetch and FormData
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: mimeType });
+    formData.append("file", blob, fileName);
+
+    console.log(`📡 Đang gửi ảnh tới AI server (http://localhost:8000/predict) ...`);
+    const aiServerUrl = process.env.AI_SERVER_URL || "http://localhost:8000/predict";
+
+    const aiResponse = await fetch(aiServerUrl, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error("Lỗi từ AI Server:", errorText);
+      return errorResponse(
+        res,
+        `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
+        500
+      );
+    }
+
+    const aiData = await aiResponse.json();
+    return successResponse(res, aiData, "Phân tích AI hoàn tất thành công.");
+  } catch (error) {
+    console.error("Lỗi khi phân tích AI:", error);
+    return errorResponse(
+      res,
+      `Không thể hoàn thành chẩn đoán AI: ${error.message}. Hãy đảm bảo dịch vụ AI FastAPI đã được khởi chạy trên cổng 8000.`,
+      500
+    );
+  }
+};
+
+// @desc    Submit doctor feedback on AI results (glioma, meningioma, pituitary, no_tumor)
+// @route   POST /api/v1/imaging/feedback-ai
+// @access  Private (Doctor, Technician, Admin only)
+export const feedbackImagingResultAI = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    }
+
+    const { imageUrl, correct_class, x, y, w, h } = req.body;
+    if (!imageUrl || !correct_class) {
+      return errorResponse(res, "Thiếu thông tin hình ảnh hoặc kết quả chẩn đoán điều chỉnh.", 400);
+    }
+
+    let fileBuffer;
+    let fileName = "scan.jpg";
+
+    if (imageUrl.startsWith("/uploads/")) {
+      const absolutePath = path.join(__dirname, "../..", imageUrl);
+      if (!fs.existsSync(absolutePath)) {
+        return errorResponse(res, `Không tìm thấy tệp ảnh tại đường dẫn cục bộ: ${imageUrl}`, 404);
+      }
+      fileBuffer = fs.readFileSync(absolutePath);
+      fileName = path.basename(absolutePath);
+    } else if (imageUrl.startsWith("http")) {
+      try {
+        const downloadRes = await fetch(imageUrl);
+        if (!downloadRes.ok) {
+          throw new Error(`Tải ảnh từ URL thất bại với mã trạng thái ${downloadRes.status}`);
+        }
+        const arrayBuffer = await downloadRes.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+        fileName = path.basename(new URL(imageUrl).pathname) || "scan.jpg";
+      } catch (err) {
+        console.error("Lỗi khi tải ảnh từ URL:", err);
+        return errorResponse(res, `Không thể tải ảnh từ URL cung cấp: ${err.message}`, 400);
+      }
+    } else {
+      return errorResponse(res, "Đường dẫn hình ảnh không hợp lệ.", 400);
+    }
+
+    const ext = path.extname(fileName).toLowerCase();
+    const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
+
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: mimeType });
+    formData.append("file", blob, fileName);
+    formData.append("correct_class", correct_class);
+    formData.append("x", String(x || 0));
+    formData.append("y", String(y || 0));
+    formData.append("w", String(w || 0));
+    formData.append("h", String(h || 0));
+
+    console.log(`📡 Đang gửi feedback tới AI server (http://localhost:8000/feedback) ...`);
+    const aiFeedbackUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/feedback") : "http://localhost:8000/feedback");
+
+    const aiResponse = await fetch(aiFeedbackUrl, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error("Lỗi gửi feedback tới AI Server:", errorText);
+      return errorResponse(
+        res,
+        `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
+        500
+      );
+    }
+
+    const aiData = await aiResponse.json();
+    return successResponse(res, aiData, "Ghi nhận phản hồi và lưu ca bệnh thành công.");
+  } catch (error) {
+    console.error("Lỗi khi gửi phản hồi AI:", error);
+    return errorResponse(
+      res,
+      `Không thể gửi phản hồi tới AI: ${error.message}`,
+      500
+    );
+  }
+};
+
+// @desc    Explain imaging result in simple, Hippocratic terms for patient
+// @route   POST /api/v1/imaging/:id/explain-ai
+// @access  Private (Patient, Doctor, Admin)
+export const explainImagingResultAI = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await ImagingResult.findById(id);
+    if (!result) {
+      return errorResponse(res, "Không tìm thấy kết quả chẩn đoán.", 404);
+    }
+
+    if (req.user.role === "patient") {
+      const user = await User.findById(req.user.id);
+      if (!user || user.profile?.medicalId !== result.medicalId) {
+        return errorResponse(res, "Bạn không có quyền truy cập hồ sơ này.", 403);
+      }
+    }
+
+    const clinicalText = `
+      Loại phim chụp: ${result.imagingType}
+      Chỉ định dịch vụ: ${result.procedure}
+      Mô tả hình ảnh (Findings): ${result.findings}
+      Kết luận chẩn đoán (Conclusion): ${result.conclusion}
+    `;
+
+    console.log(`📡 Đang gọi AI Server dịch báo cáo y khoa (http://localhost:8000/translate_for_patient) ...`);
+    const aiTranslateUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/translate_for_patient") : "http://localhost:8000/translate_for_patient");
+
+    const aiResponse = await fetch(aiTranslateUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        clinical_report: clinicalText
+      })
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error("Lỗi từ AI Translate Server:", errorText);
+      return errorResponse(res, `Không thể dịch kết quả: AI Server phản hồi lỗi ${aiResponse.status}`, 500);
+    }
+
+    const aiData = await aiResponse.json();
+    return successResponse(res, { explanation: aiData.translated_report }, "Giải thích kết quả AI thành công.");
+  } catch (error) {
+    console.error("Lỗi giải thích kết quả AI:", error);
+    return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, 500);
+  }
+};
+

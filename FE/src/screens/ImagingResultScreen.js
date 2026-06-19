@@ -9,8 +9,9 @@ import {
   Modal,
   SafeAreaView,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
-import { get } from '../services/api.service';
+import { get, post } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './ImagingResultScreen.styles';
@@ -25,6 +26,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [zoomVisible, setZoomVisible] = useState(false);
+  const [explanation, setExplanation] = useState('');
+  const [explaining, setExplaining] = useState(false);
 
   useEffect(() => {
     if (!resultId) {
@@ -53,6 +56,31 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
     fetchResultDetails();
   }, [resultId]);
+
+  const handleExplainAI = async () => {
+    setExplaining(true);
+    try {
+      const response = await post(`/api/v1/imaging/${resultId}/explain-ai`);
+      if (response.success && response.data?.explanation) {
+        setExplanation(response.data.explanation);
+      } else {
+        if (Platform.OS === 'web') {
+          alert(response.message || 'Không thể lấy giải thích từ AI.');
+        } else {
+          Alert.alert('Lỗi', response.message || 'Không thể lấy giải thích từ AI.');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching explanation:', err);
+      if (Platform.OS === 'web') {
+        alert('Không thể kết nối đến máy chủ.');
+      } else {
+        Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+      }
+    } finally {
+      setExplaining(false);
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -250,6 +278,25 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 <Text style={styles.conclusionHeading}>KẾT LUẬN CHẨN ĐOÁN</Text>
                 <Text style={styles.conclusionBody}>{result.conclusion}</Text>
               </View>
+
+              {explanation ? (
+                <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', padding: 16, borderRadius: 10, marginTop: 16 }}>
+                  <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13, marginBottom: 6 }}>🧠 GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
+                  <Text style={{ color: '#14532D', fontSize: 13, lineHeight: 20 }}>{explanation}</Text>
+                </View>
+              ) : explaining ? (
+                <View style={{ marginTop: 16, alignItems: 'center', padding: 12 }}>
+                  <ActivityIndicator size="small" color="#15803D" />
+                  <Text style={{ color: '#64748B', fontSize: 11, marginTop: 4 }}>Bác sĩ AI đang dịch báo cáo y khoa sang ngôn ngữ đời thường cho bạn...</Text>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginTop: 16, alignItems: 'center' }}
+                  onPress={handleExplainAI}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>🤖 GIẢI THÍCH KẾT QUẢ BẰNG AI (Dễ hiểu & Y đức)</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Doctor Signature */}

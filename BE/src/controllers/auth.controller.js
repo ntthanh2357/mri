@@ -30,7 +30,7 @@ const generateRefreshToken = (userId, role, tokenVersion) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, licenseUrl } = req.body;
+    const { email, password, role, name, phone, licenseUrl, address } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -62,17 +62,36 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    // Check if registration request is performed by a verified admin (hospital manager)
+    let isCreatedByAdmin = false;
+    if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+      try {
+        const token = req.headers.authorization.split(" ")[1];
+        const secret = process.env.JWT_SECRET || "access_secret";
+        const decoded = jwt.verify(token, secret);
+        const creator = await User.findById(decoded.id).select("role isLocked isVerified").lean();
+        if (creator && creator.role === "admin" && creator.isVerified && !creator.isLocked) {
+          isCreatedByAdmin = true;
+        }
+      } catch (err) {
+        // Ignore token decode errors
+      }
+    }
+
+    const isVerified = isCreatedByAdmin ? true : (["patient", "receptionist", "technician", "nurse"].includes(role) ? true : false);
+
     // Create new user
     const newUser = new User({
       email,
       phone: phone ? hashPhone(phone) : undefined,
       passwordHash,
       role,
-      isVerified: ["patient", "receptionist", "technician", "nurse"].includes(role) ? true : false, // Patients and clinical assistants are auto-verified, Doctors need admin verification
+      isVerified,
       profile: {
         name,
         photoUrl: "",
         licenseUrl: role === "doctor" ? licenseUrl || "" : "",
+        address: address || "",
       },
     });
 

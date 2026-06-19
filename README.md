@@ -1,148 +1,148 @@
-# MRI Project
+# Hướng Dẫn Sử Dụng & Tài Liệu Hệ Thống NeuroScan AI 🧠✨
 
-Dự án gồm 2 phần: **FE** (Expo React Native) và **BE** (Node.js Express), tổ chức theo mô hình MVC.
-
----
-
-## Cấu trúc dự án
-
-```
-mri/
-├── FE/          ← Frontend (Expo React Native)
-└── BE/          ← Backend (Node.js Express)
-```
+Hệ thống y tế **NeuroScan AI** là nền tảng quản lý hình ảnh y khoa PACS, bệnh án điện tử EMR, tích hợp Trí tuệ nhân tạo (AI) hỗ trợ chẩn đoán u não (Glioma, Meningioma, Pituitary) và Trợ lý RAG Chatbot y khoa thông minh. Hệ thống tuân thủ nghiêm ngặt HIPAA và Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân.
 
 ---
 
-## BE — Node.js Express
+## 📂 Cấu Trúc Dự Án
 
-### Cấu trúc thư mục
+Hệ thống được chia thành 3 phân hệ chính:
+1. **BE (Node.js Express Gateway)**: Cổng API Gateway kết nối cơ sở dữ liệu MongoDB, xác thực JWT, ghi nhật ký kiểm toán (Audit Logs) và phân quyền 6 vai trò.
+2. **FE (Expo React Native - Giao diện Web & Mobile)**: Ứng dụng client đa nền tảng tối ưu hóa hiển thị bệnh án và công cụ điều chỉnh vùng AI.
+3. **MRIteam_team5/MRIteam (Python FastAPI AI Server)**: Dịch vụ xử lý mô hình học sâu (Deep Learning Ensemble ResNet50 + EfficientNet + DenseNet + YOLOv8) và mô hình RAG Chatbot.
 
-```
-BE/
-├── src/
-│   ├── config/
-│   │   └── db.js                     ← Cấu hình kết nối DB
-│   ├── controllers/
-│   │   └── example.controller.js     ← Xử lý request/response
-│   ├── models/
-│   │   └── example.model.js          ← Schema / tương tác dữ liệu
-│   ├── routes/
-│   │   ├── index.js                  ← Mount routes /api/v1
-│   │   └── example.routes.js         ← Định nghĩa endpoints
-│   ├── middlewares/
-│   │   ├── auth.middleware.js         ← Xác thực token
-│   │   └── error.middleware.js        ← Global error handler
-│   ├── services/
-│   │   └── example.service.js        ← Business logic
-│   ├── utils/
-│   │   └── response.util.js          ← Format JSON response chuẩn
-│   └── index.js                      ← Entry point
-├── .env
-└── package.json
-```
+---
 
-### Luồng xử lý
+## 🛠️ Hướng Dẫn Cài Đặt Thư Viện (Library Installation)
 
-```
-Request → routes/ → middlewares/ → controllers/ → services/ → models/ → DB
-                                        ↓
-Response ←──────────────────── controllers/
-```
-
-### Cài đặt & Chạy
-
+### 1. Phân Hệ Backend (BE)
+Yêu cầu Node.js v18 trở lên.
 ```bash
 cd BE
 npm install
 ```
+*Các thư viện cốt lõi:* `express`, `mongoose`, `jsonwebtoken`, `firebase-admin`, `bcryptjs`, `cors`, `dotenv`.
 
-| Lệnh | Mô tả |
-|------|-------|
-| `npm run dev` | Chạy development (nodemon, tự reload) |
-| `npm start` | Chạy production |
-
-Server mặc định chạy tại: `http://localhost:3000`
-
-### Endpoints
-
-| Method | URL | Mô tả |
-|--------|-----|-------|
-| GET | `/api/v1/` | Health check |
-| GET | `/api/v1/examples` | Lấy tất cả |
-| GET | `/api/v1/examples/:id` | Lấy theo ID |
-| POST | `/api/v1/examples` | Tạo mới |
-| PUT | `/api/v1/examples/:id` | Cập nhật |
-| DELETE | `/api/v1/examples/:id` | Xoá |
-
-### Biến môi trường (`.env`)
-
-```env
-PORT=3000
-NODE_ENV=development
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=mri_db
-DB_USER=root
-DB_PASSWORD=
-```
-
----
-
-## FE — Expo React Native
-
-### Cấu trúc thư mục
-
-```
-FE/
-├── src/
-│   ├── screens/
-│   │   └── HomeScreen.js             ← (View) Màn hình chính
-│   ├── components/
-│   │   └── Button.js                 ← (View) UI tái sử dụng
-│   ├── controllers/
-│   │   └── useHome.js                ← (Controller) Custom hook
-│   ├── models/
-│   │   └── User.js                   ← (Model) Cấu trúc data
-│   ├── services/
-│   │   └── api.service.js            ← (Model) Gọi API tới BE
-│   ├── navigation/
-│   │   └── AppNavigator.js           ← Cấu hình React Navigation
-│   ├── constants/
-│   │   ├── colors.js                 ← Bảng màu
-│   │   └── config.js                 ← API_URL và hằng số app
-│   └── utils/
-│       └── format.js                 ← Helper functions
-├── App.js                            ← Entry point
-└── package.json
-```
-
-### Luồng xử lý
-
-```
-Screen (View) ←→ useXxx Hook (Controller) ←→ api.service.js (Model) ←→ BE API
-```
-
-### Cài đặt & Chạy
-
+### 2. Phân Hệ Frontend (FE)
 ```bash
 cd FE
 npm install
 ```
+*Các thư viện cốt lõi:* `expo`, `react-native`, `react-native-web`, `lucide-react`, `tailwindcss` (dành cho giao diện Web).
 
-| Lệnh | Nền tảng |
-|------|----------|
-| `npm start` | Mở Expo DevTools, chọn nền tảng |
-| `npm run android` | Android (cần Android Studio hoặc thiết bị thật) |
-| `npm run ios` | iOS (chỉ trên macOS) |
-| `npm run web` | Trình duyệt web |
+### 3. Phân Hệ AI Server (FastAPI)
+Yêu cầu Python 3.9 - 3.11. Nên sử dụng môi trường ảo (virtual environment).
+```bash
+cd MRIteam_team5/MRIteam
+python -m venv .venv
+.venv\Scripts\activate      # Trên Windows
+source .venv/bin/activate    # Trên macOS/Linux
+pip install -r requirements.txt
+```
+*Các thư viện cốt lõi:* `fastapi`, `uvicorn`, `tensorflow`, `torch`, `ultralytics` (YOLO), `pandas`, `numpy`.
 
-### Packages chính
+---
 
-| Package | Mô tả |
-|---------|-------|
-| `expo` ~56.0.8 | Framework chính |
-| `react-native` 0.85.3 | UI framework |
-| `@react-navigation/native` | Navigation |
-| `@react-navigation/native-stack` | Stack navigator |
-| `react-native-web` | Hỗ trợ chạy trên web |
+## 🚀 Hệ Thống Lệnh Chạy (Execution Commands)
+
+### 1. Khởi tạo Cơ sở Dữ liệu mẫu (Database Seeding)
+Trước khi khởi chạy hệ thống lần đầu, thực hiện nạp dữ liệu phân quyền mẫu và bệnh án mẫu:
+```bash
+cd BE
+npm run seed       # Nạp tài khoản mẫu (Admin, Doctor, Patient, v.v...)
+npm run seed:emr   # Nạp hồ sơ bệnh án mẫu và lịch sử khám
+```
+
+### 2. Khởi chạy Python FastAPI AI Server (Cổng 8000)
+```bash
+cd MRIteam_team5/MRIteam
+.venv\Scripts\activate
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+### 3. Khởi chạy Express Backend Gateway (Cổng 3000)
+```bash
+cd BE
+npm start
+```
+
+### 4. Khởi chạy Frontend React Native Web/Mobile
+```bash
+cd FE
+npm run web
+```
+Ứng dụng web sẽ chạy tại địa chỉ: `http://localhost:8081` hoặc `http://localhost:19006` tùy thuộc vào phiên bản Expo.
+
+### 5. Chạy Kiểm Thử Hệ Thống (Integration & Unit Tests)
+Để chạy các bộ test kiểm nghiệm backend (bao gồm kiểm thử thuộc tính - Property-based Testing):
+```bash
+cd BE
+$env:NODE_OPTIONS="--experimental-vm-modules"; npx jest   # Trên Windows PowerShell
+NODE_OPTIONS="--experimental-vm-modules" npm test         # Trên Linux/macOS
+```
+
+---
+
+## 🔄 Luồng Hoạt Động Của Hệ Thống (System Workflows)
+
+### 1. Luồng Chẩn Đoán AI & Trợ Giúp Lâm Sàng (AI Reference Flow)
+```mermaid
+graph TD
+    A[Bác sĩ / Kỹ thuật viên] -->|Tải lên phim MRI| B(BE Gateway)
+    B -->|Proxy ảnh gốc| C(FastAPI AI Server)
+    C -->|Dự đoán Ensemble + YOLOv8| D[Kết quả phân loại & Bounding Box]
+    D -->|Trả về Heatmap & Kết quả| B
+    B -->|Hiển thị chẩn đoán tham khảo| A
+```
+
+### 2. Luồng Bác Sĩ Hiệu Chỉnh Vùng & Phân Loại Sai (Doctor Feedback Loop)
+Bác sĩ bệnh viện sử dụng kết quả AI để tham khảo. Nếu AI chẩn đoán sai loại u hoặc khoanh vùng bị lệch:
+1. Bác sĩ mở bảng **Hiệu chỉnh khoanh vùng & phân loại (AI sai?)**.
+2. Chọn loại u đúng thực tế (`glioma`, `meningioma`, `pituitary`, `notumor`).
+3. Điều chỉnh tọa độ hộp giới hạn ($X, Y, W, H$).
+4. Nhấn **Xác nhận & Gửi phản hồi AI học lại**.
+5. BE gửi yêu cầu tới FastAPI ghi nhận ca bệnh vào file `hard_examples/feedback_log.csv` và lưu ảnh gốc phục vụ cho học máy chủ động (Active Learning).
+
+### 3. Luồng Tự Quét & Lưu Trữ Phim AI Của Bệnh Nhân (Patient Self-Scan & AI Storage Flow)
+Bệnh nhân có thể tự kiểm tra hình ảnh phim chụp MRI của mình:
+1. Truy cập chức năng **Tải ảnh MRI** từ màn hình Home.
+2. Chọn ảnh phim chụp từ thiết bị và bấm **Chẩn đoán AI**.
+3. Hệ thống trả về kết quả gợi ý chẩn đoán phân loại và khoanh vùng u não từ AI.
+4. Thông tin cá nhân của bệnh nhân (Họ tên, Mã y tế, Năm sinh, Giới tính) được tự động lấy từ tài khoản và khóa ở dạng chỉ đọc.
+5. Kết quả chẩn đoán và phát hiện của AI sẽ tự động điền vào các phần Mô tả (Findings) và Kết luận (Conclusion) tương ứng theo docs form chuẩn.
+6. Bệnh nhân bấm **Lưu trữ phim & Báo cáo vào EMR** để tự lưu trữ kết quả chẩn đoán vào hồ sơ bệnh án cá nhân.
+
+### 4. Luồng Bác Sĩ AI Giải Thích Kết Quả Dễ Hiểu (Hippocratic AI EMR Interpretation Flow)
+Khi bệnh nhân xem chi tiết bất kỳ kết quả chẩn đoán hình ảnh EMR nào:
+1. Nhấn nút **GIẢI THÍCH KẾT QUẢ BẰNG AI (Dễ hiểu & Y đức)**.
+2. BE chuyển tiếp yêu cầu cùng toàn bộ báo cáo lâm sàng chuyên môn tới FastAPI AI Server (`/translate_for_patient`).
+3. AI biên dịch các thuật ngữ chuyên môn phức tạp (glioma, meningioma, phù nề,...) sang cách diễn giải trực quan, so sánh dễ hình dung theo tinh thần y đức **Lời thề Hippocrates** (không gây lo lắng hoang mang, tôn trọng quyền và hướng dẫn của bác sĩ điều trị, nhấn mạnh việc gặp bác sĩ chuyên khoa).
+4. Phản hồi dễ hiểu được kết xuất ngay trên giao diện để hỗ trợ tâm lý và nâng cao kiến thức sức khỏe cho bệnh nhân.
+
+### 5. Luồng Quản Lý & Retrain AI Của Admin (Active Learning Loop)
+Chỉ **Administrator** mới có quyền quản trị hệ thống AI:
+1. Admin truy cập tab **Hệ Thống AI** -> **Cấu hình AI**.
+2. Xem danh sách toàn bộ các ca bệnh mà bác sĩ đã hiệu chỉnh sai sót của AI.
+3. Nhấn **"Kích hoạt Huấn luyện lại AI (Active Learning)"** để kích hoạt tiến trình retrain trên nền mẫu dữ liệu khó mới.
+4. Cập nhật cấu hình bộ lọc từ cấm của Chatbot và thay đổi System Prompt chỉ định hành vi tư vấn của AI.
+
+---
+
+## 👥 Vai Trò & Chức Năng Của Từng Role (6-Role Model)
+
+Hệ thống phân quyền chi tiết cho 6 đối tượng người dùng:
+
+| Vai Trò | Chức năng trên hệ thống |
+| :--- | :--- |
+| **Administrator (Admin)** | • Quản lý toàn bộ cấu hình AI (retrain, chatbot configuration).<br>• Phê duyệt và quản lý tài khoản người dùng, bác sĩ.<br>• Xem nhật ký kiểm toán hệ thống (Audit Logs) để truy vết dữ liệu. |
+| **Hospital Doctor (Bác sĩ)** | • Xem kết quả chẩn đoán hình ảnh và tham khảo dự đoán của AI.<br>• **Hiệu chỉnh kết quả AI nếu phân loại/khoanh vùng sai**.<br>• Quản lý bệnh án điện tử EMR, kê toa thuốc và chuyển tuyến bệnh nhân. |
+| **Patient (Bệnh nhân)** | • **Tự tải lên phim chụp MRI, phân tích bằng AI và lưu trữ kết quả vào bệnh án cá nhân (EMR) của mình theo biểu mẫu chuẩn**.<br>• Tra cứu lịch sử khám bệnh và hồ sơ hình ảnh y khoa của cá nhân.<br>• Trò chuyện với Chatbot AI RAG để tham khảo các thắc mắc về sức khỏe. |
+| **Technician (Kỹ thuật viên)** | • Tiếp nhận ca chụp, tải hình ảnh MRI/CT lên hệ thống.<br>• Nhập thông số kỹ thuật chụp và kết quả mô tả ban đầu. |
+| **Clinic Manager (Quản lý)** | • Theo dõi lịch làm việc của bác sĩ, quản lý danh sách phòng khám.<br>• Xem các báo cáo vận hành y tế trong ngày. |
+| **Financial Manager (Kế toán)** | • Quản lý viện phí, thu chi của bệnh nhân.<br>• Xuất hóa đơn dịch vụ khám chữa bệnh và thống kê tài chính doanh thu. |
+
+---
+
+## 🔒 Tuân Thủ Bảo Mật & Quy Định Pháp Luật
+- **HIPAA**: Mã hóa dữ liệu truyền tải thông qua HTTPS/TLS, ẩn danh hóa thông tin định danh cá nhân nhạy cảm trong ảnh chụp.
+- **Nghị định 13/2023/NĐ-CP**: Loại bỏ các trường định danh dư thừa như Số CCCD/BHYT trên toàn bộ biểu mẫu quản lý bệnh nhân để bảo mật thông tin tối đa.

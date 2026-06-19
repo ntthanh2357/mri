@@ -163,6 +163,25 @@ export default function AdminUsersView() {
     }
   };
 
+  // ─── Verify action for admin ────────────────────────────────────────────────
+  const handleVerifyUser = async (userId, verified) => {
+    setActionError(null);
+    try {
+      const data = await apiRequest(`/admin/users/${userId}/verify`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified }),
+      });
+
+      // Update detail panel if it shows the same user
+      if (selectedUserId === userId && selectedUserDetail) {
+        setSelectedUserDetail({ ...selectedUserDetail, isVerified: data.user.isVerified });
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không thể cập nhật trạng thái xác thực.');
+    }
+  };
+
   // ─── Filtered rows ────────────────────────────────────────────────────────
   const filteredUsers = usersList.filter(u => {
     const query = searchQuery.toLowerCase();
@@ -447,6 +466,12 @@ export default function AdminUsersView() {
                   <span className="text-slate-700 font-bold">{selectedUserDetail.phone || '—'}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Địa chỉ</span>
+                  <span className="text-slate-700 font-bold truncate max-w-[160px]" title={selectedUserDetail.profile?.address || '—'}>
+                    {selectedUserDetail.profile?.address || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
                   <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Trạng thái khóa</span>
                   <span className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${
                     selectedUserDetail.isLocked
@@ -482,23 +507,47 @@ export default function AdminUsersView() {
               </div>
 
               {/* Bottom Actions inside detailed card */}
-              <div className="pt-4 border-t border-slate-100 flex gap-2">
-                {selectedUserDetail.isLocked ? (
-                  <button
-                    onClick={() => handleUnlockUser(selectedUserDetail._id)}
-                    className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"
-                  >
-                    <Unlock className="w-4 h-4 shrink-0" />
-                    <span>Mở Khóa Tài Khoản</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleLockUser(selectedUserDetail._id)}
-                    className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
-                  >
-                    <Lock className="w-4 h-4 shrink-0" />
-                    <span>Khóa Tài Khoản</span>
-                  </button>
+              <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+                <div className="flex gap-2">
+                  {selectedUserDetail.isLocked ? (
+                    <button
+                      onClick={() => handleUnlockUser(selectedUserDetail._id)}
+                      className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"
+                    >
+                      <Unlock className="w-4 h-4 shrink-0" />
+                      <span>Mở Khóa Tài Khoản</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleLockUser(selectedUserDetail._id)}
+                      className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    >
+                      <Lock className="w-4 h-4 shrink-0" />
+                      <span>Khóa Tài Khoản</span>
+                    </button>
+                  )}
+                </div>
+
+                {selectedUserDetail.role === 'admin' && (
+                  <div className="flex">
+                    {selectedUserDetail.isVerified ? (
+                      <button
+                        onClick={() => handleVerifyUser(selectedUserDetail._id, false)}
+                        className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                      >
+                        <ShieldX className="w-4 h-4 shrink-0 text-amber-600" />
+                        <span>Hủy duyệt Quản lý bệnh viện</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleVerifyUser(selectedUserDetail._id, true)}
+                        className="flex-1 bg-blue-600 text-white hover:bg-blue-700 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-500/10"
+                      >
+                        <ShieldCheck className="w-4 h-4 shrink-0 text-white" />
+                        <span>Duyệt Quản lý bệnh viện</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

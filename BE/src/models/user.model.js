@@ -77,6 +77,11 @@ const userSchema = new Schema(
         type: String,
         default: "",
       },
+      address: {
+        type: String,
+        default: "",
+        trim: true,
+      },
     },
   },
   {

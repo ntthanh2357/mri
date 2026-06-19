@@ -36,7 +36,16 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   const [radiologist, setRadiologist] = useState('Bác sĩ Gia Huy');
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [errors, setErrors] = useState({});
+  const [aiResult, setAiResult] = useState(null);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [correctClass, setCorrectClass] = useState('notumor');
+  const [coordX, setCoordX] = useState('120');
+  const [coordY, setCoordY] = useState('120');
+  const [coordW, setCoordW] = useState('100');
+  const [coordH, setCoordH] = useState('100');
+  const [sendingFeedback, setSendingFeedback] = useState(false);
 
   const showAlert = (title, message, callback) => {
     if (Platform.OS === 'web') {
@@ -136,6 +145,93 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     showAlert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin hành chính & chẩn đoán hình ảnh từ phim chụp giấy!');
   };
 
+  const handleAiAnalysis = async () => {
+    if (images.length === 0) {
+      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi thực hiện chẩn đoán AI.');
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const payload = { imageUrl: images[0] };
+      const response = await post('/api/v1/imaging/analyze-ai', payload);
+
+      if (response.success && response.data) {
+        const { class_name, confidence, annotated_image, consensus_message } = response.data;
+
+        // Auto-fill findings and conclusion
+        setFindings(consensus_message || `Phân tích AI phát hiện khối u loại ${class_name.toUpperCase()}.`);
+        
+        let conclusionText = '';
+        if (class_name === 'notumor') {
+          conclusionText = `Không phát hiện bất thường sọ não trên hình ảnh MRI (Độ tự tin của AI: ${confidence}%).`;
+        } else {
+          conclusionText = `Hình ảnh gợi ý khối u loại ${class_name.toUpperCase()} (Độ tự tin của AI: ${confidence}%). Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.`;
+        }
+        setConclusion(conclusionText);
+
+        // If an annotated image is returned, add it to the image gallery
+        if (annotated_image) {
+          setImages((prev) => [...prev, annotated_image]);
+        }
+
+        setAiResult(response.data);
+        setCorrectClass(class_name);
+        setCoordX('120');
+        setCoordY('120');
+        setCoordW('100');
+        setCoordH('100');
+
+        // Clear validation errors
+        setErrors((prev) => ({
+          ...prev,
+          findings: null,
+          conclusion: null,
+        }));
+
+        showAlert('Chẩn đoán AI', `Hoàn tất phân tích MRI! Phát hiện: ${class_name.toUpperCase()} (Tin cậy: ${confidence}%).`);
+      } else {
+        showAlert('Lỗi phân tích AI', response.message || 'Không thể chẩn đoán ảnh chụp.');
+      }
+    } catch (err) {
+      console.error('AI Analysis error:', err);
+      showAlert('Lỗi kết nối', 'Không thể kết nối đến AI server. Đảm bảo Backend và FastAPI microservice đã khởi động.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (images.length === 0) {
+      showAlert('Yêu cầu', 'Cần có ít nhất một hình ảnh phim chụp để gửi phản hồi.');
+      return;
+    }
+    setSendingFeedback(true);
+    try {
+      const payload = {
+        imageUrl: images[0],
+        correct_class: correctClass,
+        x: parseInt(coordX) || 0,
+        y: parseInt(coordY) || 0,
+        w: parseInt(coordW) || 0,
+        h: parseInt(coordH) || 0
+      };
+
+      const response = await post('/api/v1/imaging/feedback-ai', payload);
+      if (response.success) {
+        showAlert('Đóng góp thành công', 'Ý kiến hiệu chỉnh khối u đã được ghi nhận. Hệ thống sẽ sử dụng dữ liệu này để tự động huấn luyện lại AI.');
+        setShowFeedbackForm(false);
+      } else {
+        showAlert('Lỗi', response.message || 'Không thể gửi phản hồi.');
+      }
+    } catch (err) {
+      console.error('Feedback error:', err);
+      showAlert('Lỗi kết nối', 'Không thể gửi phản hồi đến máy chủ.');
+    } finally {
+      setSendingFeedback(false);
+    }
+  };
+
   const handleSaveResult = async () => {
     // Validate required fields
     const newErrors = {};
@@ -218,11 +314,119 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
           <View style={styles.formSheet}>
             
             {/* Auto Fill Buttons */}
-            <View style={styles.helperRow}>
+            <View style={[styles.helperRow, { gap: 10 }]}>
               <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#0F172A', borderColor: '#1E293B', flex: 1 }]} onPress={handleOcrFill}>
                 <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>⚡ Quét tự động (OCR & Fill)</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.helperBtn, 
+                  { 
+                    backgroundColor: '#1E1B4B', 
+                    borderColor: '#312E81', 
+                    flex: 1,
+                    opacity: images.length === 0 ? 0.6 : 1 
+                  }
+                ]} 
+                onPress={handleAiAnalysis}
+                disabled={analyzing}
+              >
+                {analyzing ? (
+                  <ActivityIndicator size="small" color="#818CF8" />
+                ) : (
+                  <Text style={[styles.helperBtnText, { color: '#818CF8', fontWeight: 'bold' }]}>
+                    🤖 Phân tích AI ({images.length === 0 ? 'Chưa nạp ảnh' : 'Đọc phim & Vẽ Heatmap'})
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
+
+            {aiResult && (
+              <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginVertical: 12 }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A', marginBottom: 4 }}>🤖 Kết quả chẩn đoán AI (Chỉ dùng tham khảo)</Text>
+                <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 2 }}>
+                  - Loại khối u phát hiện: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{aiResult.class_name?.toUpperCase()}</Text>
+                </Text>
+                <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 8 }}>
+                  - Độ tự tin: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
+                </Text>
+                {aiResult.consensus_message ? (
+                  <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginBottom: 10 }}>
+                    {aiResult.consensus_message}
+                  </Text>
+                ) : null}
+
+                <TouchableOpacity 
+                  style={{ alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#3B82F6', borderRadius: 6 }}
+                  onPress={() => setShowFeedbackForm(!showFeedbackForm)}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                    {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ Hiệu chỉnh khoanh vùng & phân loại (AI sai?)'}
+                  </Text>
+                </TouchableOpacity>
+
+                {showFeedbackForm && (
+                  <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                    <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                      ĐIỀU CHỈNH KẾT QUẢ AI SAI:
+                    </Text>
+
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Loại khối u thực tế (Phân loại):</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {['glioma', 'meningioma', 'pituitary', 'notumor'].map((cls) => (
+                        <TouchableOpacity
+                          key={cls}
+                          style={{
+                            paddingVertical: 5,
+                            paddingHorizontal: 10,
+                            backgroundColor: correctClass === cls ? '#B91C1C' : '#F1F5F9',
+                            borderRadius: 4
+                          }}
+                          onPress={() => setCorrectClass(cls)}
+                        >
+                          <Text style={{ color: correctClass === cls ? '#FFFFFF' : '#334155', fontSize: 11, fontWeight: 'bold' }}>
+                            {cls.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>
+                      Tọa độ vùng khối u (Khoanh vùng/Segmentation):
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>X</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordX} onChangeText={setCoordX} keyboardType="numeric" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>Y</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordY} onChangeText={setCoordY} keyboardType="numeric" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>W</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordW} onChangeText={setCoordW} keyboardType="numeric" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>H</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordH} onChangeText={setCoordH} keyboardType="numeric" />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={{ paddingVertical: 8, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', opacity: sendingFeedback ? 0.7 : 1 }}
+                      onPress={handleSubmitFeedback}
+                      disabled={sendingFeedback}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                        {sendingFeedback ? 'Đang gửi phản hồi...' : '✓ Xác nhận & Gửi phản hồi AI học lại'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Section 1: Administrative Info */}
             <Text style={styles.sectionHeading}>I. Thông tin hành chính bệnh nhân</Text>

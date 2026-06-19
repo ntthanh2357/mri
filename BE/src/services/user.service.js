@@ -114,6 +114,32 @@ export const verifyDoctorById = async (id, verified, adminId) => {
   return updated;
 };
 
+export const verifyAdminById = async (id, verified, adminId) => {
+  const existing = await User.findById(id).select("role email isVerified").lean();
+
+  if (!existing || existing.role !== "admin") {
+    throw new Error("Admin not found");
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    id,
+    { isVerified: verified },
+    { new: true }
+  )
+    .select("-passwordHash -otpCode -otpExpires -tokenVersion")
+    .lean();
+
+  await AuditLog.create({
+    action: verified ? "verify-admin" : "unverify-admin",
+    entity: "User",
+    entityId: id,
+    performedBy: adminId,
+    details: `Clinic Admin ${existing.email} verification ${verified ? "approved" : "revoked"} by admin`,
+  });
+
+  return updated;
+};
+
 export const unlockUserById = async (id, adminId) => {
   const existing = await User.findById(id).select("isLocked email").lean();
 
