@@ -27,6 +27,28 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Phone Login OTP states
+  const [loginMethod, setLoginMethod] = useState('password'); // 'password' or 'otp'
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+
+  // Forgot password states
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotStep, setForgotStep] = useState(1); // 1 or 2
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  // Custom Alert state
+  const [customAlert, setCustomAlert] = useState({
+    visible: false,
+    type: 'success', // 'success' | 'error' | 'info'
+    title: '',
+    message: '',
+    onClose: null,
+  });
+
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
@@ -54,29 +76,6 @@ const LoginScreen = ({ navigation }) => {
       </SafeAreaView>
     );
   }
-
-  // Phone Login OTP states
-  const [loginMethod, setLoginMethod] = useState('password'); // 'password' or 'otp'
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-
-
-  // Forgot password states
-  const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotStep, setForgotStep] = useState(1); // 1 or 2
-  const [forgotLoading, setForgotLoading] = useState(false);
-
-  // Custom Alert state
-  const [customAlert, setCustomAlert] = useState({
-    visible: false,
-    type: 'success', // 'success' | 'error' | 'info'
-    title: '',
-    message: '',
-    onClose: null,
-  });
 
   const showAlert = (type, title, message, onClose = null) => {
     setCustomAlert({
