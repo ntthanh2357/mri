@@ -2,6 +2,7 @@ import { MedicalRecord } from "../models/medicalRecord.model.js";
 import { CareSheet } from "../models/careSheet.model.js";
 import { Consultation } from "../models/consultation.model.js";
 import { ConsentForm } from "../models/consentForm.model.js";
+import { EMRVersion } from "../models/emrVersion.model.js";
 
 // --- Medical Record (HSBA) Controllers ---
 
@@ -35,7 +36,6 @@ export const createRecord = async (req, res) => {
       patientName,
       gender,
       age,
-      bhytNumber,
       admissionType,
       department,
       paymentMethod,
@@ -53,7 +53,6 @@ export const createRecord = async (req, res) => {
       patientName,
       gender,
       age,
-      bhytNumber,
       admissionType,
       department,
       paymentMethod,
@@ -94,6 +93,37 @@ export const updateRecord = async (req, res) => {
 
     const updates = req.body;
     
+    // So sánh sự khác biệt để ghi nhận phiên bản EMR
+    const changes = {};
+    let hasChanges = false;
+    
+    // Các trường quan trọng cần lưu vết
+    const trackedFields = ["diagnosis", "treatmentPlan", "status", "admissionType", "paymentMethod", "doctorInCharge", "department"];
+    
+    trackedFields.forEach(field => {
+      if (updates[field] !== undefined && updates[field] !== record[field]) {
+        changes[field] = {
+          old: record[field] || "",
+          new: updates[field] || ""
+        };
+        hasChanges = true;
+      }
+    });
+
+    // Ghi nhận phiên bản nếu phát hiện thay đổi
+    if (hasChanges) {
+      const nextVersion = (record.currentVersion || 1) + 1;
+      const emrVersion = new EMRVersion({
+        medicalRecordId: record._id,
+        version: record.currentVersion || 1, // Lưu trạng thái hiện tại trước khi lên ver mới
+        modifiedBy: req.user?.profile?.name || "Bác sĩ điều trị",
+        changes,
+      });
+      await emrVersion.save();
+      
+      updates.currentVersion = nextVersion;
+    }
+
     // If setting to discharge, record discharge date
     if (updates.status === "Xuất viện" && record.status !== "Xuất viện") {
       updates.dischargeDate = new Date();
@@ -104,6 +134,16 @@ export const updateRecord = async (req, res) => {
   } catch (error) {
     console.error("Lỗi cập nhật bệnh án:", error);
     res.status(500).json({ message: "Không thể cập nhật bệnh án." });
+  }
+};
+
+export const getRecordVersions = async (req, res) => {
+  try {
+    const versions = await EMRVersion.find({ medicalRecordId: req.params.id }).sort({ version: -1 });
+    res.status(200).json({ status: "success", data: versions });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách lịch sử sửa đổi bệnh án:", error);
+    res.status(500).json({ message: "Không thể lấy lịch sử sửa đổi bệnh án." });
   }
 };
 

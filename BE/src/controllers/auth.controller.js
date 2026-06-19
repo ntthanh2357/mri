@@ -30,7 +30,7 @@ const generateRefreshToken = (userId, role, tokenVersion) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
+    const { email, password, role, name, phone, licenseUrl } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -72,7 +72,6 @@ export const register = async (req, res) => {
       profile: {
         name,
         photoUrl: "",
-        bhytNumber: role === "patient" ? bhytNumber || "" : "",
         licenseUrl: role === "doctor" ? licenseUrl || "" : "",
       },
     });
@@ -738,7 +737,7 @@ export const requestPhoneRegisterOtp = async (req, res) => {
 // @access  Public
 export const verifyPhoneRegisterOtp = async (req, res) => {
   try {
-    const { phone, otp, name, email, password, role, bhytNumber, licenseUrl } = req.body;
+    const { phone, otp, name, email, password, role, licenseUrl } = req.body;
 
     if (!phone || !otp || !name || !email || !password || !role) {
       res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin bắt buộc." });
@@ -788,7 +787,6 @@ export const verifyPhoneRegisterOtp = async (req, res) => {
       profile: {
         name,
         photoUrl: "",
-        bhytNumber: role === "patient" ? bhytNumber || "" : "",
         licenseUrl: role === "doctor" ? licenseUrl || "" : "",
       },
     });

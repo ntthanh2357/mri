@@ -61,8 +61,8 @@ const seedDatabase = async () => {
         profile: {
           name: "Bệnh nhân Tuấn Thành",
           photoUrl: "",
-          bhytNumber: "GD4797932200123",
           medicalId: "26025699",
+          // Ghi chú: BHYT không được lưu trữ trong hệ thống này
         },
       },
       {
@@ -282,18 +282,19 @@ const seedDatabase = async () => {
     await VitalSign.insertMany(mockVitals);
     console.log("Vitals seeded successfully.");
 
-    // 6. Phiếu xét nghiệm mẫu - ĐẦY ĐỦ theo phiếu thật
+    // 6. Phiếu xét nghiệm mẫu - Xét nghiệm trước phẫu thuật thần kinh (Pre-op Neuro)
+    // Lưu ý: Các xét nghiệm này được chỉ định cho bệnh nhân u não trước phẫu thuật
     const mockLabOrders = [
       {
         patient_id: patientUser._id,
         patient_gender: "Nam",
-        barcode: "LH-2601",
+        barcode: "LH-NEURO-2601",
         category: "HUYET_HOC",
         status: "COMPLETED",
         ordered_at: new Date(now.getTime() - 24 * 3600000),
         resulted_at: new Date(now.getTime() - 23 * 3600000),
+        // Mục đích: Đánh giá tổng trạng máu trước phẫu thuật u não
         results: [
-          // Kết quả tổng phân tích tế bào máu ngoại vi (mô phỏng theo phiếu FPT eHospital)
           { biomarker_code: "WBC", biomarker_name: "Bạch Cầu (WBC)", value_result: 6.8, unit: "10^9/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "4.0 - 10.0" },
           { biomarker_code: "NEU_PCT", biomarker_name: "Bạch cầu Trung tính % (NEU%)", value_result: 62.5, unit: "%", is_abnormal: false, abnormal_direction: "", reference_range_display: "50 - 75" },
           { biomarker_code: "NEU_ABS", biomarker_name: "Bạch cầu Trung tính # (NEU#)", value_result: 4.25, unit: "10^9/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "1.7 - 7.5" },
@@ -315,45 +316,43 @@ const seedDatabase = async () => {
       {
         patient_id: patientUser._id,
         patient_gender: "Nam",
-        barcode: "HS-2602",
+        barcode: "HS-NEURO-2602",
         category: "HOA_SINH",
         status: "COMPLETED",
         ordered_at: new Date(now.getTime() - 12 * 3600000),
         resulted_at: new Date(now.getTime() - 11 * 3600000),
+        // Mục đích: Hóa sinh đánh giá chức năng gan thận trước khi dùng thuốc chống phù não (Dexamethasone)
         results: [
-          // Kết quả Hóa sinh máu đầy đủ theo phiếu MS: 22/BV-02
           { biomarker_code: "UREA", biomarker_name: "Urê (Thận)", value_result: 6.0, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "2.5 - 7.5" },
           { biomarker_code: "GLU", biomarker_name: "Glucose (Đường huyết)", value_result: 7.2, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "3.9 - 6.4" },
           { biomarker_code: "CRE", biomarker_name: "Creatinin (Thận)", value_result: 95.0, unit: "μmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "62 - 120" },
-          { biomarker_code: "ACID_URIC", biomarker_name: "Acid Uric", value_result: 380.0, unit: "μmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "180 - 420" },
-          { biomarker_code: "BILI_TP", biomarker_name: "Bilirubin Toàn Phần", value_result: 12.5, unit: "μmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "<= 17" },
-          { biomarker_code: "CHOL", biomarker_name: "Cholesterol Toàn Phần", value_result: 5.8, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "3.9 - 5.2" },
-          { biomarker_code: "TRIG", biomarker_name: "Triglycerid", value_result: 2.1, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "0.46 - 1.88" },
-          { biomarker_code: "HDL", biomarker_name: "HDL-Cholesterol", value_result: 1.1, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: ">= 0.9" },
-          { biomarker_code: "LDL", biomarker_name: "LDL-Cholesterol", value_result: 3.9, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "<= 3.4" },
           { biomarker_code: "NA", biomarker_name: "Natri (Na+)", value_result: 138, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "135 - 145" },
           { biomarker_code: "K", biomarker_name: "Kali (K+)", value_result: 4.2, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "3.5 - 5.0" },
           { biomarker_code: "CL", biomarker_name: "Chloride (Cl-)", value_result: 101, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "98 - 106" },
-          { biomarker_code: "AST", biomarker_name: "AST (GOT) - Men gan", value_result: 45.0, unit: "U/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "<= 37" },
-          { biomarker_code: "ALT", biomarker_name: "ALT (GPT) - Men gan", value_result: 38.0, unit: "U/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "<= 40" },
-          { biomarker_code: "GGT", biomarker_name: "GGT (Gamma-GT)", value_result: 55.0, unit: "U/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "11 - 50" },
+          { biomarker_code: "CA", biomarker_name: "Calci (Ca2+)", value_result: 2.35, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "2.15 - 2.6" },
+          { biomarker_code: "AST", biomarker_name: "AST (GOT) - Men gan", value_result: 32.0, unit: "U/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "<= 37" },
+          { biomarker_code: "ALT", biomarker_name: "ALT (GPT) - Men gan", value_result: 28.0, unit: "U/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "<= 40" },
           { biomarker_code: "PROTEIN_TP", biomarker_name: "Protein Toàn Phần", value_result: 72.0, unit: "g/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "65 - 82" },
           { biomarker_code: "ALBUMIN", biomarker_name: "Albumin", value_result: 42.0, unit: "g/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "35 - 50" },
+          // Đông máu - quan trọng trước phẫu thuật thần kinh
+          { biomarker_code: "FIBRINOGEN", biomarker_name: "Fibrinogen (Đông máu)", value_result: 3.1, unit: "g/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "2 - 4" },
         ]
       },
       {
+        // Xét nghiệm chưa có kết quả - chờ xử lý (Pre-op pending)
         patient_id: patientUser._id,
         patient_gender: "Nam",
-        barcode: "LIS-9999",
+        barcode: "PREOP-NEURO-001",
         category: "HOA_SINH",
         status: "PENDING",
         ordered_at: new Date(now.getTime() - 2 * 3600000),
         results: []
       },
       {
+        // Xét nghiệm đông máu trước mổ - chờ kết quả
         patient_id: patientUser._id,
         patient_gender: "Nam",
-        barcode: "LIS-HH-0001",
+        barcode: "COAG-NEURO-001",
         category: "HUYET_HOC",
         status: "PENDING",
         ordered_at: new Date(now.getTime() - 1 * 3600000),
@@ -361,7 +360,7 @@ const seedDatabase = async () => {
       }
     ];
 
-    console.log("Inserting lab orders...");
+    console.log("Inserting lab orders (Neurology/Pre-op)...");
     await LabOrder.insertMany(mockLabOrders);
     console.log("Lab orders seeded successfully.");
 

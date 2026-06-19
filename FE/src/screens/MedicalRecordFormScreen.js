@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,6 +12,29 @@ import {
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useMedicalRecordForm } from '../controllers/useMedicalRecordForm';
+import { apiRequest } from '../utils/apiClient';
+
+const extractMedications = (text) => {
+  if (!text) return [];
+  const words = text.toLowerCase().split(/[\s,;\n\-\+•·]+/);
+  const found = [];
+  const candidates = ['keppra', 'depakine', 'dexamethasone', 'donepezil', 'diazepam', 'phenobarbital', 'tegretol'];
+  candidates.forEach(cand => {
+    if (words.includes(cand) || text.toLowerCase().includes(cand)) {
+      found.push(cand);
+    }
+  });
+  return found;
+};
+
+const extractOrders = (formData) => {
+  const text = Object.values(formData).join(' ').toLowerCase();
+  const found = [];
+  if (text.includes('mri') || text.includes('cản từ') || text.includes('gadolinium') || text.includes('tương phản')) {
+    found.push('MRI sọ não có cản quang');
+  }
+  return found;
+};
 
 const FormField = ({ label, value, onChangeText, placeholder, multiline, keyboardType, half }) => (
   <View style={[styles.fieldContainer, half && styles.fieldHalf]}>
@@ -60,6 +83,42 @@ const MedicalRecordFormScreen = ({ navigation }) => {
   const toggleSection = (key) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const [warnings, setWarnings] = useState([]);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const meds = extractMedications(formData.huongDieuTri?.noiKhoaCapCuu || '');
+    const orders = extractOrders(formData);
+
+    if (meds.length === 0 && orders.length === 0) {
+      setWarnings([]);
+      return;
+    }
+
+    const delayDebounceId = setTimeout(async () => {
+      setChecking(true);
+      try {
+        const res = await apiRequest('/api/drugs/check-prescription', {
+          method: 'POST',
+          body: JSON.stringify({
+            patientId: 'PT-001',
+            medications: meds,
+            orders,
+          }),
+        });
+        if (res && res.data) {
+          setWarnings(res.data.warnings || []);
+        }
+      } catch (err) {
+        console.log('Error checking clinical safety in medical record form:', err);
+      } finally {
+        setChecking(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(delayDebounceId);
+  }, [formData.huongDieuTri?.noiKhoaCapCuu, formData.canLamSang]);
 
   if (loading) {
     return (
@@ -446,6 +505,25 @@ const MedicalRecordFormScreen = ({ navigation }) => {
             />
           </Section>
 
+          {/* Cảnh báo lâm sàng (Clinical Warnings Alert Banner) */}
+          {checking && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8, paddingHorizontal: 4 }}>
+              <ActivityIndicator size="small" color="#0D9488" />
+              <Text style={{ fontSize: 12, color: '#0D9488', marginLeft: 8 }}>Đang kiểm tra an toàn kê đơn...</Text>
+            </View>
+          )}
+
+          {warnings.length > 0 && (
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningBannerTitle}>⚠️ Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+              {warnings.map((w, idx) => (
+                <Text key={idx} style={styles.warningItem}>
+                  • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})
+                </Text>
+              ))}
+            </View>
+          )}
+
           {/* Action buttons */}
           <View style={styles.actionsRow}>
             <TouchableOpacity style={styles.resetButton} onPress={resetForm} disabled={saving}>
@@ -628,6 +706,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  warningBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 12,
+  },
+  warningBannerTitle: {
+    color: '#991B1B',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  warningItem: {
+    color: '#7F1D1D',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
   },
 });
 

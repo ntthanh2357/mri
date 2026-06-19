@@ -46,6 +46,16 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
+    wardId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    departmentId: {
+      type: String,
+      default: "KNT",
+      trim: true,
+    },
     profile: {
       name: {
         type: String,
@@ -56,10 +66,7 @@ const userSchema = new Schema(
         type: String,
         default: "",
       },
-      bhytNumber: {
-        type: String,
-        default: "",
-      },
+
       medicalId: {
         type: String,
         default: "",

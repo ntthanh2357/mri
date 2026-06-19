@@ -13,6 +13,29 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import Config from '../constants/config';
+import { apiRequest } from '../utils/apiClient';
+
+const extractMedications = (text) => {
+  if (!text) return [];
+  const words = text.toLowerCase().split(/[\s,;\n\-\+•·]+/);
+  const found = [];
+  const candidates = ['keppra', 'depakine', 'dexamethasone', 'donepezil', 'diazepam', 'phenobarbital', 'tegretol'];
+  candidates.forEach(cand => {
+    if (words.includes(cand) || text.toLowerCase().includes(cand)) {
+      found.push(cand);
+    }
+  });
+  return found;
+};
+
+const extractOrders = (formData) => {
+  const text = Object.values(formData).join(' ').toLowerCase();
+  const found = [];
+  if (text.includes('mri') || text.includes('cản từ') || text.includes('gadolinium') || text.includes('tương phản')) {
+    found.push('MRI sọ não có cản quang');
+  }
+  return found;
+};
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 // field types:
@@ -47,7 +70,6 @@ const DOC_SCHEMAS = {
       { key: 'doiTuong', label: 'Đối tượng', type: 'radio', options: ['BHYT', 'Thu phí', 'Miễn phí'] },
       { key: 'danhSachDichVu', label: 'Danh sách dịch vụ (tên · đơn giá · SL)', multiline: true },
       { key: 'tongChiPhi', label: 'Tổng chi phí (VNĐ)', keyboardType: 'numeric' },
-      { key: 'bhytChiTra', label: 'BHYT chi trả (VNĐ)', keyboardType: 'numeric' },
       { key: 'bnThanhToan', label: 'Bệnh nhân thanh toán (VNĐ)', keyboardType: 'numeric' },
       { key: 'soTienBangChu', label: 'Số tiền bằng chữ' },
     ],
@@ -98,7 +120,6 @@ const DOC_SCHEMAS = {
       { key: 'soHoSo', label: 'Số hồ sơ / Số bệnh án' },
       { key: 'ngaySinh', label: 'Ngày/tháng/năm sinh' },
       { key: 'gioiTinh', label: 'Giới tính', type: 'radio', options: ['Nam', 'Nữ'] },
-      { key: 'soBHYT', label: 'Mã số BHXH / Thẻ BHYT' },
       { key: 'vaoVienLuc', label: 'Vào viện lúc (giờ phút ngày tháng năm)' },
       { key: 'raVienLuc', label: 'Ra viện lúc (giờ phút ngày tháng năm)' },
       { key: 'chanDoan', label: 'Chẩn đoán', multiline: true },
@@ -113,7 +134,6 @@ const DOC_SCHEMAS = {
       { key: 'noiChuyenDen', label: 'Kính gửi / Nơi chuyển đến' },
       { key: 'namSinh', label: 'Năm sinh' },
       { key: 'gioiTinh', label: 'Giới tính', type: 'radio', options: ['Nam', 'Nữ'] },
-      { key: 'soBHYT', label: 'Số thẻ BHYT (thời hạn)' },
       { key: 'daKhamTai', label: 'Đã điều trị tại (cơ sở · cấp · từ ngày đến ngày)', multiline: true },
       { key: 'dauHieuLamSang', label: 'Tóm tắt dấu hiệu lâm sàng', multiline: true },
       { key: 'ketQuaCLS', label: 'Kết quả xét nghiệm / cận lâm sàng chính', multiline: true },
@@ -350,6 +370,48 @@ const DocumentDetailScreen = ({ route, navigation }) => {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [warnings, setWarnings] = useState([]);
+  const [checking, setChecking] = useState(false);
+
+  const patientId = route.params.patientId || 'PT-001';
+
+  useEffect(() => {
+    if (doc?.docKey !== 'toa_thuoc' && doc?.docKey !== 'mri' && doc?.docKey !== 'ct_scan' && doc?.docKey !== 'phieu_chi_dinh') {
+      return;
+    }
+
+    const meds = extractMedications(formData.danhSachThuoc || '');
+    const orders = extractOrders(formData);
+
+    if (meds.length === 0 && orders.length === 0) {
+      setWarnings([]);
+      return;
+    }
+
+    const delayDebounceId = setTimeout(async () => {
+      setChecking(true);
+      try {
+        const res = await apiRequest('/api/drugs/check-prescription', {
+          method: 'POST',
+          body: JSON.stringify({
+            patientId,
+            medications: meds,
+            orders,
+          }),
+        });
+        if (res && res.data) {
+          setWarnings(res.data.warnings || []);
+        }
+      } catch (err) {
+        console.log('Error checking clinical safety:', err);
+      } finally {
+        setChecking(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(delayDebounceId);
+  }, [formData, doc?.docKey, patientId]);
 
   useEffect(() => {
     if (!successMsg) return;
@@ -617,6 +679,25 @@ const DocumentDetailScreen = ({ route, navigation }) => {
         {editingManualDoc ? 'Chỉnh sửa form điền tay' : (schema?.title || doc?.label)}
       </Text>
       {fields.map(renderField)}
+      
+      {checking && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
+          <ActivityIndicator size="small" color="#0D9488" />
+          <Text style={{ fontSize: 12, color: '#0D9488', marginLeft: 8 }}>Đang kiểm tra an toàn kê đơn...</Text>
+        </View>
+      )}
+
+      {warnings.length > 0 && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningBannerTitle}>⚠️ Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+          {warnings.map((w, idx) => (
+            <Text key={idx} style={styles.warningItem}>
+              • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})
+            </Text>
+          ))}
+        </View>
+      )}
+
       {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
       <TouchableOpacity
         style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
@@ -814,6 +895,26 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { backgroundColor: '#94A3B8' },
   saveBtnText: { fontSize: 15, color: '#FFFFFF', fontWeight: 'bold' },
+  warningBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 12,
+  },
+  warningBannerTitle: {
+    color: '#991B1B',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  warningItem: {
+    color: '#7F1D1D',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
 });
 
 export default DocumentDetailScreen;

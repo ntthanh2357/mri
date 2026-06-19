@@ -21,11 +21,7 @@ const medicalRecordSchema = new Schema(
       type: Number,
       required: true,
     },
-    bhytNumber: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+
     admissionType: {
       type: String,
       enum: ["Ngoại trú", "Nội trú", "Cấp cứu"],
@@ -67,6 +63,20 @@ const medicalRecordSchema = new Schema(
       type: String,
       enum: ["Chưa duyệt", "Đã duyệt", "Đã ký số"],
       default: "Chưa duyệt",
+    },
+    allergies: [
+      {
+        type: String,
+      },
+    ],
+    wardId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    currentVersion: {
+      type: Number,
+      default: 1,
     },
   },
   {

@@ -517,6 +517,7 @@ const PatientRecordsScreen = ({ navigation }) => {
   const handleDocPress = (visitId, slot, savedDocs) => {
     navigation.navigate('DocumentDetail', {
       visitId,
+      patientId: identity?.userId || identity?._id || 'PT-001',
       doc: { ...slot },
       savedDocs: savedDocs || [],
       onUpload: uploadDoc,
@@ -602,16 +603,6 @@ const PatientRecordsScreen = ({ navigation }) => {
                 <Text style={styles.identityValue}>
                   {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
                 </Text>
-              </View>
-            </View>
-            <View style={styles.identityRow}>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>CCCD</Text>
-                <Text style={styles.identityValue}>{identity?.cccd || '—'}</Text>
-              </View>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>Số BHYT</Text>
-                <Text style={styles.identityValue}>{identity?.bhytNumber || '—'}</Text>
               </View>
             </View>
             <Text style={styles.identityEditHint}>Nhấn để chỉnh sửa thông tin →</Text>

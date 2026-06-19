@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,8 +10,10 @@ import {
   Image,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Config from '../constants/config';
+import { get } from '../services/api.service';
 
 // Mock Data for the medical portal
 const servicesData = [
@@ -86,6 +88,37 @@ const WelcomeScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const data = await get('/auth/me');
+        if (data && data.user) {
+          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+          navigation.replace(destination, { user: data.user });
+          return;
+        }
+      } catch (err) {
+        console.log('Welcome auto-login check failed or no token:', err.message);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  if (checkingAuth) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
+        <ActivityIndicator size="large" color="#15803D" />
+        <Text style={{ marginTop: 12, color: '#475569', fontSize: 14, fontWeight: '500' }}>
+          Đang xác thực phiên làm việc...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   const handleBooking = () => {
     Alert.alert('Đặt lịch hẹn', 'Tính năng đăng ký khám trực tuyến đang được đồng bộ. Vui lòng đăng nhập hoặc liên hệ hotline.');

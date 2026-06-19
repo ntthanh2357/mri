@@ -67,7 +67,7 @@ export const getResultById = async (req, res) => {
 export const createImagingResult = async (req, res) => {
   try {
     // 1. Check roles
-    if (req.user.role !== "doctor" && req.user.role !== "admin") {
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
@@ -135,7 +135,7 @@ export const createImagingResult = async (req, res) => {
 // @access  Private (Doctor, Admin only)
 export const getPatientResultsByMedicalId = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin") {
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
     const { medicalId } = req.params;

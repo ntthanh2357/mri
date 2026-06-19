@@ -9,7 +9,7 @@ const patientProfileSchema = new Schema(
       unique: true,
       index: true,
     },
-    cccd: { type: String, trim: true, default: "" },
+
     dateOfBirth: { type: Date, default: null },
     gender: {
       type: String,

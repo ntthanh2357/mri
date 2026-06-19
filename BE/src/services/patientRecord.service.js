@@ -13,7 +13,7 @@ export const getOrCreateProfile = async (userId) => {
 };
 
 export const updateProfile = async (userId, data) => {
-  const allowed = ["cccd", "dateOfBirth", "gender", "phone", "address"];
+  const allowed = ["dateOfBirth", "gender", "phone", "address"];
   const update = {};
   allowed.forEach((key) => {
     if (data[key] !== undefined) update[key] = data[key];

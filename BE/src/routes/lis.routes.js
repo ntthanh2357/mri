@@ -2,14 +2,16 @@ import { Router } from "express";
 import { Biomarker } from "../models/biomarker.model.js";
 import { receiveLisResults } from "../controllers/lis.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-// Endpoint: POST /api/lis/receiver — Tiếp nhận kết quả từ máy LIS
-router.post("/receiver", receiveLisResults);
+router.use(protect);
 
-// Endpoint: GET /api/lis/biomarkers — Lấy danh mục chỉ số xét nghiệm (có thể lọc theo category)
-// Query: ?category=HOA_SINH | ?category=HUYET_HOC
+// Endpoint: POST /api/lis/receiver — Tiếp nhận kết quả từ máy LIS (Chỉ cho Doctor, Kỹ thuật viên, Admin)
+router.post("/receiver", checkRole(["doctor", "technician", "admin"]), receiveLisResults);
+
+// Endpoint: GET /api/lis/biomarkers — Lấy danh mục chỉ số xét nghiệm (mọi user đã đăng nhập đều xem được)
 router.get("/biomarkers", async (req, res) => {
   try {
     const { category } = req.query;

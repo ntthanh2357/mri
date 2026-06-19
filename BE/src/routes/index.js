@@ -5,6 +5,7 @@ import emrRoutes from "./emr.routes.js";
 
 import patientRoutes from "./patient.routes.js";
 import lisRoutes from "./lis.routes.js";
+import drugRoutes from "./drug.routes.js";
 
 import patientRecordRoutes from "./patientRecord.routes.js";
 import imagingRoutes from "./imaging.routes.js";
@@ -18,6 +19,7 @@ router.use("/api/v1/patient", patientRecordRoutes);
 // Mount patient and LIS simulator receiver routes
 router.use("/api/patients", patientRoutes);
 router.use("/api/lis", lisRoutes);
+router.use("/api/drugs", drugRoutes);
 
 // Mount admin routes for backoffice and compliance features
 router.use("/admin", adminRoutes);

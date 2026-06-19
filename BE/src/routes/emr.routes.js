@@ -11,8 +11,9 @@ import {
   getConsents,
   createConsent,
   signConsent,
+  getRecordVersions,
 } from "../controllers/emr.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -20,26 +21,29 @@ const router = Router();
 router.use(protect);
 
 router.route("/records")
-  .get(getRecords)
-  .post(createRecord);
+  .get(checkRole(["doctor", "nurse", "receptionist", "admin"]), getRecords)
+  .post(checkRole(["doctor", "receptionist", "admin"]), createRecord);
 
 router.route("/records/:id")
-  .get(getRecordById)
-  .put(updateRecord);
+  .get(checkRole(["doctor", "nurse", "receptionist", "admin"]), getRecordById)
+  .put(checkRole(["doctor", "receptionist", "admin"]), updateRecord);
 
 router.route("/records/:id/care-sheets")
-  .get(getCareSheets)
-  .post(createCareSheet);
+  .get(checkRole(["doctor", "nurse", "admin"]), getCareSheets)
+  .post(checkRole(["nurse", "admin"]), createCareSheet);
 
 router.route("/records/:id/consultations")
-  .get(getConsultations)
-  .post(createConsultation);
+  .get(checkRole(["doctor", "admin"]), getConsultations)
+  .post(checkRole(["doctor", "admin"]), createConsultation);
 
 router.route("/records/:id/consents")
-  .get(getConsents)
-  .post(createConsent);
+  .get(checkRole(["doctor", "patient", "admin"]), getConsents)
+  .post(checkRole(["doctor", "admin"]), createConsent);
 
 router.route("/consents/:consentId/sign")
-  .put(signConsent);
+  .put(checkRole(["doctor", "patient", "admin"]), signConsent);
+
+router.route("/records/:id/versions")
+  .get(checkRole(["doctor", "admin"]), getRecordVersions);
 
 export default router;

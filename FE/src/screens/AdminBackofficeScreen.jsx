@@ -22,6 +22,7 @@ import AdminUsersView from '../components/AdminUsersView';
 import AdminDoctorsView from '../components/AdminDoctorsView';
 import AdminDatasetsView from '../components/AdminDatasetsView';
 import AdminAuditLogsView from '../components/AdminAuditLogsView';
+import { setAuthToken } from '../services/api.service';
 
 const AdminBackofficeScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('metrics');
@@ -45,7 +46,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
   };
 
   // Logout function
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await setAuthToken('');
     navigation.replace('Login');
   };
 

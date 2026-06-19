@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { navigationRef } from '../utils/navigationRef';
+import { Platform } from 'react-native';
+import { navigationRef, navigateTo } from '../utils/navigationRef';
+import { setAuthToken } from '../services/api.service';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -27,6 +29,39 @@ import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    let timeoutId;
+    const TIMEOUT_MS = 15 * 60 * 1000; // 15 phút
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleSessionTimeout, TIMEOUT_MS);
+    };
+
+    const handleSessionTimeout = async () => {
+      console.log('Session timed out due to inactivity.');
+      await setAuthToken('');
+      navigateTo('Login');
+      alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
+    };
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    events.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, []);
+
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator

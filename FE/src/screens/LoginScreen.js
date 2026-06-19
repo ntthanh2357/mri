@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native';
 import Config from '../constants/config';
-import { post, setAuthToken } from '../services/api.service';
+import { post, setAuthToken, get } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
 
 const LoginScreen = ({ navigation }) => {
@@ -26,6 +26,34 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const data = await get('/auth/me');
+        if (data && data.user) {
+          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+          navigation.replace(destination, { user: data.user });
+          return;
+        }
+      } catch (err) {
+        console.log('Login auto-login check failed or no token:', err.message);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  if (checkingAuth) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
+        <ActivityIndicator size="large" color="#15803D" />
+      </SafeAreaView>
+    );
+  }
 
   // Phone Login OTP states
   const [loginMethod, setLoginMethod] = useState('password'); // 'password' or 'otp'

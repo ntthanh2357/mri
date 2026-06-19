@@ -1,11 +1,18 @@
 import * as service from "../services/patientRecord.service.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
+const getTargetPatientId = (req) => {
+  if (req.user && req.user.role !== 'patient') {
+    return req.query.patientId || req.body.patientId || req.user.id;
+  }
+  return req.user ? req.user.id : null;
+};
+
 // ── Identity ──────────────────────────────────────────────────────────────────
 
 export const getIdentity = async (req, res, next) => {
   try {
-    const profile = await service.getOrCreateProfile(req.user.id);
+    const profile = await service.getOrCreateProfile(getTargetPatientId(req));
     return successResponse(res, profile);
   } catch (err) {
     next(err);
@@ -14,7 +21,7 @@ export const getIdentity = async (req, res, next) => {
 
 export const updateIdentity = async (req, res, next) => {
   try {
-    const profile = await service.updateProfile(req.user.id, req.body);
+    const profile = await service.updateProfile(getTargetPatientId(req), req.body);
     return successResponse(res, profile, "Cập nhật thông tin thành công.");
   } catch (err) {
     next(err);
@@ -25,7 +32,7 @@ export const updateIdentity = async (req, res, next) => {
 
 export const listVisits = async (req, res, next) => {
   try {
-    const visits = await service.listVisits(req.user.id);
+    const visits = await service.listVisits(getTargetPatientId(req));
     return successResponse(res, visits);
   } catch (err) {
     next(err);
@@ -38,7 +45,7 @@ export const createVisit = async (req, res, next) => {
     if (!facility || !visitType) {
       return errorResponse(res, "Thiếu trường bắt buộc: facility, visitType.", 400);
     }
-    const visit = await service.createVisit(req.user.id, req.body);
+    const visit = await service.createVisit(getTargetPatientId(req), req.body);
     return successResponse(res, visit, "Đã tạo lượt khám.", 201);
   } catch (err) {
     next(err);
@@ -47,7 +54,7 @@ export const createVisit = async (req, res, next) => {
 
 export const getVisit = async (req, res, next) => {
   try {
-    const visit = await service.getVisit(req.user.id, req.params.visitId);
+    const visit = await service.getVisit(getTargetPatientId(req), req.params.visitId);
     return successResponse(res, visit);
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -57,7 +64,7 @@ export const getVisit = async (req, res, next) => {
 
 export const updateVisit = async (req, res, next) => {
   try {
-    const visit = await service.updateVisit(req.user.id, req.params.visitId, req.body);
+    const visit = await service.updateVisit(getTargetPatientId(req), req.params.visitId, req.body);
     return successResponse(res, visit, "Đã cập nhật lượt khám.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -67,7 +74,7 @@ export const updateVisit = async (req, res, next) => {
 
 export const deleteVisit = async (req, res, next) => {
   try {
-    await service.deleteVisit(req.user.id, req.params.visitId);
+    await service.deleteVisit(getTargetPatientId(req), req.params.visitId);
     return successResponse(res, null, "Đã xóa lượt khám.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -86,7 +93,7 @@ export const uploadDocument = async (req, res, next) => {
       return errorResponse(res, "Thiếu trường: docKey, groupKey, label.", 400);
     }
 
-    const visit = await service.addDocumentUpload(req.user.id, req.params.visitId, {
+    const visit = await service.addDocumentUpload(getTargetPatientId(req), req.params.visitId, {
       docKey,
       groupKey,
       label,
@@ -109,7 +116,7 @@ export const saveManualDocument = async (req, res, next) => {
       return errorResponse(res, "Thiếu trường: docKey, groupKey, label, manualData.", 400);
     }
 
-    const visit = await service.addDocumentManual(req.user.id, req.params.visitId, {
+    const visit = await service.addDocumentManual(getTargetPatientId(req), req.params.visitId, {
       docKey,
       groupKey,
       label,
@@ -125,7 +132,7 @@ export const saveManualDocument = async (req, res, next) => {
 export const deleteDocument = async (req, res, next) => {
   try {
     const visit = await service.deleteDocument(
-      req.user.id,
+      getTargetPatientId(req),
       req.params.visitId,
       req.params.docId
     );

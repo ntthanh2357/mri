@@ -31,6 +31,7 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [careSheets, setCareSheets] = useState([]);
   const [consultations, setConsultations] = useState([]);
   const [consents, setConsents] = useState([]);
+  const [versions, setVersions] = useState([]);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -55,16 +56,18 @@ const EMRDashboardScreen = ({ navigation }) => {
   const fetchRecordDetails = async (recordId) => {
     setLoading(true);
     try {
-      const [careData, consultData, consentData] = await Promise.all([
+      const [careData, consultData, consentData, versionData] = await Promise.all([
         apiRequest(`/emr/records/${recordId}/care-sheets`),
         apiRequest(`/emr/records/${recordId}/consultations`),
         apiRequest(`/emr/records/${recordId}/consents`),
+        apiRequest(`/emr/records/${recordId}/versions`),
       ]);
       setCareSheets(careData.data || []);
       setConsultations(consultData.data || []);
       setConsents(consentData.data || []);
+      setVersions(versionData.data || []);
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tải chi tiết bệnh án.');
+      console.log('Error loading details:', error.message);
     } finally {
       setLoading(false);
     }
@@ -200,6 +203,12 @@ const EMRDashboardScreen = ({ navigation }) => {
                   active={activeTab === 'consent'}
                   onPress={() => setActiveTab('consent')}
                 />
+                <SidebarItem
+                  icon="⏳"
+                  label="Lịch sử sửa đổi"
+                  active={activeTab === 'versions'}
+                  onPress={() => setActiveTab('versions')}
+                />
               </View>
               {selectedRecord && (
                 <View style={styles.selectedRecordBox}>
@@ -240,6 +249,11 @@ const EMRDashboardScreen = ({ navigation }) => {
                   label="Cam đoan"
                   active={activeTab === 'consent'}
                   onPress={() => setActiveTab('consent')}
+                />
+                <MobileTab
+                  label="Lịch sử"
+                  active={activeTab === 'versions'}
+                  onPress={() => setActiveTab('versions')}
                 />
               </View>
             )}
@@ -299,6 +313,13 @@ const EMRDashboardScreen = ({ navigation }) => {
                       setModalType('newConsent');
                       setIsModalVisible(true);
                     }}
+                  />
+                )}
+
+                {activeTab === 'versions' && (
+                  <VersionTab
+                    versions={versions}
+                    selectedRecord={selectedRecord}
                   />
                 )}
               </ScrollView>
@@ -525,6 +546,60 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
               <View style={styles.signatureRow}>
                 <StatusBadge status={c.doctorSigned ? 'Đã ký' : 'Chưa ký'} color="blue" />
                 <StatusBadge status={c.patientSigned ? 'Đã ký' : 'Chưa ký'} color="green" />
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+    )}
+  </View>
+);
+
+const VersionTab = ({ versions, selectedRecord }) => (
+  <View style={styles.tabContainer}>
+    <View style={styles.tabHeader}>
+      <Text style={styles.tabTitle}>⏳ Lịch sử sửa đổi bệnh án (Audit Trail)</Text>
+    </View>
+
+    {!selectedRecord ? (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyIcon}>👈</Text>
+        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+      </View>
+    ) : (
+      <View style={styles.listContainer}>
+        {versions.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📭</Text>
+            <Text style={styles.emptyText}>Chưa có bản ghi nhận chỉnh sửa nào (Phiên bản đầu tiên v1)</Text>
+          </View>
+        ) : (
+          versions.map(v => (
+            <View key={v._id || v.id} style={styles.itemCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.itemTitle, { color: '#0D9488' }]}>Phiên bản EMR v{v.version}</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: 'bold' }}>
+                  {new Date(v.modifiedAt).toLocaleString('vi-VN')}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600', marginBottom: 8 }}>
+                Người sửa đổi: {v.modifiedBy}
+              </Text>
+              <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, gap: 8 }}>
+                <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase' }}>Chi tiết thay đổi:</Text>
+                {Object.keys(v.changes || {}).map(field => (
+                  <View key={field} style={{ borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E293B', textTransform: 'capitalize' }}>
+                      {field === 'diagnosis' ? 'Chẩn đoán' : field === 'treatmentPlan' ? 'Kế hoạch điều trị' : field}:
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#EF4444', textDecorationLine: 'line-through', marginTop: 2 }}>
+                      Cũ: {v.changes[field].old || '(Trống)'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#22C55E', fontWeight: '500', marginTop: 1 }}>
+                      Mới: {v.changes[field].new || '(Trống)'}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
           ))
