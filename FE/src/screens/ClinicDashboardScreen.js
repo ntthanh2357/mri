@@ -225,6 +225,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+      </ScrollView>
         <Modal
           visible={showAddUserModal}
           transparent={true}
