@@ -30,7 +30,7 @@ const generateRefreshToken = (userId, role, tokenVersion) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, licenseUrl, address } = req.body;
+    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -38,7 +38,7 @@ export const register = async (req, res) => {
       return;
     }
 
-    if (!["patient", "doctor", "admin", "receptionist", "technician", "nurse"].includes(role)) {
+    if (!["patient", "doctor", "admin"].includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
     }
@@ -62,36 +62,18 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Check if registration request is performed by a verified admin (hospital manager)
-    let isCreatedByAdmin = false;
-    if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
-      try {
-        const token = req.headers.authorization.split(" ")[1];
-        const secret = process.env.JWT_SECRET || "access_secret";
-        const decoded = jwt.verify(token, secret);
-        const creator = await User.findById(decoded.id).select("role isLocked isVerified").lean();
-        if (creator && creator.role === "admin" && creator.isVerified && !creator.isLocked) {
-          isCreatedByAdmin = true;
-        }
-      } catch (err) {
-        // Ignore token decode errors
-      }
-    }
-
-    const isVerified = isCreatedByAdmin ? true : (["patient", "receptionist", "technician", "nurse"].includes(role) ? true : false);
-
     // Create new user
     const newUser = new User({
       email,
       phone: phone ? hashPhone(phone) : undefined,
       passwordHash,
       role,
-      isVerified,
+      isVerified: role === "patient" ? true : false, // Patients are auto-verified, Doctors need admin verification for CCHN
       profile: {
         name,
         photoUrl: "",
+        bhytNumber: role === "patient" ? bhytNumber || "" : "",
         licenseUrl: role === "doctor" ? licenseUrl || "" : "",
-        address: address || "",
       },
     });
 
@@ -491,12 +473,12 @@ export const ssoLogin = async (req, res) => {
       }
 
       const zaloData = await zaloResponse.json();
-      
+
       // Safety check: Zalo Graph API sometimes returns 200 OK with error body
       if (zaloData.error || !zaloData.id) {
-        res.status(400).json({ 
-          message: "Xác thực Zalo thất bại từ Zalo Server.", 
-          error: zaloData.message || "Invalid Zalo Token response" 
+        res.status(400).json({
+          message: "Xác thực Zalo thất bại từ Zalo Server.",
+          error: zaloData.message || "Invalid Zalo Token response"
         });
         return;
       }
@@ -599,7 +581,7 @@ export const changePassword = async (req, res) => {
     // Hash new password
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
-    
+
     // Optional: Increment tokenVersion to logout of all other sessions when password changes
     user.tokenVersion = (user.tokenVersion || 0) + 1;
 
@@ -699,253 +681,5 @@ export const verifyOtp = async (req, res) => {
   } catch (error) {
     console.error("Lỗi xác thực OTP:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
-  }
-};
-
-// @desc    Request OTP for Phone registration
-// @route   POST /auth/phone-register-request
-// @access  Public
-export const requestPhoneRegisterOtp = async (req, res) => {
-  try {
-    const { phone } = req.body;
-
-    if (!phone) {
-      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
-      return;
-    }
-
-    const phoneRegex = /^[0-9]{10}$/;
-    if (!phoneRegex.test(phone)) {
-      res.status(400).json({ message: "Số điện thoại phải chứa đúng 10 chữ số." });
-      return;
-    }
-
-    // Check if user already exists (using hashed phone)
-    const userExists = await User.findOne({ phone: hashPhone(phone) });
-    if (userExists) {
-      res.status(400).json({ message: "Số điện thoại này đã được đăng ký sử dụng." });
-      return;
-    }
-
-    // Generate 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiration
-
-    // Upsert OTP in database (using hashed phone)
-    await Otp.findOneAndUpdate(
-      { phone: hashPhone(phone) },
-      { otpCode, otpExpires },
-      { upsert: true, new: true }
-    );
-
-    // Print OTP in terminal console for easy local testing
-    console.log(`\n\x1b[33m[SMS OTP MOCK] Mã OTP đăng ký của số điện thoại ${phone} là: ${otpCode}\x1b[0m\n`);
-
-    res.status(200).json({
-      message: "Mã OTP đã được tạo thành công (Xem tại terminal của Server).",
-      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
-    });
-  } catch (error) {
-    console.error("Lỗi yêu cầu OTP đăng ký:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP đăng ký.", error: error.message });
-  }
-};
-
-// @desc    Verify Phone OTP and register user
-// @route   POST /auth/phone-register-verify
-// @access  Public
-export const verifyPhoneRegisterOtp = async (req, res) => {
-  try {
-    const { phone, otp, name, email, password, role, licenseUrl } = req.body;
-
-    if (!phone || !otp || !name || !email || !password || !role) {
-      res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin bắt buộc." });
-      return;
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      res.status(400).json({ message: "Địa chỉ email không đúng định dạng chuẩn." });
-      return;
-    }
-
-    // Check if email already exists
-    const emailExists = await User.findOne({ email });
-    if (emailExists) {
-      res.status(400).json({ message: "Email này đã được đăng ký sử dụng." });
-      return;
-    }
-
-    // Find and check OTP (using hashed phone)
-    const otpDoc = await Otp.findOne({ phone: hashPhone(phone) });
-    if (!otpDoc || otpDoc.otpCode !== otp) {
-      res.status(400).json({ message: "Mã OTP không chính xác." });
-      return;
-    }
-
-    if (otpDoc.otpExpires < new Date()) {
-      res.status(400).json({ message: "Mã OTP đã hết hạn." });
-      return;
-    }
-
-    // Remove OTP document
-    await Otp.deleteOne({ _id: otpDoc._id });
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Create user (using hashed phone)
-    const newUser = new User({
-      email: email.toLowerCase(),
-      phone: hashPhone(phone),
-      passwordHash,
-      role,
-      isVerified: true, // Phone OTP is verified successfully
-      profile: {
-        name,
-        photoUrl: "",
-        licenseUrl: role === "doctor" ? licenseUrl || "" : "",
-      },
-    });
-
-    await newUser.save();
-
-    // Automatically log user in
-    const accessToken = generateAccessToken(newUser._id.toString(), newUser.role, newUser.tokenVersion || 0);
-    const refreshToken = generateRefreshToken(newUser._id.toString(), newUser.role, newUser.tokenVersion || 0);
-
-    res.status(201).json({
-      message: "Xác minh OTP và đăng ký tài khoản thành công!",
-      accessToken,
-      refreshToken,
-      user: {
-        id: newUser._id,
-        email: newUser.email,
-        role: newUser.role,
-        isVerified: newUser.isVerified,
-        profile: newUser.profile,
-      },
-    });
-  } catch (error) {
-    console.error("Lỗi xác thực OTP đăng ký:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng ký tài khoản.", error: error.message });
-  }
-};
-
-// @desc    Request OTP for Phone Login
-// @route   POST /auth/phone-login-request
-// @access  Public
-export const requestPhoneLoginOtp = async (req, res) => {
-  try {
-    const { phone } = req.body;
-
-    if (!phone) {
-      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
-      return;
-    }
-
-    // Find user by phone (using hashed phone)
-    const user = await User.findOne({ phone: hashPhone(phone) });
-    if (!user) {
-      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký." });
-      return;
-    }
-
-    // Generate 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiration
-
-    // Upsert OTP in database (using hashed phone)
-    await Otp.findOneAndUpdate(
-      { phone: hashPhone(phone) },
-      { otpCode, otpExpires },
-      { upsert: true, new: true }
-    );
-
-    // Print OTP in terminal console for easy local testing
-    console.log(`\n\x1b[32m[SMS OTP MOCK] Mã OTP đăng nhập của số điện thoại ${phone} là: ${otpCode}\x1b[0m\n`);
-
-    res.status(200).json({
-      message: "Mã OTP đã được tạo thành công (Xem tại terminal của Server).",
-      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
-    });
-  } catch (error) {
-    console.error("Lỗi yêu cầu OTP đăng nhập:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP đăng nhập.", error: error.message });
-  }
-};
-
-// @desc    Verify Phone OTP and login user
-// @route   POST /auth/phone-login-verify
-// @access  Public
-export const verifyPhoneLoginOtp = async (req, res) => {
-  try {
-    const { phone, otp } = req.body;
-
-    if (!phone || !otp) {
-      res.status(400).json({ message: "Vui lòng nhập đầy đủ số điện thoại và mã OTP." });
-      return;
-    }
-
-    // Check OTP (using hashed phone)
-    const otpDoc = await Otp.findOne({ phone: hashPhone(phone) });
-    if (!otpDoc || otpDoc.otpCode !== otp) {
-      res.status(400).json({ message: "Mã OTP không chính xác." });
-      return;
-    }
-
-    if (otpDoc.otpExpires < new Date()) {
-      res.status(400).json({ message: "Mã OTP đã hết hạn." });
-      return;
-    }
-
-    // Find user (using hashed phone)
-    const user = await User.findOne({ phone: hashPhone(phone) });
-    if (!user) {
-      res.status(404).json({ message: "Không tìm thấy người dùng sở hữu số điện thoại này." });
-      return;
-    }
-
-    // Remove OTP document
-    await Otp.deleteOne({ _id: otpDoc._id });
-
-    // Generate tokens
-    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-
-    res.status(200).json({
-      message: "Đăng nhập thành công bằng OTP!",
-      accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        profile: user.profile,
-      },
-    });
-  } catch (error) {
-    console.error("Lỗi xác minh OTP đăng nhập:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác thực OTP đăng nhập.", error: error.message });
-  }
-};
-
-// @desc    Get all patients
-// @route   GET /auth/patients
-// @access  Private (Doctor/Admin only)
-export const getPatients = async (req, res) => {
-  try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin") {
-      res.status(403).json({ message: "Bạn không có quyền thực hiện hành động này." });
-      return;
-    }
-    const patients = await User.find({ role: "patient" }).select("-passwordHash");
-    res.status(200).json({ success: true, data: patients });
-  } catch (error) {
-    console.error("Lỗi lấy danh sách bệnh nhân:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi lấy danh sách bệnh nhân.", error: error.message });
   }
 };
