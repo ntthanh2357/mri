@@ -36,6 +36,16 @@ const ClinicDashboardScreen = ({ navigation }) => {
   ]);
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // New hospital operations statistics
+  const [totalPatientsToday, setTotalPatientsToday] = useState(0);
+  const [statusDistribution, setStatusDistribution] = useState({});
+  const [aiProcessedCount, setAiProcessedCount] = useState(0);
+  const [revenue, setRevenue] = useState({ totalRevenue: 0, aiRevenue: 0 });
+  const [examFee, setExamFee] = useState('150000');
+  const [mriFee, setMriFee] = useState('1500000');
+  const [aiFee, setAiFee] = useState('200000');
+  const [updatingPricing, setUpdatingPricing] = useState(false);
+
   const fetchDashboardData = async () => {
     setLoadingStats(true);
     try {
@@ -45,68 +55,28 @@ const ClinicDashboardScreen = ({ navigation }) => {
         setCurrentUser(userRes.user);
       }
 
-      // 2. Fetch total patients list
-      const patientsRes = await get('/api/patients');
-      let patientCount = 0;
-      if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
-        patientCount = patientsRes.data.length;
+      // 2. Fetch hospital-specific stats
+      const statsRes = await get('/admin/dashboard');
+      if (statsRes && statsRes.success) {
+        setTotalPatients(statsRes.totalPatients ?? 0);
+        setTotalScans(statsRes.totalScans ?? 0);
+        setTotalPatientsToday(statsRes.totalPatientsToday ?? 0);
+        setStatusDistribution(statsRes.statusDistribution ?? {});
+        setAiProcessedCount(statsRes.aiProcessedCount ?? 0);
+        setRevenue(statsRes.revenue ?? { totalRevenue: 0, aiRevenue: 0 });
+
+        if (statsRes.demographics) {
+          setDemographics(statsRes.demographics);
+        }
+        if (statsRes.recentActivity) {
+          setRecentActivity(statsRes.recentActivity);
+        }
+        if (statsRes.pricing) {
+          setExamFee(String(statsRes.pricing.examFee ?? 150000));
+          setMriFee(String(statsRes.pricing.mriFee ?? 1500000));
+          setAiFee(String(statsRes.pricing.aiFee ?? 200000));
+        }
       }
-      setTotalPatients(patientCount);
-
-      // 3. Fetch all imaging results
-      const scansRes = await get('/api/v1/imaging');
-      let scanList = [];
-      if (scansRes && scansRes.success && Array.isArray(scansRes.data)) {
-        scanList = scansRes.data;
-      }
-      setTotalScans(scanList.length);
-
-      // 4. Fetch EMR records for demographics calculation
-      const emrRes = await get('/emr/records');
-      let emrList = [];
-      if (emrRes && emrRes.status === 'success' && Array.isArray(emrRes.data)) {
-        emrList = emrRes.data;
-      }
-
-      // Calculate demographics
-      if (emrList.length > 0) {
-        let adult = 0, senior = 0, pediatric = 0;
-        emrList.forEach(r => {
-          const age = Number(r.age) || 0;
-          if (age < 18) pediatric++;
-          else if (age >= 60) senior++;
-          else adult++;
-        });
-        const total = emrList.length;
-        setDemographics([
-          { name: 'Người lớn (18–60)', value: Math.round((adult / total) * 100), color: '#15803D' },
-          { name: 'Người cao tuổi (60+)', value: Math.round((senior / total) * 100), color: '#475569' },
-          { name: 'Nhi khoa', value: Math.round((pediatric / total) * 100), color: '#CBD5E1' },
-        ]);
-      } else {
-        setDemographics([
-          { name: 'Người lớn (18–60)', value: 0, color: '#15803D' },
-          { name: 'Người cao tuổi (60+)', value: 0, color: '#475569' },
-          { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
-        ]);
-      }
-
-      // 5. Construct recent activities from real scans
-      const formattedActivities = scanList.slice(0, 3).map((scan) => {
-        const scanDate = new Date(scan.reportDate || scan.createdAt);
-        const timeStr = `${scanDate.getDate()}/${scanDate.getMonth() + 1} ${scanDate.getHours().toString().padStart(2, '0')}:${scanDate.getMinutes().toString().padStart(2, '0')}`;
-        
-        return {
-          id: scan.medicalRecordNumber || scan.medicalId || `NS-${scan._id.substring(18).toUpperCase()}`,
-          doctor: scan.radiologist || scan.orderingDoctor || 'Bác sĩ',
-          scanType: scan.imagingType || 'Phim chụp',
-          status: 'Hoàn thành',
-          time: timeStr,
-          isSuccess: true
-        };
-      });
-      setRecentActivity(formattedActivities);
-
     } catch (err) {
       console.error('Lỗi khi tải thông tin tổng quan phòng khám:', err);
     } finally {
@@ -117,6 +87,43 @@ const ClinicDashboardScreen = ({ navigation }) => {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  const handleUpdatePricing = async () => {
+    const parsedExam = Number(examFee);
+    const parsedMri = Number(mriFee);
+    const parsedAi = Number(aiFee);
+
+    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi)) {
+      Alert.alert('Lỗi', 'Bảng giá dịch vụ phải là chữ số hợp lệ.');
+      return;
+    }
+
+    setUpdatingPricing(true);
+    try {
+      const { put } = require('../services/api.service');
+      const response = await put('/admin/hospital-pricing', {
+        examFee: parsedExam,
+        mriFee: parsedMri,
+        aiFee: parsedAi
+      });
+
+      if (response && response.success) {
+        Alert.alert('Thành công', 'Cập nhật bảng giá dịch vụ bệnh viện thành công!');
+        if (response.pricing) {
+          setExamFee(String(response.pricing.examFee));
+          setMriFee(String(response.pricing.mriFee));
+          setAiFee(String(response.pricing.aiFee));
+        }
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể cập nhật bảng giá.');
+      }
+    } catch (err) {
+      console.error('Error updating hospital pricing:', err);
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setUpdatingPricing(false);
+    }
+  };
 
   const handleCreateUser = async () => {
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
@@ -130,6 +137,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
         password: newUserPassword,
         name: newUserName,
         role: newUserRole,
+        hospitalId: currentUser?.hospitalId || undefined,
       });
 
       if (response.success || response.user) {
@@ -230,26 +238,31 @@ const ClinicDashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Dark Wallet Card */}
+            {/* Daily Operational Stats Card */}
             <View style={styles.walletCard}>
               <View style={styles.walletHeader}>
                 <View>
-                  <Text style={styles.walletTitle}>Số dư ví hiện tại</Text>
-                  <Text style={styles.walletBalance}>0đ</Text>
+                  <Text style={styles.walletTitle}>Doanh thu hôm nay (lũy kế)</Text>
+                  <Text style={styles.walletBalance}>
+                    {loadingStats ? '...' : (revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                  </Text>
                 </View>
-                <TouchableOpacity style={styles.walletDepositBtn} onPress={() => navigation.navigate('Financials')}>
-                  <Text style={styles.walletDepositText}>Nạp tiền</Text>
-                </TouchableOpacity>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.walletTitle, { color: '#4ADE80' }]}>Doanh thu AI hôm nay</Text>
+                  <Text style={[styles.walletBalance, { fontSize: 18, color: '#4ADE80' }]}>
+                    {loadingStats ? '...' : (revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.walletFooter}>
                 <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
-                  <Text style={styles.walletFooterText}>Tự động nạp: Chưa kích hoạt</Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#4ADE80' }]} />
+                  <Text style={styles.walletFooterText}>Ca phân tích AI: {aiProcessedCount || 0}</Text>
                 </View>
                 <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
-                  <Text style={styles.walletFooterText}>Chu kỳ: N/A</Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#60A5FA' }]} />
+                  <Text style={styles.walletFooterText}>Tiếp đón hôm nay: {totalPatientsToday || 0}</Text>
                 </View>
               </View>
             </View>
@@ -269,13 +282,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 </View>
               ) : recentActivity.length === 0 ? (
                 <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động quét AI nào gần đây.</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
                 </View>
               ) : (
                 recentActivity.map((activity, index) => (
                   <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
                     <View style={styles.activityLeft}>
-                      <Text style={styles.patientId}>{activity.id}</Text>
+                      <Text style={styles.patientId}>Ca #{activity.id} - {activity.patientName}</Text>
                       <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
                     </View>
                     <View style={styles.activityRight}>
@@ -318,6 +331,57 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   </View>
                 ))}
               </View>
+            </View>
+
+            {/* Bảng giá dịch vụ Bệnh viện */}
+            <Text style={styles.sectionTitle}>Bảng giá dịch vụ</Text>
+            <View style={styles.pricingCard}>
+              <Text style={styles.pricingDesc}>Cấu hình giá dịch vụ áp dụng cho hóa đơn khám chữa bệnh tại cơ sở của bạn.</Text>
+              
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí khám lâm sàng (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={examFee}
+                  onChangeText={setExamFee}
+                  placeholder="Ví dụ: 150000"
+                />
+              </View>
+
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí chụp phim MRI (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={mriFee}
+                  onChangeText={setMriFee}
+                  placeholder="Ví dụ: 1500000"
+                />
+              </View>
+
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí phân tích tự động AI (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={aiFee}
+                  onChangeText={setAiFee}
+                  placeholder="Ví dụ: 200000"
+                />
+              </View>
+
+              <TouchableOpacity 
+                style={styles.pricingSubmitBtn} 
+                onPress={handleUpdatePricing}
+                disabled={updatingPricing}
+              >
+                {updatingPricing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật bảng giá</Text>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Info Banner */}
@@ -371,8 +435,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
               />
 
               <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Vai trò công việc *</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-                {['doctor', 'nurse', 'technician'].map((role) => (
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20 }}>
+                {['doctor', 'nurse', 'technician', 'receptionist'].map((role) => (
                   <TouchableOpacity
                     key={role}
                     style={{
@@ -385,8 +449,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
                     }}
                     onPress={() => setNewUserRole(role)}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: newUserRole === role ? '#FFFFFF' : '#475569' }}>
-                      {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Y tá' : 'KTV'}
+                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: newUserRole === role ? '#FFFFFF' : '#475569' }}>
+                      {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Y tá' : role === 'technician' ? 'KTV' : 'Lễ tân'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -782,6 +846,52 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
+  },
+  pricingCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 24,
+  },
+  pricingDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 16,
+  },
+  pricingInputGroup: {
+    marginBottom: 12,
+  },
+  pricingInputLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  pricingInput: {
+    height: 38,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  pricingSubmitBtn: {
+    backgroundColor: '#15803D',
+    borderRadius: 8,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pricingSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

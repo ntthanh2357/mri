@@ -18,6 +18,7 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
+import { get } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('records');
@@ -25,6 +26,18 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [localUser, setLocalUser] = useState(null);
+
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setLocalUser(JSON.parse(storedUser));
+      }
+    } catch (e) {
+      console.log('Error reading user role:', e);
+    }
+  }, []);
   
   // Data states
   const [records, setRecords] = useState([]);
@@ -32,6 +45,18 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [consultations, setConsultations] = useState([]);
   const [consents, setConsents] = useState([]);
   const [versions, setVersions] = useState([]);
+  const [imagingResults, setImagingResults] = useState([]);
+  
+  // Fetch imaging
+  useEffect(() => {
+    if (selectedRecord && selectedRecord.patientId) {
+      get(`/api/v1/imaging/patient/${selectedRecord.patientId}`)
+        .then(res => {
+          if (res && res.success) setImagingResults(res.data || []);
+        })
+        .catch(err => console.log('Error fetching imaging:', err));
+    }
+  }, [selectedRecord]);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -191,24 +216,36 @@ const EMRDashboardScreen = ({ navigation }) => {
                   active={activeTab === 'care'}
                   onPress={() => setActiveTab('care')}
                 />
-                <SidebarItem
-                  icon="🧠"
-                  label="Hội chẩn"
-                  active={activeTab === 'consult'}
-                  onPress={() => setActiveTab('consult')}
-                />
-                <SidebarItem
-                  icon="✍️"
-                  label="Giấy cam đoan"
-                  active={activeTab === 'consent'}
-                  onPress={() => setActiveTab('consent')}
-                />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <>
+                    <SidebarItem
+                      icon="🧠"
+                      label="Hội chẩn"
+                      active={activeTab === 'consult'}
+                      onPress={() => setActiveTab('consult')}
+                    />
+                    <SidebarItem
+                      icon="✍️"
+                      label="Giấy cam đoan"
+                      active={activeTab === 'consent'}
+                      onPress={() => setActiveTab('consent')}
+                    />
+                  </>
+                )}
                 <SidebarItem
                   icon="⏳"
                   label="Lịch sử sửa đổi"
                   active={activeTab === 'versions'}
                   onPress={() => setActiveTab('versions')}
                 />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <SidebarItem
+                    icon="🧠"
+                    label="Phim MRI & CT"
+                    active={activeTab === 'imaging'}
+                    onPress={() => setActiveTab('imaging')}
+                  />
+                )}
               </View>
               {selectedRecord && (
                 <View style={styles.selectedRecordBox}>
@@ -240,21 +277,32 @@ const EMRDashboardScreen = ({ navigation }) => {
                   active={activeTab === 'care'}
                   onPress={() => setActiveTab('care')}
                 />
-                <MobileTab
-                  label="Hội chẩn"
-                  active={activeTab === 'consult'}
-                  onPress={() => setActiveTab('consult')}
-                />
-                <MobileTab
-                  label="Cam đoan"
-                  active={activeTab === 'consent'}
-                  onPress={() => setActiveTab('consent')}
-                />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <>
+                    <MobileTab
+                      label="Hội chẩn"
+                      active={activeTab === 'consult'}
+                      onPress={() => setActiveTab('consult')}
+                    />
+                    <MobileTab
+                      label="Cam đoan"
+                      active={activeTab === 'consent'}
+                      onPress={() => setActiveTab('consent')}
+                    />
+                  </>
+                )}
                 <MobileTab
                   label="Lịch sử"
                   active={activeTab === 'versions'}
                   onPress={() => setActiveTab('versions')}
                 />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <MobileTab
+                    label="Phim MRI"
+                    active={activeTab === 'imaging'}
+                    onPress={() => setActiveTab('imaging')}
+                  />
+                )}
               </View>
             )}
 
@@ -320,6 +368,14 @@ const EMRDashboardScreen = ({ navigation }) => {
                   <VersionTab
                     versions={versions}
                     selectedRecord={selectedRecord}
+                  />
+                )}
+
+                {activeTab === 'imaging' && (
+                  <ImagingTab
+                    imagingResults={imagingResults}
+                    selectedRecord={selectedRecord}
+                    navigation={navigation}
                   />
                 )}
               </ScrollView>
@@ -644,6 +700,56 @@ const SignBadge = ({ signStatus }) => {
   return (
     <View style={[styles.statusBadge, { backgroundColor: bg, marginTop: 6 }]}>
       <Text style={[styles.statusBadgeText, { color, fontSize: 10 }]}>{signStatus}</Text>
+    </View>
+  );
+};
+
+const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabHeader}>
+        <Text style={styles.tabTitle}>🧠 Lịch sử Chẩn đoán Hình ảnh</Text>
+      </View>
+
+      {!selectedRecord ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>👈</Text>
+          <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        </View>
+      ) : imagingResults.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📂</Text>
+          <Text style={styles.emptyText}>Chưa có kết quả chẩn đoán hình ảnh nào được lưu trữ cho bệnh án này.</Text>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          {imagingResults.map((item) => {
+            const date = new Date(item.reportDate);
+            const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            
+            return (
+              <TouchableOpacity
+                key={item._id}
+                style={styles.card}
+                onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
+              >
+                <View style={[styles.cardHeader, { marginBottom: 12 }]}>
+                  <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
+                    <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                  </View>
+                  <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>{item.procedure}</Text>
+                <Text style={{ color: '#475569', fontSize: 14, marginBottom: 4 }}>Bác sĩ: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.radiologist}</Text></Text>
+                <Text style={{ color: '#475569', fontSize: 14, marginBottom: 12 }}>Chẩn đoán: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.diagnosis}</Text></Text>
+                <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
+                <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
+                <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 };

@@ -10,6 +10,8 @@ import {
   SafeAreaView,
   useWindowDimensions,
   Platform,
+  Alert,
+  TextInput,
 } from 'react-native';
 import { get, post } from '../services/api.service';
 import Config from '../constants/config';
@@ -28,6 +30,19 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [explanation, setExplanation] = useState('');
   const [explaining, setExplaining] = useState(false);
+
+  // AI Analysis States
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [correctClass, setCorrectClass] = useState('notumor');
+  const [coordX, setCoordX] = useState('120');
+  const [coordY, setCoordY] = useState('120');
+  const [coordW, setCoordW] = useState('100');
+  const [coordH, setCoordH] = useState('100');
+  const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [approvingAI, setApprovingAI] = useState(false);
+  const [approveSuccess, setApproveSuccess] = useState(false);
 
   useEffect(() => {
     if (!resultId) {
@@ -56,6 +71,94 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
     fetchResultDetails();
   }, [resultId]);
+
+  const handleAiAnalysis = async () => {
+    if (!result?.images || result.images.length === 0) {
+      if (Platform.OS === 'web') alert('Yêu cầu: Không có ảnh phim chụp để phân tích.');
+      else Alert.alert('Yêu cầu', 'Không có ảnh phim chụp để phân tích.');
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const payload = { imageUrl: result.images[0] };
+      const response = await post('/api/v1/imaging/analyze-ai', payload);
+
+      if (response.success && response.data) {
+        setAiResult(response.data);
+        setCorrectClass(response.data.class_name);
+      } else {
+        if (Platform.OS === 'web') alert('Lỗi phân tích AI: ' + (response.message || 'Không thể chẩn đoán.'));
+        else Alert.alert('Lỗi phân tích AI', response.message || 'Không thể chẩn đoán ảnh chụp.');
+      }
+    } catch (err) {
+      console.error('AI Analysis error:', err);
+      if (Platform.OS === 'web') alert('Lỗi kết nối: Không thể kết nối đến AI server.');
+      else Alert.alert('Lỗi kết nối', 'Không thể kết nối đến AI server.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    setSendingFeedback(true);
+    try {
+      const payload = {
+        imageUrl: result.images[0],
+        correct_class: correctClass,
+        x: parseInt(coordX) || 0,
+        y: parseInt(coordY) || 0,
+        w: parseInt(coordW) || 0,
+        h: parseInt(coordH) || 0
+      };
+
+      const response = await post('/api/v1/imaging/feedback-ai', payload);
+      if (response.success) {
+        if (Platform.OS === 'web') alert('Ý kiến hiệu chỉnh khối u đã được ghi nhận.');
+        else Alert.alert('Đóng góp thành công', 'Ý kiến hiệu chỉnh khối u đã được ghi nhận.');
+        setShowFeedbackForm(false);
+      } else {
+        if (Platform.OS === 'web') alert('Lỗi: ' + (response.message || 'Không thể gửi phản hồi.'));
+        else Alert.alert('Lỗi', response.message || 'Không thể gửi phản hồi.');
+      }
+    } catch (err) {
+      console.error('Feedback error:', err);
+      if (Platform.OS === 'web') alert('Lỗi kết nối máy chủ.');
+      else Alert.alert('Lỗi kết nối', 'Không thể gửi phản hồi đến máy chủ.');
+    } finally {
+      setSendingFeedback(false);
+    }
+  };
+
+  const handleApproveAI = async () => {
+    if (!aiResult) return;
+    setApprovingAI(true);
+    setApproveSuccess(false);
+    try {
+      const imageUrl = result.images[0] || '';
+      const filename = imageUrl.split('/').pop() || 'scan.jpg';
+      const payload = {
+        filename,
+        predicted_class: aiResult.class_name,
+        confidence: aiResult.confidence ?? 0,
+      };
+      const response = await post('/api/v1/imaging/approve-ai', payload);
+      if (response.success) {
+        setApproveSuccess(true);
+        if (Platform.OS === 'web') alert(`Đã ghi nhận kết quả AI (${aiResult.class_name?.toUpperCase()}) là ĐÚNG.`);
+        else Alert.alert('Xác nhận thành công', `Đã ghi nhận kết quả AI (${aiResult.class_name?.toUpperCase()}) là ĐÚNG.`);
+      } else {
+        if (Platform.OS === 'web') alert('Lỗi: ' + (response.message || 'Không thể ghi nhận.'));
+        else Alert.alert('Lỗi', response.message || 'Không thể ghi nhận xác nhận.');
+      }
+    } catch (err) {
+      console.error('Approve AI error:', err);
+      if (Platform.OS === 'web') alert('Lỗi kết nối máy chủ.');
+      else Alert.alert('Lỗi kết nối', 'Không thể gửi xác nhận đến máy chủ.');
+    } finally {
+      setApprovingAI(false);
+    }
+  };
 
   const handleExplainAI = async () => {
     setExplaining(true);
@@ -219,7 +322,110 @@ const ImagingResultScreen = ({ route, navigation }) => {
             {/* Tumor Image Gallery Carousel */}
             {result.images && result.images.length > 0 && (
               <View style={styles.gallerySection}>
-                <Text style={styles.sectionHeading}>HÌNH ẢNH PHIM CHỤP ({result.images.length} ẢNH KHỐI U SẮC NÉT KHUYÊN DÙNG)</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>HÌNH ẢNH PHIM CHỤP ({result.images.length} ẢNH)</Text>
+                  <TouchableOpacity 
+                    style={{ backgroundColor: '#1E1B4B', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, opacity: analyzing ? 0.7 : 1 }}
+                    onPress={handleAiAnalysis}
+                    disabled={analyzing}
+                  >
+                    {analyzing ? (
+                      <ActivityIndicator size="small" color="#818CF8" />
+                    ) : (
+                      <Text style={{ color: '#818CF8', fontWeight: 'bold', fontSize: 13 }}>
+                        🤖 Phân tích Khối u bằng AI
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {aiResult && (
+                  <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                    <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A', marginBottom: 4 }}>🤖 Dự đoán của AI (Dành cho Bác sĩ đánh giá)</Text>
+                    <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 2 }}>
+                      - Phân loại khối u: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{aiResult.class_name?.toUpperCase()}</Text>
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 8 }}>
+                      - Độ tự tin: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
+                    </Text>
+                    {aiResult.consensus_message ? (
+                      <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginBottom: 10 }}>
+                        {aiResult.consensus_message}
+                      </Text>
+                    ) : null}
+
+                    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                      {!approveSuccess ? (
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14,
+                            backgroundColor: approvingAI ? '#D1FAE5' : '#10B981', borderRadius: 6, opacity: approvingAI ? 0.7 : 1,
+                          }}
+                          onPress={handleApproveAI} disabled={approvingAI}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                            {approvingAI ? '⏳ Đang ghi nhận...' : '✅ AI đúng — Xác nhận'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, borderWidth: 1, borderColor: '#6EE7B7' }}>
+                          <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng</Text>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
+                        style={{ alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#3B82F6', borderRadius: 6 }}
+                        onPress={() => setShowFeedbackForm(!showFeedbackForm)}
+                        disabled={approveSuccess}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', opacity: approveSuccess ? 0.5 : 1 }}>
+                          {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ AI sai — Hiệu chỉnh lại'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {showFeedbackForm && (
+                      <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                        <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#475569', marginBottom: 8 }}>ĐIỀU CHỈNH KẾT QUẢ AI SAI:</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Loại khối u thực tế (Phân loại):</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                          {['glioma', 'meningioma', 'pituitary', 'notumor'].map((cls) => (
+                            <TouchableOpacity
+                              key={cls}
+                              style={{ paddingVertical: 5, paddingHorizontal: 10, backgroundColor: correctClass === cls ? '#B91C1C' : '#F1F5F9', borderRadius: 4 }}
+                              onPress={() => setCorrectClass(cls)}
+                            >
+                              <Text style={{ color: correctClass === cls ? '#FFFFFF' : '#334155', fontSize: 11, fontWeight: 'bold' }}>{cls.toUpperCase()}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Tọa độ vùng khối u (Khoanh vùng/Segmentation):</Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                          {['X', 'Y', 'W', 'H'].map((label, idx) => {
+                            const val = idx === 0 ? coordX : idx === 1 ? coordY : idx === 2 ? coordW : coordH;
+                            const setVal = idx === 0 ? setCoordX : idx === 1 ? setCoordY : idx === 2 ? setCoordW : setCoordH;
+                            return (
+                              <View key={label} style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 10, color: '#94A3B8' }}>{label}</Text>
+                                <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={val} onChangeText={setVal} keyboardType="numeric" />
+                              </View>
+                            );
+                          })}
+                        </View>
+
+                        <TouchableOpacity 
+                          style={{ paddingVertical: 8, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', opacity: sendingFeedback ? 0.7 : 1 }}
+                          onPress={handleSubmitFeedback} disabled={sendingFeedback}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                            {sendingFeedback ? 'Đang gửi phản hồi...' : '✓ Xác nhận & Gửi phản hồi AI học lại'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
                 
                 <View style={styles.carouselContainer}>
                   <TouchableOpacity 

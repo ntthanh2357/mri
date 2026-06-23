@@ -2,6 +2,12 @@ import { Schema, model } from "mongoose";
 
 const medicalRecordSchema = new Schema(
   {
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Hospital',
+      default: null,
+      index: true,
+    },
     patientId: {
       type: String,
       required: true,

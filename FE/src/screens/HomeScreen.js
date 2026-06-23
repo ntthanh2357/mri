@@ -75,6 +75,25 @@ const HomeScreen = ({ route, navigation }) => {
   }, []);
 
   useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        navigation.replace('AdminBackoffice');
+      } else if (user.role === 'hospital_admin') {
+        navigation.replace('ClinicDashboard');
+      } else if (user.role === 'receptionist') {
+        navigation.replace('ReceptionistDashboard', { user });
+      } else if (user.role === 'doctor') {
+        navigation.replace('DoctorWorkQueue', { user });
+      } else if (user.role === 'technician') {
+        navigation.replace('TechnicianQueue', { user });
+      } else if (user.role === 'nurse') {
+        // Nurse goes to EMR Dashboard to see their assigned visits
+        navigation.replace('EMRDashboard', { user });
+      }
+    }
+  }, [user, navigation]);
+
+  useEffect(() => {
     if (!user || user.role === 'patient') return;
 
     const fetchStats = async () => {
@@ -666,7 +685,7 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.queueCard}>
                 <TouchableOpacity
                   style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('EMRDashboard')}
+                  onPress={() => navigation.navigate('ReceptionistDashboard')}
                 >
                   <View style={styles.queueLeftInfo}>
                     <Text style={styles.queuePatientName}>Đăng ký mới: Lê Trần Gia Huy</Text>
@@ -679,7 +698,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                 <TouchableOpacity
                   style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('EMRDashboard')}
+                  onPress={() => navigation.navigate('ReceptionistDashboard')}
                 >
                   <View style={styles.queueLeftInfo}>
                     <Text style={styles.queuePatientName}>Bệnh nhân Tuấn Thành</Text>
@@ -698,20 +717,20 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.doctorGrid}>
                 <TouchableOpacity
                   style={styles.doctorGridCard}
-                  onPress={() => navigation.navigate('EMRDashboard')}
+                  onPress={() => navigation.navigate('ReceptionistDashboard')}
                 >
                   <Text style={styles.doctorGridIcon}>📋</Text>
-                  <Text style={styles.doctorGridLabel}>Tiếp nhận & Tạo EMR</Text>
-                  <Text style={styles.doctorGridSub}>Đăng ký mới & Quét OCR</Text>
+                  <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân</Text>
+                  <Text style={styles.doctorGridSub}>Tạo Visit mới & phân ca</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.doctorGridCard}
-                  onPress={() => navigation.navigate('EMRDashboard')}
+                  onPress={() => navigation.navigate('ReceptionistDashboard')}
                 >
-                  <Text style={styles.doctorGridIcon}>👨‍⚕️</Text>
-                  <Text style={styles.doctorGridLabel}>Phân công Bác sĩ</Text>
-                  <Text style={styles.doctorGridSub}>Đồng bộ điều phối phòng khám</Text>
+                  <Text style={styles.doctorGridIcon}>💳</Text>
+                  <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
+                  <Text style={styles.doctorGridSub}>Quản lý hóa đơn chờ</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

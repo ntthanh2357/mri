@@ -26,8 +26,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [patient, setPatient] = useState(null);
   const [vitals, setVitals] = useState([]);
   const [labOrders, setLabOrders] = useState([]);
+  const [imagingResults, setImagingResults] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [activeTab, setActiveTab] = useState('vitals'); // 'vitals' hoặc 'lab'
+  const [activeTab, setActiveTab] = useState('vitals'); // 'vitals', 'lab', 'imaging'
 
   // State cho form ghi nhận sinh hiệu mới
   const [pulseInput, setPulseInput] = useState('');
@@ -88,6 +89,17 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
       setLabOrders(ordersData.data || []);
       
+      // 5. Lấy danh sách phim MRI/CT
+      try {
+        const pId = foundPatient?.profile?.medicalId || targetPatientId;
+        const imagingData = await get(`/api/v1/imaging/patient/${pId}`);
+        if (imagingData && imagingData.success) {
+          setImagingResults(imagingData.data || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải phim MRI:', err);
+      }
+
       // Chọn mặc định phiếu đầu tiên để hiển thị chi tiết
       if (ordersData.data && ordersData.data.length > 0) {
         setSelectedOrder(ordersData.data[0]);
@@ -602,7 +614,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               onPress={() => setActiveTab('vitals')}
             >
               <Text style={[styles.tabButtonText, activeTab === 'vitals' && styles.activeTabButtonText]}>
-                📈 Theo dõi Sinh hiệu
+                📈 Sinh hiệu
               </Text>
             </TouchableOpacity>
             
@@ -611,7 +623,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
               onPress={() => setActiveTab('lab')}
             >
               <Text style={[styles.tabButtonText, activeTab === 'lab' && styles.activeTabButtonText]}>
-                🔬 Kết quả Xét nghiệm (LIS)
+                🔬 Xét nghiệm
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'imaging' && styles.activeTabButton]}
+              onPress={() => setActiveTab('imaging')}
+            >
+              <Text style={[styles.tabButtonText, activeTab === 'imaging' && styles.activeTabButtonText]}>
+                🧠 Phim MRI/CT
               </Text>
             </TouchableOpacity>
           </View>
@@ -1124,6 +1145,44 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 )}
               </View>
 
+            </View>
+          )}
+
+          {/* 5. Nội dung TAB 3: HÌNH ẢNH PHIM MRI/CT */}
+          {activeTab === 'imaging' && (
+            <View style={{ marginTop: 16 }}>
+              {imagingResults.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12 }}>
+                  <Text style={{ fontSize: 40, marginBottom: 12 }}>📂</Text>
+                  <Text style={{ color: '#64748B', fontSize: 14 }}>Chưa có phim chụp nào được ghi nhận cho bệnh án này.</Text>
+                </View>
+              ) : (
+                imagingResults.map((item) => {
+                  const date = new Date(item.reportDate);
+                  const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}
+                      onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
+                          <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                        </View>
+                        <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>{item.procedure}</Text>
+                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 4 }}>Bác sĩ: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.radiologist}</Text></Text>
+                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 12 }}>Chẩn đoán: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.diagnosis}</Text></Text>
+                      <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
+                      <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
+                      <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
           )}
 

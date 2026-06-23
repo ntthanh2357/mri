@@ -1,0 +1,166 @@
+import { Visit } from "../models/visit.model.js";
+import { User } from "../models/user.model.js";
+
+// @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
+// @route   GET /api/v1/visits/staff
+// @access  Private
+export const getStaff = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(403).json({ message: "Bạn chưa được gán vào bệnh viện nào." });
+    }
+
+    const [doctors, nurses, technicians] = await Promise.all([
+      User.find({ hospitalId, role: "doctor" }).select("profile email role"),
+      User.find({ hospitalId, role: "nurse" }).select("profile email role"),
+      User.find({ hospitalId, role: "technician" }).select("profile email role"),
+    ]);
+
+    res.status(200).json({ doctors, nurses, technicians });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Lễ tân tạo lượt khám mới
+// @route   POST /api/v1/visits
+// @access  Private (Receptionist)
+export const createVisit = async (req, res) => {
+  try {
+    const { patientId, doctorId, nurseId, reason } = req.body;
+    const hospitalId = req.user.hospitalId;
+
+    if (!hospitalId) {
+      return res.status(403).json({ message: "Bạn chưa được gán vào bệnh viện nào." });
+    }
+
+    if (!patientId || !doctorId || !nurseId) {
+      return res.status(400).json({ message: "Vui lòng cung cấp bệnh nhân, bác sĩ và điều dưỡng." });
+    }
+
+    const visit = new Visit({
+      hospitalId,
+      patientId,
+      doctorId,
+      nurseId,
+      reason,
+      status: "đang chờ"
+    });
+
+    await visit.save();
+
+    res.status(201).json({ message: "Tạo lượt khám thành công", visit });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Lấy danh sách công việc của tôi
+// @route   GET /api/v1/visits/my-queue
+// @access  Private (Doctor, Nurse, Technician, Receptionist)
+export const getMyQueue = async (req, res) => {
+  try {
+    const { role, id, hospitalId } = req.user;
+    
+    if (!hospitalId) {
+      return res.status(403).json({ message: "Bạn chưa được gán vào bệnh viện nào." });
+    }
+
+    let filter = { hospitalId };
+    
+    if (role === "doctor") {
+      filter.doctorId = id;
+      // Fetching all relevant statuses for the doctor to track patients
+    } else if (role === "nurse") {
+      filter.nurseId = id;
+      filter.status = "đang chờ";
+    } else if (role === "technician") {
+      filter.technicianId = id;
+      filter.status = "chờ chụp";
+    }
+
+    // Lễ tân hoặc Admin lấy hết theo hospitalId
+
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    const visits = await Visit.find(filter)
+      .populate("patientId", "email profile")
+      .populate("doctorId", "profile.name")
+      .populate("nurseId", "profile.name")
+      .populate("technicianId", "profile.name")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ visits });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Điều dưỡng cập nhật sinh hiệu
+// @route   PUT /api/v1/visits/:id/vitals
+// @access  Private (Nurse)
+export const updateVitals = async (req, res) => {
+  try {
+    const { vitals } = req.body;
+    const visit = await Visit.findById(req.params.id);
+
+    if (!visit) {
+      return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    }
+    
+    if (visit.hospitalId.toString() !== req.user.hospitalId) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+
+    visit.vitals = { ...vitals, measuredAt: new Date() };
+    visit.status = "đang khám";
+
+    await visit.save();
+    res.status(200).json({ message: "Cập nhật sinh hiệu thành công", visit });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Bác sĩ ra y lệnh MRI
+// @route   PUT /api/v1/visits/:id/mri-order
+// @access  Private (Doctor)
+export const createMriOrder = async (req, res) => {
+  try {
+    const { technicianId, region, instructions, requestAiAnalysis } = req.body;
+    const visit = await Visit.findById(req.params.id);
+
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+
+    visit.technicianId = technicianId;
+    visit.mriOrder = { region, instructions, requestAiAnalysis, orderedAt: new Date() };
+    visit.status = "chờ chụp";
+
+    await visit.save();
+    res.status(200).json({ message: "Đã ra y lệnh chụp MRI", visit });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Cập nhật trạng thái
+// @route   PUT /api/v1/visits/:id/status
+// @access  Private
+export const updateStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const visit = await Visit.findById(req.params.id);
+    
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+
+    visit.status = status;
+    await visit.save();
+    
+    res.status(200).json({ message: "Cập nhật trạng thái thành công", visit });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};

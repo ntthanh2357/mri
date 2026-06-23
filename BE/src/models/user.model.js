@@ -15,13 +15,19 @@ const userSchema = new Schema(
       sparse: true, // Allows multiple null/undefined values
       trim: true,
     },
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Hospital',
+      default: null,
+      index: true,
+    },
     passwordHash: {
       type: String,
       required: true,
     },
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin", "receptionist", "technician", "nurse"],
+      enum: ["patient", "doctor", "admin", "hospital_admin", "receptionist", "technician", "nurse"],
       default: "patient",
       required: true,
     },

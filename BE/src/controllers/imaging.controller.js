@@ -1,5 +1,6 @@
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { User } from "../models/user.model.js";
+import { Visit } from "../models/visit.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import fs from "fs";
 import path from "path";
@@ -96,6 +97,7 @@ export const createImagingResult = async (req, res) => {
       images,
       dicomMetadata,
       imagingType,
+      visitId,
     } = req.body;
 
     // 2. Validate required fields
@@ -127,6 +129,15 @@ export const createImagingResult = async (req, res) => {
     });
 
     await newResult.save();
+
+    if (visitId) {
+      const visit = await Visit.findById(visitId);
+      if (visit) {
+        visit.mriOrder.imagingResultId = newResult._id;
+        visit.status = visit.mriOrder.requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
+        await visit.save();
+      }
+    }
 
     return successResponse(res, newResult, "Tạo kết quả chẩn đoán hình ảnh mới thành công.", 201);
   } catch (error) {
@@ -225,7 +236,7 @@ export const analyzeImagingResultAI = async (req, res) => {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
-    const { imageUrl } = req.body;
+    const { imageUrl, visitId } = req.body;
     if (!imageUrl) {
       return errorResponse(res, "Thiếu đường dẫn hình ảnh cần phân tích.", 400);
     }
@@ -288,6 +299,15 @@ export const analyzeImagingResultAI = async (req, res) => {
     }
 
     const aiData = await aiResponse.json();
+
+    if (visitId) {
+      const visit = await Visit.findById(visitId);
+      if (visit) {
+        visit.status = "chờ bác sĩ đọc";
+        await visit.save();
+      }
+    }
+
     return successResponse(res, aiData, "Phân tích AI hoàn tất thành công.");
   } catch (error) {
     console.error("Lỗi khi phân tích AI:", error);

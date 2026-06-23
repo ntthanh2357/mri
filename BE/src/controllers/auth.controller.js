@@ -14,15 +14,15 @@ const hashPhone = (phone) => {
 
 
 // Helper function to generate JWT Access Token
-const generateAccessToken = (userId, role, tokenVersion) => {
+const generateAccessToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = process.env.JWT_SECRET || "access_secret";
-  return jwt.sign({ id: userId, role, tokenVersion }, secret, { expiresIn: "1h" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "1h" });
 };
 
 // Helper function to generate JWT Refresh Token
-const generateRefreshToken = (userId, role, tokenVersion) => {
+const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = process.env.JWT_REFRESH_SECRET || "refresh_secret";
-  return jwt.sign({ id: userId, role, tokenVersion }, secret, { expiresIn: "7d" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d" });
 };
 
 // @desc    Register a new user
@@ -30,7 +30,7 @@ const generateRefreshToken = (userId, role, tokenVersion) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
+    const { email, password, role, name, phone, bhytNumber, licenseUrl, hospitalId } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -38,7 +38,8 @@ export const register = async (req, res) => {
       return;
     }
 
-    if (!["patient", "doctor", "admin"].includes(role)) {
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "receptionist", "technician", "nurse"];
+    if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
     }
@@ -68,6 +69,7 @@ export const register = async (req, res) => {
       phone: phone ? hashPhone(phone) : undefined,
       passwordHash,
       role,
+      hospitalId: role !== "patient" ? hospitalId : undefined,
       isVerified: role === "patient" ? true : false, // Patients are auto-verified, Doctors need admin verification for CCHN
       profile: {
         name,
@@ -85,6 +87,7 @@ export const register = async (req, res) => {
         id: newUser._id,
         email: newUser.email,
         role: newUser.role,
+        hospitalId: newUser.hospitalId,
         isVerified: newUser.isVerified,
         profile: newUser.profile,
       },
@@ -133,17 +136,23 @@ export const login = async (req, res) => {
     }
 
     // Generate tokens
-    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
+    // Staff roles created by hospital admin must activate on first login
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "hospital_admin"];
+    const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({
       message: "Đăng nhập thành công!",
       accessToken,
       refreshToken,
+      requiresActivation,
       user: {
         id: user._id,
         email: user.email,
         role: user.role,
+        hospitalId: user.hospitalId,
         isVerified: user.isVerified,
         profile: user.profile,
       },
@@ -582,12 +591,21 @@ export const changePassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
 
+    // Auto-activate account if it was pending activation (first-time staff activation)
+    const wasActivated = !user.isVerified;
+    if (wasActivated) {
+      user.isVerified = true;
+    }
+
     // Optional: Increment tokenVersion to logout of all other sessions when password changes
     user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
 
-    res.status(200).json({ message: "Đổi mật khẩu thành công!" });
+    res.status(200).json({
+      message: "Đổi mật khẩu thành công!",
+      activated: wasActivated,
+    });
   } catch (error) {
     console.error("Lỗi đổi mật khẩu:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đổi mật khẩu.", error: error.message });

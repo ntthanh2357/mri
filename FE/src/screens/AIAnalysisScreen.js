@@ -280,6 +280,13 @@ const AIAnalysisScreen = ({ navigation }) => {
                   </TouchableOpacity>
 
                   <TouchableOpacity
+                    style={[styles.btn, styles.btnUpload, { backgroundColor: '#F59E0B' }]}
+                    onPress={() => { setImages(['/uploads/tumor_01.png']); setAiResult(null); }}
+                  >
+                    <Text style={styles.btnText}>TẢI ẢNH MẪU (TEST)</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={[styles.btn, styles.btnAi, (images.length === 0 || analyzing) && styles.btnDisabled]}
                     onPress={handleAiAnalysis}
                     disabled={images.length === 0 || analyzing}

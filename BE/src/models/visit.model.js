@@ -1,49 +1,38 @@
 import { Schema, model } from "mongoose";
 
-const documentSchema = new Schema(
-  {
-    docKey: { type: String, required: true },
-    groupKey: {
-      type: String,
-      enum: ["nhom1", "nhom2", "nhom3", "nhom5"],
-      required: true,
-    },
-    label: { type: String, required: true },
-    storageType: {
-      type: String,
-      enum: ["upload", "manual"],
-      required: true,
-    },
-    fileUrl: { type: String, default: null },
-    fileName: { type: String, default: null },
-    fileType: { type: String, default: null },
-    manualData: { type: Schema.Types.Mixed, default: null },
-    uploadedAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
 const visitSchema = new Schema(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
-    date: { type: Date, required: true },
-    facility: { type: String, required: true, trim: true },
-    visitType: {
+    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
+    patientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    nurseId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    technicianId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    status: {
       type: String,
-      enum: ["ngoai_tru", "noi_tru"],
-      required: true,
+      enum: ['đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'hoàn tất', 'đã đóng'],
+      default: 'đang chờ'
     },
-    diagnosis: { type: String, trim: true, default: "" },
-    medicalId: { type: String, trim: true, default: "" },
-    doctor: { type: String, trim: true, default: "" },
-    documents: [documentSchema],
+    reason: { type: String, default: "" },
+    vitals: {
+      pulse: { type: Number, default: null },
+      bloodPressure: { type: String, default: "" },
+      temperature: { type: Number, default: null },
+      spo2: { type: Number, default: null },
+      respiratoryRate: { type: Number, default: null },
+      measuredAt: { type: Date, default: null }
+    },
+    mriOrder: {
+      region: { type: String, default: "" },
+      instructions: { type: String, default: "" },
+      requestAiAnalysis: { type: Boolean, default: false },
+      imagingResultId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
+      orderedAt: { type: Date, default: null }
+    },
+    aiResultRef: { type: String, default: null },
+    invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', default: null }
   },
   { timestamps: true }
 );
 
 export const Visit = model("Visit", visitSchema);
+export default Visit;
