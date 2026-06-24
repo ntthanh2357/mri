@@ -13,7 +13,7 @@ const invoiceSchema = new Schema(
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', required: true, index: true },
     items: [invoiceItemSchema],
     totalAmount: { type: Number, required: true },
-    status: { type: String, enum: ['chưa thanh toán', 'đã thanh toán'], default: 'chưa thanh toán' },
+    status: { type: String, enum: ['chờ thanh toán', 'đã thanh toán'], default: 'chờ thanh toán' },
     paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', ''], default: '' },
     paidAt: { type: Date, default: null }
   },

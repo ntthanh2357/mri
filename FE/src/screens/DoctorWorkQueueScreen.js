@@ -154,7 +154,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           {hasReadResult && (
             <TouchableOpacity
               style={styles.btnRead}
-              onPress={() => navigation.navigate('ImagingResult', { visitId: v._id, imagingResultId: v.mriOrder?.imagingResultId })}
+              onPress={() => navigation.navigate('ImagingResult', { visitId: v._id, resultId: v.mriOrder?.imagingResultId, imagingResultId: v.mriOrder?.imagingResultId })}
             >
               <Text style={styles.btnReadText}>🔬 Đọc Kết Quả Phim</Text>
             </TouchableOpacity>
