@@ -1,5 +1,8 @@
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
+import { Invoice } from "../models/invoice.model.js";
+import { Hospital } from "../models/hospital.model.js";
+
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
 // @route   GET /api/v1/visits/staff
@@ -157,6 +160,36 @@ export const updateStatus = async (req, res) => {
     if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
 
     visit.status = status;
+
+    if (status === "hoàn tất") {
+      // Tự động tạo hóa đơn nếu chưa có
+      const existingInvoice = await Invoice.findOne({ visitId: visit._id });
+      if (!existingInvoice) {
+        const hospital = await Hospital.findById(visit.hospitalId);
+        if (hospital) {
+          let items = [{ description: "Khám bệnh", amount: hospital.pricing.examFee, type: "exam" }];
+          if (visit.mriOrder && visit.mriOrder.orderedAt) {
+            items.push({ description: "Chụp MRI", amount: hospital.pricing.mriFee, type: "mri" });
+            if (visit.mriOrder.requestAiAnalysis) {
+              items.push({ description: "Phân tích AI chẩn đoán", amount: hospital.pricing.aiFee, type: "ai" });
+            }
+          }
+          const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+          const invoice = new Invoice({
+            hospitalId: visit.hospitalId,
+            patientId: visit.patientId,
+            visitId: visit._id,
+            items,
+            totalAmount,
+            status: "chờ thanh toán"
+          });
+          await invoice.save();
+          visit.invoiceId = invoice._id;
+        }
+      }
+    }
+
     await visit.save();
     
     res.status(200).json({ message: "Cập nhật trạng thái thành công", visit });

@@ -9,7 +9,8 @@ import {
   feedbackImagingResultAI,
   approveImagingResultAI,
   explainImagingResultAI,
-  getAllImagingResults
+  getAllImagingResults,
+  updateImagingResult
 } from "../controllers/imaging.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -42,7 +43,11 @@ router.post("/:id/explain-ai", protect, explainImagingResultAI);
 // Get single imaging result details (Requires login)
 router.get("/:id", protect, getResultById);
 
+// Update single imaging result report findings/conclusions (Requires login)
+router.put("/:id", protect, updateImagingResult);
+
 // Create new imaging result (Requires login - Doctor/Admin role enforced inside controller)
 router.post("/", protect, createImagingResult);
+
 
 export default router;

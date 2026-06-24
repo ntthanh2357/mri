@@ -18,7 +18,7 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
-import { get } from '../services/api.service';
+import { get, put } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('records');
@@ -32,7 +32,11 @@ const EMRDashboardScreen = ({ navigation }) => {
     try {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
-        setLocalUser(JSON.parse(storedUser));
+        const u = JSON.parse(storedUser);
+        setLocalUser(u);
+        if (u.role === 'nurse') {
+          setActiveTab('nurseQueue');
+        }
       }
     } catch (e) {
       console.log('Error reading user role:', e);
@@ -204,6 +208,14 @@ const EMRDashboardScreen = ({ navigation }) => {
               <Text style={styles.sidebarTitle}>EMR Management</Text>
               <Text style={styles.sidebarSubtitle}>Quản lý Hồ sơ Bệnh Án</Text>
               <View style={styles.sidebarNav}>
+                {localUser?.role === 'nurse' && (
+                  <SidebarItem
+                    icon="🩺"
+                    label="Đo sinh hiệu"
+                    active={activeTab === 'nurseQueue'}
+                    onPress={() => setActiveTab('nurseQueue')}
+                  />
+                )}
                 <SidebarItem
                   icon="📋"
                   label="Hồ sơ bệnh án"
@@ -267,6 +279,13 @@ const EMRDashboardScreen = ({ navigation }) => {
             {/* Mobile tab bar */}
             {!isDesktop && (
               <View style={styles.mobileTabBar}>
+                {localUser?.role === 'nurse' && (
+                  <MobileTab
+                    label="Sinh hiệu"
+                    active={activeTab === 'nurseQueue'}
+                    onPress={() => setActiveTab('nurseQueue')}
+                  />
+                )}
                 <MobileTab
                   label="Hồ sơ"
                   active={activeTab === 'records'}
@@ -313,6 +332,9 @@ const EMRDashboardScreen = ({ navigation }) => {
               </View>
             ) : (
               <ScrollView contentContainerStyle={styles.scrollContainer}>
+                {activeTab === 'nurseQueue' && (
+                  <NurseQueueTab navigation={navigation} />
+                )}
                 {activeTab === 'records' && (
                   <RecordsTab
                     records={filteredRecords}
@@ -422,6 +444,211 @@ const MobileTab = ({ label, active, onPress }) => (
     </Text>
   </TouchableOpacity>
 );
+
+// Tab Components
+const NurseQueueTab = ({ navigation }) => {
+  const [visits, setVisits] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Vitals form state
+  const [selectedVisit, setSelectedVisit] = useState(null);
+  const [vitalsModal, setVitalsModal] = useState(false);
+  const [pulse, setPulse] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [spo2, setSpo2] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [respiratoryRate, setRespiratoryRate] = useState('');
+  const [updating, setUpdating] = useState(false);
+
+  const fetchQueue = async () => {
+    setLoading(true);
+    try {
+      const res = await get('/api/v1/visits/my-queue');
+      setVisits(res.visits || []);
+    } catch (err) {
+      console.error('Error fetching nurse queue:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const openVitalsModal = (visit) => {
+    setSelectedVisit(visit);
+    setPulse(visit.vitals?.pulse?.toString() || '');
+    setBloodPressure(visit.vitals?.bloodPressure || '');
+    setSpo2(visit.vitals?.spo2?.toString() || '');
+    setTemperature(visit.vitals?.temperature?.toString() || '');
+    setRespiratoryRate(visit.vitals?.respiratoryRate?.toString() || '');
+    setVitalsModal(true);
+  };
+
+  const handleSaveVitals = async () => {
+    if (!pulse || !bloodPressure || !spo2 || !temperature) {
+      Alert.alert("Thông báo", "Vui lòng điền các chỉ số sinh hiệu bắt buộc.");
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await put(`/api/v1/visits/${selectedVisit._id}/vitals`, {
+        vitals: {
+          pulse: parseInt(pulse),
+          bloodPressure,
+          spo2: parseInt(spo2),
+          temperature: parseFloat(temperature),
+          respiratoryRate: respiratoryRate ? parseInt(respiratoryRate) : undefined,
+        }
+      });
+      Alert.alert("Thành công", "Đã cập nhật sinh hiệu. Lượt khám chuyển sang Đang khám.");
+      setVitalsModal(false);
+      fetchQueue();
+    } catch (err) {
+      Alert.alert("Lỗi", err.message || "Không thể cập nhật sinh hiệu.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabHeader}>
+        <Text style={styles.tabTitle}>🩺 Hàng đợi đo sinh hiệu</Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
+          <Text style={styles.refreshButtonText}>🔄</Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0D9488" style={{ marginTop: 40 }} />
+      ) : (
+        <View style={{ gap: 12 }}>
+          {visits.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>✨</Text>
+              <Text style={styles.emptyText}>Không có ca khám nào đang chờ đo sinh hiệu.</Text>
+            </View>
+          ) : (
+            visits.map(v => (
+              <View key={v._id} style={[styles.card, { padding: 20, marginBottom: 12 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.patientName}>
+                      {v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
+                    </Text>
+                    <Text style={styles.patientInfo}>
+                      Mã y tế: {v.patientId?.profile?.medicalId || 'N/A'} • Lý do: {v.reason}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.statusBadgeText, { color: '#D97706' }]}>CHỜ ĐO SINH HIỆU</Text>
+                  </View>
+                </View>
+                <View style={{ marginTop: 8, gap: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#475569' }}><Text style={{ fontWeight: 'bold' }}>Bác sĩ chỉ định:</Text> {v.doctorId?.profile?.fullName || v.doctorId?.profile?.name || v.doctorId?.email || 'Đang phân công'}</Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8' }}>Tiếp nhận lúc: {new Date(v.createdAt).toLocaleString('vi-VN')}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.primaryButton, { marginTop: 12, paddingVertical: 10, maxWidth: 160 }]} 
+                  onPress={() => openVitalsModal(v)}
+                >
+                  <Text style={styles.primaryButtonText}>🩺 Nhập Sinh Hiệu</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+
+      {/* Vitals Modal */}
+      <Modal visible={vitalsModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { padding: 20 }]}>
+            <Text style={styles.modalTitle}>🩺 Nhập Sinh Hiệu Cho Bệnh Nhân</Text>
+            <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
+              Bệnh nhân: {selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
+            </Text>
+
+            <View style={{ gap: 12 }}>
+              <View>
+                <Text style={styles.fieldLabel}>Huyết áp (mmHg) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 120/80" 
+                  value={bloodPressure}
+                  onChangeText={setBloodPressure}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Mạch (lần/phút) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 80" 
+                  keyboardType="numeric"
+                  value={pulse}
+                  onChangeText={setPulse}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>SpO2 (%) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 98" 
+                  keyboardType="numeric"
+                  value={spo2}
+                  onChangeText={setSpo2}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Nhiệt độ (°C) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 37" 
+                  keyboardType="numeric"
+                  value={temperature}
+                  onChangeText={setTemperature}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Nhịp thở (lần/phút)</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 18 (không bắt buộc)" 
+                  keyboardType="numeric"
+                  value={respiratoryRate}
+                  onChangeText={setRespiratoryRate}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={() => setVitalsModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.primaryButton} 
+                onPress={handleSaveVitals}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Lưu & Hoàn Thành</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
 
 // Tab Components
 const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh }) => {

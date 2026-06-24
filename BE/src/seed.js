@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import { User } from "./models/user.model.js";
+import { VitalSign } from "./models/vitalSign.model.js";
+import { LabOrder } from "./models/labOrder.model.js";
+import { Biomarker } from "./models/biomarker.model.js";
+
 
 dotenv.config();
 
@@ -85,6 +89,22 @@ const seedDatabase = async () => {
     console.log("Inserting users...");
     const createdUsers = await User.insertMany(mockUsers);
     console.log("Created users:", createdUsers.map(u => `${u.email} (${u.role})`));
+
+    const patientUser = createdUsers.find(u => u.role === "patient");
+    const now = new Date();
+    const mockBiomarkers = [];
+    const mockVitals = [
+      {
+        patient_id: patientUser._id,
+        pulse: 80,
+        blood_pressure: { systolic: 120, diastolic: 80 },
+        spo2: 98,
+        weight: 70,
+        height: 175,
+        bmi: 22.86,
+        recorded_at: new Date(now.getTime() - 2 * 24 * 3600000)
+      }
+    ];
 
     console.log("Inserting vitals history...");
     await VitalSign.insertMany(mockVitals);

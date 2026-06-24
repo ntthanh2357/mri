@@ -13,13 +13,14 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { get, post } from '../services/api.service';
+import { get, post, put } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './ImagingResultScreen.styles';
 
 const ImagingResultScreen = ({ route, navigation }) => {
-  const { resultId } = route.params || {};
+  const resultId = route.params?.resultId || route.params?.imagingResultId;
+  const visitId = route.params?.visitId;
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
@@ -30,6 +31,12 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [explanation, setExplanation] = useState('');
   const [explaining, setExplaining] = useState(false);
+
+  // Doctor Report Editing States
+  const [localUser, setLocalUser] = useState(null);
+  const [findingsText, setFindingsText] = useState('');
+  const [conclusionText, setConclusionText] = useState('');
+  const [completingVisit, setCompletingVisit] = useState(false);
 
   // AI Analysis States
   const [analyzing, setAnalyzing] = useState(false);
@@ -45,6 +52,12 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [approveSuccess, setApproveSuccess] = useState(false);
 
   useEffect(() => {
+    get('/auth/me')
+      .then(res => setLocalUser(res.user))
+      .catch(err => console.log('Error fetching me:', err));
+  }, []);
+
+  useEffect(() => {
     if (!resultId) {
       setError('Không tìm thấy thông tin kết quả.');
       setLoading(false);
@@ -58,6 +71,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
         const response = await get(`/api/v1/imaging/${resultId}`);
         if (response.success) {
           setResult(response.data);
+          setFindingsText(response.data.findings || '');
+          setConclusionText(response.data.conclusion || '');
         } else {
           setError(response.message || 'Không thể tải chi tiết kết quả.');
         }
@@ -182,6 +197,41 @@ const ImagingResultScreen = ({ route, navigation }) => {
       }
     } finally {
       setExplaining(false);
+    }
+  };
+
+  const handleSaveAndComplete = async () => {
+    if (!findingsText.trim() || !conclusionText.trim()) {
+      if (Platform.OS === 'web') alert('Vui lòng điền đầy đủ mô tả hình ảnh và kết luận chẩn đoán.');
+      else Alert.alert('Thông báo', 'Vui lòng điền đầy đủ mô tả hình ảnh và kết luận chẩn đoán.');
+      return;
+    }
+
+    setCompletingVisit(true);
+    try {
+      const docName = localUser?.profile?.fullName || localUser?.profile?.name || localUser?.email || 'Bác sĩ chuyên khoa';
+      await put(`/api/v1/imaging/${resultId}`, {
+        findings: findingsText.trim(),
+        conclusion: conclusionText.trim(),
+        radiologist: docName
+      });
+
+      if (visitId) {
+        await put(`/api/v1/visits/${visitId}/status`, { status: 'hoàn tất' });
+      }
+
+      if (Platform.OS === 'web') {
+        alert('Đã lưu chẩn đoán và hoàn tất ca khám.');
+      } else {
+        Alert.alert('Thành công', 'Đã lưu chẩn đoán và hoàn tất ca khám.');
+      }
+      navigation.goBack();
+    } catch (err) {
+      console.error('Error completing visit:', err);
+      if (Platform.OS === 'web') alert('Lỗi: ' + (err.message || 'Không thể hoàn tất ca khám.'));
+      else Alert.alert('Lỗi', err.message || 'Không thể hoàn tất ca khám.');
+    } finally {
+      setCompletingVisit(false);
     }
   };
 
@@ -478,12 +528,52 @@ const ImagingResultScreen = ({ route, navigation }) => {
             {/* Findings & Conclusion */}
             <View style={styles.findingsSection}>
               <Text style={styles.sectionHeading}>MÔ TẢ HÌNH ẢNH Y KHOA</Text>
-              <Text style={styles.findingsBody}>{result.findings}</Text>
+              {localUser?.role === 'doctor' ? (
+                <TextInput
+                  style={[styles.textInput, styles.textInputMultiline, { marginBottom: 16 }]}
+                  placeholder="Nhập mô tả hình ảnh phim chụp..."
+                  multiline
+                  value={findingsText}
+                  onChangeText={setFindingsText}
+                />
+              ) : (
+                <Text style={styles.findingsBody}>{result.findings}</Text>
+              )}
 
-              <View style={styles.conclusionBox}>
-                <Text style={styles.conclusionHeading}>KẾT LUẬN CHẨN ĐOÁN</Text>
-                <Text style={styles.conclusionBody}>{result.conclusion}</Text>
+              <View style={localUser?.role === 'doctor' ? null : styles.conclusionBox}>
+                <Text style={localUser?.role === 'doctor' ? styles.sectionHeading : styles.conclusionHeading}>KẾT LUẬN CHẨN ĐOÁN</Text>
+                {localUser?.role === 'doctor' ? (
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 48, marginBottom: 16 }]}
+                    placeholder="Nhập kết luận chẩn đoán..."
+                    value={conclusionText}
+                    onChangeText={setConclusionText}
+                  />
+                ) : (
+                  <Text style={styles.conclusionBody}>{result.conclusion}</Text>
+                )}
               </View>
+
+              {localUser?.role === 'doctor' && (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#15803D',
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    marginTop: 10,
+                    marginBottom: 20
+                  }}
+                  onPress={handleSaveAndComplete}
+                  disabled={completingVisit}
+                >
+                  {completingVisit ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>💾 Lưu Kết Quả & Hoàn Tất Khám</Text>
+                  )}
+                </TouchableOpacity>
+              )}
 
               {explanation ? (
                 <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', padding: 16, borderRadius: 10, marginTop: 16 }}>
