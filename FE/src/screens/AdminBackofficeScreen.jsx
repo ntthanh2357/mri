@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
 import {
   LayoutDashboard, 
@@ -26,11 +26,25 @@ import AdminDatasetsView from '../components/AdminDatasetsView';
 import AdminAuditLogsView from '../components/AdminAuditLogsView';
 import AdminAIConfigView from '../components/AdminAIConfigView';
 import { setAuthToken } from '../services/api.service';
+import { apiRequest } from '../utils/apiClient';
 
 const AdminBackofficeScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('metrics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [adminUser, setAdminUser] = useState(null);
+
+  useEffect(() => {
+    apiRequest('/auth/me')
+      .then((data) => {
+        if (data && data.user) {
+          setAdminUser(data.user);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch admin profile:', err);
+      });
+  }, []);
 
 
   // Fullscreen support matching F11 request
@@ -327,13 +341,37 @@ const AdminBackofficeScreen = ({ navigation }) => {
             <span className="w-px h-6 bg-[#e8edf5]" />
 
             {/* User Profile Avatar with dropdown visual */}
-            <div className="flex items-center gap-2 pl-1 cursor-pointer group">
+            <div className="flex items-center gap-3 pl-1 cursor-pointer group">
+              <div className="flex flex-col items-end hidden md:flex">
+                <span className="text-xs font-bold text-slate-800 leading-none">
+                  {adminUser?.profile?.name || adminUser?.email || 'Admin'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wider leading-none">
+                  {adminUser?.role === 'admin' ? 'Hệ thống Admin' : adminUser?.role || 'Admin'}
+                </span>
+              </div>
               <div className="relative">
-                <img 
-                  src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=120&auto=format&fit=crop&q=80" 
-                  alt="BS. Lê Mạnh Minh" 
-                  className="w-10 h-10 rounded-full object-cover border border-[#e8edf5]" 
-                />
+                {adminUser?.profile?.photoUrl ? (
+                  <img 
+                    src={adminUser.profile.photoUrl} 
+                    alt={adminUser?.profile?.name || 'Admin'} 
+                    className="w-10 h-10 rounded-full object-cover border border-[#e8edf5]" 
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border border-[#e8edf5] flex items-center justify-center text-white font-extrabold text-xs shadow-3xs">
+                    {adminUser?.profile?.name
+                      ? adminUser.profile.name
+                          .split(' ')
+                          .filter(Boolean)
+                          .map(w => w[0])
+                          .join('')
+                          .substring(0, 2)
+                          .toUpperCase()
+                      : adminUser?.email
+                        ? adminUser.email.substring(0, 2).toUpperCase()
+                        : 'AD'}
+                  </div>
+                )}
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
               </div>
             </div>

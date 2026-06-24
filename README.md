@@ -134,15 +134,87 @@ Hệ thống phân quyền chi tiết cho 6 đối tượng người dùng:
 
 | Vai Trò | Chức năng trên hệ thống |
 | :--- | :--- |
-| **Administrator (Admin)** | • Quản lý toàn bộ cấu hình AI (retrain, chatbot configuration).<br>• Phê duyệt và quản lý tài khoản người dùng, bác sĩ.<br>• Xem nhật ký kiểm toán hệ thống (Audit Logs) để truy vết dữ liệu. |
-| **Hospital Doctor (Bác sĩ)** | • Xem kết quả chẩn đoán hình ảnh và tham khảo dự đoán của AI.<br>• **Hiệu chỉnh kết quả AI nếu phân loại/khoanh vùng sai**.<br>• Quản lý bệnh án điện tử EMR, kê toa thuốc và chuyển tuyến bệnh nhân. |
-| **Patient (Bệnh nhân)** | • **Tự tải lên phim chụp MRI, phân tích bằng AI và lưu trữ kết quả vào bệnh án cá nhân (EMR) của mình theo biểu mẫu chuẩn**.<br>• Tra cứu lịch sử khám bệnh và hồ sơ hình ảnh y khoa của cá nhân.<br>• Trò chuyện với Chatbot AI RAG để tham khảo các thắc mắc về sức khỏe. |
-| **Technician (Kỹ thuật viên)** | • Tiếp nhận ca chụp, tải hình ảnh MRI/CT lên hệ thống.<br>• Nhập thông số kỹ thuật chụp và kết quả mô tả ban đầu. |
-| **Clinic Manager (Quản lý)** | • Theo dõi lịch làm việc của bác sĩ, quản lý danh sách phòng khám.<br>• Xem các báo cáo vận hành y tế trong ngày. |
-| **Financial Manager (Kế toán)** | • Quản lý viện phí, thu chi của bệnh nhân.<br>• Xuất hóa đơn dịch vụ khám chữa bệnh và thống kê tài chính doanh thu. |
+| **Administrator (Admin)** | • Quản lý toàn bộ cấu hình AI (retrain, chatbot configuration).<br>• Quản lý tài khoản, xem Audit Logs truy vết dữ liệu. |
+| **Hospital Doctor (Bác sĩ)** | • Xem kết quả chẩn đoán hình ảnh và tham khảo dự đoán AI.<br>• **Hiệu chỉnh kết quả AI nếu phân loại/khoanh vùng sai**.<br>• Quản lý bệnh án điện tử EMR, kê toa thuốc. |
+| **Patient (Bệnh nhân)** | • **Tự tải lên phim chụp MRI, phân tích bằng AI và lưu vào bệnh án cá nhân (EMR)**.<br>• Trò chuyện với Chatbot AI RAG y đức. |
+| **Nurse (Điều dưỡng/Y tá)** | • Tạo phiếu chăm sóc (Care Sheet).<br>• Cập nhật các chỉ số sinh hiệu, theo dõi diễn tiến lâm sàng của bệnh nhân nội trú. |
+| **Technician (Kỹ thuật viên)** | • Tải ảnh MRI/CT gốc lên hệ thống RIS/PACS.<br>• Tiếp nhận ca chụp và xác nhận kết quả ban đầu trước khi chuyển Bác sĩ. |
+| **Receptionist (Lễ tân)** | • Tiếp nhận bệnh nhân, tạo hồ sơ mới.<br>• Chỉ định phân luồng phòng khám. |
 
 ---
 
 ## 🔒 Tuân Thủ Bảo Mật & Quy Định Pháp Luật
 - **HIPAA**: Mã hóa dữ liệu truyền tải thông qua HTTPS/TLS, ẩn danh hóa thông tin định danh cá nhân nhạy cảm trong ảnh chụp.
 - **Nghị định 13/2023/NĐ-CP**: Loại bỏ các trường định danh dư thừa như Số CCCD/BHYT trên toàn bộ biểu mẫu quản lý bệnh nhân để bảo mật thông tin tối đa.
+
+---
+
+## 🧪 Hướng Dẫn Test Hệ Thống (Testing Scenarios)
+
+### 1. Tài Khoản Test (Đã Seed Database)
+Sau khi khởi chạy hệ thống và nạp dữ liệu mẫu (`npm run seed`), bạn có thể sử dụng các tài khoản mặc định sau để test (Mật khẩu chung cho tất cả là: **123456**):
+- **Admin**: `admin@neuroscan.com` (Phân quyền Quản trị hệ thống)
+- **Bác sĩ**: `doctor@neuroscan.com` (Phân quyền Bác sĩ)
+- **Điều dưỡng**: `nurse@neuroscan.com` (Phân quyền Điều dưỡng / Y tá)
+- **Kỹ thuật viên**: `technician@neuroscan.com` (Phân quyền Kỹ thuật viên)
+- **Lễ tân**: `receptionist@neuroscan.com` (Phân quyền Lễ tân)
+- **Bệnh nhân**: `patient@neuroscan.com` (Phân quyền Bệnh nhân)
+
+### 2. Các Màn Hình & Chức Năng Cần Test Trọng Tâm
+
+#### 🎯 Test Case 1: Chẩn đoán AI & Active Learning (Dành cho Bác sĩ)
+- **Tài khoản sử dụng:** Bác sĩ (`doctor@neuroscan.com`)
+- **Màn hình:** Hồ sơ bệnh án (EMR) -> Tải ảnh chụp MRI / Cập nhật hình ảnh y khoa.
+- **Thao tác:**
+  1. Tải lên một ảnh MRI não để AI chẩn đoán.
+  2. Đợi hệ thống xử lý, hiển thị kết quả phân loại (vd: Glioma) kèm Bounding Box và bản đồ nhiệt (Heatmap).
+  3. Mở chức năng **"Hiệu chỉnh khoanh vùng & phân loại (AI sai?)"**.
+  4. Chọn lại nhãn thực tế đúng hoặc kéo thả sửa tọa độ khung bị lệch, sau đó ấn **"Xác nhận & Gửi phản hồi AI học lại"**.
+- **Kỳ vọng:** Dữ liệu chuẩn được đưa vào kho Active Learning (thư mục `hard_examples/feedback_log.csv`) phục vụ cho kỹ sư AI tái huấn luyện mô hình.
+
+#### 🎯 Test Case 2: Tự Quét AI & Giải Thích Bác Sĩ Ảo (Dành cho Bệnh nhân)
+- **Tài khoản sử dụng:** Bệnh nhân (`patient@neuroscan.com`)
+- **Màn hình:** Trang chủ Bệnh nhân -> Quét ảnh MRI (Self-Scan) -> Xem EMR.
+- **Thao tác:**
+  1. Bệnh nhân tự tải lên ảnh MRI của bản thân và bấm **"Chẩn đoán AI"**. 
+  2. Hệ thống phân tích, sau đó bệnh nhân có thể lưu trữ kết quả này vào hồ sơ bệnh án cá nhân.
+  3. Khi xem chi tiết EMR, bấm nút **"GIẢI THÍCH KẾT QUẢ BẰNG AI"** (Tính năng Hippocratic AI).
+- **Kỳ vọng:** Trợ lý RAG Chatbot dịch thuật tự động các thuật ngữ chuyên khoa phức tạp thành ngôn ngữ dễ hiểu, mang tính trấn an, và tuân thủ y đức (luôn khuyên bệnh nhân tham vấn bác sĩ).
+
+#### 🎯 Test Case 3: Quản Lý Hệ Thống AI & Truy Vết (Dành cho Admin)
+- **Tài khoản sử dụng:** Admin (`admin@neuroscan.com`)
+- **Màn hình:** Bảng điều khiển Quản trị (Admin Dashboard) -> Hệ thống AI / Cấu hình Chatbot.
+- **Thao tác:**
+  1. Kiểm tra danh sách các ca bệnh được bác sĩ dán nhãn lại (dữ liệu Active Learning).
+  2. Test tính năng **Kích hoạt Huấn luyện lại AI (Retrain)**.
+  3. Quản lý cấu hình Chatbot (thay đổi System Prompt, từ khóa cấm).
+  4. Kiểm tra Audit Logs (Nhật ký kiểm toán) ghi lại mọi thao tác sửa/xóa của người dùng.
+- **Kỳ vọng:** Admin kiểm soát được chất lượng mô hình AI, theo dõi sát luồng dữ liệu y tế nhạy cảm (tuân thủ HIPAA và Audit Log).
+
+#### 🎯 Test Case 4: Theo Dõi & Cập Nhật Sinh Hiệu Bệnh Nhân (Dành cho Điều dưỡng)
+- **Tài khoản sử dụng:** Điều dưỡng (`nurse@neuroscan.com`)
+- **Màn hình:** Danh sách bệnh nhân nội trú -> Chi tiết EMR -> Phiếu Chăm Sóc / Chỉ số Sinh Hiệu.
+- **Thao tác:**
+  1. Chọn một bệnh án nội trú đang điều trị (ví dụ bệnh nhân chờ mổ u não).
+  2. Tạo mới Phiếu Chăm Sóc: Nhập các chỉ số sinh hiệu (Huyết áp, Nhịp tim, Nhiệt độ, SpO2).
+  3. Ghi chú diễn tiến bệnh lý (ví dụ: Bệnh nhân bớt đau đầu, tri giác GCS 15đ) và các y lệnh chăm sóc thực hiện.
+  4. Lưu phiếu chăm sóc vào hồ sơ bệnh án.
+- **Kỳ vọng:** Phiếu chăm sóc được thêm thành công vào EMR của bệnh nhân. Bác sĩ điều trị có thể xem được lịch sử diễn tiến này để điều chỉnh kế hoạch phẫu thuật/điều trị.
+
+#### 🎯 Test Case 5: Tiếp Nhận Phim & Cập Nhật Kết Quả Chụp Mới (Dành cho Kỹ thuật viên)
+- **Tài khoản sử dụng:** Kỹ thuật viên (`technician@neuroscan.com`)
+- **Màn hình:** Quản lý Hình Ảnh (PACS/RIS) / Lịch sử Khám.
+- **Thao tác:**
+  1. Tạo hoặc chọn ca chụp mới cho bệnh nhân đã có trên hệ thống.
+  2. Cập nhật file ảnh (MRI/CT) từ máy chụp lên hệ thống PACS/RIS.
+  3. Điền thông tin kỹ thuật ban đầu (loại máy, vùng chụp) và chuyển trạng thái "Đã chụp xong".
+- **Kỳ vọng:** Ảnh được phân bổ đúng vào hồ sơ EMR của bệnh nhân. Bác sĩ chuyên khoa có thể xem ảnh và dùng AI để chẩn đoán tiếp theo.
+
+#### 🎯 Test Case 6: Tiếp Đón & Tạo Hồ Sơ Bệnh Nhân Ban Đầu (Dành cho Lễ tân)
+- **Tài khoản sử dụng:** Lễ tân (`receptionist@neuroscan.com`)
+- **Màn hình:** Quản lý Bệnh Nhân -> Tiếp đón (Đăng ký khám mới).
+- **Thao tác:**
+  1. Nhập thông tin hành chính của bệnh nhân mới (Họ tên, Năm sinh, Số điện thoại).
+  2. Khởi tạo Hồ sơ bệnh án (EMR) và điều phối bệnh nhân vào phòng khám.
+  3. Quản lý danh sách bệnh nhân chờ khám trong ngày.
+- **Kỳ vọng:** Hồ sơ bệnh án được khởi tạo thành công, xuất hiện ở danh sách chờ khám của đúng Bác sĩ và Điều dưỡng để tiến hành đo sinh hiệu.

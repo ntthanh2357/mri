@@ -9,6 +9,8 @@ import drugRoutes from "./drug.routes.js";
 
 import patientRecordRoutes from "./patientRecord.routes.js";
 import imagingRoutes from "./imaging.routes.js";
+import visitRoutes from "./visit.routes.js";
+import invoiceRoutes from "./invoice.routes.js";
 
 const router = Router();
 
@@ -29,6 +31,10 @@ router.use("/emr", emrRoutes);
 
 // Mount imaging routes
 router.use("/api/v1/imaging", imagingRoutes);
+
+// Mount task assignment routes
+router.use("/api/v1/visits", visitRoutes);
+router.use("/api/v1/invoices", invoiceRoutes);
 
 // Health check endpoint under /api/v1
 

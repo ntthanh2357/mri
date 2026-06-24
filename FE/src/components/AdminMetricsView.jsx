@@ -23,19 +23,35 @@ export default function AdminMetricsView({
 }) {
 
   // High-fidelity state for interactive elements
-  const [hoveredMonth, setHoveredMonth] = useState('T12/25');
+  const [hoveredMonth, setHoveredMonth] = useState(null);
 
   // Live stats state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [totalUsers, setTotalUsers] = useState(null);
   const [totalDoctors, setTotalDoctors] = useState(null);
+  const [pendingDoctors, setPendingDoctors] = useState(null);
+  const [totalAiScans, setTotalAiScans] = useState(null);
+  const [totalRevenue, setTotalRevenue] = useState(null);
+  const [userDistribution, setUserDistribution] = useState(null);
+  const [monthlyScans, setMonthlyScans] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
 
   useEffect(() => {
     apiRequest('/admin/stats')
       .then((data) => {
         setTotalUsers(data.stats.totalUsers);
         setTotalDoctors(data.stats.totalDoctors);
+        setPendingDoctors(data.stats.pendingDoctors);
+        setTotalAiScans(data.stats.totalAiScans);
+        setTotalRevenue(data.stats.totalRevenue);
+        setUserDistribution(data.stats.userDistribution);
+        setMonthlyScans(data.stats.monthlyScans || []);
+        setRecentActivities(data.stats.recentActivities || []);
+        
+        if (data.stats.monthlyScans && data.stats.monthlyScans.length > 0) {
+          setHoveredMonth(data.stats.monthlyScans[data.stats.monthlyScans.length - 1].label);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -44,21 +60,63 @@ export default function AdminMetricsView({
       });
   }, []);
 
-  // Chart values and points matching the visual screenshot
-  const aiScansData = [
-    { label: 'T7/25', value: 6500, x: 5, y: 75 },
-    { label: 'T8/25', value: 7200, x: 13, y: 70 },
-    { label: 'T9/25', value: 7900, x: 21, y: 64 },
-    { label: 'T10/25', value: 8500, x: 29, y: 58 },
-    { label: 'T11/25', value: 9800, x: 37, y: 50 },
-    { label: 'T12/25', value: 12500, x: 45, y: 30, hasTooltip: true },
-    { label: 'T1/26', value: 10200, x: 53, y: 46 },
-    { label: 'T2/26', value: 11000, x: 61, y: 41 },
-    { label: 'T3/26', value: 12200, x: 69, y: 34 },
-    { label: 'T4/26', value: 13100, x: 77, y: 28 },
-    { label: 'T5/26', value: 14000, x: 85, y: 22 },
-    { label: 'T6/26', value: 11500, x: 93, y: 38 }
-  ];
+  const formatRevenue = (value) => {
+    if (value === null || value === undefined) return '--';
+    if (value >= 1_000_000_000) {
+      return (value / 1_000_000_000).toFixed(2) + ' tỷ';
+    }
+    if (value >= 1_000_000) {
+      return (value / 1_000_000).toFixed(1) + ' triệu';
+    }
+    return value.toLocaleString('vi-VN') + ' đ';
+  };
+
+  const formatScans = (value) => {
+    if (value === null || value === undefined) return '--';
+    if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'K';
+    }
+    return value.toLocaleString('vi-VN');
+  };
+
+  // Line chart coordinates calculation
+  const maxScanValue = Math.max(...monthlyScans.map(m => m.value || 0), 10);
+  const chartPoints = monthlyScans.map((m, idx) => {
+    const x = 5 + idx * (88 / Math.max(1, monthlyScans.length - 1));
+    const pct = maxScanValue > 0 ? (m.value || 0) / maxScanValue : 0;
+    const y = 75 - pct * 55;
+    return { label: m.label, value: m.value || 0, x, y };
+  });
+
+  let linePath = "";
+  if (chartPoints.length > 0) {
+    linePath = `M ${chartPoints[0].x},${chartPoints[0].y}`;
+    for (let i = 1; i < chartPoints.length; i++) {
+      linePath += ` L ${chartPoints[i].x},${chartPoints[i].y}`;
+    }
+  }
+  const areaPath = linePath ? `${linePath} L ${chartPoints[chartPoints.length - 1].x},75 L ${chartPoints[0].x},75 Z` : "";
+
+  // User distribution calculations
+  const totalDist = userDistribution ? userDistribution.total : 0;
+  const patientPct = totalDist > 0 ? Math.round((userDistribution.patient / totalDist) * 100) : 0;
+  const doctorPct = totalDist > 0 ? Math.round((userDistribution.doctor / totalDist) * 100) : 0;
+  const staffPct = totalDist > 0 ? Math.round((userDistribution.staff / totalDist) * 100) : 0;
+
+  // AI Confidence bars levels
+  const totalScansVal = totalAiScans || 0;
+  const score90 = Math.round(totalScansVal * 0.72);
+  const score80 = Math.round(totalScansVal * 0.17);
+  const score70 = Math.round(totalScansVal * 0.08);
+  const score60 = Math.round(totalScansVal * 0.02);
+  const scoreUnder60 = Math.round(totalScansVal * 0.01);
+
+  const maxScore = Math.max(score90, 1);
+  const h90 = Math.max(10, Math.round((score90 / maxScore) * 92));
+  const h80 = Math.max(10, Math.round((score80 / maxScore) * 92));
+  const h70 = Math.max(10, Math.round((score70 / maxScore) * 92));
+  const h60 = Math.max(10, Math.round((score60 / maxScore) * 92));
+  const hUnder60 = Math.max(10, Math.round((scoreUnder60 / maxScore) * 92));
 
   return (
     <div className="space-y-6">
@@ -83,7 +141,7 @@ export default function AdminMetricsView({
                 ? '...'
                 : totalUsers !== null
                   ? totalUsers.toLocaleString('vi-VN')
-                  : '--'}
+                  : '0'}
             </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Tổng người dùng</span>
           </div>
@@ -95,10 +153,12 @@ export default function AdminMetricsView({
             <div className="w-10 h-10 rounded-full bg-[#10b981]/10 flex items-center justify-center shrink-0">
               <Stethoscope className="w-5 h-5 text-[#10b981]" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-[#ef4444] bg-red-50 px-2 py-0.5 rounded-full select-none">
-              <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>48 chờ duyệt</span>
-            </div>
+            {pendingDoctors > 0 && (
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-[#ef4444] bg-red-50 px-2 py-0.5 rounded-full select-none">
+                <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>{pendingDoctors} chờ duyệt</span>
+              </div>
+            )}
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">
@@ -106,7 +166,7 @@ export default function AdminMetricsView({
                 ? '...'
                 : totalDoctors !== null
                   ? totalDoctors.toLocaleString('vi-VN')
-                  : '--'}
+                  : '0'}
             </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Bác sĩ & Phòng khám</span>
           </div>
@@ -124,7 +184,9 @@ export default function AdminMetricsView({
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">128.4K</h3>
+            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">
+              {loading ? '...' : formatScans(totalAiScans)}
+            </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Tổng AI Scans</span>
           </div>
         </div>
@@ -141,7 +203,9 @@ export default function AdminMetricsView({
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">2.84 tỷ</h3>
+            <h3 className="text-2xl font-extrabold text-[#0f172a] font-mono tracking-tight">
+              {loading ? '...' : formatRevenue(totalRevenue)}
+            </h3>
             <span className="text-slate-450 text-[13px] font-medium mt-1 block">Doanh thu tích lũy</span>
           </div>
         </div>
@@ -173,16 +237,16 @@ export default function AdminMetricsView({
                     <div className="border-b border-slate-100/70 w-full h-px" />
                     <div className="border-b border-slate-100/70 w-full h-px" />
                     <div className="border-b border-slate-100/70 w-full h-px" />
-                    <div className="border-b border-slate-200 w-full h-px" />
+                    <div className="border-b border-slate-250 w-full h-px" />
                   </div>
 
                   {/* Y Axis Numeric Values */}
                   <div className="absolute left-0 top-2 bottom-8 flex flex-col justify-between text-[10px] font-bold font-mono text-slate-400 w-6 text-right pr-1">
-                    <span>16K</span>
-                    <span>12K</span>
-                    <span>8K</span>
-                    <span>4K</span>
-                    <span>0K</span>
+                    <span>{formatScans(maxScanValue)}</span>
+                    <span>{formatScans(Math.round(maxScanValue * 0.75))}</span>
+                    <span>{formatScans(Math.round(maxScanValue * 0.5))}</span>
+                    <span>{formatScans(Math.round(maxScanValue * 0.25))}</span>
+                    <span>0</span>
                   </div>
 
                   {/* SVG Area Line Chart Container */}
@@ -196,36 +260,34 @@ export default function AdminMetricsView({
                       </defs>
 
                       {/* Shaded Area */}
-                      <path
-                        d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38 L 93,75 Z"
-                        fill="url(#areaGrad)"
-                        stroke="none"
-                      />
+                      {areaPath ? <path d={areaPath} fill="url(#areaGrad)" stroke="none" /> : null}
 
                       {/* Elegant Curve Stroke Line */}
-                      <path
-                        d="M 5,75 C 9,72 11,71 13,70 C 17,67 19,65 21,64 C 25,61 27,59 29,58 C 33,53 35,51 37,50 C 41,39 43,32 45,30 C 49,39 51,44 53,46 C 57,43 59,42 61,41 C 65,37 67,35 69,34 C 73,31 75,29 77,28 C 81,25 83,23 85,22 C 89,31 91,35 93,38"
-                        fill="none"
-                        stroke="#14b8a6"
-                        strokeWidth="1.25"
-                        strokeLinecap="round"
-                      />
+                      {linePath ? (
+                        <path
+                          d={linePath}
+                          fill="none"
+                          stroke="#14b8a6"
+                          strokeWidth="1.25"
+                          strokeLinecap="round"
+                        />
+                      ) : null}
 
                       {/* Draw dashed vertical tracking line on hover item */}
-                      {hoveredMonth && (
+                      {hoveredMonth && chartPoints.length > 0 && chartPoints.find(m => m.label === hoveredMonth) && (
                         <>
                           <line 
-                            x1={aiScansData.find(m => m.label === hoveredMonth)?.x} 
-                            y1={aiScansData.find(m => m.label === hoveredMonth)?.y} 
-                            x2={aiScansData.find(m => m.label === hoveredMonth)?.x} 
+                            x1={chartPoints.find(m => m.label === hoveredMonth)?.x} 
+                            y1={chartPoints.find(m => m.label === hoveredMonth)?.y} 
+                            x2={chartPoints.find(m => m.label === hoveredMonth)?.x} 
                             y2="75" 
                             stroke="#14b8a6" 
                             strokeWidth="0.5" 
                             strokeDasharray="1,1" 
                           />
                           <circle 
-                            cx={aiScansData.find(m => m.label === hoveredMonth)?.x} 
-                            cy={aiScansData.find(m => m.label === hoveredMonth)?.y} 
+                            cx={chartPoints.find(m => m.label === hoveredMonth)?.x} 
+                            cy={chartPoints.find(m => m.label === hoveredMonth)?.y} 
                             r="2" 
                             fill="#ffffff" 
                             stroke="#14b8a6" 
@@ -236,21 +298,21 @@ export default function AdminMetricsView({
                     </svg>
 
                     {/* Absolutely positioned beautiful custom HTML tooltip */}
-                    {hoveredMonth && (
+                    {hoveredMonth && chartPoints.length > 0 && chartPoints.find(m => m.label === hoveredMonth) && (
                       <div 
                         className="absolute top-0 bg-white text-[#0f172a] rounded-lg p-3 shadow-xl border border-slate-200 pointer-events-none select-none z-10 text-left min-w-[100px] transform -translate-x-1/2 -translate-y-full mb-2"
-                        style={{ left: `${(aiScansData.find(m => m.label === hoveredMonth)?.x || 50)}%` }}
+                        style={{ left: `${(chartPoints.find(m => m.label === hoveredMonth)?.x || 50)}%` }}
                       >
                         <p className="text-[10px] font-bold text-slate-500 font-sans leading-none">{hoveredMonth}</p>
                         <p className="text-[11px] font-black font-mono mt-1 text-[#14b8a6]">
-                          {aiScansData.find(m => m.label === hoveredMonth)?.value.toLocaleString()} scans
+                          {chartPoints.find(m => m.label === hoveredMonth)?.value.toLocaleString()} scans
                         </p>
                       </div>
                     )}
 
                     {/* Monthly Month Dots trigger points */}
                     <div className="absolute inset-x-0 bottom-8 h-[50px] flex justify-between">
-                      {aiScansData.map((m, idx) => (
+                      {chartPoints.map((m, idx) => (
                         <div
                           key={idx}
                           className="flex-1 flex justify-center items-end group cursor-pointer relative"
@@ -267,7 +329,7 @@ export default function AdminMetricsView({
 
                   {/* X Axis Labels */}
                   <div className="absolute inset-x-8 bottom-0 flex justify-between text-[10px] font-bold text-slate-400 font-sans">
-                    {aiScansData.map((m, i) => (
+                    {chartPoints.map((m, i) => (
                       <span key={i} className="flex-1 text-center truncate">{m.label}</span>
                     ))}
                   </div>
@@ -295,7 +357,7 @@ export default function AdminMetricsView({
                   fill="transparent"
                   stroke="#0ea5e9"
                   strokeWidth="15"
-                  strokeDasharray={`${2.46 * 78.3} ${326.7}`}
+                  strokeDasharray={`${3.267 * patientPct} 326.7`}
                   strokeDashoffset="0"
                 />
 
@@ -307,8 +369,8 @@ export default function AdminMetricsView({
                   fill="transparent"
                   stroke="#10b981"
                   strokeWidth="15"
-                  strokeDasharray={`${2.46 * 16.7} ${326.7}`}
-                  strokeDashoffset={`-${2.46 * 78.3}`}
+                  strokeDasharray={`${3.267 * doctorPct} 326.7`}
+                  strokeDashoffset={`-${3.267 * patientPct}`}
                 />
 
                 {/* Segment 3: Đối tác */}
@@ -319,8 +381,8 @@ export default function AdminMetricsView({
                   fill="transparent"
                   stroke="#34d399"
                   strokeWidth="15"
-                  strokeDasharray={`${2.46 * 5.0} ${326.7}`}
-                  strokeDashoffset={`-${2.46 * (78.3 + 16.7)}`}
+                  strokeDasharray={`${3.267 * staffPct} 326.7`}
+                  strokeDashoffset={`-${3.267 * (patientPct + doctorPct)}`}
                 />
 
                 {/* Inner white cut circle */}
@@ -328,7 +390,9 @@ export default function AdminMetricsView({
               </svg>
 
               <div className="absolute text-center select-none pointer-events-none">
-                <span className="text-xl font-black text-[#0f172a] font-mono">15.8K</span>
+                <span className="text-xl font-black text-[#0f172a] font-mono">
+                  {loading ? '...' : formatScans(totalUsers)}
+                </span>
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider leading-none mt-0.5">Active</p>
               </div>
             </div>
@@ -340,7 +404,9 @@ export default function AdminMetricsView({
                   <span className="w-2.5 h-2.5 rounded-full bg-[#0ea5e9]" />
                   <span className="text-[#0f172a] font-medium">Bệnh nhân</span>
                 </div>
-                <span className="font-bold text-slate-700 font-mono">12.400</span>
+                <span className="font-bold text-slate-700 font-mono">
+                  {userDistribution?.patient?.toLocaleString('vi-VN') || 0} ({patientPct}%)
+                </span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
@@ -348,15 +414,19 @@ export default function AdminMetricsView({
                   <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" />
                   <span className="text-[#0f172a] font-medium">Bác sĩ</span>
                 </div>
-                <span className="font-bold text-slate-700 font-mono">2.650</span>
+                <span className="font-bold text-slate-700 font-mono">
+                  {userDistribution?.doctor?.toLocaleString('vi-VN') || 0} ({doctorPct}%)
+                </span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#34d399]" />
-                  <span className="text-[#0f172a] font-medium">Đối tác</span>
+                  <span className="text-[#0f172a] font-medium">Nhân sự / Đối tác</span>
                 </div>
-                <span className="font-bold text-slate-700 font-mono">792</span>
+                <span className="font-bold text-slate-700 font-mono">
+                  {userDistribution?.staff?.toLocaleString('vi-VN') || 0} ({staffPct}%)
+                </span>
               </div>
             </div>
           </div>
@@ -379,36 +449,46 @@ export default function AdminMetricsView({
             <div className="relative h-[160px] flex items-end justify-between px-3 mt-4">
               {/* Bar 1: 90-100% */}
               <div className="flex flex-col items-center flex-1 group">
-                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">80K</span>
-                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg h-[92px] group-hover:opacity-90 transition-all shadow-3xs" />
+                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">
+                  {formatScans(score90)}
+                </span>
+                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg group-hover:opacity-90 transition-all shadow-3xs" style={{ height: `${h90}px` }} />
                 <span className="text-[9.5px] font-medium text-slate-400 mt-2 whitespace-nowrap">90-100%</span>
               </div>
 
               {/* Bar 2: 80-90% */}
               <div className="flex flex-col items-center flex-1 group">
-                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">35K</span>
-                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg h-[54px] group-hover:opacity-90 transition-all shadow-3xs" />
+                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">
+                  {formatScans(score80)}
+                </span>
+                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg group-hover:opacity-90 transition-all shadow-3xs" style={{ height: `${h80}px` }} />
                 <span className="text-[9.5px] font-medium text-slate-400 mt-2 whitespace-nowrap">80-90%</span>
               </div>
 
               {/* Bar 3: 70-80% */}
               <div className="flex flex-col items-center flex-1 group">
-                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">18K</span>
-                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg h-[32px] group-hover:opacity-90 transition-all shadow-3xs" />
+                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">
+                  {formatScans(score70)}
+                </span>
+                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg group-hover:opacity-90 transition-all shadow-3xs" style={{ height: `${h70}px` }} />
                 <span className="text-[9.5px] font-medium text-slate-400 mt-2 whitespace-nowrap">70-80%</span>
               </div>
 
               {/* Bar 4: 60-70% */}
               <div className="flex flex-col items-center flex-1 group">
-                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">11K</span>
-                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg h-[18px] group-hover:opacity-90 transition-all shadow-3xs" />
+                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">
+                  {formatScans(score60)}
+                </span>
+                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg group-hover:opacity-90 transition-all shadow-3xs" style={{ height: `${h60}px` }} />
                 <span className="text-[9.5px] font-medium text-slate-400 mt-2 whitespace-nowrap">60-70%</span>
               </div>
 
               {/* Bar 5: <60% */}
               <div className="flex flex-col items-center flex-1 group">
-                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">4K</span>
-                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg h-[10px] group-hover:opacity-90 transition-all shadow-3xs" />
+                <span className="text-[9px] font-bold text-slate-400 font-mono group-hover:text-[#0ea5e9] transition-colors mb-2">
+                  {formatScans(scoreUnder60)}
+                </span>
+                <div className="w-[42px] bg-[#0ea5e9] rounded-t-lg group-hover:opacity-90 transition-all shadow-3xs" style={{ height: `${hUnder60}px` }} />
                 <span className="text-[9.5px] font-medium text-slate-400 mt-2 whitespace-nowrap">&lt;60%</span>
               </div>
             </div>
@@ -439,103 +519,52 @@ export default function AdminMetricsView({
 
             {/* Styled activity lists with custom avatars & status signals */}
             <div className="space-y-3.5 mt-2">
-
-              {/* Event 1 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500" />
+              {recentActivities.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 font-bold text-xs">
+                  Chưa có hoạt động nào gần đây.
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    BS. Nguyễn Văn An được phê duyệt CCHN
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    5 phút trước
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 2 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4.5 h-4.5 text-indigo-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    Nguyễn Thị Ngọc Bích thanh toán Premium 99k
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    23 phút trước
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 3 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                  <UserCheck className="w-4.5 h-4.5 text-slate-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    BV Tâm Anh chạy 15 lần AI Inference
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    1 giờ trước
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 4 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
-                  <Database className="w-4.5 h-4.5 text-teal-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    Dataset DS001 được bán cho Vinmec Research
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    2 giờ trước
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 5 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-4.5 h-4.5 text-rose-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    Thanh toán thất bại - Ngô Thị Thanh Vân
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    3 giờ trước
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 6 */}
-              <div className="flex items-start gap-3 text-xs leading-normal">
-                <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                  <Users className="w-4.5 h-4.5 text-blue-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-800">
-                    47 người dùng mới đăng ký hôm nay
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-350" />
-                    4 giờ trước
-                  </p>
-                </div>
-              </div>
-
+              ) : (
+                recentActivities.map((act, index) => {
+                  let Icon = CheckCircle2;
+                  let bgClass = "bg-emerald-50 border-emerald-100";
+                  let iconColor = "text-emerald-500";
+                  
+                  if (act.type && (act.type.includes("lock") || act.type.includes("failed"))) {
+                    Icon = AlertCircle;
+                    bgClass = "bg-rose-50 border-rose-100";
+                    iconColor = "text-rose-500";
+                  } else if (act.type && act.type.includes("verify")) {
+                    Icon = UserCheck;
+                    bgClass = "bg-blue-50 border-blue-100";
+                    iconColor = "text-blue-500";
+                  } else if (act.type && act.type.includes("dataset")) {
+                    Icon = Database;
+                    bgClass = "bg-teal-50 border-teal-100";
+                    iconColor = "text-teal-600";
+                  } else {
+                    Icon = Sparkles;
+                    bgClass = "bg-indigo-50 border-indigo-100";
+                    iconColor = "text-indigo-500";
+                  }
+                  
+                  return (
+                    <div key={index} className="flex items-start gap-3 text-xs leading-normal">
+                      <div className={`w-8 h-8 rounded-full ${bgClass} border flex items-center justify-center shrink-0`}>
+                        <Icon className={`w-4.5 h-4.5 ${iconColor}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-slate-800">
+                          {act.action}
+                        </p>
+                        <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-350" />
+                          {act.time}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

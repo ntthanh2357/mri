@@ -56,7 +56,7 @@ const LoginScreen = ({ navigation }) => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.replace(destination, { user: data.user });
           return;
         }
@@ -149,7 +149,16 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/login', { email, password });
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+
+      // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
+      if (data.requiresActivation) {
+        navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
+        return;
+      }
+
+      const destination = data.user && data.user.role === 'admin'
+        ? 'AdminBackoffice'
+        : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
         navigation.replace(destination);
       });
@@ -185,7 +194,7 @@ const LoginScreen = ({ navigation }) => {
 
       const data = await post('/auth/sso/google', { idToken });
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.replace(destination);
       });
@@ -203,7 +212,7 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/sso/zalo', { accessToken: 'mock_zalo_token_123' });
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
+      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Zalo thành công.', () => {
         navigation.replace(destination);
       });
