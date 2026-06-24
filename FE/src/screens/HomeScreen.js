@@ -79,7 +79,19 @@ const HomeScreen = ({ route, navigation }) => {
       if (user.role === 'admin') {
         navigation.replace('AdminBackoffice');
       } else if (user.role === 'hospital_admin') {
-        navigation.replace('ClinicDashboard');
+        (async () => {
+          try {
+            const hRes = await get('/api/v1/hospital/me');
+            const hStatus = hRes.data?.hospital?.status;
+            if (hStatus === 'provisioned') {
+              navigation.replace('HospitalOnboarding');
+            } else {
+              navigation.replace('ClinicDashboard');
+            }
+          } catch {
+            navigation.replace('HospitalOnboarding');
+          }
+        })();
       } else if (user.role === 'receptionist') {
         navigation.replace('ReceptionistDashboard', { user });
       } else if (user.role === 'doctor') {

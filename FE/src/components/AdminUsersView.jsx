@@ -288,18 +288,9 @@ export default function AdminUsersView() {
           <h2 className="text-base font-extrabold text-slate-800">Quản lý Tài Khoản &amp; Khóa User</h2>
           <p className="text-slate-400 text-xs">Phân hệ hiển thị, can thiệp khóa/mở quyền đăng nhập của y bác sĩ lẫn bệnh án B2C (ADM-01, ADM-02, ADM-04, ADM-05)</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold py-2 px-4 shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Tạo tài khoản mới
-          </button>
-          <span className="text-[10px] bg-slate-100 text-slate-650 border border-slate-200 font-bold px-3 py-2 rounded-lg shrink-0">
-            Tổng: {usersList.length} tài khoản
-          </span>
-        </div>
+        <span className="text-[10px] bg-slate-100 text-slate-650 border border-slate-200 font-bold px-3 py-2 rounded-lg shrink-0">
+          Tổng: {usersList.length} tài khoản
+        </span>
       </div>
 
       {/* Control filters & search query */}

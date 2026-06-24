@@ -3,8 +3,7 @@ import { Platform, View, Text, StyleSheet } from 'react-native';
 import {
   LayoutDashboard, 
   Users, 
-  Stethoscope, 
-  ChevronRight, 
+ChevronRight, 
   ChevronDown, 
   Search, 
   Moon, 
@@ -21,10 +20,10 @@ import '../tailwind-built.css';
 
 import AdminMetricsView from '../components/AdminMetricsView';
 import AdminUsersView from '../components/AdminUsersView';
-import AdminDoctorsView from '../components/AdminDoctorsView';
 import AdminDatasetsView from '../components/AdminDatasetsView';
 import AdminAuditLogsView from '../components/AdminAuditLogsView';
 import AdminAIConfigView from '../components/AdminAIConfigView';
+import AdminHospitalsView from '../components/AdminHospitalsView';
 import { setAuthToken } from '../services/api.service';
 import { apiRequest } from '../utils/apiClient';
 
@@ -173,25 +172,23 @@ const AdminBackofficeScreen = ({ navigation }) => {
                 {!sidebarCollapsed && <span className="truncate">Người dùng</span>}
               </button>
 
-              <button 
-                onClick={() => setActiveTab('doctors')}
-                className={`relative flex items-center rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'justify-between px-4 w-full'
+<button
+                onClick={() => setActiveTab('hospitals')}
+                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
+                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
-                  activeTab === 'doctors'
+                  activeTab === 'hospitals'
                     ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
                     : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Bác sĩ & PK" : undefined}
+                title={sidebarCollapsed ? "Bệnh viện" : undefined}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Stethoscope className="w-[18px] h-[18px] shrink-0" />
-                  {!sidebarCollapsed && <span className="truncate">Bác sĩ & PK</span>}
-                </div>
+                <span className="w-[18px] h-[18px] shrink-0 flex items-center justify-center text-base leading-none">🏥</span>
+                {!sidebarCollapsed && <span className="truncate">Bệnh viện</span>}
               </button>
 
-              <button 
+              <button
                 onClick={() => setActiveTab('datasets')}
                 className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
@@ -393,8 +390,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
               <AdminUsersView />
             )}
 
-            {activeTab === 'doctors' && (
-              <AdminDoctorsView />
+{activeTab === 'hospitals' && (
+              <AdminHospitalsView />
             )}
 
             {activeTab === 'datasets' && (

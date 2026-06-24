@@ -29,10 +29,6 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
   return user;
 };
 
-export const getAllDoctors = async () => {
-  return User.find({ role: "doctor" }, "-passwordHash").lean();
-};
-
 export const lockUserById = async (id, adminId) => {
   const user = await User.findById(id).select("isLocked email").lean();
 
@@ -63,57 +59,6 @@ export const lockUserById = async (id, adminId) => {
   });
 
   return updatedUser;
-};
-
-export const verifyDoctor = async (userId, verified, adminId) => {
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isVerified: verified },
-    { new: true }
-  ).select("-passwordHash");
-
-  if (user) {
-    await AuditLog.create({
-      action: verified ? "verify-doctor" : "unverify-doctor",
-      entity: "User",
-      entityId: userId,
-      performedBy: adminId,
-      details: `Doctor ${user.email} verification ${verified ? "approved" : "revoked"} by admin`,
-    });
-  }
-
-  return user;
-};
-
-export const verifyDoctorById = async (id, verified, adminId) => {
-  // Step 1: Find user by id, selecting only the fields we need to validate
-  const existing = await User.findById(id).select("role email isVerified").lean();
-
-  // Step 2: If not found or not a doctor, throw
-  if (!existing || existing.role !== "doctor") {
-    throw new Error("Doctor not found");
-  }
-
-  // Step 3: Update and return the sanitized document
-  const updated = await User.findByIdAndUpdate(
-    id,
-    { isVerified: verified },
-    { new: true }
-  )
-    .select("-passwordHash -otpCode -otpExpires -tokenVersion")
-    .lean();
-
-  // Step 4: Create audit log
-  await AuditLog.create({
-    action: verified ? "verify-doctor" : "unverify-doctor",
-    entity: "User",
-    entityId: id,
-    performedBy: adminId,
-    details: `Doctor ${existing.email} verification ${verified ? "approved" : "revoked"} by admin`,
-  });
-
-  // Step 5: Return updated doctor
-  return updated;
 };
 
 export const verifyAdminById = async (id, verified, adminId) => {

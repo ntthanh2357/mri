@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
+import { Hospital } from "../models/hospital.model.js";
 import { sendOtpEmail } from "../services/email.service.js";
 import { Otp } from "../models/otp.model.js";
 import crypto from "crypto";
@@ -110,13 +111,22 @@ export const login = async (req, res) => {
       return;
     }
 
-    // Find user by email or phone
-    const user = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        { phone: hashPhone(email) }
-      ]
-    });
+    // Nếu nhập mã BV (VD: BV_003) → tìm user qua hospital.code
+    let user;
+    const isBvCode = /^BV_\d+$/i.test(email.trim());
+    if (isBvCode) {
+      const hospital = await Hospital.findOne({ code: email.trim().toUpperCase() }).lean();
+      if (hospital) {
+        user = await User.findOne({ hospitalId: hospital._id, role: 'hospital_admin' });
+      }
+    } else {
+      user = await User.findOne({
+        $or: [
+          { email: email.toLowerCase() },
+          { phone: hashPhone(email) }
+        ]
+      });
+    }
     if (!user) {
       res.status(400).json({ message: "Email hoặc mật khẩu không chính xác." });
       return;

@@ -29,6 +29,7 @@ import ReceptionistDashboardScreen from '../screens/ReceptionistDashboardScreen'
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
 import TechnicianQueueScreen from '../screens/TechnicianQueueScreen';
+import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -100,6 +101,7 @@ const AppNavigator = () => {
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TechnicianQueue" component={TechnicianQueueScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

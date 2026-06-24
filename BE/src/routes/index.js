@@ -12,6 +12,7 @@ import imagingRoutes from "./imaging.routes.js";
 import imagingResultsRoutes from "./imagingResults.routes.js";
 import visitRoutes from "./visit.routes.js";
 import invoiceRoutes from "./invoice.routes.js";
+import hospitalRoutes from "./hospital.routes.js";
 
 const router = Router();
 
@@ -37,6 +38,7 @@ router.use("/api/v1/imaging-results", imagingResultsRoutes);
 // Mount task assignment routes
 router.use("/api/v1/visits", visitRoutes);
 router.use("/api/v1/invoices", invoiceRoutes);
+router.use("/api/v1/hospital", hospitalRoutes);
 
 // Health check endpoint under /api/v1
 

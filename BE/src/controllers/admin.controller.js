@@ -11,17 +11,15 @@ import bcrypt from "bcryptjs";
 import {
   getAllUsers,
   toggleUserLock,
-  getAllDoctors,
-  verifyDoctor,
-  getUserById,
+getUserById,
   lockUserById as lockUserByIdService,
   unlockUserById as unlockUserByIdService,
   getSystemStats,
-  verifyDoctorById as verifyDoctorByIdService,
-  verifyAdminById,
+verifyAdminById,
 } from "../services/user.service.js";
 import { getDatasets, createDataset, updateDatasetPrice as updateDatasetPriceService } from "../services/dataset.service.js";
 import { getAuditLogs, anonymizeAuditLogs } from "../services/audit.service.js";
+import { sendHospitalCredentials } from "../services/email.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,26 +39,6 @@ export const lockUser = async (req, res) => {
     const adminId = req.user.id;
     const user = await toggleUserLock(userId, Boolean(isLocked), adminId);
     res.status(200).json({ success: true, user });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-export const fetchDoctors = async (req, res) => {
-  try {
-    const doctors = await getAllDoctors();
-    res.status(200).json({ success: true, doctors });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-export const verifyDoctorAccount = async (req, res) => {
-  try {
-    const { userId, verified } = req.body;
-    const adminId = req.user.id;
-    const doctor = await verifyDoctor(userId, Boolean(verified), adminId);
-    res.status(200).json({ success: true, doctor });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -161,31 +139,6 @@ export const fetchStats = async (req, res) => {
     res.status(200).json({ success: true, stats });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ─── 3.5 verifyDoctorById ────────────────────────────────────────────────────
-export const verifyDoctorById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!isValidObjectId(id)) {
-      res.status(400).json({ success: false, message: "Invalid doctor ID" });
-      return;
-    }
-    const { verified } = req.body;
-    if (typeof verified !== "boolean") {
-      res.status(400).json({ success: false, message: "Field 'verified' must be a boolean" });
-      return;
-    }
-    const adminId = req.user.id;
-    const doctor = await verifyDoctorByIdService(id, verified, adminId);
-    res.status(200).json({ success: true, doctor });
-  } catch (error) {
-    if (error.message === "Doctor not found") {
-      res.status(404).json({ success: false, message: error.message });
-    } else {
-      res.status(500).json({ success: false, message: error.message });
-    }
   }
 };
 
@@ -366,7 +319,9 @@ export const createUser = async (req, res) => {
 
 export const fetchHospitals = async (req, res) => {
   try {
-    const hospitals = await Hospital.find({ isActive: true }).select("name code").lean();
+    const hospitals = await Hospital.find({ isActive: true })
+      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt")
+      .lean();
     res.status(200).json({ success: true, hospitals });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -672,5 +627,169 @@ export const updateHospitalPricing = async (req, res) => {
     res.status(200).json({ success: true, message: "Cập nhật bảng giá thành công", pricing: hospital.pricing });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+// ─── Hospital Onboarding ──────────────────────────────────────────────────────
+
+// Step 1: Admin cấp tài khoản tạm cho bệnh viện
+export const provisionHospital = async (req, res) => {
+  try {
+    const { hospitalName, itEmail } = req.body;
+    if (!hospitalName || !itEmail) {
+      return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện và email IT." });
+    }
+
+    // Generate unique BV_XXX code
+    const count = await Hospital.countDocuments();
+    let code;
+    let attempt = count + 1;
+    do {
+      code = `BV_${String(attempt).padStart(3, "0")}`;
+      attempt++;
+    } while (await Hospital.findOne({ code }));
+
+    // Generate temp password
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    const tempPassword = "BV@" + Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+
+    // Temp email used as username (not a real email, just an internal identifier)
+    const tempEmail = `${code.toLowerCase()}@temp.neuroscan.internal`;
+
+    const existing = await User.findOne({ email: tempEmail });
+    if (existing) {
+      return res.status(409).json({ success: false, message: `Mã ${code} đã tồn tại.` });
+    }
+
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    // Create hospital record first
+    const hospital = await Hospital.create({
+      name: hospitalName.trim(),
+      code,
+      tempUsername: code,
+      status: "provisioned",
+    });
+
+    // Create hospital_admin user
+    await User.create({
+      email: tempEmail,
+      passwordHash,
+      role: "hospital_admin",
+      hospitalId: hospital._id,
+      isVerified: false,
+      profile: { name: hospitalName.trim() },
+    });
+
+    // Send credentials email (fire-and-forget)
+    sendHospitalCredentials({ itEmail, hospitalName: hospitalName.trim(), tempUsername: code, tempPassword }).catch(() => {});
+
+    res.status(201).json({
+      success: true,
+      message: "Đã cấp tài khoản tạm thời.",
+      credentials: { tempUsername: code, tempPassword, itEmail },
+      hospital: { _id: hospital._id, name: hospital.name, code, status: "provisioned" },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /admin/hospitals/:id
+export const getHospitalById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+    const hospital = await Hospital.findById(id).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    res.status(200).json({ success: true, hospital });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Step 4: Admin xác thực → cập nhật email đăng nhập chính thức
+export const activateHospital = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    if (hospital.status !== "submitted") {
+      return res.status(400).json({ success: false, message: "Bệnh viện chưa nộp thông tin hoặc đã được kích hoạt." });
+    }
+    if (!hospital.loginEmail) {
+      return res.status(400).json({ success: false, message: "Bệnh viện chưa cung cấp email đăng nhập chính thức." });
+    }
+
+    // Check loginEmail not already taken by another user
+    const conflict = await User.findOne({ email: hospital.loginEmail, hospitalId: { $ne: hospital._id } });
+    if (conflict) {
+      return res.status(409).json({ success: false, message: "Email đăng nhập đã được sử dụng bởi tài khoản khác." });
+    }
+
+    // Update user: replace temp email with official loginEmail
+    const tempEmail = `${hospital.code.toLowerCase()}@temp.neuroscan.internal`;
+    await User.findOneAndUpdate(
+      { email: tempEmail, hospitalId: hospital._id },
+      { email: hospital.loginEmail, isVerified: true }
+    );
+
+    hospital.status = "active";
+    await hospital.save();
+
+    await AuditLog.create({
+      action: "activate-hospital",
+      entity: "Hospital",
+      entityId: hospital._id,
+      performedBy: req.user.id,
+      details: `Hospital ${hospital.name} activated. Login email: ${hospital.loginEmail}`,
+    });
+
+    res.status(200).json({ success: true, message: "Bệnh viện đã được kích hoạt.", hospital });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Reset mật khẩu tạm cho bệnh viện (dùng khi quên password)
+export const resetHospitalPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    if (hospital.status === "active") {
+      return res.status(400).json({ success: false, message: "Bệnh viện đã kích hoạt, không thể reset tài khoản tạm." });
+    }
+
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    const newPassword = "BV@" + Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const tempEmail = `${hospital.code.toLowerCase()}@temp.neuroscan.internal`;
+    await User.findOneAndUpdate({ email: tempEmail, hospitalId: hospital._id }, { passwordHash });
+
+    res.status(200).json({
+      success: true,
+      message: "Đã reset mật khẩu tạm.",
+      credentials: { tempUsername: hospital.code, tempPassword: newPassword },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
