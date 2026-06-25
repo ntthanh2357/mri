@@ -1,0 +1,42 @@
+# Environments
+.env
+
+# Virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Mac
+.DS_Store
+
+# Data and Models
+archive/
+archive.zip
+models/*
+!models/README.md
+*.h5
+*.keras
+
+# Database and logs
+audit_logs.db
+*.db
+*.log
+feedback_log.csv
+
+# Uploads and temporary files
+uploads/
+hard_examples/
+gradcam_tests/
+
+# Test output images
+*.png
+*.jpg
+*.jpeg
+!Figure_1.png
+!confusion_matrix.png
+
+# Office temporary files
+~$*
+
