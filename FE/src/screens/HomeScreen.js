@@ -371,7 +371,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.gridCard}
-                      onPress={() => navigation.navigate('MedicalRecordForm')}
+                      onPress={() => navigation.navigate('RecordVault')}
                     >
                       <Text style={styles.gridIcon}>📋</Text>
                       <Text style={styles.gridLabel}>Khai báo bệnh án</Text>

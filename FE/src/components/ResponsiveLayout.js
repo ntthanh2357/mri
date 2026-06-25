@@ -66,7 +66,7 @@ const ResponsiveLayout = ({
           { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: '🧠' },
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: '📸' },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: '📜' },
-          { label: 'Khai báo bệnh án', route: 'MedicalRecordForm', icon: '📋' },
+          { label: 'Khai báo bệnh án', route: 'RecordVault', icon: '📋' },
           { label: 'Mua Premium', route: 'Premium', icon: '💎' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '👨‍⚕️' },
         ];

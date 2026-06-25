@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,33 +12,10 @@ import {
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useMedicalRecordForm } from '../controllers/useMedicalRecordForm';
-import { apiRequest } from '../utils/apiClient';
-
-const extractMedications = (text) => {
-  if (!text) return [];
-  const words = text.toLowerCase().split(/[\s,;\n\-\+•·]+/);
-  const found = [];
-  const candidates = ['keppra', 'depakine', 'dexamethasone', 'donepezil', 'diazepam', 'phenobarbital', 'tegretol'];
-  candidates.forEach(cand => {
-    if (words.includes(cand) || text.toLowerCase().includes(cand)) {
-      found.push(cand);
-    }
-  });
-  return found;
-};
-
-const extractOrders = (formData) => {
-  const text = Object.values(formData).join(' ').toLowerCase();
-  const found = [];
-  if (text.includes('mri') || text.includes('cản từ') || text.includes('gadolinium') || text.includes('tương phản')) {
-    found.push('MRI sọ não có cản quang');
-  }
-  return found;
-};
 
 const FormField = ({ label, value, onChangeText, placeholder, multiline, keyboardType, half }) => (
   <View style={[styles.fieldContainer, half && styles.fieldHalf]}>
-    <Text style={styles.fieldLabel}>{label}</Text>
+    {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
     <TextInput
       style={[styles.input, multiline && styles.textArea]}
       value={value}
@@ -50,6 +27,19 @@ const FormField = ({ label, value, onChangeText, placeholder, multiline, keyboar
       keyboardType={keyboardType || 'default'}
     />
   </View>
+);
+
+const CheckboxItem = ({ label, checked, onToggle, indent }) => (
+  <TouchableOpacity
+    style={[styles.checkboxRow, indent && styles.checkboxIndent]}
+    onPress={onToggle}
+    activeOpacity={0.7}
+  >
+    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+      {checked && <Text style={styles.checkboxTick}>✓</Text>}
+    </View>
+    <Text style={[styles.checkboxLabel, checked && styles.checkboxLabelChecked]}>{label}</Text>
+  </TouchableOpacity>
 );
 
 const Section = ({ title, sectionKey, expanded, onToggle, children }) => (
@@ -80,45 +70,20 @@ const MedicalRecordFormScreen = ({ navigation }) => {
     tienLuong: false,
   });
 
-  const toggleSection = (key) => {
-    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const togglePhanBiet = (field) => {
+    const current = formData.chanDoan?.phanBiet || {};
+    updateField('chanDoan', 'phanBiet', { ...current, [field]: !current[field] });
   };
 
-  const [warnings, setWarnings] = useState([]);
-  const [checking, setChecking] = useState(false);
+  const toggleChuyenKhoa = (field) => {
+    const current = formData.huongDieuTri?.chuyenKhoa || {};
+    updateField('huongDieuTri', 'chuyenKhoa', { ...current, [field]: !current[field] });
+  };
 
-  useEffect(() => {
-    const meds = extractMedications(formData.huongDieuTri?.noiKhoaCapCuu || '');
-    const orders = extractOrders(formData);
-
-    if (meds.length === 0 && orders.length === 0) {
-      setWarnings([]);
-      return;
-    }
-
-    const delayDebounceId = setTimeout(async () => {
-      setChecking(true);
-      try {
-        const res = await apiRequest('/api/drugs/check-prescription', {
-          method: 'POST',
-          body: JSON.stringify({
-            patientId: 'PT-001',
-            medications: meds,
-            orders,
-          }),
-        });
-        if (res && res.data) {
-          setWarnings(res.data.warnings || []);
-        }
-      } catch (err) {
-        console.log('Error checking clinical safety in medical record form:', err);
-      } finally {
-        setChecking(false);
-      }
-    }, 800);
-
-    return () => clearTimeout(delayDebounceId);
-  }, [formData.huongDieuTri?.noiKhoaCapCuu, formData.canLamSang]);
+  const phanBiet = formData.chanDoan?.phanBiet || {};
+  const chuyenKhoa = formData.huongDieuTri?.chuyenKhoa || {};
 
   if (loading) {
     return (
@@ -144,10 +109,6 @@ const MedicalRecordFormScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
           <View style={styles.titleBlock}>
             <Text style={styles.pageTitle}>BỆNH ÁN UNG THƯ NÃO</Text>
-            <Text style={styles.pageSubtitle}>
-              Vui lòng điền đầy đủ thông tin bên dưới. Dữ liệu sẽ được lưu lại trên thiết bị của bạn để
-              bác sĩ tham khảo trong lần khám tiếp theo.
-            </Text>
             {formData.updatedAt && (
               <Text style={styles.lastSaved}>
                 Lần lưu gần nhất: {new Date(formData.updatedAt).toLocaleString('vi-VN')}
@@ -196,30 +157,30 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               label="Ngày giờ vào viện"
               value={formData.hanhChinh.ngayGioVaoVien}
               onChangeText={(t) => updateField('hanhChinh', 'ngayGioVaoVien', t)}
-              placeholder="VD: 8 giờ 30, ngày 11 tháng 06 năm 2026"
+              placeholder="........ giờ ....... ngày ....... tháng ....... năm 2026"
             />
             <FormField
               label="Ngày làm bệnh án"
               value={formData.hanhChinh.ngayLamBenhAn}
               onChangeText={(t) => updateField('hanhChinh', 'ngayLamBenhAn', t)}
-              placeholder="VD: 9 giờ 00, ngày 11 tháng 06 năm 2026"
+              placeholder="........ giờ ....... ngày ....... tháng ....... năm 2026"
             />
           </Section>
 
           {/* II. LÝ DO VÀO VIỆN */}
           <Section title="II. LÝ DO VÀO VIỆN" sectionKey="lyDoVaoVien" expanded={expanded.lyDoVaoVien} onToggle={toggleSection}>
+            <Text style={styles.hintText}>(Ví dụ: Đau đầu dữ dội tăng dần, co giật, yếu nửa người, nhìn mờ...)</Text>
             <FormField
-              label="Lý do vào viện"
               value={formData.lyDoVaoVien}
               onChangeText={(t) => updateField('lyDoVaoVien', null, t)}
-              placeholder="Ví dụ: Đau đầu dữ dội tăng dần, co giật, yếu nửa người, nhìn mờ..."
+              placeholder="Mô tả lý do vào viện..."
               multiline
             />
           </Section>
 
           {/* III. BỆNH SỬ */}
           <Section title="III. BỆNH SỬ" sectionKey="benhSu" expanded={expanded.benhSu} onToggle={toggleSection}>
-            <Text style={styles.subSectionTitle}>1. Quá trình khởi phát và diễn tiến</Text>
+            <Text style={styles.subSectionTitle}>1. Quá trình khởi phát và diễn tiến:</Text>
             <FormField
               label="Thời gian khởi phát triệu chứng đầu tiên"
               value={formData.benhSu.thoiGianKhoiPhat}
@@ -255,7 +216,7 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               multiline
             />
 
-            <Text style={styles.subSectionTitle}>2. Các triệu chứng kèm theo</Text>
+            <Text style={styles.subSectionTitle}>2. Các triệu chứng kèm theo:</Text>
             <FormField
               label="Hội chứng tăng áp lực nội sọ"
               value={formData.benhSu.hoiChungTangApLuc}
@@ -264,7 +225,7 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               multiline
             />
 
-            <Text style={styles.subSectionTitle}>3. Quá trình điều trị đã qua</Text>
+            <Text style={styles.subSectionTitle}>3. Quá trình điều trị đã qua:</Text>
             <FormField
               label="Đã khám ở đâu, chẩn đoán gì, dùng thuốc gì"
               value={formData.benhSu.quaTrinhDieuTri}
@@ -276,9 +237,9 @@ const MedicalRecordFormScreen = ({ navigation }) => {
 
           {/* IV. TIỀN SỬ */}
           <Section title="IV. TIỀN SỬ" sectionKey="tienSu" expanded={expanded.tienSu} onToggle={toggleSection}>
-            <Text style={styles.subSectionTitle}>1. Bản thân</Text>
+            <Text style={styles.subSectionTitle}>1. Bản thân:</Text>
             <FormField
-              label="Tiền sử bệnh lý thần kinh, chấn thương sọ não trước đây"
+              label="Tiền sử mắc các bệnh lý thần kinh, chấn thương sọ não trước đây"
               value={formData.tienSu.benhLyThanKinh}
               onChangeText={(t) => updateField('tienSu', 'benhLyThanKinh', t)}
               placeholder="Mô tả nếu có..."
@@ -288,11 +249,11 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               label="Tiền sử ung thư cơ quan khác"
               value={formData.tienSu.ungThuCoQuanKhac}
               onChangeText={(t) => updateField('tienSu', 'ungThuCoQuanKhac', t)}
-              placeholder="Phổi, vú, đại trực tràng..."
+              placeholder="Loại trừ hoặc hướng tới ung thư não thứ phát do di căn từ phổi, vú, đại trực tràng..."
               multiline
             />
             <FormField
-              label="Tiền sử tiếp xúc tia xạ, hóa chất độc hại"
+              label="Tiền sử tiếp xúc với tia xạ, hóa chất độc hại"
               value={formData.tienSu.tiepXucTiaXa}
               onChangeText={(t) => updateField('tienSu', 'tiepXucTiaXa', t)}
               placeholder="Mô tả nếu có..."
@@ -311,12 +272,12 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               placeholder="Thuốc, hóa chất, thức ăn..."
             />
 
-            <Text style={styles.subSectionTitle}>2. Gia đình</Text>
+            <Text style={styles.subSectionTitle}>2. Gia đình:</Text>
             <FormField
               label="Có ai mắc hội chứng di truyền liên quan đến u não"
               value={formData.tienSu.hoiChungDiTruyen}
               onChangeText={(t) => updateField('tienSu', 'hoiChungDiTruyen', t)}
-              placeholder="Neurofibromatosis, Li-Fraumeni, Von Hippel-Lindau..."
+              placeholder="Neurofibromatosis, hội chứng Li-Fraumeni, Von Hippel-Lindau...?"
               multiline
             />
             <FormField
@@ -334,33 +295,29 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               label="Thời điểm khám"
               value={formData.khamBenh.thoiDiemKham}
               onChangeText={(t) => updateField('khamBenh', 'thoiDiemKham', t)}
-              placeholder="VD: 9 giờ ngày 11/06/2026"
+              placeholder="...... giờ ngày ..../......./2026"
             />
-            <Text style={styles.subSectionTitle}>1. Khám toàn thân</Text>
-            <View style={styles.row}>
-              <FormField
-                label="Tri giác"
-                value={formData.khamBenh.triGiac}
-                onChangeText={(t) => updateField('khamBenh', 'triGiac', t)}
-                placeholder="Tỉnh táo / Ngủ gà / Mơ màng / Hôn mê"
-                half
-              />
-              <FormField
-                label="Thang điểm Glasgow"
-                value={formData.khamBenh.glasgow}
-                onChangeText={(t) => updateField('khamBenh', 'glasgow', t)}
-                placeholder="VD: 15 điểm"
-                keyboardType="number-pad"
-                half
-              />
-            </View>
-            <Text style={styles.subSectionTitle}>Dấu hiệu sinh tồn</Text>
+            <Text style={styles.subSectionTitle}>1. Khám Toàn Thân</Text>
+            <FormField
+              label="Tri giác (Đánh giá qua thang điểm Glasgow)"
+              value={formData.khamBenh.triGiac}
+              onChangeText={(t) => updateField('khamBenh', 'triGiac', t)}
+              placeholder="Tỉnh táo / Ngủ gà / Mơ màng / Hôn mê"
+            />
+            <FormField
+              label="Thang điểm Glasgow"
+              value={formData.khamBenh.glasgow}
+              onChangeText={(t) => updateField('khamBenh', 'glasgow', t)}
+              placeholder="...... điểm"
+              keyboardType="number-pad"
+            />
+            <Text style={styles.fieldLabel}>Dấu hiệu sinh tồn:</Text>
             <View style={styles.row}>
               <FormField
                 label="Mạch (lần/phút)"
                 value={formData.khamBenh.mach}
                 onChangeText={(t) => updateField('khamBenh', 'mach', t)}
-                placeholder="VD: 80"
+                placeholder="..........."
                 keyboardType="number-pad"
                 half
               />
@@ -368,7 +325,7 @@ const MedicalRecordFormScreen = ({ navigation }) => {
                 label="Nhiệt độ (°C)"
                 value={formData.khamBenh.nhietDo}
                 onChangeText={(t) => updateField('khamBenh', 'nhietDo', t)}
-                placeholder="VD: 37"
+                placeholder="..........."
                 keyboardType="decimal-pad"
                 half
               />
@@ -378,14 +335,14 @@ const MedicalRecordFormScreen = ({ navigation }) => {
                 label="Huyết áp (mmHg)"
                 value={formData.khamBenh.huyetAp}
                 onChangeText={(t) => updateField('khamBenh', 'huyetAp', t)}
-                placeholder="VD: 120/80"
+                placeholder="..........."
                 half
               />
               <FormField
                 label="Nhịp thở (lần/phút)"
                 value={formData.khamBenh.nhipTho}
                 onChangeText={(t) => updateField('khamBenh', 'nhipTho', t)}
-                placeholder="VD: 18"
+                placeholder="..........."
                 keyboardType="number-pad"
                 half
               />
@@ -402,27 +359,26 @@ const MedicalRecordFormScreen = ({ navigation }) => {
                 label="BMI"
                 value={formData.khamBenh.bmi}
                 onChangeText={(t) => updateField('khamBenh', 'bmi', t)}
-                placeholder="VD: 21.5"
+                placeholder="..........."
                 keyboardType="decimal-pad"
                 half
               />
             </View>
             <FormField
-              label="Da, niêm mạc"
+              label="Da, niêm mạc hồng hào hay nhợt nhạt? Có xuất huyết dưới da không?"
               value={formData.khamBenh.daNiemMac}
               onChangeText={(t) => updateField('khamBenh', 'daNiemMac', t)}
-              placeholder="Hồng hào hay nhợt nhạt? Có xuất huyết dưới da không?"
+              placeholder="Mô tả..."
               multiline
             />
           </Section>
 
-          {/* VI. KHÁM CHUYÊN KHOA */}
+          {/* VI. KHÁM CHUYÊN KHOA THẦN KINH */}
           <Section title="VI. KHÁM CHUYÊN KHOA THẦN KINH" sectionKey="khamChuyenKhoa" expanded={expanded.khamChuyenKhoa} onToggle={toggleSection}>
             <FormField
-              label="Ghi chú khám chuyên khoa thần kinh"
               value={formData.khamChuyenKhoa}
               onChangeText={(t) => updateField('khamChuyenKhoa', null, t)}
-              placeholder="Vận động, cảm giác, phản xạ, dây thần kinh sọ, thất điều... (bác sĩ sẽ bổ sung khi thăm khám)"
+              placeholder="Vận động, cảm giác, phản xạ, dây thần kinh sọ, thất điều..."
               multiline
             />
           </Section>
@@ -430,7 +386,6 @@ const MedicalRecordFormScreen = ({ navigation }) => {
           {/* VII. CẬN LÂM SÀNG */}
           <Section title="VII. CẬN LÂM SÀNG" sectionKey="canLamSang" expanded={expanded.canLamSang} onToggle={toggleSection}>
             <FormField
-              label="Kết quả cận lâm sàng"
               value={formData.canLamSang}
               onChangeText={(t) => updateField('canLamSang', null, t)}
               placeholder="Kết quả MRI/CT, xét nghiệm máu, giải phẫu bệnh (nếu có)..."
@@ -444,57 +399,113 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               label="Chẩn đoán xác định"
               value={formData.chanDoan.xacDinh}
               onChangeText={(t) => updateField('chanDoan', 'xacDinh', t)}
-              placeholder="Ung thư não (U não ác tính) vùng ... / Giai đoạn (Độ ác tính - WHO Grade I-IV nếu đã có GPB)"
+              placeholder="Ung thư não (U não ác tính) vùng ........................... / Giai đoạn (hoặc Độ ác tính - WHO Grade I-IV nếu đã có GPB)."
               multiline
             />
-            <FormField
-              label="Chẩn đoán phân biệt"
-              value={formData.chanDoan.phanBiet}
-              onChangeText={(t) => updateField('chanDoan', 'phanBiet', t)}
-              placeholder="Áp xe não / Tai biến mạch máu não (Đột quỵ) / Phình mạch não"
-              multiline
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelBold]}>Chẩn đoán phân biệt:</Text>
+            <CheckboxItem
+              label="Áp xe não."
+              checked={!!phanBiet.apXeNao}
+              onToggle={() => togglePhanBiet('apXeNao')}
             />
-            <FormField
-              label="Chẩn đoán nguyên nhân"
-              value={formData.chanDoan.nguyenNhan}
-              onChangeText={(t) => updateField('chanDoan', 'nguyenNhan', t)}
-              placeholder="Nguyên phát tại não hay Thứ phát (Di căn từ ung thư...)"
-              multiline
+            <CheckboxItem
+              label="Tai biến mạch máu não (Đột quỵ)."
+              checked={!!phanBiet.taiNao}
+              onToggle={() => togglePhanBiet('taiNao')}
             />
+            <CheckboxItem
+              label="Phình mạch não."
+              checked={!!phanBiet.phinhMach}
+              onToggle={() => togglePhanBiet('phinhMach')}
+            />
+
+            <View style={styles.fieldSpacingTop}>
+              <FormField
+                label="Chẩn đoán nguyên nhân"
+                value={formData.chanDoan.nguyenNhan}
+                onChangeText={(t) => updateField('chanDoan', 'nguyenNhan', t)}
+                placeholder="Nguyên phát tại não hay Thứ phát (Di căn từ ung thư .....................)."
+                multiline
+              />
+            </View>
           </Section>
 
           {/* IX. HƯỚNG ĐIỀU TRỊ THIẾT YẾU */}
           <Section title="IX. HƯỚNG ĐIỀU TRỊ THIẾT YẾU" sectionKey="huongDieuTri" expanded={expanded.huongDieuTri} onToggle={toggleSection}>
-            <FormField
-              label="1. Điều trị nội khoa cấp cứu"
-              value={formData.huongDieuTri.noiKhoaCapCuu}
-              onChangeText={(t) => updateField('huongDieuTri', 'noiKhoaCapCuu', t)}
-              placeholder="Chống phù não, giảm áp lực nội sọ: Corticoid (Dexamethasone) + thuốc chống co giật (nếu có tiền sử) + giảm đau"
-              multiline
-            />
-            <FormField
-              label="2. Điều trị chuyên khoa (phối hợp đa mô thức)"
-              value={formData.huongDieuTri.chuyenKhoa}
-              onChangeText={(t) => updateField('huongDieuTri', 'chuyenKhoa', t)}
-              placeholder="Phẫu thuật / Xạ trị / Hóa trị (VD: Temozolomide)..."
-              multiline
-            />
-            <FormField
-              label="3. Chăm sóc giảm nhẹ & dinh dưỡng"
-              value={formData.huongDieuTri.chamSocGiamNhe}
-              onChangeText={(t) => updateField('huongDieuTri', 'chamSocGiamNhe', t)}
-              placeholder="Nâng cao thể trạng, giảm đau, hỗ trợ tâm lý..."
-              multiline
-            />
+            <View style={styles.treatmentItem}>
+              <Text style={styles.treatmentNumber}>1</Text>
+              <View style={styles.treatmentContent}>
+                <Text style={styles.treatmentText}>
+                  <Text style={styles.treatmentBold}>Điều trị nội khoa cấp cứu (Chống phù não, giảm áp lực nội sọ): </Text>
+                  Sử dụng Corticoid (Dexamethasone) + Thuốc chống co giật (nếu có tiền sử co giật) + Giảm đau.
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.treatmentNote]}
+                  value={formData.huongDieuTri.noiKhoaCapCuu}
+                  onChangeText={(t) => updateField('huongDieuTri', 'noiKhoaCapCuu', t)}
+                  placeholder="Ghi chú thêm..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={styles.treatmentItem}>
+              <Text style={styles.treatmentNumber}>2</Text>
+              <View style={styles.treatmentContent}>
+                <Text style={styles.treatmentText}>
+                  <Text style={styles.treatmentBold}>Điều trị chuyên khoa (Phối hợp đa mô thức):</Text>
+                </Text>
+                <CheckboxItem
+                  label="Phẫu thuật: Cắt bỏ tối đa khối u an toàn / Sinh thiết làm giải phẫu bệnh."
+                  checked={!!chuyenKhoa.phauThuat}
+                  onToggle={() => toggleChuyenKhoa('phauThuat')}
+                  indent
+                />
+                <CheckboxItem
+                  label="Xạ trị: Xạ trị toàn não hoặc xạ trị định vị (nếu có chỉ định)."
+                  checked={!!chuyenKhoa.xaTri}
+                  onToggle={() => toggleChuyenKhoa('xaTri')}
+                  indent
+                />
+                <CheckboxItem
+                  label="Hóa trị: Sử dụng hóa chất (ví dụ: Temozolomide đối với U tế bào thần kinh đệm ác tính)."
+                  checked={!!chuyenKhoa.hoaTri}
+                  onToggle={() => toggleChuyenKhoa('hoaTri')}
+                  indent
+                />
+              </View>
+            </View>
+
+            <View style={styles.treatmentItem}>
+              <Text style={styles.treatmentNumber}>3</Text>
+              <View style={styles.treatmentContent}>
+                <Text style={styles.treatmentText}>
+                  <Text style={styles.treatmentBold}>Chăm sóc giảm nhẹ &amp; Dinh dưỡng: </Text>
+                  Nâng cao thể trạng, giảm đau, hỗ trợ tâm lý.
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.treatmentNote]}
+                  value={formData.huongDieuTri.chamSocGiamNhe}
+                  onChangeText={(t) => updateField('huongDieuTri', 'chamSocGiamNhe', t)}
+                  placeholder="Ghi chú thêm..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
           </Section>
 
           {/* X. TIÊN LƯỢNG & DỰ KIẾN KẾ HOẠCH TIẾP THEO */}
-          <Section title="X. TIÊN LƯỢNG & KẾ HOẠCH TIẾP THEO" sectionKey="tienLuong" expanded={expanded.tienLuong} onToggle={toggleSection}>
+          <Section title="X. TIÊN LƯỢNG & DỰ KIẾN KẾ HOẠCH TIẾP THEO" sectionKey="tienLuong" expanded={expanded.tienLuong} onToggle={toggleSection}>
             <FormField
               label="Tiên lượng"
               value={formData.tienLuong.mucDo}
               onChangeText={(t) => updateField('tienLuong', 'mucDo', t)}
-              placeholder="Gần / Xa (dựa vào thể giải phẫu bệnh, kích thước và vị trí khối u)"
+              placeholder="Gần / Xa (Dựa vào thể giải phẫu bệnh, kích thước và vị trí khối u)."
             />
             <FormField
               label="Kế hoạch tiếp theo"
@@ -505,24 +516,18 @@ const MedicalRecordFormScreen = ({ navigation }) => {
             />
           </Section>
 
-          {/* Cảnh báo lâm sàng (Clinical Warnings Alert Banner) */}
-          {checking && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8, paddingHorizontal: 4 }}>
-              <ActivityIndicator size="small" color="#0D9488" />
-              <Text style={{ fontSize: 12, color: '#0D9488', marginLeft: 8 }}>Đang kiểm tra an toàn kê đơn...</Text>
-            </View>
-          )}
-
-          {warnings.length > 0 && (
-            <View style={styles.warningBanner}>
-              <Text style={styles.warningBannerTitle}>⚠️ Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
-              {warnings.map((w, idx) => (
-                <Text key={idx} style={styles.warningItem}>
-                  • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})
-                </Text>
-              ))}
-            </View>
-          )}
+          {/* BÁC SĨ LÀM BỆNH ÁN */}
+          <View style={styles.signatureBlock}>
+            <Text style={styles.signatureTitle}>BÁC SĨ LÀM BỆNH ÁN</Text>
+            <Text style={styles.signatureHint}>(Ký và ghi rõ họ tên)</Text>
+            <TextInput
+              style={[styles.input, styles.signatureInput]}
+              value={formData.bacSiLamBenhAn}
+              onChangeText={(t) => updateField('bacSiLamBenhAn', null, t)}
+              placeholder="Họ và tên bác sĩ..."
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
 
           {/* Action buttons */}
           <View style={styles.actionsRow}>
@@ -533,7 +538,7 @@ const MedicalRecordFormScreen = ({ navigation }) => {
               {saving ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.saveButtonText}>💾 Lưu bệnh án</Text>
+                <Text style={styles.saveButtonText}>Lưu bệnh án</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -591,20 +596,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#0F172A',
-    marginBottom: 6,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 19,
+    marginBottom: 4,
   },
   lastSaved: {
     fontSize: 11,
     color: '#15803D',
-    marginTop: 8,
+    marginTop: 4,
     fontWeight: '600',
   },
   sectionCard: {
@@ -638,11 +638,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   subSectionTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#334155',
-    marginTop: 4,
+    marginTop: 8,
     marginBottom: 10,
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginBottom: 10,
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',
@@ -661,6 +668,15 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 6,
   },
+  fieldLabelBold: {
+    fontSize: 13,
+    color: '#334155',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  fieldSpacingTop: {
+    marginTop: 8,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -675,10 +691,106 @@ const styles = StyleSheet.create({
     minHeight: 80,
     paddingTop: 10,
   },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    paddingVertical: 2,
+  },
+  checkboxIndent: {
+    marginLeft: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  checkboxChecked: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  checkboxTick: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    lineHeight: 16,
+  },
+  checkboxLabel: {
+    fontSize: 13,
+    color: '#475569',
+    flex: 1,
+    lineHeight: 20,
+  },
+  checkboxLabelChecked: {
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  treatmentItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  treatmentNumber: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#334155',
+    width: 20,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  treatmentContent: {
+    flex: 1,
+  },
+  treatmentText: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  treatmentBold: {
+    fontWeight: 'bold',
+    color: '#334155',
+  },
+  treatmentNote: {
+    minHeight: 56,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  signatureBlock: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  signatureTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  signatureHint: {
+    fontSize: 12,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  signatureInput: {
+    marginTop: 4,
+  },
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
   },
   resetButton: {
     flex: 1,
@@ -706,26 +818,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  warningBanner: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 12,
-  },
-  warningBannerTitle: {
-    color: '#991B1B',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  warningItem: {
-    color: '#7F1D1D',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 4,
   },
 });
 
