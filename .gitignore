@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 
 # Claude Code local config
 .claude/
+
+# Temporary clones and ducks
+tmp_clone/
+tmp_duck/

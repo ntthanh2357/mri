@@ -27,8 +27,14 @@ updateDatasetPrice,
   resetHospitalPassword,
   toggleHospitalLock,
   deleteHospital,
+  createRevenueReport,
+  getRevenueReports,
+  getRevenueReportById,
+  createDrugReport,
+  getDrugReports,
+  getDrugReportById,
 } from "../controllers/admin.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { requireSystemAdmin, requireHospitalAdmin } from "../middlewares/role.middleware.js";
 
 const router = Router();
@@ -69,5 +75,13 @@ router.get("/ai-training-stats", requireSystemAdmin, getAiTrainingStats);
 // ─── Hospital Operations Dashboard ───────────────────────────────────────────
 router.get("/dashboard", requireHospitalAdmin, getDashboardStats);
 router.put("/hospital-pricing", requireHospitalAdmin, updateHospitalPricing);
+
+// ─── Custom monthly reports (Revenue and Drug reports) ──────────────────────
+router.post("/reports/revenue", checkRole(["admin", "hospital_admin", "doctor"]), createRevenueReport);
+router.get("/reports/revenue", checkRole(["admin", "hospital_admin", "doctor"]), getRevenueReports);
+router.get("/reports/revenue/:id", checkRole(["admin", "hospital_admin", "doctor"]), getRevenueReportById);
+router.post("/reports/drugs", checkRole(["admin", "hospital_admin", "doctor"]), createDrugReport);
+router.get("/reports/drugs", checkRole(["admin", "hospital_admin", "doctor"]), getDrugReports);
+router.get("/reports/drugs/:id", checkRole(["admin", "hospital_admin", "doctor"]), getDrugReportById);
 
 export default router;

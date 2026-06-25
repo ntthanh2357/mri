@@ -72,6 +72,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [examFee, setExamFee] = useState('150000');
   const [mriFee, setMriFee] = useState('1500000');
   const [aiFee, setAiFee] = useState('200000');
+  const [maxPatients, setMaxPatients] = useState('50');
   const [updatingPricing, setUpdatingPricing] = useState(false);
 
   const fetchDashboardData = async () => {
@@ -103,6 +104,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
           setExamFee(String(statsRes.pricing.examFee ?? 150000));
           setMriFee(String(statsRes.pricing.mriFee ?? 1500000));
           setAiFee(String(statsRes.pricing.aiFee ?? 200000));
+          setMaxPatients(String(statsRes.pricing.maxPatients ?? 50));
         }
       }
     } catch (err) {
@@ -121,9 +123,10 @@ const ClinicDashboardScreen = ({ navigation }) => {
     const parsedExam = Number(examFee);
     const parsedMri = Number(mriFee);
     const parsedAi = Number(aiFee);
+    const parsedMax = Number(maxPatients);
 
-    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi)) {
-      Alert.alert('Lỗi', 'Bảng giá dịch vụ phải là chữ số hợp lệ.');
+    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi) || isNaN(parsedMax)) {
+      Alert.alert('Lỗi', 'Bảng giá dịch vụ và số bệnh nhân tối đa phải là chữ số hợp lệ.');
       return;
     }
 
@@ -133,18 +136,20 @@ const ClinicDashboardScreen = ({ navigation }) => {
       const response = await put('/admin/hospital-pricing', {
         examFee: parsedExam,
         mriFee: parsedMri,
-        aiFee: parsedAi
+        aiFee: parsedAi,
+        maxPatients: parsedMax
       });
 
       if (response && response.success) {
-        Alert.alert('Thành công', 'Cập nhật bảng giá dịch vụ bệnh viện thành công!');
+        Alert.alert('Thành công', 'Cập nhật cấu hình bệnh viện thành công!');
         if (response.pricing) {
           setExamFee(String(response.pricing.examFee));
           setMriFee(String(response.pricing.mriFee));
           setAiFee(String(response.pricing.aiFee));
+          setMaxPatients(String(response.pricing.maxPatients ?? 50));
         }
       } else {
-        Alert.alert('Lỗi', response.message || 'Không thể cập nhật bảng giá.');
+        Alert.alert('Lỗi', response.message || 'Không thể cập nhật cấu hình.');
       }
     } catch (err) {
       console.error('Error updating hospital pricing:', err);
@@ -221,8 +226,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
           <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
             {/* Action Buttons */}
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => Alert.alert('Thông báo', 'Đang tải sao kê về điện thoại...')}>
-                <Text style={styles.actionButtonOutlineText}>📥 Xuất sao kê</Text>
+              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
+                <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
                 <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
@@ -400,6 +405,17 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 />
               </View>
 
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Số bệnh nhân tối đa trong ngày</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={maxPatients}
+                  onChangeText={setMaxPatients}
+                  placeholder="Ví dụ: 50"
+                />
+              </View>
+
               <TouchableOpacity 
                 style={styles.pricingSubmitBtn} 
                 onPress={handleUpdatePricing}
@@ -408,7 +424,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {updatingPricing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật bảng giá</Text>
+                  <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật cấu hình</Text>
                 )}
               </TouchableOpacity>
             </View>

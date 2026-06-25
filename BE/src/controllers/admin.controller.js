@@ -7,6 +7,8 @@ import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { User } from "../models/user.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
+import { RevenueReport } from "../models/revenueReport.model.js";
+import { DrugReport } from "../models/drugReport.model.js";
 import bcrypt from "bcryptjs";
 import {
   getAllUsers,
@@ -528,7 +530,12 @@ export const getDashboardStats = async (req, res) => {
 
     // 4. Hospital specific pricing
     const hospital = await Hospital.findById(hospitalId);
-    const pricing = hospital ? hospital.pricing : { examFee: 150000, mriFee: 1500000, aiFee: 200000 };
+    const pricing = hospital ? {
+      examFee: hospital.pricing?.examFee ?? 150000,
+      mriFee: hospital.pricing?.mriFee ?? 1500000,
+      aiFee: hospital.pricing?.aiFee ?? 200000,
+      maxPatients: hospital.pricing?.maxPatients ?? 50
+    } : { examFee: 150000, mriFee: 1500000, aiFee: 200000, maxPatients: 50 };
 
     // 5. Total patients (distinct all time)
     const hospitalVisitsAllTime = await Visit.find({ hospitalId }).select("patientId");
@@ -601,12 +608,12 @@ export const getDashboardStats = async (req, res) => {
   }
 };
 
-// @desc    Update Hospital Pricing
+// @desc    Update Hospital Pricing & Max Patients
 // @route   PUT /api/v1/admin/hospital-pricing
 // @access  Private (Admin)
 export const updateHospitalPricing = async (req, res) => {
   try {
-    const { examFee, mriFee, aiFee } = req.body;
+    const { examFee, mriFee, aiFee, maxPatients } = req.body;
     const hospitalId = req.user.hospitalId;
     
     if (!hospitalId) {
@@ -621,10 +628,11 @@ export const updateHospitalPricing = async (req, res) => {
     if (examFee !== undefined) hospital.pricing.examFee = examFee;
     if (mriFee !== undefined) hospital.pricing.mriFee = mriFee;
     if (aiFee !== undefined) hospital.pricing.aiFee = aiFee;
+    if (maxPatients !== undefined) hospital.pricing.maxPatients = maxPatients;
     
     await hospital.save();
     
-    res.status(200).json({ success: true, message: "Cập nhật bảng giá thành công", pricing: hospital.pricing });
+    res.status(200).json({ success: true, message: "Cập nhật cấu hình bệnh viện thành công", pricing: hospital.pricing });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
@@ -869,5 +877,118 @@ export const deleteHospital = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── REPORT GENERATION AND VIEWING CONTROLLERS ────────────────────────────────
+
+export const createRevenueReport = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const { month, year, totalAmount, dailyRecords } = req.body;
+    if (!month || !year || totalAmount === undefined || !dailyRecords) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ các thông tin báo cáo." });
+    }
+    const report = new RevenueReport({
+      hospitalId,
+      month: Number(month),
+      year: Number(year),
+      totalAmount: Number(totalAmount),
+      dailyRecords,
+      author: req.user.id
+    });
+    await report.save();
+    res.status(201).json({ success: true, message: "Tạo báo cáo doanh thu thành công!", report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getRevenueReports = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const reports = await RevenueReport.find({ hospitalId })
+      .populate("author", "profile.name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getRevenueReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID báo cáo không hợp lệ." });
+    }
+    const report = await RevenueReport.findById(id).populate("author", "profile.name email");
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy báo cáo." });
+    }
+    res.status(200).json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const createDrugReport = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const { month, year, items } = req.body;
+    if (!month || !year || !items) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ các thông tin báo cáo." });
+    }
+    const report = new DrugReport({
+      hospitalId,
+      month: Number(month),
+      year: Number(year),
+      items,
+      author: req.user.id
+    });
+    await report.save();
+    res.status(201).json({ success: true, message: "Tạo báo cáo sử dụng thuốc thành công!", report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getDrugReports = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const reports = await DrugReport.find({ hospitalId })
+      .populate("author", "profile.name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getDrugReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID báo cáo không hợp lệ." });
+    }
+    const report = await DrugReport.findById(id).populate("author", "profile.name email");
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy báo cáo." });
+    }
+    res.status(200).json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };

@@ -42,6 +42,25 @@ export const createVisit = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng cung cấp bệnh nhân, bác sĩ và điều dưỡng." });
     }
 
+    // Check maximum patient limit for the day
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const [visitCountToday, hospital] = await Promise.all([
+      Visit.countDocuments({
+        hospitalId,
+        createdAt: { $gte: startOfDay, $lte: endOfDay }
+      }),
+      Hospital.findById(hospitalId)
+    ]);
+
+    const maxPatients = hospital?.pricing?.maxPatients ?? 50;
+    if (visitCountToday >= maxPatients) {
+      return res.status(400).json({ message: `Đã đạt số lượng bệnh nhân tối đa trong ngày (${maxPatients} bệnh nhân)!` });
+    }
+
     const visit = new Visit({
       hospitalId,
       patientId,

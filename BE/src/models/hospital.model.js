@@ -45,6 +45,7 @@ const hospitalSchema = new Schema(
       examFee: { type: Number, default: 150000 },
       mriFee: { type: Number, default: 1500000 },
       aiFee: { type: Number, default: 200000 },
+      maxPatients: { type: Number, default: 50 },
     },
 
     isActive: { type: Boolean, default: true },
