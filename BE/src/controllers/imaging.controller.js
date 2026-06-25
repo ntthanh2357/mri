@@ -1,5 +1,6 @@
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { User } from "../models/user.model.js";
+import { Visit } from "../models/visit.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import fs from "fs";
 import path from "path";
@@ -96,6 +97,7 @@ export const createImagingResult = async (req, res) => {
       images,
       dicomMetadata,
       imagingType,
+      visitId,
     } = req.body;
 
     // 2. Validate required fields
@@ -127,6 +129,15 @@ export const createImagingResult = async (req, res) => {
     });
 
     await newResult.save();
+
+    if (visitId) {
+      const visit = await Visit.findById(visitId);
+      if (visit) {
+        visit.mriOrder.imagingResultId = newResult._id;
+        visit.status = visit.mriOrder.requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
+        await visit.save();
+      }
+    }
 
     return successResponse(res, newResult, "Tạo kết quả chẩn đoán hình ảnh mới thành công.", 201);
   } catch (error) {
@@ -225,7 +236,7 @@ export const analyzeImagingResultAI = async (req, res) => {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
-    const { imageUrl } = req.body;
+    const { imageUrl, visitId } = req.body;
     if (!imageUrl) {
       return errorResponse(res, "Thiếu đường dẫn hình ảnh cần phân tích.", 400);
     }
@@ -288,6 +299,15 @@ export const analyzeImagingResultAI = async (req, res) => {
     }
 
     const aiData = await aiResponse.json();
+
+    if (visitId) {
+      const visit = await Visit.findById(visitId);
+      if (visit) {
+        visit.status = "chờ bác sĩ đọc";
+        await visit.save();
+      }
+    }
+
     return successResponse(res, aiData, "Phân tích AI hoàn tất thành công.");
   } catch (error) {
     console.error("Lỗi khi phân tích AI:", error);
@@ -500,5 +520,106 @@ export const getAllImagingResults = async (req, res) => {
     return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
   }
 };
+
+// @desc    Kỹ thuật viên upload kết quả phim chụp (tạo bản ghi phim chụp và liên kết visit)
+// @route   POST /api/v1/imaging-results
+// @access  Private (Technician, Admin)
+export const createKtvImagingResult = async (req, res) => {
+  try {
+    const { visitId, patientId, imageUrl, techNotes, region, requestAiAnalysis } = req.body;
+
+    if (!visitId || !patientId || !imageUrl) {
+      return res.status(400).json({ message: "Thiếu thông tin lượt khám, bệnh nhân hoặc đường dẫn hình ảnh." });
+    }
+
+    // Lấy thông tin lượt khám
+    const visit = await Visit.findById(visitId);
+    if (!visit) {
+      return res.status(404).json({ message: "Không tìm thấy lượt khám tương ứng." });
+    }
+
+    // Lấy thông tin bệnh nhân
+    const patient = await User.findById(patientId);
+    if (!patient) {
+      return res.status(404).json({ message: "Không tìm thấy bệnh nhân." });
+    }
+
+    // Lấy thông tin bác sĩ chỉ định từ visit
+    const doctor = await User.findById(visit.doctorId);
+    const doctorName = doctor?.profile?.fullName || doctor?.profile?.name || doctor?.email || "Bác sĩ chỉ định";
+
+    // Tạo bản ghi ImagingResult mới với các trường bắt buộc
+    const imagingResult = new ImagingResult({
+      hospitalId: req.user.hospitalId || visit.hospitalId,
+      medicalId: patient.profile?.medicalId || "BN" + patient._id.toString().substring(18),
+      patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
+      birthYear: patient.profile?.birthYear || 1990,
+      gender: patient.profile?.gender === "Nữ" ? "Nữ" : patient.profile?.gender === "Khác" ? "Khác" : "Nam",
+      address: patient.profile?.address || "Đà Nẵng",
+      orderDate: visit.mriOrder?.orderedAt || new Date(),
+      orderingDoctor: doctorName,
+      orderingDepartment: "Chẩn đoán hình ảnh",
+      medicalRecordNumber: "BA" + visit._id.toString().substring(18),
+      diagnosis: visit.reason || "Theo dõi u não",
+      procedure: "Chụp MRI vùng " + (region || visit.mriOrder?.region || "Não bộ"),
+      technique: "Cộng hưởng từ (MRI) " + (region || visit.mriOrder?.region || "Não bộ") + " không thuốc cản quang.",
+      findings: techNotes ? `Kỹ thuật viên ghi chú: ${techNotes}` : "Chờ bác sĩ đọc mô tả hình ảnh.",
+      conclusion: "Chờ kết quả chẩn đoán từ bác sĩ.",
+      radiologist: doctorName,
+      reportDate: new Date(),
+      images: [imageUrl],
+      imagingType: "MRI"
+    });
+
+    await imagingResult.save();
+
+    // Liên kết với visit và cập nhật trạng thái
+    visit.mriOrder.imagingResultId = imagingResult._id;
+    visit.status = requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
+    await visit.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo kết quả phim chụp thành công",
+      data: imagingResult
+    });
+  } catch (error) {
+    console.error("Lỗi khi KTV tạo kết quả chụp:", error);
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Cập nhật kết quả chẩn đoán phim chụp (Bác sĩ đọc phim)
+// @route   PUT /api/v1/imaging/:id
+// @access  Private (Doctor, Admin)
+export const updateImagingResult = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { findings, conclusion, radiologist, technique } = req.body;
+
+    const result = await ImagingResult.findById(id);
+    if (!result) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    }
+
+    if (findings !== undefined) result.findings = findings;
+    if (conclusion !== undefined) result.conclusion = conclusion;
+    if (radiologist !== undefined) result.radiologist = radiologist;
+    if (technique !== undefined) result.technique = technique;
+    result.reportDate = new Date();
+
+    await result.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật kết quả phim chụp thành công",
+      data: result
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật kết quả phim chụp:", error);
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
 
 

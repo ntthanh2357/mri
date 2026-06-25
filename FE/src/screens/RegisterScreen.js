@@ -20,15 +20,11 @@ const RegisterScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('patient'); // 'patient' or 'doctor'
+  const [role, setRole] = useState('patient'); // only 'patient' can self-register
   // BHYT removed for privacy regulations
-  const [licenseUrl, setLicenseUrl] = useState(''); // Doctor only
   const [loading, setLoading] = useState(false);
 
-  // OTP Verification states
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpModalVisible, setOtpModalVisible] = useState(false);
+
 
   // Custom Alert state
   const [customAlert, setCustomAlert] = useState({
@@ -54,7 +50,6 @@ const RegisterScreen = ({ navigation }) => {
   const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [licenseUrlError, setLicenseUrlError] = useState('');
 
   const handleRegister = async () => {
     // Reset errors
@@ -62,7 +57,6 @@ const RegisterScreen = ({ navigation }) => {
     setEmailError('');
     setPhoneError('');
     setPasswordError('');
-    setLicenseUrlError('');
 
     let hasError = false;
 
@@ -82,14 +76,11 @@ const RegisterScreen = ({ navigation }) => {
       }
     }
 
-    // Phone number is required for Phone+OTP verification
-    if (!phone.trim()) {
-      setPhoneError('Vui lòng nhập Số điện thoại.');
-      hasError = true;
-    } else {
-      const phoneRegex = /^[0-9]{10}$/;
+    // Phone is optional — validate format only when provided
+    if (phone.trim()) {
+      const phoneRegex = /^[0-9]{9,11}$/;
       if (!phoneRegex.test(phone.trim())) {
-        setPhoneError('Số điện thoại phải chứa đúng 10 số.');
+        setPhoneError('Số điện thoại phải chứa 9–11 chữ số.');
         hasError = true;
       }
     }
@@ -102,63 +93,33 @@ const RegisterScreen = ({ navigation }) => {
       hasError = true;
     }
 
-    if (role === 'doctor' && !licenseUrl.trim()) {
-      setLicenseUrlError('Vui lòng cung cấp đường dẫn Chứng chỉ hành nghề.');
-      hasError = true;
-    }
-
     if (hasError) {
       return;
     }
 
     setLoading(true);
     try {
-      // Step 1: Send registration OTP
-      const data = await post('/auth/phone-register-request', { phone: phone.trim() });
-      setOtpSent(true);
-      setOtpModalVisible(true);
-      showAlert('success', 'Gửi OTP thành công', data.message || 'Mã OTP xác thực số điện thoại đã được gửi.');
-    } catch (error) {
-      console.error('Register OTP request error:', error);
-      showAlert('error', 'Đăng ký thất bại', error.message || 'Không thể gửi mã OTP xác thực.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyRegisterOtp = async () => {
-    if (!otpCode || otpCode.length !== 6) {
-      showAlert('info', 'Thông báo', 'Vui lòng nhập mã OTP gồm 6 chữ số.');
-      return;
-    }
-
-    const payload = {
-      phone: phone.trim(),
-      otp: otpCode.trim(),
-      email: email.trim(),
-      password,
-      name: name.trim(),
-      role,
-      // bhytNumber removed for privacy regulations
-      licenseUrl: role === 'doctor' ? licenseUrl.trim() : undefined,
-    };
-
-    setLoading(true);
-    try {
-      // Step 2: Verify OTP and save registration details
-      await post('/auth/phone-register-verify', payload);
-      setOtpModalVisible(false);
-      setOtpCode('');
-      showAlert('success', 'Thành công', 'Đăng ký tài khoản thành công! Vui lòng đăng nhập.', () => {
+      // Directly register the user (no OTP step required)
+      const payload = {
+        email: email.trim(),
+        password,
+        name: name.trim(),
+        role: 'patient',
+        phone: phone.trim() || undefined,
+      };
+      const data = await post('/auth/register', payload);
+      showAlert('success', 'Đăng ký thành công', 'Tài khoản đã được tạo! Vui lòng đăng nhập.', () => {
         navigation.navigate('Login');
       });
     } catch (error) {
-      console.error('Register verify OTP error:', error);
-      showAlert('error', 'Xác thực thất bại', error.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
+      console.error('Register error:', error);
+      showAlert('error', 'Đăng ký thất bại', error.message || 'Không thể tạo tài khoản. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -205,7 +166,7 @@ const RegisterScreen = ({ navigation }) => {
           />
           {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-          <Text style={styles.label}>Số điện thoại</Text>
+          <Text style={styles.label}>Số điện thoại (tùy chọn)</Text>
           <TextInput
             style={[styles.input, phoneError ? styles.inputError : null]}
             placeholder="09XXXXXXXX"
@@ -234,49 +195,16 @@ const RegisterScreen = ({ navigation }) => {
           />
           {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-          {/* Role selector */}
-          <Text style={styles.label}>Bạn đăng ký với tư cách là *</Text>
-          <View style={styles.roleGrid}>
-            {[
-              { id: 'patient', label: 'Bệnh nhân' },
-              { id: 'doctor', label: 'Bác sĩ' },
-              { id: 'nurse', label: 'Điều dưỡng' },
-              { id: 'technician', label: 'Kỹ thuật viên' },
-              { id: 'receptionist', label: 'Tiếp tân' },
-            ].map((r) => (
-              <TouchableOpacity
-                key={r.id}
-                style={[styles.roleGridTab, role === r.id && styles.activeRoleGridTab]}
-                onPress={() => setRole(r.id)}
-              >
-                <Text style={[styles.roleGridTabText, role === r.id && styles.activeRoleGridTabText]}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Conditional inputs for Doctor only */}
-          {role === 'doctor' && (
-            <View>
-              <Text style={styles.label}>Đường dẫn Chứng chỉ hành nghề (CCHN) *</Text>
-              <TextInput
-                style={[styles.input, licenseUrlError ? styles.inputError : null]}
-                placeholder="https://drive.google.com/... hoặc file path"
-                placeholderTextColor="#94A3B8"
-                value={licenseUrl}
-                onChangeText={(text) => {
-                  setLicenseUrl(text);
-                  if (licenseUrlError) setLicenseUrlError('');
-                }}
-                autoCapitalize="none"
-              />
-              {licenseUrlError ? <Text style={styles.errorText}>{licenseUrlError}</Text> : null}
-              <Text style={styles.helperText}>
-                * Tài khoản bác sĩ sẽ được Ban quản trị phê duyệt thủ công sau khi kiểm tra CCHN.
+          {/* Info banner for staff */}
+          <View style={styles.staffNotice}>
+            <Text style={styles.staffNoticeIcon}>🏥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
+              <Text style={styles.staffNoticeText}>
+                Tài khoản Bác sĩ, Điều dưỡng, KTV, Lễ tân được cấp bởi <Text style={{ fontWeight: 'bold' }}>Admin Bệnh viện</Text>. Vui lòng liên hệ quản trị viên cơ sở của bạn để được cấp thông tin đăng nhập.
               </Text>
             </View>
-          )}
+          </View>
 
           {/* Register Button */}
           <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={loading}>
@@ -297,67 +225,6 @@ const RegisterScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* OTP Verification Modal */}
-      <Modal visible={otpModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Xác minh Số điện thoại</Text>
-              <TouchableOpacity onPress={() => {
-                setOtpModalVisible(false);
-                setOtpCode('');
-              }}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.otpNotice}>
-                <Text style={styles.otpNoticeText}>
-                  Mã OTP đã được gửi đến số điện thoại {phone}.
-                </Text>
-                <Text style={styles.otpNoticeSubtext}>
-                  * Vui lòng kiểm tra mã OTP tại terminal console của Server.
-                </Text>
-              </View>
-
-              <Text style={styles.label}>Mã OTP (6 số)</Text>
-              <TextInput
-                style={[styles.input, styles.otpInput]}
-                placeholder="Nhập 6 số"
-                placeholderTextColor="#94A3B8"
-                maxLength={6}
-                keyboardType="number-pad"
-                value={otpCode}
-                onChangeText={setOtpCode}
-              />
-
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={styles.modalBackButton}
-                  onPress={() => {
-                    setOtpModalVisible(false);
-                    setOtpCode('');
-                  }}
-                >
-                  <Text style={styles.modalBackText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalConfirmButton}
-                  onPress={handleVerifyRegisterOtp}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.modalConfirmText}>Xác nhận</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Custom Alert Modal */}
       <Modal visible={customAlert.visible} transparent animationType="fade">
@@ -535,6 +402,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontWeight: '500',
     paddingLeft: 4,
+  },
+  staffNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  staffNoticeIcon: { fontSize: 22, marginTop: 1 },
+  staffNoticeTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    marginBottom: 4,
+  },
+  staffNoticeText: {
+    fontSize: 12,
+    color: '#1E3A8A',
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,

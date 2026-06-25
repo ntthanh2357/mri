@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,423 +7,528 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
-  Alert,
-  TextInput,
   ActivityIndicator,
   useWindowDimensions,
-  Platform
+  Platform,
+  Animated,
 } from 'react-native';
-import ResponsiveLayout from '../components/ResponsiveLayout';
-import { get, post } from '../services/api.service';
+import { post } from '../services/api.service';
 import Config from '../constants/config';
+import ResponsiveLayout from '../components/ResponsiveLayout';
 
-const AIAnalysisScreen = ({ navigation }) => {
+const CLASS_META = {
+  glioma: {
+    label: 'GLIOMA',
+    color: '#DC2626',
+    bg: '#FEF2F2',
+    border: '#FECACA',
+    icon: '🔴',
+    desc: 'Khối u thần kinh đệm — cần hội chẩn chuyên khoa ngay.',
+  },
+  meningioma: {
+    label: 'MENINGIOMA',
+    color: '#D97706',
+    bg: '#FFFBEB',
+    border: '#FDE68A',
+    icon: '🟡',
+    desc: 'U màng não — thường lành tính, có thể theo dõi hoặc phẫu thuật.',
+  },
+  pituitary: {
+    label: 'PITUITARY',
+    color: '#7C3AED',
+    bg: '#F5F3FF',
+    border: '#DDD6FE',
+    icon: '🟣',
+    desc: 'U tuyến yên — cần kiểm tra nội tiết và hội chẩn chuyên khoa.',
+  },
+  notumor: {
+    label: 'BÌNH THƯỜNG',
+    color: '#059669',
+    bg: '#ECFDF5',
+    border: '#A7F3D0',
+    icon: '🟢',
+    desc: 'Không phát hiện khối u não bất thường trên hình ảnh MRI.',
+  },
+};
+
+const ConfidenceBar = ({ value, color }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: value / 100,
+      duration: 900,
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
+  return (
+    <View style={{ height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden', marginTop: 4 }}>
+      <Animated.View
+        style={{
+          height: '100%',
+          borderRadius: 4,
+          backgroundColor: color,
+          width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+        }}
+      />
+    </View>
+  );
+};
+
+const AIAnalysisScreen = ({ route, navigation }) => {
+  const { imageUrl, visitId, patientInfo } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
-  // Profile data
-  const [user, setUser] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-
-  // Scan & AI state
-  const [images, setImages] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [phase, setPhase] = useState('analyzing'); // 'analyzing' | 'result'
   const [aiResult, setAiResult] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Feedback state
+  const [selectedCorrectClass, setSelectedCorrectClass] = useState(null);
+  const [sendingFeedback, setSendingFeedback] = useState(false);
   const [approvingAI, setApprovingAI] = useState(false);
-  const [approveSuccess, setApproveSuccess] = useState(false);
 
-  // Form fields (matching the standard document schema)
-  const [findings, setFindings] = useState('');
-  const [conclusion, setConclusion] = useState('');
-  const [procedure, setProcedure] = useState('Chụp cộng hưởng từ sọ não (MRI Tự kiểm tra)');
-  const [technique, setTechnique] = useState('Dữ liệu phim chụp MRI do bệnh nhân tự tải lên và phân tích qua hệ thống NeuroScan AI.');
-  const [radiologist, setRadiologist] = useState('NeuroScan AI (Tự động phân tích)');
-
+  // Slide animation for scanning line (translateY)
+  const scanAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await get('/auth/me');
-        setUser(res.user);
-      } catch (err) {
-        console.error('Error fetching profile:', err);
-        showAlert('Lỗi', 'Không thể lấy thông tin tài khoản. Vui lòng đăng nhập lại.');
-      } finally {
-        setLoadingProfile(false);
-      }
-    };
-    fetchProfile();
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, { toValue: 1, duration: 2500, useNativeDriver: true }),
+        Animated.timing(scanAnim, { toValue: 0, duration: 2500, useNativeDriver: true }),
+      ])
+    );
+    if (phase === 'analyzing') loop.start();
+    else loop.stop();
+    return () => loop.stop();
+  }, [phase]);
+
+  // Fade-in animation for results
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (phase === 'result') {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      fadeAnim.setValue(0);
+    }
+  }, [phase]);
+
+  const steps = [
+    { label: '🔬 Tiền xử lý ảnh y khoa (OpenCV)', desc: 'Chuẩn hóa độ sáng, khử nhiễu ảnh MRI' },
+    { label: '🤖 Ensemble 3 mô hình phân loại u não', desc: 'ResNet50 + EfficientNetB0 + DenseNet121' },
+    { label: '📦 YOLOv8 phát hiện và khoanh vùng', desc: 'Định vị tọa độ khối u trên lát cắt' },
+    { label: '🧠 Gemini VLM phân xử đa thức', desc: 'Nhận diện ngữ cảnh và kiểm chứng chéo' },
+    { label: '🗺️ Grad-CAM vẽ Heatmap bất thường', desc: 'Trực quan hóa vùng kích hoạt mô hình' },
+  ];
+
+  // Auto-start analysis when screen mounts
+  useEffect(() => {
+    if (!imageUrl) {
+      setError('Không có ảnh MRI để phân tích.');
+      setPhase('result');
+      return;
+    }
+    runAnalysis();
   }, []);
 
-  const showAlert = (title, message, callback) => {
-    if (Platform.OS === 'web') {
-      alert(`${title}: ${message}`);
-      if (callback) callback();
-    } else {
-      Alert.alert(title, message, callback ? [{ text: 'OK', onPress: callback }] : undefined);
-    }
-  };
+  const runAnalysis = async () => {
+    setPhase('analyzing');
+    setCurrentStep(0);
+    setError(null);
 
-  const readFileAsBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-      reader.readAsDataURL(file);
-    });
-  };
+    // Simulate step progress while loading
+    const stepInterval = setInterval(() => {
+      setCurrentStep((prev) => {
+        if (prev < 4) return prev + 1;
+        return prev;
+      });
+    }, 600);
 
-  const handlePickImage = () => {
-    if (Platform.OS !== 'web') {
-      showAlert('Hỗ trợ', 'Tính năng chọn tệp hiện chỉ hỗ trợ trên giao diện Web.');
-      return;
-    }
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async (e) => {
-      const files = Array.from(e.target.files || []);
-      if (files.length === 0) return;
-
-      setUploading(true);
-      try {
-        const file = files[0];
-        const fileData = await readFileAsBase64(file);
-        const response = await post('/api/v1/imaging/upload', {
-          fileData,
-          fileName: file.name,
-          imagingType: 'MRI'
-        });
-
-        if (response.success && response.data?.imageUrl) {
-          setImages([response.data.imageUrl]);
-          setAiResult(null); // Reset AI result for new image
-        } else {
-          showAlert('Lỗi', `Tải ảnh thất bại: ${response.message || 'Không có phản hồi'}`);
-        }
-      } catch (err) {
-        console.error('Upload error:', err);
-        showAlert('Lỗi', 'Không thể tải tệp lên máy chủ.');
-      } finally {
-        setUploading(false);
-      }
-    };
-    input.click();
-  };
-
-  const handleAiAnalysis = async () => {
-    if (images.length === 0) {
-      showAlert('Yêu cầu', 'Vui lòng tải lên ảnh chụp MRI của bạn trước.');
-      return;
-    }
-
-    setAnalyzing(true);
     try {
-      const response = await post('/api/v1/imaging/analyze-ai', { imageUrl: images[0] });
+      const response = await post('/api/v1/imaging/analyze-ai', { imageUrl, visitId });
+      clearInterval(stepInterval);
+      setCurrentStep(5);
 
       if (response.success && response.data) {
-        const { class_name, confidence, consensus_message } = response.data;
         setAiResult(response.data);
-
-        // Autofill findings and conclusions according to standard form
-        setFindings(`Phân tích hình ảnh phát hiện vùng tổn thương bất thường gợi ý u não loại: ${class_name.toUpperCase()}.`);
-        setConclusion(
-          consensus_message || 
-          (class_name === 'notumor'
-            ? `Hệ thống AI không phát hiện khối u não bất thường nào (Độ tự tin: ${confidence}%).`
-            : `Phát hiện nghi vấn khối u loại ${class_name.toUpperCase()} với độ tin cậy ${confidence}%. Khuyên dùng: Bệnh nhân hãy mang kết quả này đến gặp bác sĩ chuyên khoa để được tư vấn chính xác nhất.`)
-        );
-        showAlert('Phân tích xong', `AI chẩn đoán gợi ý: ${class_name.toUpperCase()} (Độ tự tin: ${confidence}%).`);
+        setSelectedCorrectClass(response.data.class_name);
+        setTimeout(() => {
+          setPhase('result');
+        }, 300);
       } else {
-        showAlert('Lỗi', response.message || 'Phân tích AI thất bại.');
+        setError(response.message || 'Phân tích AI thất bại. Vui lòng thử lại.');
+        setPhase('result');
       }
     } catch (err) {
+      clearInterval(stepInterval);
       console.error('AI Analysis error:', err);
-      showAlert('Lỗi kết nối', 'Không thể kết nối đến máy chủ AI.');
-    } finally {
-      setAnalyzing(false);
+      setError('Không thể kết nối đến AI server. Đảm bảo FastAPI đã khởi động trên cổng 8000.');
+      setPhase('result');
     }
   };
 
-  const handleApproveAI = async () => {
+  // ── Xác nhận đúng ──────────────────────────────────────────────────────────
+  const handleConfirmCorrect = async () => {
     if (!aiResult) return;
     setApprovingAI(true);
-    setApproveSuccess(false);
     try {
-      const imageUrl = images[0] || '';
-      const filename = imageUrl.split('/').pop() || 'scan.jpg';
-      const response = await post('/api/v1/imaging/approve-ai', {
+      const filename = imageUrl?.split('/').pop() || 'scan.jpg';
+      await post('/api/v1/imaging/approve-ai', {
         filename,
         predicted_class: aiResult.class_name,
         confidence: aiResult.confidence ?? 0,
       });
-      if (response.success) {
-        setApproveSuccess(true);
-        showAlert('Xác nhận thành công', `Kết quả AI (${aiResult.class_name?.toUpperCase()}) đã được ghi nhận là chính xác!`);
-      } else {
-        showAlert('Lỗi', response.message || 'Không thể ghi nhận xác nhận.');
-      }
-    } catch (err) {
-      console.error('Approve AI error:', err);
-      showAlert('Lỗi', 'Không thể gửi xác nhận.');
-    } finally {
-      setApprovingAI(false);
-    }
+    } catch (_) {}
+    setApprovingAI(false);
+
+    const meta = CLASS_META[aiResult.class_name] || CLASS_META.notumor;
+    const conclusionText =
+      aiResult.class_name === 'notumor'
+        ? `Không phát hiện bất thường sọ não trên hình ảnh MRI (Độ tự tin AI: ${aiResult.confidence}%). Đồng thuận: ${aiResult.consensus_message || 'Kết quả bình thường.'}`
+        : `Hình ảnh gợi ý khối u loại ${meta.label} (Độ tự tin AI: ${aiResult.confidence}%). ${meta.desc} Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.`;
+
+    const findingsText =
+      aiResult.class_name === 'notumor'
+        ? `Kết quả phân tích AI từ hệ thống Ensemble (ResNet + EfficientNet + DenseNet) + YOLOv8 không ghi nhận tổn thương bất thường. Độ tự tin: ${aiResult.confidence}%. Đồng thuận: ${aiResult.consensus_message || 'Tất cả mô hình nhất quán.'}`
+        : `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Độ tự tin Ensemble: ${aiResult.confidence}%. ${aiResult.consensus_message || ''}`;
+
+    navigation.navigate('CreateImagingResult', {
+      ...(route.params || {}),
+      aiResult: {
+        ...aiResult,
+        annotated_image: aiResult.annotated_image,
+        confirmed: true,
+        isWrong: false,
+      },
+      prefillFindings: findingsText,
+      prefillConclusion: conclusionText,
+    });
   };
 
-  const handleSelfStore = async () => {
-    if (images.length === 0) {
-      showAlert('Yêu cầu', 'Vui lòng nạp hình ảnh trước khi lưu trữ.');
-      return;
-    }
-
-    setSaving(true);
+  // ── AI sai → gửi phản hồi rồi quay lại ────────────────────────────────────
+  const handleConfirmWrong = async () => {
+    if (!selectedCorrectClass) return;
+    setSendingFeedback(true);
     try {
-      const payload = {
-        medicalId: user?.profile?.medicalId || '26025699',
-        patientName: user?.profile?.name || 'Bệnh nhân tự upload',
-        birthYear: user?.profile?.birthYear || 1995,
-        gender: user?.profile?.gender || 'Nam',
-        address: user?.profile?.address || 'Việt Nam',
-        orderDate: new Date(),
-        orderingDoctor: 'Tự kiểm tra (AI)',
-        orderingDepartment: 'NeuroScan AI Portal',
-        medicalRecordNumber: `SBA-SELF-${Date.now().toString().slice(-6)}`,
-        diagnosis: aiResult ? `Nghi ngờ u ${aiResult.class_name?.toUpperCase()}` : 'Chưa phân tích AI',
-        procedure,
-        technique,
-        findings,
-        conclusion,
-        radiologist,
-        reportDate: new Date(),
-        images,
-        imagingType: 'MRI'
-      };
+      const filename = imageUrl?.split('/').pop() || 'scan.jpg';
+      await post('/api/v1/imaging/feedback-ai', {
+        imageUrl,
+        correct_class: selectedCorrectClass,
+        x: 120, y: 120, w: 100, h: 100,
+      });
+    } catch (_) {}
+    setSendingFeedback(false);
 
-      const response = await post('/api/v1/imaging', payload);
-      if (response.success) {
-        showAlert('Thành công', 'Đã lưu trữ kết quả phân tích MRI vào hồ sơ cá nhân của bạn!', () => {
-          navigation.navigate('Home');
-        });
-      } else {
-        showAlert('Lỗi', response.message || 'Không thể lưu hồ sơ.');
-      }
-    } catch (err) {
-      console.error('Store error:', err);
-      showAlert('Lỗi kết nối', 'Không thể lưu hồ sơ lên máy chủ.');
-    } finally {
-      setSaving(false);
-    }
+    const correctMeta = CLASS_META[selectedCorrectClass] || CLASS_META.notumor;
+    const aiMeta = CLASS_META[aiResult?.class_name] || CLASS_META.notumor;
+
+    const warningNote = `⚠️ LƯU Ý: AI chẩn đoán ban đầu là "${aiMeta.label}" nhưng bác sĩ đã điều chỉnh thành "${correctMeta.label}". Kết quả này cần được xem xét kỹ lưỡng bởi chuyên gia. Phản hồi điều chỉnh đã được ghi nhận để cải thiện mô hình AI.`;
+
+    const conclusionText =
+      selectedCorrectClass === 'notumor'
+        ? `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Không phát hiện bất thường sọ não.`
+        : `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Hình ảnh gợi ý khối u loại ${correctMeta.label}. ${correctMeta.desc}`;
+
+    navigation.navigate('CreateImagingResult', {
+      ...(route.params || {}),
+      aiResult: {
+        ...aiResult,
+        class_name: selectedCorrectClass,
+        confirmed: true,
+        isWrong: true,
+        originalClass: aiResult?.class_name,
+        warningNote,
+      },
+      prefillFindings: warningNote,
+      prefillConclusion: conclusionText,
+    });
   };
 
-  if (loadingProfile) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#15803D" />
-        <Text style={styles.loadingText}>Đang khởi tạo cổng chẩn đoán...</Text>
-      </View>
-    );
-  }
+  const meta = aiResult ? (CLASS_META[aiResult.class_name] || CLASS_META.notumor) : null;
+  const imageFullUri = imageUrl?.startsWith('http') ? imageUrl : `${Config.API_URL}${imageUrl}`;
+  const annotatedUri = aiResult?.annotated_image || null;
+
+  // Translate coordinates mapping box width
+  const translateY = scanAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-140, 140],
+  });
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="AIAnalysis" user={user}>
+    <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>Cổng Phân Tích & Tự Lưu Trữ MRI (Dành cho Bệnh nhân)</Text>
-            <Text style={styles.subtitle}>
-              Tự tải ảnh phim MRI sọ não, phân tích nhanh bằng AI và lưu trữ vào hồ sơ cá nhân theo đúng biểu mẫu y khoa chuẩn.
-            </Text>
-          </View>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.backBtnText}>← Hủy</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Chẩn Đoán Hình Ảnh AI</Text>
+          {phase === 'result' ? (
+            <TouchableOpacity onPress={runAnalysis} style={styles.retryBtn}>
+              <Text style={styles.retryBtnText}>🔄 Quét lại</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 80 }} />
+          )}
+        </View>
 
-          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-            {/* Left Column: Image upload & AI visualization */}
-            <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>1. Tải lên & Phân tích phim chụp</Text>
-                
-                <View style={styles.viewerContainer}>
-                  {images.length > 0 ? (
-                    <View style={styles.imageWrapper}>
-                      <Image
-                        source={{ uri: images[0].startsWith('http') ? images[0] : `${Config.API_URL}${images[0]}` }}
-                        style={styles.brainImage}
-                        resizeMode="contain"
-                      />
-                      {aiResult && aiResult.class_name !== 'notumor' && (
-                        <View style={styles.boundingBox}>
-                          <View style={styles.boxTag}>
-                            <Text style={styles.boxTagText}>AI_DETECT: {aiResult.confidence}%</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <View style={styles.placeholderContainer}>
-                      <Text style={styles.placeholderIcon}>📷</Text>
-                      <Text style={styles.placeholderText}>Chưa có hình ảnh phim chụp</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.btnRow}>
-                  <TouchableOpacity
-                    style={[styles.btn, styles.btnUpload, uploading && styles.btnDisabled]}
-                    onPress={handlePickImage}
-                    disabled={uploading}
-                  >
-                    <Text style={styles.btnText}>
-                      {uploading ? 'Đang tải ảnh...' : '➕ Chọn ảnh phim MRI'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.btn, styles.btnAi, (images.length === 0 || analyzing) && styles.btnDisabled]}
-                    onPress={handleAiAnalysis}
-                    disabled={images.length === 0 || analyzing}
-                  >
-                    <Text style={styles.btnText}>
-                      {analyzing ? 'Đang phân tích...' : '🤖 Chẩn đoán AI'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {aiResult && (
-                <View style={[styles.card, styles.aiResultCard]}>
-                  <Text style={styles.aiResultHeader}>Kết quả chẩn đoán AI</Text>
-                  <Text style={styles.aiResultClass}>
-                    Phát hiện u: <Text style={{ color: '#EF4444' }}>{aiResult.class_name?.toUpperCase()}</Text>
-                  </Text>
-                  <Text style={styles.aiResultConf}>
-                    Độ tin cậy: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
-                  </Text>
-                  <Text style={styles.aiDisclaimer}>
-                    ⚠️ Lưu ý: Kết quả AI chỉ mang tính chất tham khảo cá nhân, không thay thế cho kết luận của bác sĩ điều trị.
-                  </Text>
-
-                  {/* Approve button */}
-                  <View style={{ marginTop: 10 }}>
-                    {!approveSuccess ? (
-                      <TouchableOpacity
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 14,
-                          backgroundColor: approvingAI ? '#D1FAE5' : '#10B981',
-                          borderRadius: 6,
-                          alignSelf: 'flex-start',
-                          opacity: approvingAI ? 0.7 : 1,
-                        }}
-                        onPress={handleApproveAI}
-                        disabled={approvingAI}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                          {approvingAI ? '⏳ Đang ghi nhận...' : '✅ Kết quả đúng — Xác nhận cho AI học'}
-                        </Text>
-                      </TouchableOpacity>
+        {phase === 'analyzing' ? (
+          // ── LOADING / ANALYZING STATE ──
+          <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
+            <View style={[isDesktop && styles.desktopRow]}>
+              {/* Left col: brain scan visualization */}
+              <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
+                <View style={styles.imgCard}>
+                  <Text style={styles.imgCardLabel}>📷 Phim chụp MRI đang phân tích</Text>
+                  <View style={styles.scanPreviewBox}>
+                    {imageUrl ? (
+                      <Image source={{ uri: imageFullUri }} style={styles.scanPreviewImg} resizeMode="contain" />
                     ) : (
-                      <View style={{ paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#6EE7B7' }}>
-                        <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng — Cảm ơn!</Text>
-                      </View>
+                      <Text style={{ color: '#64748B' }}>Không có ảnh</Text>
                     )}
+                    <View style={styles.scanOverlay} pointerEvents="none">
+                      <Animated.View
+                        style={[
+                          styles.scanLine,
+                          {
+                            transform: [{ translateY }],
+                          },
+                        ]}
+                      />
+                    </View>
                   </View>
                 </View>
-              )}
-            </View>
+              </View>
 
-            {/* Right Column: Standard Document Form */}
-            <View style={isDesktop ? styles.rightColumn : styles.fullWidth}>
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>2. Thông tin lưu trữ (Biểu mẫu chuẩn y khoa)</Text>
+              {/* Right col: steps loading status */}
+              <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
+                <View style={styles.actionCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <ActivityIndicator size="small" color="#15803D" />
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>
+                      Đang xử lý phim chụp...
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 20, marginBottom: 20 }}>
+                    Hệ thống AI tích hợp (Ensemble ResNet + EfficientNet + DenseNet + YOLOv8 + Gemini VLM) đang chạy phân tích song song và sinh bản đồ kích hoạt nhiệt Grad-CAM.
+                  </Text>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Mã y tế (Medical ID)</Text>
-                  <TextInput
-                    style={[styles.input, styles.inputReadonly]}
-                    value={user?.profile?.medicalId || 'Chưa liên kết'}
-                    editable={false}
-                  />
+                  <View style={{ gap: 6 }}>
+                    {steps.map((step, i) => {
+                      const isCompleted = i < currentStep;
+                      const isCurrent = i === currentStep;
+                      const isPending = i > currentStep;
+
+                      return (
+                        <View
+                          key={i}
+                          style={[
+                            styles.stepItem,
+                            isCurrent && styles.stepItemActive,
+                            isCompleted && styles.stepItemCompleted
+                          ]}
+                        >
+                          <View style={styles.stepStatusIcon}>
+                            {isCompleted && <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 13 }}>✓</Text>}
+                            {isCurrent && <ActivityIndicator size="small" color="#3B82F6" />}
+                            {isPending && <View style={styles.pendingDot} />}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[
+                              styles.stepText,
+                              isCurrent && styles.stepTextActive,
+                              isCompleted && styles.stepTextCompleted
+                            ]}>
+                              {step.label}
+                            </Text>
+                            <Text style={[
+                              styles.stepDesc,
+                              isCurrent && styles.stepDescActive,
+                              isCompleted && styles.stepDescCompleted
+                            ]}>
+                              {step.desc}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Họ tên bệnh nhân</Text>
-                  <TextInput
-                    style={[styles.input, styles.inputReadonly]}
-                    value={user?.profile?.name || 'Chưa cập nhật'}
-                    editable={false}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Dịch vụ chỉ định</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={procedure}
-                    onChangeText={setProcedure}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Kỹ thuật thực hiện</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={technique}
-                    onChangeText={setTechnique}
-                    multiline
-                    numberOfLines={2}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Mô tả hình ảnh (Findings) *</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea, { height: 80 }]}
-                    placeholder="Mô tả các bất thường quan sát thấy..."
-                    value={findings}
-                    onChangeText={setFindings}
-                    multiline
-                    numberOfLines={4}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Kết luận chẩn đoán (Conclusion) *</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea, { height: 80 }]}
-                    placeholder="Kết luận tổng quan của phim chụp..."
-                    value={conclusion}
-                    onChangeText={setConclusion}
-                    multiline
-                    numberOfLines={4}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Người đọc phim / Xác nhận</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={radiologist}
-                    onChangeText={setRadiologist}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.btnSave, saving && styles.btnDisabled]}
-                  onPress={handleSelfStore}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.btnSaveText}>💾 Lưu trữ phim & Báo cáo vào EMR</Text>
-                  )}
-                </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        ) : (
+          // ── RESULTS PHASE ──
+          <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.errorTitle}>Lỗi kết nối AI</Text>
+                <Text style={styles.errorMsg}>{error}</Text>
+                <TouchableOpacity style={styles.retryBigBtn} onPress={runAnalysis}>
+                  <Text style={styles.retryBigBtnText}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Animated.View style={[isDesktop && styles.desktopRow, { opacity: fadeAnim, flex: 1, width: '100%' }]}>
+                {/* ── LEFT: Images ─────────────────────────────────────────── */}
+                <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
+                  {/* Original image */}
+                  <View style={styles.imgCard}>
+                    <Text style={styles.imgCardLabel}>📷 Ảnh gốc MRI</Text>
+                    <View style={styles.imgViewer}>
+                      {imageUrl ? (
+                        <Image source={{ uri: imageFullUri }} style={styles.imgFull} resizeMode="contain" />
+                      ) : (
+                        <Text style={{ color: '#94A3B8' }}>Không có ảnh</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Annotated image (Heatmap / GradCAM) */}
+                  {annotatedUri && (
+                    <View style={styles.imgCard}>
+                      <Text style={styles.imgCardLabel}>🗺️ Heatmap phân tích (Grad-CAM + YOLO)</Text>
+                      <View style={styles.imgViewer}>
+                        <Image source={{ uri: annotatedUri }} style={styles.imgFull} resizeMode="contain" />
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {/* ── RIGHT: Result + Actions ───────────────────────────────── */}
+                <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
+                  {/* Main result card */}
+                  {meta && (
+                    <View style={[styles.resultCard, { borderColor: meta.border, backgroundColor: meta.bg }]}>
+                      <View style={styles.resultCardHeader}>
+                        <Text style={styles.resultCardIcon}>{meta.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.resultLabel, { color: meta.color }]}>
+                            {meta.label}
+                          </Text>
+                          <Text style={styles.resultDesc}>{meta.desc}</Text>
+                        </View>
+                      </View>
+
+                      {/* Confidence gauge */}
+                      <View style={styles.confRow}>
+                        <Text style={styles.confLabel}>
+                          Độ tự tin: <Text style={[styles.confValue, { color: meta.color }]}>{aiResult.confidence}%</Text>
+                        </Text>
+                      </View>
+                      <ConfidenceBar value={aiResult.confidence} color={meta.color} />
+
+                      {/* All probabilities */}
+                      {aiResult.all_probabilities && (
+                        <View style={styles.allProbBox}>
+                          <Text style={styles.allProbTitle}>Phân phối xác suất Ensemble:</Text>
+                          {Object.entries(aiResult.all_probabilities).map(([cls, pct]) => {
+                            const m = CLASS_META[cls] || CLASS_META.notumor;
+                            return (
+                              <View key={cls} style={styles.probRow}>
+                                <Text style={styles.probCls}>{m.icon} {m.label}</Text>
+                                <View style={{ flex: 1, marginHorizontal: 8 }}>
+                                  <ConfidenceBar value={pct} color={m.color} />
+                                </View>
+                                <Text style={[styles.probPct, { color: m.color }]}>{pct}%</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+
+                      {/* Consensus message */}
+                      {aiResult.consensus_message ? (
+                        <View style={styles.consensusBox}>
+                          <Text style={styles.consensusTitle}>Đồng thuận mô hình:</Text>
+                          <Text style={styles.consensusText}>{aiResult.consensus_message}</Text>
+                        </View>
+                      ) : null}
+
+                      <View style={styles.disclaimer}>
+                        <Text style={styles.disclaimerText}>
+                          ⚠️ Kết quả AI chỉ mang tính chất hỗ trợ tham khảo, không thay thế kết luận của bác sĩ chuyên khoa.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* ── CONFIRM CORRECT ──────────────────────────────────────── */}
+                  <View style={styles.actionCard}>
+                    <Text style={styles.actionTitle}>Bác sĩ xác nhận kết quả:</Text>
+
+                    <TouchableOpacity
+                      style={[styles.confirmBtn, approvingAI && styles.btnDisabled]}
+                      onPress={handleConfirmCorrect}
+                      disabled={approvingAI}
+                    >
+                      {approvingAI ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.confirmBtnIcon}>✅</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.confirmBtnTitle}>AI đúng — Xác nhận & Điền kết quả</Text>
+                            <Text style={styles.confirmBtnSub}>Trả về form với ảnh gốc + ảnh heatmap + kết quả AI đã điền sẵn</Text>
+                          </View>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Divider */}
+                    <View style={styles.orDivider}>
+                      <View style={styles.orLine} />
+                      <Text style={styles.orText}>HOẶC</Text>
+                      <View style={styles.orLine} />
+                    </View>
+
+                    {/* Wrong → feedback */}
+                    <Text style={styles.feedbackTitle}>AI sai — Chọn kết quả đúng:</Text>
+                    <View style={styles.classGrid}>
+                      {Object.entries(CLASS_META).map(([cls, m]) => (
+                        <TouchableOpacity
+                          key={cls}
+                          style={[
+                            styles.classChip,
+                            selectedCorrectClass === cls && { backgroundColor: m.color, borderColor: m.color },
+                          ]}
+                          onPress={() => setSelectedCorrectClass(cls)}
+                        >
+                          <Text style={[styles.classChipText, selectedCorrectClass === cls && { color: '#fff' }]}>
+                            {m.icon} {m.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.wrongBtn, sendingFeedback && styles.btnDisabled]}
+                      onPress={handleConfirmWrong}
+                      disabled={sendingFeedback || !selectedCorrectClass}
+                    >
+                      {sendingFeedback ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.wrongBtnIcon}>✍️</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.wrongBtnTitle}>AI sai — Gửi hiệu chỉnh & Trở về</Text>
+                            <Text style={styles.wrongBtnSub}>Điền kết quả đúng + ghi lưu ý cảnh báo vào form</Text>
+                          </View>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+          </ScrollView>
+        )}
       </SafeAreaView>
     </ResponsiveLayout>
   );
@@ -432,219 +537,441 @@ const AIAnalysisScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    marginTop: 12,
-    fontWeight: 'bold',
-  },
-  scrollContainer: {
-    padding: 16,
+    backgroundColor: '#F1F5F9',
   },
   headerRow: {
-    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  title: {
-    fontSize: 20,
+  backBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  backBtnText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#0F172A',
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
+  retryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+  },
+  retryBtnText: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+
+  scrollContainer: {
+    padding: 16,
+  },
+  scrollContainerDesktop: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
   },
   desktopRow: {
     flexDirection: 'row',
     gap: 20,
+    alignItems: 'flex-start',
+    width: '100%',
   },
-  mobileColumn: {
-    flexDirection: 'column',
+  leftCol: {
+    flex: 1.1,
     gap: 16,
   },
-  leftColumn: {
+  rightCol: {
     flex: 1,
-  },
-  rightColumn: {
-    flex: 1.2,
+    gap: 16,
   },
   fullWidth: {
     width: '100%',
+    marginBottom: 16,
   },
-  card: {
+
+  // ── Analyzing phase ──
+  analyzingScreen: {
+    flex: 1,
+  },
+  scanPreviewBox: {
+    height: 300,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  scanPreviewImg: {
+    width: '94%',
+    height: '94%',
+    borderRadius: 8,
+  },
+  scanOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanLine: {
+    position: 'absolute',
+    left: '5%',
+    right: '5%',
+    height: 3,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+
+  // Steps style
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  stepItemActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  stepItemCompleted: {
+    borderColor: '#D1FAE5',
+    backgroundColor: '#F0FDF4',
+  },
+  stepStatusIcon: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  pendingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  stepText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  stepTextActive: {
+    color: '#1D4ED8',
+    fontWeight: 'bold',
+  },
+  stepTextCompleted: {
+    color: '#065F46',
+  },
+  stepDesc: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  stepDescActive: {
+    color: '#3B82F6',
+  },
+  stepDescCompleted: {
+    color: '#10B981',
+  },
+
+  // Images
+  imgCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 12,
+  imgCardLabel: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    paddingBottom: 8,
+    backgroundColor: '#F8FAFC',
   },
-  viewerContainer: {
+  imgViewer: {
     height: 300,
-    backgroundColor: '#090D16',
-    borderRadius: 8,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  imageWrapper: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  brainImage: {
-    width: '90%',
-    height: '90%',
-  },
-  boundingBox: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#4ADE80',
-    width: '42%',
-    height: '35%',
-    top: '30%',
-    left: '29%',
-  },
-  boxTag: {
-    position: 'absolute',
-    top: -18,
-    left: -2,
-    backgroundColor: '#15803D',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  boxTagText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  placeholderContainer: {
-    alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 40,
-    color: '#475569',
-  },
-  placeholderText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 8,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  btn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnUpload: {
     backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  btnAi: {
-    backgroundColor: '#2563EB',
+  imgFull: {
+    width: '96%',
+    height: '96%',
   },
-  btnDisabled: {
-    opacity: 0.5,
+
+  // Result card
+  resultCard: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  btnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  resultCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 16,
+  },
+  resultCardIcon: {
+    fontSize: 32,
+  },
+  resultLabel: {
+    fontSize: 24,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
-  aiResultCard: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
-  },
-  aiResultHeader: {
-    fontWeight: 'bold',
-    color: '#1E3A8A',
-    fontSize: 14,
-    marginBottom: 6,
-  },
-  aiResultClass: {
+  resultDesc: {
     fontSize: 13,
-    color: '#1E293B',
-    marginBottom: 2,
-    fontWeight: '600',
-  },
-  aiResultConf: {
-    fontSize: 13,
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  aiDisclaimer: {
-    fontSize: 11,
     color: '#475569',
-    fontStyle: 'italic',
+    marginTop: 4,
+    lineHeight: 18,
   },
-  inputGroup: {
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#475569',
+  confRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
     marginBottom: 4,
   },
-  input: {
-    height: 38,
+  confLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  confValue: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+
+  allProbBox: {
+    marginTop: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.03)',
+    borderRadius: 10,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    backgroundColor: '#FFFFFF',
-    color: '#334155',
   },
-  inputReadonly: {
-    backgroundColor: '#F1F5F9',
-    color: '#64748B',
-  },
-  textArea: {
-    height: 50,
-    textAlignVertical: 'top',
-    paddingVertical: 6,
-  },
-  btnSave: {
-    backgroundColor: '#15803D',
-    height: 44,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  btnSaveText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  allProbTitle: {
+    fontSize: 11,
     fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
+  probRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  probCls: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    width: 120,
+  },
+  probPct: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    width: 45,
+    textAlign: 'right',
+  },
+
+  consensusBox: {
+    marginTop: 16,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4F46E5',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  consensusTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#3730A3',
+    marginBottom: 4,
+  },
+  consensusText: {
+    fontSize: 13,
+    color: '#312E81',
+    lineHeight: 18,
+  },
+
+  disclaimer: {
+    marginTop: 14,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#C2410C',
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+
+  // Action card
+  actionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionTitle: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    marginBottom: 14,
+    textTransform: 'uppercase',
+  },
+
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  confirmBtnIcon: { fontSize: 24 },
+  confirmBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  confirmBtnSub: { color: '#D1FAE5', fontSize: 11, marginTop: 3, lineHeight: 15 },
+
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 20,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  orText: { color: '#94A3B8', fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
+
+  feedbackTitle: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
+  classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  classChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  classChipText: { color: '#64748B', fontSize: 12, fontWeight: '600' },
+
+  wrongBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  wrongBtnIcon: { fontSize: 24 },
+  wrongBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  wrongBtnSub: { color: '#DBEAFE', fontSize: 11, marginTop: 3, lineHeight: 15 },
+
+  btnDisabled: { opacity: 0.5 },
+
+  // Error card style
+  errorCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 40,
+    margin: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  errorIcon: { fontSize: 48, marginBottom: 12 },
+  errorTitle: { color: '#DC2626', fontSize: 20, fontWeight: 'bold' },
+  errorMsg: { color: '#64748B', fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8 },
+  retryBigBtn: {
+    marginTop: 20,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  retryBigBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
 });
 
 export default AIAnalysisScreen;

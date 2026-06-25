@@ -2,6 +2,12 @@ import { Schema, model } from "mongoose";
 
 const imagingResultSchema = new Schema(
   {
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Hospital',
+      default: null,
+      index: true,
+    },
     medicalId: {
       type: String,
       required: true,

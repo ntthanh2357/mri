@@ -52,33 +52,68 @@ const ResponsiveLayout = ({
   }
 
   const isPatient = localUser?.role === 'patient';
-  const roleLabel = localUser?.role === 'admin' ? 'Quản trị viên' : localUser?.role === 'doctor' ? 'Bác sĩ' : 'Bệnh nhân';
+  const roleLabel = localUser?.role === 'admin' ? 'Quản trị viên hệ thống' : 
+                    localUser?.role === 'hospital_admin' ? 'Quản lý bệnh viện' : 
+                    (localUser?.role === 'doctor' || localUser?.role === 'technician') ? 'Bác sĩ & Kỹ thuật viên' : 
+                    (localUser?.role === 'nurse' || localUser?.role === 'receptionist') ? 'Điều dưỡng & Lễ tân' : 'Bệnh nhân';
 
   // Menu items config
-  const menuItems = isPatient
-    ? [
-        { label: 'Tổng quan', route: 'Home', icon: '📊' },
-        { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: '🧠' },
-        { label: 'Phân tích AI', route: 'AIAnalysis', icon: '📸' },
-        { label: 'Lịch sử khám', route: 'PatientRecords', icon: '📜' },
-        { label: 'Khai báo bệnh án', route: 'MedicalRecordForm', icon: '📋' },
-        { label: 'Mua Premium', route: 'Premium', icon: '💎' },
-        { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '👨‍⚕️' },
-      ]
-    : localUser?.role === 'admin'
-    ? [
-        { label: 'Tổng quan', route: 'Home', icon: '📊' },
-        { label: 'Admin Backoffice', route: 'AdminBackoffice', icon: '🛠️' },
-        { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
-        { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
-      ]
-    : [
-        { label: 'Tổng quan', route: 'Home', icon: '📊' },
-        { label: 'Phòng khám', route: 'ClinicDashboard', icon: '🏥' },
-        { label: 'Bệnh án Điện tử', route: 'PatientRecords', icon: '📂' },
-        { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
-        { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
-      ];
+  const getMenuItems = (role) => {
+    switch (role) {
+      case 'patient':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: '🧠' },
+          { label: 'Phân tích AI', route: 'AIAnalysis', icon: '📸' },
+          { label: 'Lịch sử khám', route: 'PatientRecords', icon: '📜' },
+          { label: 'Khai báo bệnh án', route: 'MedicalRecordForm', icon: '📋' },
+          { label: 'Mua Premium', route: 'Premium', icon: '💎' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '👨‍⚕️' },
+        ];
+      case 'admin':
+        return [
+          { label: 'Tổng quan', route: 'AdminBackoffice', icon: '📊' },
+          { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
+      case 'hospital_admin':
+        return [
+          { label: 'Tổng quan', route: 'ClinicDashboard', icon: '📊' },
+          { label: 'Quản lý EMR', route: 'EMRDashboard', icon: '📂' },
+          { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: '🏥' },
+          { label: 'Quản lý tài khoản', route: 'StaffManagement', icon: '👥' },
+          { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
+      case 'doctor':
+      case 'technician':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Hàng đợi khám', route: 'DoctorWorkQueue', icon: '🩺' },
+          { label: 'Hàng đợi chụp MRI', route: 'TechnicianQueue', icon: '🔬' },
+          { label: 'Tải phim lên', route: 'CreateImagingResult', icon: '📸' },
+          { label: 'Bệnh án Điện tử', route: 'DoctorPatientList', icon: '📂' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
+      case 'nurse':
+      case 'receptionist':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', icon: '📋' },
+          { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
+          { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
+          { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', icon: '💳' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
+      default:
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
+    }
+  };
+
+  const menuItems = getMenuItems(localUser?.role);
 
   const getInitials = (name) => {
     if (!name) return 'U';

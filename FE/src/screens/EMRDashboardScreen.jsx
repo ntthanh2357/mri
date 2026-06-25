@@ -18,6 +18,7 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
+import { get, put } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('records');
@@ -25,6 +26,22 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [localUser, setLocalUser] = useState(null);
+
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        setLocalUser(u);
+        if (u.role === 'nurse') {
+          setActiveTab('nurseQueue');
+        }
+      }
+    } catch (e) {
+      console.log('Error reading user role:', e);
+    }
+  }, []);
   
   // Data states
   const [records, setRecords] = useState([]);
@@ -32,6 +49,18 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [consultations, setConsultations] = useState([]);
   const [consents, setConsents] = useState([]);
   const [versions, setVersions] = useState([]);
+  const [imagingResults, setImagingResults] = useState([]);
+  
+  // Fetch imaging
+  useEffect(() => {
+    if (selectedRecord && selectedRecord.patientId) {
+      get(`/api/v1/imaging/patient/${selectedRecord.patientId}`)
+        .then(res => {
+          if (res && res.success) setImagingResults(res.data || []);
+        })
+        .catch(err => console.log('Error fetching imaging:', err));
+    }
+  }, [selectedRecord]);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -179,6 +208,14 @@ const EMRDashboardScreen = ({ navigation }) => {
               <Text style={styles.sidebarTitle}>EMR Management</Text>
               <Text style={styles.sidebarSubtitle}>Quản lý Hồ sơ Bệnh Án</Text>
               <View style={styles.sidebarNav}>
+                {localUser?.role === 'nurse' && (
+                  <SidebarItem
+                    icon="🩺"
+                    label="Đo sinh hiệu"
+                    active={activeTab === 'nurseQueue'}
+                    onPress={() => setActiveTab('nurseQueue')}
+                  />
+                )}
                 <SidebarItem
                   icon="📋"
                   label="Hồ sơ bệnh án"
@@ -191,24 +228,36 @@ const EMRDashboardScreen = ({ navigation }) => {
                   active={activeTab === 'care'}
                   onPress={() => setActiveTab('care')}
                 />
-                <SidebarItem
-                  icon="🧠"
-                  label="Hội chẩn"
-                  active={activeTab === 'consult'}
-                  onPress={() => setActiveTab('consult')}
-                />
-                <SidebarItem
-                  icon="✍️"
-                  label="Giấy cam đoan"
-                  active={activeTab === 'consent'}
-                  onPress={() => setActiveTab('consent')}
-                />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <>
+                    <SidebarItem
+                      icon="🧠"
+                      label="Hội chẩn"
+                      active={activeTab === 'consult'}
+                      onPress={() => setActiveTab('consult')}
+                    />
+                    <SidebarItem
+                      icon="✍️"
+                      label="Giấy cam đoan"
+                      active={activeTab === 'consent'}
+                      onPress={() => setActiveTab('consent')}
+                    />
+                  </>
+                )}
                 <SidebarItem
                   icon="⏳"
                   label="Lịch sử sửa đổi"
                   active={activeTab === 'versions'}
                   onPress={() => setActiveTab('versions')}
                 />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <SidebarItem
+                    icon="🧠"
+                    label="Phim MRI & CT"
+                    active={activeTab === 'imaging'}
+                    onPress={() => setActiveTab('imaging')}
+                  />
+                )}
               </View>
               {selectedRecord && (
                 <View style={styles.selectedRecordBox}>
@@ -230,6 +279,13 @@ const EMRDashboardScreen = ({ navigation }) => {
             {/* Mobile tab bar */}
             {!isDesktop && (
               <View style={styles.mobileTabBar}>
+                {localUser?.role === 'nurse' && (
+                  <MobileTab
+                    label="Sinh hiệu"
+                    active={activeTab === 'nurseQueue'}
+                    onPress={() => setActiveTab('nurseQueue')}
+                  />
+                )}
                 <MobileTab
                   label="Hồ sơ"
                   active={activeTab === 'records'}
@@ -240,21 +296,32 @@ const EMRDashboardScreen = ({ navigation }) => {
                   active={activeTab === 'care'}
                   onPress={() => setActiveTab('care')}
                 />
-                <MobileTab
-                  label="Hội chẩn"
-                  active={activeTab === 'consult'}
-                  onPress={() => setActiveTab('consult')}
-                />
-                <MobileTab
-                  label="Cam đoan"
-                  active={activeTab === 'consent'}
-                  onPress={() => setActiveTab('consent')}
-                />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <>
+                    <MobileTab
+                      label="Hội chẩn"
+                      active={activeTab === 'consult'}
+                      onPress={() => setActiveTab('consult')}
+                    />
+                    <MobileTab
+                      label="Cam đoan"
+                      active={activeTab === 'consent'}
+                      onPress={() => setActiveTab('consent')}
+                    />
+                  </>
+                )}
                 <MobileTab
                   label="Lịch sử"
                   active={activeTab === 'versions'}
                   onPress={() => setActiveTab('versions')}
                 />
+                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
+                  <MobileTab
+                    label="Phim MRI"
+                    active={activeTab === 'imaging'}
+                    onPress={() => setActiveTab('imaging')}
+                  />
+                )}
               </View>
             )}
 
@@ -265,6 +332,9 @@ const EMRDashboardScreen = ({ navigation }) => {
               </View>
             ) : (
               <ScrollView contentContainerStyle={styles.scrollContainer}>
+                {activeTab === 'nurseQueue' && (
+                  <NurseQueueTab navigation={navigation} />
+                )}
                 {activeTab === 'records' && (
                   <RecordsTab
                     records={filteredRecords}
@@ -322,6 +392,14 @@ const EMRDashboardScreen = ({ navigation }) => {
                     selectedRecord={selectedRecord}
                   />
                 )}
+
+                {activeTab === 'imaging' && (
+                  <ImagingTab
+                    imagingResults={imagingResults}
+                    selectedRecord={selectedRecord}
+                    navigation={navigation}
+                  />
+                )}
               </ScrollView>
             )}
           </View>
@@ -366,6 +444,211 @@ const MobileTab = ({ label, active, onPress }) => (
     </Text>
   </TouchableOpacity>
 );
+
+// Tab Components
+const NurseQueueTab = ({ navigation }) => {
+  const [visits, setVisits] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Vitals form state
+  const [selectedVisit, setSelectedVisit] = useState(null);
+  const [vitalsModal, setVitalsModal] = useState(false);
+  const [pulse, setPulse] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [spo2, setSpo2] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [respiratoryRate, setRespiratoryRate] = useState('');
+  const [updating, setUpdating] = useState(false);
+
+  const fetchQueue = async () => {
+    setLoading(true);
+    try {
+      const res = await get('/api/v1/visits/my-queue');
+      setVisits(res.visits || []);
+    } catch (err) {
+      console.error('Error fetching nurse queue:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const openVitalsModal = (visit) => {
+    setSelectedVisit(visit);
+    setPulse(visit.vitals?.pulse?.toString() || '');
+    setBloodPressure(visit.vitals?.bloodPressure || '');
+    setSpo2(visit.vitals?.spo2?.toString() || '');
+    setTemperature(visit.vitals?.temperature?.toString() || '');
+    setRespiratoryRate(visit.vitals?.respiratoryRate?.toString() || '');
+    setVitalsModal(true);
+  };
+
+  const handleSaveVitals = async () => {
+    if (!pulse || !bloodPressure || !spo2 || !temperature) {
+      Alert.alert("Thông báo", "Vui lòng điền các chỉ số sinh hiệu bắt buộc.");
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await put(`/api/v1/visits/${selectedVisit._id}/vitals`, {
+        vitals: {
+          pulse: parseInt(pulse),
+          bloodPressure,
+          spo2: parseInt(spo2),
+          temperature: parseFloat(temperature),
+          respiratoryRate: respiratoryRate ? parseInt(respiratoryRate) : undefined,
+        }
+      });
+      Alert.alert("Thành công", "Đã cập nhật sinh hiệu. Lượt khám chuyển sang Đang khám.");
+      setVitalsModal(false);
+      fetchQueue();
+    } catch (err) {
+      Alert.alert("Lỗi", err.message || "Không thể cập nhật sinh hiệu.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabHeader}>
+        <Text style={styles.tabTitle}>🩺 Hàng đợi đo sinh hiệu</Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
+          <Text style={styles.refreshButtonText}>🔄</Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0D9488" style={{ marginTop: 40 }} />
+      ) : (
+        <View style={{ gap: 12 }}>
+          {visits.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>✨</Text>
+              <Text style={styles.emptyText}>Không có ca khám nào đang chờ đo sinh hiệu.</Text>
+            </View>
+          ) : (
+            visits.map(v => (
+              <View key={v._id} style={[styles.card, { padding: 20, marginBottom: 12 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.patientName}>
+                      {v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
+                    </Text>
+                    <Text style={styles.patientInfo}>
+                      Mã y tế: {v.patientId?.profile?.medicalId || 'N/A'} • Lý do: {v.reason}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.statusBadgeText, { color: '#D97706' }]}>CHỜ ĐO SINH HIỆU</Text>
+                  </View>
+                </View>
+                <View style={{ marginTop: 8, gap: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#475569' }}><Text style={{ fontWeight: 'bold' }}>Bác sĩ chỉ định:</Text> {v.doctorId?.profile?.name || v.doctorId?.profile?.fullName || v.doctorId?.email || 'Đang phân công'}</Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8' }}>Tiếp nhận lúc: {new Date(v.createdAt).toLocaleString('vi-VN')}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.primaryButton, { marginTop: 12, paddingVertical: 10, maxWidth: 160 }]} 
+                  onPress={() => openVitalsModal(v)}
+                >
+                  <Text style={styles.primaryButtonText}>🩺 Nhập Sinh Hiệu</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+
+      {/* Vitals Modal */}
+      <Modal visible={vitalsModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { padding: 20 }]}>
+            <Text style={styles.modalTitle}>🩺 Nhập Sinh Hiệu Cho Bệnh Nhân</Text>
+            <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
+              Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
+            </Text>
+
+            <View style={{ gap: 12 }}>
+              <View>
+                <Text style={styles.fieldLabel}>Huyết áp (mmHg) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 120/80" 
+                  value={bloodPressure}
+                  onChangeText={setBloodPressure}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Mạch (lần/phút) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 80" 
+                  keyboardType="numeric"
+                  value={pulse}
+                  onChangeText={setPulse}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>SpO2 (%) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 98" 
+                  keyboardType="numeric"
+                  value={spo2}
+                  onChangeText={setSpo2}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Nhiệt độ (°C) *</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 37" 
+                  keyboardType="numeric"
+                  value={temperature}
+                  onChangeText={setTemperature}
+                />
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>Nhịp thở (lần/phút)</Text>
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Ví dụ: 18 (không bắt buộc)" 
+                  keyboardType="numeric"
+                  value={respiratoryRate}
+                  onChangeText={setRespiratoryRate}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={() => setVitalsModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.primaryButton} 
+                onPress={handleSaveVitals}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Lưu & Hoàn Thành</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
 
 // Tab Components
 const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh }) => {
@@ -644,6 +927,56 @@ const SignBadge = ({ signStatus }) => {
   return (
     <View style={[styles.statusBadge, { backgroundColor: bg, marginTop: 6 }]}>
       <Text style={[styles.statusBadgeText, { color, fontSize: 10 }]}>{signStatus}</Text>
+    </View>
+  );
+};
+
+const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabHeader}>
+        <Text style={styles.tabTitle}>🧠 Lịch sử Chẩn đoán Hình ảnh</Text>
+      </View>
+
+      {!selectedRecord ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>👈</Text>
+          <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        </View>
+      ) : imagingResults.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📂</Text>
+          <Text style={styles.emptyText}>Chưa có kết quả chẩn đoán hình ảnh nào được lưu trữ cho bệnh án này.</Text>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          {imagingResults.map((item) => {
+            const date = new Date(item.reportDate);
+            const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            
+            return (
+              <TouchableOpacity
+                key={item._id}
+                style={styles.card}
+                onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
+              >
+                <View style={[styles.cardHeader, { marginBottom: 12 }]}>
+                  <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
+                    <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                  </View>
+                  <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>{item.procedure}</Text>
+                <Text style={{ color: '#475569', fontSize: 14, marginBottom: 4 }}>Bác sĩ: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.radiologist}</Text></Text>
+                <Text style={{ color: '#475569', fontSize: 14, marginBottom: 12 }}>Chẩn đoán: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.diagnosis}</Text></Text>
+                <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
+                <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
+                <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 };

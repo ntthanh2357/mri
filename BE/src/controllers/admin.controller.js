@@ -2,20 +2,26 @@ import { isValidObjectId } from "mongoose";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Visit } from "../models/visit.model.js";
+import { Invoice } from "../models/invoice.model.js";
+import { Hospital } from "../models/hospital.model.js";
+import { User } from "../models/user.model.js";
+import { AuditLog } from "../models/auditLog.model.js";
+import { RevenueReport } from "../models/revenueReport.model.js";
+import { DrugReport } from "../models/drugReport.model.js";
+import bcrypt from "bcryptjs";
 import {
   getAllUsers,
   toggleUserLock,
-  getAllDoctors,
-  verifyDoctor,
-  getUserById,
+getUserById,
   lockUserById as lockUserByIdService,
   unlockUserById as unlockUserByIdService,
   getSystemStats,
-  verifyDoctorById as verifyDoctorByIdService,
-  verifyAdminById,
+verifyAdminById,
 } from "../services/user.service.js";
 import { getDatasets, createDataset, updateDatasetPrice as updateDatasetPriceService } from "../services/dataset.service.js";
 import { getAuditLogs, anonymizeAuditLogs } from "../services/audit.service.js";
+import { sendHospitalCredentials } from "../services/email.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,26 +41,6 @@ export const lockUser = async (req, res) => {
     const adminId = req.user.id;
     const user = await toggleUserLock(userId, Boolean(isLocked), adminId);
     res.status(200).json({ success: true, user });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-export const fetchDoctors = async (req, res) => {
-  try {
-    const doctors = await getAllDoctors();
-    res.status(200).json({ success: true, doctors });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-export const verifyDoctorAccount = async (req, res) => {
-  try {
-    const { userId, verified } = req.body;
-    const adminId = req.user.id;
-    const doctor = await verifyDoctor(userId, Boolean(verified), adminId);
-    res.status(200).json({ success: true, doctor });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -116,7 +102,7 @@ export const lockUserById = async (req, res) => {
       res.status(400).json({ success: false, message: "Invalid user ID" });
       return;
     }
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     const user = await lockUserByIdService(id, adminId);
     res.status(200).json({ success: true, user });
   } catch (error) {
@@ -136,7 +122,7 @@ export const unlockUserById = async (req, res) => {
       res.status(400).json({ success: false, message: "Invalid user ID" });
       return;
     }
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     const user = await unlockUserByIdService(id, adminId);
     res.status(200).json({ success: true, user });
   } catch (error) {
@@ -158,31 +144,6 @@ export const fetchStats = async (req, res) => {
   }
 };
 
-// ─── 3.5 verifyDoctorById ────────────────────────────────────────────────────
-export const verifyDoctorById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!isValidObjectId(id)) {
-      res.status(400).json({ success: false, message: "Invalid doctor ID" });
-      return;
-    }
-    const { verified } = req.body;
-    if (typeof verified !== "boolean") {
-      res.status(400).json({ success: false, message: "Field 'verified' must be a boolean" });
-      return;
-    }
-    const adminId = req.user._id;
-    const doctor = await verifyDoctorByIdService(id, verified, adminId);
-    res.status(200).json({ success: true, doctor });
-  } catch (error) {
-    if (error.message === "Doctor not found") {
-      res.status(404).json({ success: false, message: error.message });
-    } else {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
-};
-
 // @desc    Verify / Approve Hospital Clinic Admin (Manager) Account
 // @route   PUT /api/v1/admin/users/:id/verify
 // @access  Private (Global Admin only)
@@ -198,7 +159,7 @@ export const verifyAdminUser = async (req, res) => {
       res.status(400).json({ success: false, message: "Field 'verified' must be a boolean" });
       return;
     }
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     const user = await verifyAdminById(id, verified, adminId);
     res.status(200).json({ success: true, user });
   } catch (error) {
@@ -223,7 +184,7 @@ export const updateDatasetPrice = async (req, res) => {
       res.status(400).json({ success: false, message: "Price must be a number in range [0, 999999999]" });
       return;
     }
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     const dataset = await updateDatasetPriceService(id, price, adminId);
     res.status(200).json({ success: true, dataset });
   } catch (error) {
@@ -242,9 +203,128 @@ export const updateDatasetPrice = async (req, res) => {
 // ─── 3.7 anonymizeData ───────────────────────────────────────────────────────
 export const anonymizeData = async (req, res) => {
   try {
-    const adminId = req.user._id;
+    const adminId = req.user.id;
     const { modifiedCount } = await anonymizeAuditLogs(adminId);
     res.status(200).json({ success: true, modifiedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createUser = async (req, res) => {
+  try {
+    const { email, password, role, name, phone, hospitalName, hospitalAddress } = req.body;
+    const adminId = req.user.id;
+
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
+    }
+
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse"];
+    if (!rolesAvailable.includes(role)) {
+      return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
+    }
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ success: false, message: "Email này đã được đăng ký sử dụng." });
+    }
+
+    // Process hospital reference on the fly if role requires it
+    let resolvedHospitalId = undefined;
+    if (["hospital_admin", "doctor", "nurse", "technician"].includes(role)) {
+      if (!hospitalName || !hospitalName.trim()) {
+        return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện/cơ sở." });
+      }
+
+      const cleanName = hospitalName.trim();
+      let hospital = await Hospital.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, "i") } });
+      
+      if (!hospital) {
+        // Generate a simple unique code based on the initials
+        let baseCode = cleanName
+          .split(" ")
+          .filter(Boolean)
+          .map(w => w[0])
+          .join("")
+          .toUpperCase();
+        
+        if (baseCode.length < 2) baseCode = "HOSP";
+        
+        let code = baseCode;
+        let counter = 1;
+        while (await Hospital.findOne({ code })) {
+          code = `${baseCode}${counter}`;
+          counter++;
+        }
+
+        hospital = new Hospital({
+          name: cleanName,
+          code,
+          address: hospitalAddress ? hospitalAddress.trim() : "",
+          pricing: {
+            examFee: 150000,
+            mriFee: 1500000,
+            aiFee: 200000
+          },
+          isActive: true
+        });
+        await hospital.save();
+      }
+      resolvedHospitalId = hospital._id;
+    }
+
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const newUser = new User({
+      email,
+      phone,
+      passwordHash,
+      role,
+      hospitalId: resolvedHospitalId,
+      isVerified: true, // Accounts created by system admin are verified by default
+      profile: {
+        name,
+        photoUrl: "",
+      },
+    });
+
+    await newUser.save();
+
+    // Create Audit Log
+    await AuditLog.create({
+      action: "create-user",
+      entity: "User",
+      entityId: newUser._id,
+      performedBy: adminId,
+      details: `Đã tạo tài khoản mới ${email} với vai trò ${role} bởi Admin`,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo tài khoản thành công!",
+      user: {
+        id: newUser._id,
+        email: newUser.email,
+        role: newUser.role,
+        hospitalId: newUser.hospitalId,
+        isVerified: newUser.isVerified,
+        profile: newUser.profile,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const fetchHospitals = async (req, res) => {
+  try {
+    const hospitals = await Hospital.find()
+      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt isActive")
+      .lean();
+    res.status(200).json({ success: true, hospitals });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -393,5 +473,522 @@ export const saveChatbotConfig = async (req, res) => {
     res.status(200).json({ success: true, config, message: "Lưu cấu hình chatbot thành công!" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Lấy dashboard stats
+// @route   GET /api/v1/admin/dashboard
+// @access  Private (Admin)
+export const getDashboardStats = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // 1. Visits today
+    const visitsToday = await Visit.find({
+      hospitalId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const totalPatientsToday = visitsToday.length;
+
+    const statusDistribution = visitsToday.reduce((acc, visit) => {
+      acc[visit.status] = (acc[visit.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    // 2. AI Processed Count
+    const aiProcessedCount = await Visit.countDocuments({
+      hospitalId,
+      "mriOrder.requestAiAnalysis": true,
+      status: { $in: ["chờ bác sĩ đọc", "hoàn tất", "đã đóng"] }
+    });
+
+    // 3. Invoices/Revenue today
+    const invoicesToday = await Invoice.find({
+      hospitalId,
+      paidAt: { $gte: startOfDay, $lte: endOfDay },
+      status: "đã thanh toán"
+    });
+
+    let totalRevenue = 0;
+    let aiRevenue = 0;
+
+    invoicesToday.forEach(inv => {
+      totalRevenue += inv.totalAmount;
+      inv.items.forEach(item => {
+        if (item.type === "ai") aiRevenue += item.amount;
+      });
+    });
+
+    // 4. Hospital specific pricing
+    const hospital = await Hospital.findById(hospitalId);
+    const pricing = hospital ? {
+      examFee: hospital.pricing?.examFee ?? 150000,
+      mriFee: hospital.pricing?.mriFee ?? 1500000,
+      aiFee: hospital.pricing?.aiFee ?? 200000,
+      maxPatients: hospital.pricing?.maxPatients ?? 50
+    } : { examFee: 150000, mriFee: 1500000, aiFee: 200000, maxPatients: 50 };
+
+    // 5. Total patients (distinct all time)
+    const hospitalVisitsAllTime = await Visit.find({ hospitalId }).select("patientId");
+    const uniquePatientIds = [...new Set(hospitalVisitsAllTime.map(v => v.patientId ? v.patientId.toString() : null).filter(Boolean))];
+    const totalPatients = uniquePatientIds.length;
+
+    // 6. Total scans (all time)
+    const totalScans = await Visit.countDocuments({
+      hospitalId,
+      "mriOrder.imagingResultId": { $ne: null }
+    });
+
+    // 7. Demographics calculation
+    let adult = 0, senior = 0, pediatric = 0;
+    if (uniquePatientIds.length > 0) {
+      const patients = await User.find({ _id: { $in: uniquePatientIds } }).select("profile.age age");
+      patients.forEach(p => {
+        const ageVal = Number(p.profile?.age || p.age || 35);
+        if (ageVal < 18) pediatric++;
+        else if (ageVal >= 60) senior++;
+        else adult++;
+      });
+    }
+    const totalDemographics = adult + senior + pediatric;
+    const demographics = [
+      { name: 'Người lớn (18–60)', value: totalDemographics > 0 ? Math.round((adult / totalDemographics) * 100) : 0, color: '#15803D' },
+      { name: 'Người cao tuổi (60+)', value: totalDemographics > 0 ? Math.round((senior / totalDemographics) * 100) : 0, color: '#475569' },
+      { name: 'Nhi khoa', value: totalDemographics > 0 ? Math.round((pediatric / totalDemographics) * 100) : 0, color: '#CBD5E1' }
+    ];
+
+    // 8. Recent activity (formatted for frontend display)
+    const recentVisits = await Visit.find({ hospitalId })
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .populate({ path: "patientId", select: "profile.name" })
+      .populate({ path: "doctorId", select: "profile.name" });
+
+    const recentActivity = recentVisits.map(v => {
+      const formattedDate = v.updatedAt ? new Date(v.updatedAt) : new Date();
+      const timeStr = `${formattedDate.getDate()}/${formattedDate.getMonth() + 1} ${formattedDate.getHours().toString().padStart(2, '0')}:${formattedDate.getMinutes().toString().padStart(2, '0')}`;
+      return {
+        id: v._id.toString().substring(18).toUpperCase(),
+        patientName: v.patientId?.profile?.name || "Bệnh nhân",
+        doctor: v.doctorId?.profile?.name || "Bác sĩ",
+        scanType: v.mriOrder?.region || "Khám thần kinh",
+        status: v.status,
+        time: timeStr,
+        isSuccess: ["hoàn tất", "đã đóng"].includes(v.status)
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      totalPatientsToday,
+      statusDistribution,
+      aiProcessedCount,
+      aiCorrectRate: 0,
+      revenue: {
+        totalRevenue,
+        aiRevenue
+      },
+      pricing,
+      totalPatients,
+      totalScans,
+      demographics,
+      recentActivity
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+// @desc    Update Hospital Pricing & Max Patients
+// @route   PUT /api/v1/admin/hospital-pricing
+// @access  Private (Admin)
+export const updateHospitalPricing = async (req, res) => {
+  try {
+    const { examFee, mriFee, aiFee, maxPatients } = req.body;
+    const hospitalId = req.user.hospitalId;
+    
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Admin chưa được gán hospitalId" });
+    }
+    
+    const hospital = await Hospital.findById(hospitalId);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện" });
+    }
+    
+    if (examFee !== undefined) hospital.pricing.examFee = examFee;
+    if (mriFee !== undefined) hospital.pricing.mriFee = mriFee;
+    if (aiFee !== undefined) hospital.pricing.aiFee = aiFee;
+    if (maxPatients !== undefined) hospital.pricing.maxPatients = maxPatients;
+    
+    await hospital.save();
+    
+    res.status(200).json({ success: true, message: "Cập nhật cấu hình bệnh viện thành công", pricing: hospital.pricing });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+// ─── Hospital Onboarding ──────────────────────────────────────────────────────
+
+// Step 1: Admin cấp tài khoản tạm cho bệnh viện
+export const provisionHospital = async (req, res) => {
+  try {
+    const { hospitalName, itEmail } = req.body;
+    if (!hospitalName || !itEmail) {
+      return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện và email IT." });
+    }
+
+    // Generate unique BV_XXX code
+    const count = await Hospital.countDocuments();
+    let code;
+    let attempt = count + 1;
+    do {
+      code = `BV_${String(attempt).padStart(3, "0")}`;
+      attempt++;
+    } while (await Hospital.findOne({ code }));
+
+    // Generate temp password
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    const tempPassword = "BV@" + Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+
+    // Temp email used as username (not a real email, just an internal identifier)
+    const tempEmail = `${code.toLowerCase()}@temp.neuroscan.internal`;
+
+    const existing = await User.findOne({ email: tempEmail });
+    if (existing) {
+      return res.status(409).json({ success: false, message: `Mã ${code} đã tồn tại.` });
+    }
+
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    // Create hospital record first
+    const hospital = await Hospital.create({
+      name: hospitalName.trim(),
+      code,
+      tempUsername: code,
+      status: "provisioned",
+    });
+
+    // Create hospital_admin user
+    await User.create({
+      email: tempEmail,
+      passwordHash,
+      role: "hospital_admin",
+      hospitalId: hospital._id,
+      isVerified: false,
+      profile: { name: hospitalName.trim() },
+    });
+
+    // Send credentials email (fire-and-forget)
+    sendHospitalCredentials({ itEmail, hospitalName: hospitalName.trim(), tempUsername: code, tempPassword }).catch(() => {});
+
+    res.status(201).json({
+      success: true,
+      message: "Đã cấp tài khoản tạm thời.",
+      credentials: { tempUsername: code, tempPassword, itEmail },
+      hospital: { _id: hospital._id, name: hospital.name, code, status: "provisioned" },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /admin/hospitals/:id
+export const getHospitalById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+    const hospital = await Hospital.findById(id).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    res.status(200).json({ success: true, hospital });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Step 4: Admin xác thực → cập nhật email đăng nhập chính thức
+export const activateHospital = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    if (hospital.status !== "submitted") {
+      return res.status(400).json({ success: false, message: "Bệnh viện chưa nộp thông tin hoặc đã được kích hoạt." });
+    }
+    if (!hospital.loginEmail) {
+      return res.status(400).json({ success: false, message: "Bệnh viện chưa cung cấp email đăng nhập chính thức." });
+    }
+
+    // Check loginEmail not already taken by another user
+    const conflict = await User.findOne({ email: hospital.loginEmail, hospitalId: { $ne: hospital._id } });
+    if (conflict) {
+      return res.status(409).json({ success: false, message: "Email đăng nhập đã được sử dụng bởi tài khoản khác." });
+    }
+
+    // Update user: replace temp email/official email with approved loginEmail
+    await User.findOneAndUpdate(
+      { hospitalId: hospital._id, role: "hospital_admin" },
+      { email: hospital.loginEmail, isVerified: true }
+    );
+
+    hospital.status = "active";
+    await hospital.save();
+
+    await AuditLog.create({
+      action: "activate-hospital",
+      entity: "Hospital",
+      entityId: hospital._id,
+      performedBy: req.user.id,
+      details: `Hospital ${hospital.name} activated. Login email: ${hospital.loginEmail}`,
+    });
+
+    res.status(200).json({ success: true, message: "Bệnh viện đã được kích hoạt.", hospital });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Reset mật khẩu tạm cho bệnh viện (dùng khi quên password)
+export const resetHospitalPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+    if (hospital.status === "active") {
+      return res.status(400).json({ success: false, message: "Bệnh viện đã kích hoạt, không thể reset tài khoản tạm." });
+    }
+
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    const newPassword = "BV@" + Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const tempEmail = `${hospital.code.toLowerCase()}@temp.neuroscan.internal`;
+    const updatedUser = await User.findOneAndUpdate({ email: tempEmail, hospitalId: hospital._id }, { passwordHash });
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản tạm cho bệnh viện này (có thể tài khoản đã kích hoạt chính thức)." });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Đã reset mật khẩu tạm.",
+      credentials: { tempUsername: hospital.code, tempPassword: newPassword },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Toggle Lock/Unlock hospital
+// @route   PUT /api/v1/admin/hospitals/:id/toggle-lock
+// @access  Private (System Admin)
+export const toggleHospitalLock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+
+    hospital.isActive = !hospital.isActive;
+    await hospital.save();
+
+    // Log action to AuditLog
+    await AuditLog.create({
+      action: hospital.isActive ? "unlock-hospital" : "lock-hospital",
+      entity: "Hospital",
+      entityId: hospital._id,
+      performedBy: req.user.id,
+      details: `Admin ${req.user.email} đã ${hospital.isActive ? "MỞ KHÓA" : "KHÓA"} bệnh viện ${hospital.name}.`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Đã ${hospital.isActive ? "mở khóa" : "khóa"} bệnh viện thành công.`,
+      hospital
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete hospital and its associated staff users
+// @route   DELETE /api/v1/admin/hospitals/:id
+// @access  Private (System Admin)
+export const deleteHospital = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+
+    // Delete all users belonging to this hospital
+    const deleteUsersRes = await User.deleteMany({ hospitalId: id });
+
+    // Delete hospital record
+    await Hospital.findByIdAndDelete(id);
+
+    // Log action to AuditLog
+    await AuditLog.create({
+      action: "delete-hospital",
+      entity: "Hospital",
+      entityId: id,
+      performedBy: req.user.id,
+      details: `Admin ${req.user.email} đã XÓA bệnh viện ${hospital.name} cùng với ${deleteUsersRes.deletedCount} tài khoản nhân sự liên quan.`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Đã xóa bệnh viện ${hospital.name} và các tài khoản liên quan thành công.`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── REPORT GENERATION AND VIEWING CONTROLLERS ────────────────────────────────
+
+export const createRevenueReport = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const { month, year, totalAmount, dailyRecords } = req.body;
+    if (!month || !year || totalAmount === undefined || !dailyRecords) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ các thông tin báo cáo." });
+    }
+    const report = new RevenueReport({
+      hospitalId,
+      month: Number(month),
+      year: Number(year),
+      totalAmount: Number(totalAmount),
+      dailyRecords,
+      author: req.user.id
+    });
+    await report.save();
+    res.status(201).json({ success: true, message: "Tạo báo cáo doanh thu thành công!", report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getRevenueReports = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const reports = await RevenueReport.find({ hospitalId })
+      .populate("author", "profile.name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getRevenueReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID báo cáo không hợp lệ." });
+    }
+    const report = await RevenueReport.findById(id).populate("author", "profile.name email");
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy báo cáo." });
+    }
+    res.status(200).json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const createDrugReport = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const { month, year, items } = req.body;
+    if (!month || !year || !items) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ các thông tin báo cáo." });
+    }
+    const report = new DrugReport({
+      hospitalId,
+      month: Number(month),
+      year: Number(year),
+      items,
+      author: req.user.id
+    });
+    await report.save();
+    res.status(201).json({ success: true, message: "Tạo báo cáo sử dụng thuốc thành công!", report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getDrugReports = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "Yêu cầu tài khoản có gán hospitalId." });
+    }
+    const reports = await DrugReport.find({ hospitalId })
+      .populate("author", "profile.name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const getDrugReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID báo cáo không hợp lệ." });
+    }
+    const report = await DrugReport.findById(id).populate("author", "profile.name email");
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy báo cáo." });
+    }
+    res.status(200).json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };

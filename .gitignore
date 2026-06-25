@@ -144,7 +144,7 @@ vite.config.ts.timestamp-*
 
 # Claude Code local config
 .claude/
-.TheDuckHospital-main/
 
-# External reference folders
-TheDuckHospital-main/
+# Temporary clones and ducks
+tmp_clone/
+tmp_duck/

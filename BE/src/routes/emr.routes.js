@@ -21,16 +21,16 @@ const router = Router();
 router.use(protect);
 
 router.route("/records")
-  .get(checkRole(["doctor", "nurse", "receptionist", "admin"]), getRecords)
-  .post(checkRole(["doctor", "receptionist", "admin"]), createRecord);
+  .get(checkRole(["doctor", "nurse", "admin"]), getRecords)
+  .post(checkRole(["doctor", "nurse", "admin"]), createRecord);
 
 router.route("/records/:id")
-  .get(checkRole(["doctor", "nurse", "receptionist", "admin"]), getRecordById)
-  .put(checkRole(["doctor", "receptionist", "admin"]), updateRecord);
+  .get(checkRole(["doctor", "nurse", "admin"]), getRecordById)
+  .put(checkRole(["doctor", "nurse", "admin"]), updateRecord);
 
 router.route("/records/:id/care-sheets")
   .get(checkRole(["doctor", "nurse", "admin"]), getCareSheets)
-  .post(checkRole(["nurse", "admin"]), createCareSheet);
+  .post(checkRole(["doctor", "nurse", "admin"]), createCareSheet);
 
 router.route("/records/:id/consultations")
   .get(checkRole(["doctor", "admin"]), getConsultations)

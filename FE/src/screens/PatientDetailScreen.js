@@ -26,8 +26,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [patient, setPatient] = useState(null);
   const [vitals, setVitals] = useState([]);
   const [labOrders, setLabOrders] = useState([]);
+  const [imagingResults, setImagingResults] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [activeTab, setActiveTab] = useState('vitals'); // 'vitals' hoặc 'lab'
+  const [activeTab, setActiveTab] = useState('vitals'); // 'vitals', 'lab', 'imaging'
 
   // State cho form ghi nhận sinh hiệu mới
   const [pulseInput, setPulseInput] = useState('');
@@ -46,6 +47,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [isSendingLis, setIsSendingLis] = useState(false);
   // Legacy - kept for backward compat
   const [customLisCode, setCustomLisCode] = useState('GLU');
+
+  const [labInputValues, setLabInputValues] = useState({});
+  const [savingManualLab, setSavingManualLab] = useState(false);
+  const [isEditingLab, setIsEditingLab] = useState(false);
 
   // Fetch dữ liệu từ backend
   const fetchData = async () => {
@@ -88,6 +93,17 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
       setLabOrders(ordersData.data || []);
       
+      // 5. Lấy danh sách phim MRI/CT
+      try {
+        const pId = foundPatient?.profile?.medicalId || targetPatientId;
+        const imagingData = await get(`/api/v1/imaging/patient/${pId}`);
+        if (imagingData && imagingData.success) {
+          setImagingResults(imagingData.data || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải phim MRI:', err);
+      }
+
       // Chọn mặc định phiếu đầu tiên để hiển thị chi tiết
       if (ordersData.data && ordersData.data.length > 0) {
         setSelectedOrder(ordersData.data[0]);
@@ -125,6 +141,25 @@ const PatientDetailScreen = ({ route, navigation }) => {
     };
     loadBiomarkers();
   }, [selectedOrder?._id, selectedOrder?.category]);
+
+  // Khởi tạo các giá trị nhập kết quả xét nghiệm khi chọn phiếu hoặc đổi danh sách biomarkers
+  useEffect(() => {
+    if (!selectedOrder) {
+      setLabInputValues({});
+      return;
+    }
+    const initialValues = {};
+    if (selectedOrder.results && selectedOrder.results.length > 0) {
+      selectedOrder.results.forEach(res => {
+        initialValues[res.biomarker_code] = String(res.value_result);
+      });
+    } else {
+      biomarkerList.forEach(b => {
+        initialValues[b.code] = '';
+      });
+    }
+    setLabInputValues(initialValues);
+  }, [selectedOrder?._id, biomarkerList]);
 
   // Validate giá trị tùy biến mỗi khi thay đổi
   useEffect(() => {
@@ -200,6 +235,76 @@ const PatientDetailScreen = ({ route, navigation }) => {
       Alert.alert('Thất bại', error.message || 'Không thể thêm sinh hiệu mới.');
     } finally {
       setIsSubmittingVital(false);
+    }
+  };
+
+  // Tự động điền các trị số bình thường theo giới tính
+  const handleAutoFillNormalLab = () => {
+    if (!selectedOrder || biomarkerList.length === 0) return;
+    const filled = { ...labInputValues };
+    biomarkerList.forEach(b => {
+      const ref = selectedOrder.patient_gender === 'Nam' ? b.reference_range?.male : b.reference_range?.female;
+      if (ref) {
+        let normalVal = 0;
+        const hasMin = ref.min !== null && ref.min !== undefined;
+        const hasMax = ref.max !== null && ref.max !== undefined;
+        if (hasMin && hasMax) {
+          normalVal = (ref.min + ref.max) / 2;
+        } else if (hasMax) {
+          normalVal = ref.max;
+        } else if (hasMin) {
+          normalVal = ref.min;
+        }
+        filled[b.code] = String(Number(normalVal.toFixed(2)));
+      }
+    });
+    setLabInputValues(filled);
+  };
+
+  // Lưu kết quả xét nghiệm điền tay của bác sĩ
+  const handleSaveManualLab = async () => {
+    if (!selectedOrder) return;
+    
+    const results = Object.keys(labInputValues)
+      .filter(code => labInputValues[code] !== undefined && labInputValues[code].trim() !== '')
+      .map(code => ({
+        code,
+        value: Number(labInputValues[code])
+      }));
+
+    if (results.length === 0) {
+      Alert.alert('Lỗi', 'Vui lòng nhập ít nhất một kết quả xét nghiệm.');
+      return;
+    }
+
+    const hasInvalidVal = results.some(r => isNaN(r.value));
+    if (hasInvalidVal) {
+      Alert.alert('Lỗi', 'Giá trị kết quả nhập vào phải là số.');
+      return;
+    }
+
+    setSavingManualLab(true);
+    try {
+      await post('/api/lis/receiver', {
+        barcode: selectedOrder.barcode,
+        results
+      });
+      Alert.alert('Thành công', 'Đã lưu kết quả xét nghiệm.');
+      setIsEditingLab(false);
+      
+      const targetPatientId = patient?._id;
+      const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
+      setLabOrders(ordersData.data || []);
+      
+      const updated = ordersData.data.find(o => o._id === selectedOrder._id);
+      if (updated) {
+        setSelectedOrder(updated);
+      }
+    } catch (error) {
+      console.error('Lỗi lưu kết quả xét nghiệm:', error);
+      Alert.alert('Thất bại', error.message || 'Không thể lưu kết quả xét nghiệm.');
+    } finally {
+      setSavingManualLab(false);
     }
   };
 
@@ -533,6 +638,86 @@ const PatientDetailScreen = ({ route, navigation }) => {
     );
   };
 
+  const renderManualLabForm = () => {
+    if (!selectedOrder) return null;
+    return (
+      <View style={styles.manualLabFormContainer}>
+        <View style={styles.manualFormHeader}>
+          <Text style={styles.manualFormTitle}>
+            {selectedOrder.status === 'COMPLETED' ? '✏️ Chỉnh sửa kết quả xét nghiệm' : '✍️ Nhập kết quả xét nghiệm'}
+          </Text>
+          <TouchableOpacity
+            style={styles.autofillBtn}
+            onPress={handleAutoFillNormalLab}
+          >
+            <Text style={styles.autofillBtnText}>⚡ Tự động điền giá trị chuẩn</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.manualLabGrid}>
+          {biomarkerList.map((biomarker) => {
+            const range = selectedOrder.patient_gender === 'Nam'
+              ? biomarker.reference_range?.male
+              : biomarker.reference_range?.female;
+
+            let rangeStr = '';
+            if (range) {
+              const hasMin = range.min !== null && range.min !== undefined;
+              const hasMax = range.max !== null && range.max !== undefined;
+              if (hasMin && hasMax) rangeStr = `${range.min} - ${range.max}`;
+              else if (hasMax) rangeStr = `≤ ${range.max}`;
+              else if (hasMin) rangeStr = `≥ ${range.min}`;
+            }
+
+            return (
+              <View key={biomarker.code} style={styles.manualLabField}>
+                <Text style={styles.manualLabFieldLabel}>
+                  {biomarker.name} ({biomarker.code}) {biomarker.unit ? `[${biomarker.unit}]` : ''}
+                </Text>
+                <TextInput
+                  style={styles.manualLabInput}
+                  placeholder="Nhập trị số..."
+                  placeholderTextColor="#94A3B8"
+                  value={labInputValues[biomarker.code] || ''}
+                  onChangeText={(val) => setLabInputValues(prev => ({ ...prev, [biomarker.code]: val }))}
+                  keyboardType="decimal-pad"
+                />
+                {rangeStr ? (
+                  <Text style={styles.manualLabRangeHint}>
+                    Khoảng chuẩn: {rangeStr}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.manualFormFooter}>
+          {selectedOrder.status === 'COMPLETED' && (
+            <TouchableOpacity
+              style={styles.cancelManualBtn}
+              onPress={() => setIsEditingLab(false)}
+              disabled={savingManualLab}
+            >
+              <Text style={styles.cancelManualBtnText}>Hủy</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.saveManualBtn}
+            onPress={handleSaveManualLab}
+            disabled={savingManualLab}
+          >
+            {savingManualLab ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.saveManualBtnText}>💾 Lưu kết quả xét nghiệm</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -602,7 +787,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               onPress={() => setActiveTab('vitals')}
             >
               <Text style={[styles.tabButtonText, activeTab === 'vitals' && styles.activeTabButtonText]}>
-                📈 Theo dõi Sinh hiệu
+                📈 Sinh hiệu
               </Text>
             </TouchableOpacity>
             
@@ -611,7 +796,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
               onPress={() => setActiveTab('lab')}
             >
               <Text style={[styles.tabButtonText, activeTab === 'lab' && styles.activeTabButtonText]}>
-                🔬 Kết quả Xét nghiệm (LIS)
+                🔬 Xét nghiệm
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'imaging' && styles.activeTabButton]}
+              onPress={() => setActiveTab('imaging')}
+            >
+              <Text style={[styles.tabButtonText, activeTab === 'imaging' && styles.activeTabButtonText]}>
+                🧠 Phim MRI/CT
               </Text>
             </TouchableOpacity>
           </View>
@@ -887,8 +1081,17 @@ const PatientDetailScreen = ({ route, navigation }) => {
                         )}
                       </View>
 
+                      {selectedOrder.status === 'COMPLETED' && !isEditingLab && currentUser?.role !== 'patient' && (
+                        <TouchableOpacity
+                          style={styles.editLabResultsBtn}
+                          onPress={() => setIsEditingLab(true)}
+                        >
+                          <Text style={styles.editLabResultsBtnText}>✏️ Chỉnh sửa kết quả xét nghiệm</Text>
+                        </TouchableOpacity>
+                      )}
+
                       {/* Bảng kết quả chi tiết */}
-                      {selectedOrder.status === 'COMPLETED' ? (
+                      {selectedOrder.status === 'COMPLETED' && !isEditingLab ? (
                         <View style={styles.tableContainer}>
                           <View style={styles.tableRowHeader}>
                             <Text style={[styles.colHeader, { flex: 2.2 }]}>Tên chỉ số xét nghiệm</Text>
@@ -933,6 +1136,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
                             );
                           })}
                         </View>
+                      ) : currentUser?.role !== 'patient' ? (
+                        renderManualLabForm()
                       ) : (
                         <View style={styles.pendingReportBox}>
                           <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: 12 }} />
@@ -1124,6 +1329,44 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 )}
               </View>
 
+            </View>
+          )}
+
+          {/* 5. Nội dung TAB 3: HÌNH ẢNH PHIM MRI/CT */}
+          {activeTab === 'imaging' && (
+            <View style={{ marginTop: 16 }}>
+              {imagingResults.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12 }}>
+                  <Text style={{ fontSize: 40, marginBottom: 12 }}>📂</Text>
+                  <Text style={{ color: '#64748B', fontSize: 14 }}>Chưa có phim chụp nào được ghi nhận cho bệnh án này.</Text>
+                </View>
+              ) : (
+                imagingResults.map((item) => {
+                  const date = new Date(item.reportDate);
+                  const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}
+                      onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
+                          <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                        </View>
+                        <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>{item.procedure}</Text>
+                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 4 }}>Bác sĩ: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.radiologist}</Text></Text>
+                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 12 }}>Chẩn đoán: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.diagnosis}</Text></Text>
+                      <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
+                      <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
+                      <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
           )}
 
@@ -1850,6 +2093,124 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textAlign: 'center',
     marginVertical: 12,
+  },
+  manualLabFormContainer: {
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  manualFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  manualFormTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  autofillBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  autofillBtnText: {
+    fontSize: 12,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  manualLabGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  manualLabField: {
+    width: Platform.OS === 'web' ? '48%' : '100%',
+    minWidth: 200,
+    marginBottom: 12,
+  },
+  manualLabFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  manualLabInput: {
+    height: 38,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  manualLabRangeHint: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+  manualFormFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 12,
+  },
+  cancelManualBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelManualBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  saveManualBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveManualBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  editLabResultsBtn: {
+    marginVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  editLabResultsBtnText: {
+    fontSize: 13,
+    color: '#166534',
+    fontWeight: '600',
   },
 });
 

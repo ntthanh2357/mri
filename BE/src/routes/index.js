@@ -9,6 +9,10 @@ import drugRoutes from "./drug.routes.js";
 
 import patientRecordRoutes from "./patientRecord.routes.js";
 import imagingRoutes from "./imaging.routes.js";
+import imagingResultsRoutes from "./imagingResults.routes.js";
+import visitRoutes from "./visit.routes.js";
+import invoiceRoutes from "./invoice.routes.js";
+import hospitalRoutes from "./hospital.routes.js";
 
 const router = Router();
 
@@ -29,11 +33,18 @@ router.use("/emr", emrRoutes);
 
 // Mount imaging routes
 router.use("/api/v1/imaging", imagingRoutes);
+router.use("/api/v1/imaging-results", imagingResultsRoutes);
+
+// Mount task assignment routes
+router.use("/api/v1/visits", visitRoutes);
+router.use("/api/v1/invoices", invoiceRoutes);
+router.use("/api/v1/hospital", hospitalRoutes);
 
 // Health check endpoint under /api/v1
 
 router.get("/api/v1", (req, res) => {
   res.json({ status: "success", message: "Health check passed", environment: process.env.NODE_ENV });
 });
+
 
 export default router;

@@ -5,8 +5,6 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "node src/index.js",
-    "seed": "node src/seed.js",
-    "seed:emr": "node src/seedEMR.js",
     "start": "node src/index.js",
     "test": "jest"
   },

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { get } from '../services/api.service';
+import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './DoctorPatientListScreen.styles';
 
 const DoctorPatientListScreen = ({ navigation }) => {
@@ -17,6 +18,11 @@ const DoctorPatientListScreen = ({ navigation }) => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    get('/auth/me').then(r => setUser(r.user)).catch(() => {});
+  }, []);
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -124,7 +130,8 @@ const DoctorPatientListScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
+      <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>← Quay lại</Text>
@@ -181,11 +188,18 @@ const DoctorPatientListScreen = ({ navigation }) => {
                 <Text style={styles.diagnosisValue} numberOfLines={1}>{patient.diagnosis}</Text>
                 <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
               </View>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name })} 
+                style={{marginTop: 8, padding: 8, backgroundColor: '#3B82F6', borderRadius: 4}}
+              >
+                <Text style={{color: 'white', textAlign: 'center'}}>Xem Phim MRI/CT (TEST)</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </ResponsiveLayout>
   );
 };
 

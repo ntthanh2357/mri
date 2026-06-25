@@ -21,8 +21,36 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState('doctor');
+  const [activeRoleTab, setActiveRoleTab] = useState('doctor');
   const [creatingUser, setCreatingUser] = useState(false);
+
+  const [hospitalStaff, setHospitalStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
+  const ROLE_LABELS = {
+    doctor: 'Bác sĩ',
+    nurse: 'Điều dưỡng & Lễ tân',
+    technician: 'Kỹ thuật viên'
+  };
+
+  const fetchHospitalStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const res = await get('/api/v1/hospital/staff');
+      if (res && res.success) {
+        setHospitalStaff(res.staff || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách nhân viên:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleOpenStaffModal = () => {
+    fetchHospitalStaff();
+    setShowAddUserModal(true);
+  };
 
   // Dynamic dashboard states
   const [currentUser, setCurrentUser] = useState(null);
@@ -36,6 +64,17 @@ const ClinicDashboardScreen = ({ navigation }) => {
   ]);
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // New hospital operations statistics
+  const [totalPatientsToday, setTotalPatientsToday] = useState(0);
+  const [statusDistribution, setStatusDistribution] = useState({});
+  const [aiProcessedCount, setAiProcessedCount] = useState(0);
+  const [revenue, setRevenue] = useState({ totalRevenue: 0, aiRevenue: 0 });
+  const [examFee, setExamFee] = useState('150000');
+  const [mriFee, setMriFee] = useState('1500000');
+  const [aiFee, setAiFee] = useState('200000');
+  const [maxPatients, setMaxPatients] = useState('50');
+  const [updatingPricing, setUpdatingPricing] = useState(false);
+
   const fetchDashboardData = async () => {
     setLoadingStats(true);
     try {
@@ -45,68 +84,29 @@ const ClinicDashboardScreen = ({ navigation }) => {
         setCurrentUser(userRes.user);
       }
 
-      // 2. Fetch total patients list
-      const patientsRes = await get('/api/patients');
-      let patientCount = 0;
-      if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
-        patientCount = patientsRes.data.length;
+      // 2. Fetch hospital-specific stats
+      const statsRes = await get('/admin/dashboard');
+      if (statsRes && statsRes.success) {
+        setTotalPatients(statsRes.totalPatients ?? 0);
+        setTotalScans(statsRes.totalScans ?? 0);
+        setTotalPatientsToday(statsRes.totalPatientsToday ?? 0);
+        setStatusDistribution(statsRes.statusDistribution ?? {});
+        setAiProcessedCount(statsRes.aiProcessedCount ?? 0);
+        setRevenue(statsRes.revenue ?? { totalRevenue: 0, aiRevenue: 0 });
+
+        if (statsRes.demographics) {
+          setDemographics(statsRes.demographics);
+        }
+        if (statsRes.recentActivity) {
+          setRecentActivity(statsRes.recentActivity);
+        }
+        if (statsRes.pricing) {
+          setExamFee(String(statsRes.pricing.examFee ?? 150000));
+          setMriFee(String(statsRes.pricing.mriFee ?? 1500000));
+          setAiFee(String(statsRes.pricing.aiFee ?? 200000));
+          setMaxPatients(String(statsRes.pricing.maxPatients ?? 50));
+        }
       }
-      setTotalPatients(patientCount);
-
-      // 3. Fetch all imaging results
-      const scansRes = await get('/api/v1/imaging');
-      let scanList = [];
-      if (scansRes && scansRes.success && Array.isArray(scansRes.data)) {
-        scanList = scansRes.data;
-      }
-      setTotalScans(scanList.length);
-
-      // 4. Fetch EMR records for demographics calculation
-      const emrRes = await get('/emr/records');
-      let emrList = [];
-      if (emrRes && emrRes.status === 'success' && Array.isArray(emrRes.data)) {
-        emrList = emrRes.data;
-      }
-
-      // Calculate demographics
-      if (emrList.length > 0) {
-        let adult = 0, senior = 0, pediatric = 0;
-        emrList.forEach(r => {
-          const age = Number(r.age) || 0;
-          if (age < 18) pediatric++;
-          else if (age >= 60) senior++;
-          else adult++;
-        });
-        const total = emrList.length;
-        setDemographics([
-          { name: 'Người lớn (18–60)', value: Math.round((adult / total) * 100), color: '#15803D' },
-          { name: 'Người cao tuổi (60+)', value: Math.round((senior / total) * 100), color: '#475569' },
-          { name: 'Nhi khoa', value: Math.round((pediatric / total) * 100), color: '#CBD5E1' },
-        ]);
-      } else {
-        setDemographics([
-          { name: 'Người lớn (18–60)', value: 0, color: '#15803D' },
-          { name: 'Người cao tuổi (60+)', value: 0, color: '#475569' },
-          { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
-        ]);
-      }
-
-      // 5. Construct recent activities from real scans
-      const formattedActivities = scanList.slice(0, 3).map((scan) => {
-        const scanDate = new Date(scan.reportDate || scan.createdAt);
-        const timeStr = `${scanDate.getDate()}/${scanDate.getMonth() + 1} ${scanDate.getHours().toString().padStart(2, '0')}:${scanDate.getMinutes().toString().padStart(2, '0')}`;
-        
-        return {
-          id: scan.medicalRecordNumber || scan.medicalId || `NS-${scan._id.substring(18).toUpperCase()}`,
-          doctor: scan.radiologist || scan.orderingDoctor || 'Bác sĩ',
-          scanType: scan.imagingType || 'Phim chụp',
-          status: 'Hoàn thành',
-          time: timeStr,
-          isSuccess: true
-        };
-      });
-      setRecentActivity(formattedActivities);
-
     } catch (err) {
       console.error('Lỗi khi tải thông tin tổng quan phòng khám:', err);
     } finally {
@@ -116,7 +116,48 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchHospitalStaff();
   }, []);
+
+  const handleUpdatePricing = async () => {
+    const parsedExam = Number(examFee);
+    const parsedMri = Number(mriFee);
+    const parsedAi = Number(aiFee);
+    const parsedMax = Number(maxPatients);
+
+    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi) || isNaN(parsedMax)) {
+      Alert.alert('Lỗi', 'Bảng giá dịch vụ và số bệnh nhân tối đa phải là chữ số hợp lệ.');
+      return;
+    }
+
+    setUpdatingPricing(true);
+    try {
+      const { put } = require('../services/api.service');
+      const response = await put('/admin/hospital-pricing', {
+        examFee: parsedExam,
+        mriFee: parsedMri,
+        aiFee: parsedAi,
+        maxPatients: parsedMax
+      });
+
+      if (response && response.success) {
+        Alert.alert('Thành công', 'Cập nhật cấu hình bệnh viện thành công!');
+        if (response.pricing) {
+          setExamFee(String(response.pricing.examFee));
+          setMriFee(String(response.pricing.mriFee));
+          setAiFee(String(response.pricing.aiFee));
+          setMaxPatients(String(response.pricing.maxPatients ?? 50));
+        }
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể cập nhật cấu hình.');
+      }
+    } catch (err) {
+      console.error('Error updating hospital pricing:', err);
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setUpdatingPricing(false);
+    }
+  };
 
   const handleCreateUser = async () => {
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
@@ -129,17 +170,18 @@ const ClinicDashboardScreen = ({ navigation }) => {
         email: newUserEmail,
         password: newUserPassword,
         name: newUserName,
-        role: newUserRole,
+        role: activeRoleTab,
+        hospitalId: currentUser?.hospitalId || undefined,
       });
 
       if (response.success || response.user) {
-        Alert.alert('Thành công', `Đã cấp tài khoản thành công cho ${newUserName} (${newUserRole.toUpperCase()})!`);
-        setShowAddUserModal(false);
+        Alert.alert('Thành công', `Đã cấp tài khoản thành công cho ${newUserName} (${ROLE_LABELS[activeRoleTab].toUpperCase()})!`);
         setNewUserName('');
         setNewUserEmail('');
         setNewUserPassword('');
-        // Refresh dashboard data
+        // Refresh stats and staff list
         fetchDashboardData();
+        fetchHospitalStaff();
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể tạo tài khoản.');
       }
@@ -184,11 +226,11 @@ const ClinicDashboardScreen = ({ navigation }) => {
           <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
             {/* Action Buttons */}
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => Alert.alert('Thông báo', 'Đang tải sao kê về điện thoại...')}>
-                <Text style={styles.actionButtonOutlineText}>📥 Xuất sao kê</Text>
+              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
+                <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => setShowAddUserModal(true)}>
-                <Text style={styles.actionButtonSolidText}>👤 Cấp tài khoản nhân sự</Text>
+              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
+                <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
@@ -230,26 +272,31 @@ const ClinicDashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Dark Wallet Card */}
+            {/* Daily Operational Stats Card */}
             <View style={styles.walletCard}>
               <View style={styles.walletHeader}>
                 <View>
-                  <Text style={styles.walletTitle}>Số dư ví hiện tại</Text>
-                  <Text style={styles.walletBalance}>0đ</Text>
+                  <Text style={styles.walletTitle}>Doanh thu hôm nay (lũy kế)</Text>
+                  <Text style={styles.walletBalance}>
+                    {loadingStats ? '...' : (revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                  </Text>
                 </View>
-                <TouchableOpacity style={styles.walletDepositBtn} onPress={() => navigation.navigate('Financials')}>
-                  <Text style={styles.walletDepositText}>Nạp tiền</Text>
-                </TouchableOpacity>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.walletTitle, { color: '#4ADE80' }]}>Doanh thu AI hôm nay</Text>
+                  <Text style={[styles.walletBalance, { fontSize: 18, color: '#4ADE80' }]}>
+                    {loadingStats ? '...' : (revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.walletFooter}>
                 <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
-                  <Text style={styles.walletFooterText}>Tự động nạp: Chưa kích hoạt</Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#4ADE80' }]} />
+                  <Text style={styles.walletFooterText}>Ca phân tích AI: {aiProcessedCount || 0}</Text>
                 </View>
                 <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />
-                  <Text style={styles.walletFooterText}>Chu kỳ: N/A</Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#60A5FA' }]} />
+                  <Text style={styles.walletFooterText}>Tiếp đón hôm nay: {totalPatientsToday || 0}</Text>
                 </View>
               </View>
             </View>
@@ -269,13 +316,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 </View>
               ) : recentActivity.length === 0 ? (
                 <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động quét AI nào gần đây.</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
                 </View>
               ) : (
                 recentActivity.map((activity, index) => (
                   <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
                     <View style={styles.activityLeft}>
-                      <Text style={styles.patientId}>{activity.id}</Text>
+                      <Text style={styles.patientId}>Ca #{activity.id} - {activity.patientName}</Text>
                       <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
                     </View>
                     <View style={styles.activityRight}>
@@ -320,6 +367,68 @@ const ClinicDashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
+            {/* Bảng giá dịch vụ Bệnh viện */}
+            <Text style={styles.sectionTitle}>Bảng giá dịch vụ</Text>
+            <View style={styles.pricingCard}>
+              <Text style={styles.pricingDesc}>Cấu hình giá dịch vụ áp dụng cho hóa đơn khám chữa bệnh tại cơ sở của bạn.</Text>
+              
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí khám lâm sàng (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={examFee}
+                  onChangeText={setExamFee}
+                  placeholder="Ví dụ: 150000"
+                />
+              </View>
+
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí chụp phim MRI (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={mriFee}
+                  onChangeText={setMriFee}
+                  placeholder="Ví dụ: 1500000"
+                />
+              </View>
+
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Phí phân tích tự động AI (đ)</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={aiFee}
+                  onChangeText={setAiFee}
+                  placeholder="Ví dụ: 200000"
+                />
+              </View>
+
+              <View style={styles.pricingInputGroup}>
+                <Text style={styles.pricingInputLabel}>Số bệnh nhân tối đa trong ngày</Text>
+                <TextInput
+                  style={styles.pricingInput}
+                  keyboardType="numeric"
+                  value={maxPatients}
+                  onChangeText={setMaxPatients}
+                  placeholder="Ví dụ: 50"
+                />
+              </View>
+
+              <TouchableOpacity 
+                style={styles.pricingSubmitBtn} 
+                onPress={handleUpdatePricing}
+                disabled={updatingPricing}
+              >
+                {updatingPricing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật cấu hình</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
             {/* Info Banner */}
             <View style={styles.bannerCard}>
               <Text style={styles.bannerCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
@@ -338,78 +447,158 @@ const ClinicDashboardScreen = ({ navigation }) => {
           onRequestClose={() => setShowAddUserModal(false)}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 480 : '100%', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 6 }}>Cấp tài khoản nhân sự phòng khám</Text>
-              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>Nhập thông tin chi tiết của nhân viên y tế để tạo tài khoản trực tiếp.</Text>
+            <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 680 : '100%', maxHeight: '90%', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, overflow: 'hidden' }}>
+              
+              {/* Modal Header */}
+              <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Quản lý & Cấp tài khoản nhân sự</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Phân quyền và cấp tài khoản làm việc cho từng chức vụ.</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowAddUserModal(false)} style={{ padding: 6 }}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#94A3B8' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="Ví dụ: Bác sĩ Lê Mạnh Minh"
-                value={newUserName}
-                onChangeText={setNewUserName}
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="email@benhvien.vn"
-                value={newUserEmail}
-                onChangeText={setNewUserEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="Nhập mật khẩu từ 6 ký tự"
-                secureTextEntry
-                value={newUserPassword}
-                onChangeText={setNewUserPassword}
-                autoCapitalize="none"
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Vai trò công việc *</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-                {['doctor', 'nurse', 'technician'].map((role) => (
+              {/* Roles Tabs Bar */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 10 }}>
+                {Object.keys(ROLE_LABELS).map((role) => (
                   <TouchableOpacity
                     key={role}
                     style={{
-                      flex: 1,
-                      height: 36,
-                      borderRadius: 6,
-                      backgroundColor: newUserRole === role ? '#15803D' : '#F1F5F9',
-                      justifyContent: 'center',
-                      alignItems: 'center'
+                      paddingHorizontal: 16,
+                      paddingBottom: 10,
+                      borderBottomWidth: 2,
+                      borderBottomColor: activeRoleTab === role ? '#15803D' : 'transparent',
+                      marginRight: 8,
                     }}
-                    onPress={() => setNewUserRole(role)}
+                    onPress={() => setActiveRoleTab(role)}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: newUserRole === role ? '#FFFFFF' : '#475569' }}>
-                      {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Y tá' : 'KTV'}
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? '#15803D' : '#64748B' }}>
+                      {role === 'doctor' ? '🩺 Bác sĩ' : role === 'nurse' ? '🏥 Điều dưỡng' : role === 'technician' ? '🔬 Kỹ thuật viên' : '💼 Lễ tân'}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <ScrollView style={{ padding: 20 }}>
+                
+                {/* Form Section */}
+                <View style={{ marginBottom: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 14 }}>
+                    ➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
+                  </Text>
+                  
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 14 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder={`Ví dụ: ${activeRoleTab === 'doctor' ? 'Bác sĩ Lê Mạnh Minh' : activeRoleTab === 'nurse' ? 'Y tá Nguyễn Thị Hà' : activeRoleTab === 'technician' ? 'KTV Trần Văn Hùng' : 'Lễ tân Vũ Hoài An'}`}
+                        value={newUserName}
+                        onChangeText={setNewUserName}
+                      />
+                    </View>
+                    
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder="email@benhvien.vn"
+                        value={newUserEmail}
+                        onChangeText={setNewUserEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder="Nhập từ 6 ký tự"
+                        secureTextEntry
+                        value={newUserPassword}
+                        onChangeText={setNewUserPassword}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                      <TouchableOpacity
+                        style={{ height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
+                        onPress={handleCreateUser}
+                        disabled={creatingUser}
+                      >
+                        {creatingUser ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>💾 Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* List Section */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 12 }}>
+                    📋 Danh sách {ROLE_LABELS[activeRoleTab]} hiện tại ({hospitalStaff.filter(s => s.role === activeRoleTab).length})
+                  </Text>
+
+                  {loadingStaff ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+                  ) : hospitalStaff.filter(s => s.role === activeRoleTab).length === 0 ? (
+                    <View style={{ padding: 24, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 13 }}>Chưa có tài khoản {ROLE_LABELS[activeRoleTab]} nào được cấp.</Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {hospitalStaff
+                        .filter(s => s.role === activeRoleTab)
+                        .map((s) => {
+                          const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString('vi-VN') : '—';
+                          return (
+                            <View key={s.email} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 }}>
+                              <View>
+                                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{s.profile?.name || 'Nhân viên'}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{s.email}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Ngày tạo: {dateStr}</Text>
+                              </View>
+                              <View style={{ alignItems: 'flex-end' }}>
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                  backgroundColor: s.isLocked ? '#FEE2E2' : s.isVerified ? '#DCFCE7' : '#FEF3C7'
+                                }}>
+                                  <Text style={{
+                                    fontSize: 10,
+                                    fontWeight: '600',
+                                    color: s.isLocked ? '#991B1B' : s.isVerified ? '#166534' : '#B45309'
+                                  }}>
+                                    {s.isLocked ? 'Đã khóa' : s.isVerified ? 'Hoạt động' : 'Chờ kích hoạt'}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                    </View>
+                  )}
+                </View>
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+              
+              {/* Modal Footer */}
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#F8FAFC', flexDirection: 'row', justifyContent: 'flex-end' }}>
                 <TouchableOpacity
-                  style={{ flex: 1, height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                  style={{ height: 36, paddingHorizontal: 16, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}
                   onPress={() => setShowAddUserModal(false)}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Hủy</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{ flex: 1, height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
-                  onPress={handleCreateUser}
-                  disabled={creatingUser}
-                >
-                  {creatingUser ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Tạo tài khoản</Text>
-                  )}
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -782,6 +971,52 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
+  },
+  pricingCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 24,
+  },
+  pricingDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 16,
+  },
+  pricingInputGroup: {
+    marginBottom: 12,
+  },
+  pricingInputLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  pricingInput: {
+    height: 38,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  pricingSubmitBtn: {
+    backgroundColor: '#15803D',
+    borderRadius: 8,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pricingSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

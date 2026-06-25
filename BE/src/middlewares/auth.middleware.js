@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
+import { Hospital } from "../models/hospital.model.js";
 
 export const protect = async (req, res, next) => {
   let token;
@@ -14,7 +15,7 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, secret);
 
       // Fetch user from database to check token version and locked status
-      const user = await User.findById(decoded.id).select("tokenVersion isLocked");
+      const user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId");
       if (!user) {
         res.status(401).json({ message: "Người dùng không tồn tại hoặc tài khoản đã bị khóa." });
         return;
@@ -23,6 +24,15 @@ export const protect = async (req, res, next) => {
       if (user.isLocked) {
         res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
         return;
+      }
+
+      // Check if hospital is deactivated/locked
+      if (user.hospitalId) {
+        const hospital = await Hospital.findById(user.hospitalId).select("isActive");
+        if (hospital && hospital.isActive === false) {
+          res.status(403).json({ message: "Bệnh viện của bạn đang bị khóa. Vui lòng liên hệ quản trị viên." });
+          return;
+        }
       }
 
       // Check token version

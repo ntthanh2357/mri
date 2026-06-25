@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './ImagingHistoryScreen.styles';
@@ -25,9 +26,15 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
     setLoading(true);
     setError(null);
     try {
-      const endpoint = patientMedicalId 
-        ? `/api/v1/imaging/patient/${patientMedicalId}`
-        : '/api/v1/imaging/my-results';
+      const userStr = await AsyncStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : {};
+
+      let endpoint = '/api/v1/imaging/my-results';
+      if (patientMedicalId) {
+        endpoint = `/api/v1/imaging/patient/${patientMedicalId}`;
+      } else if (user.role && user.role !== 'patient') {
+        endpoint = '/api/v1/imaging';
+      }
 
       const response = await get(endpoint);
       if (response.success) {

@@ -60,6 +60,12 @@ function roleLabel(role) {
       return 'Bác sĩ';
     case 'admin':
       return 'Quản trị viên';
+    case 'hospital_admin':
+      return 'Admin Bệnh viện';
+    case 'technician':
+      return 'Kỹ thuật viên';
+    case 'nurse':
+      return 'Điều dưỡng & Lễ tân';
     default:
       return role;
   }
@@ -82,6 +88,21 @@ export default function AdminUsersView() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
+  // ─── Create User Modal State ───────────────────────────────────────────────
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('hospital_admin');
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newHospitalName, setNewHospitalName] = useState('');
+  const [newHospitalAddress, setNewHospitalAddress] = useState('');
+  
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState(null);
+  const [createSuccess, setCreateSuccess] = useState(null);
+
   // ─── 8.1  Fetch user list on mount ────────────────────────────────────────
   useEffect(() => {
     const fetchUsers = async () => {
@@ -98,6 +119,67 @@ export default function AdminUsersView() {
     };
     fetchUsers();
   }, []);
+
+  const resetCreateForm = () => {
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('hospital_admin');
+    setNewName('');
+    setNewPhone('');
+    setNewHospitalName('');
+    setNewHospitalAddress('');
+    setCreateError(null);
+    setCreateSuccess(null);
+  };
+
+  const handleCreateUser = async () => {
+    setCreateError(null);
+    setCreateSuccess(null);
+    if (!newEmail || !newPassword || !newName || !newRole) {
+      setCreateError('Vui lòng nhập đầy đủ các trường bắt buộc.');
+      return;
+    }
+    
+    const isHospitalCentric = ['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole);
+    if (isHospitalCentric && !newHospitalName.trim()) {
+      setCreateError('Vui lòng nhập tên bệnh viện/cơ sở.');
+      return;
+    }
+
+    setCreateLoading(true);
+    try {
+      const payload = {
+        email: newEmail,
+        password: newPassword,
+        role: newRole,
+        name: newName,
+        phone: newPhone || undefined,
+        hospitalName: isHospitalCentric ? newHospitalName : undefined,
+        hospitalAddress: isHospitalCentric ? newHospitalAddress : undefined
+      };
+
+      const data = await apiRequest('/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (data.success) {
+        setCreateSuccess('Tạo tài khoản thành công!');
+        const mapped = mapApiUser(data.user);
+        setUsersList(prev => [mapped, ...prev]);
+        handleSelectUser(data.user.id);
+        setTimeout(() => {
+          setShowCreateModal(false);
+          resetCreateForm();
+        }, 1500);
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Tạo tài khoản thất bại.');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   // ─── 8.2  Fetch user detail when a row is clicked ─────────────────────────
   const handleSelectUser = async (userId) => {
@@ -199,13 +281,13 @@ export default function AdminUsersView() {
     <div className="space-y-6">
 
       {/* Page Header */}
-      <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-3xs flex justify-between items-center">
+      <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h2 className="text-base font-extrabold text-slate-800">Quản lý Tài Khoản &amp; Khóa User</h2>
           <p className="text-slate-400 text-xs">Phân hệ hiển thị, can thiệp khóa/mở quyền đăng nhập của y bác sĩ lẫn bệnh án B2C (ADM-01, ADM-02, ADM-04, ADM-05)</p>
         </div>
-        <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 font-bold px-3 py-1 rounded-lg">
-          Tổng danh mục: {usersList.length} tài khoản
+        <span className="text-[10px] bg-slate-100 text-slate-650 border border-slate-200 font-bold px-3 py-2 rounded-lg shrink-0">
+          Tổng: {usersList.length} tài khoản
         </span>
       </div>
 
@@ -554,6 +636,167 @@ export default function AdminUsersView() {
         </div>
 
       </div>
+
+      {/* Create User Modal Dialog */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center shadow-sm">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Tạo tài khoản mới</h3>
+                  <p className="text-[10px] text-slate-450 font-medium">Cấp quyền quản trị bệnh viện hoặc y bác sĩ</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setShowCreateModal(false); resetCreateForm(); }}
+                className="text-slate-450 hover:text-slate-700 font-bold p-1 cursor-pointer transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error & Success Alerts */}
+            {createError && (
+              <div className="mb-4 px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-150 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{createError}</span>
+              </div>
+            )}
+            {createSuccess && (
+              <div className="mb-4 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-150 text-emerald-700 text-xs font-semibold flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-500" />
+                <span>{createSuccess}</span>
+              </div>
+            )}
+
+            {/* Form Inputs */}
+            <div className="space-y-3.5 text-xs text-slate-750">
+              {/* Họ tên */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Họ và tên *</label>
+                <input 
+                  type="text"
+                  placeholder="Nhập họ tên đầy đủ..."
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Email tài khoản *</label>
+                <input 
+                  type="email"
+                  placeholder="name@neuroscan.com..."
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Mật khẩu *</label>
+                <input 
+                  type="password"
+                  placeholder="Nhập mật khẩu..."
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Số điện thoại</label>
+                <input 
+                  type="text"
+                  placeholder="Nhập số điện thoại..."
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Vai trò (Role) *</label>
+                <select 
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-750"
+                >
+                  <option value="hospital_admin">Admin Bệnh viện (Hospital Admin)</option>
+                  <option value="doctor">Bác sĩ Thần kinh / Đọc phim (Doctor)</option>
+                  <option value="nurse">Điều dưỡng & Lễ tân (Nurse)</option>
+                  <option value="technician">Kỹ thuật viên phòng chụp (Technician)</option>
+                  <option value="patient">Bệnh nhân B2C (Patient)</option>
+                  <option value="admin">Hệ thống Admin (Global Admin)</option>
+                </select>
+              </div>
+
+              {/* Hospital Inputs - Conditionally displayed */}
+              {['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole) && (
+                <>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Tên bệnh viện / cơ sở *</label>
+                    <input 
+                      type="text"
+                      placeholder="Nhập tên bệnh viện (ví dụ: Bệnh viện Bạch Mai)..."
+                      value={newHospitalName}
+                      onChange={(e) => setNewHospitalName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Địa chỉ bệnh viện / cơ sở</label>
+                    <input 
+                      type="text"
+                      placeholder="Nhập địa chỉ bệnh viện..."
+                      value={newHospitalAddress}
+                      onChange={(e) => setNewHospitalAddress(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-3 pt-5 border-t border-slate-100 mt-5">
+              <button
+                disabled={createLoading}
+                onClick={() => { setShowCreateModal(false); resetCreateForm(); }}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200 disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                disabled={createLoading}
+                onClick={handleCreateUser}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/10 disabled:opacity-50"
+              >
+                {createLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang tạo...</span>
+                  </>
+                ) : (
+                  <span>Tạo tài khoản</span>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

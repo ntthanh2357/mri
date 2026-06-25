@@ -127,6 +127,43 @@ export const addDocumentManual = async (userId, visitId, { docKey, groupKey, lab
     });
   }
 
+  // Đồng bộ sinh hiệu sang VitalSign nếu tài liệu là phiếu khám bệnh
+  if (docKey === "mau_kham_benh") {
+    try {
+      const pulse = Number(manualData.mach);
+      const bpStr = manualData.huyetAp || "";
+      const bpParts = bpStr.split("/");
+      const systolic = bpParts[0] ? Number(bpParts[0].trim()) : null;
+      const diastolic = bpParts[1] ? Number(bpParts[1].trim()) : null;
+      const spo2 = Number(manualData.spo2);
+      const weight = manualData.canNang ? Number(manualData.canNang) : null;
+      const height = manualData.chieuCao ? Number(manualData.chieuCao) : null;
+
+      if (!isNaN(pulse) && pulse > 0 && !isNaN(systolic) && systolic > 0 && !isNaN(diastolic) && diastolic > 0 && !isNaN(spo2) && spo2 > 0) {
+        let bmi = null;
+        if (weight && height && !isNaN(weight) && !isNaN(height)) {
+          bmi = Number((weight / Math.pow(height / 100, 2)).toFixed(2));
+        }
+
+        const { VitalSign } = await import("../models/vitalSign.model.js");
+        const newVital = new VitalSign({
+          patient_id: userId,
+          pulse,
+          blood_pressure: { systolic, diastolic },
+          spo2,
+          weight: weight || undefined,
+          height: height || undefined,
+          bmi: bmi || undefined,
+          recorded_at: new Date(),
+        });
+        await newVital.save();
+        console.log("Automatically synced VitalSign from mau_kham_benh Patient document.");
+      }
+    } catch (e) {
+      console.warn("Lỗi đồng bộ sinh hiệu từ mau_kham_benh:", e);
+    }
+  }
+
   await visit.save();
   return visit;
 };

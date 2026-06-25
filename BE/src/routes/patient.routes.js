@@ -32,7 +32,7 @@ const checkSelfOrRoles = (allowedRoles) => {
 router.use(protect);
 
 // Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
-router.get("/", checkRole(["doctor", "nurse", "receptionist", "admin"]), getPatients);
+router.get("/", checkRole(["doctor", "nurse", "admin"]), getPatients);
 
 // Quản lý sinh hiệu bệnh nhân (Bác sĩ, Điều dưỡng, Admin hoặc tự bệnh nhân xem/thêm)
 router.get("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin"]), getPatientVitals);
@@ -42,6 +42,6 @@ router.post("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin"])
 router.get("/:patientId/lab-orders", checkSelfOrRoles(["doctor", "nurse", "technician", "admin"]), getPatientLabOrders);
 
 // Tạo chỉ định xét nghiệm (Chỉ cho Bác sĩ, Tiếp tân, Admin tạo)
-router.post("/:patientId/lab-orders", checkRole(["doctor", "receptionist", "admin"]), createPatientLabOrder);
+router.post("/:patientId/lab-orders", checkRole(["doctor", "nurse", "admin"]), createPatientLabOrder);
 
 export default router;

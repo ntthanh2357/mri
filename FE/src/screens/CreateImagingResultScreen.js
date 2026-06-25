@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,36 +18,52 @@ import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
 
 const CreateImagingResultScreen = ({ route, navigation }) => {
-  const { patientInfo } = route.params || {};
+  const { patientInfo, visit } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
   const [loading, setLoading] = useState(false);
-  const [medicalId, setMedicalId] = useState(patientInfo?.id || '26025699');
-  const [patientName, setPatientName] = useState(patientInfo?.name || '');
+
+  // Pre-fill fields from visit if technician launched this screen from the queue
+  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '26025699';
+  const initialPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || '';
+  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || 'Nam';
+  const initialAddress = visit?.patientId?.profile?.address || '., Phường Hòa Xuân, Tp Đà Nẵng';
+  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)';
+
+  const [medicalId, setMedicalId] = useState(initialMedicalId);
+  const [patientName, setPatientName] = useState(initialPatientName);
   const [birthYear, setBirthYear] = useState('1995');
-  const [gender, setGender] = useState(patientInfo?.gender || 'Nam');
-  const [address, setAddress] = useState('., Phường Hòa Xuân, Tp Đà Nẵng');
+  const [gender, setGender] = useState(initialGender);
+  const [address, setAddress] = useState(initialAddress);
   const [imagingType, setImagingType] = useState('MRI');
-  const [procedure, setProcedure] = useState('Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)');
+  const [procedure, setProcedure] = useState(initialProcedure);
   const [technique, setTechnique] = useState('Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.');
   const [findings, setFindings] = useState('');
   const [conclusion, setConclusion] = useState('');
   const [radiologist, setRadiologist] = useState('Bác sĩ Gia Huy');
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [errors, setErrors] = useState({});
   const [aiResult, setAiResult] = useState(null);
-  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-  const [correctClass, setCorrectClass] = useState('notumor');
-  const [coordX, setCoordX] = useState('120');
-  const [coordY, setCoordY] = useState('120');
-  const [coordW, setCoordW] = useState('100');
-  const [coordH, setCoordH] = useState('100');
-  const [sendingFeedback, setSendingFeedback] = useState(false);
-  const [approvingAI, setApprovingAI] = useState(false);
-  const [approveSuccess, setApproveSuccess] = useState(false);
+
+  // ── Nhận kết quả trả về từ AIAnalysisScreen ──
+  useEffect(() => {
+    const params = route.params || {};
+    if (params.aiResult && params.prefillFindings) {
+      const ar = params.aiResult;
+      setAiResult(ar);
+      setFindings(params.prefillFindings || '');
+      setConclusion(params.prefillConclusion || '');
+      // Thêm ảnh heatmap vào gallery nếu có
+      if (ar.annotated_image) {
+        setImages((prev) => {
+          const already = prev.includes(ar.annotated_image);
+          return already ? prev : [...prev, ar.annotated_image];
+        });
+      }
+    }
+  }, [route.params?.aiResult]);
 
   const showAlert = (title, message, callback) => {
     if (Platform.OS === 'web') {
@@ -147,120 +163,20 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     showAlert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin hành chính & chẩn đoán hình ảnh từ phim chụp giấy!');
   };
 
-  const handleAiAnalysis = async () => {
+  // ── Điều hướng sang màn hình AI chuyên biệt ──
+  const handleAiAnalysis = () => {
     if (images.length === 0) {
       showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi thực hiện chẩn đoán AI.');
       return;
     }
-
-    setAnalyzing(true);
-    try {
-      const payload = { imageUrl: images[0] };
-      const response = await post('/api/v1/imaging/analyze-ai', payload);
-
-      if (response.success && response.data) {
-        const { class_name, confidence, annotated_image, consensus_message } = response.data;
-
-        // Auto-fill findings and conclusion
-        setFindings(consensus_message || `Phân tích AI phát hiện khối u loại ${class_name.toUpperCase()}.`);
-        
-        let conclusionText = '';
-        if (class_name === 'notumor') {
-          conclusionText = `Không phát hiện bất thường sọ não trên hình ảnh MRI (Độ tự tin của AI: ${confidence}%).`;
-        } else {
-          conclusionText = `Hình ảnh gợi ý khối u loại ${class_name.toUpperCase()} (Độ tự tin của AI: ${confidence}%). Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.`;
-        }
-        setConclusion(conclusionText);
-
-        // If an annotated image is returned, add it to the image gallery
-        if (annotated_image) {
-          setImages((prev) => [...prev, annotated_image]);
-        }
-
-        setAiResult(response.data);
-        setCorrectClass(class_name);
-        setCoordX('120');
-        setCoordY('120');
-        setCoordW('100');
-        setCoordH('100');
-
-        // Clear validation errors
-        setErrors((prev) => ({
-          ...prev,
-          findings: null,
-          conclusion: null,
-        }));
-
-        showAlert('Chẩn đoán AI', `Hoàn tất phân tích MRI! Phát hiện: ${class_name.toUpperCase()} (Tin cậy: ${confidence}%).`);
-      } else {
-        showAlert('Lỗi phân tích AI', response.message || 'Không thể chẩn đoán ảnh chụp.');
-      }
-    } catch (err) {
-      console.error('AI Analysis error:', err);
-      showAlert('Lỗi kết nối', 'Không thể kết nối đến AI server. Đảm bảo Backend và FastAPI microservice đã khởi động.');
-    } finally {
-      setAnalyzing(false);
-    }
+    navigation.navigate('AIAnalysis', {
+      ...route.params,
+      imageUrl: images[0],
+      visitId: visit?._id || null,
+    });
   };
 
-  const handleSubmitFeedback = async () => {
-    if (images.length === 0) {
-      showAlert('Yêu cầu', 'Cần có ít nhất một hình ảnh phim chụp để gửi phản hồi.');
-      return;
-    }
-    setSendingFeedback(true);
-    try {
-      const payload = {
-        imageUrl: images[0],
-        correct_class: correctClass,
-        x: parseInt(coordX) || 0,
-        y: parseInt(coordY) || 0,
-        w: parseInt(coordW) || 0,
-        h: parseInt(coordH) || 0
-      };
 
-      const response = await post('/api/v1/imaging/feedback-ai', payload);
-      if (response.success) {
-        showAlert('Đóng góp thành công', 'Ý kiến hiệu chỉnh khối u đã được ghi nhận. Hệ thống sẽ sử dụng dữ liệu này để tự động huấn luyện lại AI.');
-        setShowFeedbackForm(false);
-      } else {
-        showAlert('Lỗi', response.message || 'Không thể gửi phản hồi.');
-      }
-    } catch (err) {
-      console.error('Feedback error:', err);
-      showAlert('Lỗi kết nối', 'Không thể gửi phản hồi đến máy chủ.');
-    } finally {
-      setSendingFeedback(false);
-    }
-  };
-
-  const handleApproveAI = async () => {
-    if (!aiResult) return;
-    setApprovingAI(true);
-    setApproveSuccess(false);
-    try {
-      // Extract filename from imageUrl
-      const imageUrl = images[0] || '';
-      const filename = imageUrl.split('/').pop() || 'scan.jpg';
-      const payload = {
-        filename,
-        predicted_class: aiResult.class_name,
-        confidence: aiResult.confidence ?? 0,
-      };
-      const response = await post('/api/v1/imaging/approve-ai', payload);
-      if (response.success) {
-        setApproveSuccess(true);
-        showAlert('Xác nhận thành công', `Đã ghi nhận kết quả AI (${aiResult.class_name?.toUpperCase()}) là ĐÚNG. Hệ thống cảm ơn bác sĩ đã xác nhận!`);
-      } else {
-        showAlert('Lỗi', response.message || 'Không thể ghi nhận xác nhận.');
-      }
-    } catch (err) {
-      console.error('Approve AI error:', err);
-      showAlert('Lỗi kết nối', 'Không thể gửi xác nhận đến máy chủ. Vui lòng thử lại.');
-    } finally {
-      setApprovingAI(false);
-    }
-  };
 
   const handleSaveResult = async () => {
     // Validate required fields
@@ -288,10 +204,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         gender,
         address,
         orderDate: new Date(),
-        orderingDoctor: 'Bác sĩ Nguyễn Văn A',
+        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ Nguyễn Văn A',
         orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
         medicalRecordNumber: `SBA-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-        diagnosis: imagingType === 'MRI' ? 'U não thái dương' : 'Theo dõi u não',
+        diagnosis: visit?.reason || (imagingType === 'MRI' ? 'U não thái dương' : 'Theo dõi u não'),
         procedure,
         technique,
         findings,
@@ -300,6 +216,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         reportDate: new Date(),
         images,
         imagingType,
+        visitId: visit?._id || null,
       };
 
       const response = await post('/api/v1/imaging', payload);
@@ -319,7 +236,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+    <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>
@@ -353,137 +270,56 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 style={[
                   styles.helperBtn, 
                   { 
-                    backgroundColor: '#1E1B4B', 
-                    borderColor: '#312E81', 
+                    backgroundColor: images.length === 0 ? '#1E1B4B' : '#312E81', 
+                    borderColor: '#4338CA', 
                     flex: 1,
-                    opacity: images.length === 0 ? 0.6 : 1 
+                    opacity: images.length === 0 ? 0.5 : 1 
                   }
                 ]} 
                 onPress={handleAiAnalysis}
-                disabled={analyzing}
+                disabled={images.length === 0}
               >
-                {analyzing ? (
-                  <ActivityIndicator size="small" color="#818CF8" />
-                ) : (
-                  <Text style={[styles.helperBtnText, { color: '#818CF8', fontWeight: 'bold' }]}>
-                    🤖 Phân tích AI ({images.length === 0 ? 'Chưa nạp ảnh' : 'Đọc phim & Vẽ Heatmap'})
-                  </Text>
-                )}
+                <Text style={[styles.helperBtnText, { color: '#A5B4FC', fontWeight: 'bold' }]}>
+                  🤖 {images.length === 0 ? 'Phân tích AI (Chưa nạp ảnh)' : 'Mở màn hình Phân tích AI →'}
+                </Text>
               </TouchableOpacity>
             </View>
 
+            {/* Kết quả AI trả về (sau khi bác sĩ xác nhận từ AIAnalysisScreen) */}
             {aiResult && (
-              <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginVertical: 12 }}>
-                <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A', marginBottom: 4 }}>🤖 Kết quả chẩn đoán AI (Chỉ dùng tham khảo)</Text>
-                <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 2 }}>
-                  - Loại khối u phát hiện: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{aiResult.class_name?.toUpperCase()}</Text>
-                </Text>
-                <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 8 }}>
-                  - Độ tự tin: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
-                </Text>
-                {aiResult.consensus_message ? (
-                  <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginBottom: 10 }}>
-                    {aiResult.consensus_message}
+              <View style={{
+                borderRadius: 10,
+                marginVertical: 12,
+                overflow: 'hidden',
+                borderWidth: 1.5,
+                borderColor: aiResult.isWrong ? '#FCA5A5' : '#6EE7B7',
+              }}>
+                {/* Header badge */}
+                <View style={{ backgroundColor: aiResult.isWrong ? '#DC2626' : '#059669', paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+                    {aiResult.isWrong ? '✍️ AI đã được điều chỉnh bởi bác sĩ' : '✅ Kết quả AI đã được bác sĩ xác nhận'}
                   </Text>
-                ) : null}
-
-                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                  {/* APPROVE button - AI was correct */}
-                  {!approveSuccess ? (
-                    <TouchableOpacity
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: 7,
-                        paddingHorizontal: 14,
-                        backgroundColor: approvingAI ? '#D1FAE5' : '#10B981',
-                        borderRadius: 6,
-                        opacity: approvingAI ? 0.7 : 1,
-                      }}
-                      onPress={handleApproveAI}
-                      disabled={approvingAI}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                        {approvingAI ? '⏳ Đang ghi nhận...' : '✅ AI đúng — Xác nhận'}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, borderWidth: 1, borderColor: '#6EE7B7' }}>
-                      <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng</Text>
+                </View>
+                <View style={{ backgroundColor: aiResult.isWrong ? '#FEF2F2' : '#ECFDF5', padding: 14 }}>
+                  <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 4 }}>
+                    Loại khối u: <Text style={{ fontWeight: 'bold', color: aiResult.isWrong ? '#DC2626' : '#059669' }}>{aiResult.class_name?.toUpperCase()}</Text>
+                    {aiResult.isWrong && aiResult.originalClass && (
+                      <Text style={{ color: '#9CA3AF', fontSize: 12 }}> (AI gốc: {aiResult.originalClass?.toUpperCase()})</Text>
+                    )}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#1E293B' }}>Độ tự tin AI: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text></Text>
+                  {aiResult.isWrong && (
+                    <View style={{ marginTop: 10, backgroundColor: '#FEE2E2', borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: '#DC2626' }}>
+                      <Text style={{ fontSize: 11, color: '#991B1B', lineHeight: 17 }}>{aiResult.warningNote}</Text>
                     </View>
                   )}
-
-                  {/* FEEDBACK button - AI was wrong */}
                   <TouchableOpacity
-                    style={{ alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#3B82F6', borderRadius: 6 }}
-                    onPress={() => setShowFeedbackForm(!showFeedbackForm)}
-                    disabled={approveSuccess}
+                    style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#6366F1', borderRadius: 6, alignSelf: 'flex-start' }}
+                    onPress={handleAiAnalysis}
                   >
-                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', opacity: approveSuccess ? 0.5 : 1 }}>
-                      {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ AI sai — Hiệu chỉnh lại'}
-                    </Text>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>🔄 Quét AI lại</Text>
                   </TouchableOpacity>
                 </View>
-
-                {showFeedbackForm && (
-                  <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' }}>
-                    <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#475569', marginBottom: 8 }}>
-                      ĐIỀU CHỈNH KẾT QUẢ AI SAI:
-                    </Text>
-
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Loại khối u thực tế (Phân loại):</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                      {['glioma', 'meningioma', 'pituitary', 'notumor'].map((cls) => (
-                        <TouchableOpacity
-                          key={cls}
-                          style={{
-                            paddingVertical: 5,
-                            paddingHorizontal: 10,
-                            backgroundColor: correctClass === cls ? '#B91C1C' : '#F1F5F9',
-                            borderRadius: 4
-                          }}
-                          onPress={() => setCorrectClass(cls)}
-                        >
-                          <Text style={{ color: correctClass === cls ? '#FFFFFF' : '#334155', fontSize: 11, fontWeight: 'bold' }}>
-                            {cls.toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>
-                      Tọa độ vùng khối u (Khoanh vùng/Segmentation):
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>X</Text>
-                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordX} onChangeText={setCoordX} keyboardType="numeric" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>Y</Text>
-                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordY} onChangeText={setCoordY} keyboardType="numeric" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>W</Text>
-                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordW} onChangeText={setCoordW} keyboardType="numeric" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>H</Text>
-                        <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={coordH} onChangeText={setCoordH} keyboardType="numeric" />
-                      </View>
-                    </View>
-
-                    <TouchableOpacity 
-                      style={{ paddingVertical: 8, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', opacity: sendingFeedback ? 0.7 : 1 }}
-                      onPress={handleSubmitFeedback}
-                      disabled={sendingFeedback}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                        {sendingFeedback ? 'Đang gửi phản hồi...' : '✓ Xác nhận & Gửi phản hồi AI học lại'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
             )}
 
