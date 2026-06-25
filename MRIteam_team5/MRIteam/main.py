@@ -190,9 +190,9 @@ app.add_middleware(
 )
 
 # 1. Nạp mô hình AI đã huấn luyện
-RESNET_PATH = "models/best_resnet_model.keras"
-EFFICIENTNET_PATH = "models/best_efficientnet_model.keras"
-DENSENET_PATH = "models/best_densenet_model.keras"
+RESNET_PATH = "models/model/resnet_risk_calibrated.keras"
+EFFICIENTNET_PATH = "models/model/best_efficientnet_model.keras"
+DENSENET_PATH = "models/model/best_densenet_model.keras"
 
 # Bật chế độ nạp không an toàn cho các lớp Lambda (nếu Keras hỗ trợ)
 try:
@@ -212,9 +212,9 @@ densenet_model = None
 
 try:
     print("Đang nạp bộ 3 mô hình Ensemble...")
-    model = tf.keras.models.load_model("models/resnet_risk_calibrated.keras", custom_objects=custom_objects, safe_mode=False, compile=False)
-    efficientnet_model = tf.keras.models.load_model("models/best_efficientnet_model.keras", safe_mode=False, compile=False)
-    densenet_model = tf.keras.models.load_model("models/best_densenet_model.keras", safe_mode=False, compile=False)
+    model = tf.keras.models.load_model("models/model/resnet_risk_calibrated.keras", custom_objects=custom_objects, safe_mode=False, compile=False)
+    efficientnet_model = tf.keras.models.load_model("models/model/best_efficientnet_model.keras", safe_mode=False, compile=False)
+    densenet_model = tf.keras.models.load_model("models/model/best_densenet_model.keras", safe_mode=False, compile=False)
     print("Nạp bộ 3 mô hình thành công! API đã sẵn sàng.")
 except Exception as e:
     print(f"Lỗi nạp mô hình: {e}")
