@@ -181,6 +181,56 @@ export const createCareSheet = async (req, res) => {
     });
 
     await newCareSheet.save();
+
+    // Đồng bộ sinh hiệu sang VitalSign
+    try {
+      const medicalRecord = await MedicalRecord.findById(req.params.id);
+      if (medicalRecord) {
+        let query = {};
+        if (/^[0-9a-fA-F]{24}$/.test(medicalRecord.patientId)) {
+          query = { $or: [{ _id: medicalRecord.patientId }, { "profile.medicalId": medicalRecord.patientId }] };
+        } else {
+          query = { "profile.medicalId": medicalRecord.patientId };
+        }
+
+        const { User } = await import("../models/user.model.js");
+        const { VitalSign } = await import("../models/vitalSign.model.js");
+
+        const patientUser = await User.findOne(query);
+        if (patientUser) {
+          const bpStr = bloodPressure || "";
+          const bpParts = bpStr.split("/");
+          const systolic = bpParts[0] ? Number(bpParts[0].trim()) : null;
+          const diastolic = bpParts[1] ? Number(bpParts[1].trim()) : null;
+
+          if (systolic && diastolic && !isNaN(systolic) && !isNaN(diastolic)) {
+            const latestVital = await VitalSign.findOne({ patient_id: patientUser._id }).sort({ recorded_at: -1 });
+            const height = latestVital?.height || null;
+            const weight = latestVital?.weight || null;
+            let bmi = null;
+            if (weight && height) {
+              bmi = Number((weight / Math.pow(height / 100, 2)).toFixed(2));
+            }
+
+            const newVital = new VitalSign({
+              patient_id: patientUser._id,
+              pulse: Number(pulse),
+              blood_pressure: { systolic, diastolic },
+              spo2: Number(spo2),
+              weight: weight || undefined,
+              height: height || undefined,
+              bmi: bmi || undefined,
+              recorded_at: new Date(),
+            });
+            await newVital.save();
+            console.log("Automatically synced VitalSign from EMR CareSheet.");
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Lỗi đồng bộ sinh hiệu từ CareSheet:", err);
+    }
+
     res.status(201).json({ status: "success", data: newCareSheet });
   } catch (error) {
     console.error("Lỗi tạo phiếu chăm sóc:", error);

@@ -357,6 +357,57 @@ const ImagingResultScreen = ({ route, navigation }) => {
               </View>
             </View>
 
+            {localUser?.role !== 'patient' && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1E3A8A',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  alignSelf: 'flex-start',
+                  marginTop: 14,
+                  marginBottom: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: '#3B82F6'
+                }}
+                onPress={async () => {
+                  try {
+                    const patientsRes = await get('/api/patients');
+                    if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
+                      const target = patientsRes.data.find(p => {
+                        const dbMedId = p.profile?.medicalId;
+                        const mId = result.medicalId;
+                        if (!mId) return false;
+                        if (dbMedId === mId) return true;
+                        
+                        const cleanDbMedId = String(dbMedId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                        const cleanMId = String(mId).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                        if (cleanDbMedId && cleanDbMedId === cleanMId) return true;
+                        
+                        const nsSuffix = p._id?.substring(18).toLowerCase();
+                        if (nsSuffix && cleanMId.includes(nsSuffix)) return true;
+                        
+                        return false;
+                      });
+                      if (target) {
+                        navigation.navigate('PatientDetail', { patientId: target._id });
+                        return;
+                      }
+                    }
+                    Alert.alert('Thông báo', 'Không tìm thấy bệnh án chi tiết MongoDB tương ứng cho Mã y tế này.');
+                  } catch (err) {
+                    console.warn('Lỗi tìm bệnh án bệnh nhân:', err);
+                    Alert.alert('Lỗi', 'Không thể kết nối máy chủ để tìm bệnh án.');
+                  }
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>📂 Xem Hồ sơ EMR & Xét nghiệm LIS →</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.sectionDivider} />
 
             {/* Procedure & Technique */}

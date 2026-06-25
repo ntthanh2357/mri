@@ -35,7 +35,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (!user) {
-      get('/auth/me').then(r => setUser(r.user)).catch(() => {});
+      get('/auth/me').then(r => { setUser(r.user); }).catch(() => {});
     }
   }, []);
 
@@ -96,6 +96,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const activeVisits = visits.filter(v => !['hoàn tất', 'đã đóng'].includes(v.status));
   const doneVisits = visits.filter(v => ['hoàn tất', 'đã đóng'].includes(v.status));
 
+  const isNurse = user?.role === 'nurse';
+
   const renderVisitCard = (v) => {
     const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
     const canOrderMri = v.status === 'đang khám';
@@ -144,14 +146,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           🕐 {new Date(v.createdAt).toLocaleString('vi-VN')}
         </Text>
 
-        {/* Actions */}
+        {/* Actions - differ by role */}
         <View style={styles.actions}>
-          {canOrderMri && (
+          {!isNurse && canOrderMri && (
             <TouchableOpacity style={styles.btnMri} onPress={() => openMriModal(v)}>
               <Text style={styles.btnMriText}>📷 Ra Y Lệnh MRI</Text>
             </TouchableOpacity>
           )}
-          {hasReadResult && (
+          {!isNurse && hasReadResult && (
             <TouchableOpacity
               style={styles.btnRead}
               onPress={() => navigation.navigate('ImagingResult', { visitId: v._id, resultId: v.mriOrder?.imagingResultId, imagingResultId: v.mriOrder?.imagingResultId })}
@@ -159,7 +161,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <Text style={styles.btnReadText}>🔬 Đọc Kết Quả Phim</Text>
             </TouchableOpacity>
           )}
-          {v.status === 'đang chờ' && (
+          {!isNurse && v.status === 'đang chờ' && (
             <TouchableOpacity
               style={styles.btnStart}
               onPress={async () => {
@@ -172,13 +174,23 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <Text style={styles.btnStartText}>🩺 Bắt đầu khám</Text>
             </TouchableOpacity>
           )}
+          {isNurse && v.status === 'đang chờ' && (
+            <TouchableOpacity
+              style={styles.btnStart}
+              onPress={() => navigation.navigate('EMRDashboard')}
+            >
+              <Text style={styles.btnStartText}>🩺 Nhập sinh hiệu</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
   };
 
+  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : 'Hàng Đợi Khám';
+
   return (
-    <ResponsiveLayout navigation={navigation} title="Hàng Đợi Khám" user={user} activeRoute="DoctorWorkQueue">
+    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute="DoctorWorkQueue">
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[

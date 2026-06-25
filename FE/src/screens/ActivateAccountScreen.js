@@ -14,7 +14,7 @@ import { put, setAuthToken, get } from '../services/api.service';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ',
-  nurse: 'Điều dưỡng & Lễ tân',
+  nurse: 'Điều dưỡng & Y tá',
   technician: 'Kỹ thuật viên',
   hospital_admin: 'Admin Bệnh viện',
 };
@@ -96,10 +96,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           console.error('Lỗi kiểm tra trạng thái bệnh viện sau kích hoạt:', err);
           destination = 'HospitalOnboarding'; // Fallback an toàn
         }
-      } else if (res.user?.role === 'doctor') {
+      } else if (res.user?.role === 'doctor' || res.user?.role === 'technician') {
+        destination = 'Home';
+      } else if (res.user?.role === 'nurse') {
         destination = 'DoctorWorkQueue';
-      } else if (res.user?.role === 'technician') {
-        destination = 'TechnicianQueue';
       } else if (res.user?.role === 'admin') {
         destination = 'AdminBackoffice';
       }

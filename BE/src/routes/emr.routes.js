@@ -30,7 +30,7 @@ router.route("/records/:id")
 
 router.route("/records/:id/care-sheets")
   .get(checkRole(["doctor", "nurse", "admin"]), getCareSheets)
-  .post(checkRole(["nurse", "admin"]), createCareSheet);
+  .post(checkRole(["doctor", "nurse", "admin"]), createCareSheet);
 
 router.route("/records/:id/consultations")
   .get(checkRole(["doctor", "admin"]), getConsultations)
