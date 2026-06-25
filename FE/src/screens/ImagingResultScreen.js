@@ -21,6 +21,7 @@ import styles from './ImagingResultScreen.styles';
 const ImagingResultScreen = ({ route, navigation }) => {
   const resultId = route.params?.resultId || route.params?.imagingResultId;
   const visitId = route.params?.visitId;
+  const activeRoute = route.params?.activeRoute || 'PatientRecords';
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
@@ -249,7 +250,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+      <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#15803D" />
           <Text style={styles.loadingText}>Đang tải chi tiết kết quả chẩn đoán...</Text>
@@ -260,7 +261,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   if (error || !result) {
     return (
-      <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+      <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
         <View style={styles.centerContainer}>
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorText}>{error || 'Không tìm thấy kết quả.'}</Text>
@@ -275,7 +276,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const isMRI = result.imagingType === 'MRI';
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+    <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
       <SafeAreaView style={styles.container}>
         {/* Header Row */}
         <View style={styles.headerRow}>

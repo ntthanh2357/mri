@@ -218,7 +218,7 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "receptionist", "technician", "nurse"];
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
     }
@@ -230,7 +230,7 @@ export const createUser = async (req, res) => {
 
     // Process hospital reference on the fly if role requires it
     let resolvedHospitalId = undefined;
-    if (["hospital_admin", "doctor", "nurse", "technician", "receptionist"].includes(role)) {
+    if (["hospital_admin", "doctor", "nurse", "technician"].includes(role)) {
       if (!hospitalName || !hospitalName.trim()) {
         return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện/cơ sở." });
       }
@@ -319,8 +319,8 @@ export const createUser = async (req, res) => {
 
 export const fetchHospitals = async (req, res) => {
   try {
-    const hospitals = await Hospital.find({ isActive: true })
-      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt")
+    const hospitals = await Hospital.find()
+      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt isActive")
       .lean();
     res.status(200).json({ success: true, hospitals });
   } catch (error) {
@@ -737,10 +737,9 @@ export const activateHospital = async (req, res) => {
       return res.status(409).json({ success: false, message: "Email đăng nhập đã được sử dụng bởi tài khoản khác." });
     }
 
-    // Update user: replace temp email with official loginEmail
-    const tempEmail = `${hospital.code.toLowerCase()}@temp.neuroscan.internal`;
+    // Update user: replace temp email/official email with approved loginEmail
     await User.findOneAndUpdate(
-      { email: tempEmail, hospitalId: hospital._id },
+      { hospitalId: hospital._id, role: "hospital_admin" },
       { email: hospital.loginEmail, isVerified: true }
     );
 
@@ -782,12 +781,91 @@ export const resetHospitalPassword = async (req, res) => {
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
     const tempEmail = `${hospital.code.toLowerCase()}@temp.neuroscan.internal`;
-    await User.findOneAndUpdate({ email: tempEmail, hospitalId: hospital._id }, { passwordHash });
+    const updatedUser = await User.findOneAndUpdate({ email: tempEmail, hospitalId: hospital._id }, { passwordHash });
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản tạm cho bệnh viện này (có thể tài khoản đã kích hoạt chính thức)." });
+    }
 
     res.status(200).json({
       success: true,
       message: "Đã reset mật khẩu tạm.",
       credentials: { tempUsername: hospital.code, tempPassword: newPassword },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Toggle Lock/Unlock hospital
+// @route   PUT /api/v1/admin/hospitals/:id/toggle-lock
+// @access  Private (System Admin)
+export const toggleHospitalLock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+
+    hospital.isActive = !hospital.isActive;
+    await hospital.save();
+
+    // Log action to AuditLog
+    await AuditLog.create({
+      action: hospital.isActive ? "unlock-hospital" : "lock-hospital",
+      entity: "Hospital",
+      entityId: hospital._id,
+      performedBy: req.user.id,
+      details: `Admin ${req.user.email} đã ${hospital.isActive ? "MỞ KHÓA" : "KHÓA"} bệnh viện ${hospital.name}.`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Đã ${hospital.isActive ? "mở khóa" : "khóa"} bệnh viện thành công.`,
+      hospital
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete hospital and its associated staff users
+// @route   DELETE /api/v1/admin/hospitals/:id
+// @access  Private (System Admin)
+export const deleteHospital = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+
+    // Delete all users belonging to this hospital
+    const deleteUsersRes = await User.deleteMany({ hospitalId: id });
+
+    // Delete hospital record
+    await Hospital.findByIdAndDelete(id);
+
+    // Log action to AuditLog
+    await AuditLog.create({
+      action: "delete-hospital",
+      entity: "Hospital",
+      entityId: id,
+      performedBy: req.user.id,
+      details: `Admin ${req.user.email} đã XÓA bệnh viện ${hospital.name} cùng với ${deleteUsersRes.deletedCount} tài khoản nhân sự liên quan.`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Đã xóa bệnh viện ${hospital.name} và các tài khoản liên quan thành công.`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

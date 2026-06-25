@@ -1,13 +1,15 @@
 import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
-import { getMyHospital, submitOnboardingInfo, uploadLicenseFile } from "../controllers/hospital.controller.js";
+import { getMyHospital, submitOnboardingInfo, uploadLicenseFile, getHospitalStaff, toggleStaffLock } from "../controllers/hospital.controller.js";
 
 const router = Router();
 
 router.use(protect);
 
 router.get("/me", getMyHospital);
+router.get("/staff", getHospitalStaff);
+router.put("/staff/:id/toggle-lock", toggleStaffLock);
 router.put("/onboarding", submitOnboardingInfo);
 router.post("/onboarding/license", uploadSingle, uploadLicenseFile);
 

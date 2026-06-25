@@ -66,7 +66,10 @@ export const del = (endpoint) => request(endpoint, { method: 'DELETE' });
 export const postFormData = async (endpoint, formData) => {
   const url = `${Config.API_URL}${endpoint}`;
   const headers = {};
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const token = await getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const response = await fetch(url, { method: 'POST', headers, body: formData });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Upload failed');

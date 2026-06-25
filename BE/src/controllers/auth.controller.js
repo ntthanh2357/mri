@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { sendOtpEmail } from "../services/email.service.js";
 import { Otp } from "../models/otp.model.js";
+import { AuditLog } from "../models/auditLog.model.js";
 import crypto from "crypto";
 
 const hashPhone = (phone) => {
@@ -39,7 +40,7 @@ export const register = async (req, res) => {
       return;
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "receptionist", "technician", "nurse"];
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse"];
     if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
@@ -82,6 +83,19 @@ export const register = async (req, res) => {
 
     await newUser.save();
 
+    // Log the change
+    try {
+      await AuditLog.create({
+        action: "create-staff",
+        entity: "User",
+        entityId: newUser._id,
+        performedBy: req.user ? req.user.id : newUser._id,
+        details: `Tài khoản mới ${email} với vai trò ${role} đã được tạo cho bệnh viện ID ${hospitalId || "N/A"}`,
+      });
+    } catch (logErr) {
+      console.error("Lỗi ghi log đăng ký tài khoản:", logErr);
+    }
+
     res.status(201).json({
       message: "Đăng ký tài khoản thành công!",
       user: {
@@ -111,14 +125,15 @@ export const login = async (req, res) => {
       return;
     }
 
-    // Nếu nhập mã BV (VD: BV_003) → tìm user qua hospital.code
+    // Nếu nhập mã BV (VD: BV_003, BVBM) → tìm user qua hospital.code
     let user;
-    const isBvCode = /^BV_\d+$/i.test(email.trim());
-    if (isBvCode) {
-      const hospital = await Hospital.findOne({ code: email.trim().toUpperCase() }).lean();
-      if (hospital) {
-        user = await User.findOne({ hospitalId: hospital._id, role: 'hospital_admin' });
+    const hospital = await Hospital.findOne({ code: email.trim().toUpperCase() }).lean();
+    if (hospital) {
+      if (hospital.status === "active") {
+        res.status(400).json({ message: "Tài khoản tạm thời đã hết hạn sử dụng. Vui lòng đăng nhập bằng Email đăng nhập chính thức của bệnh viện." });
+        return;
       }
+      user = await User.findOne({ hospitalId: hospital._id, role: 'hospital_admin' });
     } else {
       user = await User.findOne({
         $or: [
@@ -138,6 +153,15 @@ export const login = async (req, res) => {
       return;
     }
 
+    // Reject login if user's hospital is deactivated/locked
+    if (user.hospitalId) {
+      const hospitalObj = await Hospital.findById(user.hospitalId).select("isActive");
+      if (hospitalObj && hospitalObj.isActive === false) {
+        res.status(403).json({ message: "Bệnh viện của bạn đang bị khóa. Vui lòng liên hệ quản trị viên." });
+        return;
+      }
+    }
+
     // Verify password
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
@@ -150,7 +174,7 @@ export const login = async (req, res) => {
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
     // Staff roles created by hospital admin must activate on first login
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "hospital_admin"];
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({
@@ -572,12 +596,12 @@ export const logoutAll = async (req, res) => {
   }
 };
 
-// @desc    Change password
+// @desc    Change password / Activate account
 // @route   PUT /auth/password
 // @access  Private
 export const changePassword = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, newEmail } = req.body;
 
     if (!currentPassword || !newPassword) {
       res.status(400).json({ message: "Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới." });
@@ -597,6 +621,39 @@ export const changePassword = async (req, res) => {
       return;
     }
 
+    // If newEmail is supplied (for temporary email transition)
+    if (newEmail && newEmail.trim()) {
+      const emailLower = newEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailLower)) {
+        return res.status(400).json({ message: "Định dạng email đăng nhập mới không hợp lệ." });
+      }
+
+      // Check if email already taken
+      const emailConflict = await User.findOne({ email: emailLower, _id: { $ne: user._id } });
+      if (emailConflict) {
+        return res.status(409).json({ message: "Email đăng nhập này đã được sử dụng bởi tài khoản khác." });
+      }
+
+      // Check overlaps if hospital admin
+      if (user.role === "hospital_admin" && user.hospitalId) {
+        const hospital = await Hospital.findById(user.hospitalId);
+        if (hospital) {
+          if (hospital.contactEmail && emailLower === hospital.contactEmail.toLowerCase()) {
+            return res.status(400).json({ message: "Email đăng nhập mới không được trùng với Email liên hệ chung của bệnh viện." });
+          }
+          if (hospital.itContact?.email && emailLower === hospital.itContact.email.toLowerCase()) {
+            return res.status(400).json({ message: "Email đăng nhập mới không được trùng với Email IT phụ trách." });
+          }
+          // Sync to hospital loginEmail
+          hospital.loginEmail = emailLower;
+          await hospital.save();
+        }
+      }
+
+      user.email = emailLower;
+    }
+
     // Hash new password
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
@@ -612,9 +669,21 @@ export const changePassword = async (req, res) => {
 
     await user.save();
 
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
     res.status(200).json({
       message: "Đổi mật khẩu thành công!",
       activated: wasActivated,
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        hospitalId: user.hospitalId,
+        isVerified: user.isVerified,
+      }
     });
   } catch (error) {
     console.error("Lỗi đổi mật khẩu:", error);

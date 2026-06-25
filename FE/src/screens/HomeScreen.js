@@ -51,6 +51,7 @@ const HomeScreen = ({ route, navigation }) => {
   // Dynamic statistics states
   const [totalPatients, setTotalPatients] = useState(0);
   const [pendingRecords, setPendingRecords] = useState([]);
+  const [emrRecords, setEmrRecords] = useState([]);
   const [loadingStats, setLoadingStats] = useState(false);
 
   useEffect(() => {
@@ -92,15 +93,6 @@ const HomeScreen = ({ route, navigation }) => {
             navigation.replace('HospitalOnboarding');
           }
         })();
-      } else if (user.role === 'receptionist') {
-        navigation.replace('ReceptionistDashboard', { user });
-      } else if (user.role === 'doctor') {
-        navigation.replace('DoctorWorkQueue', { user });
-      } else if (user.role === 'technician') {
-        navigation.replace('TechnicianQueue', { user });
-      } else if (user.role === 'nurse') {
-        // Nurse goes to EMR Dashboard to see their assigned visits
-        navigation.replace('EMRDashboard', { user });
       }
     }
   }, [user, navigation]);
@@ -121,6 +113,7 @@ const HomeScreen = ({ route, navigation }) => {
         }
 
         if (emrRes && emrRes.status === 'success' && Array.isArray(emrRes.data)) {
+          setEmrRecords(emrRes.data);
           const pending = emrRes.data.filter(r => r.signStatus === 'Chưa duyệt');
           setPendingRecords(pending);
         }
@@ -495,11 +488,23 @@ const HomeScreen = ({ route, navigation }) => {
                   <Text style={styles.doctorStatLabel}>Ca sáng (07h - 13h)</Text>
                 </View>
                 <View style={styles.doctorStatCard}>
-                  <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>3 phiếu</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#D97706" />
+                  ) : (
+                    <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>
+                      {pendingRecords.length} phiếu
+                    </Text>
+                  )}
                   <Text style={styles.doctorStatLabel}>Chăm sóc cần lập</Text>
                 </View>
                 <View style={styles.doctorStatCard}>
-                  <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>8 ca</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#2563EB" />
+                  ) : (
+                    <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>
+                      {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
+                    </Text>
+                  )}
                   <Text style={styles.doctorStatLabel}>Bệnh nhân nội trú</Text>
                 </View>
               </View>
@@ -507,31 +512,53 @@ const HomeScreen = ({ route, navigation }) => {
               {/* Patient observations list */}
               <Text style={styles.sectionTitle}>Bệnh nhân nội trú cần theo dõi sinh hiệu</Text>
               <View style={styles.queueCard}>
-                <TouchableOpacity
-                  style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('DoctorPatientList')}
-                >
-                  <View style={styles.queueLeftInfo}>
-                    <Text style={styles.queuePatientName}>Nguyễn Văn A</Text>
-                    <Text style={styles.queueDetailsText}>U màng não thái dương · Phòng 301 · Giường 02</Text>
+                {loadingStats ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#15803D" />
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                    <Text style={[styles.statusBadgeText, { color: '#EF4444', fontSize: 10, fontWeight: 'bold' }]}>Theo dõi sát (Cấp 1)</Text>
+                ) : emrRecords.filter(r => r.admissionType === 'Nội trú').length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có bệnh nhân nội trú cần theo dõi.</Text>
                   </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('DoctorPatientList')}
-                >
-                  <View style={styles.queueLeftInfo}>
-                    <Text style={styles.queuePatientName}>Trần Thị B</Text>
-                    <Text style={styles.queueDetailsText}>Phẫu thuật sau u màng não ngày thứ 3 · Phòng 302</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                    <Text style={[styles.statusBadgeText, { color: '#D97706', fontSize: 10, fontWeight: 'bold' }]}>Cần đo sinh hiệu (Cấp 2)</Text>
-                  </View>
-                </TouchableOpacity>
+                ) : (
+                  emrRecords.filter(r => r.admissionType === 'Nội trú').map((record, index) => {
+                    const isLast = index === emrRecords.filter(r => r.admissionType === 'Nội trú').length - 1;
+                    return (
+                      <TouchableOpacity
+                        key={record._id || index}
+                        style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
+                        onPress={() => navigation.navigate('DoctorPatientList')}
+                      >
+                        <View style={styles.queueLeftInfo}>
+                          <Text style={styles.queuePatientName}>{record.patientName}</Text>
+                          <Text style={styles.queueDetailsText}>
+                            {record.diagnosis} · {record.department || 'Khoa Thần Kinh'}
+                          </Text>
+                        </View>
+                        <View style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor: record.signStatus === 'Chưa duyệt' ? '#FEE2E2' : '#FEF3C7',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6
+                          }
+                        ]}>
+                          <Text style={[
+                            styles.statusBadgeText,
+                            {
+                              color: record.signStatus === 'Chưa duyệt' ? '#EF4444' : '#D97706',
+                              fontSize: 10,
+                              fontWeight: 'bold'
+                            }
+                          ]}>
+                            {record.signStatus === 'Chưa duyệt' ? 'Theo dõi sát' : 'Cần theo dõi'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </View>
             </View>
 
@@ -584,10 +611,13 @@ const HomeScreen = ({ route, navigation }) => {
 
               {/* Stats Row */}
               <View style={styles.doctorStatsRow}>
-                <View style={styles.doctorStatCard}>
-                  <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>4 ca</Text>
-                  <Text style={styles.doctorStatLabel}>Chụp MRI/CT chờ nạp</Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.doctorStatCard}
+                  onPress={() => navigation.navigate('TechnicianQueue')}
+                >
+                  <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>Ca trực</Text>
+                  <Text style={styles.doctorStatLabel}>Hàng đợi chụp MRI</Text>
+                </TouchableOpacity>
                 <View style={styles.doctorStatCard}>
                   <Text style={[styles.doctorStatVal, { color: '#059669' }]}>8 chỉ định</Text>
                   <Text style={styles.doctorStatLabel}>Chờ xét nghiệm LIS</Text>
@@ -603,7 +633,7 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.queueCard}>
                 <TouchableOpacity
                   style={styles.queueItemRow}
-                  onPress={() => navigation.navigate('CreateImagingResult')}
+                  onPress={() => navigation.navigate('TechnicianQueue')}
                 >
                   <View style={styles.queueLeftInfo}>
                     <Text style={styles.queuePatientName}>Bệnh nhân Tuấn Thành (26025699)</Text>
@@ -644,11 +674,11 @@ const HomeScreen = ({ route, navigation }) => {
 
                 <TouchableOpacity
                   style={styles.doctorGridCard}
-                  onPress={() => navigation.navigate('DoctorPatientList')}
+                  onPress={() => navigation.navigate('TechnicianQueue')}
                 >
-                  <Text style={styles.doctorGridIcon}>🧪</Text>
-                  <Text style={styles.doctorGridLabel}>Truyền dữ liệu LIS</Text>
-                  <Text style={styles.doctorGridSub}>Simulate & nạp chỉ số</Text>
+                  <Text style={styles.doctorGridIcon}>🔬</Text>
+                  <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
+                  <Text style={styles.doctorGridSub}>Xem ca chụp & scan</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -844,6 +874,15 @@ const HomeScreen = ({ route, navigation }) => {
               {/* Quick Actions Grid */}
               <Text style={styles.sectionTitle}>Công cụ quản lý</Text>
               <View style={styles.doctorGrid}>
+                <TouchableOpacity
+                  style={styles.doctorGridCard}
+                  onPress={() => navigation.navigate('DoctorWorkQueue')}
+                >
+                  <Text style={styles.doctorGridIcon}>🩺</Text>
+                  <Text style={styles.doctorGridLabel}>Hàng đợi khám</Text>
+                  <Text style={styles.doctorGridSub}>Khám bệnh & Y lệnh</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.doctorGridCard}
                   onPress={() => navigation.navigate('DoctorPatientList')}

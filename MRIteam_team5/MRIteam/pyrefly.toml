@@ -1,4 +1,0 @@
-[pyrefly]
-# Trỏ đến Python global (nơi TensorFlow được cài), bỏ qua .venv
-python_interpreter = "python"
-ignore_missing_imports = true

@@ -31,6 +31,8 @@ import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
 import TechnicianQueueScreen from '../screens/TechnicianQueueScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 
+import StaffManagementScreen from '../screens/StaffManagementScreen';
+
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => {
@@ -102,6 +104,7 @@ const AppNavigator = () => {
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TechnicianQueue" component={TechnicianQueueScreen} options={{ headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -5,7 +5,7 @@ import { createVisit, getMyQueue, updateVitals, createMriOrder, updateStatus, ge
 const router = express.Router();
 
 router.get("/staff", protect, getStaff);
-router.post("/", protect, checkRole(["receptionist", "admin"]), createVisit);
+router.post("/", protect, checkRole(["nurse", "admin"]), createVisit);
 router.get("/my-queue", protect, getMyQueue);
 router.put("/:id/vitals", protect, checkRole(["nurse"]), updateVitals);
 router.put("/:id/mri-order", protect, checkRole(["doctor"]), createMriOrder);

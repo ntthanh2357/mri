@@ -537,7 +537,7 @@ const NurseQueueTab = ({ navigation }) => {
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.patientName}>
-                      {v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
+                      {v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
                     </Text>
                     <Text style={styles.patientInfo}>
                       Mã y tế: {v.patientId?.profile?.medicalId || 'N/A'} • Lý do: {v.reason}
@@ -548,7 +548,7 @@ const NurseQueueTab = ({ navigation }) => {
                   </View>
                 </View>
                 <View style={{ marginTop: 8, gap: 4 }}>
-                  <Text style={{ fontSize: 13, color: '#475569' }}><Text style={{ fontWeight: 'bold' }}>Bác sĩ chỉ định:</Text> {v.doctorId?.profile?.fullName || v.doctorId?.profile?.name || v.doctorId?.email || 'Đang phân công'}</Text>
+                  <Text style={{ fontSize: 13, color: '#475569' }}><Text style={{ fontWeight: 'bold' }}>Bác sĩ chỉ định:</Text> {v.doctorId?.profile?.name || v.doctorId?.profile?.fullName || v.doctorId?.email || 'Đang phân công'}</Text>
                   <Text style={{ fontSize: 12, color: '#94A3B8' }}>Tiếp nhận lúc: {new Date(v.createdAt).toLocaleString('vi-VN')}</Text>
                 </View>
                 <TouchableOpacity 
@@ -569,7 +569,7 @@ const NurseQueueTab = ({ navigation }) => {
           <View style={[styles.modalContainer, { padding: 20 }]}>
             <Text style={styles.modalTitle}>🩺 Nhập Sinh Hiệu Cho Bệnh Nhân</Text>
             <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
-              Bệnh nhân: {selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
+              Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
             </Text>
 
             <View style={{ gap: 12 }}>

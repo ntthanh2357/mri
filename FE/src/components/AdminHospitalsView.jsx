@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { get, post, put } from '../services/api.service';
+import { get, post, put, del } from '../services/api.service';
+import Config from '../constants/config';
 
 const STATUS_LABEL = {
   provisioned: { text: 'Chờ điền thông tin', color: 'bg-yellow-100 text-yellow-700' },
@@ -26,6 +27,13 @@ export default function AdminHospitalsView() {
   // Activate state
   const [activating, setActivating] = useState(false);
   const [activateMsg, setActivateMsg] = useState('');
+
+  // Lock/Unlock & Delete state
+  const [locking, setLocking] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchHospitals = async () => {
     setLoading(true);
@@ -105,10 +113,44 @@ export default function AdminHospitalsView() {
     }
   };
 
+  const handleToggleLock = async () => {
+    if (!selected) return;
+    setLocking(true);
+    try {
+      await put(`/admin/hospitals/${selected._id}/toggle-lock`, {});
+      await fetchDetail(selected._id);
+      await fetchHospitals();
+    } catch (err) {
+      alert(err?.message || 'Thao tác khoá/mở khoá thất bại.');
+    } finally {
+      setLocking(false);
+    }
+  };
+
+  const handleDeleteHospital = async () => {
+    if (!selected) return;
+    if (deleteConfirmName !== selected.code) {
+      setDeleteError('Mã xác nhận không khớp.');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await del(`/admin/hospitals/${selected._id}`);
+      setSelected(null);
+      setShowDeleteConfirm(false);
+      await fetchHospitals();
+    } catch (err) {
+      setDeleteError(err?.message || 'Xoá bệnh viện thất bại.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filtered = hospitals.filter(h => {
     const q = search.toLowerCase();
     const matchSearch = !q || h.name?.toLowerCase().includes(q) || h.code?.toLowerCase().includes(q) || h.loginEmail?.toLowerCase().includes(q);
-    const matchStatus = !filterStatus || h.status === filterStatus;
+    const matchStatus = !filterStatus || (filterStatus === 'locked' ? h.isActive === false : h.status === filterStatus);
     return matchSearch && matchStatus;
   });
 
@@ -158,6 +200,7 @@ export default function AdminHospitalsView() {
           <option value="submitted">Chờ duyệt</option>
           <option value="active">Đã kích hoạt</option>
           <option value="rejected">Từ chối</option>
+          <option value="locked">🔒 Đang bị khoá</option>
         </select>
       </div>
 
@@ -195,7 +238,12 @@ export default function AdminHospitalsView() {
                       <p className="text-sm font-semibold text-slate-800 truncate">{h.name}</p>
                       <p className="text-xs text-slate-400 truncate">{h.code} · {h.loginEmail || h.tempUsername + '@temp'}</p>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${s.color}`}>{s.text}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {h.isActive === false && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">🔒 Khoá</span>
+                      )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${s.color}`}>{s.text}</span>
+                    </div>
                   </button>
                 );
               })}
@@ -217,9 +265,16 @@ export default function AdminHospitalsView() {
             <div className="p-4 space-y-4 text-sm">
               {/* Status badge */}
               <div className="flex items-center justify-between">
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${(STATUS_LABEL[selected.status] || STATUS_LABEL.provisioned).color}`}>
-                  {(STATUS_LABEL[selected.status] || STATUS_LABEL.provisioned).text}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${(STATUS_LABEL[selected.status] || STATUS_LABEL.provisioned).color}`}>
+                    {(STATUS_LABEL[selected.status] || STATUS_LABEL.provisioned).text}
+                  </span>
+                  {selected.isActive === false && (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700">
+                      🔒 Đang bị khoá
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs text-slate-400">{selected.code}</span>
               </div>
 
@@ -230,13 +285,17 @@ export default function AdminHospitalsView() {
               {selected.contactEmail && <DetailRow label="Email liên hệ" value={selected.contactEmail} />}
               {selected.phone && <DetailRow label="Điện thoại" value={selected.phone} />}
               {selected.website && <DetailRow label="Website" value={selected.website} />}
+              {selected.fax && <DetailRow label="Fax" value={selected.fax} />}
 
               {/* Address */}
-              {selected.address?.province && (
+              {selected.address && (
                 <div>
                   <p className="text-xs text-slate-400 mb-0.5">Địa chỉ</p>
                   <p className="text-slate-700 font-medium">
-                    {[selected.address.street, selected.address.ward, selected.address.district, selected.address.province].filter(Boolean).join(', ')}
+                    {typeof selected.address === 'string'
+                      ? selected.address
+                      : [selected.address.street, selected.address.ward, selected.address.district, selected.address.province].filter(Boolean).join(', ')
+                    }
                   </p>
                 </div>
               )}
@@ -263,11 +322,19 @@ export default function AdminHospitalsView() {
 
               {/* License file */}
               {selected.licenseFile && (
-                <div className="border-t border-slate-100 pt-3">
-                  <a href={selected.licenseFile} target="_blank" rel="noreferrer"
-                    className="text-xs text-blue-600 underline">
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <p className="text-xs text-slate-400">Giấy phép hoạt động</p>
+                  <a href={selected.licenseFile.startsWith('http') ? selected.licenseFile : `${Config.API_URL}${selected.licenseFile}`} target="_blank" rel="noreferrer"
+                    className="text-xs text-blue-600 underline block">
                     Xem Giấy phép hoạt động
                   </a>
+                  {/\.(jpg|jpeg|png|webp|gif)$/i.test(selected.licenseFile) && (
+                    <img 
+                      src={selected.licenseFile.startsWith('http') ? selected.licenseFile : `${Config.API_URL}${selected.licenseFile}`}
+                      alt="Giấy phép hoạt động"
+                      className="w-full max-h-48 object-contain rounded-lg border border-slate-200 mt-2"
+                    />
+                  )}
                 </div>
               )}
 
@@ -314,6 +381,34 @@ export default function AdminHospitalsView() {
                   )}
                 </div>
               )}
+
+              {/* Actions Section */}
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Hành động quản trị</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleToggleLock}
+                    disabled={locking}
+                    className={`flex-1 text-xs font-bold py-2.5 rounded-xl border transition-all cursor-pointer ${
+                      selected.isActive === false
+                        ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                        : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    {locking ? 'Đang xử lý...' : (selected.isActive === false ? '🔓 Mở khoá' : '🔒 Khoá')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDeleteConfirmName('');
+                      setShowDeleteConfirm(true);
+                      setDeleteError('');
+                    }}
+                    className="flex-1 border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold py-2.5 transition-all cursor-pointer"
+                  >
+                    ❌ Xoá bệnh viện
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -378,6 +473,59 @@ export default function AdminHospitalsView() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-slate-100 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-base font-extrabold">Xác nhận xoá Bệnh viện vĩnh viễn</h3>
+            </div>
+            
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed font-sans">
+              Cảnh báo: Hành động này sẽ <strong className="text-red-600 font-bold">xoá vĩnh viễn</strong> bệnh viện <strong>{selected?.name}</strong> cùng tất cả các tài khoản nhân sự (Bác sĩ, Điều dưỡng, Kỹ thuật viên) trực thuộc. Dữ liệu sau khi xoá không thể khôi phục.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 font-sans">
+                  Nhập mã bệnh viện <strong className="font-mono text-red-600 select-all bg-red-50 px-1.5 py-0.5 rounded">{selected?.code}</strong> để xác nhận:
+                </label>
+                <input
+                  value={deleteConfirmName}
+                  onChange={e => setDeleteConfirmName(e.target.value)}
+                  placeholder={`Nhập ${selected?.code || ''}`}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 font-mono"
+                />
+              </div>
+              
+              {deleteError && <p className="text-red-500 text-xs font-semibold font-sans">{deleteError}</p>}
+              
+              <div className="flex gap-2 pt-1 font-sans">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteConfirmName('');
+                    setDeleteError('');
+                  }}
+                  disabled={deleting}
+                  className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold cursor-pointer hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleDeleteHospital}
+                  disabled={deleting || deleteConfirmName !== selected?.code}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-bold cursor-pointer transition-colors"
+                >
+                  {deleting ? 'Đang xoá...' : 'Xác nhận xoá'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

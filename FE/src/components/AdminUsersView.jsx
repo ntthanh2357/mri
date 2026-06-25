@@ -62,12 +62,10 @@ function roleLabel(role) {
       return 'Quản trị viên';
     case 'hospital_admin':
       return 'Admin Bệnh viện';
-    case 'receptionist':
-      return 'Lễ tân';
     case 'technician':
       return 'Kỹ thuật viên';
     case 'nurse':
-      return 'Điều dưỡng';
+      return 'Điều dưỡng & Lễ tân';
     default:
       return role;
   }
@@ -142,7 +140,7 @@ export default function AdminUsersView() {
       return;
     }
     
-    const isHospitalCentric = ['hospital_admin', 'doctor', 'nurse', 'technician', 'receptionist'].includes(newRole);
+    const isHospitalCentric = ['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole);
     if (isHospitalCentric && !newHospitalName.trim()) {
       setCreateError('Vui lòng nhập tên bệnh viện/cơ sở.');
       return;
@@ -737,16 +735,15 @@ export default function AdminUsersView() {
                 >
                   <option value="hospital_admin">Admin Bệnh viện (Hospital Admin)</option>
                   <option value="doctor">Bác sĩ Thần kinh / Đọc phim (Doctor)</option>
-                  <option value="nurse">Điều dưỡng chăm sóc (Nurse)</option>
+                  <option value="nurse">Điều dưỡng & Lễ tân (Nurse)</option>
                   <option value="technician">Kỹ thuật viên phòng chụp (Technician)</option>
-                  <option value="receptionist">Lễ tân phòng khám (Receptionist)</option>
                   <option value="patient">Bệnh nhân B2C (Patient)</option>
                   <option value="admin">Hệ thống Admin (Global Admin)</option>
                 </select>
               </div>
 
               {/* Hospital Inputs - Conditionally displayed */}
-              {['hospital_admin', 'doctor', 'nurse', 'technician', 'receptionist'].includes(newRole) && (
+              {['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole) && (
                 <>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1.5">Tên bệnh viện / cơ sở *</label>

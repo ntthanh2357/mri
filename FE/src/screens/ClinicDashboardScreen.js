@@ -21,8 +21,36 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState('doctor');
+  const [activeRoleTab, setActiveRoleTab] = useState('doctor');
   const [creatingUser, setCreatingUser] = useState(false);
+
+  const [hospitalStaff, setHospitalStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
+  const ROLE_LABELS = {
+    doctor: 'Bác sĩ',
+    nurse: 'Điều dưỡng & Lễ tân',
+    technician: 'Kỹ thuật viên'
+  };
+
+  const fetchHospitalStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const res = await get('/api/v1/hospital/staff');
+      if (res && res.success) {
+        setHospitalStaff(res.staff || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách nhân viên:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleOpenStaffModal = () => {
+    fetchHospitalStaff();
+    setShowAddUserModal(true);
+  };
 
   // Dynamic dashboard states
   const [currentUser, setCurrentUser] = useState(null);
@@ -86,6 +114,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchHospitalStaff();
   }, []);
 
   const handleUpdatePricing = async () => {
@@ -136,18 +165,18 @@ const ClinicDashboardScreen = ({ navigation }) => {
         email: newUserEmail,
         password: newUserPassword,
         name: newUserName,
-        role: newUserRole,
+        role: activeRoleTab,
         hospitalId: currentUser?.hospitalId || undefined,
       });
 
       if (response.success || response.user) {
-        Alert.alert('Thành công', `Đã cấp tài khoản thành công cho ${newUserName} (${newUserRole.toUpperCase()})!`);
-        setShowAddUserModal(false);
+        Alert.alert('Thành công', `Đã cấp tài khoản thành công cho ${newUserName} (${ROLE_LABELS[activeRoleTab].toUpperCase()})!`);
         setNewUserName('');
         setNewUserEmail('');
         setNewUserPassword('');
-        // Refresh dashboard data
+        // Refresh stats and staff list
         fetchDashboardData();
+        fetchHospitalStaff();
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể tạo tài khoản.');
       }
@@ -195,8 +224,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <TouchableOpacity style={styles.actionButtonOutline} onPress={() => Alert.alert('Thông báo', 'Đang tải sao kê về điện thoại...')}>
                 <Text style={styles.actionButtonOutlineText}>📥 Xuất sao kê</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => setShowAddUserModal(true)}>
-                <Text style={styles.actionButtonSolidText}>👤 Cấp tài khoản nhân sự</Text>
+              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
+                <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
@@ -402,78 +431,158 @@ const ClinicDashboardScreen = ({ navigation }) => {
           onRequestClose={() => setShowAddUserModal(false)}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 480 : '100%', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 6 }}>Cấp tài khoản nhân sự phòng khám</Text>
-              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>Nhập thông tin chi tiết của nhân viên y tế để tạo tài khoản trực tiếp.</Text>
+            <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 680 : '100%', maxHeight: '90%', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, overflow: 'hidden' }}>
+              
+              {/* Modal Header */}
+              <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Quản lý & Cấp tài khoản nhân sự</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Phân quyền và cấp tài khoản làm việc cho từng chức vụ.</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowAddUserModal(false)} style={{ padding: 6 }}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#94A3B8' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="Ví dụ: Bác sĩ Lê Mạnh Minh"
-                value={newUserName}
-                onChangeText={setNewUserName}
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="email@benhvien.vn"
-                value={newUserEmail}
-                onChangeText={setNewUserEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
-              <TextInput
-                style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, fontSize: 13 }}
-                placeholder="Nhập mật khẩu từ 6 ký tự"
-                secureTextEntry
-                value={newUserPassword}
-                onChangeText={setNewUserPassword}
-                autoCapitalize="none"
-              />
-
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Vai trò công việc *</Text>
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20 }}>
-                {['doctor', 'nurse', 'technician', 'receptionist'].map((role) => (
+              {/* Roles Tabs Bar */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 10 }}>
+                {Object.keys(ROLE_LABELS).map((role) => (
                   <TouchableOpacity
                     key={role}
                     style={{
-                      flex: 1,
-                      height: 36,
-                      borderRadius: 6,
-                      backgroundColor: newUserRole === role ? '#15803D' : '#F1F5F9',
-                      justifyContent: 'center',
-                      alignItems: 'center'
+                      paddingHorizontal: 16,
+                      paddingBottom: 10,
+                      borderBottomWidth: 2,
+                      borderBottomColor: activeRoleTab === role ? '#15803D' : 'transparent',
+                      marginRight: 8,
                     }}
-                    onPress={() => setNewUserRole(role)}
+                    onPress={() => setActiveRoleTab(role)}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: newUserRole === role ? '#FFFFFF' : '#475569' }}>
-                      {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Y tá' : role === 'technician' ? 'KTV' : 'Lễ tân'}
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? '#15803D' : '#64748B' }}>
+                      {role === 'doctor' ? '🩺 Bác sĩ' : role === 'nurse' ? '🏥 Điều dưỡng' : role === 'technician' ? '🔬 Kỹ thuật viên' : '💼 Lễ tân'}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <ScrollView style={{ padding: 20 }}>
+                
+                {/* Form Section */}
+                <View style={{ marginBottom: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 14 }}>
+                    ➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
+                  </Text>
+                  
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 14 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder={`Ví dụ: ${activeRoleTab === 'doctor' ? 'Bác sĩ Lê Mạnh Minh' : activeRoleTab === 'nurse' ? 'Y tá Nguyễn Thị Hà' : activeRoleTab === 'technician' ? 'KTV Trần Văn Hùng' : 'Lễ tân Vũ Hoài An'}`}
+                        value={newUserName}
+                        onChangeText={setNewUserName}
+                      />
+                    </View>
+                    
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder="email@benhvien.vn"
+                        value={newUserEmail}
+                        onChangeText={setNewUserEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
+                      <TextInput
+                        style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                        placeholder="Nhập từ 6 ký tự"
+                        secureTextEntry
+                        value={newUserPassword}
+                        onChangeText={setNewUserPassword}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                      <TouchableOpacity
+                        style={{ height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
+                        onPress={handleCreateUser}
+                        disabled={creatingUser}
+                      >
+                        {creatingUser ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>💾 Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* List Section */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 12 }}>
+                    📋 Danh sách {ROLE_LABELS[activeRoleTab]} hiện tại ({hospitalStaff.filter(s => s.role === activeRoleTab).length})
+                  </Text>
+
+                  {loadingStaff ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+                  ) : hospitalStaff.filter(s => s.role === activeRoleTab).length === 0 ? (
+                    <View style={{ padding: 24, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 13 }}>Chưa có tài khoản {ROLE_LABELS[activeRoleTab]} nào được cấp.</Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {hospitalStaff
+                        .filter(s => s.role === activeRoleTab)
+                        .map((s) => {
+                          const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString('vi-VN') : '—';
+                          return (
+                            <View key={s.email} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 }}>
+                              <View>
+                                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{s.profile?.name || 'Nhân viên'}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{s.email}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Ngày tạo: {dateStr}</Text>
+                              </View>
+                              <View style={{ alignItems: 'flex-end' }}>
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                  backgroundColor: s.isLocked ? '#FEE2E2' : s.isVerified ? '#DCFCE7' : '#FEF3C7'
+                                }}>
+                                  <Text style={{
+                                    fontSize: 10,
+                                    fontWeight: '600',
+                                    color: s.isLocked ? '#991B1B' : s.isVerified ? '#166534' : '#B45309'
+                                  }}>
+                                    {s.isLocked ? 'Đã khóa' : s.isVerified ? 'Hoạt động' : 'Chờ kích hoạt'}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                    </View>
+                  )}
+                </View>
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+              
+              {/* Modal Footer */}
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#F8FAFC', flexDirection: 'row', justifyContent: 'flex-end' }}>
                 <TouchableOpacity
-                  style={{ flex: 1, height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                  style={{ height: 36, paddingHorizontal: 16, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}
                   onPress={() => setShowAddUserModal(false)}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Hủy</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{ flex: 1, height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
-                  onPress={handleCreateUser}
-                  disabled={creatingUser}
-                >
-                  {creatingUser ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Tạo tài khoản</Text>
-                  )}
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
             </View>

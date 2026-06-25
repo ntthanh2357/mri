@@ -110,7 +110,7 @@ const TechnicianQueueScreen = ({ navigation, route }) => {
             <Text style={styles.icon}>👤</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.patientName}>
-                {v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
+                {v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
               </Text>
               <Text style={styles.sub}>Lý do: {v.reason}</Text>
             </View>
@@ -156,8 +156,21 @@ const TechnicianQueueScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             )}
             {canUpload && (
-              <TouchableOpacity style={styles.btnUpload} onPress={() => openUploadModal(v)}>
+              <TouchableOpacity style={styles.btnUpload} onPress={() => navigation.navigate('CreateImagingResult', { visit: v })}>
                 <Text style={styles.btnUploadText}>📤 Upload Kết Quả</Text>
+              </TouchableOpacity>
+            )}
+            {(v.status === 'chờ kết quả AI' || v.status === 'chờ bác sĩ đọc' || v.status === 'hoàn tất') && v.mriOrder?.imagingResultId && (
+              <TouchableOpacity
+                style={styles.btnRead}
+                onPress={() => navigation.navigate('ImagingResult', {
+                  visitId: v._id,
+                  resultId: v.mriOrder.imagingResultId,
+                  imagingResultId: v.mriOrder.imagingResultId,
+                  activeRoute: 'TechnicianQueue'
+                })}
+              >
+                <Text style={styles.btnReadText}>👁️ Xem kết quả phim</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -167,7 +180,7 @@ const TechnicianQueueScreen = ({ navigation, route }) => {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} title="Hàng Đợi Chụp MRI" user={user}>
+    <ResponsiveLayout navigation={navigation} title="Hàng Đợi Chụp MRI" user={user} activeRoute="TechnicianQueue">
       {/* Header stats */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -208,7 +221,7 @@ const TechnicianQueueScreen = ({ navigation, route }) => {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>📤 Upload Kết Quả Phim Chụp</Text>
             <Text style={styles.modalSub}>
-              {activeVisit?.patientId?.profile?.fullName || activeVisit?.patientId?.email}
+              {activeVisit?.patientId?.profile?.name || activeVisit?.patientId?.profile?.fullName || activeVisit?.patientId?.email}
               {' · '}{activeVisit?.mriOrder?.region}
             </Text>
 
@@ -285,6 +298,8 @@ const styles = StyleSheet.create({
   btnStartText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   btnUpload: { flex: 1, backgroundColor: '#15803D', paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   btnUploadText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  btnRead: { flex: 1, backgroundColor: '#8B5CF6', paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  btnReadText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyIcon: { fontSize: 56 },
   emptyText: { fontSize: 16, color: '#94A3B8', fontWeight: '500' },

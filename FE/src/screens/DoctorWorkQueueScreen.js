@@ -107,7 +107,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.patientName}>
-              {v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
+              {v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
             </Text>
             <Text style={styles.reason} numberOfLines={1}>📋 {v.reason || 'Không có lý do'}</Text>
           </View>
@@ -178,7 +178,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} title="Hàng Đợi Khám" user={user}>
+    <ResponsiveLayout navigation={navigation} title="Hàng Đợi Khám" user={user} activeRoute="DoctorWorkQueue">
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[
@@ -217,7 +217,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>📷 Ra Y Lệnh Chụp MRI</Text>
             <Text style={styles.modalSub}>
-              Bệnh nhân: {selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
+              Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
             </Text>
 
             {/* Chọn KTV */}

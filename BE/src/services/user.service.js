@@ -143,7 +143,7 @@ export const getSystemStats = async () => {
 
   // User role distribution counts
   const patientsCount = await User.countDocuments({ role: "patient" });
-  const staffCount = await User.countDocuments({ role: { $in: ["admin", "hospital_admin", "receptionist", "technician", "nurse"] } });
+  const staffCount = await User.countDocuments({ role: { $in: ["admin", "hospital_admin", "technician", "nurse"] } });
 
   const userDistribution = {
     patient: patientsCount,

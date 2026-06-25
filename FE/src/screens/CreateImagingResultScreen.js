@@ -18,18 +18,26 @@ import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
 
 const CreateImagingResultScreen = ({ route, navigation }) => {
-  const { patientInfo } = route.params || {};
+  const { patientInfo, visit } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
   const [loading, setLoading] = useState(false);
-  const [medicalId, setMedicalId] = useState(patientInfo?.id || '26025699');
-  const [patientName, setPatientName] = useState(patientInfo?.name || '');
+
+  // Pre-fill fields from visit if technician launched this screen from the queue
+  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '26025699';
+  const initialPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || '';
+  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || 'Nam';
+  const initialAddress = visit?.patientId?.profile?.address || '., Phường Hòa Xuân, Tp Đà Nẵng';
+  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)';
+
+  const [medicalId, setMedicalId] = useState(initialMedicalId);
+  const [patientName, setPatientName] = useState(initialPatientName);
   const [birthYear, setBirthYear] = useState('1995');
-  const [gender, setGender] = useState(patientInfo?.gender || 'Nam');
-  const [address, setAddress] = useState('., Phường Hòa Xuân, Tp Đà Nẵng');
+  const [gender, setGender] = useState(initialGender);
+  const [address, setAddress] = useState(initialAddress);
   const [imagingType, setImagingType] = useState('MRI');
-  const [procedure, setProcedure] = useState('Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)');
+  const [procedure, setProcedure] = useState(initialProcedure);
   const [technique, setTechnique] = useState('Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.');
   const [findings, setFindings] = useState('');
   const [conclusion, setConclusion] = useState('');
@@ -288,10 +296,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         gender,
         address,
         orderDate: new Date(),
-        orderingDoctor: 'Bác sĩ Nguyễn Văn A',
+        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ Nguyễn Văn A',
         orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
         medicalRecordNumber: `SBA-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-        diagnosis: imagingType === 'MRI' ? 'U não thái dương' : 'Theo dõi u não',
+        diagnosis: visit?.reason || (imagingType === 'MRI' ? 'U não thái dương' : 'Theo dõi u não'),
         procedure,
         technique,
         findings,
@@ -300,6 +308,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         reportDate: new Date(),
         images,
         imagingType,
+        visitId: visit?._id || null,
       };
 
       const response = await post('/api/v1/imaging', payload);
@@ -319,7 +328,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+    <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>

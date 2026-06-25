@@ -35,7 +35,8 @@ export const sendHospitalCredentials = async ({ itEmail, hospitalName, tempUsern
           <p>Hệ thống đã tạo tài khoản tạm thời cho <strong>${hospitalName}</strong>. Vui lòng đăng nhập và điền thông tin bệnh viện để hoàn tất kích hoạt.</p>
           <div style="background:#f0fdf4;border-radius:8px;padding:16px;margin:16px 0">
             <p style="margin:0 0 8px"><strong>Tên đăng nhập:</strong> <code style="background:#fff;padding:2px 8px;border-radius:4px">${tempUsername}</code></p>
-            <p style="margin:0"><strong>Mật khẩu tạm:</strong> <code style="background:#fff;padding:2px 8px;border-radius:4px">${tempPassword}</code></p>
+            <p style="margin:0 0 12px"><strong>Mật khẩu tạm:</strong> <code style="background:#fff;padding:2px 8px;border-radius:4px">${tempPassword}</code></p>
+            <p style="margin:0"><a href="${process.env.FRONTEND_URL || "http://localhost:8083"}" style="display:inline-block;background-color:#047857;color:#ffffff;padding:8px 16px;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">Đăng nhập hệ thống</a></p>
           </div>
           <p style="color:#ef4444;font-size:13px">⚠️ Sau khi đăng nhập lần đầu, vui lòng điền đầy đủ thông tin bệnh viện. Tài khoản sẽ được kích hoạt chính thức sau khi admin xác thực.</p>
           <p style="color:#9ca3af;font-size:12px;margin-top:24px">Email tự động từ NeuroScan AI — vui lòng không trả lời.</p>

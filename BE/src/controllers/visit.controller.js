@@ -80,7 +80,7 @@ export const getMyQueue = async (req, res) => {
       filter.status = "đang chờ";
     } else if (role === "technician") {
       filter.technicianId = id;
-      filter.status = "chờ chụp";
+      filter.status = { $in: ["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId

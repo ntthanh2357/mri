@@ -135,12 +135,13 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
 
   const filteredPatients = patients.filter(p => 
     p.email?.toLowerCase().includes(searchPatient.toLowerCase()) || 
+    p.profile?.name?.toLowerCase().includes(searchPatient.toLowerCase()) ||
     p.profile?.fullName?.toLowerCase().includes(searchPatient.toLowerCase()) ||
     p.profile?.medicalId?.toLowerCase().includes(searchPatient.toLowerCase())
   );
 
   return (
-    <ResponsiveLayout navigation={navigation} title="Receptionist Dashboard" user={user}>
+    <ResponsiveLayout navigation={navigation} title="Receptionist Dashboard" user={user} activeRoute="ReceptionistDashboard">
       <View style={styles.container}>
         <View style={styles.tabContainer}>
           <TouchableOpacity 
@@ -183,7 +184,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                       style={[styles.listItem, selectedPatientId === p._id && styles.selectedListItem]}
                       onPress={() => setSelectedPatientId(p._id)}
                     >
-                      <Text style={styles.listItemTitle}>{p.profile?.fullName || p.email}</Text>
+                      <Text style={styles.listItemTitle}>{p.profile?.name || p.profile?.fullName || p.email}</Text>
                       <Text style={styles.listItemSub}>Mã: {p.profile?.medicalId || 'N/A'}</Text>
                     </TouchableOpacity>
                   ))}
@@ -197,7 +198,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                       style={[styles.cardItem, selectedDoctorId === d._id && styles.selectedCardItem]}
                       onPress={() => setSelectedDoctorId(d._id)}
                     >
-                      <Text style={styles.cardItemText}>{d.profile?.fullName || d.email}</Text>
+                      <Text style={styles.cardItemText}>{d.profile?.name || d.profile?.fullName || d.email}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -210,7 +211,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                       style={[styles.cardItem, selectedNurseId === n._id && styles.selectedCardItem]}
                       onPress={() => setSelectedNurseId(n._id)}
                     >
-                      <Text style={styles.cardItemText}>{n.profile?.fullName || n.email}</Text>
+                      <Text style={styles.cardItemText}>{n.profile?.name || n.profile?.fullName || n.email}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -237,7 +238,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                 {visits.map(v => (
                   <View key={v._id} style={styles.visitCard}>
                     <View style={styles.visitHeader}>
-                      <Text style={styles.visitPatientName}>{v.patientId?.profile?.fullName || v.patientId?.email}</Text>
+                      <Text style={styles.visitPatientName}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
                       <Text style={styles.statusBadge(v.status)}>{v.status.toUpperCase()}</Text>
                     </View>
                     <Text style={styles.visitDetail}>Lý do: {v.reason}</Text>
