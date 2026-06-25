@@ -148,3 +148,5 @@ vite.config.ts.timestamp-*
 # Temporary clones and ducks
 tmp_clone/
 tmp_duck/
+
+TheDuckHospital-main/
