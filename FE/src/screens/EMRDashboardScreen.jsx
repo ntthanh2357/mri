@@ -18,7 +18,7 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
-import { get, put } from '../services/api.service';
+import { get, put, post } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('records');
@@ -27,20 +27,38 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [modalType, setModalType] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [localUser, setLocalUser] = useState(null);
+  // Nurse workflow: selected patient for detail panel
+  const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
 
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const u = JSON.parse(storedUser);
-        setLocalUser(u);
-        if (u.role === 'nurse') {
-          setActiveTab('nurseQueue');
+    const loadUser = async () => {
+      try {
+        let u = null;
+        // Try reading from localStorage first as a quick cache
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          u = JSON.parse(storedUser);
+          setLocalUser(u);
+          if (u.role === 'nurse') {
+            setActiveTab('records');
+          }
         }
+
+        // Fetch fresh user details from backend to ensure correct role is loaded
+        const res = await get('/auth/me');
+        if (res && res.user) {
+          u = res.user;
+          setLocalUser(u);
+          localStorage.setItem('user', JSON.stringify(u));
+          if (u.role === 'nurse') {
+            setActiveTab('records');
+          }
+        }
+      } catch (e) {
+        console.log('Error loading user role:', e);
       }
-    } catch (e) {
-      console.log('Error reading user role:', e);
-    }
+    };
+    loadUser();
   }, []);
   
   // Data states
@@ -259,7 +277,7 @@ const EMRDashboardScreen = ({ navigation }) => {
                   />
                 )}
               </View>
-              {selectedRecord && (
+              {selectedRecord && localUser?.role !== 'nurse' && (
                 <View style={styles.selectedRecordBox}>
                   <Text style={styles.selectedRecordLabel}>Đang xem:</Text>
                   <Text style={styles.selectedRecordName}>{selectedRecord.patientName}</Text>
@@ -268,6 +286,18 @@ const EMRDashboardScreen = ({ navigation }) => {
                     onPress={() => setSelectedRecord(null)}
                   >
                     <Text style={styles.clearSelectionText}>Xóa chọn</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {nurseSelectedPatient && localUser?.role === 'nurse' && (
+                <View style={[styles.selectedRecordBox, { borderColor: '#6EE7B7' }]}>
+                  <Text style={styles.selectedRecordLabel}>Bệnh nhân:</Text>
+                  <Text style={styles.selectedRecordName}>{nurseSelectedPatient.patientName}</Text>
+                  <TouchableOpacity
+                    style={styles.clearSelectionBtn}
+                    onPress={() => setNurseSelectedPatient(null)}
+                  >
+                    <Text style={styles.clearSelectionText}>← Quay lại</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -345,9 +375,13 @@ const EMRDashboardScreen = ({ navigation }) => {
                       setIsModalVisible(true);
                     }}
                     onViewRecord={(record) => {
-                      setSelectedRecord(record);
-                      fetchRecordDetails(record._id);
-                      Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
+                      if (localUser?.role === 'nurse') {
+                        navigation.navigate('NursePatientDetail', { patient: record });
+                      } else {
+                        setSelectedRecord(record);
+                        fetchRecordDetails(record._id);
+                        Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
+                      }
                     }}
                     onRefresh={fetchRecords}
                   />
@@ -650,8 +684,456 @@ const NurseQueueTab = ({ navigation }) => {
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NURSE PATIENT DETAIL TAB
+// Shows patient info + 3 clinical forms: Mẫu khám bệnh, Phiếu chỉ định, Phiếu thu viện phí
+// ─────────────────────────────────────────────────────────────────────────────
+const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
+  const [activeForm, setActiveForm] = useState('info'); // 'info' | 'exam' | 'order' | 'fee'
+  const [submitting, setSubmitting] = useState(false);
+  const [invoiceCreated, setInvoiceCreated] = useState(false);
+
+  // ── Mẫu khám bệnh (Clinical Exam Form) ──
+  const [examDiagnosis, setExamDiagnosis] = useState('');
+  const [examRequest, setExamRequest] = useState('');
+  const [examPulse, setExamPulse] = useState('');
+  const [examBP, setExamBP] = useState('');
+  const [examHeight, setExamHeight] = useState('');
+  const [examWeight, setExamWeight] = useState('');
+  const [examBreath, setExamBreath] = useState('');
+  const [examTemp, setExamTemp] = useState('');
+  const [examSpo2, setExamSpo2] = useState('');
+
+  // ── Phiếu chỉ định dịch vụ (Service Order) ──
+  const [orderServices, setOrderServices] = useState([]);
+  const [orderNewService, setOrderNewService] = useState('');
+  const [orderPriority, setOrderPriority] = useState('Thường');
+  const [orderDiagnosis, setOrderDiagnosis] = useState('');
+
+  // ── Phiếu thu viện phí (Fee Items) ──
+  const [feeItems, setFeeItems] = useState([
+    { name: 'Khám bệnh', amount: '150000' },
+  ]);
+  const [feeNewName, setFeeNewName] = useState('');
+  const [feeNewAmount, setFeeNewAmount] = useState('');
+  const [feeNote, setFeeNote] = useState('');
+
+  const patientName = patient?.patientName || patient?.profile?.name || 'Bệnh nhân';
+  const patientId = patient?.patientId || patient?._id || '';
+  const gender = patient?.gender || patient?.profile?.gender || '';
+  const age = patient?.age || '';
+  const department = patient?.department || '';
+  const doctor = patient?.doctorInCharge || '';
+
+  const totalFee = feeItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+
+  const addOrderService = () => {
+    const s = orderNewService.trim();
+    if (!s) return;
+    setOrderServices(prev => [...prev, s]);
+    setOrderNewService('');
+  };
+
+  const removeOrderService = (idx) => {
+    setOrderServices(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const addFeeItem = () => {
+    const n = feeNewName.trim();
+    const a = feeNewAmount.trim();
+    if (!n || !a) return;
+    setFeeItems(prev => [...prev, { name: n, amount: a }]);
+    setFeeNewName('');
+    setFeeNewAmount('');
+  };
+
+  const removeFeeItem = (idx) => {
+    setFeeItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleConfirmFee = async () => {
+    if (feeItems.length === 0) {
+      Alert.alert('Thông báo', 'Vui lòng thêm ít nhất một dịch vụ.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const items = feeItems.map(i => ({ description: i.name, amount: parseFloat(i.amount) || 0 }));
+      // Use patient._id (MongoDB ObjectId) if available, else patientId
+      const pid = patient?._id || patient?.patientId;
+      const vid = patient?.visitId || undefined;
+
+      await post('/api/v1/invoices/pending', {
+        patientId: pid,
+        visitId: vid,
+        items,
+        totalAmount: totalFee,
+        notes: feeNote,
+      });
+
+      setInvoiceCreated(true);
+      Alert.alert(
+        '✅ Xác nhận thành công',
+        `Phiếu thu viện phí của ${patientName} đã được gửi sang hàng đợi Thu Ngân.\nTổng tiền: ${totalFee.toLocaleString('vi-VN')} VNĐ`,
+        [{ text: 'OK', onPress: () => onBack() }]
+      );
+    } catch (err) {
+      Alert.alert('Lỗi', err?.message || 'Không thể tạo hóa đơn. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formTabs = [
+    { key: 'info',  label: '👤 Thông tin' },
+    { key: 'exam',  label: '📋 Khám bệnh' },
+    { key: 'order', label: '📝 Chỉ định' },
+    { key: 'fee',   label: '💰 Viện phí' },
+  ];
+
+  return (
+    <View style={{ minHeight: 400 }}>
+      {/* Back button */}
+      <TouchableOpacity
+        onPress={onBack}
+        style={{ flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: 4 }}
+      >
+        <Text style={{ color: '#0D9488', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
+      </TouchableOpacity>
+
+      {/* Patient name header */}
+      <View style={{ backgroundColor: '#0D9488', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>🏥 {patientName}</Text>
+        <Text style={{ color: '#CCFBF1', fontSize: 13, marginTop: 2 }}>
+          {gender}{age ? ` • ${age} tuổi` : ''}{department ? ` • ${department}` : ''}
+        </Text>
+        {doctor ? <Text style={{ color: '#CCFBF1', fontSize: 12, marginTop: 1 }}>👨‍⚕️ {doctor}</Text> : null}
+      </View>
+
+      {/* Form tab bar */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: '#F1F5F9', flexGrow: 0 }}>
+        <View style={{ flexDirection: 'row', padding: 6, gap: 6 }}>
+          {formTabs.map(t => (
+            <TouchableOpacity
+              key={t.key}
+              onPress={() => setActiveForm(t.key)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 8,
+                borderRadius: 20,
+                backgroundColor: activeForm === t.key ? '#0D9488' : '#fff',
+                borderWidth: 1,
+                borderColor: activeForm === t.key ? '#0D9488' : '#CBD5E1',
+              }}
+            >
+              <Text style={{ color: activeForm === t.key ? '#fff' : '#475569', fontWeight: '600', fontSize: 13 }}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={{ backgroundColor: '#F8FAFC', padding: 16, paddingBottom: 40 }}>
+
+        {/* ── INFO TAB ── */}
+        {activeForm === 'info' && (
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>Thông tin bệnh nhân</Text>
+            {[
+              ['Họ và tên', patientName],
+              ['Mã bệnh nhân', patientId],
+              ['Giới tính', gender || 'N/A'],
+              ['Tuổi', age ? `${age} tuổi` : 'N/A'],
+              ['Khoa / Phòng', department || 'N/A'],
+              ['Bác sĩ phụ trách', doctor || 'N/A'],
+              ['Trạng thái', patient?.status || 'N/A'],
+            ].map(([label, value]) => (
+              <View key={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#E2E8F0', paddingBottom: 8 }}>
+                <Text style={{ width: 140, color: '#64748B', fontSize: 13 }}>{label}</Text>
+                <Text style={{ flex: 1, color: '#0F172A', fontSize: 13, fontWeight: '500' }}>{value}</Text>
+              </View>
+            ))}
+            <View style={{ backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#6EE7B7' }}>
+              <Text style={{ color: '#065F46', fontWeight: '600', fontSize: 13 }}>💡 Hướng dẫn</Text>
+              <Text style={{ color: '#047857', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
+                Điền đầy đủ 3 phiếu bên dưới theo trình tự:{'\n'}
+                1. 📋 Mẫu khám bệnh – nhập sinh hiệu{'\n'}
+                2. 📝 Phiếu chỉ định – thêm dịch vụ chỉ định{'\n'}
+                3. 💰 Phiếu thu viện phí – xác nhận để gửi Thu Ngân
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── EXAM TAB (Mẫu khám bệnh) ── */}
+        {activeForm === 'exam' && (
+          <View style={{ gap: 14 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 12 }}>
+                📋 PHIẾU THÔNG TIN KHÁM BỆNH
+              </Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>Patient Information Registration Form</Text>
+
+              <Text style={{ fontWeight: '700', color: '#0D9488', marginBottom: 8 }}>🫀 Sinh hiệu (Vital Signs)</Text>
+              {[
+                ['Mạch (lần/phút)', examPulse, setExamPulse, 'numeric', 'Ví dụ: 80'],
+                ['Huyết áp (mmHg)', examBP, setExamBP, 'default', 'Ví dụ: 120/80'],
+                ['Chiều cao (cm)', examHeight, setExamHeight, 'numeric', 'Ví dụ: 165'],
+                ['Cân nặng (kg)', examWeight, setExamWeight, 'numeric', 'Ví dụ: 60'],
+                ['Nhịp thở (lần/phút)', examBreath, setExamBreath, 'numeric', 'Ví dụ: 18'],
+                ['Nhiệt độ (°C)', examTemp, setExamTemp, 'numeric', 'Ví dụ: 37.0'],
+                ['SpO2 (%)', examSpo2, setExamSpo2, 'numeric', 'Ví dụ: 98'],
+              ].map(([label, val, setter, kbType, ph]) => (
+                <View key={label} style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>{label}</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder={ph}
+                    placeholderTextColor="#94A3B8"
+                    keyboardType={kbType}
+                    value={val}
+                    onChangeText={setter}
+                  />
+                </View>
+              ))}
+
+              <Text style={{ fontWeight: '700', color: '#0D9488', marginBottom: 8, marginTop: 8 }}>📄 Thông tin khám</Text>
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Yêu cầu khám (Request)</Text>
+                <TextInput
+                  style={[styles.textInput, { height: 70, textAlignVertical: 'top' }]}
+                  placeholder="Nhập yêu cầu khám..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  value={examRequest}
+                  onChangeText={setExamRequest}
+                />
+              </View>
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Đối tượng</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Thu phí / BHYT..."
+                  placeholderTextColor="#94A3B8"
+                  value={examDiagnosis}
+                  onChangeText={setExamDiagnosis}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── ORDER TAB (Phiếu chỉ định dịch vụ) ── */}
+        {activeForm === 'order' && (
+          <View style={{ gap: 14 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
+                📝 PHIẾU CHỈ ĐỊNH DỊCH VỤ
+              </Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {['Thường', 'Cấp Cứu'].map(p => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setOrderPriority(p)}
+                    style={{
+                      paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
+                      backgroundColor: orderPriority === p ? (p === 'Cấp Cứu' ? '#FEE2E2' : '#ECFDF5') : '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: orderPriority === p ? (p === 'Cấp Cứu' ? '#F87171' : '#6EE7B7') : '#E2E8F0',
+                    }}
+                  >
+                    <Text style={{ color: orderPriority === p ? (p === 'Cấp Cứu' ? '#DC2626' : '#065F46') : '#64748B', fontWeight: '600', fontSize: 13 }}>
+                      {p === 'Cấp Cứu' ? '🚨 ' : '✅ '}{p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Chẩn đoán</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Nhập chẩn đoán..."
+                  placeholderTextColor="#94A3B8"
+                  value={orderDiagnosis}
+                  onChangeText={setOrderDiagnosis}
+                />
+              </View>
+
+              <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 8 }}>Danh sách chỉ định:</Text>
+
+              {orderServices.map((svc, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                  <Text style={{ flex: 1, color: '#065F46', fontSize: 13 }}>📌 {svc}</Text>
+                  <TouchableOpacity onPress={() => removeOrderService(idx)}>
+                    <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {orderServices.length === 0 && (
+                <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 16 }}>Chưa có dịch vụ nào được chỉ định</Text>
+              )}
+
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  placeholder="Tên dịch vụ chỉ định..."
+                  placeholderTextColor="#94A3B8"
+                  value={orderNewService}
+                  onChangeText={setOrderNewService}
+                />
+                <TouchableOpacity
+                  onPress={addOrderService}
+                  style={{ backgroundColor: '#0D9488', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Common service shortcuts */}
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 12, marginBottom: 6 }}>Chọn nhanh:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {['Khám chuyên khoa thần kinh', 'Chụp MRI sọ não', 'Phân tích AI chẩn đoán'].map(s => (
+                  <TouchableOpacity
+                    key={s}
+                    onPress={() => { setOrderServices(prev => prev.includes(s) ? prev : [...prev, s]); }}
+                    style={{ backgroundColor: '#EFF6FF', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#BFDBFE' }}
+                  >
+                    <Text style={{ color: '#1D4ED8', fontSize: 12 }}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── FEE TAB (Phiếu thu viện phí) ── */}
+        {activeForm === 'fee' && (
+          <View style={{ gap: 14 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
+                💰 PHIẾU THU VIỆN PHÍ
+              </Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+
+              {/* Patient info summary */}
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontWeight: '700', color: '#374151', marginBottom: 6 }}>Thông tin bệnh nhân:</Text>
+                <Text style={{ color: '#374151', fontSize: 13 }}>Họ và tên: <Text style={{ fontWeight: '600' }}>{patientName}</Text></Text>
+                <Text style={{ color: '#374151', fontSize: 13 }}>Giới tính: {gender || 'N/A'}  •  Đối tượng: Thu phí</Text>
+              </View>
+
+              <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 8 }}>Danh sách dịch vụ:</Text>
+
+              {/* Fee items table */}
+              <View style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', padding: 10 }}>
+                  <Text style={{ flex: 3, fontWeight: '600', color: '#374151', fontSize: 13 }}>Tên dịch vụ</Text>
+                  <Text style={{ flex: 2, fontWeight: '600', color: '#374151', fontSize: 13, textAlign: 'right' }}>Thành tiền (VNĐ)</Text>
+                  <Text style={{ width: 30 }}></Text>
+                </View>
+                {feeItems.map((item, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', padding: 10, borderTopWidth: 1, borderColor: '#F1F5F9', backgroundColor: idx % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                    <Text style={{ flex: 3, color: '#374151', fontSize: 13 }}>{item.name}</Text>
+                    <Text style={{ flex: 2, color: '#0F172A', fontSize: 13, fontWeight: '500', textAlign: 'right' }}>
+                      {parseFloat(item.amount).toLocaleString('vi-VN')}
+                    </Text>
+                    <TouchableOpacity onPress={() => removeFeeItem(idx)} style={{ width: 30, alignItems: 'center' }}>
+                      <Text style={{ color: '#EF4444', fontWeight: '700' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+
+              {/* Add service row */}
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+                <TextInput
+                  style={[styles.textInput, { flex: 2 }]}
+                  placeholder="Tên dịch vụ"
+                  placeholderTextColor="#94A3B8"
+                  value={feeNewName}
+                  onChangeText={setFeeNewName}
+                />
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  placeholder="Số tiền"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  value={feeNewAmount}
+                  onChangeText={setFeeNewAmount}
+                />
+                <TouchableOpacity
+                  onPress={addFeeItem}
+                  style={{ backgroundColor: '#0D9488', borderRadius: 8, paddingHorizontal: 12, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Ghi chú</Text>
+                <TextInput
+                  style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
+                  placeholder="Ghi chú thêm..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  value={feeNote}
+                  onChangeText={setFeeNote}
+                />
+              </View>
+
+              {/* Total */}
+              <View style={{ backgroundColor: '#0D9488', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>TỔNG CỘNG:</Text>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
+                    {totalFee.toLocaleString('vi-VN')} VNĐ
+                  </Text>
+                </View>
+              </View>
+
+              {invoiceCreated ? (
+                <View style={{ backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#6EE7B7' }}>
+                  <Text style={{ color: '#065F46', fontWeight: '700', textAlign: 'center' }}>✅ Đã gửi sang hàng đợi Thu Ngân</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleConfirmFee}
+                  disabled={submitting}
+                  style={{
+                    backgroundColor: submitting ? '#94A3B8' : '#059669',
+                    borderRadius: 10, padding: 14,
+                    alignItems: 'center',
+                  }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+                      ✅ Xác nhận & Gửi sang Thu Ngân
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                Sau khi xác nhận, hóa đơn sẽ xuất hiện trong danh sách chờ thanh toán của Thu Ngân
+              </Text>
+            </View>
+          </View>
+        )}
+
+      </View>
+    </View>
+  );
+};
+
 // Tab Components
 const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh }) => {
+
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>

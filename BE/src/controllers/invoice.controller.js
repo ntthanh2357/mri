@@ -1,6 +1,9 @@
 import { Invoice } from "../models/invoice.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Hospital } from "../models/hospital.model.js";
+import { MedicalRecord } from "../models/medicalRecord.model.js";
+import { EMRVersion } from "../models/emrVersion.model.js";
+import { User } from "../models/user.model.js";
 
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
@@ -30,6 +33,12 @@ export const createAndPayInvoice = async (req, res) => {
 
     const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
 
+    // Map payment method to database enum (tiền mặt / chuyển khoản)
+    let mappedMethod = "tiền mặt";
+    if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
+      mappedMethod = "chuyển khoản";
+    }
+
     const invoice = new Invoice({
       hospitalId: req.user.hospitalId,
       patientId: visit.patientId,
@@ -37,7 +46,7 @@ export const createAndPayInvoice = async (req, res) => {
       items,
       totalAmount,
       status: "đã thanh toán",
-      paymentMethod,
+      paymentMethod: mappedMethod,
       paidAt: new Date()
     });
 
@@ -96,7 +105,14 @@ export const payInvoice = async (req, res) => {
     }
 
     invoice.status = "đã thanh toán";
-    invoice.paymentMethod = paymentMethod || "cash";
+    
+    // Map payment method to database enum (tiền mặt / chuyển khoản)
+    let mappedMethod = "tiền mặt";
+    if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
+      mappedMethod = "chuyển khoản";
+    }
+    invoice.paymentMethod = mappedMethod;
+    
     invoice.paidAt = new Date();
     await invoice.save();
 
@@ -107,7 +123,94 @@ export const payInvoice = async (req, res) => {
       await visit.save();
     }
 
+    // ── Ghi nhận Lịch sử sửa đổi bệnh án (Audit Trail / EMR Version) ──
+    try {
+      const patientUser = await User.findById(invoice.patientId);
+      if (patientUser) {
+        const medicalId = patientUser.profile?.medicalId;
+        const patientName = patientUser.profile?.name || patientUser.profile?.fullName;
+        
+        let query = {};
+        if (medicalId) {
+          query = { $or: [{ patientId: medicalId }, { patientId: invoice.patientId.toString() }] };
+        } else {
+          query = { patientId: invoice.patientId.toString() };
+        }
+        
+        let medicalRecord = await MedicalRecord.findOne(query);
+        if (!medicalRecord && patientName) {
+          medicalRecord = await MedicalRecord.findOne({ patientName });
+        }
+
+        if (medicalRecord) {
+          const nextVersion = (medicalRecord.currentVersion || 1) + 1;
+          
+          const changes = {
+            paymentStatus: {
+              old: "Chờ thanh toán",
+              new: `Đã xác nhận thanh toán thành công cho bệnh nhân (Mã HS: ${medicalId || 'N/A'}, ID: ${invoice.patientId}) bởi Điều dưỡng / Lễ tân (ID: ${req.user._id})`
+            }
+          };
+
+          const emrVersion = new EMRVersion({
+            medicalRecordId: medicalRecord._id,
+            version: medicalRecord.currentVersion || 1,
+            modifiedBy: `${req.user?.profile?.name || req.user?.email || "Điều dưỡng / Lễ tân"} (ID: ${req.user?._id})`,
+            changes,
+          });
+          
+          await emrVersion.save();
+          medicalRecord.currentVersion = nextVersion;
+          await medicalRecord.save();
+          console.log(`[Audit Log] Created EMRVersion v${nextVersion - 1} for payment confirmation by ${req.user?._id}.`);
+        }
+      }
+    } catch (auditError) {
+      // Log audit error but don't fail the payment request
+      console.error("Lỗi ghi nhận lịch sử sửa đổi bệnh án khi thanh toán:", auditError);
+    }
+
     res.status(200).json({ message: "Thanh toán hóa đơn thành công", invoice });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+// @desc    Điều dưỡng tạo hóa đơn chờ thanh toán (từ phiếu thu viện phí)
+// @route   POST /api/v1/invoices/pending
+// @access  Private (Nurse, Admin)
+export const createPendingInvoice = async (req, res) => {
+  try {
+    const { patientId, visitId, items, totalAmount, notes } = req.body;
+
+    if (!patientId || !items || !totalAmount) {
+      return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
+    }
+
+    // Build items array from nurse's service selections
+    const invoiceItems = (items || []).map(item => ({
+      description: item.description || item.name,
+      amount: Number(item.amount) || 0,
+      type: 'other'
+    }));
+
+    const invoice = new Invoice({
+      hospitalId: req.user.hospitalId,
+      patientId,
+      visitId: visitId || null,
+      items: invoiceItems,
+      totalAmount: Number(totalAmount),
+      status: 'chờ thanh toán',
+      paymentMethod: '',
+      paidAt: null
+    });
+
+    await invoice.save();
+
+    const populated = await Invoice.findById(invoice._id)
+      .populate('patientId', 'email profile')
+      .populate('visitId', 'reason status');
+
+    res.status(201).json({ message: "Đã tạo hóa đơn chờ thanh toán.", invoice: populated });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }

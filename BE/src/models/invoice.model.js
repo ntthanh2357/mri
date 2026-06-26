@@ -10,7 +10,7 @@ const invoiceSchema = new Schema(
   {
     hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
     patientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    visitId: { type: Schema.Types.ObjectId, ref: 'Visit', required: true, index: true },
+    visitId: { type: Schema.Types.ObjectId, ref: 'Visit', index: true },
     items: [invoiceItemSchema],
     totalAmount: { type: Number, required: true },
     status: { type: String, enum: ['chờ thanh toán', 'đã thanh toán'], default: 'chờ thanh toán' },
