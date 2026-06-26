@@ -126,10 +126,10 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   const handlePayInvoice = async (invoiceId) => {
     try {
       await put(`/api/v1/invoices/${invoiceId}/pay`, { paymentMethod: 'cash' });
-      Alert.alert("Thành công", "Đã thanh toán hóa đơn");
+      Alert.alert("Thành công", "Đã xác nhận thanh toán thành công cho bệnh nhân và ghi vào lịch sử bệnh án (Audit Trail).");
       fetchInvoices();
     } catch (err) {
-      Alert.alert("Lỗi", err.message || "Thanh toán thất bại");
+      Alert.alert("Lỗi", err.message || "Xác nhận thanh toán thất bại");
     }
   };
 
@@ -270,7 +270,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                       <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
                       {inv.status === 'chờ thanh toán' && (
                         <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                          <Text style={styles.payBtnText}>Thanh Toán Ngay</Text>
+                          <Text style={styles.payBtnText}>Xác nhận thanh toán</Text>
                         </TouchableOpacity>
                       )}
                     </View>
