@@ -1,6 +1,9 @@
 import { User } from "../models/user.model.js";
 import { VitalSign } from "../models/vitalSign.model.js";
 import { LabOrder } from "../models/labOrder.model.js";
+import { Prescription } from "../models/prescription.model.js";
+import { DischargePaper } from "../models/dischargePaper.model.js";
+import { TransferForm } from "../models/transferForm.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
 // Lấy danh sách bệnh nhân kèm thống kê (số phiếu XN, lần đo sinh hiệu gần nhất)
@@ -137,5 +140,112 @@ export const createPatientLabOrder = async (req, res) => {
   } catch (error) {
     console.error("Lỗi tạo chỉ định xét nghiệm:", error);
     return errorResponse(res, "Lỗi tạo chỉ định xét nghiệm.", 500);
+  }
+};
+
+// Lấy danh sách đơn thuốc của bệnh nhân
+export const getPatientPrescriptions = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const items = await Prescription.find({ patient_id: patientId }).sort({ recorded_at: -1 });
+    return successResponse(res, items, "Lấy danh sách đơn thuốc thành công.");
+  } catch (error) {
+    console.error("Lỗi lấy danh sách đơn thuốc:", error);
+    return errorResponse(res, "Lỗi lấy danh sách đơn thuốc.", 500);
+  }
+};
+
+// Thêm đơn thuốc mới
+export const addPatientPrescription = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { doctor_name, diagnosis, drugs, note } = req.body;
+
+    if (!diagnosis || !drugs || !Array.isArray(drugs) || drugs.length === 0) {
+      return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
+    }
+
+    const newItem = new Prescription({
+      patient_id: patientId,
+      doctor_name: doctor_name || "Bác sĩ điều trị",
+      diagnosis,
+      drugs,
+      note: note || ""
+    });
+
+    await newItem.save();
+    return successResponse(res, newItem, "Thêm đơn thuốc mới thành công.", 201);
+  } catch (error) {
+    console.error("Lỗi thêm đơn thuốc:", error);
+    return errorResponse(res, "Lỗi thêm đơn thuốc.", 500);
+  }
+};
+
+// Lấy danh sách giấy ra viện của bệnh nhân
+export const getPatientDischargePapers = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const items = await DischargePaper.find({ patient_id: patientId }).sort({ recorded_at: -1 });
+    return successResponse(res, items, "Lấy danh sách giấy ra viện thành công.");
+  } catch (error) {
+    console.error("Lỗi lấy danh sách giấy ra viện:", error);
+    return errorResponse(res, "Lỗi lấy danh sách giấy ra viện.", 500);
+  }
+};
+
+// Thêm giấy ra viện mới
+export const addPatientDischargePaper = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { doctor_name, dischargeNo, hospitalNo, dateIn, dateOut, diagnosis, treatment, note } = req.body;
+
+    const newItem = new DischargePaper({
+      patient_id: patientId,
+      doctor_name: doctor_name || "Bác sĩ điều trị",
+      dischargeNo: dischargeNo || "",
+      hospitalNo: hospitalNo || "",
+      dateIn: dateIn || new Date(),
+      dateOut: dateOut || new Date(),
+      diagnosis: diagnosis || "",
+      treatment: treatment || "",
+      note: note || ""
+    });
+
+    await newItem.save();
+    return successResponse(res, newItem, "Thêm giấy ra viện thành công.", 201);
+  } catch (error) {
+    console.error("Lỗi thêm giấy ra viện:", error);
+    return errorResponse(res, "Lỗi thêm giấy ra viện.", 500);
+  }
+};
+
+// Lấy danh sách phiếu chuyển tuyến của bệnh nhân
+export const getPatientTransferForms = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const items = await TransferForm.find({ patient_id: patientId }).sort({ recorded_at: -1 });
+    return successResponse(res, items, "Lấy danh sách phiếu chuyển tuyến thành công.");
+  } catch (error) {
+    console.error("Lỗi lấy danh sách phiếu chuyển tuyến:", error);
+    return errorResponse(res, "Lỗi lấy danh sách phiếu chuyển tuyến.", 500);
+  }
+};
+
+// Thêm phiếu chuyển tuyến mới
+export const addPatientTransferForm = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const fields = req.body;
+
+    const newItem = new TransferForm({
+      patient_id: patientId,
+      ...fields
+    });
+
+    await newItem.save();
+    return successResponse(res, newItem, "Thêm phiếu chuyển tuyến thành công.", 201);
+  } catch (error) {
+    console.error("Lỗi thêm phiếu chuyển tuyến:", error);
+    return errorResponse(res, "Lỗi thêm phiếu chuyển tuyến.", 500);
   }
 };

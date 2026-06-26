@@ -4,7 +4,13 @@ import {
   getPatientVitals,
   addPatientVitals,
   getPatientLabOrders,
-  createPatientLabOrder
+  createPatientLabOrder,
+  getPatientPrescriptions,
+  addPatientPrescription,
+  getPatientDischargePapers,
+  addPatientDischargePaper,
+  getPatientTransferForms,
+  addPatientTransferForm
 } from "../controllers/patient.controller.js";
 import { protect, checkRole } from "../middlewares/auth.middleware.js";
 
@@ -43,5 +49,17 @@ router.get("/:patientId/lab-orders", checkSelfOrRoles(["doctor", "nurse", "techn
 
 // Tạo chỉ định xét nghiệm (Chỉ cho Bác sĩ, Tiếp tân, Admin tạo)
 router.post("/:patientId/lab-orders", checkRole(["doctor", "nurse", "admin"]), createPatientLabOrder);
+
+// Quản lý đơn thuốc (Toa thuốc)
+router.get("/:patientId/prescriptions", checkSelfOrRoles(["doctor", "nurse", "admin"]), getPatientPrescriptions);
+router.post("/:patientId/prescriptions", checkRole(["doctor", "admin"]), addPatientPrescription);
+
+// Quản lý giấy ra viện
+router.get("/:patientId/discharge-papers", checkSelfOrRoles(["doctor", "nurse", "admin"]), getPatientDischargePapers);
+router.post("/:patientId/discharge-papers", checkRole(["doctor", "admin"]), addPatientDischargePaper);
+
+// Quản lý phiếu chuyển tuyến
+router.get("/:patientId/transfer-forms", checkSelfOrRoles(["doctor", "nurse", "admin"]), getPatientTransferForms);
+router.post("/:patientId/transfer-forms", checkRole(["doctor", "admin"]), addPatientTransferForm);
 
 export default router;

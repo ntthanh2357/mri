@@ -189,10 +189,10 @@ const DoctorPatientListScreen = ({ navigation }) => {
                 <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
               </View>
               <TouchableOpacity 
-                onPress={() => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name })} 
-                style={{marginTop: 8, padding: 8, backgroundColor: '#3B82F6', borderRadius: 4}}
+                onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })} 
+                style={{marginTop: 8, padding: 8, backgroundColor: '#16A34A', borderRadius: 4}}
               >
-                <Text style={{color: 'white', textAlign: 'center'}}>Xem Phim MRI/CT (TEST)</Text>
+                <Text style={{color: 'white', textAlign: 'center', fontWeight: 'bold'}}>Xem hồ sơ bệnh án</Text>
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
