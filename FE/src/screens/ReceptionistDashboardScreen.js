@@ -98,8 +98,8 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   };
 
   const handleCreateVisit = async () => {
-    if (!selectedPatientId || !selectedDoctorId || !selectedNurseId || !reason) {
-      Alert.alert("Thông báo", "Vui lòng chọn đầy đủ Bệnh nhân, Bác sĩ, Điều dưỡng và nhập lý do khám.");
+    if (!selectedPatientId || !selectedDoctorId || !selectedNurseId) {
+      Alert.alert("Thông báo", "Vui lòng chọn đầy đủ Bệnh nhân, Bác sĩ và Điều dưỡng.");
       return;
     }
     setLoading(true);
@@ -108,7 +108,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
         patientId: selectedPatientId,
         doctorId: selectedDoctorId,
         nurseId: selectedNurseId,
-        reason
+        reason: reason.trim() || 'Khám tổng quát'
       });
       Alert.alert("Thành công", "Đã tạo lượt khám mới và phân công thành công.");
       setSelectedPatientId('');

@@ -1070,7 +1070,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.submitButton, { backgroundColor: '#2563EB', height: 36, marginTop: 4 }]}
+                  style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4 }]}
                   onPress={handleAddDrugToPrescription}
                 >
                   <Text style={styles.submitButtonText}>➕ Thêm vào đơn</Text>
@@ -1154,7 +1154,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               )}
 
               {/* Bản in đơn thuốc */}
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#2563EB' }]}>
+              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
                 {/* Header bệnh viện */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
@@ -1498,7 +1498,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={styles.inputLabel}>Tóm tắt cận lâm sàng chính</Text>
                   <TouchableOpacity onPress={handleAutofillLabResults} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#3B82F6' }}>
-                    <Text style={{ fontSize: 10, color: '#2563EB', fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
+                    <Text style={{ fontSize: 10, color: Colors.primary, fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
@@ -2299,7 +2299,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                          <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                          <Text style={{ color: item.imagingType === 'MRI' ? Colors.info : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
                         </View>
                         <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
                       </View>
@@ -2384,7 +2384,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarBigText: {
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -2410,7 +2410,7 @@ const styles = StyleSheet.create({
   },
   genderBadgeText: {
     fontSize: 11,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -2458,7 +2458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeTabButton: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
   },
   tabButtonText: {
     fontSize: 14,
@@ -2645,7 +2645,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2668,7 +2668,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectedOrderItem: {
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     backgroundColor: '#F0FDF4',
   },
   orderItemHeader: {
@@ -2729,7 +2729,7 @@ const styles = StyleSheet.create({
   actionBtnOutline: {
     height: 38,
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2737,7 +2737,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   labReportSheet: {
@@ -2961,7 +2961,7 @@ const styles = StyleSheet.create({
   badgeSimText: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#2563EB',
+    color: Colors.primary,
   },
   simActionsRow: {
     flexDirection: 'row',
@@ -3029,7 +3029,7 @@ const styles = StyleSheet.create({
   },
   customSendBtn: {
     height: 34,
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -3078,7 +3078,7 @@ const styles = StyleSheet.create({
   },
   autofillBtnText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: '600',
   },
   manualLabGrid: {

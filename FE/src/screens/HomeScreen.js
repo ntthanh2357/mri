@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { get, setAuthToken } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import Colors from '../constants/colors';
 
 const scheduleData = [
   {
@@ -251,7 +252,7 @@ const HomeScreen = ({ route, navigation }) => {
                       <Text style={styles.metricEmoji}>🌙</Text>
                     </View>
                     <View style={[styles.metricBadge, { backgroundColor: '#EFF6FF' }]}>
-                      <Text style={[styles.metricBadgeText, { color: '#2563EB' }]}>+15%</Text>
+                      <Text style={[styles.metricBadgeText, { color: '#0284C7' }]}>+15%</Text>
                     </View>
                   </View>
                   <Text style={styles.metricLabel}>Giấc ngủ</Text>
@@ -496,7 +497,7 @@ const HomeScreen = ({ route, navigation }) => {
                 {isNurseOrRec ? (
                   <>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#0D9488' }]}>Ca trực</Text>
+                      <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>Ca trực</Text>
                       <Text style={styles.doctorStatLabel}>Ca sáng (07h–13h)</Text>
                     </View>
                     <View style={styles.doctorStatCard}>
@@ -513,9 +514,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#2563EB" />
+                        <ActivityIndicator size="small" color="#15803D" />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
                           {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
                         </Text>
                       )}
@@ -547,9 +548,9 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('DoctorPatientList')}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#2563EB" />
+                        <ActivityIndicator size="small" color="#15803D" />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>{totalPatients}</Text>
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>{totalPatients}</Text>
                       )}
                       <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
                     </TouchableOpacity>
@@ -658,7 +659,7 @@ const HomeScreen = ({ route, navigation }) => {
                         <Text style={styles.queueDetailsText}>Yêu cầu: Chụp MRI sọ não có cản từ · Đã hoàn tất chụp</Text>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                        <Text style={[styles.statusBadgeText, { color: '#1D4ED8', fontSize: 10, fontWeight: 'bold' }]}>Chờ nạp PACS</Text>
+                        <Text style={[styles.statusBadgeText, { color: '#15803D', fontSize: 10, fontWeight: 'bold' }]}>Chờ nạp PACS</Text>
                       </View>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('TechnicianQueue')}>
@@ -932,7 +933,7 @@ const styles = StyleSheet.create({
     color: '#15803D',
   },
   doctorBadgeText: {
-    color: '#1D4ED8',
+    color: '#15803D',
   },
   emailText: {
     fontSize: 13,
@@ -1477,7 +1478,7 @@ const styles = StyleSheet.create({
     borderColor: '#DBEAFE',
   },
   tagInfoText: {
-    color: '#1D4ED8',
+    color: '#15803D',
   },
   aiChatCard: {
     backgroundColor: '#0F172A',

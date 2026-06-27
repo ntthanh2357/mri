@@ -2,11 +2,28 @@ import { Schema, model } from "mongoose";
 
 const visitSchema = new Schema(
   {
-    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
-    patientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    doctorId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    nurseId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', index: true },
+    patientId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    nurseId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     technicianId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    date: { type: Date, default: null },
+    facility: { type: String, default: "" },
+    visitType: { type: String, default: "" },
+    documents: [
+      {
+        docKey: { type: String },
+        groupKey: { type: String },
+        label: { type: String },
+        storageType: { type: String },
+        fileUrl: { type: String },
+        fileName: { type: String },
+        fileType: { type: String },
+        manualData: { type: Schema.Types.Mixed },
+        uploadedAt: { type: Date, default: Date.now }
+      }
+    ],
     status: {
       type: String,
       enum: ['đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'hoàn tất', 'đã đóng'],

@@ -300,6 +300,63 @@ export const analyzeImagingResultAI = async (req, res) => {
 
     const aiData = await aiResponse.json();
 
+    // ── Upload annotated heatmap image to Firebase (base64 → public URL) ──
+    if (aiData.annotated_image && aiData.annotated_image.startsWith('data:image')) {
+      try {
+        const base64Match = aiData.annotated_image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (base64Match && base64Match.length === 3) {
+          const imageBuffer = Buffer.from(base64Match[2], 'base64');
+          const heatmapFileName = `MRI/heatmap_${Date.now()}_${Math.floor(Math.random() * 10000)}.jpg`;
+
+          if (bucket) {
+            // Upload to Firebase Storage
+            const file = bucket.file(heatmapFileName);
+            await file.save(imageBuffer, { metadata: { contentType: 'image/jpeg' } });
+            await file.makePublic();
+            aiData.annotated_image = `https://storage.googleapis.com/${bucket.name}/${heatmapFileName}`;
+            console.log(`✅ Heatmap uploaded to Firebase: ${aiData.annotated_image}`);
+          } else {
+            // Fallback: save locally
+            const uploadsDir = path.join(__dirname, '../../uploads');
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            const localName = `heatmap_${Date.now()}.jpg`;
+            fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
+            aiData.annotated_image = `/uploads/${localName}`;
+            console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
+          }
+        }
+      } catch (uploadErr) {
+        console.warn('⚠️ Không thể upload heatmap, giữ nguyên base64:', uploadErr.message);
+        // Keep the base64 string if upload fails – FE can still render it
+      }
+    }
+
+    // Gọi thêm dịch vụ sinh báo cáo lâm sàng để mô tả chi tiết kích thước, vị trí và lý thuyết u
+    if (aiData.class_name && aiData.class_name !== 'notumor') {
+      try {
+        const aiReportUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/generate_clinical_report") : "http://localhost:8000/generate_clinical_report");
+        const reportResponse = await fetch(aiReportUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resnet_data: {
+              class_name: aiData.class_name,
+              confidence: aiData.confidence,
+              tumor_location: aiData.tumor_location,
+              consensus_message: aiData.consensus_message
+            }
+          })
+        });
+        if (reportResponse.ok) {
+          const reportData = await reportResponse.json();
+          aiData.clinical_report = reportData.draft_report || "";
+          console.log("✅ Đã sinh báo cáo chi tiết vị trí/kích thước/lý thuyết thành công từ FastAPI.");
+        }
+      } catch (reportErr) {
+        console.warn("⚠️ Lỗi sinh báo cáo chi tiết từ FastAPI:", reportErr.message);
+      }
+    }
+
     if (visitId) {
       const visit = await Visit.findById(visitId);
       if (visit) {
@@ -595,7 +652,7 @@ export const createKtvImagingResult = async (req, res) => {
 export const updateImagingResult = async (req, res) => {
   try {
     const { id } = req.params;
-    const { findings, conclusion, radiologist, technique } = req.body;
+    const { findings, conclusion, radiologist, technique, images } = req.body;
 
     const result = await ImagingResult.findById(id);
     if (!result) {
@@ -606,6 +663,7 @@ export const updateImagingResult = async (req, res) => {
     if (conclusion !== undefined) result.conclusion = conclusion;
     if (radiologist !== undefined) result.radiologist = radiologist;
     if (technique !== undefined) result.technique = technique;
+    if (images !== undefined) result.images = images;
     result.reportDate = new Date();
 
     await result.save();

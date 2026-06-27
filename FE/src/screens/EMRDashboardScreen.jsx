@@ -357,7 +357,7 @@ const EMRDashboardScreen = ({ navigation }) => {
 
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0D9488" />
+                <ActivityIndicator size="large" color="#15803D" />
                 <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
               </View>
             ) : (
@@ -557,7 +557,7 @@ const NurseQueueTab = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0D9488" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#15803D" style={{ marginTop: 40 }} />
       ) : (
         <View style={{ gap: 12 }}>
           {visits.length === 0 ? (
@@ -798,11 +798,11 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
         onPress={onBack}
         style={{ flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: 4 }}
       >
-        <Text style={{ color: '#0D9488', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
+        <Text style={{ color: '#15803D', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
       </TouchableOpacity>
 
       {/* Patient name header */}
-      <View style={{ backgroundColor: '#0D9488', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
+      <View style={{ backgroundColor: '#15803D', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
         <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>🏥 {patientName}</Text>
         <Text style={{ color: '#CCFBF1', fontSize: 13, marginTop: 2 }}>
           {gender}{age ? ` • ${age} tuổi` : ''}{department ? ` • ${department}` : ''}
@@ -820,9 +820,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               style={{
                 paddingHorizontal: 14, paddingVertical: 8,
                 borderRadius: 20,
-                backgroundColor: activeForm === t.key ? '#0D9488' : '#fff',
+                backgroundColor: activeForm === t.key ? '#15803D' : '#fff',
                 borderWidth: 1,
-                borderColor: activeForm === t.key ? '#0D9488' : '#CBD5E1',
+                borderColor: activeForm === t.key ? '#15803D' : '#CBD5E1',
               }}
             >
               <Text style={{ color: activeForm === t.key ? '#fff' : '#475569', fontWeight: '600', fontSize: 13 }}>
@@ -874,7 +874,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </Text>
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>Patient Information Registration Form</Text>
 
-              <Text style={{ fontWeight: '700', color: '#0D9488', marginBottom: 8 }}>🫀 Sinh hiệu (Vital Signs)</Text>
+              <Text style={{ fontWeight: '700', color: '#15803D', marginBottom: 8 }}>🫀 Sinh hiệu (Vital Signs)</Text>
               {[
                 ['Mạch (lần/phút)', examPulse, setExamPulse, 'numeric', 'Ví dụ: 80'],
                 ['Huyết áp (mmHg)', examBP, setExamBP, 'default', 'Ví dụ: 120/80'],
@@ -897,7 +897,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 </View>
               ))}
 
-              <Text style={{ fontWeight: '700', color: '#0D9488', marginBottom: 8, marginTop: 8 }}>📄 Thông tin khám</Text>
+              <Text style={{ fontWeight: '700', color: '#15803D', marginBottom: 8, marginTop: 8 }}>📄 Thông tin khám</Text>
               <View style={{ marginBottom: 10 }}>
                 <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Yêu cầu khám (Request)</Text>
                 <TextInput
@@ -987,7 +987,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 />
                 <TouchableOpacity
                   onPress={addOrderService}
-                  style={{ backgroundColor: '#0D9488', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}
+                  style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
                 </TouchableOpacity>
@@ -1002,7 +1002,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                     onPress={() => { setOrderServices(prev => prev.includes(s) ? prev : [...prev, s]); }}
                     style={{ backgroundColor: '#EFF6FF', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#BFDBFE' }}
                   >
-                    <Text style={{ color: '#1D4ED8', fontSize: 12 }}>{s}</Text>
+                    <Text style={{ color: '#15803D', fontSize: 12 }}>{s}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1067,7 +1067,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 />
                 <TouchableOpacity
                   onPress={addFeeItem}
-                  style={{ backgroundColor: '#0D9488', borderRadius: 8, paddingHorizontal: 12, justifyContent: 'center' }}
+                  style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 12, justifyContent: 'center' }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
                 </TouchableOpacity>
@@ -1086,7 +1086,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </View>
 
               {/* Total */}
-              <View style={{ backgroundColor: '#0D9488', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <View style={{ backgroundColor: '#15803D', borderRadius: 10, padding: 14, marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>TỔNG CỘNG:</Text>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
@@ -1342,7 +1342,7 @@ const VersionTab = ({ versions, selectedRecord }) => (
           versions.map(v => (
             <View key={v._id || v.id} style={styles.itemCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={[styles.itemTitle, { color: '#0D9488' }]}>Phiên bản EMR v{v.version}</Text>
+                <Text style={[styles.itemTitle, { color: '#15803D' }]}>Phiên bản EMR v{v.version}</Text>
                 <Text style={{ fontSize: 11, color: '#64748B', fontWeight: 'bold' }}>
                   {new Date(v.modifiedAt).toLocaleString('vi-VN')}
                 </Text>
@@ -1379,7 +1379,7 @@ const StatusBadge = ({ status }) => {
   let color, bg;
   if (status === 'Đang điều trị' || status === 'Đang điều trị') {
     bg = '#EFF6FF';
-    color = '#1D4ED8';
+    color = '#15803D';
   } else if (status === 'Xuất viện' || status === 'Đã ký') {
     bg = '#DCFCE7';
     color = '#166534';
@@ -1401,7 +1401,7 @@ const SignBadge = ({ signStatus }) => {
     color = '#166534';
   } else if (signStatus === 'Đã duyệt') {
     bg = '#EFF6FF';
-    color = '#1D4ED8';
+    color = '#15803D';
   } else {
     bg = '#FEF3C7';
     color = '#B45309';
@@ -1444,7 +1444,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
               >
                 <View style={[styles.cardHeader, { marginBottom: 12 }]}>
                   <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                    <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                    <Text style={{ color: item.imagingType === 'MRI' ? '#0284C7' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
                   </View>
                   <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
                 </View>
@@ -1968,7 +1968,7 @@ const styles = StyleSheet.create({
   sidebarItemActive: {
     backgroundColor: '#EFF6FF',
     borderLeftWidth: 3,
-    borderLeftColor: '#1D4ED8',
+    borderLeftColor: '#15803D',
     paddingLeft: 11,
   },
   sidebarIcon: {
@@ -1980,7 +1980,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sidebarItemTextActive: {
-    color: '#1D4ED8',
+    color: '#15803D',
     fontWeight: '700',
   },
   selectedRecordBox: {
@@ -2034,7 +2034,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   mobileTabItemActive: {
-    borderBottomColor: '#1D4ED8',
+    borderBottomColor: '#15803D',
   },
   mobileTabText: {
     fontSize: 13,
@@ -2042,7 +2042,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   mobileTabTextActive: {
-    color: '#1D4ED8',
+    color: '#15803D',
     fontWeight: '700',
   },
   scrollContainer: {
@@ -2079,11 +2079,11 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   actionButton: {
-    backgroundColor: '#0D9488',
+    backgroundColor: '#15803D',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#0D9488',
+    shadowColor: '#15803D',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
@@ -2338,10 +2338,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: '#0D9488',
+    backgroundColor: '#15803D',
     borderRadius: 10,
     alignItems: 'center',
-    shadowColor: '#0D9488',
+    shadowColor: '#15803D',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,

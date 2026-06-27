@@ -52,11 +52,52 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [approvingAI, setApprovingAI] = useState(false);
   const [approveSuccess, setApproveSuccess] = useState(false);
 
+  // Extra images (e.g. heatmap from AI analysis)
+  const [extraImages, setExtraImages] = useState([]);
+
+  // ── Receive prefill from AIAnalysisScreen (when doctor confirms AI result) ──
+  useEffect(() => {
+    const params = route.params || {};
+    if (params.prefillFindings && params.prefillFindings !== findingsText) {
+      setFindingsText(params.prefillFindings);
+    }
+    if (params.prefillConclusion && params.prefillConclusion !== conclusionText) {
+      setConclusionText(params.prefillConclusion);
+    }
+    if (params.aiResultData) {
+      setAiResult(params.aiResultData);
+      setCorrectClass(params.aiResultData.class_name || 'notumor');
+      setApproveSuccess(!params.aiResultData.isWrong);
+      // Merge heatmap image into the gallery
+      if (params.aiResultData.annotated_image) {
+        setExtraImages([params.aiResultData.annotated_image]);
+      }
+    }
+  }, [route.params?.prefillFindings, route.params?.prefillConclusion, route.params?.aiResultData]);
+
   useEffect(() => {
     get('/auth/me')
       .then(res => setLocalUser(res.user))
       .catch(err => console.log('Error fetching me:', err));
   }, []);
+
+  useEffect(() => {
+    if (result && localUser && localUser.role === 'doctor' && route.params?.visitStatus === 'chờ kết quả AI') {
+      if (result.images && result.images.length > 0) {
+        const firstImage = result.images[0];
+        const imageUrl = firstImage.startsWith('http') ? firstImage : `${Config.API_URL}${firstImage}`;
+        // Clear the param to avoid loop
+        navigation.setParams({ visitStatus: undefined });
+        navigation.navigate('AIAnalysis', {
+          imageUrl,
+          visitId,
+          resultId,
+          imagingResultId: resultId,
+          activeRoute,
+        });
+      }
+    }
+  }, [result, localUser, route.params?.visitStatus]);
 
   useEffect(() => {
     if (!resultId) {
@@ -211,10 +252,12 @@ const ImagingResultScreen = ({ route, navigation }) => {
     setCompletingVisit(true);
     try {
       const docName = localUser?.profile?.fullName || localUser?.profile?.name || localUser?.email || 'Bác sĩ chuyên khoa';
+      const updatedImages = Array.from(new Set([...result.images, ...extraImages]));
       await put(`/api/v1/imaging/${resultId}`, {
         findings: findingsText.trim(),
         conclusion: conclusionText.trim(),
-        radiologist: docName
+        radiologist: docName,
+        images: updatedImages
       });
 
       if (visitId) {
@@ -357,88 +400,31 @@ const ImagingResultScreen = ({ route, navigation }) => {
               </View>
             </View>
 
-            {localUser?.role !== 'patient' && (
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#1E3A8A',
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  alignSelf: 'flex-start',
-                  marginTop: 14,
-                  marginBottom: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  borderWidth: 1,
-                  borderColor: '#3B82F6'
-                }}
-                onPress={async () => {
-                  try {
-                    const patientsRes = await get('/api/patients');
-                    if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
-                      const target = patientsRes.data.find(p => {
-                        const dbMedId = p.profile?.medicalId;
-                        const mId = result.medicalId;
-                        if (!mId) return false;
-                        if (dbMedId === mId) return true;
-                        
-                        const cleanDbMedId = String(dbMedId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                        const cleanMId = String(mId).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                        if (cleanDbMedId && cleanDbMedId === cleanMId) return true;
-                        
-                        const nsSuffix = p._id?.substring(18).toLowerCase();
-                        if (nsSuffix && cleanMId.includes(nsSuffix)) return true;
-                        
-                        return false;
-                      });
-                      if (target) {
-                        navigation.navigate('PatientDetail', { patientId: target._id });
-                        return;
-                      }
-                    }
-                    Alert.alert('Thông báo', 'Không tìm thấy bệnh án chi tiết MongoDB tương ứng cho Mã y tế này.');
-                  } catch (err) {
-                    console.warn('Lỗi tìm bệnh án bệnh nhân:', err);
-                    Alert.alert('Lỗi', 'Không thể kết nối máy chủ để tìm bệnh án.');
-                  }
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>📂 Xem Hồ sơ EMR & Xét nghiệm LIS →</Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.sectionDivider} />
-
-            {/* Procedure & Technique */}
-            <View style={styles.detailSection}>
-              <Text style={styles.sectionHeading}>CHỈ ĐỊNH DỊCH VỤ</Text>
-              <Text style={styles.headingBodyBold}>{result.procedure}</Text>
-
-              <Text style={[styles.sectionHeading, { marginTop: 16 }]}>KỸ THUẬT THỰC HIỆN</Text>
-              <Text style={styles.headingBody}>{result.technique || 'Chụp cộng hưởng từ sọ não dựng hình 3D.'}</Text>
-            </View>
-
             <View style={styles.sectionDivider} />
 
             {/* Tumor Image Gallery Carousel */}
             {result.images && result.images.length > 0 && (
               <View style={styles.gallerySection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>HÌNH ẢNH PHIM CHỤP ({result.images.length} ẢNH)</Text>
-                  <TouchableOpacity 
-                    style={{ backgroundColor: '#1E1B4B', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, opacity: analyzing ? 0.7 : 1 }}
-                    onPress={handleAiAnalysis}
-                    disabled={analyzing}
-                  >
-                    {analyzing ? (
-                      <ActivityIndicator size="small" color="#818CF8" />
-                    ) : (
+                  <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>
+                    HÌNH ẢNH PHIM CHỤP ({(result.images?.length || 0) + extraImages.length} ẢNH)
+                  </Text>
+                  {localUser?.role === 'doctor' && (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#1E1B4B', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 }}
+                      onPress={() => navigation.navigate('AIAnalysis', {
+                        imageUrl: getImageUrl(result.images[0]),
+                        visitId,
+                        resultId,
+                        imagingResultId: resultId,
+                        activeRoute,
+                      })}
+                    >
                       <Text style={{ color: '#818CF8', fontWeight: 'bold', fontSize: 13 }}>
                         🤖 Phân tích Khối u bằng AI
                       </Text>
-                    )}
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {aiResult && (
@@ -530,47 +516,74 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
                 
                 <View style={styles.carouselContainer}>
-                  <TouchableOpacity 
-                    style={styles.mainImageWrapper}
-                    onPress={() => setZoomVisible(true)}
-                  >
-                    <Image
-                      source={{ uri: getImageUrl(result.images[activeImageIndex]) }}
-                      style={styles.mainImage}
-                      resizeMode="contain"
-                    />
-                    <View style={styles.zoomOverlayIcon}>
-                      <Text style={styles.zoomOverlayText}>🔍 Nhấp để phóng to</Text>
-                    </View>
-                  </TouchableOpacity>
+                  {/* Combined: DB images + AI heatmap */}
+                  {(() => {
+                    const allImgs = Array.from(new Set([...result.images, ...extraImages]));
+                    const safeIdx = Math.min(activeImageIndex, allImgs.length - 1);
+                    const currentImg = allImgs[safeIdx];
+                    const isHeatmap = safeIdx >= result.images.length || 
+                                      (currentImg && (currentImg.includes('heatmap') || currentImg.startsWith('data:')));
+                    return (
+                      <>
+                        <TouchableOpacity
+                          style={styles.mainImageWrapper}
+                          onPress={() => setZoomVisible(true)}
+                        >
+                          <Image
+                            source={{ uri: currentImg?.startsWith('data:') ? currentImg : getImageUrl(currentImg) }}
+                            style={styles.mainImage}
+                            resizeMode="contain"
+                          />
+                          {isHeatmap && (
+                            <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(124,58,237,0.85)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>📊 Heatmap Grad-CAM</Text>
+                            </View>
+                          )}
+                          <View style={styles.zoomOverlayIcon}>
+                            <Text style={styles.zoomOverlayText}>🔍 Nhấp để phóng to</Text>
+                          </View>
+                        </TouchableOpacity>
 
-                  <Text style={styles.imageCounter}>
-                    Hình ảnh {activeImageIndex + 1} / {result.images.length}
-                  </Text>
+                        <Text style={styles.imageCounter}>
+                          Hình ảnh {safeIdx + 1} / {allImgs.length}
+                          {isHeatmap ? ' — Heatmap AI' : ''}
+                        </Text>
 
-                  {/* Thumbnail Selector */}
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.thumbnailList}
-                  >
-                    {result.images.map((img, idx) => (
-                      <TouchableOpacity
-                        key={idx}
-                        style={[
-                          styles.thumbnailWrapper,
-                          activeImageIndex === idx && styles.activeThumbnailWrapper
-                        ]}
-                        onPress={() => setActiveImageIndex(idx)}
-                      >
-                        <Image
-                          source={{ uri: getImageUrl(img) }}
-                          style={styles.thumbnailImage}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.thumbnailList}
+                        >
+                          {allImgs.map((img, idx) => {
+                            const isThumbHeatmap = idx >= result.images.length || 
+                                                   (img && (img.includes('heatmap') || img.startsWith('data:')));
+                            return (
+                              <TouchableOpacity
+                                key={idx}
+                                style={[
+                                  styles.thumbnailWrapper,
+                                  safeIdx === idx && styles.activeThumbnailWrapper,
+                                  isThumbHeatmap && { borderColor: '#7C3AED', borderWidth: 2 }
+                                ]}
+                                onPress={() => setActiveImageIndex(idx)}
+                              >
+                                <Image
+                                  source={{ uri: img?.startsWith('data:') ? img : getImageUrl(img) }}
+                                  style={styles.thumbnailImage}
+                                  resizeMode="cover"
+                                />
+                                {isThumbHeatmap && (
+                                  <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(124,58,237,0.75)', paddingVertical: 2, alignItems: 'center' }}>
+                                    <Text style={{ color: '#fff', fontSize: 8, fontWeight: 'bold' }}>AI</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </>
+                    );
+                  })()}
                 </View>
               </View>
             )}

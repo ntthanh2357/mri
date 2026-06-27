@@ -91,7 +91,6 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
           { label: 'Hàng đợi khám', route: 'DoctorWorkQueue', icon: '🩺' },
           { label: 'Hàng đợi chụp MRI', route: 'TechnicianQueue', icon: '🔬' },
-          { label: 'Tải phim lên', route: 'CreateImagingResult', icon: '📸' },
           { label: 'Bệnh án Điện tử', route: 'DoctorPatientList', icon: '📂' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
@@ -160,7 +159,7 @@ const ResponsiveLayout = ({
             const isActive = activeRoute === item.route;
             return (
               <TouchableOpacity
-                key={item.route}
+                key={`${item.route}_${item.label}`}
                 style={[styles.navItem, isActive && styles.navItemActive]}
                 onPress={() => navigation.navigate(item.route)}
               >

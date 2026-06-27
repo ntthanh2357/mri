@@ -101,7 +101,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const renderVisitCard = (v) => {
     const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
     const canOrderMri = v.status === 'đang khám';
-    const hasReadResult = v.status === 'chờ bác sĩ đọc';
+    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI';
 
     return (
       <View key={v._id} style={styles.card}>
@@ -156,7 +156,21 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           {!isNurse && hasReadResult && (
             <TouchableOpacity
               style={styles.btnRead}
-              onPress={() => navigation.navigate('ImagingResult', { visitId: v._id, resultId: v.mriOrder?.imagingResultId, imagingResultId: v.mriOrder?.imagingResultId })}
+              onPress={() => {
+                const rid = v.mriOrder?.imagingResultId;
+                const ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
+                if (!ridStr) {
+                  Alert.alert('Chưa có kết quả', 'Kỹ thuật viên chưa upload kết quả phim chụp cho ca khám này.');
+                  return;
+                }
+                navigation.navigate('ImagingResult', {
+                  visitId: v._id,
+                  resultId: ridStr,
+                  imagingResultId: ridStr,
+                  activeRoute: 'DoctorWorkQueue',
+                  visitStatus: v.status,
+                });
+              }}
             >
               <Text style={styles.btnReadText}>🔬 Đọc Kết Quả Phim</Text>
             </TouchableOpacity>

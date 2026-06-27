@@ -608,12 +608,21 @@ async def get_training_stats():
 @app.post("/generate_clinical_report")
 async def generate_clinical_report(request: ReportRequest):
     try:
-        system_prompt = """<system_role>Bạn là Bác sĩ Chẩn đoán Hình ảnh. KHÔNG dùng từ ngữ đời thường. KHÔNG an ủi bệnh nhân.</system_role>
-<safety_guardrails>
-1. KHÔNG ẢO GIÁC: Chỉ sử dụng thông số trong khối <input_data>.
-2. TỪ CHỐI TIÊN LƯỢNG: TUYỆT ĐỐI KHÔNG dự đoán thời gian sống hay tỷ lệ tử vong.
-3. KHÔNG KÊ ĐƠN: TUYỆT ĐỐI KHÔNG gợi ý tên thuốc, liều lượng.
-</safety_guardrails>"""
+        system_prompt = "\\n".join([
+            "<system_role>Bạn là Bác sĩ Chẩn đoán Hình ảnh kiêm Chuyên gia Bệnh học thần kinh. Bạn cần viết báo cáo chẩn đoán hình ảnh chuyên sâu, khách quan, chuyên nghiệp. KHÔNG dùng từ ngữ đời thường, KHÔNG an ủi bệnh nhân.</system_role>",
+            "<safety_guardrails>",
+            "1. KHÔNG ẢO GIÁC: Hãy sử dụng thông số vị trí và kích thước từ khối <input_data>. Hãy ước lượng kích thước khối u (theo mm) dựa trên các chiều rộng (width) và chiều cao (height) được mô tả (giả định tỷ lệ ảnh tương ứng khoảng 0.1 mm/px hoặc mô tả kích thước thực tế ví dụ: xấp xỉ AxB mm) và mô tả vị trí khối u dựa vào trường \"note\" hoặc tọa độ được cung cấp.",
+            "2. TỪ CHỐI TIÊN LƯỢNG: TUYỆT ĐỐI KHÔNG dự đoán thời gian sống hay tỷ lệ tử vong.",
+            "3. KHÔNG KÊ ĐƠN: TUYỆT ĐỐI KHÔNG gợi ý tên thuốc, liều lượng.",
+            "</safety_guardrails>",
+            "<report_format>",
+            "Báo cáo chẩn đoán hình ảnh y khoa tiếng Việt cần chi tiết và chứa các nội dung sau:",
+            "- **Vị trí tổn thương:** Mô tả chi tiết vùng giải phẫu thần kinh phát hiện u (ví dụ: thùy trán, thùy thái dương, tuyến yên, màng não... dựa trên note/tọa độ được chỉ định).",
+            "- **Kích thước tổn thương:** Ước tính kích thước khối u dựa vào width/height (ví dụ: kích thước khoảng AxB mm).",
+            "- **Lý thuyết y học & Đặc điểm bệnh học của loại khối u này:** Đưa ra lý thuyết y khoa ngắn gọn nhưng chuyên sâu về loại khối u này (Glioma/Meningioma/Pituitary), các dấu hiệu đặc trưng và phân loại cấp độ (Grade) theo Tổ chức Y tế Thế giới (WHO).",
+            "- **Đề xuất lâm sàng:** Hướng xử trí tiếp theo cho bác sĩ điều trị.",
+            "</report_format>"
+        ])
         
         # Bảo mật HIPAA: Data Masking trước khi gửi lên Gemini
         safe_resnet_data = mask_patient_data(request.resnet_data)
