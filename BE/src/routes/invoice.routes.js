@@ -21,7 +21,8 @@ router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptioni
 router.post("/pending", protect, checkRole(["nurse", "admin", "receptionist"]), createPendingInvoice);
 
 // Cổng thanh toán trực tuyến PayOS (VietQR)
-// router.post("/visit/:visitId/payos", protect, createPayOSPayment); // Tạm thời tắt thanh toán lượt khám để test Premium
+router.post("/visit/:visitId/payos", protect, createPayOSPayment);
+router.post("/:visitId/payos", protect, createPayOSPayment);
 router.post("/premium-payment", protect, createPremiumPayment);
 router.post("/payos-webhook", handlePayOSWebhook);
 router.get("/payment/success", paymentSuccess);

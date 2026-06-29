@@ -150,21 +150,21 @@ export const payInvoice = async (req, res) => {
           const changes = {
             paymentStatus: {
               old: "Chờ thanh toán",
-              new: `Đã xác nhận thanh toán thành công cho bệnh nhân (Mã HS: ${medicalId || 'N/A'}, ID: ${invoice.patientId}) bởi Điều dưỡng / Lễ tân (ID: ${req.user._id})`
+              new: `Đã xác nhận thanh toán thành công cho bệnh nhân (Mã HS: ${medicalId || 'N/A'}, ID: ${invoice.patientId}) bởi Điều dưỡng / Lễ tân (ID: ${req.user.id})`
             }
           };
 
           const emrVersion = new EMRVersion({
             medicalRecordId: medicalRecord._id,
             version: medicalRecord.currentVersion || 1,
-            modifiedBy: `${req.user?.profile?.name || req.user?.email || "Điều dưỡng / Lễ tân"} (ID: ${req.user?._id})`,
+            modifiedBy: `${req.user?.profile?.name || req.user?.email || "Điều dưỡng / Lễ tân"} (ID: ${req.user?.id})`,
             changes,
           });
           
           await emrVersion.save();
           medicalRecord.currentVersion = nextVersion;
           await medicalRecord.save();
-          console.log(`[Audit Log] Created EMRVersion v${nextVersion - 1} for payment confirmation by ${req.user?._id}.`);
+          console.log(`[Audit Log] Created EMRVersion v${nextVersion - 1} for payment confirmation by ${req.user?.id}.`);
         }
       }
     } catch (auditError) {
@@ -223,52 +223,28 @@ export const createPendingInvoice = async (req, res) => {
 // @access  Private
 export const createPayOSPayment = async (req, res) => {
   try {
-    const { visitId } = req.params;
+    const { visitId } = req.params; // Có thể là invoiceId hoặc visitId
 
-    const visit = await Visit.findById(visitId);
-    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    let invoice = null;
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(visitId);
 
-    // Kiểm tra quyền (phải là lễ tân, admin hoặc chính bệnh nhân của lượt khám)
-    const isPatient = visit.patientId.toString() === req.user._id.toString();
-    const isClinicStaff = req.user.hospitalId && visit.hospitalId.toString() === req.user.hospitalId.toString();
-
-    if (!isPatient && !isClinicStaff) {
-      return res.status(403).json({ message: "Bạn không có quyền thanh toán cho lượt khám này" });
+    if (isValidObjectId) {
+      // 1. Tìm theo invoiceId trước
+      invoice = await Invoice.findOne({ _id: visitId, status: "chờ thanh toán" });
+      // 2. Nếu không thấy, tìm theo visitId
+      if (!invoice) {
+        invoice = await Invoice.findOne({ visitId, status: "chờ thanh toán" });
+      }
     }
 
-    const hospital = await Hospital.findById(visit.hospitalId);
-    if (!hospital) return res.status(404).json({ message: "Không tìm thấy bệnh viện" });
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn ở trạng thái chờ thanh toán" });
 
-    // Tìm hóa đơn hiện tại hoặc tạo hóa đơn mới ở trạng thái 'chờ thanh toán'
-    let invoice = await Invoice.findOne({ visitId, status: "chờ thanh toán" });
+    // Kiểm tra quyền (phải là lễ tân, admin, điều dưỡng hoặc chính bệnh nhân)
+    const isPatient = invoice.patientId.toString() === req.user.id.toString();
+    const isClinicStaff = req.user.hospitalId && invoice.hospitalId.toString() === req.user.hospitalId.toString();
 
-    if (!invoice) {
-      // Nếu đã có hóa đơn đã thanh toán rồi thì báo lỗi
-      const paidInvoice = await Invoice.findOne({ visitId, status: "đã thanh toán" });
-      if (paidInvoice) {
-        return res.status(400).json({ message: "Lượt khám này đã được thanh toán trước đó" });
-      }
-
-      // Xây dựng các mục dịch vụ
-      let items = [{ description: "Khám bệnh", amount: hospital.pricing.examFee, type: "exam" }];
-      if (visit.mriOrder && visit.mriOrder.orderedAt) {
-        items.push({ description: "Chụp MRI", amount: hospital.pricing.mriFee, type: "mri" });
-        if (visit.mriOrder.requestAiAnalysis) {
-          items.push({ description: "Phân tích AI chẩn đoán", amount: hospital.pricing.aiFee, type: "ai" });
-        }
-      }
-
-      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-
-      invoice = new Invoice({
-        hospitalId: visit.hospitalId,
-        patientId: visit.patientId,
-        visitId,
-        items,
-        totalAmount,
-        status: "chờ thanh toán",
-        paymentMethod: "vietqr"
-      });
+    if (!isPatient && !isClinicStaff) {
+      return res.status(403).json({ message: "Bạn không có quyền thanh toán cho hóa đơn này" });
     }
 
     // Tạo mã orderCode duy nhất dạng số nguyên cho PayOS (9 chữ số cuối của timestamp + số ngẫu nhiên)

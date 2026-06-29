@@ -99,10 +99,10 @@ const ResponsiveLayout = ({
       case 'receptionist':
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', icon: '📋' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', params: { tab: 'createVisit' }, icon: '📋' },
           { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
           { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
-          { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', icon: '💳' },
+          { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', params: { tab: 'billing' }, icon: '💳' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       default:
@@ -157,12 +157,20 @@ const ResponsiveLayout = ({
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
           {menuItems.map((item) => {
-            const isActive = activeRoute === item.route;
+            let isActive = false;
+            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'ReceptionistDashboard' && item.params?.tab === 'createVisit') {
+              isActive = true;
+            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'ReceptionistDashboard' && item.params?.tab === 'billing') {
+              isActive = true;
+            } else if (activeRoute === item.route && item.route !== 'ReceptionistDashboard') {
+              isActive = true;
+            }
+
             return (
               <TouchableOpacity
-                key={item.route}
+                key={item.label}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => navigation.navigate(item.route)}
+                onPress={() => navigation.navigate(item.route, item.params)}
               >
                 <Text style={styles.navIcon}>{item.icon}</Text>
                 <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
