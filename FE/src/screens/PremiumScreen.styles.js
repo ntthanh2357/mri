@@ -1,4 +1,4 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   container: {
@@ -198,6 +198,107 @@ export default StyleSheet.create({
     color: '#166534',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  cancelRenewBtn: {
+    height: 36,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelRenewBtnText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  expireNoticeText: {
+    color: '#BBF7D0',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  popupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 5,
+  },
+  popupIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  popupIconText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  popupTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  popupMessage: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  popupButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  popupButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  popupCancelButton: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  popupCancelButtonText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  popupButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  popupSingleButton: {
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   trustContainer: {
     flexDirection: 'row',

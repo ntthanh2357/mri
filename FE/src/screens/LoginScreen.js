@@ -58,7 +58,10 @@ const LoginScreen = ({ navigation }) => {
         const data = await get('/auth/me');
         if (data && data.user) {
           const destination = data.user.role === 'admin' ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-          navigation.replace(destination, { user: data.user });
+          navigation.reset({
+            index: 0,
+            routes: [{ name: destination, params: { user: data.user } }],
+          });
           return;
         }
       } catch (err) {
@@ -122,7 +125,10 @@ const LoginScreen = ({ navigation }) => {
       const data = await post('/auth/phone-login-verify', { phone: email.trim(), otp: otpCode.trim() });
       setAuthToken(data.accessToken);
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-        navigation.replace('Home');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home', params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Verify login OTP error:', error);
@@ -161,7 +167,10 @@ const LoginScreen = ({ navigation }) => {
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-        navigation.replace(destination);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -201,7 +210,10 @@ const LoginScreen = ({ navigation }) => {
       await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
-        navigation.replace(destination);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Google SSO error:', error);

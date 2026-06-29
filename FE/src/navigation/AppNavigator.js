@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
-import { navigationRef, navigateTo } from '../utils/navigationRef';
+import { navigationRef, navigateTo, resetTo } from '../utils/navigationRef';
 import { setAuthToken } from '../services/api.service';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -51,7 +51,7 @@ const AppNavigator = () => {
     const handleSessionTimeout = async () => {
       console.log('Session timed out due to inactivity.');
       await setAuthToken('');
-      navigateTo('Login');
+      resetTo('Login');
       alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
     };
 

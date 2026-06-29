@@ -1,4 +1,4 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   container: {
@@ -362,5 +362,51 @@ export default StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
+  },
+  pricingCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 24,
+  },
+  pricingDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 16,
+  },
+  pricingInputGroup: {
+    marginBottom: 12,
+  },
+  pricingInputLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  pricingInput: {
+    height: 38,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  pricingSubmitBtn: {
+    backgroundColor: '#15803D',
+    borderRadius: 8,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pricingSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

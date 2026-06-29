@@ -38,12 +38,15 @@ const ResponsiveLayout = ({
     fetchUser();
   }, [user]);
 
-  const handleDefaultLogout = () => {
+  const handleDefaultLogout = async () => {
+    await setAuthToken('');
     if (onLogout) {
       onLogout();
     } else {
-      setAuthToken('');
-      navigation.replace('Welcome');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Welcome' }],
+      });
     }
   };
 

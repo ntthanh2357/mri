@@ -60,8 +60,13 @@ const WelcomeScreen = ({ navigation }) => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : 'Home';
-          navigation.replace(destination, { user: data.user });
+          const destination = data.user.role === 'admin' 
+            ? 'AdminBackoffice' 
+            : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: destination, params: { user: data.user } }],
+          });
           return;
         }
       } catch (err) {

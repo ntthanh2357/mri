@@ -1,219 +1,441 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    marginTop: 12,
-    fontWeight: 'bold',
-  },
-  scrollContainer: {
-    padding: 16,
+    backgroundColor: '#F1F5F9',
   },
   headerRow: {
-    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  title: {
-    fontSize: 20,
+  backBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  backBtnText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#0F172A',
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
+  retryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+  },
+  retryBtnText: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+
+  scrollContainer: {
+    padding: 16,
+  },
+  scrollContainerDesktop: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
   },
   desktopRow: {
     flexDirection: 'row',
     gap: 20,
+    alignItems: 'flex-start',
+    width: '100%',
   },
-  mobileColumn: {
-    flexDirection: 'column',
+  leftCol: {
+    flex: 1.1,
     gap: 16,
   },
-  leftColumn: {
+  rightCol: {
     flex: 1,
-  },
-  rightColumn: {
-    flex: 1.2,
+    gap: 16,
   },
   fullWidth: {
     width: '100%',
+    marginBottom: 16,
   },
-  card: {
+
+  // ── Analyzing phase ──
+  analyzingScreen: {
+    flex: 1,
+  },
+  scanPreviewBox: {
+    height: 300,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  scanPreviewImg: {
+    width: '94%',
+    height: '94%',
+    borderRadius: 8,
+  },
+  scanOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanLine: {
+    position: 'absolute',
+    left: '5%',
+    right: '5%',
+    height: 3,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+
+  // Steps style
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  stepItemActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  stepItemCompleted: {
+    borderColor: '#D1FAE5',
+    backgroundColor: '#F0FDF4',
+  },
+  stepStatusIcon: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  pendingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  stepText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  stepTextActive: {
+    color: '#1D4ED8',
+    fontWeight: 'bold',
+  },
+  stepTextCompleted: {
+    color: '#065F46',
+  },
+  stepDesc: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  stepDescActive: {
+    color: '#3B82F6',
+  },
+  stepDescCompleted: {
+    color: '#10B981',
+  },
+
+  // Images
+  imgCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 12,
+  imgCardLabel: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    paddingBottom: 8,
+    backgroundColor: '#F8FAFC',
   },
-  viewerContainer: {
+  imgViewer: {
     height: 300,
-    backgroundColor: '#090D16',
-    borderRadius: 8,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  imageWrapper: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  brainImage: {
-    width: '90%',
-    height: '90%',
-  },
-  boundingBox: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#4ADE80',
-    width: '42%',
-    height: '35%',
-    top: '30%',
-    left: '29%',
-  },
-  boxTag: {
-    position: 'absolute',
-    top: -18,
-    left: -2,
-    backgroundColor: '#15803D',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  boxTagText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  placeholderContainer: {
-    alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 40,
-    color: '#475569',
-  },
-  placeholderText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 8,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  btn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnUpload: {
     backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  btnAi: {
-    backgroundColor: '#2563EB',
+  imgFull: {
+    width: '96%',
+    height: '96%',
   },
-  btnDisabled: {
-    opacity: 0.5,
+
+  // Result card
+  resultCard: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  btnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  resultCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 16,
+  },
+  resultCardIcon: {
+    fontSize: 32,
+  },
+  resultLabel: {
+    fontSize: 24,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
-  aiResultCard: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
-  },
-  aiResultHeader: {
-    fontWeight: 'bold',
-    color: '#1E3A8A',
-    fontSize: 14,
-    marginBottom: 6,
-  },
-  aiResultClass: {
+  resultDesc: {
     fontSize: 13,
-    color: '#1E293B',
-    marginBottom: 2,
-    fontWeight: '600',
-  },
-  aiResultConf: {
-    fontSize: 13,
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  aiDisclaimer: {
-    fontSize: 11,
     color: '#475569',
-    fontStyle: 'italic',
+    marginTop: 4,
+    lineHeight: 18,
   },
-  inputGroup: {
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#475569',
+  confRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
     marginBottom: 4,
   },
-  input: {
-    height: 38,
+  confLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  confValue: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+
+  allProbBox: {
+    marginTop: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.03)',
+    borderRadius: 10,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    backgroundColor: '#FFFFFF',
-    color: '#334155',
   },
-  inputReadonly: {
-    backgroundColor: '#F1F5F9',
-    color: '#64748B',
-  },
-  textArea: {
-    height: 50,
-    textAlignVertical: 'top',
-    paddingVertical: 6,
-  },
-  btnSave: {
-    backgroundColor: '#15803D',
-    height: 44,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  btnSaveText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  allProbTitle: {
+    fontSize: 11,
     fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
+  probRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  probCls: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    width: 120,
+  },
+  probPct: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    width: 45,
+    textAlign: 'right',
+  },
+
+  consensusBox: {
+    marginTop: 16,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4F46E5',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  consensusTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#3730A3',
+    marginBottom: 4,
+  },
+  consensusText: {
+    fontSize: 13,
+    color: '#312E81',
+    lineHeight: 18,
+  },
+
+  disclaimer: {
+    marginTop: 14,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#C2410C',
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+
+  // Action card
+  actionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionTitle: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    marginBottom: 14,
+    textTransform: 'uppercase',
+  },
+
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  confirmBtnIcon: { fontSize: 24 },
+  confirmBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  confirmBtnSub: { color: '#D1FAE5', fontSize: 11, marginTop: 3, lineHeight: 15 },
+
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 20,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  orText: { color: '#94A3B8', fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
+
+  feedbackTitle: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
+  classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  classChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  classChipText: { color: '#64748B', fontSize: 12, fontWeight: '600' },
+
+  wrongBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  wrongBtnIcon: { fontSize: 24 },
+  wrongBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  wrongBtnSub: { color: '#DBEAFE', fontSize: 11, marginTop: 3, lineHeight: 15 },
+
+  btnDisabled: { opacity: 0.5 },
+
+  // Error card style
+  errorCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 40,
+    margin: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  errorIcon: { fontSize: 48, marginBottom: 12 },
+  errorTitle: { color: '#DC2626', fontSize: 20, fontWeight: 'bold' },
+  errorMsg: { color: '#64748B', fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8 },
+  retryBigBtn: {
+    marginTop: 20,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  retryBigBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
 });

@@ -1,4 +1,4 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   container: {
@@ -137,6 +137,29 @@ export default StyleSheet.create({
     marginBottom: 16,
     fontWeight: '500',
     paddingLeft: 4,
+  },
+  staffNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  staffNoticeIcon: { fontSize: 22, marginTop: 1 },
+  staffNoticeTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    marginBottom: 4,
+  },
+  staffNoticeText: {
+    fontSize: 12,
+    color: '#1E3A8A',
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
