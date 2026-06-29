@@ -94,7 +94,7 @@ const FinancialsScreen = ({ navigation }) => {
         const invoices = res.invoices;
         const paid = invoices.filter(inv => inv.status === 'đã thanh toán');
         const totalPaid = paid.reduce((sum, inv) => sum + inv.totalAmount, 0);
-        
+
         setStats({
           monthlyRevenue: totalPaid,
           transactionCount: paid.length,
@@ -181,7 +181,7 @@ const FinancialsScreen = ({ navigation }) => {
     try {
       // Calculate total amount
       const total = dailyRecords.reduce((sum, rec) => sum + (Number(rec.revenue) || 0), 0);
-      
+
       const payload = {
         month: Number(revMonth),
         year: Number(revYear),
@@ -296,20 +296,20 @@ const FinancialsScreen = ({ navigation }) => {
 
         {/* Tab Buttons */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]}
             onPress={() => setActiveTab('overview')}
           >
             <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Tổng quan chung</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]}
             onPress={() => setActiveTab('revenue')}
           >
             <Text style={[styles.tabText, activeTab === 'revenue' && styles.activeTabText]}>Báo cáo doanh thu</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]}
             onPress={() => setActiveTab('drugs')}
           >
             <Text style={[styles.tabText, activeTab === 'drugs' && styles.activeTabText]}>Báo cáo thuốc</Text>
@@ -416,8 +416,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   revenueReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'revenue')}
                     >
@@ -450,20 +450,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revMonth} 
-                    onChangeText={setRevMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revMonth}
+                    onChangeText={setRevMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revYear} 
-                    onChangeText={setRevYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revYear}
+                    onChangeText={setRevYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -471,7 +471,7 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
 
               <Text style={styles.formSectionSubtitle}>Nhập số liệu chi tiết từng ngày (1 - 31)</Text>
-              
+
               <View style={styles.gridTable}>
                 <View style={styles.gridTableHeader}>
                   <Text style={[styles.gridTh, { flex: 1 }]}>Ngày</Text>
@@ -479,13 +479,13 @@ const FinancialsScreen = ({ navigation }) => {
                   <Text style={[styles.gridTh, { flex: 3 }]}>Doanh thu (đ)</Text>
                   <Text style={[styles.gridTh, { flex: 2 }]}>Tỉ lệ (%)</Text>
                 </View>
-                
+
                 {dailyRecords.map((rec, index) => (
                   <View key={rec.day} style={styles.gridTableRow}>
                     <Text style={[styles.gridTd, { flex: 1, fontWeight: 'bold' }]}>Ngày {rec.day}</Text>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={rec.patientCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={rec.patientCount}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].patientCount = val;
@@ -493,9 +493,9 @@ const FinancialsScreen = ({ navigation }) => {
                       }}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={rec.revenue} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={rec.revenue}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].revenue = val;
@@ -536,8 +536,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   drugReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'drug')}
                     >
@@ -570,20 +570,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugMonth} 
-                    onChangeText={setDrugMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugMonth}
+                    onChangeText={setDrugMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugYear} 
-                    onChangeText={setDrugYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugYear}
+                    onChangeText={setDrugYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -608,27 +608,27 @@ const FinancialsScreen = ({ navigation }) => {
 
                 {drugItems.map((item, idx) => (
                   <View key={idx} style={styles.gridTableRow}>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={item.drugName} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={item.drugName}
                       onChangeText={(val) => updateDrugItem(idx, 'drugName', val)}
                       placeholder="Tên thuốc"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.unit} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.unit}
                       onChangeText={(val) => updateDrugItem(idx, 'unit', val)}
                       placeholder="VD: Viên"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.quantity} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.quantity}
                       onChangeText={(val) => updateDrugItem(idx, 'quantity', val)}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.usedCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.usedCount}
                       onChangeText={(val) => updateDrugItem(idx, 'usedCount', val)}
                       keyboardType="numeric"
                     />
@@ -659,7 +659,7 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {detailsType === 'revenue' 
+                  {detailsType === 'revenue'
                     ? `Chi tiết báo cáo doanh thu - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                     : `Chi tiết báo cáo sử dụng thuốc - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                   }
@@ -672,11 +672,11 @@ const FinancialsScreen = ({ navigation }) => {
               <ScrollView style={styles.modalBody}>
                 <Text style={styles.modalMeta}>Người lập: {selectedReport?.author?.profile?.name || selectedReport?.author?.email}</Text>
                 <Text style={styles.modalMeta}>Thời gian lập: {selectedReport ? new Date(selectedReport.createdAt).toLocaleString() : ''}</Text>
-                
+
                 {detailsType === 'revenue' && (
                   <View style={{ marginTop: 16 }}>
                     <Text style={styles.modalSummaryText}>Tổng doanh thu: {selectedReport?.totalAmount?.toLocaleString('vi-VN')}đ</Text>
-                    
+
                     <View style={styles.detailTable}>
                       <View style={styles.detailTableHeader}>
                         <Text style={[styles.detailTh, { flex: 1 }]}>Ngày</Text>

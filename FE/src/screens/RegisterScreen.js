@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Config from '../constants/config';
 import { post } from '../services/api.service';
+import styles from './RegisterScreen.styles';
 
 
 const RegisterScreen = ({ navigation }) => {

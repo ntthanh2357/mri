@@ -14,6 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import styles from './PremiumScreen.styles';
 import { get, post } from '../services/api.service';
 
 const PremiumScreen = ({ navigation }) => {
@@ -93,7 +94,7 @@ const PremiumScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchProfile();
-    
+
     const unsubscribe = navigation.addListener('focus', () => {
       fetchProfile();
     });
@@ -110,7 +111,7 @@ const PremiumScreen = ({ navigation }) => {
           if (data && data.user && !data.user.isPremium) {
             clearInterval(intervalId);
             setUser(data.user);
-            
+
             showConfirm(
               'Gói đã hết hạn',
               'Gói Premium của bạn đã hết hạn. Bạn có muốn gia hạn gói mới không?',
@@ -233,7 +234,7 @@ const PremiumScreen = ({ navigation }) => {
                 <Text style={styles.planNameFree}>Gói Cơ bản</Text>
                 <Text style={styles.planDescFree}>Dành cho theo dõi sức khỏe cơ bản</Text>
                 <Text style={styles.planPriceFree}>Miễn phí</Text>
-                
+
                 <View style={styles.featuresList}>
                   {freeFeatures.map((f, i) => (
                     <View key={i} style={styles.featureItem}>
@@ -247,8 +248,8 @@ const PremiumScreen = ({ navigation }) => {
                   ))}
                 </View>
 
-                <TouchableOpacity 
-                  style={styles.freeBtn} 
+                <TouchableOpacity
+                  style={styles.freeBtn}
                   disabled={true}
                 >
                   <Text style={styles.freeBtnText}>
@@ -278,8 +279,8 @@ const PremiumScreen = ({ navigation }) => {
                   ))}
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.premiumBtn, user?.isPremium && { backgroundColor: '#22C55E' }]} 
+                <TouchableOpacity
+                  style={[styles.premiumBtn, user?.isPremium && { backgroundColor: '#22C55E' }]}
                   onPress={user?.isPremium ? null : handleUpgrade}
                   disabled={user?.isPremium || processing}
                 >
@@ -289,8 +290,8 @@ const PremiumScreen = ({ navigation }) => {
                 </TouchableOpacity>
 
                 {user?.isPremium && user?.autoRenew && (
-                  <TouchableOpacity 
-                    style={[styles.cancelRenewBtn, { marginTop: 12 }]} 
+                  <TouchableOpacity
+                    style={[styles.cancelRenewBtn, { marginTop: 12 }]}
                     onPress={handleCancelRenew}
                     disabled={processing}
                   >
@@ -363,7 +364,7 @@ const PremiumScreen = ({ navigation }) => {
               </View>
               <Text style={styles.popupTitle}>{popup.title}</Text>
               <Text style={styles.popupMessage}>{popup.message}</Text>
-              
+
               {popup.type === 'confirm' ? (
                 <View style={styles.popupButtonsRow}>
                   <TouchableOpacity
@@ -409,6 +410,7 @@ const PremiumScreen = ({ navigation }) => {
   );
 };
 
+;
 const styles = StyleSheet.create({
   container: {
     flex: 1,

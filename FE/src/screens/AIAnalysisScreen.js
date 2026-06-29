@@ -182,7 +182,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
         predicted_class: aiResult.class_name,
         confidence: aiResult.confidence ?? 0,
       });
-    } catch (_) {}
+    } catch (_) { }
     setApprovingAI(false);
 
     const meta = CLASS_META[aiResult.class_name] || CLASS_META.notumor;
@@ -220,7 +220,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
         correct_class: selectedCorrectClass,
         x: 120, y: 120, w: 100, h: 100,
       });
-    } catch (_) {}
+    } catch (_) { }
     setSendingFeedback(false);
 
     const correctMeta = CLASS_META[selectedCorrectClass] || CLASS_META.notumor;

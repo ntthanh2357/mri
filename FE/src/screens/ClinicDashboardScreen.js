@@ -1,4 +1,4 @@
-  import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,6 +15,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
+import styles from './ClinicDashboardScreen.styles';
 
 const ClinicDashboardScreen = ({ navigation }) => {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -212,234 +213,234 @@ const ClinicDashboardScreen = ({ navigation }) => {
           </View>
         )}
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Bảng điều khiển Phòng khám</Text>
-          <Text style={styles.subtitle}>
-            Chào mừng trở lại, Bs. {currentUser?.profile?.name || currentUser?.email || 'Bác sĩ'}. Đây là tổng quan phòng khám.
-          </Text>
-        </View>
-
-        <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-          {/* Left Column (flex: 2) */}
-          <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
-            {/* Action Buttons */}
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
-                <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
-                <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
-              <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
-            </TouchableOpacity>
-
-            {/* Stats Section */}
-            <View style={styles.statsContainer}>
-              {/* Patients Metric */}
-              <View style={styles.statCard}>
-                <View style={styles.statIconContainer}>
-                  <Text style={styles.statEmojiIcon}>👥</Text>
-                </View>
-                <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
-                {loadingStats ? (
-                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
-                ) : (
-                  <Text style={styles.statValue}>{totalPatients}</Text>
-                )}
-                <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>Hoạt động thực tế</Text>
-                </View>
-              </View>
-
-              {/* AI Scans Metric */}
-              <View style={styles.statCard}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#F0FDF4' }]}>
-                  <Text style={styles.statEmojiIcon}>🧠</Text>
-                </View>
-                <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
-                {loadingStats ? (
-                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
-                ) : (
-                  <Text style={styles.statValue}>{totalScans}</Text>
-                )}
-                <View style={styles.badgeGreen}>
-                  <Text style={styles.badgeGreenText}>Từ dữ liệu quét thật</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Daily Operational Stats Card */}
-            <View style={styles.walletCard}>
-              <View style={styles.walletHeader}>
-                <View>
-                  <Text style={styles.walletTitle}>Doanh thu hôm nay (lũy kế)</Text>
-                  <Text style={styles.walletBalance}>
-                    {loadingStats ? '...' : (revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.walletTitle, { color: '#4ADE80' }]}>Doanh thu AI hôm nay</Text>
-                  <Text style={[styles.walletBalance, { fontSize: 18, color: '#4ADE80' }]}>
-                    {loadingStats ? '...' : (revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.walletFooter}>
-                <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#4ADE80' }]} />
-                  <Text style={styles.walletFooterText}>Ca phân tích AI: {aiProcessedCount || 0}</Text>
-                </View>
-                <View style={styles.walletFooterItem}>
-                  <View style={[styles.statusDot, { backgroundColor: '#60A5FA' }]} />
-                  <Text style={styles.walletFooterText}>Tiếp đón hôm nay: {totalPatientsToday || 0}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Recent Activity Section */}
-            <View style={styles.recentSectionHeader}>
-              <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
-                <Text style={styles.viewAllText}>Xem tất cả</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.activityCard}>
-              {loadingStats ? (
-                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color="#15803D" />
-                </View>
-              ) : recentActivity.length === 0 ? (
-                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
-                </View>
-              ) : (
-                recentActivity.map((activity, index) => (
-                  <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
-                    <View style={styles.activityLeft}>
-                      <Text style={styles.patientId}>Ca #{activity.id} - {activity.patientName}</Text>
-                      <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
-                    </View>
-                    <View style={styles.activityRight}>
-                      <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
-                        <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
-                          {activity.status}
-                        </Text>
-                      </View>
-                      <Text style={styles.activityTime}>{activity.time}</Text>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          {/* Title */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Bảng điều khiển Phòng khám</Text>
+            <Text style={styles.subtitle}>
+              Chào mừng trở lại, Bs. {currentUser?.profile?.name || currentUser?.email || 'Bác sĩ'}. Đây là tổng quan phòng khám.
+            </Text>
           </View>
 
-          {/* Right Column (flex: 1) */}
-          <View style={isDesktop ? styles.rightColumn : styles.fullWidth}>
-            {/* Demographic Section */}
-            <Text style={styles.sectionTitle}>Nhân khẩu học bệnh nhân</Text>
-            <View style={styles.demographicCard}>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalVal}>{totalPatients}</Text>
-                <Text style={styles.totalLabel}>TỔNG CỘNG</Text>
+          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
+            {/* Left Column (flex: 2) */}
+            <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
+              {/* Action Buttons */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
+                  <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
+                  <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
+                </TouchableOpacity>
               </View>
+              <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
+                <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
+              </TouchableOpacity>
 
-              <View style={styles.barChartContainer}>
-                {demographics.map((item, idx) => (
-                  <View key={idx} style={styles.demographicRow}>
-                    <View style={styles.demographicLabelRow}>
-                      <View style={styles.demographicNameContainer}>
-                        <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
-                        <Text style={styles.demographicName}>{item.name}</Text>
-                      </View>
-                      <Text style={styles.demographicPct}>{item.value}%</Text>
-                    </View>
-                    <View style={styles.barBackground}>
-                      <View style={[styles.barForeground, { width: `${item.value}%`, backgroundColor: item.color }]} />
-                    </View>
+              {/* Stats Section */}
+              <View style={styles.statsContainer}>
+                {/* Patients Metric */}
+                <View style={styles.statCard}>
+                  <View style={styles.statIconContainer}>
+                    <Text style={styles.statEmojiIcon}>👥</Text>
                   </View>
-                ))}
-              </View>
-            </View>
+                  <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                  ) : (
+                    <Text style={styles.statValue}>{totalPatients}</Text>
+                  )}
+                  <View style={styles.badgeGreen}>
+                    <Text style={styles.badgeGreenText}>Hoạt động thực tế</Text>
+                  </View>
+                </View>
 
-            {/* Bảng giá dịch vụ Bệnh viện */}
-            <Text style={styles.sectionTitle}>Bảng giá dịch vụ</Text>
-            <View style={styles.pricingCard}>
-              <Text style={styles.pricingDesc}>Cấu hình giá dịch vụ áp dụng cho hóa đơn khám chữa bệnh tại cơ sở của bạn.</Text>
-              
-              <View style={styles.pricingInputGroup}>
-                <Text style={styles.pricingInputLabel}>Phí khám lâm sàng (đ)</Text>
-                <TextInput
-                  style={styles.pricingInput}
-                  keyboardType="numeric"
-                  value={examFee}
-                  onChangeText={setExamFee}
-                  placeholder="Ví dụ: 150000"
-                />
-              </View>
-
-              <View style={styles.pricingInputGroup}>
-                <Text style={styles.pricingInputLabel}>Phí chụp phim MRI (đ)</Text>
-                <TextInput
-                  style={styles.pricingInput}
-                  keyboardType="numeric"
-                  value={mriFee}
-                  onChangeText={setMriFee}
-                  placeholder="Ví dụ: 1500000"
-                />
+                {/* AI Scans Metric */}
+                <View style={styles.statCard}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#F0FDF4' }]}>
+                    <Text style={styles.statEmojiIcon}>🧠</Text>
+                  </View>
+                  <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                  ) : (
+                    <Text style={styles.statValue}>{totalScans}</Text>
+                  )}
+                  <View style={styles.badgeGreen}>
+                    <Text style={styles.badgeGreenText}>Từ dữ liệu quét thật</Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.pricingInputGroup}>
-                <Text style={styles.pricingInputLabel}>Phí phân tích tự động AI (đ)</Text>
-                <TextInput
-                  style={styles.pricingInput}
-                  keyboardType="numeric"
-                  value={aiFee}
-                  onChangeText={setAiFee}
-                  placeholder="Ví dụ: 200000"
-                />
+              {/* Daily Operational Stats Card */}
+              <View style={styles.walletCard}>
+                <View style={styles.walletHeader}>
+                  <View>
+                    <Text style={styles.walletTitle}>Doanh thu hôm nay (lũy kế)</Text>
+                    <Text style={styles.walletBalance}>
+                      {loadingStats ? '...' : (revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.walletTitle, { color: '#4ADE80' }]}>Doanh thu AI hôm nay</Text>
+                    <Text style={[styles.walletBalance, { fontSize: 18, color: '#4ADE80' }]}>
+                      {loadingStats ? '...' : (revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.walletFooter}>
+                  <View style={styles.walletFooterItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#4ADE80' }]} />
+                    <Text style={styles.walletFooterText}>Ca phân tích AI: {aiProcessedCount || 0}</Text>
+                  </View>
+                  <View style={styles.walletFooterItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#60A5FA' }]} />
+                    <Text style={styles.walletFooterText}>Tiếp đón hôm nay: {totalPatientsToday || 0}</Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.pricingInputGroup}>
-                <Text style={styles.pricingInputLabel}>Số bệnh nhân tối đa trong ngày</Text>
-                <TextInput
-                  style={styles.pricingInput}
-                  keyboardType="numeric"
-                  value={maxPatients}
-                  onChangeText={setMaxPatients}
-                  placeholder="Ví dụ: 50"
-                />
+              {/* Recent Activity Section */}
+              <View style={styles.recentSectionHeader}>
+                <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
+                  <Text style={styles.viewAllText}>Xem tất cả</Text>
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity 
-                style={styles.pricingSubmitBtn} 
-                onPress={handleUpdatePricing}
-                disabled={updatingPricing}
-              >
-                {updatingPricing ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+              <View style={styles.activityCard}>
+                {loadingStats ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#15803D" />
+                  </View>
+                ) : recentActivity.length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
+                  </View>
                 ) : (
-                  <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật cấu hình</Text>
+                  recentActivity.map((activity, index) => (
+                    <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
+                      <View style={styles.activityLeft}>
+                        <Text style={styles.patientId}>Ca #{activity.id} - {activity.patientName}</Text>
+                        <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
+                      </View>
+                      <View style={styles.activityRight}>
+                        <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
+                          <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
+                            {activity.status}
+                          </Text>
+                        </View>
+                        <Text style={styles.activityTime}>{activity.time}</Text>
+                      </View>
+                    </View>
+                  ))
                 )}
-              </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Info Banner */}
-            <View style={styles.bannerCard}>
-              <Text style={styles.bannerCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
-              <Text style={styles.bannerTitle}>Sách trắng kết nối thần kinh 2024</Text>
-              <TouchableOpacity onPress={() => Alert.alert('Tài liệu y khoa', 'Tính năng đọc sách trắng sẽ khả dụng ở phiên bản tiếp theo.')}>
-                <Text style={styles.bannerLink}>Đọc thêm →</Text>
-              </TouchableOpacity>
+            {/* Right Column (flex: 1) */}
+            <View style={isDesktop ? styles.rightColumn : styles.fullWidth}>
+              {/* Demographic Section */}
+              <Text style={styles.sectionTitle}>Nhân khẩu học bệnh nhân</Text>
+              <View style={styles.demographicCard}>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalVal}>{totalPatients}</Text>
+                  <Text style={styles.totalLabel}>TỔNG CỘNG</Text>
+                </View>
+
+                <View style={styles.barChartContainer}>
+                  {demographics.map((item, idx) => (
+                    <View key={idx} style={styles.demographicRow}>
+                      <View style={styles.demographicLabelRow}>
+                        <View style={styles.demographicNameContainer}>
+                          <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
+                          <Text style={styles.demographicName}>{item.name}</Text>
+                        </View>
+                        <Text style={styles.demographicPct}>{item.value}%</Text>
+                      </View>
+                      <View style={styles.barBackground}>
+                        <View style={[styles.barForeground, { width: `${item.value}%`, backgroundColor: item.color }]} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Bảng giá dịch vụ Bệnh viện */}
+              <Text style={styles.sectionTitle}>Bảng giá dịch vụ</Text>
+              <View style={styles.pricingCard}>
+                <Text style={styles.pricingDesc}>Cấu hình giá dịch vụ áp dụng cho hóa đơn khám chữa bệnh tại cơ sở của bạn.</Text>
+
+                <View style={styles.pricingInputGroup}>
+                  <Text style={styles.pricingInputLabel}>Phí khám lâm sàng (đ)</Text>
+                  <TextInput
+                    style={styles.pricingInput}
+                    keyboardType="numeric"
+                    value={examFee}
+                    onChangeText={setExamFee}
+                    placeholder="Ví dụ: 150000"
+                  />
+                </View>
+
+                <View style={styles.pricingInputGroup}>
+                  <Text style={styles.pricingInputLabel}>Phí chụp phim MRI (đ)</Text>
+                  <TextInput
+                    style={styles.pricingInput}
+                    keyboardType="numeric"
+                    value={mriFee}
+                    onChangeText={setMriFee}
+                    placeholder="Ví dụ: 1500000"
+                  />
+                </View>
+
+                <View style={styles.pricingInputGroup}>
+                  <Text style={styles.pricingInputLabel}>Phí phân tích tự động AI (đ)</Text>
+                  <TextInput
+                    style={styles.pricingInput}
+                    keyboardType="numeric"
+                    value={aiFee}
+                    onChangeText={setAiFee}
+                    placeholder="Ví dụ: 200000"
+                  />
+                </View>
+
+                <View style={styles.pricingInputGroup}>
+                  <Text style={styles.pricingInputLabel}>Số bệnh nhân tối đa trong ngày</Text>
+                  <TextInput
+                    style={styles.pricingInput}
+                    keyboardType="numeric"
+                    value={maxPatients}
+                    onChangeText={setMaxPatients}
+                    placeholder="Ví dụ: 50"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.pricingSubmitBtn}
+                  onPress={handleUpdatePricing}
+                  disabled={updatingPricing}
+                >
+                  {updatingPricing ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật cấu hình</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Info Banner */}
+              <View style={styles.bannerCard}>
+                <Text style={styles.bannerCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
+                <Text style={styles.bannerTitle}>Sách trắng kết nối thần kinh 2024</Text>
+                <TouchableOpacity onPress={() => Alert.alert('Tài liệu y khoa', 'Tính năng đọc sách trắng sẽ khả dụng ở phiên bản tiếp theo.')}>
+                  <Text style={styles.bannerLink}>Đọc thêm →</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
         <Modal
           visible={showAddUserModal}
           transparent={true}
@@ -448,7 +449,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <View style={{ backgroundColor: '#FFFFFF', width: isDesktop ? 680 : '100%', maxHeight: '90%', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, overflow: 'hidden' }}>
-              
+
               {/* Modal Header */}
               <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View>
@@ -482,13 +483,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
               </View>
 
               <ScrollView style={{ padding: 20 }}>
-                
+
                 {/* Form Section */}
                 <View style={{ marginBottom: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                   <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 14 }}>
                     ➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
                   </Text>
-                  
+
                   <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 14 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
@@ -499,7 +500,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                         onChangeText={setNewUserName}
                       />
                     </View>
-                    
+
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
                       <TextInput
@@ -591,7 +592,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                 <View style={{ height: 40 }} />
               </ScrollView>
-              
+
               {/* Modal Footer */}
               <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#F8FAFC', flexDirection: 'row', justifyContent: 'flex-end' }}>
                 <TouchableOpacity
