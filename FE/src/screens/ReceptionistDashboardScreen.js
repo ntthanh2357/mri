@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   FlatList,
+  Linking,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -130,6 +131,35 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
       fetchInvoices();
     } catch (err) {
       Alert.alert("Lỗi", err.message || "Xác nhận thanh toán thất bại");
+    }
+  };
+
+  const handlePayOSPayment = async (visitId) => {
+    setLoading(true);
+    try {
+      const res = await post(`/api/v1/invoices/visit/${visitId}/payos`);
+      if (res && res.checkoutUrl) {
+        Alert.alert(
+          "Thanh toán VietQR",
+          "Hệ thống sẽ mở trang thanh toán PayOS. Sau khi quét QR và chuyển khoản thành công, hóa đơn sẽ tự động cập nhật.",
+          [
+            { text: "Hủy", style: "cancel" },
+            { 
+              text: "Tiếp tục", 
+              onPress: () => {
+                Linking.openURL(res.checkoutUrl);
+              } 
+            }
+          ]
+        );
+      } else {
+        Alert.alert("Lỗi", "Không nhận được link thanh toán từ cổng PayOS.");
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Lỗi", err.message || "Không thể khởi tạo giao dịch PayOS.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -269,9 +299,11 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                     <View style={styles.invoiceFooter}>
                       <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
                       {inv.status === 'chờ thanh toán' && (
-                        <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                          <Text style={styles.payBtnText}>Xác nhận thanh toán</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
+                            <Text style={styles.payBtnText}>Tiền Mặt</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                   </View>

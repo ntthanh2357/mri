@@ -44,6 +44,18 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
+    premiumUntil: {
+      type: Date,
+      default: null,
+    },
+    autoRenew: {
+      type: Boolean,
+      default: true,
+    },
     otpCode: {
       type: String,
       default: null,

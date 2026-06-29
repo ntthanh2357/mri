@@ -14,7 +14,8 @@ const invoiceSchema = new Schema(
     items: [invoiceItemSchema],
     totalAmount: { type: Number, required: true },
     status: { type: String, enum: ['chờ thanh toán', 'đã thanh toán'], default: 'chờ thanh toán' },
-    paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', ''], default: '' },
+    paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', 'vietqr', ''], default: '' },
+    orderCode: { type: Number, unique: true, sparse: true },
     paidAt: { type: Date, default: null }
   },
   { timestamps: true }

@@ -202,12 +202,31 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-passwordHash");
+    let user = await User.findById(req.user.id);
     if (!user) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
     }
-    res.status(200).json({ user });
+
+    // Check Premium expiration
+    if (user.isPremium && user.premiumUntil && new Date() > user.premiumUntil) {
+      if (user.autoRenew) {
+        // Auto-renew: Charge 2000 VNĐ and extend by 1 minute
+        user.premiumUntil = new Date(Date.now() + 60 * 1000);
+        await user.save();
+        console.log(`[Auto-Renew] Automatically renewed Premium for ${user.email}. Charged 2000 VNĐ. Next expiration: ${user.premiumUntil.toISOString()}`);
+      } else {
+        // Expire: Set isPremium to false
+        user.isPremium = false;
+        user.premiumUntil = null;
+        await user.save();
+        console.log(`[Subscription Expired] Premium expired for ${user.email} (autoRenew was false).`);
+      }
+    }
+
+    // Return user details without passwordHash
+    const userResponse = await User.findById(req.user.id).select("-passwordHash");
+    res.status(200).json({ user: userResponse });
   } catch (error) {
     console.error("Lỗi lấy thông tin cá nhân:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi khi lấy thông tin người dùng.", error: error.message });
@@ -778,5 +797,166 @@ export const verifyOtp = async (req, res) => {
   } catch (error) {
     console.error("Lỗi xác thực OTP:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
+  }
+};
+
+// @desc    Request OTP for phone login
+// @route   POST /auth/phone-login-request
+// @access  Public
+export const phoneLoginRequest = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+      return;
+    }
+
+    // Hash phone number to match database records
+    const hashedPhone = hashPhone(phone);
+
+    // Find user by phone
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký trong hệ thống." });
+      return;
+    }
+
+    // Check if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // Expires in 5 minutes
+
+    user.otpCode = otpCode;
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    // Print OTP to server console (since we don't have an SMS gateway configured)
+    console.log(`\n--- [OTP Phone Login] ---`);
+    console.log(`Phone: ${phone}`);
+    console.log(`Code: ${otpCode}`);
+    console.log(`-------------------------\n`);
+
+    res.status(200).json({
+      message: "Mã OTP đăng nhập đã được gửi (Vui lòng kiểm tra console/log của Server).",
+      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi yêu cầu OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP.", error: error.message });
+  }
+};
+
+// @desc    Verify OTP and login via phone
+// @route   POST /auth/phone-login-verify
+// @access  Public
+export const phoneLoginVerify = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại và mã OTP." });
+      return;
+    }
+
+    // Hash phone number to match database records
+    const hashedPhone = hashPhone(phone);
+
+    // Find user by phone
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký trong hệ thống." });
+      return;
+    }
+
+    // Check if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
+    }
+
+    // Verify OTP code and expiration
+    if (!user.otpCode || user.otpCode !== otp) {
+      res.status(400).json({ message: "Mã OTP không chính xác." });
+      return;
+    }
+
+    if (!user.otpExpires || user.otpExpires < new Date()) {
+      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      return;
+    }
+
+    // Clear OTP fields
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
+    // Staff roles created by hospital admin must activate on first login
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "hospital_admin"];
+    const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
+
+    res.status(200).json({
+      message: "Đăng nhập thành công!",
+      accessToken,
+      refreshToken,
+      requiresActivation,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        hospitalId: user.hospitalId,
+        isVerified: user.isVerified,
+        profile: user.profile,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi xác thực OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác thực OTP.", error: error.message });
+  }
+};
+
+// @desc    Downgrade to Basic package
+// @route   POST /auth/premium/downgrade
+// @access  Private
+export const downgradeToBasic = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+    user.isPremium = false;
+    user.premiumUntil = null;
+    await user.save();
+    res.status(200).json({ message: "Đã chuyển về Gói Cơ bản thành công.", user });
+  } catch (error) {
+    console.error("Lỗi hạ cấp gói:", error);
+    res.status(500).json({ message: "Lỗi máy chủ khi hạ cấp gói.", error: error.message });
+  }
+};
+
+// @desc    Cancel Premium auto-renewal
+// @route   POST /auth/premium/cancel-renew
+// @access  Private
+export const cancelPremiumRenew = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+    user.autoRenew = false;
+    await user.save();
+    res.status(200).json({ message: "Đã hủy gia hạn tự động thành công. Bạn vẫn được sử dụng Premium đến hết hạn.", user });
+  } catch (error) {
+    console.error("Lỗi hủy gia hạn gói:", error);
+    res.status(500).json({ message: "Lỗi máy chủ khi hủy gia hạn gói.", error: error.message });
   }
 };

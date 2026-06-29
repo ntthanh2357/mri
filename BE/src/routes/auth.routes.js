@@ -10,6 +10,10 @@ import {
   changePassword,
   forgotPassword,
   verifyOtp,
+  phoneLoginRequest,
+  phoneLoginVerify,
+  downgradeToBasic,
+  cancelPremiumRenew,
 } from "../controllers/auth.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -27,6 +31,10 @@ router.post("/logout/all", protect, logoutAll);
 router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
+router.post("/phone-login-request", phoneLoginRequest);
+router.post("/phone-login-verify", phoneLoginVerify);
+router.post("/premium/downgrade", protect, downgradeToBasic);
+router.post("/premium/cancel-renew", protect, cancelPremiumRenew);
 
 export default router;
 
