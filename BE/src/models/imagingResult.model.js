@@ -1,11 +1,12 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const imagingResultSchema = new Schema(
   {
     hospitalId: {
       type: Schema.Types.ObjectId,
       ref: 'Hospital',
-      default: null,
+      required: true,
       index: true,
     },
     medicalId: {
@@ -107,5 +108,7 @@ const imagingResultSchema = new Schema(
     timestamps: true,
   }
 );
+
+imagingResultSchema.plugin(tenancyPlugin);
 
 export const ImagingResult = model("ImagingResult", imagingResultSchema);

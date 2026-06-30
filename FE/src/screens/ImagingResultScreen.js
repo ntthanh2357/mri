@@ -55,6 +55,9 @@ const ImagingResultScreen = ({ route, navigation }) => {
   // Extra images (e.g. heatmap from AI analysis)
   const [extraImages, setExtraImages] = useState([]);
 
+  // [BUG-01/02 FIX] Ref to track auto-navigation to prevent loops and double navigates
+  const hasAutoNavigated = React.useRef(false);
+
   // ── Receive prefill from AIAnalysisScreen (when doctor confirms AI result) ──
   useEffect(() => {
     const params = route.params || {};
@@ -82,12 +85,14 @@ const ImagingResultScreen = ({ route, navigation }) => {
   }, []);
 
   useEffect(() => {
-    if (result && localUser && localUser.role === 'doctor' && route.params?.visitStatus === 'chờ kết quả AI') {
+    // [BUG-01/02 FIX] Prevent double navigate by checking hasAutoNavigated ref
+    if (result && localUser && localUser.role === 'doctor' && route.params?.visitStatus === 'chờ kết quả AI' && !hasAutoNavigated.current) {
       if (result.images && result.images.length > 0) {
+        hasAutoNavigated.current = true;
         const firstImage = result.images[0];
         const imageUrl = firstImage.startsWith('http') ? firstImage : `${Config.API_URL}${firstImage}`;
-        // Clear the param to avoid loop
-        navigation.setParams({ visitStatus: undefined });
+        // DO NOT clear param to prevent breaking goBack consistency
+        // navigation.setParams({ visitStatus: undefined });
         navigation.navigate('AIAnalysis', {
           imageUrl,
           visitId,

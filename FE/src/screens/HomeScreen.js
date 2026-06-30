@@ -53,6 +53,8 @@ const HomeScreen = ({ route, navigation }) => {
   const [totalPatients, setTotalPatients] = useState(0);
   const [pendingRecords, setPendingRecords] = useState([]);
   const [emrRecords, setEmrRecords] = useState([]);
+  const [queueVisits, setQueueVisits] = useState([]);
+  const [todaySchedule, setTodaySchedule] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
   useEffect(() => {
@@ -104,9 +106,11 @@ const HomeScreen = ({ route, navigation }) => {
     const fetchStats = async () => {
       setLoadingStats(true);
       try {
-        const [patientsRes, emrRes] = await Promise.all([
+        const [patientsRes, emrRes, queueRes, schedRes] = await Promise.all([
           get('/api/patients'),
-          get('/emr/records')
+          get('/emr/records'),
+          get('/api/v1/visits/my-queue').catch(() => null),
+          get('/api/v1/schedules/my-schedule').catch(() => null)
         ]);
 
         if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
@@ -117,6 +121,16 @@ const HomeScreen = ({ route, navigation }) => {
           setEmrRecords(emrRes.data);
           const pending = emrRes.data.filter(r => r.signStatus === 'Chưa duyệt');
           setPendingRecords(pending);
+        }
+        
+        if (queueRes && queueRes.visits) {
+          setQueueVisits(queueRes.visits);
+        }
+        
+        if (schedRes && schedRes.schedules) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const todayS = schedRes.schedules.find(s => s.date.startsWith(todayStr));
+          setTodaySchedule(todayS);
         }
       } catch (err) {
         console.error('Lỗi khi tải thống kê HomeScreen:', err);
@@ -162,13 +176,12 @@ const HomeScreen = ({ route, navigation }) => {
   }
 
   const isPatient = user.role === 'patient';
-  const isNurseOrRec = user.role === 'nurse' || user.role === 'receptionist';
-  const isTechnician = user.role === 'technician';
-  const isDoctorOrTech = user.role === 'doctor' || user.role === 'technician';
+  const isNurse = user.role === 'nurse';
+  const isDoctor = user.role === 'doctor';
   const roleLabel = 
     user.role === 'admin' ? 'Quản trị viên' : 
-    (user.role === 'doctor' || user.role === 'technician') ? 'Bác sĩ & Kỹ thuật viên' : 
-    (user.role === 'nurse' || user.role === 'receptionist') ? 'Điều dưỡng & Lễ tân' : 'Bệnh nhân';
+    user.role === 'doctor' ? 'Bác sĩ' : 
+    user.role === 'nurse' ? 'Điều dưỡng' : 'Bệnh nhân';
 
   return (
     <ResponsiveLayout
@@ -478,15 +491,13 @@ const HomeScreen = ({ route, navigation }) => {
               {isDesktop && (
                 <View style={styles.desktopGreeting}>
                   <Text style={styles.greetingTitle}>
-                    {isNurseOrRec ? 'Bảng điều khiển Điều dưỡng & Lễ tân'
-                      : 'Bảng điều khiển Bác sĩ & Kỹ thuật viên'}
+                    {isNurse ? 'Bảng điều khiển Điều dưỡng'
+                      : 'Bảng điều khiển Bác sĩ'}
                   </Text>
                   <Text style={styles.greetingSubtitle}>
-                    {isNurseOrRec
+                    {isNurse
                       ? `Chào mừng trở lại, ${user.profile?.name || 'Nhân viên'}. Quản lý hàng đợi, tiếp đón bệnh nhân và cập nhật sinh hiệu.`
-                      : isTechnician
-                        ? `Chào mừng trở lại, KTV. ${user.profile?.name || user?.email || 'Kỹ thuật viên'}. Thực hiện chỉ định PACS/MRI và nhập kết quả LIS.`
-                        : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
+                      : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
                     }
                   </Text>
                 </View>
@@ -494,7 +505,7 @@ const HomeScreen = ({ route, navigation }) => {
 
               {/* Stats Row */}
               <View style={styles.doctorStatsRow}>
-                {isNurseOrRec ? (
+                {isNurse ? (
                   <>
                     <View style={styles.doctorStatCard}>
                       <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>Ca trực</Text>
@@ -538,7 +549,7 @@ const HomeScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.doctorStatCard}
-                      onPress={() => navigation.navigate('TechnicianQueue')}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
                     >
                       <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>MRI/PACS</Text>
                       <Text style={styles.doctorStatLabel}>Hàng đợi chụp</Text>
@@ -562,10 +573,30 @@ const HomeScreen = ({ route, navigation }) => {
                 )}
               </View>
 
+              {/* Today's Schedule Section (FIX-9) */}
+              {(user.role === 'doctor' || user.role === 'nurse') && (
+                <>
+                  <Text style={styles.sectionTitle}>Lịch Làm Việc Hôm Nay</Text>
+                  <View style={[styles.queueCard, { marginBottom: 20 }]}>
+                    {todaySchedule ? (
+                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                         <Text style={{ fontSize: 24, marginRight: 12 }}>⏰</Text>
+                         <View>
+                           <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {todaySchedule.shiftType}</Text>
+                           <Text style={{ fontSize: 13, color: '#64748B' }}>Khoa: {todaySchedule.department}</Text>
+                         </View>
+                       </View>
+                    ) : (
+                       <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 10 }}>Hôm nay bạn không có lịch trực.</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
               {/* Queue Section - differs by role */}
               <Text style={styles.sectionTitle}>
-                {isNurseOrRec
-                  ? (user.role === 'nurse' ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu' : 'Hàng chờ tiếp đón ban đầu')
+                {isNurse
+                  ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu'
                   : 'Danh sách ca bệnh & Chỉ định chờ xử lý'
                 }
               </Text>
@@ -574,30 +605,7 @@ const HomeScreen = ({ route, navigation }) => {
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                     <ActivityIndicator size="small" color="#15803D" />
                   </View>
-                ) : isNurseOrRec ? (
-                  user.role === 'receptionist' ? (
-                    /* Receptionist: static reception queue */
-                    <>
-                      <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('ReceptionistDashboard')}>
-                        <View style={styles.queueLeftInfo}>
-                          <Text style={styles.queuePatientName}>Đăng ký mới: Lê Trần Gia Huy</Text>
-                          <Text style={styles.queueDetailsText}>Yêu cầu: Khám ngoại thần kinh · Chờ bác sĩ</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                          <Text style={[styles.statusBadgeText, { color: '#EF4444', fontSize: 10, fontWeight: 'bold' }]}>Chờ phân vai</Text>
-                        </View>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('ReceptionistDashboard')}>
-                        <View style={styles.queueLeftInfo}>
-                          <Text style={styles.queuePatientName}>Bệnh nhân Tuấn Thành</Text>
-                          <Text style={styles.queueDetailsText}>Tái khám u màng não · Đã phân công Bs. Gia Huy</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                          <Text style={[styles.statusBadgeText, { color: '#15803D', fontSize: 10, fontWeight: 'bold' }]}>Đang chờ khám</Text>
-                        </View>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
+                ) : isNurse ? (
                     /* Nurse: inpatient list */
                     emrRecords.filter(r => r.admissionType === 'Nội trú').length === 0 ? (
                       <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -622,29 +630,28 @@ const HomeScreen = ({ route, navigation }) => {
                         );
                       })
                     )
-                  )
                 ) : (
                   <>
-                    {/* Doctor pending records */}
-                    {pendingRecords.length === 0 ? (
+                    {/* Doctor pending records from Queue */}
+                    {queueVisits.length === 0 ? (
                       <View style={{ paddingVertical: 10, alignItems: 'center' }}>
                         <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có ca bệnh nào chờ duyệt.</Text>
                       </View>
                     ) : (
-                      pendingRecords.map((record, index) => {
+                      queueVisits.map((v, index) => {
                         return (
                           <TouchableOpacity
-                            key={record._id}
+                            key={v._id}
                             style={styles.queueItemRow}
                             onPress={() => navigation.navigate('DoctorWorkQueue')}
                           >
                             <View style={styles.queueLeftInfo}>
-                              <Text style={styles.queuePatientName}>🩺 {record.patientName}</Text>
-                              <Text style={styles.queueDetailsText}>{record.diagnosis} ({record.admissionType})</Text>
+                              <Text style={styles.queuePatientName}>🩺 {v.patientId?.profile?.name || v.patientId?.email}</Text>
+                              <Text style={styles.queueDetailsText}>{v.reason}</Text>
                             </View>
-                            <View style={[styles.statusBadge, record.admissionType === 'Cấp cứu' ? styles.statusDanger : styles.statusWarn]}>
+                            <View style={[styles.statusBadge, v.status === 'đang chờ' ? styles.statusDanger : styles.statusWarn]}>
                               <Text style={styles.statusBadgeText}>
-                                {record.admissionType === 'Cấp cứu' ? 'Khẩn cấp' : 'Chờ duyệt'}
+                                {v.status === 'đang chờ' ? 'Chưa bắt đầu' : v.status}
                               </Text>
                             </View>
                           </TouchableOpacity>
@@ -652,8 +659,8 @@ const HomeScreen = ({ route, navigation }) => {
                       })
                     )}
 
-                    {/* Technician PACS queue */}
-                    <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('TechnicianQueue')}>
+                    {/* Technician PACS queue -> Now merged to Doctor */}
+                    <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('DoctorWorkQueue')}>
                       <View style={styles.queueLeftInfo}>
                         <Text style={styles.queuePatientName}>🔬 Bệnh nhân Tuấn Thành (26025699)</Text>
                         <Text style={styles.queueDetailsText}>Yêu cầu: Chụp MRI sọ não có cản từ · Đã hoàn tất chụp</Text>
@@ -662,7 +669,7 @@ const HomeScreen = ({ route, navigation }) => {
                         <Text style={[styles.statusBadgeText, { color: '#15803D', fontSize: 10, fontWeight: 'bold' }]}>Chờ nạp PACS</Text>
                       </View>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('TechnicianQueue')}>
+                    <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('DoctorWorkQueue')}>
                       <View style={styles.queueLeftInfo}>
                         <Text style={styles.queuePatientName}>🔬 Nguyễn Văn A</Text>
                         <Text style={styles.queueDetailsText}>Chỉ định: Huyết học 18 chỉ số · Barcode: LIS-HH-8422</Text>
@@ -680,14 +687,14 @@ const HomeScreen = ({ route, navigation }) => {
             <View style={isDesktop ? styles.doctorSideColumn : styles.fullWidth}>
               {/* Quick Actions Grid - differs by role */}
               <Text style={styles.sectionTitle}>
-                {isNurseOrRec ? 'Công cụ điều dưỡng & tiếp đón' : 'Công cụ nghiệp vụ & Quản lý'}
+                {isNurse ? 'Công cụ điều dưỡng & tiếp đón' : 'Công cụ nghiệp vụ & Quản lý'}
               </Text>
               <View style={styles.doctorGrid}>
-                {isNurseOrRec ? (
+                {isNurse ? (
                   <>
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('ReceptionistDashboard')}
+                      onPress={() => navigation.navigate('NurseReception')}
                     >
                       <Text style={styles.doctorGridIcon}>📋</Text>
                       <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân</Text>
@@ -743,7 +750,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('TechnicianQueue')}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
                     >
                       <Text style={styles.doctorGridIcon}>🔬</Text>
                       <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>

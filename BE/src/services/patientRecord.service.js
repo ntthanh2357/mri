@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
 import { uploadToGCS, deleteFromGCS } from "../config/gcs.js";
-
+import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
 
 export const getOrCreateProfile = async (userId) => {
@@ -69,7 +69,7 @@ export const listVisits = async (userId) => {
     }
 
     // It's a system visit (created by receptionist/hospital)
-    const docList = [];
+    const docList = [...(visit.documents || [])];
 
     // Check Vitals
     if (visit.vitals && (visit.vitals.pulse || visit.vitals.bloodPressure || visit.vitals.temperature || visit.vitals.spo2)) {
@@ -102,10 +102,9 @@ export const listVisits = async (userId) => {
             label: "Phiếu thu viện phí",
             storageType: "manual",
             manualData: {
-              invoiceNumber: invoice.invoiceNumber || `HD-${invoice._id.toString().substring(18)}`,
-              totalAmount: invoice.totalAmount || invoice.amount,
-              status: invoice.status === "paid" ? "Đã thanh toán" : "Chưa thanh toán",
-              paymentMethod: invoice.paymentMethod || "Tiền mặt"
+              soPhieu: invoice.invoiceNumber || `HD-${invoice._id.toString().substring(18)}`,
+              tongChiPhi: String(invoice.totalAmount || invoice.amount || 0),
+              danhSachDichVu: invoice.status === "paid" ? "Đã thanh toán qua " + (invoice.paymentMethod || "Tiền mặt") : "Chưa thanh toán"
             },
             uploadedAt: invoice.paidAt || invoice.createdAt
           });
@@ -124,9 +123,9 @@ export const listVisits = async (userId) => {
         label: "Phiếu chỉ định dịch vụ",
         storageType: "manual",
         manualData: {
-          serviceName: `Chụp MRI ${visit.mriOrder.region}`,
-          instructions: visit.mriOrder.instructions || "Không có",
-          requestAi: visit.mriOrder.requestAiAnalysis ? "Có" : "Không"
+          danhSachChiDinh: `Chụp MRI ${visit.mriOrder.region}`,
+          chanDoan: visit.mriOrder.instructions || "Không có",
+          khoa: visit.mriOrder.requestAiAnalysis ? "Có yêu cầu AI" : ""
         },
         uploadedAt: visit.mriOrder.orderedAt || visit.createdAt
       });
@@ -142,12 +141,11 @@ export const listVisits = async (userId) => {
               label: `Kết quả MRI ${imagingResult.imagingType || "Não"}`,
               storageType: "manual",
               manualData: {
-                procedure: imagingResult.procedure,
-                technique: imagingResult.technique,
-                findings: imagingResult.findings,
-                conclusion: imagingResult.conclusion,
-                radiologist: imagingResult.radiologist,
-                images: imagingResult.images
+                chiDinh: imagingResult.procedure || '',
+                kyThuat: imagingResult.technique || '',
+                moTaHinhAnh: imagingResult.findings || '',
+                ketLuan: imagingResult.conclusion || '',
+                bacSiChuyenKhoa: imagingResult.radiologist || ''
               },
               uploadedAt: imagingResult.reportDate
             });
@@ -175,10 +173,10 @@ export const listVisits = async (userId) => {
         label: "Toa thuốc",
         storageType: "manual",
         manualData: {
-          diagnosis: p.diagnosis,
-          doctorName: p.doctor_name,
-          drugs: p.drugs.map(d => `${d.name} (${d.quantity} ${d.unit}) - ${d.usage}`).join('\n'),
-          note: p.note
+          chanDoan: p.diagnosis,
+          bacSiDieuTri: p.doctor_name,
+          danhSachThuoc: p.drugs.map(d => `${d.name} (${d.quantity} ${d.unit}) - ${d.usage}`).join('\n'),
+          loiDan: p.note
         },
         uploadedAt: p.recorded_at || p.createdAt
       });
@@ -194,13 +192,12 @@ export const listVisits = async (userId) => {
         label: "Giấy ra viện",
         storageType: "manual",
         manualData: {
-          dischargeNo: d.dischargeNo,
-          hospitalNo: d.hospitalNo,
-          dateIn: d.dateIn ? new Date(d.dateIn).toLocaleDateString('vi-VN') : "",
-          dateOut: d.dateOut ? new Date(d.dateOut).toLocaleDateString('vi-VN') : "",
-          diagnosis: d.diagnosis,
-          treatment: d.treatment,
-          note: d.note
+          soHoSo: d.hospitalNo || d.dischargeNo,
+          vaoVienLuc: d.dateIn ? new Date(d.dateIn).toLocaleDateString('vi-VN') : "",
+          raVienLuc: d.dateOut ? new Date(d.dateOut).toLocaleDateString('vi-VN') : "",
+          chanDoan: d.diagnosis,
+          phuongPhapDieuTri: d.treatment,
+          ghiChu: d.note
         },
         uploadedAt: d.recorded_at || d.createdAt
       });
@@ -216,11 +213,10 @@ export const listVisits = async (userId) => {
         label: "Phiếu chuyển tuyến TT01",
         storageType: "manual",
         manualData: {
-          transferNo: t.transferNo,
-          transferTo: t.transferTo,
-          diagnosis: t.diagnosis,
-          treatment: t.treatment,
-          patientStatus: t.patientStatus
+          noiChuyenDen: t.transferTo,
+          chanDoan: t.diagnosis,
+          phuongPhapDaThucHien: t.treatment,
+          dauHieuLamSang: t.patientStatus
         },
         uploadedAt: t.recorded_at || t.createdAt
       });
@@ -236,10 +232,7 @@ export const listVisits = async (userId) => {
         label: l.category === "HUYET_HOC" ? "Kết quả XN huyết học" : "Kết quả hóa sinh máu",
         storageType: "manual",
         manualData: {
-          barcode: l.barcode,
-          category: l.category,
-          status: l.status === "COMPLETED" ? "Đã có kết quả" : "Chờ kết quả",
-          results: l.results.map(r => `${r.biomarker_name} (${r.biomarker_code}): ${r.value_result} ${r.unit} [KTC: ${r.reference_range_display}] ${r.is_abnormal ? '(Bất thường)' : ''}`).join('\n')
+          chiSoKhac: l.results.map(r => `${r.biomarker_name} (${r.biomarker_code}): ${r.value_result} ${r.unit} [KTC: ${r.reference_range_display}] ${r.is_abnormal ? '(Bất thường)' : ''}`).join('\n')
         },
         uploadedAt: l.resulted_at || l.ordered_at
       });
@@ -255,11 +248,8 @@ export const listVisits = async (userId) => {
         label: "Tóm tắt hồ sơ bệnh án",
         storageType: "manual",
         manualData: {
-          diagnosis: emr.diagnosis,
-          treatmentPlan: emr.treatmentPlan,
-          status: emr.status,
-          doctorInCharge: emr.doctorInCharge,
-          signStatus: emr.signStatus
+          soHoSo: String(emr._id),
+          mucDich: `Chẩn đoán: ${emr.diagnosis || ''}\nHướng điều trị: ${emr.treatmentPlan || ''}\nBác sĩ: ${emr.doctorInCharge || ''}`
         },
         uploadedAt: emr.createdAt
       });
@@ -275,11 +265,13 @@ export const listVisits = async (userId) => {
             label: "Cam kết chấp thuận phẫu thuật",
             storageType: "manual",
             manualData: {
-              procedureName: c.procedureName,
-              risks: c.risks,
-              doctorExplanation: c.doctorExplanation,
-              doctorSigned: c.doctorSigned ? `Đã ký (${c.doctorSignature})` : "Chưa ký",
-              patientSigned: c.patientSigned ? `Đã ký (${c.patientSignature})` : "Chưa ký"
+              loaiPhauThuat: "Chương trình/Phiên",
+              chanDoan_pt: c.procedureName || "",
+              bacSiPT_ten: c.doctorSignature || "",
+              nguoiBenh_pt: c.patientSignature || "",
+              tuVanVe: c.risks ? "Tai biến, biến chứng có thể xảy ra" : "",
+              phautthuatVien_ky: c.doctorSigned ? c.doctorSignature : "",
+              nguoiBenh_ky: c.patientSigned ? c.patientSignature : ""
             },
             uploadedAt: c.createdAt
           });
@@ -361,7 +353,20 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  const fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
+  // Lấy họ tên bệnh nhân để tạo tên thư mục
+  const { User } = await import("../models/user.model.js");
+  const user = await User.findById(userId).lean();
+  const patientName = user?.profile?.name || "Bệnh nhân";
+
+  let fileUrl;
+  try {
+    const patientFolder = await getOrCreatePatientFolder(userId, patientName);
+    const driveResult = await uploadToDrive(fileBuffer, originalName, mimeType, patientFolder.id);
+    fileUrl = driveResult.downloadUrl;
+  } catch (driveErr) {
+    console.warn("⚠️ Google Drive upload failed, falling back to GCS:", driveErr.message);
+    fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
+  }
 
   visit.documents.push({
     docKey,
@@ -446,7 +451,18 @@ export const deleteDocument = async (userId, visitId, docId) => {
   const doc = visit.documents.id(docId);
   if (!doc) throw Object.assign(new Error("Không tìm thấy tài liệu."), { status: 404 });
 
-  if (doc.fileUrl) await deleteFromGCS(doc.fileUrl);
+  if (doc.fileUrl) {
+    if (doc.fileUrl.includes("googleusercontent.com/u/0/d/")) {
+      const parts = doc.fileUrl.split("/");
+      const fileId = parts[parts.length - 1] || parts[parts.length - 2];
+      if (fileId) {
+        const { deleteFromDrive } = await import("../config/googleDrive.js");
+        await deleteFromDrive(fileId).catch(() => {});
+      }
+    } else {
+      await deleteFromGCS(doc.fileUrl);
+    }
+  }
   visit.documents.pull({ _id: docId });
 
   await visit.save();

@@ -1,8 +1,9 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const visitSchema = new Schema(
   {
-    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', index: true },
+    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
     patientId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     doctorId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     nurseId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -50,6 +51,8 @@ const visitSchema = new Schema(
   },
   { timestamps: true }
 );
+
+visitSchema.plugin(tenancyPlugin);
 
 export const Visit = model("Visit", visitSchema);
 export default Visit;

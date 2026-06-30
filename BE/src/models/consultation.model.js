@@ -1,7 +1,14 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const consultationSchema = new Schema(
   {
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Hospital',
+      required: true,
+      index: true
+    },
     medicalRecordId: {
       type: Schema.Types.ObjectId,
       ref: "MedicalRecord",
@@ -37,6 +44,8 @@ const consultationSchema = new Schema(
     timestamps: true,
   }
 );
+
+consultationSchema.plugin(tenancyPlugin);
 
 export const Consultation = model("Consultation", consultationSchema);
 export default Consultation;

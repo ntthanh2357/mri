@@ -68,6 +68,15 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [consents, setConsents] = useState([]);
   const [versions, setVersions] = useState([]);
   const [imagingResults, setImagingResults] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [availableDrugs, setAvailableDrugs] = useState([]);
+
+  // Fetch drugs for autocomplete
+  useEffect(() => {
+    get('/api/drugs').then(res => {
+      if(res && res.success) setAvailableDrugs(res.data);
+    }).catch(err => console.log('Error fetching drugs:', err));
+  }, []);
   
   // Fetch imaging
   useEffect(() => {
@@ -103,16 +112,22 @@ const EMRDashboardScreen = ({ navigation }) => {
   const fetchRecordDetails = async (recordId) => {
     setLoading(true);
     try {
-      const [careData, consultData, consentData, versionData] = await Promise.all([
+      const [careData, consultData, consentData, versionData, rxData] = await Promise.all([
         apiRequest(`/emr/records/${recordId}/care-sheets`),
         apiRequest(`/emr/records/${recordId}/consultations`),
         apiRequest(`/emr/records/${recordId}/consents`),
         apiRequest(`/emr/records/${recordId}/versions`),
+        get(`/api/patients/${selectedRecord.patientId}/prescriptions`).catch(() => null),
       ]);
       setCareSheets(careData.data || []);
       setConsultations(consultData.data || []);
       setConsents(consentData.data || []);
       setVersions(versionData.data || []);
+      if (rxData && rxData.data) {
+        setPrescriptions(rxData.data);
+      } else {
+        setPrescriptions([]);
+      }
     } catch (error) {
       console.log('Error loading details:', error.message);
     } finally {
@@ -201,6 +216,29 @@ const EMRDashboardScreen = ({ navigation }) => {
     }
   };
 
+  // Create new prescription
+  const handleCreatePrescription = async (formData) => {
+    if (!selectedRecord) {
+      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+      return;
+    }
+    try {
+      const data = await post(`/api/patients/${selectedRecord.patientId}/prescriptions`, {
+        ...formData,
+        doctor_name: localUser?.profile?.name || localUser?.email || 'Bác sĩ'
+      });
+      if (data && data.success) {
+        setPrescriptions(prev => [data.data, ...prev]);
+        setIsModalVisible(false);
+        Alert.alert('Thành công', 'Đã tạo đơn thuốc mới!');
+      } else {
+        Alert.alert('Lỗi', data.message || 'Không thể tạo đơn thuốc.');
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', error.message || 'Lỗi kết nối khi tạo đơn thuốc.');
+    }
+  };
+
   // Filter records for search
   const filteredRecords = records.filter(r =>
     (r.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -259,6 +297,12 @@ const EMRDashboardScreen = ({ navigation }) => {
                       label="Giấy cam đoan"
                       active={activeTab === 'consent'}
                       onPress={() => setActiveTab('consent')}
+                    />
+                    <SidebarItem
+                      icon="💊"
+                      label="Kê đơn thuốc"
+                      active={activeTab === 'prescriptions'}
+                      onPress={() => setActiveTab('prescriptions')}
                     />
                   </>
                 )}
@@ -337,6 +381,11 @@ const EMRDashboardScreen = ({ navigation }) => {
                       label="Cam đoan"
                       active={activeTab === 'consent'}
                       onPress={() => setActiveTab('consent')}
+                    />
+                    <MobileTab
+                      label="Đơn thuốc"
+                      active={activeTab === 'prescriptions'}
+                      onPress={() => setActiveTab('prescriptions')}
                     />
                   </>
                 )}
@@ -427,6 +476,18 @@ const EMRDashboardScreen = ({ navigation }) => {
                   />
                 )}
 
+                {activeTab === 'prescriptions' && (
+                  <PrescriptionTab
+                    prescriptions={prescriptions}
+                    availableDrugs={availableDrugs}
+                    selectedRecord={selectedRecord}
+                    onNewPrescription={() => {
+                      setModalType('newPrescription');
+                      setIsModalVisible(true);
+                    }}
+                  />
+                )}
+
                 {activeTab === 'imaging' && (
                   <ImagingTab
                     imagingResults={imagingResults}
@@ -439,7 +500,6 @@ const EMRDashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Modal */}
         <EMRModal
           isVisible={isModalVisible}
           type={modalType}
@@ -448,6 +508,8 @@ const EMRDashboardScreen = ({ navigation }) => {
           onCreateCareSheet={handleCreateCareSheet}
           onCreateConsultation={handleCreateConsultation}
           onCreateConsent={handleCreateConsent}
+          onCreatePrescription={handleCreatePrescription}
+          availableDrugs={availableDrugs}
         />
       </SafeAreaView>
     </ResponsiveLayout>
@@ -1320,6 +1382,47 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
   </View>
 );
 
+const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewPrescription }) => (
+  <View style={styles.tabContainer}>
+    <View style={styles.tabHeader}>
+      <Text style={styles.tabTitle}>💊 Kê đơn thuốc</Text>
+      <TouchableOpacity style={styles.actionButton} onPress={onNewPrescription}>
+        <Text style={styles.actionButtonText}>+ Thêm đơn thuốc</Text>
+      </TouchableOpacity>
+    </View>
+
+    {!selectedRecord ? (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyIcon}>👈</Text>
+        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+      </View>
+    ) : (
+      <View style={styles.listContainer}>
+        {prescriptions.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📭</Text>
+            <Text style={styles.emptyText}>Chưa có đơn thuốc nào</Text>
+          </View>
+        ) : (
+          prescriptions.map(p => (
+            <View key={p._id || p.id} style={styles.itemCard}>
+              <Text style={styles.itemTitle}>{`Đơn thuốc ${new Date(p.recorded_at || p.createdAt || p.date || Date.now()).toLocaleDateString('vi-VN')}`}</Text>
+              <Text style={styles.itemSubtitle}>Bác sĩ: {p.doctor_name} • Chẩn đoán: {p.diagnosis}</Text>
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ fontWeight: '600', color: '#374151' }}>Danh sách thuốc:</Text>
+                {p.drugs?.map((d, i) => (
+                  <Text key={i} style={{ color: '#475569', fontSize: 13 }}>- {d.name} ({d.quantity} {d.unit}): {d.usage}</Text>
+                ))}
+              </View>
+              {p.note && <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>Ghi chú: {p.note}</Text>}
+            </View>
+          ))
+        )}
+      </View>
+    )}
+  </View>
+);
+
 const VersionTab = ({ versions, selectedRecord }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
@@ -1481,6 +1584,7 @@ const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet,
           {type === 'newCareSheet' && <NewCareSheetForm onClose={onClose} onSubmit={onCreateCareSheet} />}
           {type === 'newConsultation' && <NewConsultationForm onClose={onClose} onSubmit={onCreateConsultation} />}
           {type === 'newConsent' && <NewConsentForm onClose={onClose} onSubmit={onCreateConsent} />}
+          {type === 'newPrescription' && <NewPrescriptionForm onClose={onClose} onSubmit={onCreatePrescription} availableDrugs={availableDrugs} />}
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -1890,6 +1994,90 @@ const NewConsentForm = ({ onClose, onSubmit }) => {
         <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit}>
           <Text style={styles.primaryButtonText}>Tạo giấy cam đoan</Text>
         </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
+  const [formData, setFormData] = useState({
+    diagnosis: '',
+    note: '',
+  });
+  const [drugs, setDrugs] = useState([{ drugId: '', name: '', quantity: '', unit: '', usage: '' }]);
+
+  const handleSubmit = () => {
+    if (!formData.diagnosis || drugs.some(d => !d.name || !d.quantity)) {
+      Alert.alert('Lỗi', 'Vui lòng nhập chẩn đoán và thông tin thuốc (tên, số lượng).');
+      return;
+    }
+    onSubmit({
+      ...formData,
+      drugs: drugs.map(d => ({ ...d, quantity: Number(d.quantity) }))
+    });
+  };
+
+  const updateDrug = (index, field, value) => {
+    const newDrugs = [...drugs];
+    newDrugs[index][field] = value;
+    if (field === 'drugId') {
+       const selected = availableDrugs.find(ad => ad._id === value);
+       if (selected) {
+         newDrugs[index].name = selected.name;
+         newDrugs[index].unit = selected.unit || 'Viên';
+       }
+    }
+    setDrugs(newDrugs);
+  };
+
+  return (
+    <View style={styles.formContainer}>
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle}>Kê Đơn Thuốc</Text>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+        <FormField label="Chẩn đoán" placeholder="VD: Viêm xoang cấp" value={formData.diagnosis} onChangeText={t => setFormData({...formData, diagnosis: t})} />
+        
+        <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#374151', marginVertical: 10 }}>Danh sách thuốc</Text>
+        {drugs.map((d, index) => (
+          <View key={index} style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Chọn thuốc từ kho</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+              {availableDrugs.map(ad => (
+                 <TouchableOpacity 
+                   key={ad._id} 
+                   style={{ padding: 8, backgroundColor: d.drugId === ad._id ? '#15803D' : '#F1F5F9', borderRadius: 6, marginRight: 8 }}
+                   onPress={() => updateDrug(index, 'drugId', ad._id)}
+                 >
+                   <Text style={{ color: d.drugId === ad._id ? '#FFF' : '#374151', fontSize: 12 }}>{ad.name}</Text>
+                 </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <FormField label="Tên thuốc" value={d.name} onChangeText={t => updateDrug(index, 'name', t)} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}><FormField label="Số lượng" keyboardType="numeric" value={d.quantity} onChangeText={t => updateDrug(index, 'quantity', t)} /></View>
+              <View style={{ flex: 1 }}><FormField label="Đơn vị" value={d.unit} onChangeText={t => updateDrug(index, 'unit', t)} /></View>
+            </View>
+            <FormField label="Cách dùng" placeholder="VD: Ngày 2 lần, mỗi lần 1 viên sau ăn" value={d.usage} onChangeText={t => updateDrug(index, 'usage', t)} />
+            {drugs.length > 1 && (
+              <TouchableOpacity onPress={() => setDrugs(drugs.filter((_, i) => i !== index))} style={{ alignSelf: 'flex-end', marginTop: 5 }}>
+                <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: 'bold' }}>Xóa thuốc này</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+        <TouchableOpacity onPress={() => setDrugs([...drugs, { drugId: '', name: '', quantity: '', unit: '', usage: '' }])} style={{ padding: 10, backgroundColor: '#EFF6FF', borderRadius: 8, alignItems: 'center', marginBottom: 10 }}>
+          <Text style={{ color: '#3B82F6', fontWeight: '600' }}>+ Thêm thuốc khác</Text>
+        </TouchableOpacity>
+        
+        <FormField label="Ghi chú" placeholder="Ghi chú thêm..." value={formData.note} onChangeText={t => setFormData({...formData, note: t})} />
+      </ScrollView>
+      <View style={styles.modalFooter}>
+        <TouchableOpacity style={styles.cancelButton} onPress={onClose}><Text style={styles.cancelButtonText}>Hủy</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit}><Text style={styles.primaryButtonText}>Lưu đơn thuốc</Text></TouchableOpacity>
       </View>
     </View>
   );

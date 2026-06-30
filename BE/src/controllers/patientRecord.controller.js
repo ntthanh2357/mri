@@ -1,9 +1,17 @@
 import * as service from "../services/patientRecord.service.js";
+import { User } from "../models/user.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
-const getTargetPatientId = (req) => {
+const getTargetPatientId = async (req) => {
   if (req.user && req.user.role !== 'patient') {
-    return req.query.patientId || req.body.patientId || req.user.id;
+    const patientId = req.query.patientId || req.body.patientId || req.user.id;
+    if (patientId !== req.user.id) {
+      const patient = await User.findById(patientId);
+      if (!patient || (patient.hospitalId && patient.hospitalId.toString() !== req.user.hospitalId.toString())) {
+        throw { status: 403, message: "Không tìm thấy bệnh nhân hoặc không có quyền truy cập." };
+      }
+    }
+    return patientId;
   }
   return req.user ? req.user.id : null;
 };
@@ -12,18 +20,22 @@ const getTargetPatientId = (req) => {
 
 export const getIdentity = async (req, res, next) => {
   try {
-    const profile = await service.getOrCreateProfile(getTargetPatientId(req));
+    const targetId = await getTargetPatientId(req);
+    const profile = await service.getOrCreateProfile(targetId);
     return successResponse(res, profile);
   } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
   }
 };
 
 export const updateIdentity = async (req, res, next) => {
   try {
-    const profile = await service.updateProfile(getTargetPatientId(req), req.body);
+    const targetId = await getTargetPatientId(req);
+    const profile = await service.updateProfile(targetId, req.body);
     return successResponse(res, profile, "Cập nhật thông tin thành công.");
   } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
   }
 };
@@ -32,9 +44,11 @@ export const updateIdentity = async (req, res, next) => {
 
 export const listVisits = async (req, res, next) => {
   try {
-    const visits = await service.listVisits(getTargetPatientId(req));
+    const targetId = await getTargetPatientId(req);
+    const visits = await service.listVisits(targetId);
     return successResponse(res, visits);
   } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
   }
 };
@@ -45,16 +59,19 @@ export const createVisit = async (req, res, next) => {
     if (!facility || !visitType) {
       return errorResponse(res, "Thiếu trường bắt buộc: facility, visitType.", 400);
     }
-    const visit = await service.createVisit(getTargetPatientId(req), req.body);
+    const targetId = await getTargetPatientId(req);
+    const visit = await service.createVisit(targetId, req.body);
     return successResponse(res, visit, "Đã tạo lượt khám.", 201);
   } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
   }
 };
 
 export const getVisit = async (req, res, next) => {
   try {
-    const visit = await service.getVisit(getTargetPatientId(req), req.params.visitId);
+    const targetId = await getTargetPatientId(req);
+    const visit = await service.getVisit(targetId, req.params.visitId);
     return successResponse(res, visit);
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -64,7 +81,8 @@ export const getVisit = async (req, res, next) => {
 
 export const updateVisit = async (req, res, next) => {
   try {
-    const visit = await service.updateVisit(getTargetPatientId(req), req.params.visitId, req.body);
+    const targetId = await getTargetPatientId(req);
+    const visit = await service.updateVisit(targetId, req.params.visitId, req.body);
     return successResponse(res, visit, "Đã cập nhật lượt khám.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -74,7 +92,8 @@ export const updateVisit = async (req, res, next) => {
 
 export const deleteVisit = async (req, res, next) => {
   try {
-    await service.deleteVisit(getTargetPatientId(req), req.params.visitId);
+    const targetId = await getTargetPatientId(req);
+    await service.deleteVisit(targetId, req.params.visitId);
     return successResponse(res, null, "Đã xóa lượt khám.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
@@ -93,7 +112,8 @@ export const uploadDocument = async (req, res, next) => {
       return errorResponse(res, "Thiếu trường: docKey, groupKey, label.", 400);
     }
 
-    const visit = await service.addDocumentUpload(getTargetPatientId(req), req.params.visitId, {
+    const targetId = await getTargetPatientId(req);
+    const visit = await service.addDocumentUpload(targetId, req.params.visitId, {
       docKey,
       groupKey,
       label,
@@ -116,7 +136,8 @@ export const saveManualDocument = async (req, res, next) => {
       return errorResponse(res, "Thiếu trường: docKey, groupKey, label, manualData.", 400);
     }
 
-    const visit = await service.addDocumentManual(getTargetPatientId(req), req.params.visitId, {
+    const targetId = await getTargetPatientId(req);
+    const visit = await service.addDocumentManual(targetId, req.params.visitId, {
       docKey,
       groupKey,
       label,
@@ -131,8 +152,9 @@ export const saveManualDocument = async (req, res, next) => {
 
 export const deleteDocument = async (req, res, next) => {
   try {
+    const targetId = await getTargetPatientId(req);
     const visit = await service.deleteDocument(
-      getTargetPatientId(req),
+      targetId,
       req.params.visitId,
       req.params.docId
     );

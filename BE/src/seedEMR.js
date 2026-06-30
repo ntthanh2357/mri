@@ -1,6 +1,7 @@
 
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import Hospital from './models/hospital.model.js';
 import MedicalRecord from './models/medicalRecord.model.js';
 import CareSheet from './models/careSheet.model.js';
 import Consultation from './models/consultation.model.js';
@@ -14,6 +15,23 @@ const seedData = async () => {
     await connectDB();
     console.log('✅ DB connected for seeding');
 
+    // Get hospital context
+    const Hospital = mongoose.model('Hospital');
+    let hospital = await Hospital.findOne({});
+    if (!hospital) {
+      hospital = await Hospital.create({
+        name: "Bệnh viện Bạch Mai",
+        nameShort: "Bạch Mai",
+        code: "BVBM",
+        address: { street: "78 Giải Phóng", ward: "Phương Mai", district: "Đống Đa", province: "Hà Nội" },
+        phone: "+842438693731",
+        contactEmail: "contact@bachmai.gov.vn",
+        status: "active",
+        isActive: true,
+      });
+    }
+    const hospitalId = hospital._id;
+
     // Clear existing data
     await MedicalRecord.deleteMany({});
     await CareSheet.deleteMany({});
@@ -26,6 +44,7 @@ const seedData = async () => {
     // ============================================================
     const records = await MedicalRecord.create([
       {
+        hospitalId,
         patientId: 'PT-001',
         patientName: 'Nguyễn Văn An',
         age: 45,
@@ -40,6 +59,7 @@ const seedData = async () => {
         signStatus: 'Chưa duyệt',
       },
       {
+        hospitalId,
         patientId: 'PT-002',
         patientName: 'Trần Thị Mai',
         age: 52,
@@ -54,6 +74,7 @@ const seedData = async () => {
         signStatus: 'Chưa duyệt',
       },
       {
+        hospitalId,
         patientId: 'PT-003',
         patientName: 'Lê Quốc Hùng',
         age: 38,
@@ -76,6 +97,7 @@ const seedData = async () => {
     // ============================================================
     await CareSheet.create([
       {
+        hospitalId,
         medicalRecordId: records[0]._id,
         careLevel: 2,
         nurse: 'Y tá Lê Thị Hoa',
@@ -88,6 +110,7 @@ const seedData = async () => {
         careActions: 'Đo sinh hiệu 4h/lần, cho uống thuốc giảm phù não (Dexamethasone), theo dõi tri giác theo thang điểm GCS.',
       },
       {
+        hospitalId,
         medicalRecordId: records[0]._id,
         careLevel: 2,
         nurse: 'Y tá Lê Thị Hoa',
@@ -100,6 +123,7 @@ const seedData = async () => {
         careActions: 'Theo dõi sinh hiệu, hướng dẫn bệnh nhân tránh gắng sức, nhắc uống đủ nước.',
       },
       {
+        hospitalId,
         medicalRecordId: records[1]._id,
         careLevel: 1,
         nurse: 'Y tá Lê Thị Hoa',
@@ -118,6 +142,7 @@ const seedData = async () => {
     // Phiếu Hội Chẩn - Đa Chuyên Khoa Thần Kinh
     // ============================================================
     await Consultation.create({
+      hospitalId,
       medicalRecordId: records[0]._id,
       meetingDate: new Date('2026-06-17'),
       participants: ['BS CKII Lê Mạnh Minh', 'PGS TS Hoàng Văn Minh', 'BS Nguyễn Hồng Hà (Chẩn đoán hình ảnh)', 'BS Gia Huy (Gây mê hồi sức)'],
@@ -131,6 +156,7 @@ const seedData = async () => {
     // Phiếu Đồng Ý Phẫu Thuật - Mổ U Não
     // ============================================================
     await ConsentForm.create({
+      hospitalId,
       medicalRecordId: records[1]._id,
       procedureName: 'Phẫu thuật mở sọ cắt bỏ u não thùy trán (Craniotomy for Meningioma)',
       risks: 'Nguy cơ phù não sau mổ, chảy máu nội sọ, nhiễm trùng vết mổ, thiếu hụt thần kinh cục bộ (yếu liệt, rối loạn ngôn ngữ), động kinh sau phẫu thuật',

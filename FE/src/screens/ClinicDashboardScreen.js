@@ -29,8 +29,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
   const ROLE_LABELS = {
     doctor: 'Bác sĩ',
-    nurse: 'Điều dưỡng & Lễ tân',
-    technician: 'Kỹ thuật viên'
+    nurse: 'Điều dưỡng',
+    technician: 'Kỹ thuật viên',
+    receptionist: 'Lễ tân'
   };
 
   const fetchHospitalStaff = async () => {
@@ -229,13 +230,18 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
                 <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('StaffScheduling')}>
+                <Text style={styles.actionButtonOutlineText}>🗓️ Lịch làm việc</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.actionRow}>
               <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
                 <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButtonSolid, { backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
+                <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={[styles.actionButtonSolid, { width: '100%', marginBottom: 20, backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
-              <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
-            </TouchableOpacity>
 
             {/* Stats Section */}
             <View style={styles.statsContainer}>

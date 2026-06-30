@@ -14,7 +14,8 @@ ChevronRight,
   Database,
   ShieldAlert,
   Brain,
-  TrendingUp
+  TrendingUp,
+  Sliders
 } from 'lucide-react';
 import '../tailwind-built.css';
 
@@ -24,6 +25,7 @@ import AdminDatasetsView from '../components/AdminDatasetsView';
 import AdminAuditLogsView from '../components/AdminAuditLogsView';
 import AdminAIConfigView from '../components/AdminAIConfigView';
 import AdminHospitalsView from '../components/AdminHospitalsView';
+import AdminSaaSSuiteView from '../components/AdminSaaSSuiteView';
 import { setAuthToken } from '../services/api.service';
 import { apiRequest } from '../utils/apiClient';
 
@@ -231,6 +233,22 @@ const AdminBackofficeScreen = ({ navigation }) => {
                 <ClipboardList className="w-[18px] h-[18px] shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Audit Logs</span>}
               </button>
+
+              <button 
+                onClick={() => setActiveTab('saas-suite')}
+                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
+                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
+                } ${
+                  activeTab === 'saas-suite'
+                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
+                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                }`}
+                style={{ height: '44px', transition: 'all 0.25s ease' }}
+                title={sidebarCollapsed ? "SaaS Suite" : undefined}
+              >
+                <Sliders className="w-[18px] h-[18px] shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">SaaS Suite (Nâng cao)</span>}
+              </button>
             </div>
           </div>
 
@@ -400,6 +418,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
 
             {activeTab === 'audit-logs' && (
               <AdminAuditLogsView />
+            )}
+
+            {activeTab === 'saas-suite' && (
+              <AdminSaaSSuiteView />
             )}
 
             {activeTab === 'ai-config' && (

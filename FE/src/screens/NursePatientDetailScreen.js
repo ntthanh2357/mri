@@ -205,6 +205,28 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     setFeeNewAmt("");
   };
 
+  const getOrCreateMedicalRecordId = async () => {
+    const pid = patient._id || patient.patientId;
+    try {
+      const res = await get(`/emr/records?search=${pid}`);
+      if (res?.data && res.data.length > 0) {
+        return res.data[0]._id;
+      }
+      // Create new record if not exists
+      const newRes = await post('/emr/records', {
+        patientId: pid,
+        patientName: patientName || "Bệnh nhân",
+        age: age || 30,
+        diagnosis: "Khám tổng quát",
+        doctorInCharge: doctor || "Bác sĩ",
+      });
+      return newRes?.data?._id || pid;
+    } catch (e) {
+      console.error("Lỗi lấy/tạo bệnh án:", e);
+      return pid; // fallback
+    }
+  };
+
   // 4. Save Clinical Exam (Vitals) to Backend EMR
   const handleSaveExamToBackend = async () => {
     if (!examPulse || !examBP || !examTemp || !examSpo2) {
@@ -213,8 +235,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
+      const recordId = await getOrCreateMedicalRecordId();
       // Create Care Sheet in backend EMR database
-      await post(`/emr/records/${patient._id}/care-sheets`, {
+      await post(`/emr/records/${recordId}/care-sheets`, {
         careLevel: 3,
         pulse: parseInt(examPulse),
         bloodPressure: examBP,
@@ -237,6 +260,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
             respiratoryRate: examBreath ? parseInt(examBreath) : undefined
           }
         });
+        // Cập nhật trạng thái lượt khám để thông báo Bác sĩ
+        await put(`/api/v1/visits/${patient.visitId}/status`, { status: 'đang khám' });
       }
 
       setExamDone(true);
@@ -256,8 +281,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
+      const recordId = await getOrCreateMedicalRecordId();
       // Update MedicalRecord diagnosis and treatment plan
-      await put(`/emr/records/${patient._id}`, {
+      await put(`/emr/records/${recordId}`, {
         diagnosis: orderDiagnosis,
         treatmentPlan: `Chỉ định dịch vụ cận lâm sàng: ${orderServices.join(", ")}`
       });
@@ -445,7 +471,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   ["Khoa / Phòng", department || "N/A"],
                   ["Bác sĩ phụ trách", doctor || "N/A"],
                   ["Trạng thái hiện tại", patient.status || "Đang điều trị"],
-                  ["Loại nhập viện", patient.admissionType || "Ngoại trú"],
+                  ["Loại nhập viện", patient.visitType || patient.admissionType || "Ngoại trú"],
                 ].map(([label, val]) => (
                   <View key={label} style={s.infoRow}>
                     <Text style={s.infoLabel}>{label}</Text>
@@ -535,7 +561,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity onPress={() => setExamDone(false)} style={s.docEditBtn}>
                       <Text style={s.docEditBtnText}>✏️ Sửa lại phiếu</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in phiếu thông tin khám đến Máy in Khoa Nội...")} style={s.docPrintBtn}>
+                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
                       <Text style={s.docPrintBtnText}>🖨️ In Phiếu Khám</Text>
                     </TouchableOpacity>
                   </View>
@@ -667,7 +693,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity onPress={() => setOrderDone(false)} style={s.docEditBtn}>
                       <Text style={s.docEditBtnText}>✏️ Sửa lại chỉ định</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in phiếu chỉ định đến Máy in phòng bác sĩ...")} style={s.docPrintBtn}>
+                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
                       <Text style={s.docPrintBtnText}>🖨️ In Phiếu Chỉ Định</Text>
                     </TouchableOpacity>
                   </View>
@@ -816,7 +842,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </Text>
                   
                   <View style={s.docActionRow}>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in biên lai thu viện phí...")} style={[s.docPrintBtn, { flex: 1 }]}>
+                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flex: 1 }]}>
                       <Text style={s.docPrintBtnText}>🖨️ In Hóa Đơn Thu Viện Phí</Text>
                     </TouchableOpacity>
                   </View>

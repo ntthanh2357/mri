@@ -557,11 +557,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
-    elevation: 8,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    ...Platform.select({
+      ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 8 },
+      web: { boxShadow: '0px 6px 12px rgba(15, 23, 42, 0.1)' }
+    }),
   },
   heroImageContainerMobile: {
     width: '100%',
@@ -638,11 +638,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+      android: { elevation: 4 },
+      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)' }
+    }),
   },
   floatingStatsVal: {
     fontSize: 22,
@@ -671,11 +671,11 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10 },
+      android: { elevation: 6 },
+      web: { boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.08)' }
+    }),
   },
   rowBar: {
     flexDirection: 'row',
@@ -818,11 +818,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)' }
+    }),
     marginBottom: 8,
   },
   serviceIconCircle: {
@@ -856,11 +856,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 16,
     overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4 },
+      android: { elevation: 3 },
+      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.06)' }
+    }),
   },
   packageImageContainer: {
     height: 160,
@@ -927,11 +927,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 16,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)' }
+    }),
   },
   doctorImagePlaceholder: {
     height: 200,

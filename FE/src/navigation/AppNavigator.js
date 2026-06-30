@@ -25,14 +25,15 @@ import ImagingHistoryScreen from '../screens/ImagingHistoryScreen';
 import ImagingResultScreen from '../screens/ImagingResultScreen';
 import CreateImagingResultScreen from '../screens/CreateImagingResultScreen';
 import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
-import ReceptionistDashboardScreen from '../screens/ReceptionistDashboardScreen';
+import NurseReceptionScreen from '../screens/NurseReceptionScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
-import TechnicianQueueScreen from '../screens/TechnicianQueueScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
+import DrugManagementScreen from '../screens/DrugManagementScreen';
+import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -100,13 +101,14 @@ const AppNavigator = () => {
         <Stack.Screen name="ImagingResult" component={ImagingResultScreen} options={{ title: 'Chi tiết phim chụp', headerShown: false }} />
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
-        <Stack.Screen name="ReceptionistDashboard" component={ReceptionistDashboardScreen} options={{ title: 'Lễ tân', headerShown: false }} />
+        <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="TechnicianQueue" component={TechnicianQueueScreen} options={{ headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: false }} />
+        <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

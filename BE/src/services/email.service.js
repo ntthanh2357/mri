@@ -104,3 +104,49 @@ export const sendOtpEmail = async (to, otpCode) => {
     return false;
   }
 };
+
+export const sendSwapRequestResultEmail = async ({ toEmail, staffName, status, shiftDetails, reviewNotes }) => {
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+
+  const statusText = status === "approved" ? "PHÊ DUYỆT" : "TỪ CHỐI";
+  const color = status === "approved" ? "#047857" : "#ef4444";
+  const bg = status === "approved" ? "#f0fdf4" : "#fef2f2";
+
+  if (!emailUser || !emailPass) {
+    console.log(`[SMTP Fallback] Swap request email for ${staffName}: email=${toEmail} status=${statusText} notes=${reviewNotes}`);
+    return false;
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: emailUser, pass: emailPass },
+    });
+
+    await transporter.sendMail({
+      from: `"NeuroScan AI Scheduling" <${emailUser}>`,
+      to: toEmail,
+      subject: `[NeuroScan AI] Kết quả yêu cầu đổi ca trực — ${statusText}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px;">
+          <h2 style="color:${color};margin:0 0 8px">NeuroScan AI Scheduling</h2>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 20px">Kết quả đề xuất đổi lịch ca trực</p>
+          <p>Xin chào <strong>${staffName}</strong>,</p>
+          <p>Yêu cầu đổi ca trực của bạn đã được quản trị viên xử lý.</p>
+          <div style="background:${bg};border-radius:8px;padding:16px;margin:16px 0;border:1px solid ${color}">
+            <p style="margin:0 0 8px"><strong>Kết quả:</strong> <span style="color:${color};font-weight:bold">${statusText}</span></p>
+            <p style="margin:0 0 8px"><strong>Chi tiết ca:</strong> ${shiftDetails}</p>
+            <p style="margin:0"><strong>Ghi chú duyệt:</strong> ${reviewNotes || "Không có"}</p>
+          </div>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Email tự động từ hệ thống quản lý ca trực — vui lòng không trả lời.</p>
+        </div>
+      `,
+    });
+    console.log(`[SMTP Success] Sent swap request email to: ${toEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`[SMTP Error] Failed to send swap request email to ${toEmail}:`, error);
+    return false;
+  }
+};

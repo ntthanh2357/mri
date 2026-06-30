@@ -22,6 +22,7 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
       entity: "User",
       entityId: userId,
       performedBy: adminId,
+      hospitalId: user.hospitalId || null,
       details: `User ${user.email} ${isLocked ? "bị khóa" : "đã mở khóa"} bởi admin`,
     });
   }
@@ -30,7 +31,7 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
 };
 
 export const lockUserById = async (id, adminId) => {
-  const user = await User.findById(id).select("isLocked email").lean();
+  const user = await User.findById(id).select("isLocked email hospitalId").lean();
 
   if (!user) {
     throw new Error("User not found");
@@ -55,6 +56,7 @@ export const lockUserById = async (id, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
+    hospitalId: user.hospitalId || null,
     details: `User ${user.email} locked by admin`,
   });
 
@@ -62,9 +64,9 @@ export const lockUserById = async (id, adminId) => {
 };
 
 export const verifyAdminById = async (id, verified, adminId) => {
-  const existing = await User.findById(id).select("role email isVerified").lean();
+  const existing = await User.findById(id).select("role email isVerified hospitalId").lean();
 
-  if (!existing || existing.role !== "admin") {
+  if (!existing || !["admin", "hospital_admin", "doctor"].includes(existing.role)) {
     throw new Error("Admin not found");
   }
 
@@ -81,14 +83,15 @@ export const verifyAdminById = async (id, verified, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
-    details: `Clinic Admin ${existing.email} verification ${verified ? "approved" : "revoked"} by admin`,
+    hospitalId: existing.hospitalId || null,
+    details: `Tài khoản ${existing.email} (${existing.role}) đã được duyệt/xác thực: ${verified ? "Thành công" : "Thu hồi"} bởi Admin`,
   });
 
   return updated;
 };
 
 export const unlockUserById = async (id, adminId) => {
-  const existing = await User.findById(id).select("isLocked email").lean();
+  const existing = await User.findById(id).select("isLocked email hospitalId").lean();
 
   if (!existing) {
     throw new Error("User not found");
@@ -115,6 +118,7 @@ export const unlockUserById = async (id, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
+    hospitalId: existing.hospitalId || null,
     details: `User ${existing.email} unlocked by admin`,
   });
 

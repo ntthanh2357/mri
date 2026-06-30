@@ -28,14 +28,34 @@ export default function AdminAuditLogsView() {
   const [entityFilter, setEntityFilter] = useState('all');
   const [selectedLog, setSelectedLog] = useState(null);
 
+  const [hospitals, setHospitals] = useState([]);
+  const [hospitalFilter, setHospitalFilter] = useState('all');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Fetch current user and hospitals list
+  useEffect(() => {
+    apiRequest('/auth/me')
+      .then((data) => {
+        if (data && data.user) {
+          const isUserAdmin = data.user.role === 'admin';
+          setIsAdmin(isUserAdmin);
+          if (isUserAdmin) {
+            apiRequest('/admin/hospitals')
+              .then((res) => setHospitals(res.hospitals ?? []))
+              .catch(err => console.error('Failed to load hospitals:', err));
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load profile:', err));
+  }, []);
+
   // ─── Fetch logs ────────────────────────────────────────────────────────────
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiRequest(
-        '/admin/audit-logs',
-      );
+      const url = hospitalFilter !== 'all' ? `/admin/audit-logs?hospitalId=${hospitalFilter}` : '/admin/audit-logs';
+      const data = await apiRequest(url);
       setLogs(data.logs ?? []);
     } catch (err) {
       setError(err.message || 'Đã xảy ra lỗi khi tải audit logs');
@@ -43,7 +63,7 @@ export default function AdminAuditLogsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hospitalFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -205,6 +225,21 @@ export default function AdminAuditLogsView() {
           />
         </div>
         <div className="flex gap-3">
+          {isAdmin && (
+            <select
+              value={hospitalFilter}
+              onChange={(e) => setHospitalFilter(e.target.value)}
+              className="bg-white border border-[#e8edf5] px-3 py-2 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            >
+              <option value="all">Tất cả bệnh viện</option>
+              {hospitals.map((h) => (
+                <option key={h._id} value={h._id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          )}
+
           <select
             value={entityFilter}
             onChange={(e) => setEntityFilter(e.target.value)}
@@ -258,6 +293,7 @@ export default function AdminAuditLogsView() {
                 <tr className="text-[11px] text-slate-500 uppercase tracking-wider">
                   <th className="text-left px-5 py-3 font-semibold">Thời gian</th>
                   <th className="text-left px-4 py-3 font-semibold">Người thực hiện</th>
+                  {isAdmin && <th className="text-left px-4 py-3 font-semibold">Bệnh viện</th>}
                   <th className="text-left px-4 py-3 font-semibold">Entity</th>
                   <th className="text-left px-4 py-3 font-semibold">Hành động</th>
                   <th className="text-left px-4 py-3 font-semibold">Chi tiết</th>
@@ -275,10 +311,25 @@ export default function AdminAuditLogsView() {
                     </td>
 
                     <td className="px-4 py-4">
-                      <span className="text-xs font-bold text-slate-800 font-mono">
-                        {log.performedBy}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800">
+                          {log.performedByName || log.performedBy}
+                        </span>
+                        {log.performedByEmail && (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {log.performedByEmail}
+                          </span>
+                        )}
+                      </div>
                     </td>
+
+                    {isAdmin && (
+                      <td className="px-4 py-4">
+                        <span className="text-xs font-semibold text-slate-700">
+                          {log.hospitalName || "Hệ thống"}
+                        </span>
+                      </td>
+                    )}
 
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 text-slate-700 text-[10.5px] font-bold">
@@ -299,7 +350,7 @@ export default function AdminAuditLogsView() {
 
                 {filteredLogs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-5 py-16 text-center">
+                    <td colSpan={isAdmin ? 6 : 5} className="px-5 py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <ClipboardList className="w-8 h-8 opacity-40" />
                         <p className="text-xs font-medium">

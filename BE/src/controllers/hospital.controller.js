@@ -182,6 +182,7 @@ export const submitOnboardingInfo = async (req, res) => {
       entity: "Hospital",
       entityId: hospitalId,
       performedBy: req.user.id,
+      hospitalId: hospitalId,
       details: `Bệnh viện ${name} cập nhật thông tin chi tiết.`,
     });
 
@@ -230,7 +231,7 @@ export const getHospitalStaff = async (req, res) => {
       return res.status(400).json({ success: false, message: "Tài khoản không gắn với bệnh viện nào." });
     }
 
-    const staff = await User.find({ hospitalId })
+    const staff = await User.find({ hospitalId, role: { $ne: "patient" } })
       .select("email role profile.name isActive isLocked isVerified createdAt phone")
       .sort({ createdAt: -1 })
       .lean();
@@ -268,6 +269,7 @@ export const toggleStaffLock = async (req, res) => {
       entity: "User",
       entityId: staffMember._id,
       performedBy: req.user.id,
+      hospitalId: hospitalId,
       details: `Hospital Admin ${req.user.email} đã ${staffMember.isLocked ? "KHÓA" : "MỞ KHÓA"} tài khoản nhân sự ${staffMember.email}`,
     });
 

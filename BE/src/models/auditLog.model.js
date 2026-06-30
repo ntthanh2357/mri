@@ -21,6 +21,11 @@ const auditLogSchema = new Schema(
       required: true,
       trim: true,
     },
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: "Hospital",
+      default: null,
+    },
     details: {
       type: String,
       default: "",

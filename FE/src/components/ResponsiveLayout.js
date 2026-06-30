@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
 
@@ -19,6 +20,42 @@ const ResponsiveLayout = ({
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const [localUser, setLocalUser] = React.useState(user || null);
+  const [notifications, setNotifications] = React.useState([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [showNotifModal, setShowNotifModal] = React.useState(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const { get } = require('../services/api.service');
+      const res = await get('/api/v1/notifications');
+      if (res && res.success) {
+        setNotifications(res.notifications || []);
+        setUnreadCount(res.unreadCount || 0);
+      }
+    } catch (err) {
+      // Quietly ignore network failures in background polling
+    }
+  };
+
+  const markNotifRead = async (id) => {
+    try {
+      const { put } = require('../services/api.service');
+      await put(`/api/v1/notifications/${id}/read`);
+      fetchNotifications();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const markAllNotifsRead = async () => {
+    try {
+      const { put } = require('../services/api.service');
+      await put('/api/v1/notifications/read-all');
+      fetchNotifications();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   React.useEffect(() => {
     if (user) {
@@ -37,6 +74,12 @@ const ResponsiveLayout = ({
     };
     fetchUser();
   }, [user]);
+
+  React.useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleDefaultLogout = () => {
     if (onLogout) {
@@ -80,17 +123,21 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'ClinicDashboard', icon: '📊' },
           { label: 'Quản lý EMR', route: 'EMRDashboard', icon: '📂' },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: '🏥' },
           { label: 'Quản lý tài khoản', route: 'StaffManagement', icon: '👥' },
           { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
+          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       case 'doctor':
       case 'technician':
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
           { label: 'Hàng đợi khám', route: 'DoctorWorkQueue', icon: '🩺' },
-          { label: 'Hàng đợi chụp MRI', route: 'TechnicianQueue', icon: '🔬' },
+          { label: 'Phòng chụp phim (MRI)', route: 'TechnicianQueue', icon: '🔬' },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'DoctorPatientList', icon: '📂' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
@@ -98,8 +145,10 @@ const ResponsiveLayout = ({
       case 'receptionist':
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
           { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', icon: '📋' },
           { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
+          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
           { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', icon: '💳' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
@@ -151,6 +200,16 @@ const ResponsiveLayout = ({
               {roleLabel}
             </Text>
           </View>
+          {localUser && (
+            <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifModal(true)}>
+              <Text style={styles.bellIconText}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Nav Links */}
@@ -199,6 +258,63 @@ const ResponsiveLayout = ({
       <View style={styles.mainContent}>
         {children}
       </View>
+
+      {/* Notification Modal */}
+      {showNotifModal && (
+        <Modal
+          visible={showNotifModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowNotifModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🔔 Thông báo nội bộ</Text>
+                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
+                  <Text style={styles.modalCloseBtn}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={styles.modalSub}>Lịch sử thông báo y khoa & hệ thống</Text>
+                {unreadCount > 0 && (
+                  <TouchableOpacity onPress={markAllNotifsRead}>
+                    <Text style={styles.markAllReadText}>Đánh dấu tất cả đã đọc</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView style={styles.notifScroll} contentContainerStyle={styles.notifList}>
+                {notifications.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyText}>Bạn không có thông báo nào.</Text>
+                  </View>
+                ) : (
+                  notifications.map((notif) => (
+                    <TouchableOpacity
+                      key={notif._id}
+                      style={[styles.notifItem, !notif.isRead && styles.notifItemUnread]}
+                      onPress={() => markNotifRead(notif._id)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.notifTitle, !notif.isRead && styles.textBold]}>
+                          {notif.title}
+                        </Text>
+                        {!notif.isRead && <View style={styles.unreadDot} />}
+                      </View>
+                      <Text style={styles.notifMessage}>{notif.message}</Text>
+                      <Text style={styles.notifTime}>
+                        {new Date(notif.createdAt).toLocaleDateString('vi-VN')} {new Date(notif.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -369,6 +485,134 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     backgroundColor: '#F8FAFC',
+  },
+  bellBtn: {
+    padding: 8,
+    position: 'relative',
+    marginLeft: 'auto',
+  },
+  bellIconText: {
+    fontSize: 18,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 24,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  modalCloseBtn: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#64748B',
+    padding: 4,
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  markAllReadText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#15803D',
+  },
+  notifScroll: {
+    flex: 1,
+    marginTop: 10,
+  },
+  notifList: {
+    gap: 10,
+  },
+  emptyBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+  },
+  emptyText: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  notifItem: {
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+  },
+  notifItemUnread: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  notifTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  textBold: {
+    fontWeight: 'bold',
+    color: '#15803D',
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22C55E',
+  },
+  notifMessage: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  notifTime: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 6,
   },
 });
 

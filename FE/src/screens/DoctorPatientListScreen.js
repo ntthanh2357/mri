@@ -13,6 +13,25 @@ import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './DoctorPatientListScreen.styles';
 
+// [BUG-03 FIX] Tính tuổi thật từ ngày sinh hoặc năm sinh
+const calculateAge = (dob, birthYear) => {
+  if (dob) {
+    const birth = new Date(dob);
+    if (!isNaN(birth.getTime())) {
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      return age > 0 ? String(age) : 'N/A';
+    }
+  }
+  if (birthYear) {
+    const age = new Date().getFullYear() - Number(birthYear);
+    return age > 0 ? String(age) : 'N/A';
+  }
+  return 'N/A';
+};
+
 const DoctorPatientListScreen = ({ navigation }) => {
   const [search, setSearch] = useState('');
   const [patients, setPatients] = useState([]);
@@ -65,7 +84,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
             id: p.profile?.medicalId || `NS-${p._id.substring(18).toUpperCase()}`,
             dbId: p._id,
             name: p.profile?.name || p.email,
-            age: '31',
+            age: calculateAge(p.profile?.dob, p.profile?.birthYear), // [BUG-03 FIX]
             gender: p.profile?.gender || 'Nam',
             phone: p.phone || 'N/A',
             diagnosis: diagnosisStr,

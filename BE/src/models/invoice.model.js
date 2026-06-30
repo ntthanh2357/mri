@@ -1,9 +1,10 @@
 import { Schema, model } from 'mongoose';
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const invoiceItemSchema = new Schema({
   description: { type: String, required: true },
   amount: { type: Number, required: true },
-  type: { type: String, enum: ['exam', 'mri', 'ai', 'other'], default: 'other' }
+  type: { type: String, enum: ['exam', 'mri', 'ai', 'drug', 'other'], default: 'other' }
 }, { _id: false });
 
 const invoiceSchema = new Schema(
@@ -19,6 +20,8 @@ const invoiceSchema = new Schema(
   },
   { timestamps: true }
 );
+
+invoiceSchema.plugin(tenancyPlugin);
 
 export const Invoice = model('Invoice', invoiceSchema);
 export default Invoice;

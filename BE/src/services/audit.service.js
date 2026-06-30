@@ -1,7 +1,33 @@
+import mongoose from "mongoose";
+import { User } from "../models/user.model.js";
+import { Hospital } from "../models/hospital.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 
-export const getAuditLogs = async () => {
-  return AuditLog.find().sort({ createdAt: -1 }).lean();
+export const getAuditLogs = async (hospitalId = null) => {
+  const query = {};
+  if (hospitalId) {
+    query.hospitalId = hospitalId;
+  }
+  const logs = await AuditLog.find(query).sort({ createdAt: -1 }).lean();
+
+  const userIds = logs.map(l => l.performedBy).filter(id => mongoose.Types.ObjectId.isValid(id));
+  const users = await User.find({ _id: { $in: userIds } }).select("profile.name email").lean();
+  const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+  const hospitalIds = logs.map(l => l.hospitalId).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+  const hospitals = await Hospital.find({ _id: { $in: hospitalIds } }).select("name").lean();
+  const hospitalMap = new Map(hospitals.map(h => [h._id.toString(), h]));
+
+  return logs.map(log => {
+    const user = userMap.get(log.performedBy);
+    const hospitalObj = log.hospitalId ? hospitalMap.get(log.hospitalId.toString()) : null;
+    return {
+      ...log,
+      performedByName: user?.profile?.name || user?.email || log.performedBy || "Hệ thống",
+      performedByEmail: user?.email || "",
+      hospitalName: hospitalObj?.name || "Hệ thống"
+    };
+  });
 };
 
 /**

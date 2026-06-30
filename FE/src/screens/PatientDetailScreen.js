@@ -63,6 +63,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [clinicalWarnings, setClinicalWarnings] = useState([]);
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
+  const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
   // State cho Giấy ra viện
   const [dischargePapers, setDischargePapers] = useState([]);
@@ -175,6 +176,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setSelectedOrder(null);
       }
 
+      // 9. Lấy kho thuốc của bệnh viện
+      try {
+        const drugsRes = await get('/api/drugs');
+        if (drugsRes && drugsRes.success) {
+          setAvailableDrugs(drugsRes.data?.drugs || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh mục thuốc:', err);
+      }
+
     } catch (error) {
       console.error('Lỗi tải dữ liệu chi tiết bệnh nhân:', error);
       Alert.alert('Lỗi', 'Không thể kết nối đến máy chủ để tải hồ sơ bệnh nhân.');
@@ -283,6 +294,14 @@ const PatientDetailScreen = ({ route, navigation }) => {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin thuốc.');
       return;
     }
+
+    // Kiểm tra tồn kho
+    const drugObj = availableDrugs.find(d => d.name === selectedPredefinedDrug);
+    if (drugObj && Number(drugQuantity) > (drugObj.stock?.quantity || 0)) {
+      Alert.alert('Cảnh báo Tồn Kho', `Thuốc ${drugObj.name} hiện chỉ còn ${drugObj.stock?.quantity || 0} ${drugObj.stock?.unit || 'viên'} trong kho. Hãy nhập số lượng nhỏ hơn hoặc bằng tồn kho.`);
+      return;
+    }
+
     const newDrug = {
       name: selectedPredefinedDrug,
       quantity: Number(drugQuantity),
@@ -1003,19 +1022,11 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     onChangeText={setSelectedPredefinedDrug}
                   />
                   {(() => {
-                    const predefinedDrugsList = [
-                      "Keppra",
-                      "Depakine",
-                      "Tegretol",
-                      "Phenobarbital",
-                      "Diazepam",
-                      "Dexamethasone",
-                      "Donepezil"
-                    ];
                     const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
-                      !predefinedDrugsList.includes(selectedPredefinedDrug);
-                    const filtered = predefinedDrugsList.filter(d => 
-                      d.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
+                      !availableDrugs.find(d => d.name === selectedPredefinedDrug);
+                    
+                    const filtered = availableDrugs.filter(d => 
+                      d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
                     );
                     
                     if (showSuggestions && filtered.length > 0) {
@@ -1023,11 +1034,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
                         <View style={styles.suggestionsContainer}>
                           {filtered.map((drug) => (
                             <TouchableOpacity
-                              key={drug}
+                              key={drug._id}
                               style={styles.suggestionItem}
-                              onPress={() => setSelectedPredefinedDrug(drug)}
+                              onPress={() => {
+                                setSelectedPredefinedDrug(drug.name);
+                                setDrugUnit(drug.stock?.unit || 'viên');
+                              }}
                             >
-                              <Text style={styles.suggestionText}>💊 {drug}</Text>
+                              <Text style={styles.suggestionText}>
+                                💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
+                              </Text>
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -1563,7 +1579,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',
@@ -1632,7 +1648,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',

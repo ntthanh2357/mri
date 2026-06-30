@@ -1,6 +1,13 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const transferFormSchema = new Schema({
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: "Hospital",
+    required: true,
+    index: true
+  },
   patient_id: {
     type: Schema.Types.ObjectId,
     ref: "User",
@@ -93,6 +100,8 @@ const transferFormSchema = new Schema({
 }, {
   timestamps: true
 });
+
+transferFormSchema.plugin(tenancyPlugin);
 
 export const TransferForm = model("TransferForm", transferFormSchema, "transfer_forms");
 export default TransferForm;

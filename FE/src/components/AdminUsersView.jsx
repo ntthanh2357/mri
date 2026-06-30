@@ -24,7 +24,7 @@ import { apiRequest } from '../utils/apiClient';
 // Map an API user to the BackofficeUser list row shape
 function mapApiUser(u) {
   return {
-    id: u._id,
+    id: u._id || u.id,          // Hỗ trợ cả MongoDB _id và alias id
     name: u.profile?.name || u.email,
     email: u.email,
     phone: u.profile?.phone || u.phone || '',
@@ -168,7 +168,9 @@ export default function AdminUsersView() {
         setCreateSuccess('Tạo tài khoản thành công!');
         const mapped = mapApiUser(data.user);
         setUsersList(prev => [mapped, ...prev]);
-        handleSelectUser(data.user.id);
+        // BE trả về data.user._id (từ newUser._id), fallback sang .id nếu có
+        const newUserId = data.user._id || data.user.id;
+        if (newUserId) handleSelectUser(newUserId);
         setTimeout(() => {
           setShowCreateModal(false);
           resetCreateForm();
@@ -312,9 +314,12 @@ export default function AdminUsersView() {
           className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full lg:w-48"
         >
           <option value="">Tất cả các Role</option>
-          <option value="patient">Bệnh nhân</option>
-          <option value="doctor">Bác sĩ</option>
-          <option value="admin">Quản trị viên</option>
+          <option value="patient">🧑‍⚕️ Bệnh nhân</option>
+          <option value="doctor">👨‍⚕️ Bác sĩ</option>
+          <option value="hospital_admin">🏥 Quản lý Bệnh viện</option>
+          <option value="nurse">👩‍⚕️ Y tá / Điều dưỡng</option>
+          <option value="technician">🔬 Kỹ thuật viên</option>
+          <option value="admin">🛡️ System Admin</option>
         </select>
 
         {/* Filter Status */}
@@ -609,7 +614,8 @@ export default function AdminUsersView() {
                   )}
                 </div>
 
-                {selectedUserDetail.role === 'admin' && (
+                {/* Nút Duyệt / Hủy duyệt chỉ hiện với hospital_admin (Quản lý bệnh viện cần xác nhận) */}
+                {selectedUserDetail.role === 'hospital_admin' && (
                   <div className="flex">
                     {selectedUserDetail.isVerified ? (
                       <button
