@@ -185,7 +185,7 @@ const PremiumScreen = ({ navigation }) => {
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const d = new Date(dateString);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const { width } = useWindowDimensions();
@@ -264,10 +264,10 @@ const PremiumScreen = ({ navigation }) => {
                   <Text style={styles.popularBadgeText}>PHỔ BIẾN NHẤT</Text>
                 </View>
                 <Text style={styles.planNamePremium}>Gói Premium</Text>
-                <Text style={styles.planDescPremium}>Gói thử nghiệm Premium 1 phút để test tính năng gia hạn</Text>
+                <Text style={styles.planDescPremium}>Đăng ký gói hội viên Premium để mở khóa đầy đủ tính năng tiên tiến nhất</Text>
                 <View style={styles.priceRow}>
-                  <Text style={styles.planPricePremium}>2.000đ</Text>
-                  <Text style={styles.planPeriodPremium}>/phút (Gói test)</Text>
+                  <Text style={styles.planPricePremium}>99.000đ</Text>
+                  <Text style={styles.planPeriodPremium}>/năm</Text>
                 </View>
 
                 <View style={styles.featuresList}>

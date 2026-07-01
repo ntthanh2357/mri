@@ -329,9 +329,10 @@ export const handlePayOSWebhook = async (req, res) => {
           if (user) {
             user.isPremium = true;
 
-            // Premium có giá trị trong 1 phút (Gói test 2000đ)
-            const oneMinFromNow = new Date(Date.now() + 60 * 1000);
-            user.premiumUntil = oneMinFromNow;
+            // Premium có giá trị trong 1 năm (Gói Premium 99.000 VNĐ)
+            const oneYearFromNow = new Date();
+            oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+            user.premiumUntil = oneYearFromNow;
             user.autoRenew = true; // Bật tự động gia hạn khi đăng ký mới
 
             await user.save();
@@ -361,7 +362,7 @@ export const createPremiumPayment = async (req, res) => {
       return res.status(400).json({ message: "Tài khoản của bạn đã là Premium" });
     }
 
-    const amount = 2000; // Gói test 2000 VNĐ
+    const amount = 99000; // Gói Premium 99.000 VNĐ
 
     // Tạo mã orderCode duy nhất dạng số nguyên cho PayOS (9 chữ số cuối của timestamp + số ngẫu nhiên)
     const orderCode = Number(String(Date.now()).slice(-9)) + Math.floor(Math.random() * 1000);
@@ -430,8 +431,9 @@ export const paymentSuccess = async (req, res) => {
         const user = await User.findById(premiumOrder.userId);
         if (user) {
           user.isPremium = true;
-          const oneMinFromNow = new Date(Date.now() + 60 * 1000);
-          user.premiumUntil = oneMinFromNow;
+          const oneYearFromNow = new Date();
+          oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+          user.premiumUntil = oneYearFromNow;
           user.autoRenew = true; // Bật tự động gia hạn khi đăng ký mới
           await user.save();
           console.log(`[Local Direct Activation] Activated Premium for User: ${user.email}, orderCode: ${orderCode}`);

@@ -211,10 +211,12 @@ export const getMe = async (req, res) => {
     // Check Premium expiration
     if (user.isPremium && user.premiumUntil && new Date() > user.premiumUntil) {
       if (user.autoRenew) {
-        // Auto-renew: Charge 2000 VNĐ and extend by 1 minute
-        user.premiumUntil = new Date(Date.now() + 60 * 1000);
+        // Auto-renew: Charge 99.000 VNĐ and extend by 1 year
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        user.premiumUntil = nextYear;
         await user.save();
-        console.log(`[Auto-Renew] Automatically renewed Premium for ${user.email}. Charged 2000 VNĐ. Next expiration: ${user.premiumUntil.toISOString()}`);
+        console.log(`[Auto-Renew] Automatically renewed Premium for ${user.email}. Charged 99.000 VNĐ. Next expiration: ${user.premiumUntil.toISOString()}`);
       } else {
         // Expire: Set isPremium to false
         user.isPremium = false;
