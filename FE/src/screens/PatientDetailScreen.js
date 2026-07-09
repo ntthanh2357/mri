@@ -1015,42 +1015,76 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>Tên thuốc điều trị *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
-                    value={selectedPredefinedDrug}
-                    onChangeText={setSelectedPredefinedDrug}
-                  />
-                  {(() => {
-                    const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
-                      !availableDrugs.find(d => d.name === selectedPredefinedDrug);
-                    
-                    const filtered = availableDrugs.filter(d => 
-                      d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
-                    );
-                    
-                    if (showSuggestions && filtered.length > 0) {
-                      return (
-                        <View style={styles.suggestionsContainer}>
-                          {filtered.map((drug) => (
-                            <TouchableOpacity
-                              key={drug._id}
-                              style={styles.suggestionItem}
-                              onPress={() => {
-                                setSelectedPredefinedDrug(drug.name);
-                                setDrugUnit(drug.stock?.unit || 'viên');
-                              }}
-                            >
-                              <Text style={styles.suggestionText}>
-                                💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {Platform.OS === 'web' ? (
+                    <>
+                      <input
+                        type="text"
+                        list="drugs-datalist"
+                        value={selectedPredefinedDrug}
+                        onChange={(e) => {
+                          setSelectedPredefinedDrug(e.target.value);
+                          const drug = availableDrugs.find(d => d.name === e.target.value);
+                          if (drug) setDrugUnit(drug.stock?.unit || 'viên');
+                        }}
+                        placeholder="Nhập hoặc chọn tên thuốc (VD: Keppra...)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #CBD5E1',
+                          outline: 'none',
+                          fontSize: '14px',
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontFamily: 'inherit'
+                        }}
+                      />
+                      <datalist id="drugs-datalist">
+                        {availableDrugs.map(d => (
+                          <option key={d._id} value={d.name}>{`Tồn: ${d.stock?.quantity || 0} ${d.stock?.unit || 'viên'}`}</option>
+                        ))}
+                      </datalist>
+                    </>
+                  ) : (
+                    <View style={{ position: 'relative', zIndex: 1000 }}>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
+                        value={selectedPredefinedDrug}
+                        onChangeText={setSelectedPredefinedDrug}
+                      />
+                      {(() => {
+                        const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
+                          !availableDrugs.find(d => d.name === selectedPredefinedDrug);
+                        
+                        const filtered = availableDrugs.filter(d => 
+                          d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
+                        );
+                        
+                        if (showSuggestions && filtered.length > 0) {
+                          return (
+                            <View style={styles.suggestionsContainer}>
+                              {filtered.map((drug) => (
+                                <TouchableOpacity
+                                  key={drug._id}
+                                  style={styles.suggestionItem}
+                                  onPress={() => {
+                                    setSelectedPredefinedDrug(drug.name);
+                                    setDrugUnit(drug.stock?.unit || 'viên');
+                                  }}
+                                >
+                                  <Text style={styles.suggestionText}>
+                                    💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.formRow}>
