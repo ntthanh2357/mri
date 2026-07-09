@@ -11,36 +11,16 @@ import {
   useWindowDimensions,
   Image,
 } from 'react-native';
-import { get, setAuthToken } from '../services/api.service';
+import { get, put, setAuthToken } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Colors from '../constants/colors';
 
-const scheduleData = [
-  {
-    time: '08:00 AM',
-    title: 'Uống thuốc hỗ trợ trí nhớ',
-    desc: 'Liều lượng: 1 viên Donepezil 5mg sau ăn sáng.',
-    tags: ['Đã uống', 'Nhắc lại sau 15p'],
-    tagTypes: ['success', 'normal'],
-    dotColor: '#22C55E',
-  },
-  {
-    time: '10:30 AM',
-    title: 'Khám lâm sàng định kỳ',
-    desc: 'Bác sĩ: Dr. Lê Minh - Chuyên khoa Thần kinh.',
-    tags: ['Cuộc gọi Video sẽ bắt đầu sau 2h'],
-    tagTypes: ['info'],
-    dotColor: '#3B82F6',
-  },
-  {
-    time: '04:00 PM',
-    title: 'Tập luyện nhận thức',
-    desc: '30 phút trò chơi giải đố & ghi nhớ trên ứng dụng.',
-    tags: [],
-    tagTypes: [],
-    dotColor: '#94A3B8',
-  },
-];
+const SHIFT_LABELS = {
+  'sáng': 'Ca Sáng',
+  'chiều': 'Ca Chiều',
+  'tối': 'Ca Tối',
+  'cả ngày': 'Cả Ngày',
+};
 
 const HomeScreen = ({ route, navigation }) => {
   const { width } = useWindowDimensions();
@@ -56,6 +36,8 @@ const HomeScreen = ({ route, navigation }) => {
   const [queueVisits, setQueueVisits] = useState([]);
   const [todaySchedule, setTodaySchedule] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [todayReminders, setTodayReminders] = useState([]);
+  const [loadingReminders, setLoadingReminders] = useState(false);
 
   useEffect(() => {
     // If user is already provided via navigation params (quick login), skip fetching
@@ -127,10 +109,11 @@ const HomeScreen = ({ route, navigation }) => {
           setQueueVisits(queueRes.visits);
         }
         
-        if (schedRes && schedRes.schedules) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          const todayS = schedRes.schedules.find(s => s.date.startsWith(todayStr));
-          setTodaySchedule(todayS);
+        const todaySchedules = schedRes?.data?.schedules;
+        if (Array.isArray(todaySchedules)) {
+          const todayStr = new Date().toDateString();
+          const todayS = todaySchedules.find(s => new Date(s.date).toDateString() === todayStr);
+          setTodaySchedule(todayS || null);
         }
       } catch (err) {
         console.error('Lỗi khi tải thống kê HomeScreen:', err);
@@ -141,6 +124,34 @@ const HomeScreen = ({ route, navigation }) => {
 
     fetchStats();
   }, [user]);
+
+  const fetchTodayReminders = async () => {
+    setLoadingReminders(true);
+    try {
+      const res = await get('/api/v1/patient/reminders/today');
+      if (res && res.success) {
+        setTodayReminders(res.data || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải lịch trình uống thuốc:', err);
+    } finally {
+      setLoadingReminders(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || user.role !== 'patient') return;
+    fetchTodayReminders();
+  }, [user]);
+
+  const handleMarkReminderDone = async (id) => {
+    try {
+      await put(`/api/v1/patient/reminders/${id}/done`, {});
+    } catch (err) {
+      console.error('Lỗi khi đánh dấu đã uống thuốc:', err);
+    }
+    fetchTodayReminders();
+  };
 
   const handleLogout = () => {
     setAuthToken('');
@@ -234,64 +245,6 @@ const HomeScreen = ({ route, navigation }) => {
                   </Text>
                 </View>
               )}
-
-              {/* Health Metrics */}
-              <View style={styles.metricsContainer}>
-                {/* Heart Rate */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#FEF2F2' }]}>
-                      <Text style={styles.metricEmoji}>❤️</Text>
-                    </View>
-                    <View style={styles.metricBadge}>
-                      <Text style={styles.metricBadgeText}>Ổn định</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.metricLabel}>Nhịp tim</Text>
-                  <Text style={styles.metricValue}>
-                    72 <Text style={styles.metricUnit}>BPM</Text>
-                  </Text>
-                  <View style={styles.sparkline}>
-                    {[15, 25, 20, 30, 20, 25, 15].map((h, i) => (
-                      <View key={i} style={[styles.sparklineBar, { height: h, backgroundColor: '#EF4444' }]} />
-                    ))}
-                  </View>
-                </View>
-
-                {/* Sleep */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#EEF2FF' }]}>
-                      <Text style={styles.metricEmoji}>🌙</Text>
-                    </View>
-                    <View style={[styles.metricBadge, { backgroundColor: '#EFF6FF' }]}>
-                      <Text style={[styles.metricBadgeText, { color: '#0284C7' }]}>+15%</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.metricLabel}>Giấc ngủ</Text>
-                  <Text style={styles.metricValue}>7h 45m</Text>
-                  <View style={styles.barContainer}>
-                    <View style={[styles.barFill, { width: '80%', backgroundColor: '#6366F1' }]} />
-                  </View>
-                </View>
-
-                {/* Activity */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#FEFCE8' }]}>
-                      <Text style={styles.metricEmoji}>⚡</Text>
-                    </View>
-                    <Text style={styles.metricBadgeValue}>8,421</Text>
-                  </View>
-                  <Text style={styles.metricLabel}>Hoạt động</Text>
-                  <Text style={styles.metricValue}>
-                    84% <Text style={styles.metricUnit}>mục tiêu</Text>
-                  </Text>
-                  <View style={styles.barContainer}>
-                    <View style={[styles.barFill, { width: '84%', backgroundColor: '#22C55E' }]} />
-                  </View>
-                </View>
-              </View>
 
               {/* MRI Result Card */}
               <View style={styles.mriCard}>
@@ -417,47 +370,48 @@ const HomeScreen = ({ route, navigation }) => {
                 </View>
 
                 <View style={styles.scheduleList}>
-                  {scheduleData.map((item, idx) => (
-                    <View key={idx} style={styles.scheduleItem}>
-                      <View style={styles.scheduleTimeline}>
-                        <View style={[styles.timelineDot, { backgroundColor: item.dotColor }]} />
-                        {idx < scheduleData.length - 1 && <View style={styles.timelineLine} />}
-                      </View>
-                      <View style={styles.scheduleContent}>
-                        <Text style={styles.scheduleTime}>{item.time}</Text>
-                        <Text style={styles.scheduleTitle}>{item.title}</Text>
-                        <Text style={styles.scheduleDesc}>{item.desc}</Text>
-                        {item.tags.length > 0 && (
-                          <View style={styles.scheduleTags}>
-                            {item.tags.map((tag, tagIdx) => {
-                              const isSuccess = item.tagTypes[tagIdx] === 'success';
-                              const isInfo = item.tagTypes[tagIdx] === 'info';
-                              return (
-                                <View
-                                  key={tagIdx}
-                                  style={[
-                                    styles.scheduleTag,
-                                    isSuccess && styles.tagSuccess,
-                                    isInfo && styles.tagInfo,
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.scheduleTagText,
-                                      isSuccess && styles.tagSuccessText,
-                                      isInfo && styles.tagInfoText,
-                                    ]}
-                                  >
-                                    {tag}
-                                  </Text>
-                                </View>
-                              );
-                            })}
+                  {loadingReminders ? (
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 16 }} />
+                  ) : todayReminders.length === 0 ? (
+                    <Text style={styles.scheduleDesc}>Không có lịch uống thuốc nào hôm nay.</Text>
+                  ) : (
+                    todayReminders.map((item, idx) => {
+                      const isDone = item.status === 'done';
+                      const isSkipped = item.status === 'skipped';
+                      const dotColor = isDone ? '#22C55E' : isSkipped ? '#94A3B8' : '#3B82F6';
+                      return (
+                        <View key={item._id} style={styles.scheduleItem}>
+                          <View style={styles.scheduleTimeline}>
+                            <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
+                            {idx < todayReminders.length - 1 && <View style={styles.timelineLine} />}
                           </View>
-                        )}
-                      </View>
-                    </View>
-                  ))}
+                          <View style={styles.scheduleContent}>
+                            <Text style={styles.scheduleTime}>{item.time}</Text>
+                            <Text style={styles.scheduleTitle}>Uống thuốc: {item.drugName}</Text>
+                            <Text style={styles.scheduleDesc}>{item.dosageText}</Text>
+                            <View style={styles.scheduleTags}>
+                              {isDone ? (
+                                <View style={[styles.scheduleTag, styles.tagSuccess]}>
+                                  <Text style={[styles.scheduleTagText, styles.tagSuccessText]}>Đã uống</Text>
+                                </View>
+                              ) : isSkipped ? (
+                                <View style={styles.scheduleTag}>
+                                  <Text style={styles.scheduleTagText}>Đã bỏ qua</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={[styles.scheduleTag, styles.tagInfo]}
+                                  onPress={() => handleMarkReminderDone(item._id)}
+                                >
+                                  <Text style={[styles.scheduleTagText, styles.tagInfoText]}>Đánh dấu đã uống</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
                 </View>
               </View>
 
@@ -508,8 +462,16 @@ const HomeScreen = ({ route, navigation }) => {
                 {isNurse ? (
                   <>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>Ca trực</Text>
-                      <Text style={styles.doctorStatLabel}>Ca sáng (07h–13h)</Text>
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#15803D" />
+                      ) : (
+                        <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>
+                          {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
+                        </Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>
+                        {todaySchedule?.startTime ? `${todaySchedule.startTime} - ${todaySchedule.endTime}` : 'Ca trực hôm nay'}
+                      </Text>
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
@@ -582,8 +544,10 @@ const HomeScreen = ({ route, navigation }) => {
                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                          <Text style={{ fontSize: 24, marginRight: 12 }}>⏰</Text>
                          <View>
-                           <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {todaySchedule.shiftType}</Text>
-                           <Text style={{ fontSize: 13, color: '#64748B' }}>Khoa: {todaySchedule.department}</Text>
+                           <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift}</Text>
+                           {todaySchedule.startTime ? (
+                             <Text style={{ fontSize: 13, color: '#64748B' }}>Giờ: {todaySchedule.startTime} - {todaySchedule.endTime}</Text>
+                           ) : null}
                          </View>
                        </View>
                     ) : (
@@ -721,7 +685,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('ReceptionistDashboard')}
+                      onPress={() => navigation.navigate('NurseReception')}
                     >
                       <Text style={styles.doctorGridIcon}>💳</Text>
                       <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
@@ -1183,89 +1147,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#166534',
     marginTop: 4,
-  },
-  metricsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricEmoji: {
-    fontSize: 16,
-  },
-  metricBadge: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  metricBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#166534',
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 8,
-  },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  metricUnit: {
-    fontSize: 12,
-    fontWeight: 'normal',
-    color: '#64748B',
-  },
-  sparkline: {
-    flexDirection: 'row',
-    gap: 2,
-    alignItems: 'flex-end',
-    height: 30,
-    marginTop: 10,
-  },
-  sparklineBar: {
-    flex: 1,
-    borderRadius: 2,
-  },
-  barContainer: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    marginTop: 14,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  metricBadgeValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#334155',
   },
   mriCard: {
     backgroundColor: '#FFFFFF',

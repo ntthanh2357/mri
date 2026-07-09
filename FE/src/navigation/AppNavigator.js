@@ -18,6 +18,8 @@ import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import MedicalRecordFormScreen from '../screens/MedicalRecordFormScreen';
 import DocumentDetailScreen from '../screens/DocumentDetailScreen';
+import RecordVaultScreen from '../screens/RecordVaultScreen';
+import DocumentFormScreen from '../screens/DocumentFormScreen';
 import Colors from '../constants/colors';
 import AdminBackofficeScreen from '../screens/AdminBackofficeScreen';
 import EMRDashboardScreen from '../screens/EMRDashboardScreen';
@@ -97,6 +99,8 @@ const AppNavigator = () => {
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
         <Stack.Screen name="MedicalRecordForm" component={MedicalRecordFormScreen} options={{ title: 'Bệnh án Ung thư Não', headerShown: false }} />
         <Stack.Screen name="DocumentDetail" component={DocumentDetailScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="RecordVault" component={RecordVaultScreen} options={{ title: 'Khai báo bệnh án', headerShown: false }} />
+        <Stack.Screen name="DocumentForm" component={DocumentFormScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ImagingHistory" component={ImagingHistoryScreen} options={{ title: 'Lịch sử phim chụp', headerShown: false }} />
         <Stack.Screen name="ImagingResult" component={ImagingResultScreen} options={{ title: 'Chi tiết phim chụp', headerShown: false }} />
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />

@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
-  Alert,
   useWindowDimensions,
   Modal,
 } from 'react-native';
@@ -39,6 +38,22 @@ const DAYS_OF_WEEK = [
   { label: 'Thứ 7', key: 6 },
   { label: 'Chủ Nhật', key: 0 },
 ];
+
+const timeToMinutes = (t) => {
+  if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// Two time ranges overlap when one starts before the other ends, both ways
+const isTimeOverlap = (aStart, aEnd, bStart, bEnd) => {
+  const s1 = timeToMinutes(aStart);
+  const e1 = timeToMinutes(aEnd);
+  const s2 = timeToMinutes(bStart);
+  const e2 = timeToMinutes(bEnd);
+  if (s1 === null || e1 === null || s2 === null || e2 === null) return false;
+  return s1 < e2 && s2 < e1;
+};
 
 export default function StaffSchedulingScreen({ navigation }) {
   const { width } = useWindowDimensions();
@@ -78,12 +93,31 @@ export default function StaffSchedulingScreen({ navigation }) {
   const [targetDateStr, setTargetDateStr] = useState('');
   const [swapReason, setSwapReason] = useState('');
 
+  // Cross-platform confirm/notify dialog.
+  // Alert.alert() is a no-op on web (react-native-web), so this app cannot
+  // rely on it for anything the user needs to see or confirm — use this instead.
+  const [dialog, setDialog] = useState(null); // { title, message, buttons: [{ text, style, onPress }] }
+  const closeDialog = () => setDialog(null);
+  const showDialog = (title, message, buttons = [{ text: 'OK' }]) => {
+    setDialog({
+      title,
+      message,
+      buttons: buttons.map((b) => ({
+        ...b,
+        onPress: () => {
+          closeDialog();
+          b.onPress?.();
+        },
+      })),
+    });
+  };
+
   // Fetch Core Information
   const fetchCurrentUser = async () => {
     try {
       const res = await get('/auth/me');
       if (res && res.user) {
-        setCurrentUser(res.user);
+        setCurrentUser({ ...res.user, id: res.user._id });
         // Default to personal schedule if not hospital admin
         if (res.user.role !== 'hospital_admin' && res.user.role !== 'admin') {
           setActiveTab('my-schedule');
@@ -120,7 +154,7 @@ export default function StaffSchedulingScreen({ navigation }) {
       const monday = getWeekStartString(new Date(currentWeekStart));
       const res = await get(`/api/v1/schedules?week=${monday.toISOString()}`);
       if (res && res.success) {
-        setWeeklySchedules(res.schedules || []);
+        setWeeklySchedules(res.data?.schedules || []);
       }
     } catch (err) {
       console.error('Lỗi lấy lịch làm việc tuần:', err);
@@ -133,7 +167,7 @@ export default function StaffSchedulingScreen({ navigation }) {
     try {
       const res = await get('/api/v1/schedules/swap-requests');
       if (res && res.success) {
-        setSwapRequests(res.requests || []);
+        setSwapRequests(res.data?.requests || []);
       }
     } catch (err) {
       console.error('Lỗi lấy yêu cầu đổi ca:', err);
@@ -182,56 +216,43 @@ export default function StaffSchedulingScreen({ navigation }) {
 
   const weekDates = getWeekDates();
 
-  // Find Schedule for staff member and date
-  const findSchedule = (staffId, date) => {
+  // Find all schedules (a staff member may have several shifts in the same day)
+  const findSchedules = (staffId, date) => {
     const dateStr = date.toDateString();
-    return weeklySchedules.find(
+    return weeklySchedules.filter(
       (s) => s.staffId?._id === staffId && new Date(s.date).toDateString() === dateStr
     );
   };
 
-  // Open Schedule Dialog for assignment or registration
-  const handleCellPress = (staff, date) => {
-    const existing = findSchedule(staff._id || staff.id, date);
-    
-    if (!isHospitalAdmin) {
-      if (existing) return; // Staff cannot edit existing from this flow
-      // Allow registration
-      setSelectedStaff(staff);
-      setSelectedDate(date);
-      setSelectedSchedule(null);
-      setShift('sáng');
-      setStartTime('');
-      setEndTime('');
-      setNotes('');
-      setStatus('pending');
-      setShowScheduleModal(true);
-      return;
-    }
-
-    // Admin flow
+  // Open blank Schedule Dialog to add a new shift for a staff/date (admin only)
+  const handleAddShift = (staff, date) => {
+    if (!isHospitalAdmin) return;
     setSelectedStaff(staff);
     setSelectedDate(date);
-    if (existing) {
-      setSelectedSchedule(existing);
-      setShift(existing.shift);
-      setStartTime(existing.startTime || '');
-      setEndTime(existing.endTime || '');
-      setNotes(existing.notes || '');
-      setStatus(existing.status || 'confirmed');
-    } else {
-      setSelectedSchedule(null);
-      setShift('sáng');
-      setStartTime('07:00');
-      setEndTime('15:00');
-      setNotes('');
-      setStatus('confirmed');
-    }
+    setSelectedSchedule(null);
+    setShift('sáng');
+    setStartTime('07:00');
+    setEndTime('15:00');
+    setNotes('');
+    setStatus('confirmed');
     setShowScheduleModal(true);
   };
 
-  // Create / Update Schedule
-  const handleSaveSchedule = async () => {
+  // Open Schedule Dialog pre-filled to edit one specific existing shift (admin only)
+  const handleEditShift = (schedule, staff, date) => {
+    if (!isHospitalAdmin) return;
+    setSelectedStaff(staff);
+    setSelectedDate(date);
+    setSelectedSchedule(schedule);
+    setShift(schedule.shift);
+    setStartTime(schedule.startTime || '');
+    setEndTime(schedule.endTime || '');
+    setNotes(schedule.notes || '');
+    setStatus(schedule.status || 'confirmed');
+    setShowScheduleModal(true);
+  };
+
+  const performSaveSchedule = async () => {
     setSubmitting(true);
     try {
       const payload = {
@@ -245,31 +266,52 @@ export default function StaffSchedulingScreen({ navigation }) {
       };
 
       let res;
-      if (!isHospitalAdmin) {
-        // Staff registers shift
-        res = await post('/api/v1/schedules/register', payload);
-      } else if (selectedSchedule) {
+      if (selectedSchedule) {
         res = await put(`/api/v1/schedules/${selectedSchedule._id}`, payload);
       } else {
         res = await post('/api/v1/schedules', payload);
       }
 
       if (res && res.success) {
-        Alert.alert('Thành công', isHospitalAdmin ? 'Đã lưu ca làm việc thành công!' : 'Đã gửi đăng ký ca làm việc thành công!');
+        showDialog('Thành công', 'Đã lưu ca làm việc thành công!');
         setShowScheduleModal(false);
         fetchWeeklySchedules();
       }
     } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Không thể lưu lịch làm.');
+      showDialog('Lỗi', err.message || 'Không thể lưu lịch làm.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Create / Update Schedule — warns if this shift's time overlaps another shift already
+  // assigned to the same staff member on the same day, but still allows saving on confirm
+  const handleSaveSchedule = () => {
+    const staffId = selectedStaff._id || selectedStaff.id;
+    const siblingShifts = findSchedules(staffId, selectedDate).filter(
+      (s) => !selectedSchedule || s._id !== selectedSchedule._id
+    );
+    const conflict = siblingShifts.find((s) => isTimeOverlap(startTime, endTime, s.startTime, s.endTime));
+
+    if (conflict) {
+      showDialog(
+        'Trùng giờ ca trực',
+        `Ca này (${startTime || '?'}-${endTime || '?'}) chồng giờ với ${SHIFT_LABELS[conflict.shift]} (${conflict.startTime}-${conflict.endTime}) đã xếp cho nhân sự này. Bạn có chắc muốn tiếp tục lưu?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Vẫn lưu', onPress: performSaveSchedule },
+        ]
+      );
+      return;
+    }
+
+    performSaveSchedule();
+  };
+
   // Delete Schedule
-  const handleDeleteSchedule = async () => {
+  const handleDeleteSchedule = () => {
     if (!selectedSchedule) return;
-    Alert.alert(
+    showDialog(
       'Xác nhận xóa',
       'Bạn có chắc muốn xóa ca làm này không?',
       [
@@ -282,12 +324,12 @@ export default function StaffSchedulingScreen({ navigation }) {
             try {
               const res = await del(`/api/v1/schedules/${selectedSchedule._id}`);
               if (res && res.success) {
-                Alert.alert('Đã xóa', 'Xóa ca làm thành công.');
+                showDialog('Đã xóa', 'Xóa ca làm thành công.');
                 setShowScheduleModal(false);
                 fetchWeeklySchedules();
               }
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể xóa ca làm này.');
+              showDialog('Lỗi', 'Không thể xóa ca làm này.');
             } finally {
               setSubmitting(false);
             }
@@ -308,7 +350,7 @@ export default function StaffSchedulingScreen({ navigation }) {
 
   const handleSwapSubmit = async () => {
     if (!targetDateStr.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập ngày muốn đổi sang.');
+      showDialog('Thiếu thông tin', 'Vui lòng nhập ngày muốn đổi sang.');
       return;
     }
     setSubmitting(true);
@@ -321,20 +363,20 @@ export default function StaffSchedulingScreen({ navigation }) {
       });
 
       if (res && res.success) {
-        Alert.alert('Thành công', 'Đã gửi yêu cầu đổi ca thành công! Chờ quản trị viên duyệt.');
+        showDialog('Thành công', 'Đã gửi yêu cầu đổi ca thành công! Chờ quản trị viên duyệt.');
         setShowSwapModal(false);
         fetchWeeklySchedules();
       }
     } catch (err) {
-      Alert.alert('Thất bại', err.message || 'Không thể tạo yêu cầu đổi ca.');
+      showDialog('Thất bại', err.message || 'Không thể tạo yêu cầu đổi ca.');
     } finally {
       setSubmitting(false);
     }
   };
 
   // Approve / Reject Swap Request
-  const handleReviewSwap = async (requestId, isApproved) => {
-    Alert.alert(
+  const handleReviewSwap = (requestId, isApproved) => {
+    showDialog(
       isApproved ? 'Duyệt đổi ca' : 'Từ chối đổi ca',
       `Bạn có chắc chắn muốn ${isApproved ? 'đồng ý' : 'từ chối'} yêu cầu này?`,
       [
@@ -348,11 +390,11 @@ export default function StaffSchedulingScreen({ navigation }) {
                 reviewNotes: 'Đã xử lý bởi Admin.',
               });
               if (res && res.success) {
-                Alert.alert('Xử lý thành công', res.message || 'Đã cập nhật trạng thái yêu cầu.');
+                showDialog('Xử lý thành công', res.message || 'Đã cập nhật trạng thái yêu cầu.');
                 fetchSwapRequests();
               }
             } catch (err) {
-              Alert.alert('Lỗi', err.message || 'Không thể xử lý yêu cầu.');
+              showDialog('Lỗi', err.message || 'Không thể xử lý yêu cầu.');
             }
           },
         },
@@ -494,54 +536,68 @@ export default function StaffSchedulingScreen({ navigation }) {
                             <Text style={styles.staffRoleText}>{getRoleLabel(staff.role)}</Text>
                           </View>
                           {weekDates.map((date, idx) => {
-                            const sched = findSchedule(staff._id, date);
-                            const shiftStyle = sched ? SHIFT_COLORS[sched.shift] : null;
+                            const schedsForDay = findSchedules(staff._id, date);
                             return (
-                              <TouchableOpacity
-                                key={idx}
-                                style={[styles.tableTdCell, { width: 100 }]}
-                                onPress={() => handleCellPress(staff, date)}
-                                disabled={!isHospitalAdmin && staff._id !== currentUser?.id}
-                              >
-                                {sched ? (
-                                  <View style={{
-                                    backgroundColor: shiftStyle.bg,
-                                    borderColor: sched.status === 'pending' ? '#F59E0B' : shiftStyle.border,
-                                    color: shiftStyle.text,
-                                    borderWidth: 1,
-                                    borderStyle: sched.status === 'pending' ? 'dashed' : 'solid',
-                                    padding: 6,
-                                    borderRadius: 6,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '100%',
-                                    opacity: sched.status === 'pending' ? 0.7 : 1
-                                  }}>
-                                    <Text style={{
-                                      color: shiftStyle.text,
-                                      fontSize: 11,
-                                      textAlign: 'center',
-                                      fontWeight: '600'
-                                    }}>
-                                      {SHIFT_LABELS[sched.shift]}
-                                    </Text>
-                                    {sched.status === 'pending' && (
-                                      <Text style={{ fontSize: 9, color: '#D97706', marginTop: 2, fontWeight: 'bold' }}>Chờ duyệt</Text>
+                              <View key={idx} style={[styles.tableTdCell, { width: 100 }]}>
+                                {schedsForDay.length > 0 ? (
+                                  <View style={{ width: '100%', gap: 4 }}>
+                                    {schedsForDay.map((sched) => {
+                                      const shiftStyle = SHIFT_COLORS[sched.shift];
+                                      return (
+                                        <TouchableOpacity
+                                          key={sched._id}
+                                          onPress={() => handleEditShift(sched, staff, date)}
+                                          disabled={!isHospitalAdmin}
+                                          style={{
+                                            backgroundColor: shiftStyle.bg,
+                                            borderColor: sched.status === 'pending' ? '#F59E0B' : shiftStyle.border,
+                                            borderWidth: 1,
+                                            borderStyle: sched.status === 'pending' ? 'dashed' : 'solid',
+                                            padding: 5,
+                                            borderRadius: 6,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '100%',
+                                            opacity: sched.status === 'pending' ? 0.7 : 1
+                                          }}
+                                        >
+                                          <Text style={{
+                                            color: shiftStyle.text,
+                                            fontSize: 10,
+                                            textAlign: 'center',
+                                            fontWeight: '600'
+                                          }}>
+                                            {SHIFT_LABELS[sched.shift]}
+                                          </Text>
+                                          {sched.status === 'pending' && (
+                                            <Text style={{ fontSize: 8, color: '#D97706', fontWeight: 'bold' }}>Chờ duyệt</Text>
+                                          )}
+                                          {sched.startTime && sched.status !== 'pending' ? (
+                                            <Text style={[styles.cellTime, { color: shiftStyle.text }]}>
+                                              {sched.startTime}-{sched.endTime}
+                                            </Text>
+                                          ) : null}
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                    {isHospitalAdmin && (
+                                      <TouchableOpacity style={styles.addShiftBtn} onPress={() => handleAddShift(staff, date)}>
+                                        <Text style={styles.addShiftBtnText}>+ Thêm ca</Text>
+                                      </TouchableOpacity>
                                     )}
-                                    {sched.startTime && sched.status !== 'pending' ? (
-                                      <Text style={[styles.cellTime, { color: shiftStyle.text }]}>
-                                        {`\n${sched.startTime}-${sched.endTime}`}
-                                      </Text>
-                                    ) : null}
                                   </View>
                                 ) : (
-                                  <View style={isHospitalAdmin || staff._id === currentUser?.id ? styles.emptyCellAdmin : styles.emptyCell}>
-                                    <Text style={isHospitalAdmin || staff._id === currentUser?.id ? styles.emptyCellAdminText : styles.emptyCellText}>
-                                      {isHospitalAdmin || staff._id === currentUser?.id ? '➕ Xếp ca' : 'Nghỉ'}
+                                  <TouchableOpacity
+                                    onPress={() => handleAddShift(staff, date)}
+                                    disabled={!isHospitalAdmin}
+                                    style={isHospitalAdmin ? styles.emptyCellAdmin : styles.emptyCell}
+                                  >
+                                    <Text style={isHospitalAdmin ? styles.emptyCellAdminText : styles.emptyCellText}>
+                                      {isHospitalAdmin ? '➕ Xếp ca' : 'Nghỉ'}
                                     </Text>
-                                  </View>
+                                  </TouchableOpacity>
                                 )}
-                              </TouchableOpacity>
+                              </View>
                             );
                           })}
                         </View>
@@ -572,8 +628,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               ) : (
                 <View style={styles.mySchedulesList}>
                   {weekDates.map((date, idx) => {
-                    const sched = currentUser ? findSchedule(currentUser.id, date) : null;
-                    const shiftStyle = sched ? SHIFT_COLORS[sched.shift] : null;
+                    const schedsForDay = currentUser ? findSchedules(currentUser.id, date) : [];
                     const isToday = date.toDateString() === new Date().toDateString();
                     return (
                       <View key={idx} style={[styles.myScheduleDayCard, isToday && styles.myDayToday]}>
@@ -584,48 +639,49 @@ export default function StaffSchedulingScreen({ navigation }) {
                           {isToday && <Text style={styles.todayBadge}>Hôm nay</Text>}
                         </View>
 
-                        {sched ? (
-                          <View style={styles.myShiftDetails}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                              <Text style={{
-                                backgroundColor: shiftStyle.bg,
-                                color: shiftStyle.text,
-                                borderColor: shiftStyle.border,
-                                borderWidth: 1,
-                                paddingVertical: 3,
-                                paddingHorizontal: 10,
-                                borderRadius: 6,
-                                fontSize: 11,
-                                fontWeight: 'bold'
-                              }}>
-                                {SHIFT_LABELS[sched.shift]}
-                              </Text>
-                              {sched.startTime && (
-                                <Text style={styles.myShiftTime}>
-                                  Thời gian: {sched.startTime} - {sched.endTime}
-                                </Text>
-                              )}
-                            </View>
-                            {sched.notes ? (
-                              <Text style={styles.myShiftNotes}>Ghi chú: {sched.notes}</Text>
-                            ) : null}
-                            
-                            <TouchableOpacity
-                              style={styles.btnSwapRequest}
-                              onPress={() => handleOpenSwapModal(sched)}
-                            >
-                              <Text style={styles.btnSwapText}>🔄 Yêu cầu đổi ca làm việc</Text>
-                            </TouchableOpacity>
+                        {schedsForDay.length > 0 ? (
+                          <View style={{ flex: 2, gap: 10 }}>
+                            {schedsForDay.map((sched) => {
+                              const shiftStyle = SHIFT_COLORS[sched.shift];
+                              return (
+                                <View key={sched._id} style={styles.myShiftDetails}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Text style={{
+                                      backgroundColor: shiftStyle.bg,
+                                      color: shiftStyle.text,
+                                      borderColor: shiftStyle.border,
+                                      borderWidth: 1,
+                                      paddingVertical: 3,
+                                      paddingHorizontal: 10,
+                                      borderRadius: 6,
+                                      fontSize: 11,
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {SHIFT_LABELS[sched.shift]}
+                                    </Text>
+                                    {sched.startTime && (
+                                      <Text style={styles.myShiftTime}>
+                                        Thời gian: {sched.startTime} - {sched.endTime}
+                                      </Text>
+                                    )}
+                                  </View>
+                                  {sched.notes ? (
+                                    <Text style={styles.myShiftNotes}>Ghi chú: {sched.notes}</Text>
+                                  ) : null}
+
+                                  <TouchableOpacity
+                                    style={styles.btnSwapRequest}
+                                    onPress={() => handleOpenSwapModal(sched)}
+                                  >
+                                    <Text style={styles.btnSwapText}>🔄 Yêu cầu đổi ca làm việc</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              );
+                            })}
                           </View>
                         ) : (
                           <View style={styles.myShiftEmpty}>
                             <Text style={styles.myShiftEmptyText}>Không có ca làm việc được phân (Nghỉ)</Text>
-                            <TouchableOpacity
-                              style={[styles.btnSwapRequest, { backgroundColor: '#10B981', marginTop: 8, alignSelf: 'flex-start' }]}
-                              onPress={() => handleCellPress(currentUser, date)}
-                            >
-                              <Text style={styles.btnSwapText}>➕ Đăng ký ca làm việc</Text>
-                            </TouchableOpacity>
                           </View>
                         )}
                       </View>
@@ -960,6 +1016,45 @@ export default function StaffSchedulingScreen({ navigation }) {
           </View>
         </Modal>
       )}
+
+      {/* CONFIRM / NOTIFY DIALOG (replaces non-functional Alert.alert on web) */}
+      {dialog && (
+        <Modal visible={!!dialog} transparent={true} animationType="fade" onRequestClose={closeDialog}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.dialogContainer}>
+              <Text style={styles.modalTitle}>{dialog.title}</Text>
+              {dialog.message ? <Text style={styles.modalSub}>{dialog.message}</Text> : null}
+              <View style={styles.dialogButtonRow}>
+                {dialog.buttons.map((b, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={
+                      b.style === 'destructive'
+                        ? styles.modalDeleteBtn
+                        : b.style === 'cancel'
+                        ? styles.modalCancelBtn
+                        : styles.modalSubmitBtn
+                    }
+                    onPress={b.onPress}
+                  >
+                    <Text
+                      style={
+                        b.style === 'destructive'
+                          ? styles.modalDeleteText
+                          : b.style === 'cancel'
+                          ? styles.modalCancelText
+                          : styles.modalSubmitText
+                      }
+                    >
+                      {b.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ResponsiveLayout>
   );
 }
@@ -1003,10 +1098,12 @@ const styles = StyleSheet.create({
   emptyCellText: { fontSize: 11, color: '#CBD5E1', textAlign: 'center' },
   emptyCellAdmin: { borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, paddingVertical: 8, backgroundColor: '#F8FAFC', width: '100%', alignItems: 'center', justifyContent: 'center' },
   emptyCellAdminText: { fontSize: 11, color: '#94A3B8', textAlign: 'center' },
+  addShiftBtn: { borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, paddingVertical: 4, backgroundColor: '#F8FAFC', width: '100%', alignItems: 'center', justifyContent: 'center' },
+  addShiftBtnText: { fontSize: 9, color: '#94A3B8', textAlign: 'center', fontWeight: 'bold' },
 
   // My schedule Day Cards
   mySchedulesList: { gap: 12 },
-  myScheduleDayCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12 },
+  myScheduleDayCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12 },
   myDayToday: { borderColor: '#15803D', backgroundColor: '#F0FDF4' },
   myDayHeader: { flex: 1 },
   myDayLabel: { fontSize: 14, fontWeight: 'bold', color: '#0F172A' },
@@ -1066,6 +1163,8 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, borderHeight: 1, borderWidth: 1, borderColor: '#E2E8F0', padding: 24, width: '100%', maxWidth: 450, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+  dialogContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 24, width: '100%', maxWidth: 380, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+  dialogButtonRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
   modalSub: { fontSize: 12, color: '#64748B', marginBottom: 20, lineHeight: 18 },
   field: { marginBottom: 14 },

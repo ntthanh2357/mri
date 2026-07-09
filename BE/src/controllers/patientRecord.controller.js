@@ -1,5 +1,6 @@
 import * as service from "../services/patientRecord.service.js";
 import { User } from "../models/user.model.js";
+import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
 const getTargetPatientId = async (req) => {
@@ -159,6 +160,60 @@ export const deleteDocument = async (req, res, next) => {
       req.params.docId
     );
     return successResponse(res, visit, "Đã xóa tài liệu.");
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
+};
+
+// ── Medicine Reminders ───────────────────────────────────────────────────────
+
+export const getTodayReminders = async (req, res, next) => {
+  try {
+    const targetId = await getTargetPatientId(req);
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    const reminders = await MedicineReminder.find({
+      patientId: targetId,
+      date: { $gte: startOfDay, $lt: endOfDay },
+    }).sort({ time: 1 });
+
+    return successResponse(res, reminders, "Lấy lịch trình uống thuốc hôm nay thành công.");
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
+};
+
+export const markReminderDone = async (req, res, next) => {
+  try {
+    const targetId = await getTargetPatientId(req);
+    const reminder = await MedicineReminder.findOneAndUpdate(
+      { _id: req.params.id, patientId: targetId },
+      { status: "done" },
+      { new: true }
+    );
+    if (!reminder) return errorResponse(res, "Không tìm thấy lịch nhắc thuốc.", 404);
+    return successResponse(res, reminder, "Đã đánh dấu đã uống thuốc.");
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
+};
+
+export const skipReminder = async (req, res, next) => {
+  try {
+    const targetId = await getTargetPatientId(req);
+    const reminder = await MedicineReminder.findOneAndUpdate(
+      { _id: req.params.id, patientId: targetId },
+      { status: "skipped" },
+      { new: true }
+    );
+    if (!reminder) return errorResponse(res, "Không tìm thấy lịch nhắc thuốc.", 404);
+    return successResponse(res, reminder, "Đã bỏ qua lịch nhắc thuốc.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
     next(err);

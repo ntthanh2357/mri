@@ -136,21 +136,30 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
           { label: 'Hàng đợi khám', route: 'DoctorWorkQueue', icon: '🩺' },
-          { label: 'Phòng chụp phim (MRI)', route: 'TechnicianQueue', icon: '🔬' },
+          { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', icon: '🔬' },
           { label: 'Danh mục thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'DoctorPatientList', icon: '📂' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       case 'nurse':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: '📊' },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', icon: '📋' },
+          { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
+          { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
+          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', icon: '💳' },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+        ];
       case 'receptionist':
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', icon: '📋' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', icon: '📋' },
           { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
-          { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', icon: '💳' },
+          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', icon: '💳' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       default:

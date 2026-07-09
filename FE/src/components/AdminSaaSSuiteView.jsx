@@ -454,7 +454,7 @@ export default function AdminSaaSSuiteView() {
             {isolationResults && (
               <div className="border rounded-xl p-4 bg-slate-50 space-y-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <CheckCircle2 className={`w-4 h-4 ${isolationResults.allIsolated ? 'text-emerald-500' : 'text-red-500'}`} />
                   <span className="text-xs font-bold text-slate-800">
                     Kết quả xác thực: {isolationResults.allIsolated ? "ĐẠT TIÊU CHUẨN ISOLATION" : "CẢNH BÁO RÒ RỈ DỮ LIỆU"}
                   </span>
@@ -464,7 +464,9 @@ export default function AdminSaaSSuiteView() {
                   {isolationResults.verificationResults.map(r => (
                     <div key={r.hospitalId} className="py-2 flex justify-between">
                       <span className="font-bold text-slate-700">{r.name}</span>
-                      <span className="text-emerald-600 font-bold font-mono">Cách biệt 100%</span>
+                      <span className={`font-bold font-mono ${r.status === 'isolated' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {r.status === 'isolated' ? 'Cách biệt an toàn' : `Rò rỉ: ${r.issuesCount} nhân sự sai viện`}
+                      </span>
                     </div>
                   ))}
                 </div>

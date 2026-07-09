@@ -1296,20 +1296,34 @@ export const verifyTenantIsolation = async (req, res) => {
   try {
     const hospitals = await Hospital.find().select("_id name").lean();
     const results = [];
-    
+
     for (const h of hospitals) {
-      // Run dry-run checks to verify that query isolation works:
-      // Verify if visits query restricted to hospital h._id only returns documents belonging to h._id
-      const leakCount = await Visit.countDocuments({
-        hospitalId: { $ne: h._id },
-        performedByHospital: h._id // simulated field or mismatch check
+      // Kiểm tra thật: nhân sự (bác sĩ/điều dưỡng/KTV) được gán vào lượt khám của
+      // bệnh viện h phải thực sự thuộc về bệnh viện h. Nếu không, đó là rò rỉ cách ly dữ liệu.
+      const visits = await Visit.find({ hospitalId: h._id })
+        .select("doctorId nurseId technicianId")
+        .lean();
+
+      const staffIds = new Set();
+      visits.forEach((v) => {
+        [v.doctorId, v.nurseId, v.technicianId].forEach((id) => {
+          if (id) staffIds.add(id.toString());
+        });
       });
-      
+
+      let issuesCount = 0;
+      if (staffIds.size > 0) {
+        issuesCount = await User.countDocuments({
+          _id: { $in: Array.from(staffIds) },
+          hospitalId: { $ne: h._id },
+        });
+      }
+
       results.push({
         hospitalId: h._id,
         name: h.name,
-        status: leakCount === 0 ? "isolated" : "leaked",
-        issuesCount: leakCount,
+        status: issuesCount === 0 ? "isolated" : "leaked",
+        issuesCount,
         verifiedAt: new Date()
       });
     }
@@ -1318,7 +1332,9 @@ export const verifyTenantIsolation = async (req, res) => {
     res.status(200).json({
       success: true,
       allIsolated,
-      details: "Tất cả các cơ sở dữ liệu bệnh viện đã được xác nhận cách biệt (isolated) hoàn toàn.",
+      details: allIsolated
+        ? "Tất cả các cơ sở dữ liệu bệnh viện đã được xác nhận cách biệt (isolated) hoàn toàn."
+        : "Phát hiện nhân sự được gán vào lượt khám của bệnh viện khác — cần kiểm tra lại phân quyền dữ liệu.",
       verificationResults: results
     });
   } catch (error) {

@@ -382,8 +382,8 @@ export const ssoLogin = async (req, res) => {
         return;
       }
 
-      // Handle mock token for Google SSO in local development
-      if (idToken === "mock_google_token_123") {
+      // Handle mock token for Google SSO in local development ONLY — never active in production
+      if (process.env.NODE_ENV !== "production" && idToken === "mock_google_token_123") {
         let user = await User.findOne({ email: "google_test@neuroscan.com" });
         if (!user) {
           const salt = await bcrypt.genSalt(10);
@@ -495,8 +495,8 @@ export const ssoLogin = async (req, res) => {
       return;
     }
 
-    // 1. Handle mock token first for easy testing without hitting real Zalo API
-    if (accessToken === "mock_zalo_token_123") {
+    // 1. Handle mock token first for easy testing without hitting real Zalo API — local development ONLY
+    if (process.env.NODE_ENV !== "production" && accessToken === "mock_zalo_token_123") {
       try {
         let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
         if (!user) {

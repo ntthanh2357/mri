@@ -172,24 +172,25 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleGoogleLogin = async () => {
+    if (Platform.OS !== 'web') {
+      showAlert('info', 'Chưa hỗ trợ', 'Đăng nhập Google trên ứng dụng di động chưa được hỗ trợ. Vui lòng dùng trình duyệt web.');
+      return;
+    }
     setLoading(true);
     try {
-      let idToken = 'mock_google_token_123';
-      
-      if (Platform.OS === 'web') {
-        try {
-          idToken = await signInWithGoogleWeb();
-          if (!idToken) {
-            showAlert('info', 'Thông báo', 'Đăng nhập Google bị hủy.');
-            setLoading(false);
-            return;
-          }
-        } catch (firebaseErr) {
-          console.error('Firebase sign in popup error:', firebaseErr);
-          showAlert('error', 'Lỗi đăng nhập', 'Không thể mở popup hoặc quá trình đăng nhập Google bị gián đoạn.');
+      let idToken;
+      try {
+        idToken = await signInWithGoogleWeb();
+        if (!idToken) {
+          showAlert('info', 'Thông báo', 'Đăng nhập Google bị hủy.');
           setLoading(false);
           return;
         }
+      } catch (firebaseErr) {
+        console.error('Firebase sign in popup error:', firebaseErr);
+        showAlert('error', 'Lỗi đăng nhập', 'Không thể mở popup hoặc quá trình đăng nhập Google bị gián đoạn.');
+        setLoading(false);
+        return;
       }
 
       const data = await post('/auth/sso/google', { idToken });
@@ -201,24 +202,6 @@ const LoginScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Google SSO error:', error);
       const errMsg = error.message || 'Đăng nhập Google thất bại.';
-      showAlert('error', 'Đăng nhập thất bại', errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleZaloLogin = async () => {
-    setLoading(true);
-    try {
-      const data = await post('/auth/sso/zalo', { accessToken: 'mock_zalo_token_123' });
-      await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-      showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Zalo thành công.', () => {
-        navigation.replace(destination);
-      });
-    } catch (error) {
-      console.error('Zalo SSO error:', error);
-      const errMsg = error.message || 'Đăng nhập Zalo thất bại.';
       showAlert('error', 'Đăng nhập thất bại', errMsg);
     } finally {
       setLoading(false);

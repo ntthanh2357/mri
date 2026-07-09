@@ -28,7 +28,9 @@ const prescriptionSchema = new Schema({
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
     unit: { type: String, required: true, default: "viên" },
-    usage: { type: String, default: "" }
+    usage: { type: String, default: "" },
+    timesPerDay: { type: Number, default: 2 },
+    durationDays: { type: Number, default: 7 }
   }],
   note: {
     type: String,

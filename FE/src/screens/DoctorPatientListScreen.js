@@ -55,7 +55,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
           const completedOrders = stats.completed_lab_orders || 0;
           const lastVital = stats.last_vital;
 
-          let diagnosisStr = 'U não thái dương';
+          let diagnosisStr = 'Chưa có dữ liệu';
           if (totalOrders > 0 || lastVital) {
             const parts = [];
             if (totalOrders > 0) parts.push(`${completedOrders}/${totalOrders} phiếu XN`);
@@ -85,12 +85,12 @@ const DoctorPatientListScreen = ({ navigation }) => {
             dbId: p._id,
             name: p.profile?.name || p.email,
             age: calculateAge(p.profile?.dob, p.profile?.birthYear), // [BUG-03 FIX]
-            gender: p.profile?.gender || 'Nam',
+            gender: p.profile?.gender || 'N/A',
             phone: p.phone || 'N/A',
             diagnosis: diagnosisStr,
             lastScan: lastVital
               ? `${new Date(lastVital.recorded_at).getDate()}/${new Date(lastVital.recorded_at).getMonth() + 1}`
-              : '10/06/2026',
+              : 'Chưa có',
             status,
             badgeColor,
             textColor,

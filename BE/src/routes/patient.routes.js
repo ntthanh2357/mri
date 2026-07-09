@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getPatients,
+  getPatientById,
   getPatientVitals,
   addPatientVitals,
   getPatientLabOrders,
@@ -39,6 +40,9 @@ router.use(protect);
 
 // Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
 router.get("/", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatients);
+
+// Lấy chi tiết 1 bệnh nhân theo ID (cho phép xuyên viện để phục vụ chuyển tuyến)
+router.get("/:patientId", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatientById);
 
 // Quản lý sinh hiệu bệnh nhân (Bác sĩ, Điều dưỡng, Admin hoặc tự bệnh nhân xem/thêm)
 router.get("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientVitals);

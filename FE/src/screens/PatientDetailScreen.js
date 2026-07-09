@@ -60,6 +60,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [drugQuantity, setDrugQuantity] = useState('10');
   const [drugUnit, setDrugUnit] = useState('viên');
   const [drugUsage, setDrugUsage] = useState('Ngày uống 2 lần, mỗi lần 1 viên sau ăn');
+  const [drugTimesPerDay, setDrugTimesPerDay] = useState('2');
+  const [drugDurationDays, setDrugDurationDays] = useState('7');
   const [clinicalWarnings, setClinicalWarnings] = useState([]);
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
@@ -112,18 +114,21 @@ const PatientDetailScreen = ({ route, navigation }) => {
         return;
       }
 
-      // 2. Lấy chi tiết bệnh nhân
-      const patientsData = await get('/api/patients');
-      const foundPatient = patientsData.data.find(p => p._id === targetPatientId);
-      
-      if (foundPatient) {
+      // 2. Lấy chi tiết bệnh nhân (cho phép xuyên viện để phục vụ chuyển tuyến)
+      let foundPatient = null;
+      if (meData.user.role === 'patient' && meData.user._id === targetPatientId) {
+        foundPatient = meData.user;
         setPatient(foundPatient);
-      } else if (meData.user.role === 'patient' && meData.user._id === targetPatientId) {
-        setPatient(meData.user);
       } else {
-        Alert.alert('Lỗi', 'Không tìm thấy thông tin bệnh nhân trong hệ thống.');
-        navigation.navigate('Home');
-        return;
+        try {
+          const patientRes = await get(`/api/patients/${targetPatientId}`);
+          foundPatient = patientRes.data;
+          setPatient(foundPatient);
+        } catch (err) {
+          Alert.alert('Lỗi', err.message || 'Không tìm thấy thông tin bệnh nhân trong hệ thống.');
+          navigation.navigate('Home');
+          return;
+        }
       }
 
       // 3. Lấy lịch sử sinh hiệu
@@ -306,7 +311,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
       name: selectedPredefinedDrug,
       quantity: Number(drugQuantity),
       unit: drugUnit,
-      usage: drugUsage
+      usage: drugUsage,
+      timesPerDay: Math.min(Math.max(Number(drugTimesPerDay) || 2, 1), 4),
+      durationDays: Math.max(Number(drugDurationDays) || 7, 1)
     };
     const updated = [...prescriptionDrugs, newDrug];
     setPrescriptionDrugs(updated);
@@ -1119,6 +1126,29 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   />
                 </View>
 
+                <View style={styles.formRow}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Số lần uống/ngày</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="VD: 2"
+                      value={drugTimesPerDay}
+                      onChangeText={setDrugTimesPerDay}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Số ngày uống</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="VD: 7"
+                      value={drugDurationDays}
+                      onChangeText={setDrugDurationDays}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
                 <TouchableOpacity
                   style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4 }]}
                   onPress={handleAddDrugToPrescription}
@@ -1136,6 +1166,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                       <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A' }}>{index + 1}. {d.name} ({d.quantity} {d.unit})</Text>
                         <Text style={{ fontSize: 11, color: '#1E40AF' }}>HD: {d.usage}</Text>
+                        <Text style={{ fontSize: 11, color: '#1E40AF' }}>Nhắc uống: {d.timesPerDay} lần/ngày × {d.durationDays} ngày</Text>
                       </View>
                       <TouchableOpacity onPress={() => handleRemoveDrugFromPrescription(index)} style={{ padding: 4, backgroundColor: '#FECACA', borderRadius: 4 }}>
                         <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Xóa</Text>

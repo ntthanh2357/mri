@@ -24,4 +24,9 @@ router.post("/records/:visitId/documents/upload", uploadSingle, ctrl.uploadDocum
 router.post("/records/:visitId/documents/manual", ctrl.saveManualDocument);
 router.delete("/records/:visitId/documents/:docId", ctrl.deleteDocument);
 
+// Medicine Reminders
+router.get("/reminders/today", ctrl.getTodayReminders);
+router.put("/reminders/:id/done", ctrl.markReminderDone);
+router.delete("/reminders/:id", ctrl.skipReminder);
+
 export default router;

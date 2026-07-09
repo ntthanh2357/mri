@@ -5,7 +5,49 @@ import { Prescription } from "../models/prescription.model.js";
 import { DischargePaper } from "../models/dischargePaper.model.js";
 import { TransferForm } from "../models/transferForm.model.js";
 import { Drug } from "../models/drug.model.js";
+import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+
+// Khung giờ nhắc uống thuốc cố định theo số lần/ngày
+const REMINDER_TIME_SLOTS = {
+  1: ["08:00"],
+  2: ["08:00", "20:00"],
+  3: ["08:00", "13:00", "20:00"],
+  4: ["08:00", "12:00", "17:00", "21:00"],
+};
+
+const generateRemindersForPrescription = async (prescription) => {
+  const reminders = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const drug of prescription.drugs) {
+    const timesPerDay = Math.min(Math.max(drug.timesPerDay || 2, 1), 4);
+    const durationDays = Math.max(drug.durationDays || 7, 1);
+    const slots = REMINDER_TIME_SLOTS[timesPerDay];
+    const dosageText = `${drug.quantity} ${drug.unit}${drug.usage ? ` — ${drug.usage}` : ""}`;
+
+    for (let day = 0; day < durationDays; day++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + day);
+      for (const time of slots) {
+        reminders.push({
+          hospitalId: prescription.hospitalId,
+          patientId: prescription.patient_id,
+          prescriptionId: prescription._id,
+          drugName: drug.name,
+          dosageText,
+          date,
+          time,
+        });
+      }
+    }
+  }
+
+  if (reminders.length > 0) {
+    await MedicineReminder.insertMany(reminders);
+  }
+};
 
 const checkPatientTenancy = async (patientId, userHospitalId) => {
   if (!userHospitalId) return null;
@@ -65,6 +107,22 @@ export const getPatients = async (req, res) => {
   } catch (error) {
     console.error("Lỗi lấy danh sách bệnh nhân:", error);
     return errorResponse(res, "Lỗi lấy danh sách bệnh nhân.", 500);
+  }
+};
+
+// Lấy chi tiết 1 bệnh nhân theo ID — cho phép xem xuyên viện để phục vụ chuyển tuyến
+export const getPatientById = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const patient = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patient) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 404);
+    }
+    const { passwordHash, ...safePatient } = patient.toObject();
+    return successResponse(res, safePatient, "Lấy thông tin bệnh nhân thành công.");
+  } catch (error) {
+    console.error("Lỗi lấy chi tiết bệnh nhân:", error);
+    return errorResponse(res, "Lỗi lấy chi tiết bệnh nhân.", 500);
   }
 };
 
@@ -228,6 +286,9 @@ export const addPatientPrescription = async (req, res) => {
     await newItem.save();
 
     // Việc khấu trừ kho thuốc sẽ được thực hiện khi thanh toán hóa đơn thực tế (ở invoice.controller.js)
+
+    // Tự động sinh lịch nhắc uống thuốc cho bệnh nhân dựa trên số lần/ngày và số ngày uống
+    await generateRemindersForPrescription(newItem);
 
     return successResponse(res, newItem, "Thêm đơn thuốc mới thành công.", 201);
   } catch (error) {
