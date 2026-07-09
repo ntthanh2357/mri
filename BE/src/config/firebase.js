@@ -1,4 +1,5 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin";
+import { getStorage } from "firebase-admin/storage";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
@@ -21,8 +22,8 @@ if (fs.existsSync(resolvedPath)) {
   try {
     const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
     
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+    initializeApp({
+      credential: cert(serviceAccount),
       storageBucket: storageBucket
     });
     
@@ -34,5 +35,12 @@ if (fs.existsSync(resolvedPath)) {
   console.warn(`WARNING: Firebase service account key not found at ${resolvedPath}. Firebase features will be disabled.`);
 }
 
-export const bucket = admin.apps.length ? admin.storage().bucket() : null;
-export default admin;
+export const bucket = getApps().length ? getStorage().bucket() : null;
+
+const adminMock = {
+  initializeApp,
+  credential: { cert },
+  get apps() { return getApps(); },
+  storage: () => ({ bucket: () => getStorage().bucket() })
+};
+export default adminMock;

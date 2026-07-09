@@ -13,7 +13,7 @@ import {
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 
-const ReceptionistDashboardScreen = ({ route, navigation }) => {
+const NurseReceptionScreen = ({ route, navigation }) => {
   const [activeTab, setActiveTab] = useState('createVisit'); // 'createVisit' | 'myQueue' | 'billing'
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
@@ -28,6 +28,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedNurseId, setSelectedNurseId] = useState('');
   const [reason, setReason] = useState('');
+  const [visitType, setVisitType] = useState('Ngoại trú');
 
   // myQueue / All Visits State
   const [visits, setVisits] = useState([]);
@@ -98,8 +99,8 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   };
 
   const handleCreateVisit = async () => {
-    if (!selectedPatientId || !selectedDoctorId || !selectedNurseId || !reason) {
-      Alert.alert("Thông báo", "Vui lòng chọn đầy đủ Bệnh nhân, Bác sĩ, Điều dưỡng và nhập lý do khám.");
+    if (!selectedPatientId || !selectedDoctorId || !selectedNurseId) {
+      Alert.alert("Thông báo", "Vui lòng chọn đầy đủ Bệnh nhân, Bác sĩ và Điều dưỡng.");
       return;
     }
     setLoading(true);
@@ -108,13 +109,15 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
         patientId: selectedPatientId,
         doctorId: selectedDoctorId,
         nurseId: selectedNurseId,
-        reason
+        reason: reason.trim() || 'Khám tổng quát',
+        visitType
       });
       Alert.alert("Thành công", "Đã tạo lượt khám mới và phân công thành công.");
       setSelectedPatientId('');
       setSelectedDoctorId('');
       setSelectedNurseId('');
       setReason('');
+      setVisitType('Ngoại trú');
       setActiveTab('myQueue');
     } catch (error) {
       Alert.alert("Lỗi", error.message || "Tạo lượt khám thất bại");
@@ -126,10 +129,10 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   const handlePayInvoice = async (invoiceId) => {
     try {
       await put(`/api/v1/invoices/${invoiceId}/pay`, { paymentMethod: 'cash' });
-      Alert.alert("Thành công", "Đã thanh toán hóa đơn");
+      Alert.alert("Thành công", "Đã xác nhận thanh toán thành công cho bệnh nhân và ghi vào lịch sử bệnh án (Audit Trail).");
       fetchInvoices();
     } catch (err) {
-      Alert.alert("Lỗi", err.message || "Thanh toán thất bại");
+      Alert.alert("Lỗi", err.message || "Xác nhận thanh toán thất bại");
     }
   };
 
@@ -141,7 +144,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
   );
 
   return (
-    <ResponsiveLayout navigation={navigation} title="Receptionist Dashboard" user={user} activeRoute="ReceptionistDashboard">
+    <ResponsiveLayout navigation={navigation} title="Tiếp Nhận & Thu Ngân (Điều Dưỡng)" user={user} activeRoute="NurseReception">
       <View style={styles.container}>
         <View style={styles.tabContainer}>
           <TouchableOpacity 
@@ -236,16 +239,21 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                 <Text style={styles.sectionTitle}>Danh Sách Lượt Khám</Text>
                 {visits.length === 0 ? <Text style={styles.emptyText}>Không có lượt khám nào.</Text> : null}
                 {visits.map(v => (
-                  <View key={v._id} style={styles.visitCard}>
+                  <TouchableOpacity 
+                    key={v._id} 
+                    style={styles.visitCard}
+                    onPress={() => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } })}
+                  >
                     <View style={styles.visitHeader}>
                       <Text style={styles.visitPatientName}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
                       <Text style={styles.statusBadge(v.status)}>{v.status.toUpperCase()}</Text>
                     </View>
                     <Text style={styles.visitDetail}>Lý do: {v.reason}</Text>
+                    <Text style={styles.visitDetail}>Phân loại: {v.visitType || 'Ngoại trú'}</Text>
                     <Text style={styles.visitDetail}>Bác sĩ: {v.doctorId?.profile?.name || 'Đã phân công'}</Text>
                     <Text style={styles.visitDetail}>Điều dưỡng: {v.nurseId?.profile?.name || 'Đã phân công'}</Text>
                     <Text style={styles.visitTime}>Tạo lúc: {new Date(v.createdAt).toLocaleString()}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -270,7 +278,7 @@ const ReceptionistDashboardScreen = ({ route, navigation }) => {
                       <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
                       {inv.status === 'chờ thanh toán' && (
                         <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                          <Text style={styles.payBtnText}>Thanh Toán Ngay</Text>
+                          <Text style={styles.payBtnText}>Xác nhận thanh toán</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -415,6 +423,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
   },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  chipActive: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  chipText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
   visitCard: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -522,4 +550,4 @@ const styles = StyleSheet.create({
   }
 });
 
-export default ReceptionistDashboardScreen;
+export default NurseReceptionScreen;

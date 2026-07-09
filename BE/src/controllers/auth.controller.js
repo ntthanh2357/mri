@@ -29,10 +29,11 @@ const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
 
 // @desc    Register a new user
 // @route   POST /auth/register
-// @access  Public
+// @access  Public (nhưng có guard cho hospital_admin)
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, bhytNumber, licenseUrl, hospitalId } = req.body;
+    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
+    let { hospitalId } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -45,6 +46,35 @@ export const register = async (req, res) => {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
     }
+
+    // ── Bảo vệ leo thang đặc quyền ──────────────────────────────────────────
+    // Nếu caller là hospital_admin (đã đăng nhập):
+    //   1. Chỉ được tạo doctor, nurse, technician — không được tạo admin/hospital_admin
+    //   2. hospitalId bắt buộc = hospitalId của chính họ (không tin client)
+    if (req.user && req.user.role === "hospital_admin") {
+      const staffOnlyRoles = ["doctor", "nurse", "technician"];
+      if (!staffOnlyRoles.includes(role)) {
+        res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên." });
+        return;
+      }
+      // Override hospitalId từ JWT, không tin dữ liệu client
+      hospitalId = req.user.hospitalId;
+    }
+
+    // Nếu caller là user thường (không phải hospital_admin/admin) mà cố tạo role đặc quyền
+    if (req.user && !["admin", "hospital_admin"].includes(req.user.role)) {
+      if (["admin", "hospital_admin"].includes(role)) {
+        res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này." });
+        return;
+      }
+    }
+
+    // Nếu không có token (người dùng tự đăng ký), CHỈ CHO PHÉP TẠO ROLE PATIENT
+    if (!req.user && role !== "patient") {
+      res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này. Chỉ có thể tạo tài khoản bệnh nhân (patient)." });
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Check if user already exists
     const userExists = await User.findOne({ email });
@@ -90,6 +120,7 @@ export const register = async (req, res) => {
         entity: "User",
         entityId: newUser._id,
         performedBy: req.user ? req.user.id : newUser._id,
+        hospitalId: hospitalId || null,
         details: `Tài khoản mới ${email} với vai trò ${role} đã được tạo cho bệnh viện ID ${hospitalId || "N/A"}`,
       });
     } catch (logErr) {
@@ -112,6 +143,7 @@ export const register = async (req, res) => {
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng ký tài khoản.", error: error.message });
   }
 };
+
 
 // @desc    Login user
 // @route   POST /auth/login
@@ -232,7 +264,7 @@ export const refresh = async (req, res) => {
     const decoded = jwt.verify(refreshToken, secret);
 
     // Fetch user to verify active session version
-    const user = await User.findById(decoded.id).select("tokenVersion role");
+    const user = await User.findById(decoded.id).select("tokenVersion role hospitalId");
     if (!user) {
       res.status(401).json({ message: "Người dùng không tồn tại." });
       return;
@@ -245,7 +277,7 @@ export const refresh = async (req, res) => {
     }
 
     // Generate new access token
-    const accessToken = generateAccessToken(decoded.id, decoded.role, user.tokenVersion);
+    const accessToken = generateAccessToken(decoded.id, decoded.role, user.tokenVersion, user.hospitalId);
 
     res.status(200).json({
       accessToken,

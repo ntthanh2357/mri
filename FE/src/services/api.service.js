@@ -52,8 +52,16 @@ const request = async (endpoint, options = {}) => {
     ...options,
     headers,
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Request failed');
+  let data;
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (err) {
+    if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+    return {};
+  }
+
+  if (!response.ok) throw new Error(data.message || `Request failed with status ${response.status}`);
   return data;
 };
 
@@ -71,7 +79,15 @@ export const postFormData = async (endpoint, formData) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
   const response = await fetch(url, { method: 'POST', headers, body: formData });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Upload failed');
+  let data;
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (err) {
+    if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+    return {};
+  }
+
+  if (!response.ok) throw new Error(data.message || `Upload failed with status ${response.status}`);
   return data;
 };

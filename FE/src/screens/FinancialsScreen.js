@@ -11,9 +11,11 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
+import Config from '../constants/config';
 
 const DRUG_SUGGESTIONS = [
   { name: 'Keppra', unit: 'Viên' },
@@ -41,6 +43,13 @@ const FinancialsScreen = ({ navigation }) => {
     refunds: 0,
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [revenueDistribution, setRevenueDistribution] = useState({
+    exam: 0,
+    mri: 0,
+    ai: 0,
+    drug: 0,
+    other: 0,
+  });
 
   // Reports lists
   const [revenueReports, setRevenueReports] = useState([]);
@@ -85,6 +94,44 @@ const FinancialsScreen = ({ navigation }) => {
     }
   }, [activeTab]);
 
+  const handleExportRevenueCSV = async () => {
+    try {
+      setLoading(true);
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : '';
+      const url = `${Config.API_URL}/admin/reports/revenue-export?month=${revMonth}&year=${revYear}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Không thể tải file báo cáo.');
+      }
+      
+      const csvText = await response.text();
+      
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `Bao_cao_doanh_thu_${revYear}_${revMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        Alert.alert('Thành công', 'Đã tải xuống báo cáo kiểm toán CSV.');
+      } else {
+        Alert.alert('Thành công', 'Đã tải dữ liệu báo cáo thành công.');
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Lỗi', 'Không thể xuất báo cáo kiểm toán CSV.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchFinancialData = async () => {
     setLoading(true);
     try {
@@ -101,6 +148,27 @@ const FinancialsScreen = ({ navigation }) => {
           averageTransaction: paid.length > 0 ? Math.round(totalPaid / paid.length) : 0,
           refunds: 0,
         });
+
+        // Tính toán phân bổ nguồn thu
+        let exam = 0;
+        let mri = 0;
+        let ai = 0;
+        let drug = 0;
+        let other = 0;
+
+        paid.forEach(inv => {
+          if (inv.items && Array.isArray(inv.items)) {
+            inv.items.forEach(item => {
+              if (item.type === 'exam') exam += item.amount;
+              else if (item.type === 'mri') mri += item.amount;
+              else if (item.type === 'ai') ai += item.amount;
+              else if (item.type === 'drug') drug += item.amount;
+              else other += item.amount;
+            });
+          }
+        });
+
+        setRevenueDistribution({ exam, mri, ai, drug, other });
 
         // Format recent transactions
         const txs = invoices.slice(0, 10).map(inv => {
@@ -363,6 +431,55 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 </View>
               </View>
+              {/* Stacked Bar Chart for Revenue Distribution */}
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>📊 Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
+                <Text style={styles.chartSub}>Tỷ lệ nguồn thu bóc tách từ các hóa đơn đã thanh toán</Text>
+
+                {(() => {
+                  const total = (revenueDistribution.exam + revenueDistribution.mri + revenueDistribution.ai + revenueDistribution.drug + revenueDistribution.other) || 1;
+                  const pExam = Math.round((revenueDistribution.exam / total) * 100);
+                  const pMri = Math.round((revenueDistribution.mri / total) * 100);
+                  const pAi = Math.round((revenueDistribution.ai / total) * 100);
+                  const pDrug = Math.round((revenueDistribution.drug / total) * 100);
+                  const pOther = Math.round((revenueDistribution.other / total) * 100);
+
+                  return (
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.stackedBar}>
+                        {pExam > 0 && <View style={[styles.barSegment, { flex: pExam, backgroundColor: '#3B82F6' }]} />}
+                        {pMri > 0 && <View style={[styles.barSegment, { flex: pMri, backgroundColor: '#8B5CF6' }]} />}
+                        {pAi > 0 && <View style={[styles.barSegment, { flex: pAi, backgroundColor: '#10B981' }]} />}
+                        {pDrug > 0 && <View style={[styles.barSegment, { flex: pDrug, backgroundColor: '#F59E0B' }]} />}
+                        {pOther > 0 && <View style={[styles.barSegment, { flex: pOther, backgroundColor: '#64748B' }]} />}
+                      </View>
+
+                      <View style={styles.legendContainer}>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
+                          <Text style={styles.legendText}>Khám thần kinh ({pExam}%): {revenueDistribution.exam.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
+                          <Text style={styles.legendText}>Chụp MRI ({pMri}%): {revenueDistribution.mri.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                          <Text style={styles.legendText}>Phân tích AI ({pAi}%): {revenueDistribution.ai.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+                          <Text style={styles.legendText}>Thuốc hướng thần/não ({pDrug}%): {revenueDistribution.drug.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#64748B' }]} />
+                          <Text style={styles.legendText}>Chi phí khác ({pOther}%): {revenueDistribution.other.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
+              </View>
 
               {/* Transactions List */}
               <View style={styles.recentHeaderRow}>
@@ -404,9 +521,30 @@ const FinancialsScreen = ({ navigation }) => {
             <View>
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Danh sách báo cáo doanh thu tháng</Text>
-                <TouchableOpacity style={styles.btnCreate} onPress={() => setShowRevenueForm(true)}>
-                  <Text style={styles.btnCreateText}>➕ Lập báo cáo mới</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 12, color: '#475569', fontWeight: 'bold' }}>Tháng:</Text>
+                    <TextInput
+                      style={{ width: 30, fontSize: 12, padding: 0, fontWeight: 'bold', color: '#1E293B', outlineStyle: 'none' }}
+                      value={revMonth}
+                      onChangeText={setRevMonth}
+                      keyboardType="numeric"
+                    />
+                    <Text style={{ fontSize: 12, color: '#475569', fontWeight: 'bold' }}>Năm:</Text>
+                    <TextInput
+                      style={{ width: 45, fontSize: 12, padding: 0, fontWeight: 'bold', color: '#1E293B', outlineStyle: 'none' }}
+                      value={revYear}
+                      onChangeText={setRevYear}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.btnExport} onPress={handleExportRevenueCSV}>
+                    <Text style={styles.btnExportText}>📥 Xuất kiểm toán CSV</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnCreate} onPress={() => setShowRevenueForm(true)}>
+                    <Text style={styles.btnCreateText}>➕ Lập báo cáo mới</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.reportsCard}>
@@ -1181,6 +1319,70 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#15803D',
     marginVertical: 10,
+  },
+  btnExport: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#15803D',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnExportText: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  chartTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  chartSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  stackedBar: {
+    flexDirection: 'row',
+    height: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  barSegment: {
+    height: '100%',
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 14,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: '45%',
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 11,
+    color: '#334155',
   },
   detailTable: {
     borderWidth: 1,

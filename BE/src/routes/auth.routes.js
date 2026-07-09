@@ -11,11 +11,11 @@ import {
   forgotPassword,
   verifyOtp,
 } from "../controllers/auth.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, optionalProtect } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.post("/register", register);
+router.post("/register", optionalProtect, register);
 router.post("/login", login);
 router.post("/refresh", refresh);
 router.post("/firebase-login", firebaseLogin);

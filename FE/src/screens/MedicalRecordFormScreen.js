@@ -52,10 +52,13 @@ const Section = ({ title, sectionKey, expanded, onToggle, children }) => (
   </View>
 );
 
-const MedicalRecordFormScreen = ({ navigation }) => {
+const MedicalRecordFormScreen = ({ navigation, route }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
-  const { formData, loading, saving, updateField, saveForm, resetForm } = useMedicalRecordForm();
+  // [BUG-04/05 FIX] Lấy patientId từ navigation params (truyền từ DoctorPatientListScreen hoặc PatientDetailScreen)
+  const patientId = route?.params?.patientId || null;
+  const patientMedicalId = route?.params?.patientMedicalId || null;
+  const { formData, loading, saving, updateField, saveForm, resetForm } = useMedicalRecordForm(patientId);
 
   const [expanded, setExpanded] = useState({
     hanhChinh: true,
@@ -72,18 +75,42 @@ const MedicalRecordFormScreen = ({ navigation }) => {
 
   const toggleSection = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const togglePhanBiet = (field) => {
-    const current = formData.chanDoan?.phanBiet || {};
-    updateField('chanDoan', 'phanBiet', { ...current, [field]: !current[field] });
-  };
+  const [warnings, setWarnings] = useState([]);
+  const [checking, setChecking] = useState(false);
 
-  const toggleChuyenKhoa = (field) => {
-    const current = formData.huongDieuTri?.chuyenKhoa || {};
-    updateField('huongDieuTri', 'chuyenKhoa', { ...current, [field]: !current[field] });
-  };
+  useEffect(() => {
+    const meds = extractMedications(formData.huongDieuTri?.noiKhoaCapCuu || '');
+    const orders = extractOrders(formData);
 
-  const phanBiet = formData.chanDoan?.phanBiet || {};
-  const chuyenKhoa = formData.huongDieuTri?.chuyenKhoa || {};
+    if (meds.length === 0 && orders.length === 0) {
+      setWarnings([]);
+      return;
+    }
+
+    const delayDebounceId = setTimeout(async () => {
+      setChecking(true);
+      try {
+        const res = await apiRequest('/api/drugs/check-prescription', {
+          method: 'POST',
+          body: JSON.stringify({
+            // [BUG-04 FIX] Dùng patientId thật từ params, không hardcode
+            patientId: patientId || patientMedicalId || 'UNKNOWN',
+            medications: meds,
+            orders,
+          }),
+        });
+        if (res && res.data) {
+          setWarnings(res.data.warnings || []);
+        }
+      } catch (err) {
+        console.log('Error checking clinical safety in medical record form:', err);
+      } finally {
+        setChecking(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(delayDebounceId);
+  }, [formData.huongDieuTri?.noiKhoaCapCuu, formData.canLamSang]);
 
   if (loading) {
     return (

@@ -6,6 +6,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { bucket } from "../config/firebase.js";
+import { uploadMetadataBackup } from "../config/googleDrive.js";
+import { createNotificationInternal } from "./notification.controller.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,12 +49,14 @@ export const getResultById = async (req, res) => {
       return errorResponse(res, "Không tìm thấy kết quả chẩn đoán hình ảnh.", 404);
     }
 
-    // Authorization check: Patients can only view their own results
+    // Authorization check: Bệnh nhân chỉ xem kết quả của chính mình
     if (req.user.role === "patient") {
       const user = await User.findById(req.user.id);
       if (!user || user.profile?.medicalId !== result.medicalId) {
         return errorResponse(res, "Bạn không có quyền xem kết quả chẩn đoán này.", 403);
       }
+    } else {
+      // Cho phép nhân viên y tế từ bất kỳ bệnh viện nào xem kết quả chụp để chuyển tuyến
     }
 
     return successResponse(res, result, "Lấy chi tiết kết quả chẩn đoán hình ảnh thành công.");
@@ -67,16 +71,7 @@ export const getResultById = async (req, res) => {
 // @access  Private (Doctor, Admin only)
 export const createImagingResult = async (req, res) => {
   try {
-    // 1. Check roles
-    if (req.user.role === "patient") {
-      const user = await User.findById(req.user.id);
-      if (!user || user.profile?.medicalId !== medicalId) {
-        return errorResponse(res, "Bạn chỉ có thể tự lưu trữ kết quả cho chính mình.", 403);
-      }
-    } else if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
-      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
-    }
-
+    // [BUG-08 FIX] Destructure req.body TRƯỜC khi dùng medicalId trong role check
     const {
       medicalId,
       patientName,
@@ -100,6 +95,16 @@ export const createImagingResult = async (req, res) => {
       visitId,
     } = req.body;
 
+    // 1. Check roles
+    if (req.user.role === "patient") {
+      const user = await User.findById(req.user.id);
+      if (!user || user.profile?.medicalId !== medicalId) {
+        return errorResponse(res, "Bạn chỉ có thể tự lưu trữ kết quả cho chính mình.", 403);
+      }
+    } else if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    }
+
     // 2. Validate required fields
     if (!medicalId || !patientName || !gender || !orderDate || !procedure || !findings || !conclusion || !radiologist || !reportDate || !imagingType) {
       return errorResponse(res, "Vui lòng nhập đầy đủ các trường bắt buộc.", 400);
@@ -107,6 +112,7 @@ export const createImagingResult = async (req, res) => {
 
     // 3. Create record
     const newResult = new ImagingResult({
+      hospitalId: req.user.hospitalId,
       medicalId,
       patientName,
       birthYear,
@@ -300,9 +306,66 @@ export const analyzeImagingResultAI = async (req, res) => {
 
     const aiData = await aiResponse.json();
 
+    // ── Upload annotated heatmap image to Firebase (base64 → public URL) ──
+    if (aiData.annotated_image && aiData.annotated_image.startsWith('data:image')) {
+      try {
+        const base64Match = aiData.annotated_image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (base64Match && base64Match.length === 3) {
+          const imageBuffer = Buffer.from(base64Match[2], 'base64');
+          const heatmapFileName = `MRI/heatmap_${Date.now()}_${Math.floor(Math.random() * 10000)}.jpg`;
+
+          if (bucket) {
+            // Upload to Firebase Storage
+            const file = bucket.file(heatmapFileName);
+            await file.save(imageBuffer, { metadata: { contentType: 'image/jpeg' } });
+            await file.makePublic();
+            aiData.annotated_image = `https://storage.googleapis.com/${bucket.name}/${heatmapFileName}`;
+            console.log(`✅ Heatmap uploaded to Firebase: ${aiData.annotated_image}`);
+          } else {
+            // Fallback: save locally
+            const uploadsDir = path.join(__dirname, '../../uploads');
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            const localName = `heatmap_${Date.now()}.jpg`;
+            fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
+            aiData.annotated_image = `/uploads/${localName}`;
+            console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
+          }
+        }
+      } catch (uploadErr) {
+        console.warn('⚠️ Không thể upload heatmap, giữ nguyên base64:', uploadErr.message);
+        // Keep the base64 string if upload fails – FE can still render it
+      }
+    }
+
+    // Gọi thêm dịch vụ sinh báo cáo lâm sàng để mô tả chi tiết kích thước, vị trí và lý thuyết u
+    if (aiData.class_name && aiData.class_name !== 'notumor') {
+      try {
+        const aiReportUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/generate_clinical_report") : "http://localhost:8000/generate_clinical_report");
+        const reportResponse = await fetch(aiReportUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resnet_data: {
+              class_name: aiData.class_name,
+              confidence: aiData.confidence,
+              tumor_location: aiData.tumor_location,
+              consensus_message: aiData.consensus_message
+            }
+          })
+        });
+        if (reportResponse.ok) {
+          const reportData = await reportResponse.json();
+          aiData.clinical_report = reportData.draft_report || "";
+          console.log("✅ Đã sinh báo cáo chi tiết vị trí/kích thước/lý thuyết thành công từ FastAPI.");
+        }
+      } catch (reportErr) {
+        console.warn("⚠️ Lỗi sinh báo cáo chi tiết từ FastAPI:", reportErr.message);
+      }
+    }
+
     if (visitId) {
       const visit = await Visit.findById(visitId);
-      if (visit) {
+      if (visit && visit.hospitalId.toString() === req.user.hospitalId) {
         visit.status = "chờ bác sĩ đọc";
         await visit.save();
       }
@@ -391,6 +454,22 @@ export const feedbackImagingResultAI = async (req, res) => {
     }
 
     const aiData = await aiResponse.json();
+
+    // Tự động sao lưu tọa độ vẽ chỉnh sửa (Annotation Bounding Box) của bác sĩ lên Google Drive
+    try {
+      const metadata = {
+        correctClass: correct_class,
+        coordinates: { x, y, w, h },
+        originalImageUrl: imageUrl,
+        doctorEmail: req.user.email,
+        doctorId: req.user.id,
+        timestamp: new Date().toISOString()
+      };
+      await uploadMetadataBackup(metadata, req.user.hospitalId, `feedback_coords_${correct_class}`);
+    } catch (backupError) {
+      console.warn("⚠️ Không thể sao lưu file metadata vẽ lên Google Drive:", backupError.message);
+    }
+
     return successResponse(res, aiData, "Ghi nhận phản hồi và lưu ca bệnh thành công.");
   } catch (error) {
     console.error("Lỗi khi gửi phản hồi AI:", error);
@@ -469,6 +548,11 @@ export const explainImagingResultAI = async (req, res) => {
       if (!user || user.profile?.medicalId !== result.medicalId) {
         return errorResponse(res, "Bạn không có quyền truy cập hồ sơ này.", 403);
       }
+    } else {
+      // Nhân viên y tế phải cùng bệnh viện
+      if (result.hospitalId && result.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+        return errorResponse(res, "Bạn không có quyền giải thích kết quả phim chụp của bệnh viện khác.", 403);
+      }
     }
 
     const clinicalText = `
@@ -513,7 +597,11 @@ export const getAllImagingResults = async (req, res) => {
     if (req.user.role === "patient") {
       return errorResponse(res, "Bạn không có quyền truy cập thông tin này.", 403);
     }
-    const results = await ImagingResult.find({}).sort({ reportDate: -1 });
+    // [BUG-07 FIX] Lọc theo hospitalId — không trả kết quả của bệnh viện khác
+    if (!req.user.hospitalId) {
+      return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
+    }
+    const results = await ImagingResult.find({ hospitalId: req.user.hospitalId }).sort({ reportDate: -1 });
     return successResponse(res, results, "Lấy tất cả kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy tất cả kết quả chẩn đoán hình ảnh:", error);
@@ -578,6 +666,23 @@ export const createKtvImagingResult = async (req, res) => {
     visit.status = requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
     await visit.save();
 
+    // ── Gửi thông báo tới Bác sĩ chỉ định ─────────────────────────────────────
+    try {
+      const patientName = patient.profile?.name || patient.profile?.fullName || "Bệnh nhân";
+      await createNotificationInternal({
+        hospitalId: visit.hospitalId,
+        recipientId: visit.doctorId,
+        senderId: req.user.id,
+        type: "ai_ready",
+        title: "📸 Phim chụp MRI sẵn sàng",
+        message: `Phim chụp MRI vùng ${region || "Não bộ"} của bệnh nhân ${patientName} đã được tải lên thành công. ${requestAiAnalysis ? 'Đang chạy phân tích AI...' : 'Sẵn sàng để bác sĩ đọc kết quả.'}`,
+        relatedId: visit._id,
+      });
+    } catch (notifErr) {
+      console.warn("⚠️ Không thể gửi thông báo cho Bác sĩ khi KTV hoàn tất scan:", notifErr.message);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     res.status(201).json({
       success: true,
       message: "Tạo kết quả phim chụp thành công",
@@ -595,20 +700,46 @@ export const createKtvImagingResult = async (req, res) => {
 export const updateImagingResult = async (req, res) => {
   try {
     const { id } = req.params;
-    const { findings, conclusion, radiologist, technique } = req.body;
+    const { findings, conclusion, radiologist, technique, images } = req.body;
 
     const result = await ImagingResult.findById(id);
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
 
+    // Tenancy Check
+    if (result.hospitalId && result.hospitalId.toString() !== req.user.hospitalId) {
+      return res.status(403).json({ message: "Bạn không có quyền sửa đổi kết quả chụp này." });
+    }
+
     if (findings !== undefined) result.findings = findings;
     if (conclusion !== undefined) result.conclusion = conclusion;
     if (radiologist !== undefined) result.radiologist = radiologist;
     if (technique !== undefined) result.technique = technique;
+    if (images !== undefined) result.images = images;
     result.reportDate = new Date();
 
     await result.save();
+
+    // Tự động sao lưu chẩn đoán của bác sĩ dạng JSON lên Google Drive
+    try {
+      const reportBackup = {
+        imagingResultId: result._id,
+        medicalId: result.medicalId,
+        patientName: result.patientName,
+        findings: result.findings,
+        conclusion: result.conclusion,
+        technique: result.technique,
+        radiologist: result.radiologist,
+        reportDate: result.reportDate.toISOString(),
+        updatedBy: req.user.id,
+        updatedByEmail: req.user.email
+      };
+      const targetHospitalId = req.user.hospitalId || result.hospitalId;
+      await uploadMetadataBackup(reportBackup, targetHospitalId, `report_backup_${result.medicalId}`);
+    } catch (backupError) {
+      console.warn("⚠️ Không thể sao lưu bản ghi chẩn đoán lên Google Drive:", backupError.message);
+    }
 
     res.status(200).json({
       success: true,

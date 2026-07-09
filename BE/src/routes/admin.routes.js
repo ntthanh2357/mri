@@ -30,9 +30,19 @@ updateDatasetPrice,
   createRevenueReport,
   getRevenueReports,
   getRevenueReportById,
+  exportRevenueCSV,
   createDrugReport,
   getDrugReports,
   getDrugReportById,
+  updateHospitalSubscription,
+  getSlaStatus,
+  verifyTenantIsolation,
+  backupHospitalData,
+  restoreHospitalData,
+  getAiModels,
+  rollbackAiModel,
+  createAnnouncement,
+  getAnnouncements,
 } from "../controllers/admin.controller.js";
 import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { requireSystemAdmin, requireHospitalAdmin } from "../middlewares/role.middleware.js";
@@ -78,10 +88,22 @@ router.put("/hospital-pricing", requireHospitalAdmin, updateHospitalPricing);
 
 // ─── Custom monthly reports (Revenue and Drug reports) ──────────────────────
 router.post("/reports/revenue", checkRole(["admin", "hospital_admin", "doctor"]), createRevenueReport);
+router.get("/reports/revenue-export", checkRole(["admin", "hospital_admin", "doctor"]), exportRevenueCSV);
 router.get("/reports/revenue", checkRole(["admin", "hospital_admin", "doctor"]), getRevenueReports);
 router.get("/reports/revenue/:id", checkRole(["admin", "hospital_admin", "doctor"]), getRevenueReportById);
 router.post("/reports/drugs", checkRole(["admin", "hospital_admin", "doctor"]), createDrugReport);
 router.get("/reports/drugs", checkRole(["admin", "hospital_admin", "doctor"]), getDrugReports);
 router.get("/reports/drugs/:id", checkRole(["admin", "hospital_admin", "doctor"]), getDrugReportById);
+
+// ─── SaaS Advanced Routes ───────────────────────────────────────────────────
+router.put("/hospitals/:id/subscription", requireSystemAdmin, updateHospitalSubscription);
+router.get("/monitoring/sla", requireSystemAdmin, getSlaStatus);
+router.get("/tenants/verify-isolation", requireSystemAdmin, verifyTenantIsolation);
+router.post("/hospitals/:id/backup", requireSystemAdmin, backupHospitalData);
+router.post("/hospitals/:id/restore", requireSystemAdmin, restoreHospitalData);
+router.get("/ai-models", requireSystemAdmin, getAiModels);
+router.post("/ai-models/rollback", requireSystemAdmin, rollbackAiModel);
+router.post("/announcements", requireSystemAdmin, createAnnouncement);
+router.get("/announcements", getAnnouncements);
 
 export default router;
