@@ -136,6 +136,21 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   };
 
+  const getLeastBusyDoctorId = () => {
+    if (!doctors || doctors.length === 0) return null;
+    let minSize = Infinity;
+    let minDocId = null;
+    doctors.forEach(d => {
+      const qSize = d.queueSize || 0;
+      if (qSize < minSize) {
+        minSize = qSize;
+        minDocId = d._id;
+      }
+    });
+    return minDocId;
+  };
+  const leastBusyDoctorId = getLeastBusyDoctorId();
+
   const filteredPatients = patients.filter(p => 
     p.email?.toLowerCase().includes(searchPatient.toLowerCase()) || 
     p.profile?.name?.toLowerCase().includes(searchPatient.toLowerCase()) ||
@@ -195,15 +210,50 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
                 <Text style={styles.sectionTitle}>2. Phân Công Bác Sĩ</Text>
                 <View style={styles.rowWrapper}>
-                  {doctors.map(d => (
-                    <TouchableOpacity 
-                      key={d._id} 
-                      style={[styles.cardItem, selectedDoctorId === d._id && styles.selectedCardItem]}
-                      onPress={() => setSelectedDoctorId(d._id)}
-                    >
-                      <Text style={styles.cardItemText}>{d.profile?.name || d.profile?.fullName || d.email}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {doctors.map(d => {
+                    const qSize = d.queueSize || 0;
+                    const isLeastBusy = d._id === leastBusyDoctorId;
+                    return (
+                      <TouchableOpacity 
+                        key={d._id} 
+                        style={[
+                          styles.cardItem, 
+                          selectedDoctorId === d._id && styles.selectedCardItem,
+                          isLeastBusy && selectedDoctorId !== d._id && styles.suggestedCardItem
+                        ]}
+                        onPress={() => setSelectedDoctorId(d._id)}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[
+                            styles.cardItemText, 
+                            selectedDoctorId === d._id && { color: '#fff' }
+                          ]}>
+                            {d.profile?.name || d.profile?.fullName || d.email}
+                          </Text>
+                          <View style={[
+                            styles.queueBadge,
+                            qSize === 0 ? styles.queueBadgeGreen : (qSize >= 5 ? styles.queueBadgeRed : styles.queueBadgeOrange),
+                            selectedDoctorId === d._id && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }
+                          ]}>
+                            <Text style={[
+                              styles.queueBadgeText,
+                              selectedDoctorId === d._id && { color: '#fff' }
+                            ]}>
+                              {qSize}
+                            </Text>
+                          </View>
+                          {isLeastBusy && (
+                            <Text style={[
+                              styles.suggestLabel,
+                              selectedDoctorId === d._id && { color: '#fff' }
+                            ]}>
+                              ⭐ Gợi ý
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 <Text style={styles.sectionTitle}>3. Phân Công Điều Dưỡng</Text>
@@ -399,6 +449,34 @@ const styles = StyleSheet.create({
   selectedCardItem: {
     backgroundColor: '#15803D',
     borderColor: '#15803D',
+  },
+  suggestedCardItem: {
+    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+  },
+  queueBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  queueBadgeGreen: {
+    backgroundColor: '#DCFCE7',
+  },
+  queueBadgeOrange: {
+    backgroundColor: '#FEF3C7',
+  },
+  queueBadgeRed: {
+    backgroundColor: '#FEE2E2',
+  },
+  queueBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  suggestLabel: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: 'bold',
   },
   cardItemText: {
     fontSize: 14,

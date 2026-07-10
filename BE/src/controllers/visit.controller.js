@@ -15,11 +15,34 @@ export const getStaff = async (req, res) => {
       return res.status(403).json({ message: "Bạn chưa được gán vào bệnh viện nào." });
     }
 
-    const [doctors, nurses, dbTechnicians] = await Promise.all([
-      User.find({ hospitalId, role: "doctor" }).select("profile email role"),
+    const [doctorsList, nurses, dbTechnicians] = await Promise.all([
+      User.find({ hospitalId, role: "doctor" }).select("profile email role").lean(),
       User.find({ hospitalId, role: { $in: ["nurse", "receptionist"] } }).select("profile email role"),
       User.find({ hospitalId, role: "technician" }).select("profile email role"),
     ]);
+
+    // Tính toán hàng đợi hiện tại trong ngày của các bác sĩ (trạng thái đang chờ hoặc đang khám)
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const activeVisits = await Visit.find({
+      hospitalId,
+      status: { $in: ["đang chờ", "đang khám"] },
+      createdAt: { $gte: startOfDay }
+    }).select("doctorId").lean();
+
+    const queueMap = {};
+    activeVisits.forEach(v => {
+      if (v.doctorId) {
+        const docId = v.doctorId.toString();
+        queueMap[docId] = (queueMap[docId] || 0) + 1;
+      }
+    });
+
+    const doctors = doctorsList.map(doc => ({
+      ...doc,
+      queueSize: queueMap[doc._id.toString()] || 0
+    }));
 
     // Bác sĩ kiêm KTV nếu bệnh viện không có KTV chuyên biệt
     const technicians = dbTechnicians.length > 0 ? dbTechnicians : doctors;
@@ -29,6 +52,7 @@ export const getStaff = async (req, res) => {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
+
 
 // @desc    Lễ tân tạo lượt khám mới
 // @route   POST /api/v1/visits
