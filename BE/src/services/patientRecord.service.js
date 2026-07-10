@@ -8,7 +8,10 @@ import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.j
 export const getOrCreateProfile = async (userId) => {
   let profile = await PatientProfile.findOne({ userId });
   if (!profile) {
-    profile = await PatientProfile.create({ userId });
+    // Lấy hospitalId từ User để điền vào trường required của PatientProfile
+    const { User } = await import("../models/user.model.js");
+    const user = await User.findById(userId).select("hospitalId").lean();
+    profile = await PatientProfile.create({ userId, hospitalId: user?.hospitalId });
   }
   return profile;
 };

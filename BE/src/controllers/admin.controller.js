@@ -371,51 +371,137 @@ export const getAiTrainingStats = async (req, res) => {
   }
 };
 
-// @desc    Get AI Feedback logs
+// @desc    Get AI Feedback logs with statistics
 // @route   GET /api/v1/admin/ai-feedback
 // @access  Private (Admin only)
 export const getAiFeedback = async (req, res) => {
   try {
-    // Use env variable for portability; fallback to a sensible relative path
     const feedbackPath = process.env.AI_FEEDBACK_PATH
       ? path.resolve(process.env.AI_FEEDBACK_PATH)
       : path.resolve(__dirname, "../../../MRIteam/hard_examples/feedback_log.csv");
 
+    // Ngưỡng số mẫu feedback tối thiểu để có thể retrain
+    const RETRAIN_THRESHOLD = parseInt(process.env.AI_RETRAIN_THRESHOLD || "50");
+
     if (!fs.existsSync(feedbackPath)) {
-      return res.status(200).json({ success: true, feedback: [] });
+      return res.status(200).json({
+        success: true,
+        feedback: [],
+        stats: {
+          total: 0,
+          byClass: {},
+          readyForRetrain: false,
+          threshold: RETRAIN_THRESHOLD,
+          lastFeedbackAt: null,
+        },
+      });
     }
+
     const data = fs.readFileSync(feedbackPath, "utf8");
     const lines = data.split("\n").filter(line => line.trim() !== "");
     const feedback = [];
+    const byClass = {};
+    let lastTimestamp = null;
+
     for (let i = 1; i < lines.length; i++) {
       const parts = lines[i].split(",");
       if (parts.length >= 6) {
+        const correctClass = parts[1]?.trim();
+        const timestamp = parts[6]?.trim() || null;
+
         feedback.push({
           filename: parts[0],
-          correctClass: parts[1],
+          correctClass,
           x: parseInt(parts[2]),
           y: parseInt(parts[3]),
           w: parseInt(parts[4]),
           h: parseInt(parts[5]),
+          timestamp,
         });
+
+        // Đếm theo class
+        if (correctClass) {
+          byClass[correctClass] = (byClass[correctClass] || 0) + 1;
+        }
+
+        // Lấy timestamp gần nhất
+        if (timestamp && (!lastTimestamp || timestamp > lastTimestamp)) {
+          lastTimestamp = timestamp;
+        }
       }
     }
-    res.status(200).json({ success: true, feedback });
+
+    const total = feedback.length;
+    const readyForRetrain = total >= RETRAIN_THRESHOLD;
+
+    res.status(200).json({
+      success: true,
+      feedback,
+      stats: {
+        total,
+        byClass,
+        readyForRetrain,
+        threshold: RETRAIN_THRESHOLD,
+        lastFeedbackAt: lastTimestamp,
+        message: readyForRetrain
+          ? `✅ Đã thu thập ${total}/${RETRAIN_THRESHOLD} mẫu — Sẵn sàng để retrain!`
+          : `⏳ Đã thu thập ${total}/${RETRAIN_THRESHOLD} mẫu — Cần thêm ${RETRAIN_THRESHOLD - total} mẫu nữa.`,
+      },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Trigger AI retraining (simulated or process spawning)
+// @desc    Confirm retrain has been done manually and reset feedback counter
 // @route   POST /api/v1/admin/ai-retrain
 // @access  Private (Admin only)
 export const retrainAiModel = async (req, res) => {
   try {
-    // Spawn retraining process in background or simulate it
+    const feedbackPath = process.env.AI_FEEDBACK_PATH
+      ? path.resolve(process.env.AI_FEEDBACK_PATH)
+      : path.resolve(__dirname, "../../../MRIteam/hard_examples/feedback_log.csv");
+
+    const RETRAIN_THRESHOLD = parseInt(process.env.AI_RETRAIN_THRESHOLD || "50");
+
+    // Đếm số mẫu hiện có
+    let currentCount = 0;
+    if (fs.existsSync(feedbackPath)) {
+      const data = fs.readFileSync(feedbackPath, "utf8");
+      const lines = data.split("\n").filter(l => l.trim() !== "");
+      currentCount = Math.max(0, lines.length - 1); // trừ header
+    }
+
+    if (currentCount < RETRAIN_THRESHOLD) {
+      return res.status(400).json({
+        success: false,
+        message: `Chưa đủ dữ liệu để retrain. Hiện có ${currentCount}/${RETRAIN_THRESHOLD} mẫu feedback.`,
+        currentCount,
+        threshold: RETRAIN_THRESHOLD,
+      });
+    }
+
+    // Lưu bản backup trước khi reset
+    const backupPath = feedbackPath.replace(".csv", `_backup_${Date.now()}.csv`);
+    if (fs.existsSync(feedbackPath)) {
+      fs.copyFileSync(feedbackPath, backupPath);
+    }
+
+    // Reset file feedback (giữ header)
+    const header = "filename,correct_class,x,y,w,h,timestamp\n";
+    fs.writeFileSync(feedbackPath, header, "utf8");
+
     res.status(200).json({
       success: true,
-      message: "Quy trình huấn luyện lại mô hình AI (Active Learning) đã được kích hoạt thành công từ phản hồi của bác sĩ. Tiến trình chạy ngầm...",
-      status: "training"
+      message: `Đã ghi nhận xác nhận retrain. Feedback log đã được reset (backup tại: ${path.basename(backupPath)}).`,
+      samplesUsed: currentCount,
+      backupFile: path.basename(backupPath),
+      instructions: [
+        "1. SSH vào AI server",
+        `2. Chạy: python train.py --data hard_examples/ --epochs 20`,
+        "3. Sau khi train xong, restart AI service để load model mới",
+      ],
+      status: "confirmed",
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -931,7 +1017,40 @@ export const deleteHospital = async (req, res) => {
   }
 };
 
-// ─── REPORT GENERATION AND VIEWING CONTROLLERS ────────────────────────────────
+// @desc    Re-setup Google Drive folder structure for an existing hospital
+// @route   POST /api/v1/admin/hospitals/:id/setup-drive
+// @access  Private (System Admin)
+export const repairHospitalDrive = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ." });
+    }
+
+    const hospital = await Hospital.findById(id);
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
+    }
+
+    const driveInfo = await setupHospitalDriveStructure(hospital.name.trim());
+
+    hospital.driveFolderId = driveInfo.mainFolderId;
+    hospital.driveFolderUrl = driveInfo.mainFolderUrl;
+    hospital.subFolders = driveInfo.subFolders;
+    await hospital.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Đã khởi tạo lại cấu trúc Google Drive cho bệnh viện "${hospital.name}" thành công.`,
+      driveFolderUrl: driveInfo.mainFolderUrl,
+      subFolders: driveInfo.subFolders,
+    });
+  } catch (error) {
+    console.error("Lỗi khi setup Drive cho bệnh viện:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 export const createRevenueReport = async (req, res) => {
   try {

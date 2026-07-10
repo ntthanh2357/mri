@@ -43,6 +43,7 @@ updateDatasetPrice,
   rollbackAiModel,
   createAnnouncement,
   getAnnouncements,
+  repairHospitalDrive,
 } from "../controllers/admin.controller.js";
 import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { requireSystemAdmin, requireHospitalAdmin } from "../middlewares/role.middleware.js";
@@ -74,6 +75,7 @@ router.put("/hospitals/:id/activate", requireSystemAdmin, activateHospital);
 router.post("/hospitals/:id/reset-password", requireSystemAdmin, resetHospitalPassword);
 router.put("/hospitals/:id/toggle-lock", requireSystemAdmin, toggleHospitalLock);
 router.delete("/hospitals/:id", requireSystemAdmin, deleteHospital);
+router.post("/hospitals/:id/setup-drive", requireSystemAdmin, repairHospitalDrive);
 
 // ─── AI & Chatbot Management routes ──────────────────────────────────────────
 router.get("/ai-feedback", requireSystemAdmin, getAiFeedback);

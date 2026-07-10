@@ -123,8 +123,14 @@ const getOrCreatePatientsParentFolder = async () => {
  */
 export const getOrCreatePatientFolder = async (userId, patientName = "Bệnh nhân") => {
   try {
-    const PatientProfile = (await import("../models/patientProfile.model.js")).default;
-    let profile = await PatientProfile.findOne({ userId });
+    const { PatientProfile } = await import("../models/patientProfile.model.js");
+
+    // Bypass tenancy plugin: tìm trực tiếp theo userId không lọc hospitalId
+    // Dùng native collection để tránh Mongoose middleware (tenancyPlugin)
+    // Vì Drive folder là tài sản CÁ NHÂN của bệnh nhân, không thuộc bệnh viện nào
+    const mongoose = await import("mongoose");
+    const profile = await PatientProfile.collection.findOne({ userId: new mongoose.default.Types.ObjectId(userId) });
+
 
     if (profile && profile.driveFolderId) {
       return {
@@ -137,12 +143,18 @@ export const getOrCreatePatientFolder = async (userId, patientName = "Bệnh nh�
     const patientFolder = await createFolder(`BN - ${patientName} (ID: ${userId.toString().substring(18)})`, patientsParentId);
 
     if (profile) {
-      profile.driveFolderId = patientFolder.id;
-      profile.driveFolderUrl = patientFolder.url;
-      await profile.save();
+      // Cập nhật driveFolderId — dùng native collection để bypass tenancy (kể cả khi đã chuyển viện)
+      await PatientProfile.collection.updateOne(
+        { _id: profile._id },
+        { $set: { driveFolderId: patientFolder.id, driveFolderUrl: patientFolder.url } }
+      );
     } else {
+      // Lấy hospitalId từ User để điền trường required của PatientProfile
+      const { User } = await import("../models/user.model.js");
+      const user = await User.findById(userId).select("hospitalId").lean();
       await PatientProfile.create({
         userId,
+        hospitalId: user?.hospitalId,
         driveFolderId: patientFolder.id,
         driveFolderUrl: patientFolder.url,
       });
@@ -154,6 +166,7 @@ export const getOrCreatePatientFolder = async (userId, patientName = "Bệnh nh�
     throw error;
   }
 };
+
 
 /**
  * Upload a file from Express buffer to a specific Drive folder and make it public (view only)
@@ -228,7 +241,7 @@ export const uploadMetadataBackup = async (metadata, hospitalId, fileNamePrefix 
       return null;
     }
 
-    const Hospital = (await import("../models/hospital.model.js")).default;
+    const { Hospital } = await import("../models/hospital.model.js");
     const hospital = await Hospital.findById(hospitalId).lean();
     if (!hospital || !hospital.subFolders || !hospital.subFolders.metadataBackupsId) {
       console.warn("Bệnh viện không cấu hình thư mục backup hoặc không tìm thấy.");
