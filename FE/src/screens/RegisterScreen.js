@@ -178,6 +178,7 @@ const RegisterScreen = ({ navigation }) => {
               if (phoneError) setPhoneError('');
             }}
             keyboardType="phone-pad"
+            onSubmitEditing={handleRegister}
           />
           {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
 
@@ -193,6 +194,7 @@ const RegisterScreen = ({ navigation }) => {
               if (passwordError) setPasswordError('');
             }}
             autoCapitalize="none"
+            onSubmitEditing={handleRegister}
           />
           {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 

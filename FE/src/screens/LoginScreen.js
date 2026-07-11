@@ -387,6 +387,7 @@ const LoginScreen = ({ navigation }) => {
                     autoCapitalize="none"
                     keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
                     editable={loginMethod === 'otp' ? !otpSent : true}
+                    onSubmitEditing={handleLogin}
                   />
 
                   {loginMethod === 'password' ? (
@@ -406,6 +407,7 @@ const LoginScreen = ({ navigation }) => {
                           value={password}
                           onChangeText={setPassword}
                           autoCapitalize="none"
+                          onSubmitEditing={handleLogin}
                         />
                         <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
                           <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
@@ -426,6 +428,7 @@ const LoginScreen = ({ navigation }) => {
                           maxLength={6}
                           value={otpCode}
                           onChangeText={setOtpCode}
+                          onSubmitEditing={handleLogin}
                         />
                         <TouchableOpacity
                           style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]}
@@ -533,6 +536,7 @@ const LoginScreen = ({ navigation }) => {
               autoCapitalize="none"
               keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
               editable={loginMethod === 'otp' ? !otpSent : true}
+              onSubmitEditing={handleLogin}
             />
 
             {loginMethod === 'password' ? (
@@ -552,6 +556,7 @@ const LoginScreen = ({ navigation }) => {
                     value={password}
                     onChangeText={setPassword}
                     autoCapitalize="none"
+                    onSubmitEditing={handleLogin}
                   />
                   <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
                     <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
@@ -572,6 +577,7 @@ const LoginScreen = ({ navigation }) => {
                     maxLength={6}
                     value={otpCode}
                     onChangeText={setOtpCode}
+                    onSubmitEditing={handleLogin}
                   />
                   <TouchableOpacity
                     style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]}
@@ -657,6 +663,7 @@ const LoginScreen = ({ navigation }) => {
                     onChangeText={setForgotEmail}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    onSubmitEditing={handleRequestOtp}
                   />
                   <TouchableOpacity
                     style={styles.modalSubmitButton}
@@ -690,6 +697,7 @@ const LoginScreen = ({ navigation }) => {
                     keyboardType="number-pad"
                     value={forgotOtp}
                     onChangeText={setForgotOtp}
+                    onSubmitEditing={handleVerifyOtp}
                   />
 
                   <Text style={styles.label}>Mật khẩu mới</Text>
@@ -701,6 +709,7 @@ const LoginScreen = ({ navigation }) => {
                     value={forgotNewPassword}
                     onChangeText={setForgotNewPassword}
                     autoCapitalize="none"
+                    onSubmitEditing={handleVerifyOtp}
                   />
 
                   <View style={styles.modalButtonsRow}>
