@@ -1,11 +1,12 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const medicalRecordSchema = new Schema(
   {
     hospitalId: {
       type: Schema.Types.ObjectId,
       ref: 'Hospital',
-      default: null,
+      required: true,
       index: true,
     },
     patientId: {
@@ -89,6 +90,8 @@ const medicalRecordSchema = new Schema(
     timestamps: true,
   }
 );
+
+medicalRecordSchema.plugin(tenancyPlugin);
 
 export const MedicalRecord = model("MedicalRecord", medicalRecordSchema);
 export default MedicalRecord;

@@ -1,6 +1,13 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const dischargePaperSchema = new Schema({
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: "Hospital",
+    required: true,
+    index: true
+  },
   patient_id: {
     type: Schema.Types.ObjectId,
     ref: "User",
@@ -47,6 +54,8 @@ const dischargePaperSchema = new Schema({
 }, {
   timestamps: true
 });
+
+dischargePaperSchema.plugin(tenancyPlugin);
 
 export const DischargePaper = model("DischargePaper", dischargePaperSchema, "discharge_papers");
 export default DischargePaper;

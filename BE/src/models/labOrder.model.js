@@ -1,6 +1,13 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const labOrderSchema = new Schema({
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: "Hospital",
+    required: true,
+    index: true
+  },
   patient_id: { 
     type: Schema.Types.ObjectId, 
     ref: "User",
@@ -46,5 +53,7 @@ const labOrderSchema = new Schema({
 }, {
   timestamps: true
 });
+
+labOrderSchema.plugin(tenancyPlugin);
 
 export const LabOrder = model("LabOrder", labOrderSchema, "lab_orders");

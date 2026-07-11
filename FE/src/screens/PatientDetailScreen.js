@@ -63,6 +63,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [clinicalWarnings, setClinicalWarnings] = useState([]);
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
+  const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
   // State cho Giấy ra viện
   const [dischargePapers, setDischargePapers] = useState([]);
@@ -175,6 +176,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setSelectedOrder(null);
       }
 
+      // 9. Lấy kho thuốc của bệnh viện
+      try {
+        const drugsRes = await get('/api/drugs');
+        if (drugsRes && drugsRes.success) {
+          setAvailableDrugs(drugsRes.data?.drugs || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh mục thuốc:', err);
+      }
+
     } catch (error) {
       console.error('Lỗi tải dữ liệu chi tiết bệnh nhân:', error);
       Alert.alert('Lỗi', 'Không thể kết nối đến máy chủ để tải hồ sơ bệnh nhân.');
@@ -283,6 +294,14 @@ const PatientDetailScreen = ({ route, navigation }) => {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin thuốc.');
       return;
     }
+
+    // Kiểm tra tồn kho
+    const drugObj = availableDrugs.find(d => d.name === selectedPredefinedDrug);
+    if (drugObj && Number(drugQuantity) > (drugObj.stock?.quantity || 0)) {
+      Alert.alert('Cảnh báo Tồn Kho', `Thuốc ${drugObj.name} hiện chỉ còn ${drugObj.stock?.quantity || 0} ${drugObj.stock?.unit || 'viên'} trong kho. Hãy nhập số lượng nhỏ hơn hoặc bằng tồn kho.`);
+      return;
+    }
+
     const newDrug = {
       name: selectedPredefinedDrug,
       quantity: Number(drugQuantity),
@@ -996,45 +1015,76 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>Tên thuốc điều trị *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
-                    value={selectedPredefinedDrug}
-                    onChangeText={setSelectedPredefinedDrug}
-                  />
-                  {(() => {
-                    const predefinedDrugsList = [
-                      "Keppra",
-                      "Depakine",
-                      "Tegretol",
-                      "Phenobarbital",
-                      "Diazepam",
-                      "Dexamethasone",
-                      "Donepezil"
-                    ];
-                    const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
-                      !predefinedDrugsList.includes(selectedPredefinedDrug);
-                    const filtered = predefinedDrugsList.filter(d => 
-                      d.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
-                    );
-                    
-                    if (showSuggestions && filtered.length > 0) {
-                      return (
-                        <View style={styles.suggestionsContainer}>
-                          {filtered.map((drug) => (
-                            <TouchableOpacity
-                              key={drug}
-                              style={styles.suggestionItem}
-                              onPress={() => setSelectedPredefinedDrug(drug)}
-                            >
-                              <Text style={styles.suggestionText}>💊 {drug}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {Platform.OS === 'web' ? (
+                    <>
+                      <input
+                        type="text"
+                        list="drugs-datalist"
+                        value={selectedPredefinedDrug}
+                        onChange={(e) => {
+                          setSelectedPredefinedDrug(e.target.value);
+                          const drug = availableDrugs.find(d => d.name === e.target.value);
+                          if (drug) setDrugUnit(drug.stock?.unit || 'viên');
+                        }}
+                        placeholder="Nhập hoặc chọn tên thuốc (VD: Keppra...)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #CBD5E1',
+                          outline: 'none',
+                          fontSize: '14px',
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontFamily: 'inherit'
+                        }}
+                      />
+                      <datalist id="drugs-datalist">
+                        {availableDrugs.map(d => (
+                          <option key={d._id} value={d.name}>{`Tồn: ${d.stock?.quantity || 0} ${d.stock?.unit || 'viên'}`}</option>
+                        ))}
+                      </datalist>
+                    </>
+                  ) : (
+                    <View style={{ position: 'relative', zIndex: 1000 }}>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
+                        value={selectedPredefinedDrug}
+                        onChangeText={setSelectedPredefinedDrug}
+                      />
+                      {(() => {
+                        const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
+                          !availableDrugs.find(d => d.name === selectedPredefinedDrug);
+                        
+                        const filtered = availableDrugs.filter(d => 
+                          d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
+                        );
+                        
+                        if (showSuggestions && filtered.length > 0) {
+                          return (
+                            <View style={styles.suggestionsContainer}>
+                              {filtered.map((drug) => (
+                                <TouchableOpacity
+                                  key={drug._id}
+                                  style={styles.suggestionItem}
+                                  onPress={() => {
+                                    setSelectedPredefinedDrug(drug.name);
+                                    setDrugUnit(drug.stock?.unit || 'viên');
+                                  }}
+                                >
+                                  <Text style={styles.suggestionText}>
+                                    💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.formRow}>
@@ -1070,7 +1120,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.submitButton, { backgroundColor: '#2563EB', height: 36, marginTop: 4 }]}
+                  style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4 }]}
                   onPress={handleAddDrugToPrescription}
                 >
                   <Text style={styles.submitButtonText}>➕ Thêm vào đơn</Text>
@@ -1154,7 +1204,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               )}
 
               {/* Bản in đơn thuốc */}
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#2563EB' }]}>
+              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
                 {/* Header bệnh viện */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
@@ -1498,7 +1548,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={styles.inputLabel}>Tóm tắt cận lâm sàng chính</Text>
                   <TouchableOpacity onPress={handleAutofillLabResults} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#3B82F6' }}>
-                    <Text style={{ fontSize: 10, color: '#2563EB', fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
+                    <Text style={{ fontSize: 10, color: Colors.primary, fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
@@ -1563,7 +1613,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',
@@ -1632,7 +1682,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',
@@ -2299,7 +2349,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                          <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                          <Text style={{ color: item.imagingType === 'MRI' ? Colors.info : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
                         </View>
                         <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
                       </View>
@@ -2384,7 +2434,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarBigText: {
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -2410,7 +2460,7 @@ const styles = StyleSheet.create({
   },
   genderBadgeText: {
     fontSize: 11,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -2458,7 +2508,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeTabButton: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
   },
   tabButtonText: {
     fontSize: 14,
@@ -2645,7 +2695,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2668,7 +2718,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectedOrderItem: {
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     backgroundColor: '#F0FDF4',
   },
   orderItemHeader: {
@@ -2729,7 +2779,7 @@ const styles = StyleSheet.create({
   actionBtnOutline: {
     height: 38,
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2737,7 +2787,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   labReportSheet: {
@@ -2961,7 +3011,7 @@ const styles = StyleSheet.create({
   badgeSimText: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#2563EB',
+    color: Colors.primary,
   },
   simActionsRow: {
     flexDirection: 'row',
@@ -3029,7 +3079,7 @@ const styles = StyleSheet.create({
   },
   customSendBtn: {
     height: 34,
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -3078,7 +3128,7 @@ const styles = StyleSheet.create({
   },
   autofillBtnText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: '600',
   },
   manualLabGrid: {

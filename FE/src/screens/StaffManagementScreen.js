@@ -16,9 +16,8 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 
 const ROLE_LABELS = {
-  doctor: 'Bác sĩ',
+  doctor: 'Bác sĩ & Kỹ thuật viên',
   nurse: 'Điều dưỡng & Lễ tân',
-  technician: 'Kỹ thuật viên',
 };
 
 export default function StaffManagementScreen({ navigation }) {
@@ -71,12 +70,12 @@ export default function StaffManagementScreen({ navigation }) {
     }
     setCreatingUser(true);
     try {
+      // Không gửi hospitalId từ client — BE sẽ tự lấy từ JWT để bảo mật
       const response = await post('/auth/register', {
         email: newUserEmail.trim(),
         password: newUserPassword,
         name: newUserName.trim(),
         role: activeRoleTab,
-        hospitalId: currentUser?.hospitalId || undefined,
       });
 
       if (response.success || response.user) {
@@ -95,6 +94,7 @@ export default function StaffManagementScreen({ navigation }) {
       setCreatingUser(false);
     }
   };
+
 
   const handleToggleLock = async (staffId, email, isLocked) => {
     const actionText = isLocked ? 'MỞ KHÓA' : 'KHÓA';
@@ -156,7 +156,7 @@ export default function StaffManagementScreen({ navigation }) {
                 onPress={() => setActiveRoleTab(role)}
               >
                 <Text style={[styles.tabText, activeRoleTab === role && styles.tabTextActive]}>
-                  {role === 'doctor' ? '🩺 Bác sĩ' : role === 'nurse' ? '🏥 Điều dưỡng & Lễ tân' : '🔬 Kỹ thuật viên'}
+                  {ROLE_LABELS[role]}
                 </Text>
               </TouchableOpacity>
             ))}

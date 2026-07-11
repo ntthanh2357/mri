@@ -13,6 +13,8 @@ import imagingResultsRoutes from "./imagingResults.routes.js";
 import visitRoutes from "./visit.routes.js";
 import invoiceRoutes from "./invoice.routes.js";
 import hospitalRoutes from "./hospital.routes.js";
+import scheduleRoutes from "./schedule.routes.js";
+import notificationRoutes from "./notification.routes.js";
 
 const router = Router();
 
@@ -39,6 +41,8 @@ router.use("/api/v1/imaging-results", imagingResultsRoutes);
 router.use("/api/v1/visits", visitRoutes);
 router.use("/api/v1/invoices", invoiceRoutes);
 router.use("/api/v1/hospital", hospitalRoutes);
+router.use("/api/v1/schedules", scheduleRoutes);
+router.use("/api/v1/notifications", notificationRoutes);
 
 // Health check endpoint under /api/v1
 

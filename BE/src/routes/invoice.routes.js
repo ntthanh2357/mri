@@ -15,10 +15,10 @@ import {
 const router = express.Router();
 
 // Lấy danh sách và thanh toán hóa đơn
-router.get("/", protect, checkRole(["nurse", "admin", "receptionist"]), getInvoices);
-router.put("/:id/pay", protect, checkRole(["nurse", "admin", "receptionist"]), payInvoice);
-router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptionist"]), createAndPayInvoice);
-router.post("/pending", protect, checkRole(["nurse", "admin", "receptionist"]), createPendingInvoice);
+router.get("/", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), getInvoices);
+router.put("/:id/pay", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), payInvoice);
+router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createAndPayInvoice);
+router.post("/pending", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createPendingInvoice);
 
 // Cổng thanh toán trực tuyến PayOS (VietQR)
 router.post("/visit/:visitId/payos", protect, createPayOSPayment);

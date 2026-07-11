@@ -62,10 +62,13 @@ const Section = ({ title, sectionKey, expanded, onToggle, children }) => (
   </View>
 );
 
-const MedicalRecordFormScreen = ({ navigation }) => {
+const MedicalRecordFormScreen = ({ navigation, route }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
-  const { formData, loading, saving, updateField, saveForm, resetForm } = useMedicalRecordForm();
+  // [BUG-04/05 FIX] Lấy patientId từ navigation params (truyền từ DoctorPatientListScreen hoặc PatientDetailScreen)
+  const patientId = route?.params?.patientId || null;
+  const patientMedicalId = route?.params?.patientMedicalId || null;
+  const { formData, loading, saving, updateField, saveForm, resetForm } = useMedicalRecordForm(patientId);
 
   const [expanded, setExpanded] = useState({
     hanhChinh: true,
@@ -102,7 +105,8 @@ const MedicalRecordFormScreen = ({ navigation }) => {
         const res = await apiRequest('/api/drugs/check-prescription', {
           method: 'POST',
           body: JSON.stringify({
-            patientId: 'PT-001',
+            // [BUG-04 FIX] Dùng patientId thật từ params, không hardcode
+            patientId: patientId || patientMedicalId || 'UNKNOWN',
             medications: meds,
             orders,
           }),

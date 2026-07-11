@@ -4,6 +4,7 @@ import {
   TextInput, ActivityIndicator, Alert, StyleSheet, SafeAreaView, Platform
 } from "react-native";
 import ResponsiveLayout from "../components/ResponsiveLayout";
+import Colors from "../constants/colors";
 import { get, post, put } from "../services/api.service";
 
 const NursePatientDetailScreen = ({ navigation, route }) => {
@@ -204,6 +205,28 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     setFeeNewAmt("");
   };
 
+  const getOrCreateMedicalRecordId = async () => {
+    const pid = patient._id || patient.patientId;
+    try {
+      const res = await get(`/emr/records?search=${pid}`);
+      if (res?.data && res.data.length > 0) {
+        return res.data[0]._id;
+      }
+      // Create new record if not exists
+      const newRes = await post('/emr/records', {
+        patientId: pid,
+        patientName: patientName || "Bệnh nhân",
+        age: age || 30,
+        diagnosis: "Khám tổng quát",
+        doctorInCharge: doctor || "Bác sĩ",
+      });
+      return newRes?.data?._id || pid;
+    } catch (e) {
+      console.error("Lỗi lấy/tạo bệnh án:", e);
+      return pid; // fallback
+    }
+  };
+
   // 4. Save Clinical Exam (Vitals) to Backend EMR
   const handleSaveExamToBackend = async () => {
     if (!examPulse || !examBP || !examTemp || !examSpo2) {
@@ -212,8 +235,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
+      const recordId = await getOrCreateMedicalRecordId();
       // Create Care Sheet in backend EMR database
-      await post(`/emr/records/${patient._id}/care-sheets`, {
+      await post(`/emr/records/${recordId}/care-sheets`, {
         careLevel: 3,
         pulse: parseInt(examPulse),
         bloodPressure: examBP,
@@ -236,6 +260,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
             respiratoryRate: examBreath ? parseInt(examBreath) : undefined
           }
         });
+        // Cập nhật trạng thái lượt khám để thông báo Bác sĩ
+        await put(`/api/v1/visits/${patient.visitId}/status`, { status: 'đang khám' });
       }
 
       setExamDone(true);
@@ -255,8 +281,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
+      const recordId = await getOrCreateMedicalRecordId();
       // Update MedicalRecord diagnosis and treatment plan
-      await put(`/emr/records/${patient._id}`, {
+      await put(`/emr/records/${recordId}`, {
         diagnosis: orderDiagnosis,
         treatmentPlan: `Chỉ định dịch vụ cận lâm sàng: ${orderServices.join(", ")}`
       });
@@ -444,7 +471,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   ["Khoa / Phòng", department || "N/A"],
                   ["Bác sĩ phụ trách", doctor || "N/A"],
                   ["Trạng thái hiện tại", patient.status || "Đang điều trị"],
-                  ["Loại nhập viện", patient.admissionType || "Ngoại trú"],
+                  ["Loại nhập viện", patient.visitType || patient.admissionType || "Ngoại trú"],
                 ].map(([label, val]) => (
                   <View key={label} style={s.infoRow}>
                     <Text style={s.infoLabel}>{label}</Text>
@@ -534,7 +561,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity onPress={() => setExamDone(false)} style={s.docEditBtn}>
                       <Text style={s.docEditBtnText}>✏️ Sửa lại phiếu</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in phiếu thông tin khám đến Máy in Khoa Nội...")} style={s.docPrintBtn}>
+                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
                       <Text style={s.docPrintBtnText}>🖨️ In Phiếu Khám</Text>
                     </TouchableOpacity>
                   </View>
@@ -666,7 +693,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity onPress={() => setOrderDone(false)} style={s.docEditBtn}>
                       <Text style={s.docEditBtnText}>✏️ Sửa lại chỉ định</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in phiếu chỉ định đến Máy in phòng bác sĩ...")} style={s.docPrintBtn}>
+                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
                       <Text style={s.docPrintBtnText}>🖨️ In Phiếu Chỉ Định</Text>
                     </TouchableOpacity>
                   </View>
@@ -815,7 +842,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </Text>
                   
                   <View style={s.docActionRow}>
-                    <TouchableOpacity onPress={() => Alert.alert("In ấn", "Đang gửi lệnh in biên lai thu viện phí...")} style={[s.docPrintBtn, { flex: 1 }]}>
+                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flex: 1 }]}>
                       <Text style={s.docPrintBtnText}>🖨️ In Hóa Đơn Thu Viện Phí</Text>
                     </TouchableOpacity>
                   </View>
@@ -883,7 +910,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 };
 
 const s = StyleSheet.create({
-  topHeader: { backgroundColor: "#0D9488", paddingHorizontal: 20, paddingVertical: 16, flexDirection: "row", alignItems: "center", gap: 14 },
+  topHeader: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 16, flexDirection: "row", alignItems: "center", gap: 14 },
   backBtn: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   backBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
@@ -891,12 +918,12 @@ const s = StyleSheet.create({
   tabBarContainer: { backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
   tabBar: { flexGrow: 0 },
   tabPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#CBD5E1" },
-  tabPillActive: { backgroundColor: "#0D9488", borderColor: "#0D9488" },
+  tabPillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabPillText: { color: "#475569", fontWeight: "600", fontSize: 13 },
   tabPillTextActive: { color: "#fff" },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: "#0F172A", marginBottom: 4 },
   sectionSubtitle: { fontSize: 12, color: "#64748B", marginBottom: 14, lineHeight: 18 },
-  groupLabel: { fontSize: 13, fontWeight: "700", color: "#0D9488", marginBottom: 10 },
+  groupLabel: { fontSize: 13, fontWeight: "700", color: Colors.primary, marginBottom: 10 },
   fieldLabel: { fontSize: 13, color: "#374151", marginBottom: 4, fontWeight: "600" },
   card: { backgroundColor: "#fff", borderRadius: 14, padding: 18, borderWidth: 1, borderColor: "#E2E8F0", elevation: 2, marginBottom: 16 },
   infoRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#F1F5F9", paddingVertical: 9 },
@@ -912,18 +939,18 @@ const s = StyleSheet.create({
   toggleBtnText: { color: "#64748B", fontWeight: "600", fontSize: 13 },
   toggleBtnTextActive: { color: "#065F46" },
   serviceRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: "#BBF7D0" },
-  addBtn: { backgroundColor: "#0D9488", borderRadius: 8, paddingHorizontal: 14, justifyContent: "center", alignItems: "center", minHeight: 44 },
+  addBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 14, justifyContent: "center", alignItems: "center", minHeight: 44 },
   addBtnText: { color: "#fff", fontWeight: "800", fontSize: 20 },
   quickChip: { backgroundColor: "#EFF6FF", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#BFDBFE" },
-  quickChipText: { color: "#1D4ED8", fontSize: 12, fontWeight: "500" },
+  quickChipText: { color: Colors.info, fontSize: 12, fontWeight: "500" },
   patientSummaryBox: { backgroundColor: "#F8FAFC", borderRadius: 8, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: "#E2E8F0", gap: 4 },
   tableHeader: { flexDirection: "row", backgroundColor: "#F1F5F9", padding: 10, borderRadius: 6, marginBottom: 2 },
   tableHeaderText: { fontWeight: "700", color: "#374151", fontSize: 13 },
   tableRow: { flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: "#F1F5F9" },
-  totalBox: { backgroundColor: "#0D9488", borderRadius: 10, padding: 14, marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalBox: { backgroundColor: Colors.primary, borderRadius: 10, padding: 14, marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { color: "#fff", fontWeight: "700", fontSize: 15 },
   totalValue: { color: "#fff", fontWeight: "800", fontSize: 18 },
-  confirmBtn: { backgroundColor: "#0D9488", borderRadius: 10, padding: 14, alignItems: "center", marginTop: 20, width: "100%" },
+  confirmBtn: { backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: "center", marginTop: 20, width: "100%" },
   confirmBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   successBox: { backgroundColor: "#ECFDF5", borderRadius: 10, padding: 14, borderWidth: 1, borderColor: "#6EE7B7", marginTop: 14, alignItems: "center" },
   successText: { color: "#065F46", fontWeight: "700", fontSize: 14 },
@@ -1116,7 +1143,7 @@ const s = StyleSheet.create({
     flex: 1.5,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     alignItems: "center",
   },
   docPrintBtnText: {
