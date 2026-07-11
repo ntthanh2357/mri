@@ -149,11 +149,11 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'ReceptionistDashboard', params: { tab: 'createVisit' }, icon: '📋' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: '📋' },
           { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
-          { label: 'Thu ngân & Hóa đơn', route: 'ReceptionistDashboard', params: { tab: 'billing' }, icon: '💳' },
+          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', params: { tab: 'billing' }, icon: '💳' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       default:
@@ -219,11 +219,11 @@ const ResponsiveLayout = ({
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
           {menuItems.map((item) => {
             let isActive = false;
-            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'ReceptionistDashboard' && item.params?.tab === 'createVisit') {
+            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') {
               isActive = true;
-            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'ReceptionistDashboard' && item.params?.tab === 'billing') {
+            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') {
               isActive = true;
-            } else if (activeRoute === item.route && item.route !== 'ReceptionistDashboard') {
+            } else if (activeRoute === item.route && item.route !== 'NurseReception') {
               isActive = true;
             }
 

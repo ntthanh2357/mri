@@ -725,7 +725,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('ReceptionistDashboard')}
+                      onPress={() => navigation.navigate('NurseReception')}
                     >
                       <Text style={styles.doctorGridIcon}>💳</Text>
                       <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
