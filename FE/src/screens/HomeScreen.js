@@ -11,35 +11,16 @@ import {
   useWindowDimensions,
   Image,
 } from 'react-native';
-import { get, setAuthToken } from '../services/api.service';
+import { get, put, setAuthToken } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import Colors from '../constants/colors';
 
-const scheduleData = [
-  {
-    time: '08:00 AM',
-    title: 'Uống thuốc hỗ trợ trí nhớ',
-    desc: 'Liều lượng: 1 viên Donepezil 5mg sau ăn sáng.',
-    tags: ['Đã uống', 'Nhắc lại sau 15p'],
-    tagTypes: ['success', 'normal'],
-    dotColor: '#22C55E',
-  },
-  {
-    time: '10:30 AM',
-    title: 'Khám lâm sàng định kỳ',
-    desc: 'Bác sĩ: Dr. Lê Minh - Chuyên khoa Thần kinh.',
-    tags: ['Cuộc gọi Video sẽ bắt đầu sau 2h'],
-    tagTypes: ['info'],
-    dotColor: '#3B82F6',
-  },
-  {
-    time: '04:00 PM',
-    title: 'Tập luyện nhận thức',
-    desc: '30 phút trò chơi giải đố & ghi nhớ trên ứng dụng.',
-    tags: [],
-    tagTypes: [],
-    dotColor: '#94A3B8',
-  },
-];
+const SHIFT_LABELS = {
+  'sáng': 'Ca Sáng',
+  'chiều': 'Ca Chiều',
+  'tối': 'Ca Tối',
+  'cả ngày': 'Cả Ngày',
+};
 
 const HomeScreen = ({ route, navigation }) => {
   const { width } = useWindowDimensions();
@@ -52,7 +33,11 @@ const HomeScreen = ({ route, navigation }) => {
   const [totalPatients, setTotalPatients] = useState(0);
   const [pendingRecords, setPendingRecords] = useState([]);
   const [emrRecords, setEmrRecords] = useState([]);
+  const [queueVisits, setQueueVisits] = useState([]);
+  const [todaySchedule, setTodaySchedule] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [todayReminders, setTodayReminders] = useState([]);
+  const [loadingReminders, setLoadingReminders] = useState(false);
 
   useEffect(() => {
     // If user is already provided via navigation params (quick login), skip fetching
@@ -83,7 +68,7 @@ const HomeScreen = ({ route, navigation }) => {
         (async () => {
           try {
             const hRes = await get('/api/v1/hospital/me');
-            const hStatus = hRes.data?.hospital?.status;
+            const hStatus = hRes.hospital?.status;
             if (hStatus === 'provisioned') {
               navigation.replace('HospitalOnboarding');
             } else {
@@ -103,9 +88,11 @@ const HomeScreen = ({ route, navigation }) => {
     const fetchStats = async () => {
       setLoadingStats(true);
       try {
-        const [patientsRes, emrRes] = await Promise.all([
+        const [patientsRes, emrRes, queueRes, schedRes] = await Promise.all([
           get('/api/patients'),
-          get('/emr/records')
+          get('/emr/records'),
+          get('/api/v1/visits/my-queue').catch(() => null),
+          get('/api/v1/schedules/my-schedule').catch(() => null)
         ]);
 
         if (patientsRes && patientsRes.success && Array.isArray(patientsRes.data)) {
@@ -117,6 +104,17 @@ const HomeScreen = ({ route, navigation }) => {
           const pending = emrRes.data.filter(r => r.signStatus === 'Chưa duyệt');
           setPendingRecords(pending);
         }
+        
+        if (queueRes && queueRes.visits) {
+          setQueueVisits(queueRes.visits);
+        }
+        
+        const todaySchedules = schedRes?.data?.schedules;
+        if (Array.isArray(todaySchedules)) {
+          const todayStr = new Date().toDateString();
+          const todayS = todaySchedules.find(s => new Date(s.date).toDateString() === todayStr);
+          setTodaySchedule(todayS || null);
+        }
       } catch (err) {
         console.error('Lỗi khi tải thống kê HomeScreen:', err);
       } finally {
@@ -126,6 +124,34 @@ const HomeScreen = ({ route, navigation }) => {
 
     fetchStats();
   }, [user]);
+
+  const fetchTodayReminders = async () => {
+    setLoadingReminders(true);
+    try {
+      const res = await get('/api/v1/patient/reminders/today');
+      if (res && res.success) {
+        setTodayReminders(res.data || []);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải lịch trình uống thuốc:', err);
+    } finally {
+      setLoadingReminders(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || user.role !== 'patient') return;
+    fetchTodayReminders();
+  }, [user]);
+
+  const handleMarkReminderDone = async (id) => {
+    try {
+      await put(`/api/v1/patient/reminders/${id}/done`, {});
+    } catch (err) {
+      console.error('Lỗi khi đánh dấu đã uống thuốc:', err);
+    }
+    fetchTodayReminders();
+  };
 
   const handleLogout = () => {
     setAuthToken('');
@@ -161,13 +187,12 @@ const HomeScreen = ({ route, navigation }) => {
   }
 
   const isPatient = user.role === 'patient';
-  const isNurseOrRec = user.role === 'nurse' || user.role === 'receptionist';
-  const isTechnician = user.role === 'technician';
-  const isDoctorOrTech = user.role === 'doctor' || user.role === 'technician';
+  const isNurse = user.role === 'nurse';
+  const isDoctor = user.role === 'doctor';
   const roleLabel = 
     user.role === 'admin' ? 'Quản trị viên' : 
-    (user.role === 'doctor' || user.role === 'technician') ? 'Bác sĩ & Kỹ thuật viên' : 
-    (user.role === 'nurse' || user.role === 'receptionist') ? 'Điều dưỡng & Lễ tân' : 'Bệnh nhân';
+    user.role === 'doctor' ? 'Bác sĩ' : 
+    user.role === 'nurse' ? 'Điều dưỡng' : 'Bệnh nhân';
 
   return (
     <ResponsiveLayout
@@ -216,68 +241,10 @@ const HomeScreen = ({ route, navigation }) => {
                 <View style={styles.desktopGreeting}>
                   <Text style={styles.greetingTitle}>Chào buổi sáng, {user.profile?.name || 'Người dùng'}</Text>
                   <Text style={styles.greetingSubtitle}>
-                    Hôm nay là Thứ Tư, ngày 24 tháng 5 năm 2024. Sức khỏe của bạn đang rất tốt.
+                    Hôm nay là {(() => { const d = new Date(); const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; return days[d.getDay()]; })()}, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}. Sức khỏe của bạn đang rất tốt.
                   </Text>
                 </View>
               )}
-
-              {/* Health Metrics */}
-              <View style={styles.metricsContainer}>
-                {/* Heart Rate */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#FEF2F2' }]}>
-                      <Text style={styles.metricEmoji}>❤️</Text>
-                    </View>
-                    <View style={styles.metricBadge}>
-                      <Text style={styles.metricBadgeText}>Ổn định</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.metricLabel}>Nhịp tim</Text>
-                  <Text style={styles.metricValue}>
-                    72 <Text style={styles.metricUnit}>BPM</Text>
-                  </Text>
-                  <View style={styles.sparkline}>
-                    {[15, 25, 20, 30, 20, 25, 15].map((h, i) => (
-                      <View key={i} style={[styles.sparklineBar, { height: h, backgroundColor: '#EF4444' }]} />
-                    ))}
-                  </View>
-                </View>
-
-                {/* Sleep */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#EEF2FF' }]}>
-                      <Text style={styles.metricEmoji}>🌙</Text>
-                    </View>
-                    <View style={[styles.metricBadge, { backgroundColor: '#EFF6FF' }]}>
-                      <Text style={[styles.metricBadgeText, { color: '#2563EB' }]}>+15%</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.metricLabel}>Giấc ngủ</Text>
-                  <Text style={styles.metricValue}>7h 45m</Text>
-                  <View style={styles.barContainer}>
-                    <View style={[styles.barFill, { width: '80%', backgroundColor: '#6366F1' }]} />
-                  </View>
-                </View>
-
-                {/* Activity */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBox, { backgroundColor: '#FEFCE8' }]}>
-                      <Text style={styles.metricEmoji}>⚡</Text>
-                    </View>
-                    <Text style={styles.metricBadgeValue}>8,421</Text>
-                  </View>
-                  <Text style={styles.metricLabel}>Hoạt động</Text>
-                  <Text style={styles.metricValue}>
-                    84% <Text style={styles.metricUnit}>mục tiêu</Text>
-                  </Text>
-                  <View style={styles.barContainer}>
-                    <View style={[styles.barFill, { width: '84%', backgroundColor: '#22C55E' }]} />
-                  </View>
-                </View>
-              </View>
 
               {/* MRI Result Card */}
               <View style={styles.mriCard}>
@@ -371,7 +338,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.gridCard}
-                      onPress={() => navigation.navigate('MedicalRecordForm')}
+                      onPress={() => navigation.navigate('RecordVault')}
                     >
                       <Text style={styles.gridIcon}>📋</Text>
                       <Text style={styles.gridLabel}>Khai báo bệnh án</Text>
@@ -403,47 +370,48 @@ const HomeScreen = ({ route, navigation }) => {
                 </View>
 
                 <View style={styles.scheduleList}>
-                  {scheduleData.map((item, idx) => (
-                    <View key={idx} style={styles.scheduleItem}>
-                      <View style={styles.scheduleTimeline}>
-                        <View style={[styles.timelineDot, { backgroundColor: item.dotColor }]} />
-                        {idx < scheduleData.length - 1 && <View style={styles.timelineLine} />}
-                      </View>
-                      <View style={styles.scheduleContent}>
-                        <Text style={styles.scheduleTime}>{item.time}</Text>
-                        <Text style={styles.scheduleTitle}>{item.title}</Text>
-                        <Text style={styles.scheduleDesc}>{item.desc}</Text>
-                        {item.tags.length > 0 && (
-                          <View style={styles.scheduleTags}>
-                            {item.tags.map((tag, tagIdx) => {
-                              const isSuccess = item.tagTypes[tagIdx] === 'success';
-                              const isInfo = item.tagTypes[tagIdx] === 'info';
-                              return (
-                                <View
-                                  key={tagIdx}
-                                  style={[
-                                    styles.scheduleTag,
-                                    isSuccess && styles.tagSuccess,
-                                    isInfo && styles.tagInfo,
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.scheduleTagText,
-                                      isSuccess && styles.tagSuccessText,
-                                      isInfo && styles.tagInfoText,
-                                    ]}
-                                  >
-                                    {tag}
-                                  </Text>
-                                </View>
-                              );
-                            })}
+                  {loadingReminders ? (
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 16 }} />
+                  ) : todayReminders.length === 0 ? (
+                    <Text style={styles.scheduleDesc}>Không có lịch uống thuốc nào hôm nay.</Text>
+                  ) : (
+                    todayReminders.map((item, idx) => {
+                      const isDone = item.status === 'done';
+                      const isSkipped = item.status === 'skipped';
+                      const dotColor = isDone ? '#22C55E' : isSkipped ? '#94A3B8' : '#3B82F6';
+                      return (
+                        <View key={item._id} style={styles.scheduleItem}>
+                          <View style={styles.scheduleTimeline}>
+                            <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
+                            {idx < todayReminders.length - 1 && <View style={styles.timelineLine} />}
                           </View>
-                        )}
-                      </View>
-                    </View>
-                  ))}
+                          <View style={styles.scheduleContent}>
+                            <Text style={styles.scheduleTime}>{item.time}</Text>
+                            <Text style={styles.scheduleTitle}>Uống thuốc: {item.drugName}</Text>
+                            <Text style={styles.scheduleDesc}>{item.dosageText}</Text>
+                            <View style={styles.scheduleTags}>
+                              {isDone ? (
+                                <View style={[styles.scheduleTag, styles.tagSuccess]}>
+                                  <Text style={[styles.scheduleTagText, styles.tagSuccessText]}>Đã uống</Text>
+                                </View>
+                              ) : isSkipped ? (
+                                <View style={styles.scheduleTag}>
+                                  <Text style={styles.scheduleTagText}>Đã bỏ qua</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={[styles.scheduleTag, styles.tagInfo]}
+                                  onPress={() => handleMarkReminderDone(item._id)}
+                                >
+                                  <Text style={[styles.scheduleTagText, styles.tagInfoText]}>Đánh dấu đã uống</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
                 </View>
               </View>
 
@@ -477,15 +445,13 @@ const HomeScreen = ({ route, navigation }) => {
               {isDesktop && (
                 <View style={styles.desktopGreeting}>
                   <Text style={styles.greetingTitle}>
-                    {isNurseOrRec ? 'Bảng điều khiển Điều dưỡng & Lễ tân'
-                      : 'Bảng điều khiển Bác sĩ & Kỹ thuật viên'}
+                    {isNurse ? 'Bảng điều khiển Điều dưỡng'
+                      : 'Bảng điều khiển Bác sĩ'}
                   </Text>
                   <Text style={styles.greetingSubtitle}>
-                    {isNurseOrRec
+                    {isNurse
                       ? `Chào mừng trở lại, ${user.profile?.name || 'Nhân viên'}. Quản lý hàng đợi, tiếp đón bệnh nhân và cập nhật sinh hiệu.`
-                      : isTechnician
-                        ? `Chào mừng trở lại, KTV. ${user.profile?.name || user?.email || 'Kỹ thuật viên'}. Thực hiện chỉ định PACS/MRI và nhập kết quả LIS.`
-                        : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
+                      : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
                     }
                   </Text>
                 </View>
@@ -493,11 +459,19 @@ const HomeScreen = ({ route, navigation }) => {
 
               {/* Stats Row */}
               <View style={styles.doctorStatsRow}>
-                {isNurseOrRec ? (
+                {isNurse ? (
                   <>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#0D9488' }]}>Ca trực</Text>
-                      <Text style={styles.doctorStatLabel}>Ca sáng (07h–13h)</Text>
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#15803D" />
+                      ) : (
+                        <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>
+                          {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
+                        </Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>
+                        {todaySchedule?.startTime ? `${todaySchedule.startTime} - ${todaySchedule.endTime}` : 'Ca trực hôm nay'}
+                      </Text>
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
@@ -513,9 +487,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#2563EB" />
+                        <ActivityIndicator size="small" color="#15803D" />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
                           {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
                         </Text>
                       )}
@@ -537,7 +511,7 @@ const HomeScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.doctorStatCard}
-                      onPress={() => navigation.navigate('TechnicianQueue')}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
                     >
                       <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>MRI/PACS</Text>
                       <Text style={styles.doctorStatLabel}>Hàng đợi chụp</Text>
@@ -547,24 +521,46 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('DoctorPatientList')}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#2563EB" />
+                        <ActivityIndicator size="small" color="#15803D" />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#2563EB' }]}>{totalPatients}</Text>
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>{totalPatients}</Text>
                       )}
                       <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
                     </TouchableOpacity>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>99.8%</Text>
+                      <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>94.7%</Text>
                       <Text style={styles.doctorStatLabel}>AI Chính xác</Text>
                     </View>
                   </>
                 )}
               </View>
 
+              {/* Today's Schedule Section (FIX-9) */}
+              {(user.role === 'doctor' || user.role === 'nurse') && (
+                <>
+                  <Text style={styles.sectionTitle}>Lịch Làm Việc Hôm Nay</Text>
+                  <View style={[styles.queueCard, { marginBottom: 20 }]}>
+                    {todaySchedule ? (
+                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                         <Text style={{ fontSize: 24, marginRight: 12 }}>⏰</Text>
+                         <View>
+                           <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift}</Text>
+                           {todaySchedule.startTime ? (
+                             <Text style={{ fontSize: 13, color: '#64748B' }}>Giờ: {todaySchedule.startTime} - {todaySchedule.endTime}</Text>
+                           ) : null}
+                         </View>
+                       </View>
+                    ) : (
+                       <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 10 }}>Hôm nay bạn không có lịch trực.</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
               {/* Queue Section - differs by role */}
               <Text style={styles.sectionTitle}>
-                {isNurseOrRec
-                  ? (user.role === 'nurse' ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu' : 'Hàng chờ tiếp đón ban đầu')
+                {isNurse
+                  ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu'
                   : 'Danh sách ca bệnh & Chỉ định chờ xử lý'
                 }
               </Text>
@@ -573,30 +569,7 @@ const HomeScreen = ({ route, navigation }) => {
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                     <ActivityIndicator size="small" color="#15803D" />
                   </View>
-                ) : isNurseOrRec ? (
-                  user.role === 'receptionist' ? (
-                    /* Receptionist: static reception queue */
-                    <>
-                      <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('ReceptionistDashboard')}>
-                        <View style={styles.queueLeftInfo}>
-                          <Text style={styles.queuePatientName}>Đăng ký mới: Lê Trần Gia Huy</Text>
-                          <Text style={styles.queueDetailsText}>Yêu cầu: Khám ngoại thần kinh · Chờ bác sĩ</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                          <Text style={[styles.statusBadgeText, { color: '#EF4444', fontSize: 10, fontWeight: 'bold' }]}>Chờ phân vai</Text>
-                        </View>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('ReceptionistDashboard')}>
-                        <View style={styles.queueLeftInfo}>
-                          <Text style={styles.queuePatientName}>Bệnh nhân Tuấn Thành</Text>
-                          <Text style={styles.queueDetailsText}>Tái khám u màng não · Đã phân công Bs. Gia Huy</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                          <Text style={[styles.statusBadgeText, { color: '#15803D', fontSize: 10, fontWeight: 'bold' }]}>Đang chờ khám</Text>
-                        </View>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
+                ) : isNurse ? (
                     /* Nurse: inpatient list */
                     emrRecords.filter(r => r.admissionType === 'Nội trú').length === 0 ? (
                       <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -621,55 +594,35 @@ const HomeScreen = ({ route, navigation }) => {
                         );
                       })
                     )
-                  )
                 ) : (
                   <>
-                    {/* Doctor pending records */}
-                    {pendingRecords.length === 0 ? (
+                    {/* Doctor pending records from Queue */}
+                    {queueVisits.length === 0 ? (
                       <View style={{ paddingVertical: 10, alignItems: 'center' }}>
                         <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có ca bệnh nào chờ duyệt.</Text>
                       </View>
                     ) : (
-                      pendingRecords.map((record, index) => {
+                      queueVisits.map((v, index) => {
+                        const isLast = index === queueVisits.length - 1;
                         return (
                           <TouchableOpacity
-                            key={record._id}
-                            style={styles.queueItemRow}
+                            key={v._id}
+                            style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
                             onPress={() => navigation.navigate('DoctorWorkQueue')}
                           >
                             <View style={styles.queueLeftInfo}>
-                              <Text style={styles.queuePatientName}>🩺 {record.patientName}</Text>
-                              <Text style={styles.queueDetailsText}>{record.diagnosis} ({record.admissionType})</Text>
+                              <Text style={styles.queuePatientName}>🩺 {v.patientId?.profile?.name || v.patientId?.email}</Text>
+                              <Text style={styles.queueDetailsText}>{v.reason}</Text>
                             </View>
-                            <View style={[styles.statusBadge, record.admissionType === 'Cấp cứu' ? styles.statusDanger : styles.statusWarn]}>
+                            <View style={[styles.statusBadge, v.status === 'đang chờ' ? styles.statusDanger : styles.statusWarn]}>
                               <Text style={styles.statusBadgeText}>
-                                {record.admissionType === 'Cấp cứu' ? 'Khẩn cấp' : 'Chờ duyệt'}
+                                {v.status === 'đang chờ' ? 'Chưa bắt đầu' : v.status}
                               </Text>
                             </View>
                           </TouchableOpacity>
                         );
                       })
                     )}
-
-                    {/* Technician PACS queue */}
-                    <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('TechnicianQueue')}>
-                      <View style={styles.queueLeftInfo}>
-                        <Text style={styles.queuePatientName}>🔬 Bệnh nhân Tuấn Thành (26025699)</Text>
-                        <Text style={styles.queueDetailsText}>Yêu cầu: Chụp MRI sọ não có cản từ · Đã hoàn tất chụp</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                        <Text style={[styles.statusBadgeText, { color: '#1D4ED8', fontSize: 10, fontWeight: 'bold' }]}>Chờ nạp PACS</Text>
-                      </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('TechnicianQueue')}>
-                      <View style={styles.queueLeftInfo}>
-                        <Text style={styles.queuePatientName}>🔬 Nguyễn Văn A</Text>
-                        <Text style={styles.queueDetailsText}>Chỉ định: Huyết học 18 chỉ số · Barcode: LIS-HH-8422</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                        <Text style={[styles.statusBadgeText, { color: '#D97706', fontSize: 10, fontWeight: 'bold' }]}>Chờ kết nối LIS</Text>
-                      </View>
-                    </TouchableOpacity>
                   </>
                 )}
               </View>
@@ -679,14 +632,14 @@ const HomeScreen = ({ route, navigation }) => {
             <View style={isDesktop ? styles.doctorSideColumn : styles.fullWidth}>
               {/* Quick Actions Grid - differs by role */}
               <Text style={styles.sectionTitle}>
-                {isNurseOrRec ? 'Công cụ điều dưỡng & tiếp đón' : 'Công cụ nghiệp vụ & Quản lý'}
+                {isNurse ? 'Công cụ điều dưỡng & tiếp đón' : 'Công cụ nghiệp vụ & Quản lý'}
               </Text>
               <View style={styles.doctorGrid}>
-                {isNurseOrRec ? (
+                {isNurse ? (
                   <>
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('ReceptionistDashboard')}
+                      onPress={() => navigation.navigate('NurseReception')}
                     >
                       <Text style={styles.doctorGridIcon}>📋</Text>
                       <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân</Text>
@@ -713,7 +666,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('ReceptionistDashboard')}
+                      onPress={() => navigation.navigate('NurseReception')}
                     >
                       <Text style={styles.doctorGridIcon}>💳</Text>
                       <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
@@ -742,7 +695,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                       style={styles.doctorGridCard}
-                      onPress={() => navigation.navigate('TechnicianQueue')}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
                     >
                       <Text style={styles.doctorGridIcon}>🔬</Text>
                       <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
@@ -932,7 +885,7 @@ const styles = StyleSheet.create({
     color: '#15803D',
   },
   doctorBadgeText: {
-    color: '#1D4ED8',
+    color: '#15803D',
   },
   emailText: {
     fontSize: 13,
@@ -1176,89 +1129,6 @@ const styles = StyleSheet.create({
     color: '#166534',
     marginTop: 4,
   },
-  metricsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricEmoji: {
-    fontSize: 16,
-  },
-  metricBadge: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  metricBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#166534',
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 8,
-  },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  metricUnit: {
-    fontSize: 12,
-    fontWeight: 'normal',
-    color: '#64748B',
-  },
-  sparkline: {
-    flexDirection: 'row',
-    gap: 2,
-    alignItems: 'flex-end',
-    height: 30,
-    marginTop: 10,
-  },
-  sparklineBar: {
-    flex: 1,
-    borderRadius: 2,
-  },
-  barContainer: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    marginTop: 14,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  metricBadgeValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#334155',
-  },
   mriCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1477,7 +1347,7 @@ const styles = StyleSheet.create({
     borderColor: '#DBEAFE',
   },
   tagInfoText: {
-    color: '#1D4ED8',
+    color: '#15803D',
   },
   aiChatCard: {
     backgroundColor: '#0F172A',

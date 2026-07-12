@@ -16,6 +16,18 @@ import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 
+const calculateAge = (dob, birthYear) => {
+  if (dob) {
+    const birthDate = new Date(dob);
+    const age = new Date().getFullYear() - birthDate.getFullYear();
+    return isNaN(age) ? (birthYear ? new Date().getFullYear() - birthYear : 30) : age;
+  }
+  if (birthYear) {
+    return new Date().getFullYear() - birthYear;
+  }
+  return 30;
+};
+
 const PatientDetailScreen = ({ route, navigation }) => {
   const patientId = route.params?.patientId;
   const { width } = useWindowDimensions();
@@ -60,9 +72,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [drugQuantity, setDrugQuantity] = useState('10');
   const [drugUnit, setDrugUnit] = useState('viên');
   const [drugUsage, setDrugUsage] = useState('Ngày uống 2 lần, mỗi lần 1 viên sau ăn');
+  const [drugTimesPerDay, setDrugTimesPerDay] = useState('2');
+  const [drugDurationDays, setDrugDurationDays] = useState('7');
   const [clinicalWarnings, setClinicalWarnings] = useState([]);
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
+  const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
   // State cho Giấy ra viện
   const [dischargePapers, setDischargePapers] = useState([]);
@@ -111,18 +126,21 @@ const PatientDetailScreen = ({ route, navigation }) => {
         return;
       }
 
-      // 2. Lấy chi tiết bệnh nhân
-      const patientsData = await get('/api/patients');
-      const foundPatient = patientsData.data.find(p => p._id === targetPatientId);
-      
-      if (foundPatient) {
+      // 2. Lấy chi tiết bệnh nhân (cho phép xuyên viện để phục vụ chuyển tuyến)
+      let foundPatient = null;
+      if (meData.user.role === 'patient' && meData.user._id === targetPatientId) {
+        foundPatient = meData.user;
         setPatient(foundPatient);
-      } else if (meData.user.role === 'patient' && meData.user._id === targetPatientId) {
-        setPatient(meData.user);
       } else {
-        Alert.alert('Lỗi', 'Không tìm thấy thông tin bệnh nhân trong hệ thống.');
-        navigation.navigate('Home');
-        return;
+        try {
+          const patientRes = await get(`/api/patients/${targetPatientId}`);
+          foundPatient = patientRes.data;
+          setPatient(foundPatient);
+        } catch (err) {
+          Alert.alert('Lỗi', err.message || 'Không tìm thấy thông tin bệnh nhân trong hệ thống.');
+          navigation.navigate('Home');
+          return;
+        }
       }
 
       // 3. Lấy lịch sử sinh hiệu
@@ -173,6 +191,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setSelectedOrder(ordersData.data[0]);
       } else {
         setSelectedOrder(null);
+      }
+
+      // 9. Lấy kho thuốc của bệnh viện
+      try {
+        const drugsRes = await get('/api/drugs');
+        if (drugsRes && drugsRes.success) {
+          setAvailableDrugs(drugsRes.data?.drugs || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh mục thuốc:', err);
       }
 
     } catch (error) {
@@ -283,11 +311,21 @@ const PatientDetailScreen = ({ route, navigation }) => {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin thuốc.');
       return;
     }
+
+    // Kiểm tra tồn kho
+    const drugObj = availableDrugs.find(d => d.name === selectedPredefinedDrug);
+    if (drugObj && Number(drugQuantity) > (drugObj.stock?.quantity || 0)) {
+      Alert.alert('Cảnh báo Tồn Kho', `Thuốc ${drugObj.name} hiện chỉ còn ${drugObj.stock?.quantity || 0} ${drugObj.stock?.unit || 'viên'} trong kho. Hãy nhập số lượng nhỏ hơn hoặc bằng tồn kho.`);
+      return;
+    }
+
     const newDrug = {
       name: selectedPredefinedDrug,
       quantity: Number(drugQuantity),
       unit: drugUnit,
-      usage: drugUsage
+      usage: drugUsage,
+      timesPerDay: Math.min(Math.max(Number(drugTimesPerDay) || 2, 1), 4),
+      durationDays: Math.max(Number(drugDurationDays) || 7, 1)
     };
     const updated = [...prescriptionDrugs, newDrug];
     setPrescriptionDrugs(updated);
@@ -556,132 +594,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
   };
 
   // Giả lập gửi dữ liệu từ máy LIS
-  const handleSimulateLis = async (mode) => {
-    if (!selectedOrder) {
-      Alert.alert('Thông báo', 'Không có phiếu xét nghiệm nào được chọn để giả lập.');
-      return;
-    }
-
-    setIsSendingLis(true);
-    try {
-      let results = [];
-
-      if (mode === 'NORMAL_HUYET_HOC') {
-        // Bộ chỉ số Huyết học BÌNH THƯỜNG - theo phiếu FPT eHospital (M4)
-        results = [
-          { code: 'WBC',      value: 6.8  },  // Bạch cầu
-          { code: 'NEU_PCT',  value: 62.5 },  // Trung tính %
-          { code: 'NEU_ABS',  value: 4.25 },  // Trung tính #
-          { code: 'LYM_PCT',  value: 28.3 },  // Lympho %
-          { code: 'LYM_ABS',  value: 1.92 },  // Lympho #
-          { code: 'MONO_PCT', value: 6.2  },  // Mono %
-          { code: 'EOS_PCT',  value: 2.4  },  // ƪa acid %
-          { code: 'BASO_PCT', value: 0.6  },  // ƪa base %
-          { code: 'RBC',      value: 4.6  },  // Hồng cầu
-          { code: 'HGB',      value: 142  },  // Hemoglobin
-          { code: 'HCT',      value: 44.2 },  // Hematocrit
-          { code: 'MCV',      value: 88.5 },  // Thể tích TB HC
-          { code: 'MCH',      value: 29.1 },  // Lượng HGB TB
-          { code: 'MCHC',     value: 340  },  // Nồng độ HGB
-          { code: 'RDW',      value: 12.8 },  // Phân bố HC
-          { code: 'PLT',      value: 245  },  // Tiểu cầu
-          { code: 'MPV',      value: 8.5  },  // Thể tích TB TC
-        ];
-      } else if (mode === 'ABNORMAL_HUYET_HOC') {
-        // Bộ chỉ số Huyết học BẤT THƯỜNG - thiếu máu + tăng bạch cầu
-        results = [
-          { code: 'WBC',      value: 12.5 },  // ↑ Tăng bạch cầu (> 10.0)
-          { code: 'NEU_PCT',  value: 82.0 },  // ↑ Trung tính tăng (> 75%)
-          { code: 'NEU_ABS',  value: 10.25},  // ↑ Trung tính # tăng
-          { code: 'LYM_PCT',  value: 12.5 },  // ↓ Lympho giảm (< 20%)
-          { code: 'LYM_ABS',  value: 1.56 },
-          { code: 'MONO_PCT', value: 4.5  },
-          { code: 'EOS_PCT',  value: 1.0  },
-          { code: 'BASO_PCT', value: 0.3  },
-          { code: 'RBC',      value: 3.1  },  // ↓ Hồng cầu giảm (thiếu máu)
-          { code: 'HGB',      value: 95   },  // ↓ HGB giảm nặng
-          { code: 'HCT',      value: 28.5 },  // ↓ Hematocrit giảm
-          { code: 'MCV',      value: 68.0 },  // ↓ HC nhỏ (thiếu sắt)
-          { code: 'MCH',      value: 21.5 },  // ↓ Lượng HGB giảm
-          { code: 'MCHC',     value: 295  },  // ↓ Nồng độ HGB giảm
-          { code: 'RDW',      value: 18.5 },  // ↑ Phân bố HC không đều (> 15%)
-          { code: 'PLT',      value: 520  },  // ↑ Tiểu cầu tăng (> 450)
-          { code: 'MPV',      value: 12.5 },  // ↑ Thể tích TC tăng (> 11)
-        ];
-      } else if (mode === 'ABNORMAL_HOA_SINH') {
-        // Bộ chỉ số Hóa sinh BẤT THƯỜNG - ĐTĐ type 2 + Rối loạn lipid + Suy gan nhẹ
-        results = [
-          { code: 'UREA',       value: 3.1  },  // Bình thường (2.5-7.5)
-          { code: 'GLU',        value: 9.8  },  // ↑ Đường huyết cao (> 6.4)
-          { code: 'CRE',        value: 108  },  // Bình thường (62-120)
-          { code: 'ACID_URIC',  value: 455  },  // ↑ Acid Uric cao (> 420 Nam)
-          { code: 'BILI_TP',    value: 12.5 },  // Bình thường (< 17)
-          { code: 'CHOL',       value: 6.4  },  // ↑ Cholesterol cao (> 5.2)
-          { code: 'TRIG',       value: 3.2  },  // ↑ Triglycerid cao (> 1.88)
-          { code: 'HDL',        value: 0.75 },  // ↓ HDL thấp (< 0.9)
-          { code: 'LDL',        value: 4.2  },  // ↑ LDL cao (> 3.4)
-          { code: 'NA',         value: 142  },  // Bình thường (135-145)
-          { code: 'K',          value: 3.2  },  // ↓ Kali thấp (< 3.5)
-          { code: 'CL',         value: 102  },  // Bình thường (98-106)
-          { code: 'CA',         value: 2.35 },  // Bình thường (2.15-2.6)
-          { code: 'AST',        value: 68.5 },  // ↑ AST tăng (> 37)
-          { code: 'ALT',        value: 92.0 },  // ↑ ALT tăng (> 40)
-          { code: 'GGT',        value: 78.0 },  // ↑ GGT tăng (> 50 Nam)
-          { code: 'PROTEIN_TP', value: 70.0 },  // Bình thường (65-82)
-          { code: 'ALBUMIN',    value: 38.0 },  // Bình thường (35-50)
-        ];
-      } else if (mode === 'CUSTOM') {
-        if (!selectedBiomarkerCode || !customLisValue) {
-          Alert.alert('Lỗi', 'Vui lòng chọn chỉ số và nhập giá trị.');
-          setIsSendingLis(false);
-          return;
-        }
-        // MERGE MODE: Giữ nguyên tất cả kết quả cũ, chỉ cập nhật chỉ số được chọn
-        const existingResults = (selectedOrder.results || []).map(r => ({
-          code: r.biomarker_code,
-          value: r.value_result
-        }));
-        results = [
-          ...existingResults.filter(r => r.code !== selectedBiomarkerCode),
-          { code: selectedBiomarkerCode, value: Number(customLisValue) }
-        ];
-      }
-
-      await post('/api/lis/receiver', {
-        barcode: selectedOrder.barcode,
-        results
-      });
-
-      const msgMode = mode === 'CUSTOM'
-        ? `Đã cập nhật chỉ số ${selectedBiomarkerCode} = ${customLisValue}${customValidation?.biomarker?.unit ? ' ' + customValidation.biomarker.unit : ''}`
-        : `Đã truyền ${results.length} chỉ số xét nghiệm thành công!`;
-
-      Alert.alert('✅ LIS Simulator', msgMode);
-      
-      // Reset giá trị custom sau khi gửi thành công
-      if (mode === 'CUSTOM') {
-        setCustomLisValue('');
-        setCustomValidation(null);
-      }
-
-      // Reload danh sách phiếu xét nghiệm
-      const targetPatientId = patient?._id;
-      const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
-      setLabOrders(ordersData.data || []);
-      
-      // Cập nhật lại phiếu đang hiển thị
-      const updated = ordersData.data.find(o => o._id === selectedOrder._id);
-      if (updated) {
-        setSelectedOrder(updated);
-      }
-    } catch (error) {
-      console.error('Lỗi gửi dữ liệu LIS:', error);
-      Alert.alert('LIS Simulator Thất bại', error.message || 'Lỗi khi máy LIS truyền dữ liệu.');
-    } finally {
-      setIsSendingLis(false);
-    }
-  };
-
   // Tạo chỉ định xét nghiệm mới từ UI
   const handleCreateLabOrder = async (category) => {
     const targetPatientId = patient?._id;
@@ -996,45 +908,76 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>Tên thuốc điều trị *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
-                    value={selectedPredefinedDrug}
-                    onChangeText={setSelectedPredefinedDrug}
-                  />
-                  {(() => {
-                    const predefinedDrugsList = [
-                      "Keppra",
-                      "Depakine",
-                      "Tegretol",
-                      "Phenobarbital",
-                      "Diazepam",
-                      "Dexamethasone",
-                      "Donepezil"
-                    ];
-                    const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
-                      !predefinedDrugsList.includes(selectedPredefinedDrug);
-                    const filtered = predefinedDrugsList.filter(d => 
-                      d.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
-                    );
-                    
-                    if (showSuggestions && filtered.length > 0) {
-                      return (
-                        <View style={styles.suggestionsContainer}>
-                          {filtered.map((drug) => (
-                            <TouchableOpacity
-                              key={drug}
-                              style={styles.suggestionItem}
-                              onPress={() => setSelectedPredefinedDrug(drug)}
-                            >
-                              <Text style={styles.suggestionText}>💊 {drug}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {Platform.OS === 'web' ? (
+                    <>
+                      <input
+                        type="text"
+                        list="drugs-datalist"
+                        value={selectedPredefinedDrug}
+                        onChange={(e) => {
+                          setSelectedPredefinedDrug(e.target.value);
+                          const drug = availableDrugs.find(d => d.name === e.target.value);
+                          if (drug) setDrugUnit(drug.stock?.unit || 'viên');
+                        }}
+                        placeholder="Nhập hoặc chọn tên thuốc (VD: Keppra...)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #CBD5E1',
+                          outline: 'none',
+                          fontSize: '14px',
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontFamily: 'inherit'
+                        }}
+                      />
+                      <datalist id="drugs-datalist">
+                        {availableDrugs.map(d => (
+                          <option key={d._id} value={d.name}>{`Tồn: ${d.stock?.quantity || 0} ${d.stock?.unit || 'viên'}`}</option>
+                        ))}
+                      </datalist>
+                    </>
+                  ) : (
+                    <View style={{ position: 'relative', zIndex: 1000 }}>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
+                        value={selectedPredefinedDrug}
+                        onChangeText={setSelectedPredefinedDrug}
+                      />
+                      {(() => {
+                        const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
+                          !availableDrugs.find(d => d.name === selectedPredefinedDrug);
+                        
+                        const filtered = availableDrugs.filter(d => 
+                          d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
+                        );
+                        
+                        if (showSuggestions && filtered.length > 0) {
+                          return (
+                            <View style={styles.suggestionsContainer}>
+                              {filtered.map((drug) => (
+                                <TouchableOpacity
+                                  key={drug._id}
+                                  style={styles.suggestionItem}
+                                  onPress={() => {
+                                    setSelectedPredefinedDrug(drug.name);
+                                    setDrugUnit(drug.stock?.unit || 'viên');
+                                  }}
+                                >
+                                  <Text style={styles.suggestionText}>
+                                    💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.formRow}>
@@ -1069,8 +1012,31 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   />
                 </View>
 
+                <View style={styles.formRow}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Số lần uống/ngày</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="VD: 2"
+                      value={drugTimesPerDay}
+                      onChangeText={setDrugTimesPerDay}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Số ngày uống</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="VD: 7"
+                      value={drugDurationDays}
+                      onChangeText={setDrugDurationDays}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
                 <TouchableOpacity
-                  style={[styles.submitButton, { backgroundColor: '#2563EB', height: 36, marginTop: 4 }]}
+                  style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4 }]}
                   onPress={handleAddDrugToPrescription}
                 >
                   <Text style={styles.submitButtonText}>➕ Thêm vào đơn</Text>
@@ -1086,6 +1052,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                       <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A' }}>{index + 1}. {d.name} ({d.quantity} {d.unit})</Text>
                         <Text style={{ fontSize: 11, color: '#1E40AF' }}>HD: {d.usage}</Text>
+                        <Text style={{ fontSize: 11, color: '#1E40AF' }}>Nhắc uống: {d.timesPerDay} lần/ngày × {d.durationDays} ngày</Text>
                       </View>
                       <TouchableOpacity onPress={() => handleRemoveDrugFromPrescription(index)} style={{ padding: 4, backgroundColor: '#FECACA', borderRadius: 4 }}>
                         <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Xóa</Text>
@@ -1154,7 +1121,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               )}
 
               {/* Bản in đơn thuốc */}
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#2563EB' }]}>
+              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
                 {/* Header bệnh viện */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
@@ -1175,7 +1142,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>31</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Giới tính: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
                   </View>
                   <Text style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
@@ -1367,8 +1334,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   <Text style={{ fontSize: 13, color: '#334155' }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
                   
                   <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>15/05/1995</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>31</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).toLocaleDateString('vi-VN') : patient?.profile?.birthYear || 'N/A'}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
                   </View>
 
@@ -1498,7 +1465,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={styles.inputLabel}>Tóm tắt cận lâm sàng chính</Text>
                   <TouchableOpacity onPress={handleAutofillLabResults} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#3B82F6' }}>
-                    <Text style={{ fontSize: 10, color: '#2563EB', fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
+                    <Text style={{ fontSize: 10, color: Colors.primary, fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
@@ -1563,7 +1530,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',
@@ -1632,7 +1599,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     style={{
                       height: 38,
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
                       paddingLeft: 10,
                       fontSize: 13,
                       backgroundColor: '#FFFFFF',
@@ -1710,7 +1677,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   
                   <View style={{ flexDirection: 'row', gap: 20 }}>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>- Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Năm sinh: <Text style={{ fontWeight: '500' }}>1995</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Năm sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).getFullYear() : patient?.profile?.birthYear || 'N/A'}</Text></Text>
                   </View>
 
                   <Text style={{ fontSize: 13, color: '#334155' }}>- Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
@@ -2299,7 +2266,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                          <Text style={{ color: item.imagingType === 'MRI' ? '#2563EB' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                          <Text style={{ color: item.imagingType === 'MRI' ? Colors.info : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
                         </View>
                         <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
                       </View>
@@ -2384,7 +2351,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarBigText: {
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -2410,7 +2377,7 @@ const styles = StyleSheet.create({
   },
   genderBadgeText: {
     fontSize: 11,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -2458,7 +2425,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeTabButton: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
   },
   tabButtonText: {
     fontSize: 14,
@@ -2645,7 +2612,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2668,7 +2635,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectedOrderItem: {
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     backgroundColor: '#F0FDF4',
   },
   orderItemHeader: {
@@ -2729,7 +2696,7 @@ const styles = StyleSheet.create({
   actionBtnOutline: {
     height: 38,
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: Colors.primary,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2737,7 +2704,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    color: '#15803D',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   labReportSheet: {
@@ -2961,7 +2928,7 @@ const styles = StyleSheet.create({
   badgeSimText: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#2563EB',
+    color: Colors.primary,
   },
   simActionsRow: {
     flexDirection: 'row',
@@ -3029,7 +2996,7 @@ const styles = StyleSheet.create({
   },
   customSendBtn: {
     height: 34,
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -3078,7 +3045,7 @@ const styles = StyleSheet.create({
   },
   autofillBtnText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: Colors.primary,
     fontWeight: '600',
   },
   manualLabGrid: {

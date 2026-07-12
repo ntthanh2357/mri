@@ -4,6 +4,8 @@ import { Hospital } from "../models/hospital.model.js";
 import { MedicalRecord } from "../models/medicalRecord.model.js";
 import { EMRVersion } from "../models/emrVersion.model.js";
 import { User } from "../models/user.model.js";
+import { Drug } from "../models/drug.model.js";
+import { Prescription } from "../models/prescription.model.js";
 
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
@@ -20,9 +22,14 @@ export const createAndPayInvoice = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền" });
     }
 
+    const existingInvoice = await Invoice.findOne({ visitId });
+    if (existingInvoice && existingInvoice.status !== "hủy") {
+      return res.status(400).json({ message: "Lượt khám này đã có hóa đơn." });
+    }
+
     const hospital = await Hospital.findById(req.user.hospitalId);
 
-    // Xây dựng items
+    // Xây dựng items dịch vụ khám lâm sàng và hình ảnh
     let items = [{ description: "Khám bệnh", amount: hospital.pricing.examFee, type: "exam" }];
     if (visit.mriOrder && visit.mriOrder.orderedAt) {
       items.push({ description: "Chụp MRI", amount: hospital.pricing.mriFee, type: "mri" });
@@ -30,6 +37,40 @@ export const createAndPayInvoice = async (req, res) => {
         items.push({ description: "Phân tích AI chẩn đoán", amount: hospital.pricing.aiFee, type: "ai" });
       }
     }
+
+    // ── Tự động tính tiền thuốc từ Đơn thuốc đã kê trong lượt khám ───────────
+    const prescription = await Prescription.findOne({
+      patient_id: visit.patientId,
+      createdAt: { $gte: visit.createdAt },
+      isBilled: { $ne: true }
+    });
+
+    if (prescription && prescription.drugs && prescription.drugs.length > 0) {
+      for (const pDrug of prescription.drugs) {
+        // Tìm thông tin thuốc trong danh mục của bệnh viện
+        const dbDrug = await Drug.findOne({
+          hospitalId: req.user.hospitalId,
+          name: { $regex: new RegExp(`^${pDrug.name.trim()}$`, "i") }
+        });
+
+        const unitPrice = dbDrug ? dbDrug.price : 0;
+        const totalDrugPrice = unitPrice * pDrug.quantity;
+
+        items.push({
+          description: `Thuốc: ${pDrug.name} (SL: ${pDrug.quantity} ${pDrug.unit || 'Viên'})`,
+          amount: totalDrugPrice,
+          type: "drug"
+        });
+
+        // Trừ tồn kho nếu thuốc được cấu hình trong hệ thống
+        if (dbDrug) {
+          dbDrug.stock.quantity = Math.max(0, dbDrug.stock.quantity - pDrug.quantity);
+          dbDrug.stock.lastUpdated = new Date();
+          await dbDrug.save();
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
 
@@ -51,6 +92,13 @@ export const createAndPayInvoice = async (req, res) => {
     });
 
     await invoice.save();
+
+    // Đánh dấu đơn thuốc đã được xuất hóa đơn
+    if (prescription) {
+      prescription.isBilled = true;
+      prescription.invoiceId = invoice._id;
+      await prescription.save();
+    }
 
     visit.invoiceId = invoice._id;
     visit.status = "đã đóng";
@@ -104,6 +152,59 @@ export const payInvoice = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
+    // Cập nhật trạng thái lượt khám và tính toán lại tiền thuốc trước khi lưu hóa đơn
+    const visit = await Visit.findById(invoice.visitId);
+    let prescription = null;
+    
+    if (visit) {
+      // 1. Tìm đơn thuốc chưa thanh toán của lượt khám này
+      prescription = await Prescription.findOne({
+        patient_id: visit.patientId,
+        createdAt: { $gte: visit.createdAt },
+        isBilled: { $ne: true }
+      });
+
+      if (prescription && prescription.drugs && prescription.drugs.length > 0) {
+        // Lọc bỏ tất cả các khoản thu loại "drug" cũ để tránh trùng lặp hoặc sai lệch khi chỉnh sửa đơn thuốc
+        invoice.items = invoice.items.filter(item => item.type !== "drug");
+
+        for (const pDrug of prescription.drugs) {
+          const dbDrug = await Drug.findOne({
+            hospitalId: req.user.hospitalId,
+            name: { $regex: new RegExp(`^${pDrug.name.trim()}$`, "i") }
+          });
+
+          const unitPrice = dbDrug ? dbDrug.price : 0;
+          const totalDrugPrice = unitPrice * pDrug.quantity;
+
+          invoice.items.push({
+            description: `Thuốc: ${pDrug.name} (SL: ${pDrug.quantity} ${pDrug.unit || 'Viên'})`,
+            amount: totalDrugPrice,
+            type: "drug"
+          });
+
+          // Trừ tồn kho thực tế
+          if (dbDrug) {
+            dbDrug.stock.quantity = Math.max(0, dbDrug.stock.quantity - pDrug.quantity);
+            dbDrug.stock.lastUpdated = new Date();
+            await dbDrug.save();
+          }
+        }
+
+        // Cập nhật lại tổng tiền hóa đơn
+        invoice.totalAmount = invoice.items.reduce((sum, item) => sum + item.amount, 0);
+
+        // Đánh dấu đơn thuốc đã xuất hóa đơn
+        prescription.isBilled = true;
+        prescription.invoiceId = invoice._id;
+        await prescription.save();
+      }
+
+      // Cập nhật trạng thái lượt khám
+      visit.status = "đã đóng";
+      await visit.save();
+    }
+
     invoice.status = "đã thanh toán";
     
     // Map payment method to database enum (tiền mặt / chuyển khoản)
@@ -112,16 +213,9 @@ export const payInvoice = async (req, res) => {
       mappedMethod = "chuyển khoản";
     }
     invoice.paymentMethod = mappedMethod;
-    
     invoice.paidAt = new Date();
+    
     await invoice.save();
-
-    // Cập nhật trạng thái lượt khám
-    const visit = await Visit.findById(invoice.visitId);
-    if (visit) {
-      visit.status = "đã đóng";
-      await visit.save();
-    }
 
     // ── Ghi nhận Lịch sử sửa đổi bệnh án (Audit Trail / EMR Version) ──
     try {

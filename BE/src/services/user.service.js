@@ -22,6 +22,7 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
       entity: "User",
       entityId: userId,
       performedBy: adminId,
+      hospitalId: user.hospitalId || null,
       details: `User ${user.email} ${isLocked ? "bị khóa" : "đã mở khóa"} bởi admin`,
     });
   }
@@ -30,7 +31,7 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
 };
 
 export const lockUserById = async (id, adminId) => {
-  const user = await User.findById(id).select("isLocked email").lean();
+  const user = await User.findById(id).select("isLocked email hospitalId").lean();
 
   if (!user) {
     throw new Error("User not found");
@@ -55,6 +56,7 @@ export const lockUserById = async (id, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
+    hospitalId: user.hospitalId || null,
     details: `User ${user.email} locked by admin`,
   });
 
@@ -62,9 +64,9 @@ export const lockUserById = async (id, adminId) => {
 };
 
 export const verifyAdminById = async (id, verified, adminId) => {
-  const existing = await User.findById(id).select("role email isVerified").lean();
+  const existing = await User.findById(id).select("role email isVerified hospitalId").lean();
 
-  if (!existing || existing.role !== "admin") {
+  if (!existing || !["admin", "hospital_admin", "doctor"].includes(existing.role)) {
     throw new Error("Admin not found");
   }
 
@@ -81,14 +83,15 @@ export const verifyAdminById = async (id, verified, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
-    details: `Clinic Admin ${existing.email} verification ${verified ? "approved" : "revoked"} by admin`,
+    hospitalId: existing.hospitalId || null,
+    details: `Tài khoản ${existing.email} (${existing.role}) đã được duyệt/xác thực: ${verified ? "Thành công" : "Thu hồi"} bởi Admin`,
   });
 
   return updated;
 };
 
 export const unlockUserById = async (id, adminId) => {
-  const existing = await User.findById(id).select("isLocked email").lean();
+  const existing = await User.findById(id).select("isLocked email hospitalId").lean();
 
   if (!existing) {
     throw new Error("User not found");
@@ -115,6 +118,7 @@ export const unlockUserById = async (id, adminId) => {
     entity: "User",
     entityId: id,
     performedBy: adminId,
+    hospitalId: existing.hospitalId || null,
     details: `User ${existing.email} unlocked by admin`,
   });
 
@@ -141,20 +145,10 @@ export const getSystemStats = async () => {
 
   const totalRevenue = paidInvoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
 
-  // User role distribution counts
-  const patientsCount = await User.countDocuments({ role: "patient" });
-  const staffCount = await User.countDocuments({ role: { $in: ["admin", "hospital_admin", "technician", "nurse"] } });
-
-  const userDistribution = {
-    patient: patientsCount,
-    doctor: totalDoctors,
-    staff: staffCount,
-    total: patientsCount + totalDoctors + staffCount
-  };
+  const now = new Date();
 
   // Compile monthly scans dynamically for the last 12 months
   const monthlyScans = [];
-  const now = new Date();
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const start = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -169,6 +163,39 @@ export const getSystemStats = async () => {
     monthlyScans.push({ label: monthLabel, value: count });
   }
 
+  // Growth calculations (this month vs last month)
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const [usersThisMonth, usersLastMonth] = await Promise.all([
+    User.countDocuments({ createdAt: { $gte: startOfThisMonth } }),
+    User.countDocuments({ createdAt: { $gte: startOfLastMonth, $lt: startOfThisMonth } }),
+  ]);
+  const userGrowth = usersLastMonth > 0 ? ((usersThisMonth - usersLastMonth) / usersLastMonth * 100) : (usersThisMonth > 0 ? 100 : 0);
+
+  const invoicesThisMonth = paidInvoices.filter(inv => inv.updatedAt && new Date(inv.updatedAt) >= startOfThisMonth);
+  const invoicesLastMonth = paidInvoices.filter(inv => inv.updatedAt && new Date(inv.updatedAt) >= startOfLastMonth && new Date(inv.updatedAt) < startOfThisMonth);
+  const revThisMonth = invoicesThisMonth.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+  const revLastMonth = invoicesLastMonth.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+  const revenueGrowth = revLastMonth > 0 ? ((revThisMonth - revLastMonth) / revLastMonth * 100) : (revThisMonth > 0 ? 100 : 0);
+
+  const lastMonthScan = monthlyScans[11]?.value || 0;
+  const prevMonthScan = monthlyScans[10]?.value || 0;
+  const scanGrowth = prevMonthScan > 0 ? ((lastMonthScan - prevMonthScan) / prevMonthScan * 100) : (lastMonthScan > 0 ? 100 : 0);
+
+  // User role distribution counts
+  const patientsCount = await User.countDocuments({ role: "patient" });
+  const staffCount = await User.countDocuments({ role: { $in: ["admin", "hospital_admin", "technician", "nurse"] } });
+
+  const userDistribution = {
+    patient: patientsCount,
+    doctor: totalDoctors,
+    staff: staffCount,
+    total: patientsCount + totalDoctors + staffCount
+  };
+
+  // Compile monthly scans dynamically for the last 12 months (recalculated based on loop above)
+  
   // Retrieve actual recent activities from AuditLog
   const recentAuditLogs = await AuditLog.find({})
     .sort({ createdAt: -1 })
@@ -210,6 +237,9 @@ export const getSystemStats = async () => {
     totalRevenue,
     userDistribution,
     monthlyScans,
-    recentActivities
+    recentActivities,
+    userGrowth,
+    scanGrowth,
+    revenueGrowth
   };
 };

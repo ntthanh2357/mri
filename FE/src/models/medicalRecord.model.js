@@ -45,17 +45,26 @@ export const createEmptyMedicalRecord = () => ({
   canLamSang: '',
   chanDoan: {
     xacDinh: '',
-    phanBiet: '',
+    phanBiet: {
+      apXeNao: false,
+      taiNao: false,
+      phinhMach: false,
+    },
     nguyenNhan: '',
   },
   huongDieuTri: {
     noiKhoaCapCuu: '',
-    chuyenKhoa: '',
+    chuyenKhoa: {
+      phauThuat: false,
+      xaTri: false,
+      hoaTri: false,
+    },
     chamSocGiamNhe: '',
   },
   tienLuong: {
     mucDo: '',
     keHoachTiepTheo: '',
   },
+  bacSiLamBenhAn: '',
   updatedAt: null,
 });

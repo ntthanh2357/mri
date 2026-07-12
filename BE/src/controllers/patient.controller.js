@@ -4,12 +4,81 @@ import { LabOrder } from "../models/labOrder.model.js";
 import { Prescription } from "../models/prescription.model.js";
 import { DischargePaper } from "../models/dischargePaper.model.js";
 import { TransferForm } from "../models/transferForm.model.js";
+import { Drug } from "../models/drug.model.js";
+import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+
+// Khung giờ nhắc uống thuốc cố định theo số lần/ngày
+const REMINDER_TIME_SLOTS = {
+  1: ["08:00"],
+  2: ["08:00", "20:00"],
+  3: ["08:00", "13:00", "20:00"],
+  4: ["08:00", "12:00", "17:00", "21:00"],
+};
+
+const generateRemindersForPrescription = async (prescription) => {
+  const reminders = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const drug of prescription.drugs) {
+    const timesPerDay = Math.min(Math.max(drug.timesPerDay || 2, 1), 4);
+    const durationDays = Math.max(drug.durationDays || 7, 1);
+    const slots = REMINDER_TIME_SLOTS[timesPerDay];
+    const dosageText = `${drug.quantity} ${drug.unit}${drug.usage ? ` — ${drug.usage}` : ""}`;
+
+    for (let day = 0; day < durationDays; day++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + day);
+      for (const time of slots) {
+        reminders.push({
+          hospitalId: prescription.hospitalId,
+          patientId: prescription.patient_id,
+          prescriptionId: prescription._id,
+          drugName: drug.name,
+          dosageText,
+          date,
+          time,
+        });
+      }
+    }
+  }
+
+  if (reminders.length > 0) {
+    await MedicineReminder.insertMany(reminders);
+  }
+};
+
+const checkPatientTenancy = async (patientId, userHospitalId) => {
+  if (!userHospitalId) return null;
+  const patient = await User.findById(patientId);
+  if (!patient || patient.role !== "patient") return null;
+  // Cho phép mọi nhân viên y tế từ bất kỳ bệnh viện nào xem hồ sơ để phục vụ chuyển tuyến
+  return patient;
+};
 
 // Lấy danh sách bệnh nhân kèm thống kê (số phiếu XN, lần đo sinh hiệu gần nhất)
 export const getPatients = async (req, res) => {
   try {
-    const patients = await User.find({ role: "patient" }).select("-passwordHash").lean();
+    // [BUG-06 FIX] Bắt buộc phải có hospitalId — không cho phép query toàn hệ thống
+    if (!req.user?.hospitalId) {
+      return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào. Không thể truy xuất danh sách bệnh nhân.", 403);
+    }
+    const query = { role: "patient", hospitalId: req.user.hospitalId };
+    
+    // [BUG FIX] Hỗ trợ tìm kiếm liên viện để chuyển tuyến
+    if (req.query.search) {
+      delete query.hospitalId; // Bỏ giới hạn bệnh viện nếu đang search (chuyển tuyến)
+      query.$or = [
+        { "profile.medicalId": new RegExp(req.query.search, "i") },
+        { email: new RegExp(req.query.search, "i") },
+        { "profile.phone": new RegExp(req.query.search, "i") },
+        { "profile.name": new RegExp(req.query.search, "i") },
+        { "profile.fullName": new RegExp(req.query.search, "i") }
+      ];
+    }
+
+    const patients = await User.find(query).select("-passwordHash").lean();
 
     // Với mỗi bệnh nhân, lấy thêm: tổng số phiếu XN, số phiếu đã có KQ, sinh hiệu gần nhất
     const enrichedPatients = await Promise.all(
@@ -41,11 +110,32 @@ export const getPatients = async (req, res) => {
   }
 };
 
+// Lấy chi tiết 1 bệnh nhân theo ID — cho phép xem xuyên viện để phục vụ chuyển tuyến
+export const getPatientById = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const patient = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patient) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 404);
+    }
+    const { passwordHash, ...safePatient } = patient.toObject();
+    return successResponse(res, safePatient, "Lấy thông tin bệnh nhân thành công.");
+  } catch (error) {
+    console.error("Lỗi lấy chi tiết bệnh nhân:", error);
+    return errorResponse(res, "Lỗi lấy chi tiết bệnh nhân.", 500);
+  }
+};
+
 
 // Lấy lịch sử sinh hiệu bệnh nhân (sắp xếp tăng dần theo thời gian)
 export const getPatientVitals = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const vitals = await VitalSign.find({ patient_id: patientId }).sort({ recorded_at: 1 });
     return successResponse(res, vitals, "Lấy lịch sử sinh hiệu thành công.");
   } catch (error) {
@@ -62,6 +152,11 @@ export const addPatientVitals = async (req, res) => {
 
     if (!pulse || !blood_pressure || !spo2) {
       return errorResponse(res, "Thiếu thông tin mạch, huyết áp hoặc SpO2.", 400);
+    }
+
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
 
     // Tự động tính chỉ số BMI nếu có cân nặng và chiều cao
@@ -93,6 +188,11 @@ export const addPatientVitals = async (req, res) => {
 export const getPatientLabOrders = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const orders = await LabOrder.find({ patient_id: patientId }).sort({ ordered_at: -1 });
     return successResponse(res, orders, "Lấy danh sách phiếu xét nghiệm thành công.");
   } catch (error) {
@@ -111,10 +211,10 @@ export const createPatientLabOrder = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin phân loại xét nghiệm hoặc mã vạch barcode.", 400);
     }
 
-    // Xác thực bệnh nhân có tồn tại
-    const patient = await User.findById(patientId);
+    // Xác thực bệnh nhân có tồn tại và thuộc cùng bệnh viện
+    const patient = await checkPatientTenancy(patientId, req.user?.hospitalId);
     if (!patient) {
-      return errorResponse(res, "Không tìm thấy bệnh nhân tương ứng.", 404);
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
 
     // Kiểm tra barcode trùng lặp
@@ -147,6 +247,11 @@ export const createPatientLabOrder = async (req, res) => {
 export const getPatientPrescriptions = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const items = await Prescription.find({ patient_id: patientId }).sort({ recorded_at: -1 });
     return successResponse(res, items, "Lấy danh sách đơn thuốc thành công.");
   } catch (error) {
@@ -165,6 +270,11 @@ export const addPatientPrescription = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
     }
 
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const newItem = new Prescription({
       patient_id: patientId,
       doctor_name: doctor_name || "Bác sĩ điều trị",
@@ -174,6 +284,12 @@ export const addPatientPrescription = async (req, res) => {
     });
 
     await newItem.save();
+
+    // Việc khấu trừ kho thuốc sẽ được thực hiện khi thanh toán hóa đơn thực tế (ở invoice.controller.js)
+
+    // Tự động sinh lịch nhắc uống thuốc cho bệnh nhân dựa trên số lần/ngày và số ngày uống
+    await generateRemindersForPrescription(newItem);
+
     return successResponse(res, newItem, "Thêm đơn thuốc mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi thêm đơn thuốc:", error);
@@ -185,6 +301,11 @@ export const addPatientPrescription = async (req, res) => {
 export const getPatientDischargePapers = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const items = await DischargePaper.find({ patient_id: patientId }).sort({ recorded_at: -1 });
     return successResponse(res, items, "Lấy danh sách giấy ra viện thành công.");
   } catch (error) {
@@ -198,6 +319,11 @@ export const addPatientDischargePaper = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { doctor_name, dischargeNo, hospitalNo, dateIn, dateOut, diagnosis, treatment, note } = req.body;
+
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
 
     const newItem = new DischargePaper({
       patient_id: patientId,
@@ -223,6 +349,11 @@ export const addPatientDischargePaper = async (req, res) => {
 export const getPatientTransferForms = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
+
     const items = await TransferForm.find({ patient_id: patientId }).sort({ recorded_at: -1 });
     return successResponse(res, items, "Lấy danh sách phiếu chuyển tuyến thành công.");
   } catch (error) {
@@ -236,6 +367,11 @@ export const addPatientTransferForm = async (req, res) => {
   try {
     const { patientId } = req.params;
     const fields = req.body;
+
+    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    if (!patientExists) {
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
+    }
 
     const newItem = new TransferForm({
       patient_id: patientId,

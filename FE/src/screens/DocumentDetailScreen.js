@@ -374,7 +374,7 @@ const DocumentDetailScreen = ({ route, navigation }) => {
   const [warnings, setWarnings] = useState([]);
   const [checking, setChecking] = useState(false);
 
-  const patientId = route.params.patientId || 'PT-001';
+  const patientId = route.params.patientId || '';
 
   useEffect(() => {
     if (doc?.docKey !== 'toa_thuoc' && doc?.docKey !== 'mri' && doc?.docKey !== 'ct_scan' && doc?.docKey !== 'phieu_chi_dinh') {

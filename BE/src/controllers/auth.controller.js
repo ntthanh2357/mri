@@ -29,10 +29,11 @@ const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
 
 // @desc    Register a new user
 // @route   POST /auth/register
-// @access  Public
+// @access  Public (nhưng có guard cho hospital_admin)
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, bhytNumber, licenseUrl, hospitalId } = req.body;
+    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
+    let { hospitalId } = req.body;
 
     // Validate inputs
     if (!email || !password || !name || !role) {
@@ -45,6 +46,35 @@ export const register = async (req, res) => {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
     }
+
+    // ── Bảo vệ leo thang đặc quyền ──────────────────────────────────────────
+    // Nếu caller là hospital_admin (đã đăng nhập):
+    //   1. Chỉ được tạo doctor, nurse, technician — không được tạo admin/hospital_admin
+    //   2. hospitalId bắt buộc = hospitalId của chính họ (không tin client)
+    if (req.user && req.user.role === "hospital_admin") {
+      const staffOnlyRoles = ["doctor", "nurse", "technician"];
+      if (!staffOnlyRoles.includes(role)) {
+        res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên." });
+        return;
+      }
+      // Override hospitalId từ JWT, không tin dữ liệu client
+      hospitalId = req.user.hospitalId;
+    }
+
+    // Nếu caller là user thường (không phải hospital_admin/admin) mà cố tạo role đặc quyền
+    if (req.user && !["admin", "hospital_admin"].includes(req.user.role)) {
+      if (["admin", "hospital_admin"].includes(role)) {
+        res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này." });
+        return;
+      }
+    }
+
+    // Nếu không có token (người dùng tự đăng ký), CHỈ CHO PHÉP TẠO ROLE PATIENT
+    if (!req.user && role !== "patient") {
+      res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này. Chỉ có thể tạo tài khoản bệnh nhân (patient)." });
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Check if user already exists
     const userExists = await User.findOne({ email });
@@ -90,6 +120,7 @@ export const register = async (req, res) => {
         entity: "User",
         entityId: newUser._id,
         performedBy: req.user ? req.user.id : newUser._id,
+        hospitalId: hospitalId || null,
         details: `Tài khoản mới ${email} với vai trò ${role} đã được tạo cho bệnh viện ID ${hospitalId || "N/A"}`,
       });
     } catch (logErr) {
@@ -112,6 +143,7 @@ export const register = async (req, res) => {
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng ký tài khoản.", error: error.message });
   }
 };
+
 
 // @desc    Login user
 // @route   POST /auth/login
@@ -202,11 +234,29 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-passwordHash");
-    if (!user) {
+    const userObj = await User.findById(req.user.id).select("-passwordHash");
+    if (!userObj) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
     }
+    
+    // Return both id and _id to maintain compatibility across FE screens (Bug #16)
+    const user = {
+      id: userObj._id,
+      _id: userObj._id,
+      email: userObj.email,
+      phone: userObj.phone,
+      role: userObj.role,
+      hospitalId: userObj.hospitalId,
+      isVerified: userObj.isVerified,
+      profile: userObj.profile,
+      wardId: userObj.wardId,
+      departmentId: userObj.departmentId,
+      isLocked: userObj.isLocked,
+      createdAt: userObj.createdAt,
+      updatedAt: userObj.updatedAt,
+    };
+
     res.status(200).json({ user });
   } catch (error) {
     console.error("Lỗi lấy thông tin cá nhân:", error);
@@ -232,7 +282,7 @@ export const refresh = async (req, res) => {
     const decoded = jwt.verify(refreshToken, secret);
 
     // Fetch user to verify active session version
-    const user = await User.findById(decoded.id).select("tokenVersion role");
+    const user = await User.findById(decoded.id).select("tokenVersion role hospitalId");
     if (!user) {
       res.status(401).json({ message: "Người dùng không tồn tại." });
       return;
@@ -245,7 +295,7 @@ export const refresh = async (req, res) => {
     }
 
     // Generate new access token
-    const accessToken = generateAccessToken(decoded.id, decoded.role, user.tokenVersion);
+    const accessToken = generateAccessToken(decoded.id, decoded.role, user.tokenVersion, user.hospitalId);
 
     res.status(200).json({
       accessToken,
@@ -350,8 +400,8 @@ export const ssoLogin = async (req, res) => {
         return;
       }
 
-      // Handle mock token for Google SSO in local development
-      if (idToken === "mock_google_token_123") {
+      // Handle mock token for Google SSO in local development ONLY — never active in production
+      if (process.env.NODE_ENV !== "production" && idToken === "mock_google_token_123") {
         let user = await User.findOne({ email: "google_test@neuroscan.com" });
         if (!user) {
           const salt = await bcrypt.genSalt(10);
@@ -463,8 +513,8 @@ export const ssoLogin = async (req, res) => {
       return;
     }
 
-    // 1. Handle mock token first for easy testing without hitting real Zalo API
-    if (accessToken === "mock_zalo_token_123") {
+    // 1. Handle mock token first for easy testing without hitting real Zalo API — local development ONLY
+    if (process.env.NODE_ENV !== "production" && accessToken === "mock_zalo_token_123") {
       try {
         let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
         if (!user) {
@@ -778,5 +828,98 @@ export const verifyOtp = async (req, res) => {
   } catch (error) {
     console.error("Lỗi xác thực OTP:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
+  }
+};
+
+// @desc    Request OTP for phone login
+// @route   POST /auth/phone-login-request
+// @access  Public
+export const phoneLoginRequest = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+    }
+
+    const hashedPhone = hashPhone(phone);
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký trong hệ thống." });
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otpCode = otpCode;
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    console.log(`[SMS Simulator] OTP Code for phone ${phone}: ${otpCode}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Mã OTP đã được tạo (Xem tại terminal của Server).",
+      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi yêu cầu OTP SĐT:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP SĐT.", error: error.message });
+  }
+};
+
+// @desc    Verify OTP for phone login
+// @route   POST /auth/phone-login-verify
+// @access  Public
+export const phoneLoginVerify = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại và mã OTP." });
+    }
+
+    const hashedPhone = hashPhone(phone);
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký." });
+    }
+
+    if (!user.otpCode || user.otpCode !== otp) {
+      return res.status(400).json({ message: "Mã OTP không chính xác." });
+    }
+
+    if (!user.otpExpires || user.otpExpires < new Date()) {
+      return res.status(400).json({ message: "Mã OTP đã hết hạn." });
+    }
+
+    // Clear OTP
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    // Generate JWT tokens
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
+    // Format user object consistent with normal login
+    const userRes = {
+      id: user._id,
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      profile: user.profile,
+      hospitalId: user.hospitalId,
+      isVerified: user.isVerified,
+    };
+
+    res.status(200).json({
+      success: true,
+      accessToken,
+      refreshToken,
+      user: userRes,
+    });
+  } catch (error) {
+    console.error("Lỗi xác minh OTP SĐT:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác minh OTP SĐT.", error: error.message });
   }
 };

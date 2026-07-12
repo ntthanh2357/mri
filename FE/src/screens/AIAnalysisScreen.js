@@ -194,27 +194,34 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     const findingsText =
       aiResult.class_name === 'notumor'
         ? `Kết quả phân tích AI từ hệ thống Ensemble (ResNet + EfficientNet + DenseNet) + YOLOv8 không ghi nhận tổn thương bất thường. Độ tự tin: ${aiResult.confidence}%. Đồng thuận: ${aiResult.consensus_message || 'Tất cả mô hình nhất quán.'}`
-        : `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Độ tự tin Ensemble: ${aiResult.confidence}%. ${aiResult.consensus_message || ''}`;
+        : (aiResult.clinical_report || `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Vị trí: ${aiResult.tumor_location?.note || 'Không xác định'}. Kích thước: xấp xỉ ${aiResult.tumor_location?.width}x${aiResult.tumor_location?.height} px. Độ tự tin: ${aiResult.confidence}%.`);
 
-    navigation.navigate('CreateImagingResult', {
-      ...(route.params || {}),
-      aiResult: {
+    // Navigate back to ImagingResult with pre-filled findings/conclusion
+    const targetResultId = route.params?.resultId || route.params?.imagingResultId;
+    const targetVisitId = route.params?.visitId;
+    const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue';
+
+    navigation.navigate('ImagingResult', {
+      resultId: targetResultId,
+      imagingResultId: targetResultId,
+      visitId: targetVisitId,
+      activeRoute: targetActiveRoute,
+      prefillFindings: findingsText,
+      prefillConclusion: conclusionText,
+      aiResultData: {
         ...aiResult,
         annotated_image: aiResult.annotated_image,
         confirmed: true,
         isWrong: false,
       },
-      prefillFindings: findingsText,
-      prefillConclusion: conclusionText,
     });
   };
 
-  // ── AI sai → gửi phản hồi rồi quay lại ────────────────────────────────────
+  // \u2500\u2500 AI sai \u2192 g\u1eedi ph\u1ea3n h\u1ed3i r\u1ed3i quay l\u1ea1i \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleConfirmWrong = async () => {
     if (!selectedCorrectClass) return;
     setSendingFeedback(true);
     try {
-      const filename = imageUrl?.split('/').pop() || 'scan.jpg';
       await post('/api/v1/imaging/feedback-ai', {
         imageUrl,
         correct_class: selectedCorrectClass,
@@ -226,16 +233,25 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     const correctMeta = CLASS_META[selectedCorrectClass] || CLASS_META.notumor;
     const aiMeta = CLASS_META[aiResult?.class_name] || CLASS_META.notumor;
 
-    const warningNote = `⚠️ LƯU Ý: AI chẩn đoán ban đầu là "${aiMeta.label}" nhưng bác sĩ đã điều chỉnh thành "${correctMeta.label}". Kết quả này cần được xem xét kỹ lưỡng bởi chuyên gia. Phản hồi điều chỉnh đã được ghi nhận để cải thiện mô hình AI.`;
+    const warningNote = `\u26a0\ufe0f L\u01af\u0301U \u00dd: AI ch\u1ea9n \u0111o\u00e1n ban \u0111\u1ea7u l\u00e0 "${aiMeta.label}" nh\u01b0ng b\u00e1c s\u0129 \u0111\u00e3 \u0111i\u1ec1u ch\u1ec9nh th\u00e0nh "${correctMeta.label}". K\u1ebft qu\u1ea3 n\u00e0y c\u1ea7n \u0111\u01b0\u1ee3c xem x\u00e9t k\u1ef9 l\u01b0\u1ee1ng b\u1edfi chuy\u00ean gia. Ph\u1ea3n h\u1ed3i \u0111i\u1ec1u ch\u1ec9nh \u0111\u00e3 \u0111\u01b0\u1ee3c ghi nh\u1eadn \u0111\u1ec3 c\u1ea3i thi\u1ec7n m\u00f4 h\u00ecnh AI.`;
 
     const conclusionText =
       selectedCorrectClass === 'notumor'
-        ? `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Không phát hiện bất thường sọ não.`
-        : `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Hình ảnh gợi ý khối u loại ${correctMeta.label}. ${correctMeta.desc}`;
+        ? `Sau khi b\u00e1c s\u0129 xem x\u00e9t v\u00e0 \u0111i\u1ec1u ch\u1ec9nh k\u1ebft qu\u1ea3 AI: Kh\u00f4ng ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng s\u1ecd n\u00e3o.`
+        : `Sau khi b\u00e1c s\u0129 xem x\u00e9t v\u00e0 \u0111i\u1ec1u ch\u1ec9nh k\u1ebft qu\u1ea3 AI: H\u00ecnh \u1ea3nh g\u1ee3i \u00fd kh\u1ed1i u lo\u1ea1i ${correctMeta.label}. ${correctMeta.desc}`;
 
-    navigation.navigate('CreateImagingResult', {
-      ...(route.params || {}),
-      aiResult: {
+    const targetResultId = route.params?.resultId || route.params?.imagingResultId;
+    const targetVisitId = route.params?.visitId;
+    const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue';
+
+    navigation.navigate('ImagingResult', {
+      resultId: targetResultId,
+      imagingResultId: targetResultId,
+      visitId: targetVisitId,
+      activeRoute: targetActiveRoute,
+      prefillFindings: warningNote,
+      prefillConclusion: conclusionText,
+      aiResultData: {
         ...aiResult,
         class_name: selectedCorrectClass,
         confirmed: true,
@@ -243,14 +259,17 @@ const AIAnalysisScreen = ({ route, navigation }) => {
         originalClass: aiResult?.class_name,
         warningNote,
       },
-      prefillFindings: warningNote,
-      prefillConclusion: conclusionText,
     });
   };
 
   const meta = aiResult ? (CLASS_META[aiResult.class_name] || CLASS_META.notumor) : null;
   const imageFullUri = imageUrl?.startsWith('http') ? imageUrl : `${Config.API_URL}${imageUrl}`;
-  const annotatedUri = aiResult?.annotated_image || null;
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:image')) return url;
+    return `${Config.API_URL}${url}`;
+  };
+  const annotatedUri = getImageUrl(aiResult?.annotated_image);
 
   // Translate coordinates mapping box width
   const translateY = scanAnim.interpolate({
@@ -259,7 +278,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   });
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
+    <ResponsiveLayout navigation={navigation} activeRoute="DoctorWorkQueue">
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>

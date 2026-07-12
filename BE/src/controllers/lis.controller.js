@@ -25,10 +25,10 @@ export const receiveLisResults = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin barcode hoặc danh sách kết quả xét nghiệm.", 400);
     }
 
-    // Tìm phiếu xét nghiệm theo barcode
-    const order = await LabOrder.findOne({ barcode });
+    // Tìm phiếu xét nghiệm theo barcode và hospitalId
+    const order = await LabOrder.findOne({ barcode, hospitalId: req.user.hospitalId });
     if (!order) {
-      return errorResponse(res, `Không tìm thấy phiếu xét nghiệm với barcode: ${barcode}`, 404);
+      return errorResponse(res, `Không tìm thấy phiếu xét nghiệm thuộc bệnh viện của bạn với barcode: ${barcode}`, 404);
     }
 
     const gender = order.patient_gender; // 'Nam' hoặc 'Nữ'
