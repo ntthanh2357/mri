@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
+import styles from './FinancialsScreen.styles';
 import Config from '../constants/config';
 
 const DRUG_SUGGESTIONS = [
@@ -139,7 +140,7 @@ const FinancialsScreen = ({ navigation }) => {
         const invoices = res.invoices;
         const paid = invoices.filter(inv => inv.status === 'đã thanh toán');
         const totalPaid = paid.reduce((sum, inv) => sum + inv.totalAmount, 0);
-        
+
         setStats({
           monthlyRevenue: totalPaid,
           transactionCount: paid.length,
@@ -247,7 +248,7 @@ const FinancialsScreen = ({ navigation }) => {
     try {
       // Calculate total amount
       const total = dailyRecords.reduce((sum, rec) => sum + (Number(rec.revenue) || 0), 0);
-      
+
       const payload = {
         month: Number(revMonth),
         year: Number(revYear),
@@ -362,20 +363,20 @@ const FinancialsScreen = ({ navigation }) => {
 
         {/* Tab Buttons */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]}
             onPress={() => setActiveTab('overview')}
           >
             <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Tổng quan chung</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]}
             onPress={() => setActiveTab('revenue')}
           >
             <Text style={[styles.tabText, activeTab === 'revenue' && styles.activeTabText]}>Báo cáo doanh thu</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]}
             onPress={() => setActiveTab('drugs')}
           >
             <Text style={[styles.tabText, activeTab === 'drugs' && styles.activeTabText]}>Báo cáo thuốc</Text>
@@ -552,8 +553,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   revenueReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'revenue')}
                     >
@@ -586,20 +587,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revMonth} 
-                    onChangeText={setRevMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revMonth}
+                    onChangeText={setRevMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revYear} 
-                    onChangeText={setRevYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revYear}
+                    onChangeText={setRevYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -607,7 +608,7 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
 
               <Text style={styles.formSectionSubtitle}>Nhập số liệu chi tiết từng ngày (1 - 31)</Text>
-              
+
               <View style={styles.gridTable}>
                 <View style={styles.gridTableHeader}>
                   <Text style={[styles.gridTh, { flex: 1 }]}>Ngày</Text>
@@ -615,13 +616,13 @@ const FinancialsScreen = ({ navigation }) => {
                   <Text style={[styles.gridTh, { flex: 3 }]}>Doanh thu (đ)</Text>
                   <Text style={[styles.gridTh, { flex: 2 }]}>Tỉ lệ (%)</Text>
                 </View>
-                
+
                 {dailyRecords.map((rec, index) => (
                   <View key={rec.day} style={styles.gridTableRow}>
                     <Text style={[styles.gridTd, { flex: 1, fontWeight: 'bold' }]}>Ngày {rec.day}</Text>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={rec.patientCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={rec.patientCount}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].patientCount = val;
@@ -629,9 +630,9 @@ const FinancialsScreen = ({ navigation }) => {
                       }}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={rec.revenue} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={rec.revenue}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].revenue = val;
@@ -672,8 +673,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   drugReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'drug')}
                     >
@@ -706,20 +707,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugMonth} 
-                    onChangeText={setDrugMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugMonth}
+                    onChangeText={setDrugMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugYear} 
-                    onChangeText={setDrugYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugYear}
+                    onChangeText={setDrugYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -744,27 +745,27 @@ const FinancialsScreen = ({ navigation }) => {
 
                 {drugItems.map((item, idx) => (
                   <View key={idx} style={styles.gridTableRow}>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={item.drugName} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={item.drugName}
                       onChangeText={(val) => updateDrugItem(idx, 'drugName', val)}
                       placeholder="Tên thuốc"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.unit} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.unit}
                       onChangeText={(val) => updateDrugItem(idx, 'unit', val)}
                       placeholder="VD: Viên"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.quantity} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.quantity}
                       onChangeText={(val) => updateDrugItem(idx, 'quantity', val)}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.usedCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.usedCount}
                       onChangeText={(val) => updateDrugItem(idx, 'usedCount', val)}
                       keyboardType="numeric"
                     />
@@ -795,7 +796,7 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {detailsType === 'revenue' 
+                  {detailsType === 'revenue'
                     ? `Chi tiết báo cáo doanh thu - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                     : `Chi tiết báo cáo sử dụng thuốc - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                   }
@@ -808,11 +809,11 @@ const FinancialsScreen = ({ navigation }) => {
               <ScrollView style={styles.modalBody}>
                 <Text style={styles.modalMeta}>Người lập: {selectedReport?.author?.profile?.name || selectedReport?.author?.email}</Text>
                 <Text style={styles.modalMeta}>Thời gian lập: {selectedReport ? new Date(selectedReport.createdAt).toLocaleString() : ''}</Text>
-                
+
                 {detailsType === 'revenue' && (
                   <View style={{ marginTop: 16 }}>
                     <Text style={styles.modalSummaryText}>Tổng doanh thu: {selectedReport?.totalAmount?.toLocaleString('vi-VN')}đ</Text>
-                    
+
                     <View style={styles.detailTable}>
                       <View style={styles.detailTableHeader}>
                         <Text style={[styles.detailTh, { flex: 1 }]}>Ngày</Text>
@@ -863,557 +864,5 @@ const FinancialsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    paddingVertical: 4,
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: '#15803D',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 40,
-  },
-  metricsGrid: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 16,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  metricEmoji: {
-    fontSize: 18,
-  },
-  badgeGreen: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeGreenText: {
-    fontSize: 9,
-    color: '#166534',
-    fontWeight: 'bold',
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  metricVal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  recentHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  viewAllText: {
-    fontSize: 13,
-    color: '#15803D',
-    fontWeight: '600',
-  },
-  transactionsCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  txRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  lastTxRow: {
-    borderBottomWidth: 0,
-  },
-  txLeft: {
-    flex: 1,
-  },
-  txId: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  txDate: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  txRight: {
-    alignItems: 'flex-end',
-  },
-  txAmount: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusSuccess: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusPending: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  statusSuccessText: {
-    color: '#166534',
-  },
-  statusPendingText: {
-    color: '#B45309',
-  },
-  btnCreate: {
-    backgroundColor: '#15803D',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  btnCreateText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  reportsCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-  },
-  reportRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  reportLeft: {
-    flex: 1.5,
-  },
-  reportTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  reportSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  reportDate: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  reportRight: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  reportValue: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#15803D',
-    marginBottom: 4,
-  },
-  reportDetailLink: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 12,
-    marginBottom: 16,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  formCloseText: {
-    fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  formInputsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  formInputGroup: {
-    flex: 1,
-  },
-  formInputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  formInput: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-  },
-  formSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  formSectionSubtitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#334155',
-    marginBottom: 10,
-  },
-  btnAddRow: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  btnAddRowText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  gridTable: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  gridTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  gridTh: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#475569',
-  },
-  gridTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  gridTd: {
-    fontSize: 12,
-    color: '#0F172A',
-  },
-  gridTdInput: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    fontSize: 12,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-    marginRight: 4,
-    textAlign: 'center',
-  },
-  btnDeleteRow: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  btnDeleteRowText: {
-    color: '#EF4444',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  formActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 10,
-  },
-  btnPrimary: {
-    backgroundColor: '#15803D',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  btnPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  btnSecondary: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#15803D',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  btnSecondaryText: {
-    color: '#15803D',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  // Modal styling
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    maxWidth: 600,
-    maxHeight: '85%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#F8FAFC',
-  },
-  modalTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    flex: 1,
-  },
-  modalCloseBtn: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    marginLeft: 10,
-  },
-  modalBody: {
-    padding: 16,
-  },
-  modalMeta: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  modalSummaryText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#15803D',
-    marginVertical: 10,
-  },
-  btnExport: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#15803D',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnExportText: {
-    color: '#15803D',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  chartTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  chartSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 10,
-  },
-  stackedBar: {
-    flexDirection: 'row',
-    height: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#E2E8F0',
-  },
-  barSegment: {
-    height: '100%',
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 14,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: '45%',
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 11,
-    color: '#334155',
-  },
-  detailTable: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  detailTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  detailTh: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#475569',
-  },
-  detailTableRow: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  detailTd: {
-    fontSize: 11,
-    color: '#0F172A',
-  },
-});
 
 export default FinancialsScreen;

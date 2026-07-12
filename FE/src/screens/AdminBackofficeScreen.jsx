@@ -66,7 +66,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
   // Logout function
   const handleLogout = async () => {
     await setAuthToken('');
-    navigation.replace('Login');
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
   };
 
   if (Platform.OS !== 'web') {

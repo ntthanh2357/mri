@@ -12,6 +12,8 @@ import {
   verifyOtp,
   phoneLoginRequest,
   phoneLoginVerify,
+  downgradeToBasic,
+  cancelPremiumRenew,
 } from "../controllers/auth.controller.js";
 import { protect, optionalProtect } from "../middlewares/auth.middleware.js";
 
@@ -33,6 +35,10 @@ router.post("/verify-otp", verifyOtp);
 // Phone login endpoints
 router.post("/phone-login-request", phoneLoginRequest);
 router.post("/phone-login-verify", phoneLoginVerify);
+
+// Premium endpoints
+router.post("/premium/downgrade", protect, downgradeToBasic);
+router.post("/premium/cancel-renew", protect, cancelPremiumRenew);
 
 export default router;
 

@@ -9,12 +9,13 @@ import {
   TextInput,
   Alert,
   FlatList,
+  Linking,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 
 const NurseReceptionScreen = ({ route, navigation }) => {
-  const [activeTab, setActiveTab] = useState('createVisit'); // 'createVisit' | 'myQueue' | 'billing'
+  const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'myQueue' | 'billing'
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
 
@@ -23,7 +24,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [doctors, setDoctors] = useState([]);
   const [nurses, setNurses] = useState([]);
   const [searchPatient, setSearchPatient] = useState('');
-  
+
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedNurseId, setSelectedNurseId] = useState('');
@@ -32,7 +33,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
   // myQueue / All Visits State
   const [visits, setVisits] = useState([]);
-  
+
   // billing State
   const [invoices, setInvoices] = useState([]);
 
@@ -43,6 +44,12 @@ const NurseReceptionScreen = ({ route, navigation }) => {
         .catch(() => Alert.alert("Lỗi", "Vui lòng đăng nhập lại"));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (route.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route.params?.tab]);
 
   useEffect(() => {
     if (activeTab === 'createVisit') {
@@ -151,31 +158,65 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   };
   const leastBusyDoctorId = getLeastBusyDoctorId();
 
-  const filteredPatients = patients.filter(p => 
-    p.email?.toLowerCase().includes(searchPatient.toLowerCase()) || 
+  const handlePayOSPayment = async (invoiceId) => {
+    setLoading(true);
+    try {
+      const res = await post(`/api/v1/invoices/${invoiceId}/payos`);
+      if (res && res.checkoutUrl) {
+        if (typeof window !== 'undefined') {
+          // Trên môi trường Web, chuyển hướng trực tiếp trang hiện tại để tránh bị popup blocker của trình duyệt chặn
+          window.location.href = res.checkoutUrl;
+        } else {
+          Alert.alert(
+            "Thanh toán VietQR",
+            "Hệ thống sẽ mở trang thanh toán PayOS. Sau khi quét QR và chuyển khoản thành công, hóa đơn sẽ tự động cập nhật.",
+            [
+              { text: "Hủy", style: "cancel" },
+              {
+                text: "Tiếp tục",
+                onPress: () => {
+                  Linking.openURL(res.checkoutUrl);
+                }
+              }
+            ]
+          );
+        }
+      } else {
+        Alert.alert("Lỗi", "Không nhận được link thanh toán từ cổng PayOS.");
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Lỗi", err.message || "Không thể khởi tạo giao dịch PayOS.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPatients = patients.filter(p =>
+    p.email?.toLowerCase().includes(searchPatient.toLowerCase()) ||
     p.profile?.name?.toLowerCase().includes(searchPatient.toLowerCase()) ||
     p.profile?.fullName?.toLowerCase().includes(searchPatient.toLowerCase()) ||
     p.profile?.medicalId?.toLowerCase().includes(searchPatient.toLowerCase())
   );
 
   return (
-    <ResponsiveLayout navigation={navigation} title="Tiếp Nhận & Thu Ngân (Điều Dưỡng)" user={user} activeRoute="NurseReception">
+    <ResponsiveLayout navigation={navigation} title="Tiếp Nhận & Thu Ngân (Điều Dưỡng)" user={user} activeRoute={activeTab === 'billing' ? 'ReceptionistDashboard_billing' : 'ReceptionistDashboard_createVisit'}>
       <View style={styles.container}>
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'createVisit' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'createVisit' && styles.activeTab]}
             onPress={() => setActiveTab('createVisit')}
           >
             <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>Tạo Lượt Khám</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'myQueue' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'myQueue' && styles.activeTab]}
             onPress={() => setActiveTab('myQueue')}
           >
             <Text style={[styles.tabText, activeTab === 'myQueue' && styles.activeTabText]}>Lượt Khám (Hôm Nay)</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'billing' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'billing' && styles.activeTab]}
             onPress={() => setActiveTab('billing')}
           >
             <Text style={[styles.tabText, activeTab === 'billing' && styles.activeTabText]}>Thanh Toán</Text>
@@ -189,16 +230,16 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             {activeTab === 'createVisit' && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>1. Chọn Bệnh Nhân</Text>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="Tìm theo tên, email, hoặc mã y tế..." 
+                <TextInput
+                  style={styles.input}
+                  placeholder="Tìm theo tên, email, hoặc mã y tế..."
                   value={searchPatient}
                   onChangeText={setSearchPatient}
                 />
                 <View style={styles.listWrapper}>
                   {filteredPatients.slice(0, 5).map(p => (
-                    <TouchableOpacity 
-                      key={p._id} 
+                    <TouchableOpacity
+                      key={p._id}
                       style={[styles.listItem, selectedPatientId === p._id && styles.selectedListItem]}
                       onPress={() => setSelectedPatientId(p._id)}
                     >
@@ -259,8 +300,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                 <Text style={styles.sectionTitle}>3. Phân Công Điều Dưỡng</Text>
                 <View style={styles.rowWrapper}>
                   {nurses.map(n => (
-                    <TouchableOpacity 
-                      key={n._id} 
+                    <TouchableOpacity
+                      key={n._id}
                       style={[styles.cardItem, selectedNurseId === n._id && styles.selectedCardItem]}
                       onPress={() => setSelectedNurseId(n._id)}
                     >
@@ -270,9 +311,9 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                 </View>
 
                 <Text style={styles.sectionTitle}>4. Lý Do Khám</Text>
-                <TextInput 
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
-                  placeholder="Triệu chứng, yêu cầu khám..." 
+                <TextInput
+                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                  placeholder="Triệu chứng, yêu cầu khám..."
                   value={reason}
                   onChangeText={setReason}
                   multiline
@@ -327,9 +368,14 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     <View style={styles.invoiceFooter}>
                       <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
                       {inv.status === 'chờ thanh toán' && (
-                        <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                          <Text style={styles.payBtnText}>Xác nhận thanh toán</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
+                            <Text style={styles.payBtnText}>Tiền Mặt</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={[styles.payBtn]} onPress={() => handlePayOSPayment(inv._id)}>
+                            <Text style={styles.payBtnText}>Chuyển Khoản QR</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -556,16 +602,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     overflow: 'hidden',
-    backgroundColor: 
-      status === 'đang chờ' ? '#FEF3C7' : 
-      status === 'đã đóng' ? '#E2E8F0' : 
-      status === 'chờ thanh toán' ? '#FEE2E2' : 
-      '#DCFCE7',
-    color: 
-      status === 'đang chờ' ? '#D97706' : 
-      status === 'đã đóng' ? '#475569' : 
-      status === 'chờ thanh toán' ? '#DC2626' : 
-      '#15803D',
+    backgroundColor:
+      status === 'đang chờ' ? '#FEF3C7' :
+        status === 'đã đóng' ? '#E2E8F0' :
+          status === 'chờ thanh toán' ? '#FEE2E2' :
+            '#DCFCE7',
+    color:
+      status === 'đang chờ' ? '#D97706' :
+        status === 'đã đóng' ? '#475569' :
+          status === 'chờ thanh toán' ? '#DC2626' :
+            '#15803D',
   }),
   invoiceCard: {
     borderWidth: 1,
