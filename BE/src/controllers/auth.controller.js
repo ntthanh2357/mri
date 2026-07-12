@@ -234,13 +234,30 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-<<<<<<< ours
-    const userObj = await User.findById(req.user.id).select("-passwordHash");
+    let userObj = await User.findById(req.user.id);
     if (!userObj) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
     }
-    
+
+    // Check Premium expiration
+    if (userObj.isPremium && userObj.premiumUntil && new Date() > userObj.premiumUntil) {
+      if (userObj.autoRenew) {
+        // Auto-renew: Charge 99.000 VNĐ and extend by 1 year
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        userObj.premiumUntil = nextYear;
+        await userObj.save();
+        console.log(`[Auto-Renew] Automatically renewed Premium for ${userObj.email}. Charged 99.000 VNĐ. Next expiration: ${userObj.premiumUntil.toISOString()}`);
+      } else {
+        // Expire: Set isPremium to false
+        userObj.isPremium = false;
+        userObj.premiumUntil = null;
+        await userObj.save();
+        console.log(`[Subscription Expired] Premium expired for ${userObj.email} (autoRenew was false).`);
+      }
+    }
+
     // Return both id and _id to maintain compatibility across FE screens (Bug #16)
     const user = {
       id: userObj._id,
@@ -254,40 +271,14 @@ export const getMe = async (req, res) => {
       wardId: userObj.wardId,
       departmentId: userObj.departmentId,
       isLocked: userObj.isLocked,
+      isPremium: userObj.isPremium,
+      premiumUntil: userObj.premiumUntil,
+      autoRenew: userObj.autoRenew,
       createdAt: userObj.createdAt,
       updatedAt: userObj.updatedAt,
     };
 
     res.status(200).json({ user });
-=======
-    let user = await User.findById(req.user.id);
-    if (!user) {
-      res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
-      return;
-    }
-
-    // Check Premium expiration
-    if (user.isPremium && user.premiumUntil && new Date() > user.premiumUntil) {
-      if (user.autoRenew) {
-        // Auto-renew: Charge 99.000 VNĐ and extend by 1 year
-        const nextYear = new Date();
-        nextYear.setFullYear(nextYear.getFullYear() + 1);
-        user.premiumUntil = nextYear;
-        await user.save();
-        console.log(`[Auto-Renew] Automatically renewed Premium for ${user.email}. Charged 99.000 VNĐ. Next expiration: ${user.premiumUntil.toISOString()}`);
-      } else {
-        // Expire: Set isPremium to false
-        user.isPremium = false;
-        user.premiumUntil = null;
-        await user.save();
-        console.log(`[Subscription Expired] Premium expired for ${user.email} (autoRenew was false).`);
-      }
-    }
-
-    // Return user details without passwordHash
-    const userResponse = await User.findById(req.user.id).select("-passwordHash");
-    res.status(200).json({ user: userResponse });
->>>>>>> theirs
   } catch (error) {
     console.error("Lỗi lấy thông tin cá nhân:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi khi lấy thông tin người dùng.", error: error.message });

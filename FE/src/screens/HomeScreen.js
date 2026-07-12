@@ -155,17 +155,12 @@ const HomeScreen = ({ route, navigation }) => {
     fetchTodayReminders();
   };
 
-  const handleLogout = () => {
-    setAuthToken('');
-    navigation.replace('Welcome');
-=======
   const handleLogout = async () => {
     await setAuthToken('');
     navigation.reset({
       index: 0,
       routes: [{ name: 'Welcome' }],
     });
->>>>>>> origin/dinhhuyhoang
   };
 
   const getInitials = (name) => {
