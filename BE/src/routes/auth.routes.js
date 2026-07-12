@@ -10,6 +10,8 @@ import {
   changePassword,
   forgotPassword,
   verifyOtp,
+  phoneLoginRequest,
+  phoneLoginVerify,
 } from "../controllers/auth.controller.js";
 import { protect, optionalProtect } from "../middlewares/auth.middleware.js";
 
@@ -27,6 +29,10 @@ router.post("/logout/all", protect, logoutAll);
 router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
+
+// Phone login endpoints
+router.post("/phone-login-request", phoneLoginRequest);
+router.post("/phone-login-verify", phoneLoginVerify);
 
 export default router;
 

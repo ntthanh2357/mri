@@ -226,7 +226,7 @@ export default function DrugManagementScreen({ navigation }) {
         fetchAlerts();
         // Update selected drug in view if applicable
         if (selectedDrug?._id === stockDrug._id) {
-          setSelectedDrug(res.drug);
+          setSelectedDrug(res.data?.drug);
         }
       }
     } catch (err) {

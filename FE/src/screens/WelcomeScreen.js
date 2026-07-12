@@ -212,12 +212,12 @@ const WelcomeScreen = ({ navigation }) => {
               resizeMode="cover"
             />
             <View style={styles.heroImgOverlay} />
-            {isDesktop && (
-              <View style={styles.floatingStats}>
-                <Text style={styles.floatingStatsVal}>99.8%</Text>
-                <Text style={styles.floatingStatsLabel}>Độ chính xác chẩn đoán</Text>
-              </View>
-            )}
+             {isDesktop && (
+               <View style={styles.floatingStats}>
+                 <Text style={styles.floatingStatsVal}>94.7%</Text>
+                 <Text style={styles.floatingStatsLabel}>Độ chính xác chẩn đoán</Text>
+               </View>
+             )}
           </View>
         </View>
 

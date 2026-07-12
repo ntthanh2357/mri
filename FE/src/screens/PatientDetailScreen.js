@@ -16,6 +16,18 @@ import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 
+const calculateAge = (dob, birthYear) => {
+  if (dob) {
+    const birthDate = new Date(dob);
+    const age = new Date().getFullYear() - birthDate.getFullYear();
+    return isNaN(age) ? (birthYear ? new Date().getFullYear() - birthYear : 30) : age;
+  }
+  if (birthYear) {
+    return new Date().getFullYear() - birthYear;
+  }
+  return 30;
+};
+
 const PatientDetailScreen = ({ route, navigation }) => {
   const patientId = route.params?.patientId;
   const { width } = useWindowDimensions();
@@ -582,132 +594,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
   };
 
   // Giả lập gửi dữ liệu từ máy LIS
-  const handleSimulateLis = async (mode) => {
-    if (!selectedOrder) {
-      Alert.alert('Thông báo', 'Không có phiếu xét nghiệm nào được chọn để giả lập.');
-      return;
-    }
-
-    setIsSendingLis(true);
-    try {
-      let results = [];
-
-      if (mode === 'NORMAL_HUYET_HOC') {
-        // Bộ chỉ số Huyết học BÌNH THƯỜNG - theo phiếu FPT eHospital (M4)
-        results = [
-          { code: 'WBC',      value: 6.8  },  // Bạch cầu
-          { code: 'NEU_PCT',  value: 62.5 },  // Trung tính %
-          { code: 'NEU_ABS',  value: 4.25 },  // Trung tính #
-          { code: 'LYM_PCT',  value: 28.3 },  // Lympho %
-          { code: 'LYM_ABS',  value: 1.92 },  // Lympho #
-          { code: 'MONO_PCT', value: 6.2  },  // Mono %
-          { code: 'EOS_PCT',  value: 2.4  },  // ƪa acid %
-          { code: 'BASO_PCT', value: 0.6  },  // ƪa base %
-          { code: 'RBC',      value: 4.6  },  // Hồng cầu
-          { code: 'HGB',      value: 142  },  // Hemoglobin
-          { code: 'HCT',      value: 44.2 },  // Hematocrit
-          { code: 'MCV',      value: 88.5 },  // Thể tích TB HC
-          { code: 'MCH',      value: 29.1 },  // Lượng HGB TB
-          { code: 'MCHC',     value: 340  },  // Nồng độ HGB
-          { code: 'RDW',      value: 12.8 },  // Phân bố HC
-          { code: 'PLT',      value: 245  },  // Tiểu cầu
-          { code: 'MPV',      value: 8.5  },  // Thể tích TB TC
-        ];
-      } else if (mode === 'ABNORMAL_HUYET_HOC') {
-        // Bộ chỉ số Huyết học BẤT THƯỜNG - thiếu máu + tăng bạch cầu
-        results = [
-          { code: 'WBC',      value: 12.5 },  // ↑ Tăng bạch cầu (> 10.0)
-          { code: 'NEU_PCT',  value: 82.0 },  // ↑ Trung tính tăng (> 75%)
-          { code: 'NEU_ABS',  value: 10.25},  // ↑ Trung tính # tăng
-          { code: 'LYM_PCT',  value: 12.5 },  // ↓ Lympho giảm (< 20%)
-          { code: 'LYM_ABS',  value: 1.56 },
-          { code: 'MONO_PCT', value: 4.5  },
-          { code: 'EOS_PCT',  value: 1.0  },
-          { code: 'BASO_PCT', value: 0.3  },
-          { code: 'RBC',      value: 3.1  },  // ↓ Hồng cầu giảm (thiếu máu)
-          { code: 'HGB',      value: 95   },  // ↓ HGB giảm nặng
-          { code: 'HCT',      value: 28.5 },  // ↓ Hematocrit giảm
-          { code: 'MCV',      value: 68.0 },  // ↓ HC nhỏ (thiếu sắt)
-          { code: 'MCH',      value: 21.5 },  // ↓ Lượng HGB giảm
-          { code: 'MCHC',     value: 295  },  // ↓ Nồng độ HGB giảm
-          { code: 'RDW',      value: 18.5 },  // ↑ Phân bố HC không đều (> 15%)
-          { code: 'PLT',      value: 520  },  // ↑ Tiểu cầu tăng (> 450)
-          { code: 'MPV',      value: 12.5 },  // ↑ Thể tích TC tăng (> 11)
-        ];
-      } else if (mode === 'ABNORMAL_HOA_SINH') {
-        // Bộ chỉ số Hóa sinh BẤT THƯỜNG - ĐTĐ type 2 + Rối loạn lipid + Suy gan nhẹ
-        results = [
-          { code: 'UREA',       value: 3.1  },  // Bình thường (2.5-7.5)
-          { code: 'GLU',        value: 9.8  },  // ↑ Đường huyết cao (> 6.4)
-          { code: 'CRE',        value: 108  },  // Bình thường (62-120)
-          { code: 'ACID_URIC',  value: 455  },  // ↑ Acid Uric cao (> 420 Nam)
-          { code: 'BILI_TP',    value: 12.5 },  // Bình thường (< 17)
-          { code: 'CHOL',       value: 6.4  },  // ↑ Cholesterol cao (> 5.2)
-          { code: 'TRIG',       value: 3.2  },  // ↑ Triglycerid cao (> 1.88)
-          { code: 'HDL',        value: 0.75 },  // ↓ HDL thấp (< 0.9)
-          { code: 'LDL',        value: 4.2  },  // ↑ LDL cao (> 3.4)
-          { code: 'NA',         value: 142  },  // Bình thường (135-145)
-          { code: 'K',          value: 3.2  },  // ↓ Kali thấp (< 3.5)
-          { code: 'CL',         value: 102  },  // Bình thường (98-106)
-          { code: 'CA',         value: 2.35 },  // Bình thường (2.15-2.6)
-          { code: 'AST',        value: 68.5 },  // ↑ AST tăng (> 37)
-          { code: 'ALT',        value: 92.0 },  // ↑ ALT tăng (> 40)
-          { code: 'GGT',        value: 78.0 },  // ↑ GGT tăng (> 50 Nam)
-          { code: 'PROTEIN_TP', value: 70.0 },  // Bình thường (65-82)
-          { code: 'ALBUMIN',    value: 38.0 },  // Bình thường (35-50)
-        ];
-      } else if (mode === 'CUSTOM') {
-        if (!selectedBiomarkerCode || !customLisValue) {
-          Alert.alert('Lỗi', 'Vui lòng chọn chỉ số và nhập giá trị.');
-          setIsSendingLis(false);
-          return;
-        }
-        // MERGE MODE: Giữ nguyên tất cả kết quả cũ, chỉ cập nhật chỉ số được chọn
-        const existingResults = (selectedOrder.results || []).map(r => ({
-          code: r.biomarker_code,
-          value: r.value_result
-        }));
-        results = [
-          ...existingResults.filter(r => r.code !== selectedBiomarkerCode),
-          { code: selectedBiomarkerCode, value: Number(customLisValue) }
-        ];
-      }
-
-      await post('/api/lis/receiver', {
-        barcode: selectedOrder.barcode,
-        results
-      });
-
-      const msgMode = mode === 'CUSTOM'
-        ? `Đã cập nhật chỉ số ${selectedBiomarkerCode} = ${customLisValue}${customValidation?.biomarker?.unit ? ' ' + customValidation.biomarker.unit : ''}`
-        : `Đã truyền ${results.length} chỉ số xét nghiệm thành công!`;
-
-      Alert.alert('✅ LIS Simulator', msgMode);
-      
-      // Reset giá trị custom sau khi gửi thành công
-      if (mode === 'CUSTOM') {
-        setCustomLisValue('');
-        setCustomValidation(null);
-      }
-
-      // Reload danh sách phiếu xét nghiệm
-      const targetPatientId = patient?._id;
-      const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
-      setLabOrders(ordersData.data || []);
-      
-      // Cập nhật lại phiếu đang hiển thị
-      const updated = ordersData.data.find(o => o._id === selectedOrder._id);
-      if (updated) {
-        setSelectedOrder(updated);
-      }
-    } catch (error) {
-      console.error('Lỗi gửi dữ liệu LIS:', error);
-      Alert.alert('LIS Simulator Thất bại', error.message || 'Lỗi khi máy LIS truyền dữ liệu.');
-    } finally {
-      setIsSendingLis(false);
-    }
-  };
-
   // Tạo chỉ định xét nghiệm mới từ UI
   const handleCreateLabOrder = async (category) => {
     const targetPatientId = patient?._id;
@@ -1256,7 +1142,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>31</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Giới tính: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
                   </View>
                   <Text style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
@@ -1448,8 +1334,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   <Text style={{ fontSize: 13, color: '#334155' }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
                   
                   <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>15/05/1995</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>31</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).toLocaleDateString('vi-VN') : patient?.profile?.birthYear || 'N/A'}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
                   </View>
 
@@ -1791,7 +1677,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                   
                   <View style={{ flexDirection: 'row', gap: 20 }}>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>- Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Năm sinh: <Text style={{ fontWeight: '500' }}>1995</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Năm sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).getFullYear() : patient?.profile?.birthYear || 'N/A'}</Text></Text>
                   </View>
 
                   <Text style={{ fontSize: 13, color: '#334155' }}>- Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>

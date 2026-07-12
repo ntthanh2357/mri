@@ -78,9 +78,7 @@ const FinancialsScreen = ({ navigation }) => {
   const [showDrugForm, setShowDrugForm] = useState(false);
   const [drugMonth, setDrugMonth] = useState(String(new Date().getMonth() + 1));
   const [drugYear, setDrugYear] = useState(String(new Date().getFullYear()));
-  const [drugItems, setDrugItems] = useState([
-    { drugName: 'Keppra', unit: 'Viên', quantity: '100', usedCount: '10' }
-  ]);
+  const [drugItems, setDrugItems] = useState([]);
 
   useEffect(() => {
     fetchFinancialData();

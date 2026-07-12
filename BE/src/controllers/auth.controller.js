@@ -234,11 +234,29 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-passwordHash");
-    if (!user) {
+    const userObj = await User.findById(req.user.id).select("-passwordHash");
+    if (!userObj) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
     }
+    
+    // Return both id and _id to maintain compatibility across FE screens (Bug #16)
+    const user = {
+      id: userObj._id,
+      _id: userObj._id,
+      email: userObj.email,
+      phone: userObj.phone,
+      role: userObj.role,
+      hospitalId: userObj.hospitalId,
+      isVerified: userObj.isVerified,
+      profile: userObj.profile,
+      wardId: userObj.wardId,
+      departmentId: userObj.departmentId,
+      isLocked: userObj.isLocked,
+      createdAt: userObj.createdAt,
+      updatedAt: userObj.updatedAt,
+    };
+
     res.status(200).json({ user });
   } catch (error) {
     console.error("Lỗi lấy thông tin cá nhân:", error);
@@ -810,5 +828,98 @@ export const verifyOtp = async (req, res) => {
   } catch (error) {
     console.error("Lỗi xác thực OTP:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đặt lại mật khẩu.", error: error.message });
+  }
+};
+
+// @desc    Request OTP for phone login
+// @route   POST /auth/phone-login-request
+// @access  Public
+export const phoneLoginRequest = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+    }
+
+    const hashedPhone = hashPhone(phone);
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký trong hệ thống." });
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otpCode = otpCode;
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    console.log(`[SMS Simulator] OTP Code for phone ${phone}: ${otpCode}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Mã OTP đã được tạo (Xem tại terminal của Server).",
+      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi yêu cầu OTP SĐT:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP SĐT.", error: error.message });
+  }
+};
+
+// @desc    Verify OTP for phone login
+// @route   POST /auth/phone-login-verify
+// @access  Public
+export const phoneLoginVerify = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại và mã OTP." });
+    }
+
+    const hashedPhone = hashPhone(phone);
+    const user = await User.findOne({ phone: hashedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký." });
+    }
+
+    if (!user.otpCode || user.otpCode !== otp) {
+      return res.status(400).json({ message: "Mã OTP không chính xác." });
+    }
+
+    if (!user.otpExpires || user.otpExpires < new Date()) {
+      return res.status(400).json({ message: "Mã OTP đã hết hạn." });
+    }
+
+    // Clear OTP
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    // Generate JWT tokens
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
+    // Format user object consistent with normal login
+    const userRes = {
+      id: user._id,
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      profile: user.profile,
+      hospitalId: user.hospitalId,
+      isVerified: user.isVerified,
+    };
+
+    res.status(200).json({
+      success: true,
+      accessToken,
+      refreshToken,
+      user: userRes,
+    });
+  } catch (error) {
+    console.error("Lỗi xác minh OTP SĐT:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác minh OTP SĐT.", error: error.message });
   }
 };

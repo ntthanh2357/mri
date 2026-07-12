@@ -21,7 +21,7 @@ export const useMedicalRecordForm = (patientId = null) => {
         // 1. Thử load từ server trước (nếu có patientId)
         if (patientId) {
           try {
-            const serverRes = await get(`/api/v1/emr/records?patientId=${patientId}`);
+            const serverRes = await get(`/emr/records?patientId=${patientId}`);
             const records = serverRes?.data || [];
             if (records.length > 0) {
               // Lấy bệnh án mới nhất
@@ -109,10 +109,10 @@ export const useMedicalRecordForm = (patientId = null) => {
 
           if (serverRecordId.current) {
             // Cập nhật bệnh án hiện có
-            await put(`/api/v1/emr/records/${serverRecordId.current}`, payload);
+            await put(`/emr/records/${serverRecordId.current}`, payload);
           } else {
             // Tạo bệnh án mới
-            const res = await post('/api/v1/emr/records', payload);
+            const res = await post('/emr/records', payload);
             if (res?.data?._id) {
               serverRecordId.current = res.data._id;
             }

@@ -68,7 +68,7 @@ const HomeScreen = ({ route, navigation }) => {
         (async () => {
           try {
             const hRes = await get('/api/v1/hospital/me');
-            const hStatus = hRes.data?.hospital?.status;
+            const hStatus = hRes.hospital?.status;
             if (hStatus === 'provisioned') {
               navigation.replace('HospitalOnboarding');
             } else {
@@ -241,7 +241,7 @@ const HomeScreen = ({ route, navigation }) => {
                 <View style={styles.desktopGreeting}>
                   <Text style={styles.greetingTitle}>Chào buổi sáng, {user.profile?.name || 'Người dùng'}</Text>
                   <Text style={styles.greetingSubtitle}>
-                    Hôm nay là Thứ Tư, ngày 24 tháng 5 năm 2024. Sức khỏe của bạn đang rất tốt.
+                    Hôm nay là {(() => { const d = new Date(); const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; return days[d.getDay()]; })()}, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}. Sức khỏe của bạn đang rất tốt.
                   </Text>
                 </View>
               )}
@@ -528,7 +528,7 @@ const HomeScreen = ({ route, navigation }) => {
                       <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
                     </TouchableOpacity>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>99.8%</Text>
+                      <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>94.7%</Text>
                       <Text style={styles.doctorStatLabel}>AI Chính xác</Text>
                     </View>
                   </>
@@ -603,10 +603,11 @@ const HomeScreen = ({ route, navigation }) => {
                       </View>
                     ) : (
                       queueVisits.map((v, index) => {
+                        const isLast = index === queueVisits.length - 1;
                         return (
                           <TouchableOpacity
                             key={v._id}
-                            style={styles.queueItemRow}
+                            style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
                             onPress={() => navigation.navigate('DoctorWorkQueue')}
                           >
                             <View style={styles.queueLeftInfo}>
@@ -622,26 +623,6 @@ const HomeScreen = ({ route, navigation }) => {
                         );
                       })
                     )}
-
-                    {/* Technician PACS queue -> Now merged to Doctor */}
-                    <TouchableOpacity style={styles.queueItemRow} onPress={() => navigation.navigate('DoctorWorkQueue')}>
-                      <View style={styles.queueLeftInfo}>
-                        <Text style={styles.queuePatientName}>🔬 Bệnh nhân Tuấn Thành (26025699)</Text>
-                        <Text style={styles.queueDetailsText}>Yêu cầu: Chụp MRI sọ não có cản từ · Đã hoàn tất chụp</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                        <Text style={[styles.statusBadgeText, { color: '#15803D', fontSize: 10, fontWeight: 'bold' }]}>Chờ nạp PACS</Text>
-                      </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.queueItemRow, styles.lastQueueItemRow]} onPress={() => navigation.navigate('DoctorWorkQueue')}>
-                      <View style={styles.queueLeftInfo}>
-                        <Text style={styles.queuePatientName}>🔬 Nguyễn Văn A</Text>
-                        <Text style={styles.queueDetailsText}>Chỉ định: Huyết học 18 chỉ số · Barcode: LIS-HH-8422</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                        <Text style={[styles.statusBadgeText, { color: '#D97706', fontSize: 10, fontWeight: 'bold' }]}>Chờ kết nối LIS</Text>
-                      </View>
-                    </TouchableOpacity>
                   </>
                 )}
               </View>

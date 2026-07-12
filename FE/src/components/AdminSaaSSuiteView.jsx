@@ -83,11 +83,12 @@ export default function AdminSaaSSuiteView() {
     try {
       const res = await apiRequest(`/admin/hospitals/${selectedHospital._id}/subscription`, {
         method: 'PUT',
-        body: {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           subscriptionPlan: editPlan,
           subscriptionExpiresAt: editExpiry,
           subscriptionStatus: editStatus
-        }
+        })
       });
       showToast('Cập nhật gói dịch vụ thành công!');
       setSelectedHospital(null);
@@ -155,7 +156,8 @@ export default function AdminSaaSSuiteView() {
     try {
       const data = await apiRequest(`/admin/hospitals/${hospId}/restore`, {
         method: 'POST',
-        body: { fileName }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName })
       });
       const { restoredStats, warnings } = data;
       let msg = `✅ Khôi phục thành công!`;
@@ -199,7 +201,8 @@ export default function AdminSaaSSuiteView() {
     try {
       const data = await apiRequest('/admin/ai-models/rollback', {
         method: 'POST',
-        body: { version }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version })
       });
       setCurrentAiVersion(data.currentVersion);
       showToast(`Đã khôi phục mô hình AI về phiên bản: ${version}`);
@@ -216,7 +219,8 @@ export default function AdminSaaSSuiteView() {
     try {
       await apiRequest('/admin/announcements', {
         method: 'POST',
-        body: { title: annTitle, content: annContent, type: annType }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: annTitle, content: annContent, type: annType })
       });
       showToast('Đã đăng thông báo khẩn cấp hệ thống thành công!');
       setAnnTitle('');

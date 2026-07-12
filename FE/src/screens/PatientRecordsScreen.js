@@ -285,7 +285,7 @@ const PatientRecordsScreen = ({ navigation }) => {
   const handleDocPress = (visitId, slot, savedDocs) => {
     navigation.navigate('DocumentDetail', {
       visitId,
-      patientId: identity?.userId || identity?._id || 'PT-001',
+      patientId: identity?.userId || identity?._id || '',
       doc: { ...slot },
       savedDocs: savedDocs || [],
       onUpload: uploadDoc,

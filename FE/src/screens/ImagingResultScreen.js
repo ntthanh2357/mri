@@ -400,7 +400,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
               <View style={styles.gridRow}>
                 <View style={[styles.gridCell, { flex: 3 }]}>
                   <Text style={styles.fieldLabel}>Chẩn đoán lâm sàng:</Text>
-                  <Text style={styles.fieldVal}>{result.diagnosis || 'U não thái dương'}</Text>
+                  <Text style={styles.fieldVal}>{result.diagnosis || 'Chưa có chẩn đoán'}</Text>
                 </View>
               </View>
             </View>

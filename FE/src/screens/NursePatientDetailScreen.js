@@ -14,7 +14,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const gender       = patient.gender      || patient?.profile?.gender || "";
   const age          = patient.age         || "";
   const department   = patient.department  || "Khoa Nội Thần Kinh";
-  const doctor       = patient.doctorInCharge || "Bs. Văn Trung Nghĩa";
+  const doctor       = patient.doctorInCharge || "Bác sĩ điều trị";
 
   // Navigation / Tabs state
   const [activeForm, setActiveForm] = useState("info");
@@ -37,7 +37,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   // ── Phiếu chỉ định dịch vụ (Service Order) ──
   const [orderPriority,   setOrderPriority]   = useState("Thường");
-  const [orderDiagnosis,  setOrderDiagnosis]  = useState("Theo dõi chấn thương đầu");
+  const [orderDiagnosis,  setOrderDiagnosis]  = useState("");
   const [orderServices,   setOrderServices]   = useState(["Chụp MRI sọ não"]);
   const [orderNewService, setOrderNewService] = useState("");
 
@@ -121,7 +121,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
           
           setOrderDone(false);
           setOrderPriority("Thường");
-          setOrderDiagnosis("Theo dõi chấn thương đầu");
+          setOrderDiagnosis("");
           setOrderServices(["Chụp MRI sọ não lát cắt mỏng", "Xét nghiệm máu"]);
           
           setFeeItems([

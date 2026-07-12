@@ -29,8 +29,8 @@ const ResponsiveLayout = ({
       const { get } = require('../services/api.service');
       const res = await get('/api/v1/notifications');
       if (res && res.success) {
-        setNotifications(res.notifications || []);
-        setUnreadCount(res.unreadCount || 0);
+        setNotifications(res.data?.notifications || []);
+        setUnreadCount(res.data?.unreadCount || 0);
       }
     } catch (err) {
       // Quietly ignore network failures in background polling

@@ -74,7 +74,7 @@ const EMRDashboardScreen = ({ navigation }) => {
   // Fetch drugs for autocomplete
   useEffect(() => {
     get('/api/drugs').then(res => {
-      if(res && res.success) setAvailableDrugs(res.data);
+      if(res && res.success) setAvailableDrugs(res.data?.drugs || []);
     }).catch(err => console.log('Error fetching drugs:', err));
   }, []);
   
@@ -1631,7 +1631,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       diagnosis: 'Chấn động não nhẹ vùng trán sau tai nạn sinh hoạt',
       treatmentPlan: 'Nghỉ ngơi theo dõi sinh hiệu tại nhà, chụp MRI lại sau 24h nếu triệu chứng đau đầu tăng lên.',
     });
-    Alert.alert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin từ Phiếu khám bệnh giấy!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin từ Phiếu khám bệnh giấy mẫu!');
   };
 
   return (
@@ -1644,7 +1644,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Mã bệnh nhân"
@@ -1763,7 +1763,7 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       progressNotes: 'Bệnh nhân tỉnh táo, tiếp xúc tốt, đau đầu nhẹ vùng thái dương, ăn uống khá.',
       careActions: 'Cho bệnh nhân uống nước ấm, hướng dẫn nằm nghỉ ngơi tại giường, theo dõi mạch & HA mỗi 4h.',
     });
-    Alert.alert('Xác thực OCR', 'Đã tự động điền sinh hiệu và diễn biến chăm sóc từ ghi chép giấy của điều dưỡng!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền sinh hiệu và diễn biến chăm sóc từ ghi chép giấy mẫu của điều dưỡng!');
   };
 
   return (
@@ -1776,7 +1776,7 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Cấp chăm sóc (1-3)"
@@ -1880,7 +1880,7 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
       diagnosis: 'Chấn động não nặng / Theo dõi tụ máu dưới màng cứng thùy trán',
       treatmentConclusion: 'Chỉ định chụp MRI sọ não lát cắt mỏng khẩn cấp, hội chẩn liên chuyên khoa để quyết định phẫu thuật hay điều trị nội khoa bảo tồn.',
     });
-    Alert.alert('Xác thực OCR', 'Đã tự động điền nội dung trích xuất từ Biên bản hội chẩn giấy!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền nội dung từ Biên bản hội chẩn giấy mẫu!');
   };
 
   return (
@@ -1893,7 +1893,7 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Quét tự động (OCR & Fill)</Text>
+          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Ngày hội chẩn"
