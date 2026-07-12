@@ -588,7 +588,7 @@ if (provider === "zalo") {
 
       const zaloData = await zaloResponse.json();
 
-      # Safety check: Zalo Graph API sometimes returns 200 OK with error body
+      // Safety check: Zalo Graph API sometimes returns 200 OK with error body
       if (zaloData.error || !zaloData.id) {
         res.status(400).json({
           message: "Xác thực Zalo thất bại từ Zalo Server.",
