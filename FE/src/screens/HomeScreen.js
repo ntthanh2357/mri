@@ -126,7 +126,6 @@ const HomeScreen = ({ route, navigation }) => {
     fetchStats();
   }, [user]);
 
-<<<<<<< HEAD
   const fetchTodayReminders = async () => {
     setLoadingReminders(true);
     try {
