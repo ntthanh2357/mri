@@ -752,7 +752,12 @@ const HomeScreen = ({ route, navigation }) => {
                 <Text style={styles.researchCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
                 <Text style={styles.researchTitle}>Sách trắng kết nối thần kinh 2024</Text>
                 <TouchableOpacity
-                  onPress={() => Alert.alert('Tài liệu y khoa', 'Tính năng đọc sách trắng sẽ khả dụng ở phiên bản tiếp theo.')}
+                  onPress={() => {
+                    const Linking = require('react-native').Linking;
+                    Linking.openURL('https://www.nejm.org/doi/full/10.1056/NEJMoa2118542').catch(() =>
+                      Alert.alert('Không thể mở', 'Vui lòng kiểm tra kết nối internet.')
+                    );
+                  }}
                 >
                   <Text style={styles.researchLink}>Đọc thêm →</Text>
                 </TouchableOpacity>

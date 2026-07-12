@@ -139,13 +139,15 @@ const FinancialsScreen = ({ navigation }) => {
       if (res && res.invoices) {
         const invoices = res.invoices;
         const paid = invoices.filter(inv => inv.status === 'đã thanh toán');
+        const refunded = invoices.filter(inv => inv.status === 'hoàn trả');
         const totalPaid = paid.reduce((sum, inv) => sum + inv.totalAmount, 0);
+        const totalRefunded = refunded.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
         setStats({
           monthlyRevenue: totalPaid,
           transactionCount: paid.length,
           averageTransaction: paid.length > 0 ? Math.round(totalPaid / paid.length) : 0,
-          refunds: 0,
+          refunds: totalRefunded,
         });
 
         // Tính toán phân bổ nguồn thu

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -16,7 +16,7 @@ import Config from '../constants/config';
 import { get } from '../services/api.service';
 import styles from './WelcomeScreen.styles';
 
-// Mock Data for the medical portal - Exclusively focused on Brain Cancer and MRI
+// Dữ liệu dịch vụ và gói khám (static, không thay đổi thường xuyên)
 const servicesData = [
   { id: 1, title: 'Chụp cộng hưởng từ MRI Não', icon: '🧠' },
   { id: 2, title: 'Phân tích & Tầm soát U não AI', icon: '🤖' },
@@ -33,35 +33,33 @@ const packagesData = [
   }
 ];
 
-const doctorsData = [
-  {
-    id: 1,
-    name: 'TS.BS. Văn Trung Nghĩa',
-    role: 'Trưởng khoa Ung bướu Thần kinh',
-    image: null,
-  },
-  {
-    id: 2,
-    name: 'ThS.BSNT. Lê Quốc Tuấn',
-    role: 'Phó khoa Chẩn đoán hình ảnh MRI',
-    image: null,
-  },
+// Fallback cứng khi API không trả về kết quả
+const fallbackDoctors = [
+  { id: 1, name: 'TS.BS. Văn Trung Nghĩa', department: 'Trưởng khoa Ung bướu Thần kinh', photoUrl: null },
+  { id: 2, name: 'ThS.BSNT. Lê Quốc Tuấn', department: 'Phó khoa Chẩn đoán hình ảnh MRI', photoUrl: null },
 ];
 
 const WelcomeScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const scrollViewRef = useRef(null);
+
+  // Doctors state — được tải từ API
+  const [doctorsData, setDoctorsData] = useState(fallbackDoctors);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+
+  // Offset để scroll tới từng section
+  const sectionOffsets = useRef({});
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin' 
-            ? 'AdminBackoffice' 
+          const destination = data.user.role === 'admin'
+            ? 'AdminBackoffice'
             : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.reset({
             index: 0,
@@ -76,6 +74,31 @@ const WelcomeScreen = ({ navigation }) => {
       }
     };
     checkAuth();
+  }, []);
+
+  // Tải danh sách bác sĩ từ API public
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      setLoadingDoctors(true);
+      try {
+        const res = await fetch(`${Config.API_URL}/api/v1/hospital/public/doctors?limit=4`);
+        const data = await res.json();
+        if (data && data.success && data.doctors && data.doctors.length > 0) {
+          setDoctorsData(data.doctors.map((d) => ({
+            id: d.id,
+            name: d.name,
+            department: d.department,
+            photoUrl: d.photoUrl || null,
+          })));
+        }
+        // Fallback: giữ doctorsData mặc định nếu API trả về mảng rỗng
+      } catch (err) {
+        console.warn('Không thể tải danh sách bác sĩ:', err.message);
+      } finally {
+        setLoadingDoctors(false);
+      }
+    };
+    fetchDoctors();
   }, []);
 
   if (checkingAuth) {
@@ -93,9 +116,13 @@ const WelcomeScreen = ({ navigation }) => {
     Alert.alert('Đặt lịch hẹn', 'Tính năng đăng ký khám trực tuyến đang được đồng bộ. Vui lòng đăng nhập hoặc liên hệ hotline.');
   };
 
+  // Scroll tới section bằng offset đã đo được
   const handleScrollToSection = (sectionName) => {
-    Alert.alert('Điều hướng', `Hệ thống đang cuộn tới mục: ${sectionName}`);
     setMobileMenuOpen(false);
+    const offset = sectionOffsets.current[sectionName];
+    if (offset !== undefined && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: offset, animated: true });
+    }
   };
 
   return (
@@ -117,19 +144,19 @@ const WelcomeScreen = ({ navigation }) => {
           {/* Desktop Navigation Links */}
           {isDesktop && (
             <View style={styles.navLinks}>
-              <TouchableOpacity onPress={() => handleScrollToSection('Trang chủ')}>
+              <TouchableOpacity onPress={() => handleScrollToSection('hero')}>
                 <Text style={styles.navLinkText}>Trang chủ</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleScrollToSection('Chuyên khoa')}>
+              <TouchableOpacity onPress={() => handleScrollToSection('services')}>
                 <Text style={styles.navLinkText}>Chuyên khoa</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleScrollToSection('Gói khám')}>
+              <TouchableOpacity onPress={() => handleScrollToSection('packages')}>
                 <Text style={styles.navLinkText}>Gói khám</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleScrollToSection('Bác sĩ')}>
+              <TouchableOpacity onPress={() => handleScrollToSection('doctors')}>
                 <Text style={styles.navLinkText}>Bác sĩ</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleScrollToSection('Liên hệ')}>
+              <TouchableOpacity onPress={() => handleScrollToSection('footer')}>
                 <Text style={styles.navLinkText}>Liên hệ</Text>
               </TouchableOpacity>
             </View>
@@ -163,19 +190,19 @@ const WelcomeScreen = ({ navigation }) => {
         {/* Mobile Dropdown Navigation Menu */}
         {!isDesktop && mobileMenuOpen && (
           <View style={styles.mobileDropdown}>
-            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('Trang chủ')}>
+            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('hero')}>
               <Text style={styles.mobileNavLinkText}>Trang chủ</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('Chuyên khoa')}>
+            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('services')}>
               <Text style={styles.mobileNavLinkText}>Chuyên khoa</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('Gói khám')}>
+            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('packages')}>
               <Text style={styles.mobileNavLinkText}>Gói khám</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('Bác sĩ')}>
+            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('doctors')}>
               <Text style={styles.mobileNavLinkText}>Bác sĩ</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('Liên hệ')}>
+            <TouchableOpacity style={styles.mobileNavLink} onPress={() => handleScrollToSection('footer')}>
               <Text style={styles.mobileNavLinkText}>Liên hệ</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -191,7 +218,11 @@ const WelcomeScreen = ({ navigation }) => {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={true}>
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+      >
         
         {/* 2. HERO SECTION */}
         <View style={isDesktop ? styles.heroDesktop : styles.heroMobile}>
@@ -325,26 +356,41 @@ const WelcomeScreen = ({ navigation }) => {
         </View>
 
         {/* 7. DOCTOR TEAM SECTION */}
-        <View style={[styles.sectionContainer, { backgroundColor: '#F8FAFC' }]}>
+        <View
+          style={[styles.sectionContainer, { backgroundColor: '#F8FAFC' }]}
+          onLayout={(e) => {
+            sectionOffsets.current['doctors'] = e.nativeEvent.layout.y;
+          }}
+        >
           <Text style={styles.sectionCenterTitle}>Đội ngũ bác sĩ chuyên khoa</Text>
           <Text style={styles.sectionCenterSub}>Tận tâm - Giàu kinh nghiệm - Hết lòng vì sức khỏe người bệnh</Text>
-          
-          <View style={[styles.doctorsContainer, isDesktop ? styles.rowLayout : styles.columnLayout]}>
-            {doctorsData.map((doc) => (
-              <View key={doc.id} style={styles.doctorCard}>
-                {/* Image Placeholder */}
-                <View style={styles.doctorImagePlaceholder}>
-                  <Text style={styles.doctorPlaceHolderText}>👨‍⚕️</Text>
-                  <Text style={styles.doctorImageLabel}>Ảnh bác sĩ</Text>
+
+          {loadingDoctors ? (
+            <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 24 }} />
+          ) : (
+            <View style={[styles.doctorsContainer, isDesktop ? styles.rowLayout : styles.columnLayout]}>
+              {doctorsData.map((doc) => (
+                <View key={doc.id} style={styles.doctorCard}>
+                  {/* Ảnh bác sĩ hoặc placeholder */}
+                  <View style={styles.doctorImagePlaceholder}>
+                    {doc.photoUrl ? (
+                      <Image source={{ uri: doc.photoUrl }} style={{ width: 64, height: 64, borderRadius: 32 }} />
+                    ) : (
+                      <>
+                        <Text style={styles.doctorPlaceHolderText}>👨‍⚕️</Text>
+                        <Text style={styles.doctorImageLabel}>Ảnh bác sĩ</Text>
+                      </>
+                    )}
+                  </View>
+                  <View style={styles.doctorContent}>
+                    <Text style={styles.doctorName}>{doc.name}</Text>
+                    <Text style={styles.doctorRole}>{doc.department || doc.role}</Text>
+                    <Text style={styles.doctorDesc}>Chuyên khoa sâu về Nội thần kinh, Đột quỵ & Phẫu thuật sọ não.</Text>
+                  </View>
                 </View>
-                <View style={styles.doctorContent}>
-                  <Text style={styles.doctorName}>{doc.name}</Text>
-                  <Text style={styles.doctorRole}>{doc.role}</Text>
-                  <Text style={styles.doctorDesc}>Chuyên khoa sâu về Nội thần kinh, Đột quỵ & Phẫu thuật sọ não.</Text>
-                </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* 8. FOOTER SECTION */}

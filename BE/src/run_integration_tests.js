@@ -1,37 +1,50 @@
 import { spawn } from "child_process";
 
-const PORT = 3031;
-const BASE_URL = `http://localhost:${PORT}`;
+let PORT = 3031;
+let BASE_URL = `http://localhost:${PORT}`;
+let serverProcess = null;
 
 console.log("🚀 Bắt đầu quy trình kiểm nghiệm tích hợp hệ thống tự động...");
 
-// Khởi chạy server ở tiến trình con
-const serverProcess = spawn("node", ["src/index.js"], {
-  env: {
-    ...process.env,
-    PORT: PORT.toString(),
-  },
-  shell: true,
-});
-
-let serverOutput = "";
-serverProcess.stdout.on("data", (data) => {
-  const text = data.toString();
-  serverOutput += text;
-  console.log(`[Server] ${text.trim()}`);
-});
-
-serverProcess.stderr.on("data", (data) => {
-  console.error(`[Server Error] ${data.toString().trim()}`);
-});
-
-// Chờ server khởi động thành công
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const runTests = async () => {
   try {
-    // Chờ 3 giây để server kết nối DB và listen port
-    await delay(3000);
+    // Thử kiểm tra xem server đã chạy ở cổng 3000 chưa
+    let useExisting = false;
+    try {
+      const pingRes = await fetch("http://localhost:3000/ping");
+      if (pingRes.ok) {
+        useExisting = true;
+        PORT = 3000;
+        BASE_URL = "http://localhost:3000";
+        console.log("📡 Phát hiện server đang chạy sẵn tại http://localhost:3000. Sẽ chạy tích hợp trực tiếp.");
+      }
+    } catch (e) {
+      // Server chưa chạy sẵn
+    }
+
+    if (!useExisting) {
+      console.log(`🚀 Khởi chạy server ở tiến trình con trên cổng ${PORT}...`);
+      serverProcess = spawn("node", ["src/index.js"], {
+        env: {
+          ...process.env,
+          PORT: PORT.toString(),
+        },
+        shell: true,
+      });
+
+      serverProcess.stdout.on("data", (data) => {
+        console.log(`[Server] ${data.toString().trim()}`);
+      });
+
+      serverProcess.stderr.on("data", (data) => {
+        console.error(`[Server Error] ${data.toString().trim()}`);
+      });
+
+      // Chờ 5 giây để server kết nối DB và listen port
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      await delay(5000);
+    }
+
     console.log("\n🧪 Khởi động các ca kiểm thử tích hợp...");
 
     let doctorToken = "";
@@ -261,9 +274,13 @@ const runTests = async () => {
     console.error(error);
     process.exitCode = 1;
   } finally {
-    // Dừng server
-    console.log("\n🛑 Đang tắt tiến trình server...");
-    serverProcess.kill("SIGTERM");
+    // Dừng server nếu được tạo tự động bởi test runner
+    if (serverProcess) {
+      console.log("\n🛑 Đang tắt tiến trình server...");
+      serverProcess.kill("SIGTERM");
+    } else {
+      console.log("\n🛑 Kiểm thử hoàn tất (Sử dụng server hiện có, giữ nguyên server).");
+    }
     process.exit();
   }
 };

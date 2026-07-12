@@ -3,6 +3,7 @@ import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, Alert, Image, Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { get, put, post } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
@@ -131,45 +132,92 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       reader.readAsDataURL(file);
     });
 
-  const handlePickAndUpload = () => {
-    if (Platform.OS !== 'web') {
-      Alert.alert('Hỗ trợ', 'Tính năng chọn file ảnh hiện chỉ hỗ trợ trên trình duyệt Web.');
-      return;
-    }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = true;
-    input.onchange = async (e) => {
-      const files = Array.from(e.target.files || []);
-      if (!files.length) return;
-      if (uploadedImages.length + files.length > 5) {
-        alert('Tối đa 5 ảnh phim chụp mỗi lần nộp.');
+  const handlePickAndUpload = async () => {
+    if (Platform.OS === 'web') {
+      // Web: dùng native file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        if (uploadedImages.length + files.length > 5) {
+          alert('Tối đa 5 ảnh phim chụp mỗi lần nộp.');
+          return;
+        }
+        setUploading(true);
+        const results = [...uploadedImages];
+        for (const file of files) {
+          try {
+            const fileData = await readFileAsBase64(file);
+            const res = await post('/api/v1/imaging/upload', {
+              fileData,
+              fileName: file.name,
+              imagingType: 'MRI',
+            });
+            if (res.success && res.data?.imageUrl) {
+              results.push(res.data.imageUrl);
+            } else {
+              alert(`Tải ảnh "${file.name}" thất bại: ${res.message || 'Lỗi không xác định'}`);
+            }
+          } catch (err) {
+            alert(`Lỗi khi upload "${file.name}": ${err.message}`);
+          }
+        }
+        setUploadedImages(results);
+        setUploading(false);
+      };
+      input.click();
+    } else {
+      // Mobile (Android/iOS): dùng expo-image-picker
+      if (uploadedImages.length >= 5) {
+        Alert.alert('Giới hạn', 'Tối đa 5 ảnh phim chụp mỗi lần nộp.');
         return;
       }
+
+      // Xin quyền truy cập thư viện ảnh
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Quyền truy cập',
+          'Vui lòng cấp quyền truy cập ảnh để tải ảnh phim chụp MRI.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
       setUploading(true);
       const results = [...uploadedImages];
-      for (const file of files) {
+      for (const asset of result.assets.slice(0, 5 - uploadedImages.length)) {
         try {
-          const fileData = await readFileAsBase64(file);
+          const fileData = `data:image/jpeg;base64,${asset.base64}`;
+          const fileName = asset.fileName || `mri_${Date.now()}.jpg`;
           const res = await post('/api/v1/imaging/upload', {
             fileData,
-            fileName: file.name,
+            fileName,
             imagingType: 'MRI',
           });
           if (res.success && res.data?.imageUrl) {
             results.push(res.data.imageUrl);
           } else {
-            alert(`Tải ảnh "${file.name}" thất bại: ${res.message || 'Lỗi không xác định'}`);
+            Alert.alert('Lỗi upload', res.message || 'Không thể tải ảnh này.');
           }
         } catch (err) {
-          alert(`Lỗi khi upload "${file.name}": ${err.message}`);
+          Alert.alert('Lỗi', `Không thể upload ảnh: ${err.message}`);
         }
       }
       setUploadedImages(results);
       setUploading(false);
-    };
-    input.click();
+    }
   };
 
   const handleRemoveImage = (idx) => {

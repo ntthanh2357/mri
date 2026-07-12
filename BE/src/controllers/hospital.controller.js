@@ -278,3 +278,38 @@ export const toggleStaffLock = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// GET /api/v1/hospital/public/doctors — Public: Lấy danh sách bác sĩ từ bệnh viện đầu tiên trong hệ thống
+// Không cần xác thực, dùng cho trang WelcomeScreen để hiển thị đội ngũ y tế
+export const getPublicDoctors = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 4, 10);
+
+    // Lấy bệnh viện đầu tiên đang active
+    const hospital = await Hospital.findOne({ isActive: true }).select("_id name").lean();
+    if (!hospital) {
+      return res.status(200).json({ success: true, doctors: [] });
+    }
+
+    const doctors = await User.find({
+      hospitalId: hospital._id,
+      role: "doctor",
+      isLocked: false,
+    })
+      .select("profile.name profile.photoUrl departmentId")
+      .limit(limit)
+      .lean();
+
+    const formatted = doctors.map((d) => ({
+      id: d._id,
+      name: d.profile?.name || "Bác sĩ",
+      photoUrl: d.profile?.photoUrl || null,
+      department: d.departmentId || "Chẩn đoán hình ảnh",
+    }));
+
+    return res.status(200).json({ success: true, doctors: formatted, hospital: hospital.name });
+  } catch (error) {
+    console.error("getPublicDoctors error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

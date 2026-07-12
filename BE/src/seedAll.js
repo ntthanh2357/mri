@@ -534,6 +534,16 @@ const seedAllData = async () => {
           { biomarker_code: "GLU", biomarker_name: "Glucose (Đường huyết)", value_result: 7.2, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "3.9 - 6.4" },
         ],
       },
+      {
+        hospitalId: hospital._id,
+        patient_id: pat1._id,
+        patient_gender: "Nam",
+        barcode: "PREOP-NEURO-001",
+        category: "HOA_SINH",
+        status: "PENDING",
+        ordered_at: new Date(now.getTime() - 2 * 3600000),
+        results: [],
+      },
     ]);
     console.log("✅ Seeded Lab Orders.");
 
@@ -641,6 +651,59 @@ const seedAllData = async () => {
       }
     ]);
     console.log("✅ Seeded Visits.");
+
+    // 14. Create Invoices
+    console.log("Seeding Invoices...");
+    await Invoice.insertMany([
+      {
+        hospitalId: hospital._id,
+        patientId: pat1._id,
+        items: [
+          { description: "Khám lâm sàng thần kinh", amount: 150000, type: "exam" },
+          { description: "Chụp cộng hưởng từ MRI sọ não 3D", amount: 1500000, type: "mri" },
+          { description: "Phân tích tự động u não qua AI", amount: 200000, type: "ai" }
+        ],
+        totalAmount: 1850000,
+        status: "đã thanh toán",
+        paymentMethod: "vietqr",
+        paidAt: new Date(now.getTime() - 1 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat2._id,
+        items: [
+          { description: "Khám lâm sàng thần kinh", amount: 150000, type: "exam" },
+          { description: "Phân tích tự động u não qua AI", amount: 200000, type: "ai" }
+        ],
+        totalAmount: 350000,
+        status: "đã thanh toán",
+        paymentMethod: "tiền mặt",
+        paidAt: new Date(now.getTime() - 2 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat3._id,
+        items: [
+          { description: "Chụp cộng hưởng từ MRI cột sống", amount: 1500000, type: "mri" }
+        ],
+        totalAmount: 1500000,
+        status: "hoàn trả",
+        paymentMethod: "chuyển khoản",
+        paidAt: new Date(now.getTime() - 4 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat1._id,
+        items: [
+          { description: "Khám chuyên khoa thần kinh", amount: 150000, type: "exam" }
+        ],
+        totalAmount: 150000,
+        status: "chờ thanh toán",
+        paymentMethod: "",
+        paidAt: null,
+      }
+    ]);
+    console.log("✅ Seeded Invoices.");
 
     console.log("\n🎉 ALL SEED DATA GENERATED SUCCESSFULLY! (Exactly 3 accounts per role, bound to Bệnh viện Bạch Mai)");
     process.exit(0);

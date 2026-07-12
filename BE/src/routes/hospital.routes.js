@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
-import { getMyHospital, submitOnboardingInfo, uploadLicenseFile, getHospitalStaff, toggleStaffLock } from "../controllers/hospital.controller.js";
+import { getMyHospital, submitOnboardingInfo, uploadLicenseFile, getHospitalStaff, toggleStaffLock, getPublicDoctors } from "../controllers/hospital.controller.js";
 
 const router = Router();
+
+// ─── Public routes (không cần đăng nhập) ─────────────────────────────────────
+router.get("/public/doctors", getPublicDoctors);
 
 router.use(protect);
 
