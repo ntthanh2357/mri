@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   TextInput,
@@ -17,6 +16,7 @@ import {
 import Config from '../constants/config';
 import { post, setAuthToken, get } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
+import styles from './LoginScreen.styles';
 
 const LoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -57,7 +57,10 @@ const LoginScreen = ({ navigation }) => {
         const data = await get('/auth/me');
         if (data && data.user) {
           const destination = data.user.role === 'admin' ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-          navigation.replace(destination, { user: data.user });
+          navigation.reset({
+            index: 0,
+            routes: [{ name: destination, params: { user: data.user } }],
+          });
           return;
         }
       } catch (err) {
@@ -121,7 +124,10 @@ const LoginScreen = ({ navigation }) => {
       const data = await post('/auth/phone-login-verify', { phone: email.trim(), otp: otpCode.trim() });
       setAuthToken(data.accessToken);
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-        navigation.replace('Home');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home', params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Verify login OTP error:', error);
@@ -160,7 +166,10 @@ const LoginScreen = ({ navigation }) => {
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-        navigation.replace(destination);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -197,7 +206,10 @@ const LoginScreen = ({ navigation }) => {
       await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
-        navigation.replace(destination);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
       });
     } catch (error) {
       console.error('Google SSO error:', error);
@@ -371,6 +383,7 @@ const LoginScreen = ({ navigation }) => {
                     autoCapitalize="none"
                     keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
                     editable={loginMethod === 'otp' ? !otpSent : true}
+                    onSubmitEditing={handleLogin}
                   />
 
                   {loginMethod === 'password' ? (
@@ -390,6 +403,7 @@ const LoginScreen = ({ navigation }) => {
                           value={password}
                           onChangeText={setPassword}
                           autoCapitalize="none"
+                          onSubmitEditing={handleLogin}
                         />
                         <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
                           <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
@@ -410,9 +424,10 @@ const LoginScreen = ({ navigation }) => {
                           maxLength={6}
                           value={otpCode}
                           onChangeText={setOtpCode}
+                          onSubmitEditing={handleLogin}
                         />
-                        <TouchableOpacity 
-                          style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]} 
+                        <TouchableOpacity
+                          style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]}
                           onPress={() => setOtpSent(false)}
                         >
                           <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
@@ -427,10 +442,10 @@ const LoginScreen = ({ navigation }) => {
                       <ActivityIndicator color="#FFF" />
                     ) : (
                       <Text style={styles.loginButtonText}>
-                        {loginMethod === 'password' 
-                          ? 'Đăng nhập →' 
-                          : otpSent 
-                            ? 'Xác nhận & Đăng nhập →' 
+                        {loginMethod === 'password'
+                          ? 'Đăng nhập →'
+                          : otpSent
+                            ? 'Xác nhận & Đăng nhập →'
                             : 'Gửi mã OTP →'}
                       </Text>
                     )}
@@ -517,6 +532,7 @@ const LoginScreen = ({ navigation }) => {
               autoCapitalize="none"
               keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
               editable={loginMethod === 'otp' ? !otpSent : true}
+              onSubmitEditing={handleLogin}
             />
 
             {loginMethod === 'password' ? (
@@ -536,6 +552,7 @@ const LoginScreen = ({ navigation }) => {
                     value={password}
                     onChangeText={setPassword}
                     autoCapitalize="none"
+                    onSubmitEditing={handleLogin}
                   />
                   <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
                     <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
@@ -556,9 +573,10 @@ const LoginScreen = ({ navigation }) => {
                     maxLength={6}
                     value={otpCode}
                     onChangeText={setOtpCode}
+                    onSubmitEditing={handleLogin}
                   />
-                  <TouchableOpacity 
-                    style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]} 
+                  <TouchableOpacity
+                    style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]}
                     onPress={() => setOtpSent(false)}
                   >
                     <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
@@ -573,10 +591,10 @@ const LoginScreen = ({ navigation }) => {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <Text style={styles.loginButtonText}>
-                  {loginMethod === 'password' 
-                    ? 'Đăng nhập →' 
-                    : otpSent 
-                      ? 'Xác nhận & Đăng nhập →' 
+                  {loginMethod === 'password'
+                    ? 'Đăng nhập →'
+                    : otpSent
+                      ? 'Xác nhận & Đăng nhập →'
                       : 'Gửi mã OTP →'}
                 </Text>
               )}
@@ -641,6 +659,7 @@ const LoginScreen = ({ navigation }) => {
                     onChangeText={setForgotEmail}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    onSubmitEditing={handleRequestOtp}
                   />
                   <TouchableOpacity
                     style={styles.modalSubmitButton}
@@ -674,6 +693,7 @@ const LoginScreen = ({ navigation }) => {
                     keyboardType="number-pad"
                     value={forgotOtp}
                     onChangeText={setForgotOtp}
+                    onSubmitEditing={handleVerifyOtp}
                   />
 
                   <Text style={styles.label}>Mật khẩu mới</Text>
@@ -685,6 +705,7 @@ const LoginScreen = ({ navigation }) => {
                     value={forgotNewPassword}
                     onChangeText={setForgotNewPassword}
                     autoCapitalize="none"
+                    onSubmitEditing={handleVerifyOtp}
                   />
 
                   <View style={styles.modalButtonsRow}>
@@ -752,749 +773,7 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    height: Platform.OS === 'web' ? '100vh' : '100%',
-  },
-  scrollContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    alignItems: 'stretch',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 16,
-  },
-  logoCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#15803D',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  logoInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  appName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 32,
-  },
-  form: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 20,
-  },
-  passwordHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: '#15803D',
-    fontWeight: '500',
-  },
-  passwordContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  passwordInput: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingLeft: 16,
-    paddingRight: 50,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 16,
-    height: 50,
-    justifyContent: 'center',
-  },
-  eyeText: {
-    fontSize: 18,
-  },
-  loginButton: {
-    height: 52,
-    backgroundColor: '#15803D',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#15803D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '600',
-    paddingHorizontal: 12,
-  },
-  ssoContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 32,
-    gap: 12,
-  },
-  ssoButton: {
-    flex: 1,
-    height: 52,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  ssoButtonText: {
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  googleIcon: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4285F4',
-  },
-
-  quickLoginContainer: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 16,
-  },
-  quickLoginTitle: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  quickButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  registerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 12,
-    marginBottom: 20,
-  },
-  registerText: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  registerLink: {
-    fontSize: 14,
-    color: '#15803D',
-    fontWeight: 'bold',
-  },
-  quickButton: {
-    flex: 1,
-    height: 38,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickButtonText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  closeButton: {
-    fontSize: 20,
-    color: '#94A3B8',
-    fontWeight: 'bold',
-  },
-  modalBody: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-  },
-  modalDesc: {
-    fontSize: 14,
-    color: '#64748B',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  modalSubmitButton: {
-    height: 52,
-    backgroundColor: '#15803D',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  modalSubmitText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  otpNotice: {
-    backgroundColor: '#F0FDF4',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  otpNoticeText: {
-    color: '#166534',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  otpNoticeSubtext: {
-    color: '#15803D',
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  otpInput: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    letterSpacing: 8,
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalBackButton: {
-    flex: 1,
-    height: 52,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBackText: {
-    color: '#475569',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalConfirmButton: {
-    flex: 2,
-    height: 52,
-    backgroundColor: '#15803D',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  desktopContainer: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-    width: '100%',
-  },
-  desktopCard: {
-    width: 900,
-    maxWidth: '90%',
-    height: 600,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  leftPanel: {
-    flex: 1.1,
-    position: 'relative',
-    justifyContent: 'flex-end',
-    padding: 32,
-    backgroundColor: '#0a2e0a',
-  },
-  leftPanelBg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 0.4,
-  },
-  leftPanelOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(13, 61, 43, 0.4)',
-  },
-  leftPanelContent: {
-    zIndex: 10,
-  },
-  statsBadgeContainer: {
-    flexDirection: 'row',
-    gap: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
-  },
-  statMiniCard: {
-    // mini status
-  },
-  statMiniLabel: {
-    color: '#94A3B8',
-    fontSize: 9,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  statMiniValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  leftPanelTextTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: 'bold',
-    lineHeight: 28,
-  },
-  leftPanelTextHighlight: {
-    color: '#4ADE80',
-  },
-  leftPanelTextDesc: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  rightPanel: {
-    flex: 1,
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  desktopScrollContainer: {
-    paddingVertical: 32,
-    paddingHorizontal: 40,
-    flexGrow: 1,
-    justifyContent: 'center',
-    gap: 20,
-  },
-  desktopHeader: {
-    marginBottom: 20,
-    marginTop: 0,
-  },
-  desktopTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#15803D',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  desktopSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 0,
-  },
-  desktopLabel: {
-    marginBottom: 6,
-    fontSize: 13,
-  },
-  desktopForm: {
-    marginBottom: 0,
-  },
-  desktopInput: {
-    height: 42,
-    marginBottom: 12,
-  },
-  desktopPasswordContainer: {
-    marginBottom: 16,
-  },
-  desktopPasswordInput: {
-    height: 42,
-  },
-  desktopEyeButton: {
-    height: 40,
-  },
-  desktopLoginButton: {
-    height: 42,
-  },
-  desktopDividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 0,
-  },
-  desktopSsoContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 0,
-    gap: 12,
-  },
-  desktopSsoButton: {
-    height: 42,
-  },
-  desktopRegisterContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 0,
-  },
-  desktopQuickLoginContainer: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  desktopQuickLoginTitle: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  desktopQuickButton: {
-    height: 32,
-  },
-  alertOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    zIndex: 9999,
-  },
-  alertCard: {
-    width: 320,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  alertIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  alertIconText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  alertTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  alertMessage: {
-    fontSize: 14,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  alertButton: {
-    width: '100%',
-    height: 42,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  alertButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  // NAVBAR STYLES
-  navbar: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    zIndex: 10,
-    width: '100%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        position: 'sticky',
-        top: 0,
-      }
-    }),
-  },
-  navbarContainer: {
-    height: 70,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    maxWidth: 1200,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#15803D',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  logoInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  brandName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    lineHeight: 18,
-  },
-  brandSub: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#15803D',
-  },
-  navLinks: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  navLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-    paddingVertical: 8,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  bookingBtn: {
-    backgroundColor: '#0284C7',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-  },
-  bookingBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  loginBtn: {
-    backgroundColor: '#15803D',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  loginBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  mobileMenuBtn: {
-    padding: 8,
-    marginLeft: 4,
-  },
-  menuIconText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#334155',
-  },
-  mobileDropdown: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  mobileNavLink: {
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  mobileNavLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  desktopMainBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    width: '100%',
-    paddingVertical: 20,
-  },
-  mainBody: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  homeLinkBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#15803D',
-    backgroundColor: '#FFFFFF',
-  },
-  homeLinkBtnText: {
-    color: '#15803D',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  methodTabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-  },
-  methodTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  activeMethodTab: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  methodTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  activeMethodTabText: {
-    color: '#15803D',
-  },
-});
+;
 
 
 export default LoginScreen;

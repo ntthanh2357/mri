@@ -81,12 +81,15 @@ const ResponsiveLayout = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleDefaultLogout = () => {
+  const handleDefaultLogout = async () => {
+    await setAuthToken('');
     if (onLogout) {
       onLogout();
     } else {
-      setAuthToken('');
-      navigation.replace('Welcome');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Welcome' }],
+      });
     }
   };
 
@@ -155,11 +158,11 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: '📊' },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '🗓️' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', icon: '📋' },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: '📋' },
           { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', icon: '🩺' },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
           { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📂' },
-          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', icon: '💳' },
+          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', params: { tab: 'billing' }, icon: '💳' },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
         ];
       default:
@@ -224,12 +227,20 @@ const ResponsiveLayout = ({
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
           {menuItems.map((item) => {
-            const isActive = activeRoute === item.route;
+            let isActive = false;
+            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') {
+              isActive = true;
+            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') {
+              isActive = true;
+            } else if (activeRoute === item.route && item.route !== 'NurseReception') {
+              isActive = true;
+            }
+
             return (
               <TouchableOpacity
                 key={`${item.route}_${item.label}`}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => navigation.navigate(item.route)}
+                onPress={() => navigation.navigate(item.route, item.params)}
               >
                 <Text style={styles.navIcon}>{item.icon}</Text>
                 <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>

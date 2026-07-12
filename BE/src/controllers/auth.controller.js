@@ -234,12 +234,30 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-    const userObj = await User.findById(req.user.id).select("-passwordHash");
+    const userObj = await User.findById(req.user.id);
     if (!userObj) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
     }
-    
+
+    // Check Premium expiration
+    if (userObj.isPremium && userObj.premiumUntil && new Date() > userObj.premiumUntil) {
+      if (userObj.autoRenew) {
+        // Auto-renew: Charge 99.000 VNĐ and extend by 1 year
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        userObj.premiumUntil = nextYear;
+        await userObj.save();
+        console.log(`[Auto-Renew] Automatically renewed Premium for ${userObj.email}. Charged 99.000 VNĐ. Next expiration: ${userObj.premiumUntil.toISOString()}`);
+      } else {
+        // Expire: Set isPremium to false
+        userObj.isPremium = false;
+        userObj.premiumUntil = null;
+        await userObj.save();
+        console.log(`[Subscription Expired] Premium expired for ${userObj.email} (autoRenew was false).`);
+      }
+    }
+
     // Return both id and _id to maintain compatibility across FE screens (Bug #16)
     const user = {
       id: userObj._id,
@@ -253,6 +271,9 @@ export const getMe = async (req, res) => {
       wardId: userObj.wardId,
       departmentId: userObj.departmentId,
       isLocked: userObj.isLocked,
+      isPremium: userObj.isPremium,
+      premiumUntil: userObj.premiumUntil,
+      autoRenew: userObj.autoRenew,
       createdAt: userObj.createdAt,
       updatedAt: userObj.updatedAt,
     };
@@ -386,7 +407,7 @@ export const firebaseLogin = async (req, res) => {
   }
 };
 
-// @desc    SSO Login (Google/Zalo)
+// @desc    SSO Login (Google)
 // @route   POST /auth/sso/:provider
 // @access  Public
 export const ssoLogin = async (req, res) => {
@@ -400,40 +421,6 @@ export const ssoLogin = async (req, res) => {
         return;
       }
 
-      // Handle mock token for Google SSO in local development ONLY — never active in production
-      if (process.env.NODE_ENV !== "production" && idToken === "mock_google_token_123") {
-        let user = await User.findOne({ email: "google_test@neuroscan.com" });
-        if (!user) {
-          const salt = await bcrypt.genSalt(10);
-          const passwordHash = await bcrypt.hash(Math.random().toString(36), salt);
-          user = new User({
-            email: "google_test@neuroscan.com",
-            passwordHash,
-            role: "patient",
-            isVerified: true,
-            profile: {
-              name: "Google Test User",
-              photoUrl: "",
-            },
-          });
-          await user.save();
-        }
-        const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Google thành công! (MOCK)",
-          accessToken,
-          refreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
-      }
 
       const apiKey = process.env.FIREBASE_API_KEY || "AIzaSyAaKP0Q5HpkLlVGfMo9Bz2TmIU2wOVSyoM";
 
@@ -513,46 +500,6 @@ export const ssoLogin = async (req, res) => {
       return;
     }
 
-    // 1. Handle mock token first for easy testing without hitting real Zalo API — local development ONLY
-    if (process.env.NODE_ENV !== "production" && accessToken === "mock_zalo_token_123") {
-      try {
-        let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
-        if (!user) {
-          user = new User({
-            email: "zalo_test@neuroscan.com",
-            passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
-            role: "patient",
-            isVerified: true,
-            profile: {
-              name: "Zalo Test User",
-              photoUrl: "",
-            },
-          });
-          await user.save();
-        }
-        const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Zalo thành công! (MOCK)",
-          accessToken: jwtAccessToken,
-          refreshToken: jwtRefreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
-      } catch (err) {
-        console.error("Lỗi đăng nhập Zalo Mock:", err);
-        res.status(500).json({ message: "Đã xảy ra lỗi khi đăng nhập Zalo Mock.", error: err.message });
-        return;
-      }
-    }
-
-    // 2. Real Zalo login flow
     try {
       // In real-world, call Zalo Graph API to verify token
       const zaloResponse = await fetch("https://graph.zalo.me/v2.0/me?fields=id,name,picture", {
@@ -837,89 +784,158 @@ export const verifyOtp = async (req, res) => {
 export const phoneLoginRequest = async (req, res) => {
   try {
     const { phone } = req.body;
+
     if (!phone) {
-      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại." });
+      return;
     }
 
+    // Hash phone number to match database records
     const hashedPhone = hashPhone(phone);
+
+    // Find user by phone
     const user = await User.findOne({ phone: hashedPhone });
     if (!user) {
-      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký trong hệ thống." });
+      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký trong hệ thống." });
+      return;
+    }
+
+    // Check if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
     }
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // Expires in 5 minutes
 
     user.otpCode = otpCode;
     user.otpExpires = otpExpires;
     await user.save();
 
-    console.log(`[SMS Simulator] OTP Code for phone ${phone}: ${otpCode}`);
+    // Print OTP to server console (since we don't have an SMS gateway configured)
+    console.log(`\n--- [OTP Phone Login] ---`);
+    console.log(`Phone: ${phone}`);
+    console.log(`Code: ${otpCode}`);
+    console.log(`-------------------------\n`);
 
     res.status(200).json({
-      success: true,
-      message: "Mã OTP đã được tạo (Xem tại terminal của Server).",
+      message: "Mã OTP đăng nhập đã được gửi (Vui lòng kiểm tra console/log của Server).",
       debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
     });
   } catch (error) {
-    console.error("Lỗi yêu cầu OTP SĐT:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP SĐT.", error: error.message });
+    console.error("Lỗi yêu cầu OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP.", error: error.message });
   }
 };
 
-// @desc    Verify OTP for phone login
+// @desc    Verify OTP and login via phone
 // @route   POST /auth/phone-login-verify
 // @access  Public
 export const phoneLoginVerify = async (req, res) => {
   try {
     const { phone, otp } = req.body;
+
     if (!phone || !otp) {
-      return res.status(400).json({ message: "Vui lòng cung cấp số điện thoại và mã OTP." });
+      res.status(400).json({ message: "Vui lòng cung cấp số điện thoại và mã OTP." });
+      return;
     }
 
+    // Hash phone number to match database records
     const hashedPhone = hashPhone(phone);
+
+    // Find user by phone
     const user = await User.findOne({ phone: hashedPhone });
     if (!user) {
-      return res.status(404).json({ message: "Số điện thoại chưa được đăng ký." });
+      res.status(404).json({ message: "Số điện thoại này chưa được đăng ký trong hệ thống." });
+      return;
     }
 
+    // Check if account is locked
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
+    }
+
+    // Verify OTP code and expiration
     if (!user.otpCode || user.otpCode !== otp) {
-      return res.status(400).json({ message: "Mã OTP không chính xác." });
+      res.status(400).json({ message: "Mã OTP không chính xác." });
+      return;
     }
 
     if (!user.otpExpires || user.otpExpires < new Date()) {
-      return res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      return;
     }
 
-    // Clear OTP
+    // Clear OTP fields
     user.otpCode = undefined;
     user.otpExpires = undefined;
     await user.save();
 
-    // Generate JWT tokens
+    // Generate tokens
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
-    // Format user object consistent with normal login
-    const userRes = {
-      id: user._id,
-      _id: user._id,
-      email: user.email,
-      role: user.role,
-      profile: user.profile,
-      hospitalId: user.hospitalId,
-      isVerified: user.isVerified,
-    };
+    // Staff roles created by hospital admin must activate on first login
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "hospital_admin"];
+    const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({
-      success: true,
+      message: "Đăng nhập thành công!",
       accessToken,
       refreshToken,
-      user: userRes,
+      requiresActivation,
+      user: {
+        id: user._id,
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        hospitalId: user.hospitalId,
+        isVerified: user.isVerified,
+        profile: user.profile,
+      },
     });
   } catch (error) {
-    console.error("Lỗi xác minh OTP SĐT:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác minh OTP SĐT.", error: error.message });
+    console.error("Lỗi xác thực OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác thực OTP.", error: error.message });
+  }
+};
+
+// @desc    Downgrade to Basic package
+// @route   POST /auth/premium/downgrade
+// @access  Private
+export const downgradeToBasic = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+    user.isPremium = false;
+    user.premiumUntil = null;
+    await user.save();
+    res.status(200).json({ message: "Đã chuyển về Gói Cơ bản thành công.", user });
+  } catch (error) {
+    console.error("Lỗi hạ cấp gói:", error);
+    res.status(500).json({ message: "Lỗi máy chủ khi hạ cấp gói.", error: error.message });
+  }
+};
+
+// @desc    Cancel Premium auto-renewal
+// @route   POST /auth/premium/cancel-renew
+// @access  Private
+export const cancelPremiumRenew = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+    user.autoRenew = false;
+    await user.save();
+    res.status(200).json({ message: "Đã hủy gia hạn tự động thành công. Bạn vẫn được sử dụng Premium đến hết hạn.", user });
+  } catch (error) {
+    console.error("Lỗi hủy gia hạn gói:", error);
+    res.status(500).json({ message: "Lỗi máy chủ khi hủy gia hạn gói.", error: error.message });
   }
 };
