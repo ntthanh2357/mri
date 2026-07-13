@@ -321,6 +321,11 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     color: '#374151',
   },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#374151',
+  },
   clinicLinkRow: {
     marginBottom: 10,
     alignSelf: 'flex-start',

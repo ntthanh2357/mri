@@ -234,7 +234,7 @@ export const login = async (req, res) => {
 // @access  Private
 export const getMe = async (req, res) => {
   try {
-    let userObj = await User.findById(req.user.id);
+    const userObj = await User.findById(req.user.id);
     if (!userObj) {
       res.status(404).json({ message: "Không tìm thấy thông tin người dùng." });
       return;
@@ -527,53 +527,13 @@ export const ssoLogin = async (req, res) => {
     return;
   }
 
-if (provider === "zalo") {
+  if (provider === "zalo") {
     const { accessToken } = req.body;
     if (!accessToken) {
       res.status(400).json({ message: "Thiếu Zalo Access Token." });
       return;
     }
 
-    // 1. Handle mock token first for easy testing without hitting real Zalo API — local development ONLY
-    if (process.env.NODE_ENV !== "production" && accessToken === "mock_zalo_token_123") {
-      try {
-        let user = await User.findOne({ email: "zalo_test@neuroscan.com" });
-        if (!user) {
-          user = new User({
-            email: "zalo_test@neuroscan.com",
-            passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
-            role: "patient",
-            isVerified: true,
-            profile: {
-              name: "Zalo Test User",
-              photoUrl: "",
-            },
-          });
-          await user.save();
-        }
-        const jwtAccessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const jwtRefreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Zalo thành công! (MOCK)",
-          accessToken: jwtAccessToken,
-          refreshToken: jwtRefreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
-      } catch (err) {
-        console.error("Lỗi đăng nhập Zalo Mock:", err);
-        res.status(500).json({ message: "Đã xảy ra lỗi khi đăng nhập Zalo Mock.", error: err.message });
-        return;
-      }
-    }
-
-    // 2. Real Zalo login flow
     try {
       // In real-world, call Zalo Graph API to verify token
       const zaloResponse = await fetch("https://graph.zalo.me/v2.0/me?fields=id,name,picture", {
@@ -641,6 +601,7 @@ if (provider === "zalo") {
     }
     return;
   }
+
   res.status(400).json({ message: `Provider '${provider}' không được hỗ trợ.` });
 };
 
@@ -873,12 +834,13 @@ export const phoneLoginRequest = async (req, res) => {
 
     // Check if account is locked
     if (user.isLocked) {
-      return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
     }
 
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // Expires in 5 minutes
 
     user.otpCode = otpCode;
     user.otpExpires = otpExpires;
@@ -889,8 +851,7 @@ export const phoneLoginRequest = async (req, res) => {
 --- [OTP Phone Login SMS Simulator] ---`);
     console.log(`Phone: ${phone}`);
     console.log(`Code: ${otpCode}`);
-    console.log(`---------------------------------------
-`);
+    console.log(`-------------------------\n`);
 
     res.status(200).json({
       success: true,
@@ -898,12 +859,12 @@ export const phoneLoginRequest = async (req, res) => {
       debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
     });
   } catch (error) {
-    console.error("Lỗi yêu cầu OTP SĐT:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP SĐT.", error: error.message });
+    console.error("Lỗi yêu cầu OTP đăng nhập:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP.", error: error.message });
   }
 };
 
-// @desc    Verify OTP for phone login
+// @desc    Verify OTP and login via phone
 // @route   POST /auth/phone-login-verify
 // @access  Public
 export const phoneLoginVerify = async (req, res) => {
@@ -930,11 +891,13 @@ export const phoneLoginVerify = async (req, res) => {
 
     // Verify OTP code and expiration
     if (!user.otpCode || user.otpCode !== otp) {
-      return res.status(400).json({ message: "Mã OTP không chính xác." });
+      res.status(400).json({ message: "Mã OTP không chính xác." });
+      return;
     }
 
     if (!user.otpExpires || user.otpExpires < new Date()) {
-      return res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+      return;
     }
 
     // Clear OTP fields

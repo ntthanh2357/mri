@@ -255,10 +255,10 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     const qSize = d.queueSize || 0;
                     const isLeastBusy = d._id === leastBusyDoctorId;
                     return (
-                      <TouchableOpacity 
-                        key={d._id} 
+                      <TouchableOpacity
+                        key={d._id}
                         style={[
-                          styles.cardItem, 
+                          styles.cardItem,
                           selectedDoctorId === d._id && styles.selectedCardItem,
                           isLeastBusy && selectedDoctorId !== d._id && styles.suggestedCardItem
                         ]}
@@ -266,7 +266,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={[
-                            styles.cardItemText, 
+                            styles.cardItemText,
                             selectedDoctorId === d._id && { color: '#fff' }
                           ]}>
                             {d.profile?.name || d.profile?.fullName || d.email}

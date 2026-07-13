@@ -1,18 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
   TextInput,
-  Alert,
   ActivityIndicator,
-  Modal,
   useWindowDimensions,
 } from 'react-native';
-import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
@@ -52,7 +48,7 @@ const ALL_DOCS = {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-const DocCard = ({ slot, savedDocs = [], onPress, onDelete }) => {
+const DocCard = ({ slot, savedDocs = [], onPress }) => {
   const hasSaved = savedDocs.length > 0;
   const firstDoc = savedDocs[0];
   const uploadCount = savedDocs.filter((d) => d.storageType === 'upload').length;
@@ -93,7 +89,7 @@ const DocCard = ({ slot, savedDocs = [], onPress, onDelete }) => {
   );
 };
 
-const VisitCard = ({ visit, expanded, onToggle, onDocPress, onDeleteDoc, onDelete }) => {
+const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
   const [expandedGroups, setExpandedGroups] = useState({ nhom1: true, nhom2: false, nhom3: false, nhom5: false });
 
   // savedMap: docKey → array of docs (multiple files per slot)
@@ -177,7 +173,6 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress, onDeleteDoc, onDelet
                         slot={slot}
                         savedDocs={savedMap[slot.docKey] || []}
                         onPress={(s, docs) => onDocPress(visit._id, { ...s, groupKey }, docs)}
-                        onDelete={(docId) => onDeleteDoc(visit._id, docId)}
                       />
                     ))}
                   </View>
@@ -185,79 +180,9 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress, onDeleteDoc, onDelet
               </View>
             );
           })}
-
-          <TouchableOpacity
-            style={styles.deleteVisitBtn}
-            onPress={() =>
-              Alert.alert('Xóa lượt khám', `Xóa lượt khám ngày ${visitDate}?\nTất cả tài liệu đi kèm cũng bị xóa.`, [
-                { text: 'Hủy', style: 'cancel' },
-                { text: 'Xóa', style: 'destructive', onPress: onDelete },
-              ])
-            }
-          >
-            <Text style={styles.deleteVisitBtnText}>🗑 Xóa lượt khám này</Text>
-          </TouchableOpacity>
         </View>
       )}
     </View>
-  );
-};
-
-// ── Add Visit Modal ────────────────────────────────────────────────────────────
-
-const AddVisitModal = ({ visible, onClose, onSubmit }) => {
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    facility: '',
-    visitType: 'ngoai_tru',
-    diagnosis: '',
-    medicalId: '',
-    doctor: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (key, val) => setForm((prev) => ({ ...prev, [key]: val }));
-
-  const handleSubmit = async () => {
-    if (!form.facility.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên cơ sở y tế.');
-    setSaving(true);
-    await onSubmit(form);
-    setSaving(false);
-    setForm({ date: new Date().toISOString().split('T')[0], facility: '', visitType: 'ngoai_tru', diagnosis: '', medicalId: '', doctor: '' });
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose}><Text style={styles.modalCancel}>Hủy</Text></TouchableOpacity>
-          <Text style={styles.modalTitle}>Thêm lượt khám</Text>
-          <TouchableOpacity onPress={handleSubmit} disabled={saving}>
-            {saving ? <ActivityIndicator color="#15803D" size="small" /> : <Text style={styles.modalSave}>Thêm</Text>}
-          </TouchableOpacity>
-        </View>
-        <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-          <Text style={styles.modalFieldLabel}>Ngày khám *</Text>
-          <TextInput style={styles.modalInput} value={form.date} onChangeText={(v) => set('date', v)} placeholder="YYYY-MM-DD" placeholderTextColor="#94A3B8" />
-          <Text style={styles.modalFieldLabel}>Cơ sở y tế *</Text>
-          <TextInput style={styles.modalInput} value={form.facility} onChangeText={(v) => set('facility', v)} placeholder="VD: Bệnh viện Chợ Rẫy" placeholderTextColor="#94A3B8" />
-          <Text style={styles.modalFieldLabel}>Loại khám *</Text>
-          <View style={styles.toggleRow}>
-            {[['ngoai_tru', 'Ngoại trú'], ['noi_tru', 'Nội trú']].map(([val, lbl]) => (
-              <TouchableOpacity key={val} style={[styles.toggleBtn, form.visitType === val && styles.toggleBtnActive]} onPress={() => set('visitType', val)}>
-                <Text style={[styles.toggleBtnText, form.visitType === val && styles.toggleBtnTextActive]}>{lbl}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.modalFieldLabel}>Chẩn đoán (nếu biết)</Text>
-          <TextInput style={styles.modalInput} value={form.diagnosis} onChangeText={(v) => set('diagnosis', v)} placeholder="VD: Tăng huyết áp giai đoạn II" placeholderTextColor="#94A3B8" />
-          <Text style={styles.modalFieldLabel}>Mã y tế</Text>
-          <TextInput style={styles.modalInput} value={form.medicalId} onChangeText={(v) => set('medicalId', v)} placeholder="VD: CR-2026-04821" placeholderTextColor="#94A3B8" />
-          <Text style={styles.modalFieldLabel}>Bác sĩ phụ trách</Text>
-          <TextInput style={styles.modalInput} value={form.doctor} onChangeText={(v) => set('doctor', v)} placeholder="VD: BS. Nguyễn Văn A" placeholderTextColor="#94A3B8" />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
   );
 };
 
@@ -268,10 +193,8 @@ const PatientRecordsScreen = ({ navigation }) => {
   const isDesktop = width > 768;
   const [search, setSearch] = useState('');
   const [expandedVisit, setExpandedVisit] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
 
-  const { visits, identity, loading, error, reload, addVisit, removeVisit, uploadDoc, saveManualDoc, removeDoc } =
-    usePatientRecords();
+  const { visits, identity, loading, error, reload } = usePatientRecords();
 
   const filtered = visits.filter(
     (v) =>
@@ -289,9 +212,6 @@ const PatientRecordsScreen = ({ navigation }) => {
       patientId: identity?.userId || identity?._id || '',
       doc: { ...slot },
       savedDocs: savedDocs || [],
-      onUpload: uploadDoc,
-      onSaveManual: saveManualDoc,
-      onDelete: removeDoc,
     });
   };
 
@@ -395,7 +315,7 @@ const PatientRecordsScreen = ({ navigation }) => {
               <Text style={styles.emptyIcon}>🗂️</Text>
               <Text style={styles.emptyText}>
                 {visits.length === 0
-                  ? 'Chưa có lượt khám nào.\nNhấn "+ Thêm lượt khám" để bắt đầu.'
+                  ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
                   : 'Không tìm thấy lượt khám phù hợp.'}
               </Text>
             </View>
@@ -414,32 +334,22 @@ const PatientRecordsScreen = ({ navigation }) => {
                     expanded={expandedVisit === visit._id}
                     onToggle={() => setExpandedVisit(expandedVisit === visit._id ? null : visit._id)}
                     onDocPress={handleDocPress}
-                    onDeleteDoc={removeDoc}
-                    onDelete={() => removeVisit(visit._id)}
                   />
                 </View>
               </View>
             ))}
           </View>
 
-          <TouchableOpacity style={styles.addVisitBtn} onPress={() => setShowAddModal(true)}>
-            <Text style={styles.addVisitBtnText}>+ Thêm lượt khám mới</Text>
-          </TouchableOpacity>
-
           <View style={styles.infoNote}>
             <Text style={styles.infoNoteIcon}>ℹ️</Text>
             <Text style={styles.infoNoteText}>
-              Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Không thay thế EMR và không dùng để kê toa hay chẩn đoán.
+              Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>
           </View>
         </ScrollView>
-
-        <AddVisitModal visible={showAddModal} onClose={() => setShowAddModal(false)} onSubmit={addVisit} />
       </SafeAreaView>
     </ResponsiveLayout>
   );
 };
-
-;
 
 export default PatientRecordsScreen;
