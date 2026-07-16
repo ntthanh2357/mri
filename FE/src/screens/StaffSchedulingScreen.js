@@ -14,12 +14,13 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
+import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react';
 
 const SHIFT_LABELS = {
-  'sáng': '🌅 Ca Sáng',
-  'chiều': '☀️ Ca Chiều',
-  'tối': '🌙 Ca Tối',
-  'cả ngày': '🕒 Cả Ngày',
+  'sáng': 'Ca Sáng',
+  'chiều': 'Ca Chiều',
+  'tối': 'Ca Tối',
+  'cả ngày': 'Cả Ngày',
 };
 
 const SHIFT_COLORS = {
@@ -435,9 +436,12 @@ export default function StaffSchedulingScreen({ navigation }) {
                 style={[styles.tabButton, activeTab === 'weekly' && styles.tabButtonActive]}
                 onPress={() => setActiveTab('weekly')}
               >
-                <Text style={[styles.tabText, activeTab === 'weekly' && styles.tabTextActive]}>
-                  🗓️ Toàn bộ thời khóa biểu
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Calendar size={14} color={activeTab === 'weekly' ? '#15803D' : '#64748B'} />
+                  <Text style={[styles.tabText, activeTab === 'weekly' && styles.tabTextActive]}>
+                    Toàn bộ thời khóa biểu
+                  </Text>
+                </View>
               </TouchableOpacity>
             )}
             
@@ -446,9 +450,12 @@ export default function StaffSchedulingScreen({ navigation }) {
                 style={[styles.tabButton, activeTab === 'my-schedule' && styles.tabButtonActive]}
                 onPress={() => setActiveTab('my-schedule')}
               >
-                <Text style={[styles.tabText, activeTab === 'my-schedule' && styles.tabTextActive]}>
-                  👤 Lịch làm của tôi
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <User size={14} color={activeTab === 'my-schedule' ? '#15803D' : '#64748B'} />
+                  <Text style={[styles.tabText, activeTab === 'my-schedule' && styles.tabTextActive]}>
+                    Lịch làm của tôi
+                  </Text>
+                </View>
               </TouchableOpacity>
             )}
 
@@ -456,9 +463,12 @@ export default function StaffSchedulingScreen({ navigation }) {
               style={[styles.tabButton, activeTab === 'swap' && styles.tabButtonActive]}
               onPress={() => setActiveTab('swap')}
             >
-              <Text style={[styles.tabText, activeTab === 'swap' && styles.tabTextActive]}>
-                🔄 Yêu cầu đổi ca
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <RefreshCw size={14} color={activeTab === 'swap' ? '#15803D' : '#64748B'} />
+                <Text style={[styles.tabText, activeTab === 'swap' && styles.tabTextActive]}>
+                  Yêu cầu đổi ca
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -466,12 +476,14 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'weekly' && (
             <View style={styles.card}>
               <View style={styles.weekNavRow}>
-                <TouchableOpacity style={styles.navBtn} onPress={handlePrevWeek}>
-                  <Text style={styles.navBtnText}>◀ Tuần trước</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handlePrevWeek}>
+                  <ChevronLeft size={14} color="#15803D" />
+                  <Text style={styles.navBtnText}>Tuần trước</Text>
                 </TouchableOpacity>
                 <Text style={styles.weekRangeTitle}>{formatWeekRange()}</Text>
-                <TouchableOpacity style={styles.navBtn} onPress={handleNextWeek}>
-                  <Text style={styles.navBtnText}>Tuần sau ▶</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleNextWeek}>
+                  <Text style={styles.navBtnText}>Tuần sau</Text>
+                  <ChevronRight size={14} color="#15803D" />
                 </TouchableOpacity>
               </View>
 
@@ -670,10 +682,11 @@ export default function StaffSchedulingScreen({ navigation }) {
                                   ) : null}
 
                                   <TouchableOpacity
-                                    style={styles.btnSwapRequest}
+                                    style={[styles.btnSwapRequest, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}
                                     onPress={() => handleOpenSwapModal(sched)}
                                   >
-                                    <Text style={styles.btnSwapText}>🔄 Yêu cầu đổi ca làm việc</Text>
+                                    <RefreshCw size={12} color="#15803D" />
+                                    <Text style={styles.btnSwapText}>Yêu cầu đổi ca làm việc</Text>
                                   </TouchableOpacity>
                                 </View>
                               );
@@ -696,7 +709,10 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'swap' && (
             <View style={styles.card}>
               <View style={styles.listHeader}>
-                <Text style={styles.cardTitle}>🔄 Phê duyệt yêu cầu đổi ca trực</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <RefreshCw size={16} color="#15803D" />
+                  <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Phê duyệt yêu cầu đổi ca trực</Text>
+                </View>
                 <Text style={styles.cardSub}>
                   {isHospitalAdmin
                     ? 'Danh sách các đề xuất đổi hoặc bàn giao ca làm việc cần quản lý phê duyệt.'
@@ -716,9 +732,12 @@ export default function StaffSchedulingScreen({ navigation }) {
                     return (
                       <View key={req._id} style={styles.requestCard}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.reqHeader}>
-                            🧑‍⚕️ {req.requesterId?.profile?.name || 'Nhân sự'} ({getRoleLabel(req.requesterId?.role)})
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <User size={14} color="#475569" />
+                            <Text style={styles.reqHeader}>
+                              {req.requesterId?.profile?.name || 'Nhân sự'} ({getRoleLabel(req.requesterId?.role)})
+                            </Text>
+                          </View>
                           <Text style={styles.reqDetails}>
                             • Muốn đổi ca:{' '}
                             <Text style={{ fontWeight: 'bold' }}>

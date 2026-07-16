@@ -275,11 +275,13 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   // Translate coordinates mapping box width
   const translateY = scanAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-140, 140],
+    outputRange: [-190, 190],
   });
 
+  const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue_examQueue';
+
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="DoctorWorkQueue">
+    <ResponsiveLayout navigation={navigation} activeRoute={targetActiveRoute}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>

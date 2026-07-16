@@ -64,11 +64,32 @@ export const getPatients = async (req, res) => {
     if (!req.user?.hospitalId) {
       return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào. Không thể truy xuất danh sách bệnh nhân.", 403);
     }
-    const query = { role: "patient", hospitalId: req.user.hospitalId };
+
+    // [FIX] Tìm bệnh nhân thuộc bệnh viện này HOẶC bệnh nhân B2C chưa được gán viện (hospitalId = null)
+    const query = {
+      role: "patient",
+      $or: [
+        { hospitalId: req.user.hospitalId },
+        { hospitalId: null },
+        { hospitalId: { $exists: false } }
+      ]
+    };
     
     // [BUG FIX] Hỗ trợ tìm kiếm liên viện để chuyển tuyến
     if (req.query.search) {
-      delete query.hospitalId; // Bỏ giới hạn bệnh viện nếu đang search (chuyển tuyến)
+      query.$and = [
+        {
+          $or: [
+            { "profile.medicalId": new RegExp(req.query.search, "i") },
+            { email: new RegExp(req.query.search, "i") },
+            { "profile.phone": new RegExp(req.query.search, "i") },
+            { "profile.name": new RegExp(req.query.search, "i") },
+            { "profile.fullName": new RegExp(req.query.search, "i") }
+          ]
+        }
+      ];
+      delete query.$or; // Khi search liên viện, bỏ giới hạn bệnh viện
+      delete query.$and;
       query.$or = [
         { "profile.medicalId": new RegExp(req.query.search, "i") },
         { email: new RegExp(req.query.search, "i") },

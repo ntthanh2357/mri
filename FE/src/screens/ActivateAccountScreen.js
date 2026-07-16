@@ -9,14 +9,23 @@ import {
   SafeAreaView,
   ScrollView,
   Modal,
+  Image,
+  Platform,
 } from 'react-native';
 import { put, setAuthToken, get } from '../services/api.service';
 
 const ROLE_LABELS = {
-  doctor: 'Bác sĩ',
+  doctor: 'Bác sĩ chuyên khoa',
   nurse: 'Điều dưỡng & Y tá',
-  technician: 'Kỹ thuật viên',
-  hospital_admin: 'Admin Bệnh viện',
+  technician: 'Kỹ thuật viên phòng MRI',
+  hospital_admin: 'Quản trị viên Bệnh viện',
+};
+
+const ROLE_COLORS = {
+  doctor: { bg: '#EEF2FF', text: '#4F46E5', label: 'Bác sĩ chuyên khoa' },
+  nurse: { bg: '#F0FDFA', text: '#0D9488', label: 'Điều dưỡng & Y tá' },
+  technician: { bg: '#FEF3C7', text: '#D97706', label: 'Kỹ thuật viên phòng MRI' },
+  hospital_admin: { bg: '#E6F4EA', text: '#047857', label: 'Quản trị viên Bệnh viện' },
 };
 
 const ActivateAccountScreen = ({ route, navigation }) => {
@@ -31,6 +40,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null);
 
   const [alert, setAlert] = useState({ visible: false, type: 'success', title: '', message: '', onClose: null });
 
@@ -66,19 +76,16 @@ const ActivateAccountScreen = ({ route, navigation }) => {
 
     setLoading(true);
     try {
-      // Gửi mật khẩu & email đăng nhập mới lên backend
       const res = await put('/auth/password', { 
         currentPassword, 
         newPassword,
         newEmail: isTempEmail ? newEmail.trim() : undefined
       });
 
-      // Lưu trữ JWT Token mới ngay lập tức
       if (res.accessToken) {
         await setAuthToken(res.accessToken);
       }
 
-      // Xác định màn hình chuyển tiếp tùy thuộc vào vai trò và trạng thái
       let destination = 'Home';
       let destParams = { user: res.user };
 
@@ -86,7 +93,6 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         try {
           const hRes = await get('/api/v1/hospital/me');
           const hStatus = hRes.hospital?.status || hRes.data?.hospital?.status;
-          // Nếu bệnh viện vừa mới được cấp (status: provisioned) -> đi đến onboarding
           if (hStatus === 'provisioned') {
             destination = 'HospitalOnboarding';
           } else {
@@ -94,7 +100,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           }
         } catch (err) {
           console.error('Lỗi kiểm tra trạng thái bệnh viện sau kích hoạt:', err);
-          destination = 'HospitalOnboarding'; // Fallback an toàn
+          destination = 'HospitalOnboarding';
         }
       } else if (res.user?.role === 'doctor' || res.user?.role === 'technician') {
         destination = 'Home';
@@ -114,7 +120,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
     }
   };
 
-  const roleLabel = ROLE_LABELS[user?.role] || user?.role || 'Nhân viên';
+  const roleInfo = ROLE_COLORS[user?.role] || { bg: '#F1F5F9', text: '#475569', label: user?.role || 'Nhân viên hệ thống' };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -122,9 +128,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
 
         {/* Brand Header */}
         <View style={styles.brandHeader}>
-          <View style={styles.logoCircle}>
-            <View style={styles.logoInner} />
-          </View>
+          <Image
+            source={require('../../assets/logo.jpg')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <View>
             <Text style={styles.brandName}>NeuroScan AI</Text>
             <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
@@ -151,8 +159,8 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             </View>
             <View style={[styles.infoRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
               <Text style={styles.infoLabel}>Vai trò truy cập:</Text>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleBadgeText}>{roleLabel}</Text>
+              <View style={[styles.roleBadge, { backgroundColor: roleInfo.bg }]}>
+                <Text style={[styles.roleBadgeText, { color: roleInfo.text }]}>{roleInfo.label}</Text>
               </View>
             </View>
           </View>
@@ -164,7 +172,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email đăng nhập chính thức *</Text>
               <Text style={styles.hint}>Nhập email thực của bạn để sử dụng đăng nhập sau này</Text>
-              <View style={styles.passwordRow}>
+              <View style={[
+                styles.passwordRow,
+                focusedInput === 'newEmail' ? styles.passwordRowFocused : null
+              ]}>
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="vidu@neuroscan.com"
@@ -173,6 +184,8 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                   onChangeText={setNewEmail}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  onFocus={() => setFocusedInput('newEmail')}
+                  onBlur={() => setFocusedInput(null)}
                 />
               </View>
             </View>
@@ -182,7 +195,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Mật khẩu tạm thời *</Text>
             <Text style={styles.hint}>Mật khẩu do Admin cấp cho bạn lúc đầu</Text>
-            <View style={styles.passwordRow}>
+            <View style={[
+              styles.passwordRow,
+              focusedInput === 'currentPassword' ? styles.passwordRowFocused : null
+            ]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Nhập mật khẩu tạm thời"
@@ -191,9 +207,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 autoCapitalize="none"
+                onFocus={() => setFocusedInput('currentPassword')}
+                onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowCurrent(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showCurrent ? '🙈' : '👁️'}</Text>
+                <Text style={styles.eyeIcon}>{showCurrent ? '🔒' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -202,7 +220,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Mật khẩu mới *</Text>
             <Text style={styles.hint}>Tối thiểu 6 ký tự bảo mật</Text>
-            <View style={styles.passwordRow}>
+            <View style={[
+              styles.passwordRow,
+              focusedInput === 'newPassword' ? styles.passwordRowFocused : null
+            ]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Đặt mật khẩu mới của bạn"
@@ -211,9 +232,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 value={newPassword}
                 onChangeText={setNewPassword}
                 autoCapitalize="none"
+                onFocus={() => setFocusedInput('newPassword')}
+                onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowNew(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showNew ? '🙈' : '👁️'}</Text>
+                <Text style={styles.eyeIcon}>{showNew ? '🔒' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -221,7 +244,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           {/* Confirm password */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Xác nhận mật khẩu mới *</Text>
-            <View style={styles.passwordRow}>
+            <View style={[
+              styles.passwordRow,
+              focusedInput === 'confirmPassword' ? styles.passwordRowFocused : null
+            ]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Nhập lại mật khẩu mới"
@@ -230,9 +256,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 autoCapitalize="none"
+                onFocus={() => setFocusedInput('confirmPassword')}
+                onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowConfirm(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showConfirm ? '🙈' : '👁️'}</Text>
+                <Text style={styles.eyeIcon}>{showConfirm ? '🔒' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -315,20 +343,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  logoCircle: {
+  logoImage: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#15803D',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: 10,
-  },
-  logoInner: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
   },
   brandName: {
     fontSize: 18,
@@ -347,8 +366,8 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 24,
+    padding: 28,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
@@ -359,18 +378,18 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   lockBadge: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#E6F4EA',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#BBF7D0',
+    borderWidth: 1.5,
+    borderColor: '#A3E635',
   },
   lockEmoji: { fontSize: 24 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
@@ -394,8 +413,8 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
   infoValue: { fontSize: 12, color: '#0F172A', fontWeight: 'bold' },
-  roleBadge: { backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  roleBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#166534' },
+  roleBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
+  roleBadgeText: { fontSize: 11, fontWeight: 'bold' },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
@@ -414,10 +433,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease',
+      }
+    }),
+  },
+  passwordRowFocused: {
+    borderColor: '#047857',
+    borderWidth: 2,
+    ...Platform.select({
+      web: {
+        outline: 'none',
+        boxShadow: '0 0 0 3px rgba(4, 120, 87, 0.15)',
+      }
+    }),
   },
   passwordInput: { flex: 1, height: 48, paddingHorizontal: 14, fontSize: 14, color: '#0F172A' },
   eyeBtn: { padding: 12 },
-  eyeIcon: { fontSize: 18 },
+  eyeIcon: { fontSize: 16, color: '#64748B' },
   strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -8, marginBottom: 16 },
   strengthBar: { height: 4, width: 60, borderRadius: 2 },
   strengthText: { fontSize: 11, fontWeight: '600' },

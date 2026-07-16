@@ -59,7 +59,7 @@ export async function apiRequest(path, options) {
 
   if (response.status === 401) {
     await clearToken();
-    navigateTo('Login');
+    navigateTo('Welcome');
     // Resolve silently — caller does not need to handle this case
     return undefined;
   }

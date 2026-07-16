@@ -21,6 +21,7 @@ const STATUS_CONFIG = {
 };
 
 const DoctorWorkQueueScreen = ({ navigation, route }) => {
+  const currentMode = route?.params?.tab || 'examQueue';
   const [user, setUser] = useState(route?.params?.user || null);
   const [visits, setVisits] = useState([]);
   const [technicians, setTechnicians] = useState([]);
@@ -50,7 +51,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [currentMode]);
+
+  // [FIX] Re-fetch when navigated back from ImagingResultScreen with refresh flag
+  useEffect(() => {
+    if (route.params?.refresh) {
+      fetchData();
+    }
+  }, [route.params?.refresh]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -71,7 +79,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const openMriModal = (visit) => {
     setSelectedVisit(visit);
     setTechnicianId('');
-    setRegion('');
+    setRegion('Não bộ');
     setInstructions('');
     setRequestAi(true);
     setMriModal(true);
@@ -266,8 +274,24 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     return `${Config.API_URL}${url}`;
   };
 
-  const activeVisits = visits.filter(v => !['hoàn tất', 'đã đóng'].includes(v.status));
-  const doneVisits = visits.filter(v => ['hoàn tất', 'đã đóng'].includes(v.status));
+
+  const activeVisits = visits.filter(v => {
+    if (['hoàn tất', 'đã đóng'].includes(v.status)) return false;
+    if (currentMode === 'mriQueue') {
+      return ['chờ chụp', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
+    } else {
+      return ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status);
+    }
+  });
+
+  const doneVisits = visits.filter(v => {
+    if (!['hoàn tất', 'đã đóng'].includes(v.status)) return false;
+    if (currentMode === 'mriQueue') {
+      return !!v.mriOrder?.region;
+    } else {
+      return !v.mriOrder?.region;
+    }
+  });
 
   const isNurse = user?.role === 'nurse' || user?.role === 'receptionist';
 
@@ -352,7 +376,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                   visitId: v._id,
                   resultId: ridStr,
                   imagingResultId: ridStr,
-                  activeRoute: 'DoctorWorkQueue',
+                  activeRoute: `DoctorWorkQueue_${currentMode}`,
                   visitStatus: v.status,
                 });
               }}
@@ -433,7 +457,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : 'Hàng Đợi Khám';
 
   return (
-    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute="DoctorWorkQueue">
+    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[
@@ -478,7 +502,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             {/* Vùng chụp */}
             <Text style={styles.fieldLabel}>Vùng Chụp *</Text>
             <View style={styles.chipRow}>
-              {['Não bộ', 'Tủy sống cổ', 'Tủy sống thắt lưng', 'Toàn thân'].map(r => (
+              {['Não bộ'].map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.chip, region === r && styles.chipActive]}

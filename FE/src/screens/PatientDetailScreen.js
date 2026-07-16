@@ -151,13 +151,31 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
       setLabOrders(ordersData.data || []);
       
-      // 5. Lấy danh sách phim MRI/CT
+      // 5. Lấy danh sách phim MRI/CT — thử cả 2 cách: theo medicalId và theo patientId
       try {
-        const pId = foundPatient?.profile?.medicalId || targetPatientId;
-        const imagingData = await get(`/api/v1/imaging/patient/${pId}`);
-        if (imagingData && imagingData.success) {
-          setImagingResults(imagingData.data || []);
+        const medId = foundPatient?.profile?.medicalId;
+        let allImaging = [];
+
+        if (medId) {
+          // Query chính: tìm theo medicalId (chuỗi mã y tế)
+          const imagingByMedId = await get(`/api/v1/imaging/patient/${medId}`);
+          if (imagingByMedId?.success) {
+            allImaging = imagingByMedId.data || [];
+          }
         }
+
+        // Fallback/bổ sung: tìm theo patientId (ObjectId) — dùng cho KTV tạo phim mà bệnh nhân chưa có medicalId
+        try {
+          const imagingByPatient = await get(`/api/v1/imaging/by-patient/${targetPatientId}`);
+          if (imagingByPatient?.success && imagingByPatient.data?.length > 0) {
+            // Merge: chỉ thêm các bản ghi chưa có trong allImaging
+            const existingIds = new Set(allImaging.map(r => r._id));
+            const extras = imagingByPatient.data.filter(r => !existingIds.has(r._id));
+            allImaging = [...allImaging, ...extras];
+          }
+        } catch (_) { /* endpoint này có thể chưa tồn tại */ }
+
+        setImagingResults(allImaging);
       } catch (err) {
         console.warn('Lỗi tải phim MRI:', err);
       }

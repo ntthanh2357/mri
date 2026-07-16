@@ -47,7 +47,7 @@ export default StyleSheet.create({
     padding: 16,
   },
   scrollContainerDesktop: {
-    maxWidth: 900,
+    maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
   },
@@ -75,7 +75,7 @@ export default StyleSheet.create({
     flex: 1,
   },
   scanPreviewBox: {
-    height: 300,
+    height: 400,
     backgroundColor: '#0F172A',
     borderRadius: 12,
     borderWidth: 1,
@@ -196,7 +196,7 @@ export default StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   imgViewer: {
-    height: 300,
+    height: 400,
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',

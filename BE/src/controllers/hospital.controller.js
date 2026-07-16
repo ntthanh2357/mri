@@ -9,6 +9,17 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const removeVietnameseTones = (str) => {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9-_]/g, "");
+};
+
 // GET /api/v1/hospital/me — hospital_admin xem thông tin bệnh viện của mình
 export const getMyHospital = async (req, res) => {
   try {
@@ -206,8 +217,19 @@ export const uploadLicenseFile = async (req, res) => {
 
     let fileUrl;
     try {
-      fileUrl = await uploadToGCS(req.file.buffer, req.file.originalname, req.file.mimetype, "licenses");
-    } catch {
+      const { getOrCreateLicensesParentFolder, uploadToDrive } = await import("../config/googleDrive.js");
+      const parentFolderId = await getOrCreateLicensesParentFolder();
+      
+      const hospital = await Hospital.findById(hospitalId).select("name").lean();
+      const hospitalName = hospital ? hospital.name : "Hospital";
+      const fileExt = path.extname(req.file.originalname) || ".pdf";
+      const sanitizedHospitalName = removeVietnameseTones(hospitalName);
+      const customFileName = `GPKD_${sanitizedHospitalName}${fileExt}`;
+      
+      const driveResult = await uploadToDrive(req.file.buffer, customFileName, req.file.mimetype, parentFolderId);
+      fileUrl = driveResult.downloadUrl || driveResult.webViewLink;
+    } catch (driveErr) {
+      console.warn("⚠️ Google Drive upload for license failed, falling back to local:", driveErr.message);
       // Fallback: save locally
       const uploadsDir = path.resolve(__dirname, "../../uploads/licenses");
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });

@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { bucket } from "../config/firebase.js";
-import { uploadMetadataBackup } from "../config/googleDrive.js";
+import { uploadMetadataBackup, uploadToDrive } from "../config/googleDrive.js";
 import { createNotificationInternal } from "./notification.controller.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,6 +152,42 @@ export const createImagingResult = async (req, res) => {
   }
 };
 
+// @desc    Get imaging results by patient User ID (ObjectId) — fallback for patients without medicalId
+// @route   GET /api/v1/imaging/by-patient/:patientId
+// @access  Private (Doctor, Admin, Technician, Nurse)
+export const getResultsByPatientUserId = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician" && req.user.role !== "nurse" && req.user.role !== "receptionist") {
+      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    }
+    const { patientId } = req.params;
+    if (!patientId) {
+      return errorResponse(res, "Thiếu ID bệnh nhân.", 400);
+    }
+
+    // 1. Tìm tất cả visits của bệnh nhân này có imagingResultId
+    const visits = await Visit.find({
+      patientId,
+      "mriOrder.imagingResultId": { $exists: true, $ne: null }
+    }).select("mriOrder.imagingResultId").lean();
+
+    if (!visits || visits.length === 0) {
+      return successResponse(res, [], "Bệnh nhân chưa có phim chụp nào.");
+    }
+
+    const resultIds = visits
+      .map(v => v.mriOrder?.imagingResultId)
+      .filter(Boolean);
+
+    // 2. Lấy các ImagingResult tương ứng
+    const results = await ImagingResult.find({ _id: { $in: resultIds } }).sort({ reportDate: -1 });
+    return successResponse(res, results, `Lấy danh sách phim chụp theo patientId thành công.`);
+  } catch (error) {
+    console.error("Lỗi khi lấy phim theo patientId:", error);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+  }
+};
+
 // @desc    Get all imaging results for a specific patient by medical ID
 // @route   GET /api/v1/imaging/patient/:medicalId
 // @access  Private (Doctor, Admin only)
@@ -192,6 +228,7 @@ export const uploadImagingImage = async (req, res) => {
     const ext = fileName ? path.extname(fileName) : ".png";
 
     // 1. Try uploading to Firebase Storage if configured
+    let publicUrl = null;
     if (bucket) {
       try {
         const folder = (imagingType && imagingType.toUpperCase().includes('CT')) ? 'CT' : 'MRI';
@@ -205,27 +242,60 @@ export const uploadImagingImage = async (req, res) => {
         });
         
         await file.makePublic();
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
-        
-        return successResponse(res, { imageUrl: publicUrl }, "Tải ảnh lên Firebase Storage thành công.");
+        publicUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
       } catch (fbError) {
         console.warn("Tải lên Firebase Storage thất bại, chuyển sang lưu trữ cục bộ:", fbError);
       }
     }
 
-    // 2. Fallback to Local Storage
-    const uploadsDir = path.join(__dirname, "../../uploads");
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    if (!publicUrl) {
+      // 2. Fallback to Local Storage
+      const uploadsDir = path.join(__dirname, "../../uploads");
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const newFileName = `uploaded_${Date.now()}_${Math.floor(Math.random() * 10000)}${ext}`;
+      const filePath = path.join(uploadsDir, newFileName);
+      fs.writeFileSync(filePath, imageBuffer);
+      publicUrl = `/uploads/${newFileName}`;
     }
 
-    const newFileName = `uploaded_${Date.now()}_${Math.floor(Math.random() * 10000)}${ext}`;
-    const filePath = path.join(uploadsDir, newFileName);
+    // 3. Backup scan image to hospital's Google Drive (01_Original_Scans folder)
+    try {
+      // Resolve hospitalId: from JWT, or from User DB (in case JWT is old)
+      let resolvedHospitalId = req.user?.hospitalId;
+      if (!resolvedHospitalId) {
+        // Fallback: re-fetch user from DB to get fresh hospitalId
+        const { User: UserModel } = await import("../models/user.model.js");
+        const freshUser = await UserModel.findById(req.user?.id).select("hospitalId").lean();
+        resolvedHospitalId = freshUser?.hospitalId;
+        if (resolvedHospitalId) {
+          console.log(`[Drive] Resolved hospitalId from DB: ${resolvedHospitalId}`);
+        }
+      }
 
-    fs.writeFileSync(filePath, imageBuffer);
+      if (!resolvedHospitalId) {
+        console.warn(`⚠️ [Drive] Bỏ qua backup ảnh gốc: user ${req.user?.id} (role=${req.user?.role}) không có hospitalId.`);
+      } else {
+        const { Hospital } = await import("../models/hospital.model.js");
+        const hospital = await Hospital.findById(resolvedHospitalId).lean();
+        console.log(`[Drive] Hospital lookup: ${hospital?.name}, originalScansId=${hospital?.subFolders?.originalScansId || '(empty)'}`);
+        const scansFolderId = hospital?.subFolders?.originalScansId;
+        if (!scansFolderId) {
+          console.warn(`⚠️ [Drive] Bệnh viện "${hospital?.name}" chưa cấu hình thư mục 01_Original_Scans. Chạy setup Drive cho bệnh viện này.`);
+        } else {
+          const scanMime = ext === ".png" ? "image/png" : "image/jpeg";
+          const driveResult = await uploadToDrive(imageBuffer, fileName || `scan${ext}`, scanMime, scansFolderId);
+          console.log(`✅ [Drive] Ảnh MRI gốc đã lưu vào 01_Original_Scans: ${driveResult.webViewLink}`);
+        }
+      }
+    } catch (driveErr) {
+      console.warn("⚠️ [Drive] Không thể backup ảnh phim lên Google Drive:", driveErr.message);
+      // Non-blocking: don't fail the upload if Drive is unavailable
+    }
 
-    const relativeUrl = `/uploads/${newFileName}`;
-    return successResponse(res, { imageUrl: relativeUrl }, "Tải ảnh lên thành công (lưu trữ cục bộ).");
+    return successResponse(res, { imageUrl: publicUrl }, "Tải ảnh lên thành công.");
   } catch (error) {
     console.error("Lỗi khi tải ảnh lên:", error);
     return errorResponse(res, "Có lỗi xảy ra khi lưu ảnh.", 500);
@@ -329,6 +399,39 @@ export const analyzeImagingResultAI = async (req, res) => {
             fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
             aiData.annotated_image = `/uploads/${localName}`;
             console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
+          }
+
+          // [DRIVE] Lưu ảnh AI heatmap vào thư mục 02_AI_Predictions
+          try {
+            // Resolve hospitalId with DB fallback
+            let resolvedHospId = req.user?.hospitalId;
+            if (!resolvedHospId) {
+              const { User: UserModel } = await import("../models/user.model.js");
+              const freshUser = await UserModel.findById(req.user?.id).select("hospitalId").lean();
+              resolvedHospId = freshUser?.hospitalId;
+            }
+
+            if (!resolvedHospId) {
+              console.warn(`⚠️ [Drive] Bỏ qua lưu heatmap: user ${req.user?.id} không có hospitalId.`);
+            } else {
+              const { Hospital } = await import("../models/hospital.model.js");
+              const hosp = await Hospital.findById(resolvedHospId).lean();
+              console.log(`[Drive] Hospital for AI heatmap: ${hosp?.name}, aiPredictionsId=${hosp?.subFolders?.aiPredictionsId || '(empty)'}`);
+              const aiPredFolderId = hosp?.subFolders?.aiPredictionsId;
+              if (!aiPredFolderId) {
+                console.warn(`⚠️ [Drive] Bệnh viện "${hosp?.name}" chưa cấu hình 02_AI_Predictions.`);
+              } else {
+                await uploadToDrive(
+                  imageBuffer,
+                  `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`,
+                  'image/jpeg',
+                  aiPredFolderId
+                );
+                console.log(`✅ [Drive] Heatmap AI đã lưu vào 02_AI_Predictions (${hosp?.name})`);
+              }
+            }
+          } catch (driveErr) {
+            console.warn('⚠️ [Drive] Không thể lưu heatmap vào 02_AI_Predictions:', driveErr.message);
           }
         }
       } catch (uploadErr) {
@@ -455,7 +558,28 @@ export const feedbackImagingResultAI = async (req, res) => {
 
     const aiData = await aiResponse.json();
 
-    // Tự động sao lưu tọa độ vẽ chỉnh sửa (Annotation Bounding Box) của bác sĩ lên Google Drive
+    // [DRIVE] Lưu ảnh hiệu chỉnh của bác sĩ vào thư mục 03_Doctor_Revisions
+    try {
+      if (req.user?.hospitalId) {
+        const { Hospital } = await import("../models/hospital.model.js");
+        const hosp = await Hospital.findById(req.user.hospitalId).lean();
+        const docRevFolderId = hosp?.subFolders?.doctorRevisionsId;
+        if (docRevFolderId) {
+          const corrMime = ext === '.png' ? 'image/png' : 'image/jpeg';
+          await uploadToDrive(
+            fileBuffer,
+            `doctor_correction_${correct_class}_${Date.now()}${ext}`,
+            corrMime,
+            docRevFolderId
+          );
+          console.log(`✅ [Drive] Correction image saved to 03_Doctor_Revisions (class: ${correct_class})`);
+        }
+      }
+    } catch (driveErr) {
+      console.warn('⚠️ [Drive] Không thể lưu ảnh hiệu chỉnh vào 03_Doctor_Revisions:', driveErr.message);
+    }
+
+    // Sao lưu metadata tọa độ vẽ vào thư mục 05_Metadata_Backups
     try {
       const metadata = {
         correctClass: correct_class,
@@ -467,7 +591,7 @@ export const feedbackImagingResultAI = async (req, res) => {
       };
       await uploadMetadataBackup(metadata, req.user.hospitalId, `feedback_coords_${correct_class}`);
     } catch (backupError) {
-      console.warn("⚠️ Không thể sao lưu file metadata vẽ lên Google Drive:", backupError.message);
+      console.warn("⚠️ Không thể sao lưu metadata vẽ lên 05_Metadata_Backups:", backupError.message);
     }
 
     return successResponse(res, aiData, "Ghi nhận phản hồi và lưu ca bệnh thành công.");
@@ -636,10 +760,14 @@ export const createKtvImagingResult = async (req, res) => {
     const doctor = await User.findById(visit.doctorId);
     const doctorName = doctor?.profile?.fullName || doctor?.profile?.name || doctor?.email || "Bác sĩ chỉ định";
 
+    // [FIX-BUG3] Ưu tiên medicalId từ profile, chỉ tự sinh khi thực sự không có
+    const patientMedicalId = patient.profile?.medicalId
+      || `BN${patient._id.toString().slice(-6).toUpperCase()}`;
+
     // Tạo bản ghi ImagingResult mới với các trường bắt buộc
     const imagingResult = new ImagingResult({
       hospitalId: req.user.hospitalId || visit.hospitalId,
-      medicalId: patient.profile?.medicalId || "BN" + patient._id.toString().substring(18),
+      medicalId: patientMedicalId,
       patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
       birthYear: patient.profile?.birthYear || 1990,
       gender: patient.profile?.gender === "Nữ" ? "Nữ" : patient.profile?.gender === "Khác" ? "Khác" : "Nam",
@@ -721,7 +849,7 @@ export const updateImagingResult = async (req, res) => {
 
     await result.save();
 
-    // Tự động sao lưu chẩn đoán của bác sĩ dạng JSON lên Google Drive
+    // [DRIVE] Lưu báo cáo chẩn đoán vào thư mục 04_Patient_Reports + 05_Metadata_Backups
     try {
       const reportBackup = {
         imagingResultId: result._id,
@@ -736,6 +864,27 @@ export const updateImagingResult = async (req, res) => {
         updatedByEmail: req.user.email
       };
       const targetHospitalId = req.user.hospitalId || result.hospitalId;
+
+      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports
+      try {
+        const { Hospital } = await import("../models/hospital.model.js");
+        const hosp = await Hospital.findById(targetHospitalId).lean();
+        const reportsFolderId = hosp?.subFolders?.patientReportsId;
+        if (reportsFolderId) {
+          const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), 'utf-8');
+          await uploadToDrive(
+            reportJson,
+            `report_${result.medicalId}_${Date.now()}.json`,
+            'application/json',
+            reportsFolderId
+          );
+          console.log(`✅ [Drive] Report saved to 04_Patient_Reports (patient: ${result.medicalId})`);
+        }
+      } catch (rptErr) {
+        console.warn('⚠️ [Drive] Không thể lưu báo cáo vào 04_Patient_Reports:', rptErr.message);
+      }
+
+      // Cũng lưu bản sao vào 05_Metadata_Backups
       await uploadMetadataBackup(reportBackup, targetHospitalId, `report_backup_${result.medicalId}`);
     } catch (backupError) {
       console.warn("⚠️ Không thể sao lưu bản ghi chẩn đoán lên Google Drive:", backupError.message);

@@ -14,6 +14,9 @@ import {
   phoneLoginVerify,
   downgradeToBasic,
   cancelPremiumRenew,
+  updateProfile,
+  verifyActivation,
+  resendActivation,
 } from "../controllers/auth.controller.js";
 import { protect, optionalProtect } from "../middlewares/auth.middleware.js";
 
@@ -25,12 +28,15 @@ router.post("/refresh", refresh);
 router.post("/firebase-login", firebaseLogin);
 router.post("/sso/:provider", ssoLogin);
 router.get("/me", protect, getMe);
+router.put("/profile", protect, updateProfile);
 
 // Endpoints
 router.post("/logout/all", protect, logoutAll);
 router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
+router.post("/verify-activation", verifyActivation);
+router.post("/resend-activation", resendActivation);
 
 // Phone login endpoints
 router.post("/phone-login-request", phoneLoginRequest);

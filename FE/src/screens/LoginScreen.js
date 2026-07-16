@@ -32,6 +32,17 @@ const LoginScreen = ({ navigation }) => {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
+  // Role, Focus, Inline error, and 2FA states
+  const [loginRole, setLoginRole] = useState('patient'); // 'patient' or 'staff'
+  const [focusedInput, setFocusedInput] = useState(null);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [rememberMe, setRememberMe] = useState(true);
+
   // Forgot password states
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -138,43 +149,117 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
+    setEmailError('');
+    setPasswordError('');
+
     if (loginMethod === 'otp') {
+      if (!email) {
+        setEmailError('Vui lòng nhập số điện thoại để nhận mã OTP.');
+        return;
+      }
+      const phoneRegex = /^[0-9]{10}$/;
+      if (!phoneRegex.test(email.trim())) {
+        setEmailError('Số điện thoại đăng nhập bằng OTP phải chứa đúng 10 chữ số.');
+        return;
+      }
+
       if (!otpSent) {
         await handleSendOtp();
       } else {
+        if (!otpCode) {
+          setPasswordError('Vui lòng nhập mã OTP.');
+          return;
+        }
         await handleVerifyLoginOtp();
       }
       return;
     }
 
-    if (!email || !password) {
-      showAlert('info', 'Thông báo', 'Vui lòng nhập đầy đủ email/SĐT và mật khẩu.');
+    if (!email) {
+      if (loginRole === 'patient') {
+        setEmailError('Vui lòng nhập Số điện thoại, Email hoặc CCCD.');
+      } else {
+        setEmailError('Vui lòng nhập Mã nhân sự hoặc Email nội bộ.');
+      }
       return;
     }
+    if (!password) {
+      setPasswordError('Vui lòng nhập mật khẩu.');
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await post('/auth/login', { email, password });
-      await setAuthToken(data.accessToken);
 
       // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
       if (data.requiresActivation) {
+        await setAuthToken(data.accessToken);
         navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
         return;
       }
 
+      // If logging in as staff/doctor, trigger 2FA OTP simulation
+      if (loginRole === 'staff' || (data.user && data.user.role !== 'patient')) {
+        setTempLoginResponse(data);
+        setShowTwoFactor(true);
+      } else {
+        await setAuthToken(data.accessToken);
+        const destination = data.user && data.user.role === 'admin'
+          ? 'AdminBackoffice'
+          : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+        showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: destination, params: { user: data.user } }],
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
+      if (errMsg.toLowerCase().includes('không chính xác') || errMsg.toLowerCase().includes('không tồn tại')) {
+        setPasswordError('Thông tin đăng nhập chưa chính xác, bạn vui lòng kiểm tra lại nhé.');
+      } else {
+        setPasswordError(errMsg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2Factor = async () => {
+    setTwoFactorError('');
+    if (!twoFactorCode) {
+      setTwoFactorError('Vui lòng nhập mã xác thực OTP.');
+      return;
+    }
+    if (twoFactorCode.length !== 6) {
+      setTwoFactorError('Mã OTP không hợp lệ. Vui lòng nhập đúng 6 chữ số.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Simulate network request duration
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const data = tempLoginResponse;
+      await setAuthToken(data.accessToken);
       const destination = data.user && data.user.role === 'admin'
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-      showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+
+      showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công!', () => {
+        setShowTwoFactor(false);
+        setTwoFactorCode('');
         navigation.reset({
           index: 0,
           routes: [{ name: destination, params: { user: data.user } }],
         });
       });
     } catch (error) {
-      console.error('Login error:', error);
-      const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
-      showAlert('error', 'Đăng nhập thất bại', errMsg);
+      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
     }
@@ -278,9 +363,11 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.navbarContainer}>
           {/* Logo & Brand */}
           <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
-            <View style={styles.logoCircle}>
-              <View style={styles.logoInner} />
-            </View>
+            <Image
+              source={require('../../assets/logo.jpg')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <View>
               <Text style={styles.brandName}>NeuroScan AI</Text>
               <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
@@ -340,146 +427,306 @@ const LoginScreen = ({ navigation }) => {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                {/* Title */}
-                <View style={styles.desktopTitleContainer}>
-                  <Text style={styles.desktopTitle}>Chào mừng trở lại</Text>
-                  <Text style={styles.desktopSubtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
-                </View>
+                {showTwoFactor ? (
+                  <View style={styles.desktopForm}>
+                    <View style={styles.desktopTitleContainer}>
+                      <Text style={styles.desktopTitle}>Xác thực 2 lớp (2FA)</Text>
+                      <Text style={styles.desktopSubtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
+                    </View>
 
-                {/* Method Tabs */}
-                <View style={styles.methodTabsContainer}>
-                  <TouchableOpacity
-                    style={[styles.methodTab, loginMethod === 'password' && styles.activeMethodTab]}
-                    onPress={() => {
-                      setLoginMethod('password');
-                      setOtpSent(false);
-                    }}
-                  >
-                    <Text style={[styles.methodTabText, loginMethod === 'password' && styles.activeMethodTabText]}>
-                      Mật khẩu
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.methodTab, loginMethod === 'otp' && styles.activeMethodTab]}
-                    onPress={() => {
-                      setLoginMethod('otp');
-                      setOtpSent(false);
-                    }}
-                  >
-                    <Text style={[styles.methodTabText, loginMethod === 'otp' && styles.activeMethodTabText]}>
-                      Mã OTP
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    <Text style={styles.desktopLabel}>Mã xác thực OTP (6 chữ số)</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        styles.desktopInput,
+                        { letterSpacing: 8, textAlign: 'center', fontSize: 20, fontWeight: 'bold' },
+                        focusedInput === 'twoFactor' ? styles.inputFocused : null,
+                        twoFactorError ? styles.inputError : null
+                      ]}
+                      placeholder="------"
+                      placeholderTextColor="#94A3B8"
+                      value={twoFactorCode}
+                      onChangeText={(text) => {
+                        setTwoFactorCode(text);
+                        if (twoFactorError) setTwoFactorError('');
+                      }}
+                      autoCapitalize="none"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      onFocus={() => setFocusedInput('twoFactor')}
+                      onBlur={() => setFocusedInput(null)}
+                      onSubmitEditing={handleVerify2Factor}
+                    />
+                    {twoFactorError ? <Text style={styles.inlineError}>{twoFactorError}</Text> : null}
 
-                {/* Inputs */}
-                <View style={styles.desktopForm}>
-                  <Text style={styles.desktopLabel}>
-                    {loginMethod === 'otp' ? 'Số điện thoại' : 'Số điện thoại hoặc Email'}
-                  </Text>
-                  <TextInput
-                    style={[styles.input, styles.desktopInput]}
-                    placeholder={loginMethod === 'otp' ? 'Nhập 10 số điện thoại' : 'Nhập email hoặc SĐT'}
-                    placeholderTextColor="#94A3B8"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
-                    editable={loginMethod === 'otp' ? !otpSent : true}
-                    onSubmitEditing={handleLogin}
-                  />
+                    <TouchableOpacity
+                      style={[styles.loginButton, styles.desktopLoginButton]}
+                      onPress={handleVerify2Factor}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                          <ActivityIndicator color="#FFF" size="small" />
+                          <Text style={styles.loginButtonText}>Đang thiết lập kết nối an toàn...</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
+                      )}
+                    </TouchableOpacity>
 
-                  {loginMethod === 'password' ? (
-                    <>
-                      <View style={styles.passwordHeader}>
-                        <Text style={styles.desktopLabel}>Mật khẩu</Text>
-                        <TouchableOpacity onPress={() => setShowForgotModal(true)}>
-                          <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <View style={[styles.passwordContainer, styles.desktopPasswordContainer]}>
-                        <TextInput
-                          style={[styles.passwordInput, styles.desktopPasswordInput]}
-                          placeholder="••••••••"
-                          placeholderTextColor="#94A3B8"
-                          secureTextEntry={!showPassword}
-                          value={password}
-                          onChangeText={setPassword}
-                          autoCapitalize="none"
-                          onSubmitEditing={handleLogin}
-                        />
-                        <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
-                          <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  ) : otpSent ? (
-                    <>
-                      <View style={styles.passwordHeader}>
-                        <Text style={styles.desktopLabel}>Mã xác thực OTP (Xem log ở server)</Text>
-                      </View>
-                      <View style={[styles.passwordContainer, styles.desktopPasswordContainer]}>
-                        <TextInput
-                          style={[styles.passwordInput, styles.desktopPasswordInput, { letterSpacing: 4, textAlign: 'center', fontWeight: 'bold' }]}
-                          placeholder="Nhập 6 chữ số"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="number-pad"
-                          maxLength={6}
-                          value={otpCode}
-                          onChangeText={setOtpCode}
-                          onSubmitEditing={handleLogin}
-                        />
+                    <TouchableOpacity
+                      style={[styles.homeLinkBtn, { marginTop: 12, height: 42, justifyContent: 'center', alignItems: 'center' }]}
+                      onPress={() => {
+                        setShowTwoFactor(false);
+                        setTwoFactorCode('');
+                        setTwoFactorError('');
+                      }}
+                    >
+                      <Text style={styles.homeLinkBtnText}>← Quay lại form đăng nhập</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.desktopTitleContainer}>
+                      <Text style={styles.desktopTitle}>Chào mừng trở lại</Text>
+                      <Text style={styles.desktopSubtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
+                    </View>
+
+                    {/* Role Selection Tabs */}
+                    <View style={styles.roleTabsContainer}>
+                      <TouchableOpacity
+                        style={[styles.roleTab, loginRole === 'patient' && styles.activeRoleTab]}
+                        onPress={() => {
+                          setLoginRole('patient');
+                          setEmailError('');
+                          setPasswordError('');
+                        }}
+                      >
+                        <Text style={[styles.roleTabText, loginRole === 'patient' && styles.activeRoleTabText]}>
+                          Dành cho Bệnh nhân
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.roleTab, loginRole === 'staff' && styles.activeRoleTab]}
+                        onPress={() => {
+                          setLoginRole('staff');
+                          setLoginMethod('password');
+                          setEmailError('');
+                          setPasswordError('');
+                          setOtpSent(false);
+                        }}
+                      >
+                        <Text style={[styles.roleTabText, loginRole === 'staff' && styles.activeRoleTabText]}>
+                          Bác sĩ / Nhân viên
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Method Tabs - Only show for patient */}
+                    {loginRole === 'patient' && (
+                      <View style={styles.methodTabsContainer}>
                         <TouchableOpacity
-                          style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]}
-                          onPress={() => setOtpSent(false)}
+                          style={[styles.methodTab, loginMethod === 'password' && styles.activeMethodTab]}
+                          onPress={() => {
+                            setLoginMethod('password');
+                            setEmailError('');
+                            setPasswordError('');
+                            setOtpSent(false);
+                          }}
                         >
-                          <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                          <Text style={[styles.methodTabText, loginMethod === 'password' && styles.activeMethodTabText]}>
+                            Mật khẩu
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.methodTab, loginMethod === 'otp' && styles.activeMethodTab]}
+                          onPress={() => {
+                            setLoginMethod('otp');
+                            setEmailError('');
+                            setPasswordError('');
+                            setOtpSent(false);
+                          }}
+                        >
+                          <Text style={[styles.methodTabText, loginMethod === 'otp' && styles.activeMethodTabText]}>
+                            Mã OTP
+                          </Text>
                         </TouchableOpacity>
                       </View>
-                    </>
-                  ) : null}
-
-                  {/* Login Button */}
-                  <TouchableOpacity style={[styles.loginButton, styles.desktopLoginButton]} onPress={handleLogin} disabled={loading}>
-                    {loading ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={styles.loginButtonText}>
-                        {loginMethod === 'password'
-                          ? 'Đăng nhập →'
-                          : otpSent
-                            ? 'Xác nhận & Đăng nhập →'
-                            : 'Gửi mã OTP →'}
-                      </Text>
                     )}
-                  </TouchableOpacity>
-                </View>
 
+                    {/* Inputs */}
+                    <View style={styles.desktopForm}>
+                      <Text style={styles.desktopLabel}>
+                        {loginRole === 'staff'
+                          ? 'Mã nhân sự hoặc Email nội bộ'
+                          : loginMethod === 'otp'
+                            ? 'Số điện thoại'
+                            : 'Số điện thoại, Email hoặc CCCD'}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          styles.desktopInput,
+                          focusedInput === 'email' ? styles.inputFocused : null,
+                          emailError ? styles.inputError : null
+                        ]}
+                        placeholder={
+                          loginRole === 'staff'
+                            ? 'Nhập mã nhân sự hoặc email'
+                            : loginMethod === 'otp'
+                              ? 'Nhập 10 số điện thoại'
+                              : 'Nhập SĐT, email hoặc số CCCD'
+                        }
+                        placeholderTextColor="#94A3B8"
+                        value={email}
+                        onChangeText={(text) => {
+                          setEmail(text);
+                          if (emailError) setEmailError('');
+                        }}
+                        autoCapitalize="none"
+                        keyboardType={loginRole === 'patient' && loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
+                        editable={loginMethod === 'otp' ? !otpSent : true}
+                        onFocus={() => setFocusedInput('email')}
+                        onBlur={() => setFocusedInput(null)}
+                        onSubmitEditing={handleLogin}
+                      />
+                      {emailError ? <Text style={styles.inlineError}>{emailError}</Text> : null}
 
-                {/* Divider */}
-                <View style={styles.desktopDividerContainer}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+                      {loginMethod === 'password' ? (
+                        <>
+                          <View style={styles.passwordHeader}>
+                            <Text style={styles.desktopLabel}>Mật khẩu</Text>
+                            <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.passwordContainer, styles.desktopPasswordContainer]}>
+                            <TextInput
+                              style={[
+                                styles.passwordInput,
+                                styles.desktopPasswordInput,
+                                focusedInput === 'password' ? styles.inputFocused : null,
+                                passwordError ? styles.inputError : null
+                              ]}
+                              placeholder="••••••••"
+                              placeholderTextColor="#94A3B8"
+                              secureTextEntry={!showPassword}
+                              value={password}
+                              onChangeText={(text) => {
+                                setPassword(text);
+                                if (passwordError) setPasswordError('');
+                              }}
+                              autoCapitalize="none"
+                              onFocus={() => setFocusedInput('password')}
+                              onBlur={() => setFocusedInput(null)}
+                              onSubmitEditing={handleLogin}
+                            />
+                            <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
+                              <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
+                        </>
+                      ) : otpSent ? (
+                        <>
+                          <View style={styles.passwordHeader}>
+                            <Text style={styles.desktopLabel}>Mã xác thực OTP (Xem log ở server)</Text>
+                          </View>
+                          <View style={[styles.passwordContainer, styles.desktopPasswordContainer]}>
+                            <TextInput
+                              style={[
+                                styles.passwordInput,
+                                styles.desktopPasswordInput,
+                                { letterSpacing: 4, textAlign: 'center', fontWeight: 'bold' },
+                                focusedInput === 'otp' ? styles.inputFocused : null,
+                                passwordError ? styles.inputError : null
+                              ]}
+                              placeholder="Nhập 6 chữ số"
+                              placeholderTextColor="#94A3B8"
+                              keyboardType="number-pad"
+                              maxLength={6}
+                              value={otpCode}
+                              onChangeText={(text) => {
+                                setOtpCode(text);
+                                if (passwordError) setPasswordError('');
+                              }}
+                              onFocus={() => setFocusedInput('otp')}
+                              onBlur={() => setFocusedInput(null)}
+                              onSubmitEditing={handleLogin}
+                            />
+                            <TouchableOpacity
+                              style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]}
+                              onPress={() => setOtpSent(false)}
+                            >
+                              <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
+                        </>
+                      ) : null}
 
-                {/* SSO Grid */}
-                <View style={styles.desktopSsoContainer}>
-                  <TouchableOpacity style={[styles.ssoButton, styles.desktopSsoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
-                    <Text style={styles.googleIcon}>G</Text>
-                    <Text style={styles.ssoButtonText}>Google</Text>
-                  </TouchableOpacity>
-                </View>
+                      {/* Security Remember checkbox */}
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 4 }}
+                        onPress={() => setRememberMe(!rememberMe)}
+                      >
+                        <Text style={{ fontSize: 16, color: rememberMe ? '#15803D' : '#94A3B8', marginRight: 8, fontWeight: 'bold' }}>
+                          {rememberMe ? '☑' : '☐'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
+                          Lưu thông tin đăng nhập <Text style={{ color: '#C2410C', fontWeight: '600' }}>(Không khuyến nghị trên thiết bị công cộng)</Text>
+                        </Text>
+                      </TouchableOpacity>
 
-                {/* Sign up Link */}
-                <View style={styles.desktopRegisterContainer}>
-                  <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                    <Text style={styles.registerLink}>Đăng ký ngay →</Text>
-                  </TouchableOpacity>
-                </View>
+                      {/* Login Button */}
+                      <TouchableOpacity style={[styles.loginButton, styles.desktopLoginButton]} onPress={handleLogin} disabled={loading}>
+                        {loading ? (
+                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            <ActivityIndicator color="#FFF" size="small" />
+                            <Text style={styles.loginButtonText}>Đang thiết lập kết nối an toàn...</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.loginButtonText}>
+                            {loginMethod === 'password'
+                              ? 'Đăng nhập →'
+                              : otpSent
+                                ? 'Xác nhận & Đăng nhập →'
+                                : 'Gửi mã OTP →'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
 
-                {/* Quick Demo Login */}
+                    {/* Divider */}
+                    <View style={styles.desktopDividerContainer}>
+                      <View style={styles.dividerLine} />
+                      <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+                      <View style={styles.dividerLine} />
+                    </View>
+
+                    {/* SSO Grid */}
+                    <View style={styles.desktopSsoContainer}>
+                      <TouchableOpacity style={[styles.ssoButton, styles.desktopSsoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
+                        <Text style={styles.googleIcon}>G</Text>
+                        <Text style={styles.ssoButtonText}>Google</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Sign up Link */}
+                    <View style={styles.desktopRegisterContainer}>
+                      <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+                      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                        <Text style={styles.registerLink}>Đăng ký ngay →</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {/* Hotline text helper */}
+                <Text style={styles.hotlineText}>
+                  Bạn gặp khó khăn khi đăng nhập? Gọi ngay Hotline:{' '}
+                  <Text style={styles.hotlineLink}>0236 3650 676</Text>
+                </Text>
               </ScrollView>
             </View>
           </View>
@@ -491,143 +738,299 @@ const LoginScreen = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
         >
-          {/* Title */}
-          <Text style={styles.title}>Chào mừng trở lại</Text>
-          <Text style={styles.subtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
+          {showTwoFactor ? (
+            <View style={styles.form}>
+              <Text style={styles.title}>Xác thực 2 lớp (2FA)</Text>
+              <Text style={styles.subtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
 
-          {/* Inputs */}
-          <View style={styles.form}>
-            {/* Method Tabs */}
-            <View style={styles.methodTabsContainer}>
-              <TouchableOpacity
-                style={[styles.methodTab, loginMethod === 'password' && styles.activeMethodTab]}
-                onPress={() => {
-                  setLoginMethod('password');
-                  setOtpSent(false);
+              <Text style={styles.label}>Mã xác thực OTP (6 chữ số)</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { letterSpacing: 8, textAlign: 'center', fontSize: 20, fontWeight: 'bold' },
+                  focusedInput === 'twoFactor' ? styles.inputFocused : null,
+                  twoFactorError ? styles.inputError : null
+                ]}
+                placeholder="------"
+                placeholderTextColor="#94A3B8"
+                value={twoFactorCode}
+                onChangeText={(text) => {
+                  setTwoFactorCode(text);
+                  if (twoFactorError) setTwoFactorError('');
                 }}
+                autoCapitalize="none"
+                keyboardType="number-pad"
+                maxLength={6}
+                onFocus={() => setFocusedInput('twoFactor')}
+                onBlur={() => setFocusedInput(null)}
+                onSubmitEditing={handleVerify2Factor}
+              />
+              {twoFactorError ? <Text style={styles.inlineError}>{twoFactorError}</Text> : null}
+
+              <TouchableOpacity
+                style={styles.loginButton}
+                onPress={handleVerify2Factor}
+                disabled={loading}
               >
-                <Text style={[styles.methodTabText, loginMethod === 'password' && styles.activeMethodTabText]}>
-                  Mật khẩu
-                </Text>
+                {loading ? (
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <ActivityIndicator color="#FFF" size="small" />
+                    <Text style={styles.loginButtonText}>Đang thiết lập kết nối an toàn...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
+                )}
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={[styles.methodTab, loginMethod === 'otp' && styles.activeMethodTab]}
+                style={[styles.homeLinkBtn, { marginTop: 12, height: 46, justifyContent: 'center', alignItems: 'center' }]}
                 onPress={() => {
-                  setLoginMethod('otp');
-                  setOtpSent(false);
+                  setShowTwoFactor(false);
+                  setTwoFactorCode('');
+                  setTwoFactorError('');
                 }}
               >
-                <Text style={[styles.methodTabText, loginMethod === 'otp' && styles.activeMethodTabText]}>
-                  Mã OTP
-                </Text>
+                <Text style={styles.homeLinkBtnText}>← Quay lại form đăng nhập</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            <>
+              {/* Title */}
+              <Text style={styles.title}>Chào mừng trở lại</Text>
+              <Text style={styles.subtitle}>Vui lòng nhập thông tin để truy cập hệ thống</Text>
 
-            <Text style={styles.label}>
-              {loginMethod === 'otp' ? 'Số điện thoại' : 'Số điện thoại hoặc Email'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder={loginMethod === 'otp' ? 'Nhập 10 số điện thoại' : 'Nhập email hoặc SĐT'}
-              placeholderTextColor="#94A3B8"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType={loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
-              editable={loginMethod === 'otp' ? !otpSent : true}
-              onSubmitEditing={handleLogin}
-            />
-
-            {loginMethod === 'password' ? (
-              <>
-                <View style={styles.passwordHeader}>
-                  <Text style={styles.label}>Mật khẩu</Text>
-                  <TouchableOpacity onPress={() => setShowForgotModal(true)}>
-                    <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder="••••••••"
-                    placeholderTextColor="#94A3B8"
-                    secureTextEntry={!showPassword}
-                    value={password}
-                    onChangeText={setPassword}
-                    autoCapitalize="none"
-                    onSubmitEditing={handleLogin}
-                  />
-                  <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
-                    <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : otpSent ? (
-              <>
-                <View style={styles.passwordHeader}>
-                  <Text style={styles.label}>Mã xác thực OTP (Xem log ở server)</Text>
-                </View>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={[styles.passwordInput, { letterSpacing: 4, textAlign: 'center', fontWeight: 'bold' }]}
-                    placeholder="Nhập 6 chữ số"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={otpCode}
-                    onChangeText={setOtpCode}
-                    onSubmitEditing={handleLogin}
-                  />
+              {/* Inputs */}
+              <View style={styles.form}>
+                {/* Role Selection Tabs */}
+                <View style={styles.roleTabsContainer}>
                   <TouchableOpacity
-                    style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]}
-                    onPress={() => setOtpSent(false)}
+                    style={[styles.roleTab, loginRole === 'patient' && styles.activeRoleTab]}
+                    onPress={() => {
+                      setLoginRole('patient');
+                      setEmailError('');
+                      setPasswordError('');
+                    }}
                   >
-                    <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                    <Text style={[styles.roleTabText, loginRole === 'patient' && styles.activeRoleTabText]}>
+                      Dành cho Bệnh nhân
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.roleTab, loginRole === 'staff' && styles.activeRoleTab]}
+                    onPress={() => {
+                      setLoginRole('staff');
+                      setLoginMethod('password');
+                      setEmailError('');
+                      setPasswordError('');
+                      setOtpSent(false);
+                    }}
+                  >
+                    <Text style={[styles.roleTabText, loginRole === 'staff' && styles.activeRoleTabText]}>
+                      Bác sĩ / Nhân viên
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              </>
-            ) : null}
 
-            {/* Login Button */}
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>
-                  {loginMethod === 'password'
-                    ? 'Đăng nhập →'
-                    : otpSent
-                      ? 'Xác nhận & Đăng nhập →'
-                      : 'Gửi mã OTP →'}
+                {/* Method Tabs - Only show for patient */}
+                {loginRole === 'patient' && (
+                  <View style={styles.methodTabsContainer}>
+                    <TouchableOpacity
+                      style={[styles.methodTab, loginMethod === 'password' && styles.activeMethodTab]}
+                      onPress={() => {
+                        setLoginMethod('password');
+                        setEmailError('');
+                        setPasswordError('');
+                        setOtpSent(false);
+                      }}
+                    >
+                      <Text style={[styles.methodTabText, loginMethod === 'password' && styles.activeMethodTabText]}>
+                        Mật khẩu
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.methodTab, loginMethod === 'otp' && styles.activeMethodTab]}
+                      onPress={() => {
+                        setLoginMethod('otp');
+                        setEmailError('');
+                        setPasswordError('');
+                        setOtpSent(false);
+                      }}
+                    >
+                      <Text style={[styles.methodTabText, loginMethod === 'otp' && styles.activeMethodTabText]}>
+                        Mã OTP
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <Text style={styles.label}>
+                  {loginRole === 'staff'
+                    ? 'Mã nhân sự hoặc Email nội bộ'
+                    : loginMethod === 'otp'
+                      ? 'Số điện thoại'
+                      : 'Số điện thoại, Email hoặc CCCD'}
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focusedInput === 'email' ? styles.inputFocused : null,
+                    emailError ? styles.inputError : null
+                  ]}
+                  placeholder={
+                    loginRole === 'staff'
+                      ? 'Nhập mã nhân sự hoặc email'
+                      : loginMethod === 'otp'
+                        ? 'Nhập 10 số điện thoại'
+                        : 'Nhập SĐT, email hoặc số CCCD'
+                  }
+                  placeholderTextColor="#94A3B8"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (emailError) setEmailError('');
+                  }}
+                  autoCapitalize="none"
+                  keyboardType={loginRole === 'patient' && loginMethod === 'otp' ? 'phone-pad' : 'email-address'}
+                  editable={loginMethod === 'otp' ? !otpSent : true}
+                  onFocus={() => setFocusedInput('email')}
+                  onBlur={() => setFocusedInput(null)}
+                  onSubmitEditing={handleLogin}
+                />
+                {emailError ? <Text style={styles.inlineError}>{emailError}</Text> : null}
 
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
-            <View style={styles.dividerLine} />
-          </View>
+                {loginMethod === 'password' ? (
+                  <>
+                    <View style={styles.passwordHeader}>
+                      <Text style={styles.label}>Mật khẩu</Text>
+                      <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                        <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        style={[
+                          styles.passwordInput,
+                          focusedInput === 'password' ? styles.inputFocused : null,
+                          passwordError ? styles.inputError : null
+                        ]}
+                        placeholder="••••••••"
+                        placeholderTextColor="#94A3B8"
+                        secureTextEntry={!showPassword}
+                        value={password}
+                        onChangeText={(text) => {
+                          setPassword(text);
+                          if (passwordError) setPasswordError('');
+                        }}
+                        autoCapitalize="none"
+                        onFocus={() => setFocusedInput('password')}
+                        onBlur={() => setFocusedInput(null)}
+                        onSubmitEditing={handleLogin}
+                      />
+                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+                        <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
+                  </>
+                ) : otpSent ? (
+                  <>
+                    <View style={styles.passwordHeader}>
+                      <Text style={styles.label}>Mã xác thực OTP (Xem log ở server)</Text>
+                    </View>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        style={[
+                          styles.passwordInput,
+                          { letterSpacing: 4, textAlign: 'center', fontWeight: 'bold' },
+                          focusedInput === 'otp' ? styles.inputFocused : null,
+                          passwordError ? styles.inputError : null
+                        ]}
+                        placeholder="Nhập 6 chữ số"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        value={otpCode}
+                        onChangeText={(text) => {
+                          setOtpCode(text);
+                          if (passwordError) setPasswordError('');
+                        }}
+                        onFocus={() => setFocusedInput('otp')}
+                        onBlur={() => setFocusedInput(null)}
+                        onSubmitEditing={handleLogin}
+                      />
+                      <TouchableOpacity
+                        style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]}
+                        onPress={() => setOtpSent(false)}
+                      >
+                        <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
+                  </>
+                ) : null}
 
-          {/* SSO Grid */}
-          <View style={styles.ssoContainer}>
-            <TouchableOpacity style={[styles.ssoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
-              <Text style={styles.googleIcon}>G</Text>
-              <Text style={styles.ssoButtonText}>Google</Text>
-            </TouchableOpacity>
-          </View>
+                {/* Security Remember checkbox */}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 4 }}
+                  onPress={() => setRememberMe(!rememberMe)}
+                >
+                  <Text style={{ fontSize: 16, color: rememberMe ? '#15803D' : '#94A3B8', marginRight: 8, fontWeight: 'bold' }}>
+                    {rememberMe ? '☑' : '☐'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
+                    Lưu thông tin đăng nhập <Text style={{ color: '#C2410C', fontWeight: '600' }}>(Không khuyến nghị trên thiết bị công cộng)</Text>
+                  </Text>
+                </TouchableOpacity>
 
-          {/* Sign up Link */}
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Đăng ký ngay →</Text>
-            </TouchableOpacity>
-          </View>
+                {/* Login Button */}
+                <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+                  {loading ? (
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <ActivityIndicator color="#FFF" size="small" />
+                      <Text style={styles.loginButtonText}>Đang thiết lập kết nối an toàn...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.loginButtonText}>
+                      {loginMethod === 'password'
+                        ? 'Đăng nhập →'
+                        : otpSent
+                          ? 'Xác nhận & Đăng nhập →'
+                          : 'Gửi mã OTP →'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
 
-          {/* Quick Demo Login */}
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* SSO Grid */}
+              <View style={styles.ssoContainer}>
+                <TouchableOpacity style={[styles.ssoButton, { width: '100%' }]} onPress={handleGoogleLogin}>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.ssoButtonText}>Google</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Sign up Link */}
+              <View style={styles.registerContainer}>
+                <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                  <Text style={styles.registerLink}>Đăng ký ngay →</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {/* Hotline text helper */}
+          <Text style={styles.hotlineText}>
+            Bạn gặp khó khăn khi đăng nhập? Gọi ngay Hotline:{' '}
+            <Text style={styles.hotlineLink}>0236 3650 676</Text>
+          </Text>
         </ScrollView>
       )}
 

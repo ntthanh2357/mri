@@ -1,5 +1,6 @@
 const Colors = {
   primary: '#15803D', // Forest Green brand color
+  primaryFocus: '#047857', // Focus state green
   secondary: '#64748B',
   background: '#F8FAFC',
   white: '#FFFFFF',

@@ -16,6 +16,22 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
+import { Users, FolderOpen, Calendar, TrendingUp, Brain, DollarSign, Activity } from 'lucide-react';
+
+const getRoleBadgeStyle = (role) => {
+  switch (role) {
+    case 'doctor':
+      return { bg: '#EFF6FF', text: '#1E40AF', label: 'Bác sĩ' };
+    case 'nurse':
+      return { bg: '#F0FDF4', text: '#166534', label: 'Điều dưỡng' };
+    case 'technician':
+      return { bg: '#F5F3FF', text: '#5B21B6', label: 'Kỹ thuật viên' };
+    case 'receptionist':
+      return { bg: '#FFF7ED', text: '#9A3412', label: 'Lễ tân' };
+    default:
+      return { bg: '#F1F5F9', text: '#475569', label: 'Nhân sự' };
+  }
+};
 
 const ClinicDashboardScreen = ({ navigation }) => {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -71,11 +87,6 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [statusDistribution, setStatusDistribution] = useState({});
   const [aiProcessedCount, setAiProcessedCount] = useState(0);
   const [revenue, setRevenue] = useState({ totalRevenue: 0, aiRevenue: 0 });
-  const [examFee, setExamFee] = useState('150000');
-  const [mriFee, setMriFee] = useState('1500000');
-  const [aiFee, setAiFee] = useState('200000');
-  const [maxPatients, setMaxPatients] = useState('50');
-  const [updatingPricing, setUpdatingPricing] = useState(false);
 
   const fetchDashboardData = async () => {
     setLoadingStats(true);
@@ -102,11 +113,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
         if (statsRes.recentActivity) {
           setRecentActivity(statsRes.recentActivity);
         }
-        if (statsRes.pricing) {
-          setExamFee(String(statsRes.pricing.examFee ?? 150000));
-          setMriFee(String(statsRes.pricing.mriFee ?? 1500000));
-          setAiFee(String(statsRes.pricing.aiFee ?? 200000));
-          setMaxPatients(String(statsRes.pricing.maxPatients ?? 50));
+        if (statsRes.recentActivity) {
+          setRecentActivity(statsRes.recentActivity);
         }
       }
     } catch (err) {
@@ -120,46 +128,6 @@ const ClinicDashboardScreen = ({ navigation }) => {
     fetchDashboardData();
     fetchHospitalStaff();
   }, []);
-
-  const handleUpdatePricing = async () => {
-    const parsedExam = Number(examFee);
-    const parsedMri = Number(mriFee);
-    const parsedAi = Number(aiFee);
-    const parsedMax = Number(maxPatients);
-
-    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi) || isNaN(parsedMax)) {
-      Alert.alert('Lỗi', 'Bảng giá dịch vụ và số bệnh nhân tối đa phải là chữ số hợp lệ.');
-      return;
-    }
-
-    setUpdatingPricing(true);
-    try {
-      const { put } = require('../services/api.service');
-      const response = await put('/admin/hospital-pricing', {
-        examFee: parsedExam,
-        mriFee: parsedMri,
-        aiFee: parsedAi,
-        maxPatients: parsedMax
-      });
-
-      if (response && response.success) {
-        Alert.alert('Thành công', 'Cập nhật cấu hình bệnh viện thành công!');
-        if (response.pricing) {
-          setExamFee(String(response.pricing.examFee));
-          setMriFee(String(response.pricing.mriFee));
-          setAiFee(String(response.pricing.aiFee));
-          setMaxPatients(String(response.pricing.maxPatients ?? 50));
-        }
-      } else {
-        Alert.alert('Lỗi', response.message || 'Không thể cập nhật cấu hình.');
-      }
-    } catch (err) {
-      console.error('Error updating hospital pricing:', err);
-      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
-    } finally {
-      setUpdatingPricing(false);
-    }
-  };
 
   const handleCreateUser = async () => {
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
@@ -226,30 +194,12 @@ const ClinicDashboardScreen = ({ navigation }) => {
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
             {/* Left Column (flex: 2) */}
             <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
-              {/* Action Buttons */}
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('Financials')}>
-                  <Text style={styles.actionButtonOutlineText}>📊 Báo cáo Tài chính</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButtonOutline} onPress={() => navigation.navigate('StaffScheduling')}>
-                  <Text style={styles.actionButtonOutlineText}>🗓️ Lịch làm việc</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionButtonSolid} onPress={() => navigation.navigate('StaffManagement')}>
-                  <Text style={styles.actionButtonSolidText}>👤 Quản lý & Cấp tài khoản nhân sự</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionButtonSolid, { backgroundColor: '#0F172A' }]} onPress={() => navigation.navigate('EMRDashboard')}>
-                  <Text style={styles.actionButtonSolidText}>🏥 Quản lý EMR</Text>
-                </TouchableOpacity>
-              </View>
-
               {/* Stats Section */}
               <View style={styles.statsContainer}>
                 {/* Patients Metric */}
                 <View style={styles.statCard}>
-                  <View style={styles.statIconContainer}>
-                    <Text style={styles.statEmojiIcon}>👥</Text>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
+                    <Users size={20} color="#1D4ED8" />
                   </View>
                   <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
                   {loadingStats ? (
@@ -264,8 +214,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                 {/* AI Scans Metric */}
                 <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#F0FDF4' }]}>
-                    <Text style={styles.statEmojiIcon}>🧠</Text>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#F5F3FF' }]}>
+                    <Brain size={20} color="#6D28D9" />
                   </View>
                   <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
                   {loadingStats ? (
@@ -279,31 +229,42 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Daily Operational Stats Card */}
-              <View style={styles.walletCard}>
-                <View style={styles.walletHeader}>
-                  <View>
-                    <Text style={styles.walletTitle}>Doanh thu hôm nay (lũy kế)</Text>
-                    <Text style={styles.walletBalance}>
-                      {loadingStats ? '...' : (revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
-                    </Text>
+              <View style={styles.statsContainer}>
+                {/* Revenue Card */}
+                <View style={styles.statCard}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#ECFDF5' }]}>
+                    <DollarSign size={20} color="#047857" />
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.walletTitle, { color: '#4ADE80' }]}>Doanh thu AI hôm nay</Text>
-                    <Text style={[styles.walletBalance, { fontSize: 18, color: '#4ADE80' }]}>
-                      {loadingStats ? '...' : (revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ')}
+                  <Text style={styles.statLabel}>Doanh thu hôm nay</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                  ) : (
+                    <Text style={[styles.statValue, { color: '#166534' }]}>
+                      {revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ'}
+                    </Text>
+                  )}
+                  <View style={styles.badgeGreen}>
+                    <Text style={styles.badgeGreenText}>
+                      Doanh thu AI: {revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ'}
                     </Text>
                   </View>
                 </View>
 
-                <View style={styles.walletFooter}>
-                  <View style={styles.walletFooterItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#4ADE80' }]} />
-                    <Text style={styles.walletFooterText}>Ca phân tích AI: {aiProcessedCount || 0}</Text>
+                {/* Daily Activity Card */}
+                <View style={styles.statCard}>
+                  <View style={[styles.statIconContainer, { backgroundColor: '#FFF7ED' }]}>
+                    <Activity size={20} color="#C2410C" />
                   </View>
-                  <View style={styles.walletFooterItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#60A5FA' }]} />
-                    <Text style={styles.walletFooterText}>Tiếp đón hôm nay: {totalPatientsToday || 0}</Text>
+                  <Text style={styles.statLabel}>Tiếp nhận hôm nay</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                  ) : (
+                    <Text style={styles.statValue}>{totalPatientsToday || 0}</Text>
+                  )}
+                  <View style={styles.badgeBlue}>
+                    <Text style={styles.badgeBlueText}>
+                      Ca phân tích AI: {aiProcessedCount || 0}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -317,6 +278,14 @@ const ClinicDashboardScreen = ({ navigation }) => {
               </View>
 
               <View style={styles.activityCard}>
+                {/* Table Header for Desktop */}
+                <View style={styles.tableHeaderRow}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Mã ca / Bệnh nhân</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>Bác sĩ phụ trách</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Phương pháp</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: 'right' }]}>Trạng thái</Text>
+                </View>
+
                 {loadingStats ? (
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                     <ActivityIndicator size="small" color="#15803D" />
@@ -328,11 +297,13 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 ) : (
                   recentActivity.map((activity, index) => (
                     <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
-                      <View style={styles.activityLeft}>
-                        <Text style={styles.patientId}>Ca #{activity.id} - {activity.patientName}</Text>
-                        <Text style={styles.activitySub}>{activity.doctor} • {activity.scanType}</Text>
+                      <View style={{ flex: 1.5 }}>
+                        <Text style={styles.patientId}>Ca #{activity.id}</Text>
+                        <Text style={styles.patientNameText}>{activity.patientName}</Text>
                       </View>
-                      <View style={styles.activityRight}>
+                      <Text style={[styles.activityTableCellText, { flex: 1.2 }]}>{activity.doctor}</Text>
+                      <Text style={[styles.activityTableCellText, { flex: 1 }]}>{activity.scanType}</Text>
+                      <View style={{ flex: 0.8, alignItems: 'flex-end' }}>
                         <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
                           <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
                             {activity.status}
@@ -356,84 +327,60 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   <Text style={styles.totalLabel}>TỔNG CỘNG</Text>
                 </View>
 
-                <View style={styles.barChartContainer}>
-                  {demographics.map((item, idx) => (
-                    <View key={idx} style={styles.demographicRow}>
-                      <View style={styles.demographicLabelRow}>
-                        <View style={styles.demographicNameContainer}>
-                          <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
-                          <Text style={styles.demographicName}>{item.name}</Text>
-                        </View>
-                        <Text style={styles.demographicPct}>{item.value}%</Text>
-                      </View>
-                      <View style={styles.barBackground}>
-                        <View style={[styles.barForeground, { width: `${item.value}%`, backgroundColor: item.color }]} />
-                      </View>
+                {totalPatients === 0 || demographics.every(d => d.value === 0) ? (
+                  <View style={styles.emptyChartContainer}>
+                    <View style={styles.emptyChartCircle}>
+                      <Text style={styles.emptyChartPercent}>0%</Text>
                     </View>
-                  ))}
-                </View>
+                    <Text style={styles.emptyChartText}>Chưa có dữ liệu phân tích nhân khẩu học</Text>
+                  </View>
+                ) : (
+                  <View style={styles.barChartContainer}>
+                    {demographics.map((item, idx) => (
+                      <View key={idx} style={styles.demographicRow}>
+                        <View style={styles.demographicLabelRow}>
+                          <View style={styles.demographicNameContainer}>
+                            <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
+                            <Text style={styles.demographicName}>{item.name}</Text>
+                          </View>
+                          <Text style={styles.demographicPct}>{item.value}%</Text>
+                        </View>
+                        <View style={styles.barBackground}>
+                          <View style={[styles.barForeground, { width: `${item.value}%`, backgroundColor: item.color }]} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
 
-              {/* Bảng giá dịch vụ Bệnh viện */}
-              <Text style={styles.sectionTitle}>Bảng giá dịch vụ</Text>
-              <View style={styles.pricingCard}>
-                <Text style={styles.pricingDesc}>Cấu hình giá dịch vụ áp dụng cho hóa đơn khám chữa bệnh tại cơ sở của bạn.</Text>
-
-                <View style={styles.pricingInputGroup}>
-                  <Text style={styles.pricingInputLabel}>Phí khám lâm sàng (đ)</Text>
-                  <TextInput
-                    style={styles.pricingInput}
-                    keyboardType="numeric"
-                    value={examFee}
-                    onChangeText={setExamFee}
-                    placeholder="Ví dụ: 150000"
-                  />
-                </View>
-
-                <View style={styles.pricingInputGroup}>
-                  <Text style={styles.pricingInputLabel}>Phí chụp phim MRI (đ)</Text>
-                  <TextInput
-                    style={styles.pricingInput}
-                    keyboardType="numeric"
-                    value={mriFee}
-                    onChangeText={setMriFee}
-                    placeholder="Ví dụ: 1500000"
-                  />
-                </View>
-
-                <View style={styles.pricingInputGroup}>
-                  <Text style={styles.pricingInputLabel}>Phí phân tích tự động AI (đ)</Text>
-                  <TextInput
-                    style={styles.pricingInput}
-                    keyboardType="numeric"
-                    value={aiFee}
-                    onChangeText={setAiFee}
-                    placeholder="Ví dụ: 200000"
-                  />
-                </View>
-
-                <View style={styles.pricingInputGroup}>
-                  <Text style={styles.pricingInputLabel}>Số bệnh nhân tối đa trong ngày</Text>
-                  <TextInput
-                    style={styles.pricingInput}
-                    keyboardType="numeric"
-                    value={maxPatients}
-                    onChangeText={setMaxPatients}
-                    placeholder="Ví dụ: 50"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={styles.pricingSubmitBtn}
-                  onPress={handleUpdatePricing}
-                  disabled={updatingPricing}
-                >
-                  {updatingPricing ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.pricingSubmitBtnText}>💾 Cập nhật cấu hình</Text>
-                  )}
-                </TouchableOpacity>
+              {/* Bác sĩ & Nhân sự đang hoạt động */}
+              <Text style={styles.sectionTitle}>Bác sĩ & Nhân sự đang hoạt động</Text>
+              <View style={styles.doctorsCard}>
+                {loadingStaff ? (
+                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+                ) : hospitalStaff.length === 0 ? (
+                  <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
+                    Chưa có nhân sự hoạt động.
+                  </Text>
+                ) : (
+                  hospitalStaff.slice(0, 5).map((staff, idx) => {
+                    const badgeConfig = getRoleBadgeStyle(staff.role);
+                    return (
+                      <View key={staff.email} style={[styles.doctorItemRow, idx === Math.min(hospitalStaff.length, 5) - 1 && { borderBottomWidth: 0 }]}>
+                        <View style={styles.doctorItemLeft}>
+                          <Text style={styles.doctorItemName}>{staff.profile?.name || 'Nhân sự'}</Text>
+                          <Text style={styles.doctorItemEmail}>{staff.email}</Text>
+                        </View>
+                        <View style={[styles.roleBadgeStyle, { backgroundColor: badgeConfig.bg }]}>
+                          <Text style={[styles.roleBadgeText, { color: badgeConfig.text }]}>
+                            {badgeConfig.label}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
               </View>
 
               {/* Info Banner */}

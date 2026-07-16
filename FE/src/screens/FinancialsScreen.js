@@ -17,6 +17,20 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 import styles from './FinancialsScreen.styles';
 import Config from '../constants/config';
+import { 
+  DollarSign, 
+  CreditCard, 
+  TrendingUp, 
+  TrendingDown, 
+  BarChart2, 
+  Download, 
+  Plus, 
+  RefreshCw, 
+  X, 
+  Save, 
+  ArrowRight,
+  Pill
+} from 'lucide-react';
 
 const DRUG_SUGGESTIONS = [
   { name: 'Keppra', unit: 'Viên' },
@@ -81,8 +95,16 @@ const FinancialsScreen = ({ navigation }) => {
   const [drugYear, setDrugYear] = useState(String(new Date().getFullYear()));
   const [drugItems, setDrugItems] = useState([]);
 
+  // Pricing & Limits Form State
+  const [examFee, setExamFee] = useState('150000');
+  const [mriFee, setMriFee] = useState('1500000');
+  const [aiFee, setAiFee] = useState('200000');
+  const [maxPatients, setMaxPatients] = useState('50');
+  const [updatingPricing, setUpdatingPricing] = useState(false);
+
   useEffect(() => {
     fetchFinancialData();
+    fetchPricing();
   }, []);
 
   useEffect(() => {
@@ -189,6 +211,54 @@ const FinancialsScreen = ({ navigation }) => {
       console.error('Error fetching financial data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPricing = async () => {
+    try {
+      const res = await get('/api/v1/hospital/me');
+      const h = res.hospital || res.data?.hospital;
+      if (h && h.pricing) {
+        setExamFee(String(h.pricing.examFee ?? 150000));
+        setMriFee(String(h.pricing.mriFee ?? 1500000));
+        setAiFee(String(h.pricing.aiFee ?? 200000));
+        setMaxPatients(String(h.pricing.maxPatients ?? 50));
+      }
+    } catch (err) {
+      console.error('Error fetching hospital pricing:', err);
+    }
+  };
+
+  const handleUpdatePricing = async () => {
+    const parsedExam = Number(examFee);
+    const parsedMri = Number(mriFee);
+    const parsedAi = Number(aiFee);
+    const parsedMax = Number(maxPatients);
+
+    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi) || isNaN(parsedMax)) {
+      Alert.alert('Lỗi', 'Bảng giá dịch vụ và số bệnh nhân tối đa phải là chữ số hợp lệ.');
+      return;
+    }
+
+    setUpdatingPricing(true);
+    try {
+      const response = await put('/admin/hospital-pricing', {
+        examFee: parsedExam,
+        mriFee: parsedMri,
+        aiFee: parsedAi,
+        maxPatients: parsedMax
+      });
+
+      if (response && response.success) {
+        Alert.alert('Thành công', 'Cập nhật bảng giá dịch vụ bệnh viện thành công!');
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể cập nhật cấu hình.');
+      }
+    } catch (err) {
+      console.error('Error updating hospital pricing:', err);
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setUpdatingPricing(false);
     }
   };
 
@@ -396,7 +466,9 @@ const FinancialsScreen = ({ navigation }) => {
                 <View style={styles.metricRow}>
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>💵</Text>
+                      <View style={{ backgroundColor: '#DCFCE7', padding: 8, borderRadius: 8 }}>
+                        <DollarSign size={20} color="#15803D" />
+                      </View>
                       <View style={styles.badgeGreen}>
                         <Text style={styles.badgeGreenText}>Hoạt động</Text>
                       </View>
@@ -407,7 +479,9 @@ const FinancialsScreen = ({ navigation }) => {
 
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>💳</Text>
+                      <View style={{ backgroundColor: '#DBEAFE', padding: 8, borderRadius: 8 }}>
+                        <CreditCard size={20} color="#1D4ED8" />
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch đã thanh toán</Text>
                     <Text style={styles.metricVal}>{stats.transactionCount}</Text>
@@ -417,7 +491,9 @@ const FinancialsScreen = ({ navigation }) => {
                 <View style={styles.metricRow}>
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>📈</Text>
+                      <View style={{ backgroundColor: '#F3E8FF', padding: 8, borderRadius: 8 }}>
+                        <TrendingUp size={20} color="#7C3AED" />
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giá trị trung bình / GD</Text>
                     <Text style={styles.metricVal}>{stats.averageTransaction.toLocaleString('vi-VN')}đ</Text>
@@ -425,7 +501,9 @@ const FinancialsScreen = ({ navigation }) => {
 
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>📉</Text>
+                      <View style={{ backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 }}>
+                        <TrendingDown size={20} color="#DC2626" />
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch hoàn trả</Text>
                     <Text style={styles.metricVal}>{stats.refunds.toLocaleString('vi-VN')}đ</Text>
@@ -434,7 +512,10 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
               {/* Stacked Bar Chart for Revenue Distribution */}
               <View style={styles.chartCard}>
-                <Text style={styles.chartTitle}>📊 Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <BarChart2 size={16} color="#15803D" />
+                  <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
+                </View>
                 <Text style={styles.chartSub}>Tỷ lệ nguồn thu bóc tách từ các hóa đơn đã thanh toán</Text>
 
                 {(() => {
@@ -482,11 +563,84 @@ const FinancialsScreen = ({ navigation }) => {
                 })()}
               </View>
 
+              {/* Pricing Section Card */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Pill size={16} color="#15803D" />
+                  <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Bảng giá dịch vụ & Giới hạn tiếp đón</Text>
+                </View>
+                <Text style={styles.chartSub}>Cấu hình giá dịch vụ áp dụng cho hóa đơn và số lượng bệnh nhân tối đa tại cơ sở của bạn.</Text>
+
+                <View style={{ gap: 12, marginTop: 12 }}>
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí khám lâm sàng (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={examFee}
+                        onChangeText={setExamFee}
+                        placeholder="Ví dụ: 150000"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí chụp phim MRI (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={mriFee}
+                        onChangeText={setMriFee}
+                        placeholder="Ví dụ: 1500000"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí phân tích tự động AI (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={aiFee}
+                        onChangeText={setAiFee}
+                        placeholder="Ví dụ: 200000"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Số bệnh nhân tối đa trong ngày *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={maxPatients}
+                        onChangeText={setMaxPatients}
+                        placeholder="Ví dụ: 50"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.btnPrimary, { marginTop: 8, flexDirection: 'row', justifyContent: 'center', gap: 6 }]}
+                    onPress={handleUpdatePricing}
+                    disabled={updatingPricing}
+                  >
+                    {updatingPricing ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Save size={16} color="#FFFFFF" />
+                        <Text style={styles.btnPrimaryText}>Cập nhật bảng giá & giới hạn</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Transactions List */}
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Các hóa đơn phát sinh gần đây</Text>
-                <TouchableOpacity onPress={fetchFinancialData}>
-                  <Text style={styles.viewAllText}>🔄 Làm mới</Text>
+                <TouchableOpacity onPress={fetchFinancialData} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <RefreshCw size={12} color="#15803D" />
+                  <Text style={styles.viewAllText}>Làm mới</Text>
                 </TouchableOpacity>
               </View>
 
@@ -539,11 +693,13 @@ const FinancialsScreen = ({ navigation }) => {
                       keyboardType="numeric"
                     />
                   </View>
-                  <TouchableOpacity style={styles.btnExport} onPress={handleExportRevenueCSV}>
-                    <Text style={styles.btnExportText}>📥 Xuất kiểm toán CSV</Text>
+                  <TouchableOpacity style={[styles.btnExport, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleExportRevenueCSV}>
+                    <Download size={12} color="#475569" />
+                    <Text style={styles.btnExportText}>Xuất kiểm toán CSV</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnCreate} onPress={() => setShowRevenueForm(true)}>
-                    <Text style={styles.btnCreateText}>➕ Lập báo cáo mới</Text>
+                  <TouchableOpacity style={[styles.btnCreate, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setShowRevenueForm(true)}>
+                    <Plus size={12} color="#FFFFFF" />
+                    <Text style={styles.btnCreateText}>Lập báo cáo mới</Text>
                   </TouchableOpacity>
                 </View>
               </View>

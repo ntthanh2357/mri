@@ -54,7 +54,7 @@ const AppNavigator = () => {
     const handleSessionTimeout = async () => {
       console.log('Session timed out due to inactivity.');
       await setAuthToken('');
-      resetTo('Login');
+      resetTo('Welcome');
       alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
     };
 

@@ -85,14 +85,14 @@ const ImagingResultScreen = ({ route, navigation }) => {
   }, []);
 
   useEffect(() => {
-    // [BUG-01/02 FIX] Prevent double navigate by checking hasAutoNavigated ref
+    // [FIX] Prevent AI re-running: clear visitStatus param after auto-navigate
     if (result && localUser && localUser.role === 'doctor' && route.params?.visitStatus === 'chờ kết quả AI' && !hasAutoNavigated.current) {
       if (result.images && result.images.length > 0) {
         hasAutoNavigated.current = true;
         const firstImage = result.images[0];
         const imageUrl = firstImage.startsWith('http') ? firstImage : `${Config.API_URL}${firstImage}`;
-        // DO NOT clear param to prevent breaking goBack consistency
-        // navigation.setParams({ visitStatus: undefined });
+        // [FIX] Clear visitStatus param so AI doesn't re-run if screen remounts
+        navigation.setParams({ visitStatus: undefined });
         navigation.navigate('AIAnalysis', {
           imageUrl,
           visitId,
@@ -271,10 +271,13 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
       if (Platform.OS === 'web') {
         alert('Đã lưu chẩn đoán và hoàn tất ca khám.');
+        // [FIX] Navigate back to DoctorWorkQueue with refresh flag so queue re-fetches
+        navigation.navigate('DoctorWorkQueue', { refresh: Date.now() });
       } else {
-        Alert.alert('Thành công', 'Đã lưu chẩn đoán và hoàn tất ca khám.');
+        Alert.alert('Thành công', 'Đã lưu chẩn đoán và hoàn tất ca khám.', [
+          { text: 'OK', onPress: () => navigation.navigate('DoctorWorkQueue', { refresh: Date.now() }) }
+        ]);
       }
-      navigation.goBack();
     } catch (err) {
       console.error('Error completing visit:', err);
       if (Platform.OS === 'web') alert('Lỗi: ' + (err.message || 'Không thể hoàn tất ca khám.'));

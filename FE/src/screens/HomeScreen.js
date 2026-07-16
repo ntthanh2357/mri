@@ -9,11 +9,14 @@ import {
   SafeAreaView,
   useWindowDimensions,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { get, put, setAuthToken } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './HomeScreen.styles';
 import Colors from '../constants/colors';
+import Config from '../constants/config';
 
 const SHIFT_LABELS = {
   'sáng': 'Ca Sáng',
@@ -29,6 +32,48 @@ const HomeScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(!route.params?.user);
   const [error, setError] = useState(null);
 
+  // Profile edit states
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+
+  const handleOpenEditProfile = () => {
+    setEditName(user?.profile?.name || '');
+    setEditPhone(user?.phone || ''); // hashed in DB, but users can re-type it
+    setEditAddress(user?.profile?.address || '');
+    setShowEditProfileModal(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Yêu cầu', 'Vui lòng nhập Họ và tên.');
+      return;
+    }
+    setUpdatingProfile(true);
+    try {
+      const res = await put('/auth/profile', {
+        name: editName.trim(),
+        phone: editPhone.trim() || undefined,
+        address: editAddress.trim() || undefined,
+      });
+
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã cập nhật thông tin cá nhân thành công!');
+        setUser(res.user);
+        setShowEditProfileModal(false);
+      } else {
+        Alert.alert('Lỗi', res.message || 'Cập nhật thất bại.');
+      }
+    } catch (err) {
+      console.error('Lỗi lưu thông tin cá nhân:', err);
+      Alert.alert('Lỗi', err.message || 'Không thể lưu thông tin cá nhân.');
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
+
   // Dynamic statistics states
   const [totalPatients, setTotalPatients] = useState(0);
   const [pendingRecords, setPendingRecords] = useState([]);
@@ -38,6 +83,8 @@ const HomeScreen = ({ route, navigation }) => {
   const [loadingStats, setLoadingStats] = useState(false);
   const [todayReminders, setTodayReminders] = useState([]);
   const [loadingReminders, setLoadingReminders] = useState(false);
+  const [latestMri, setLatestMri] = useState(null);
+  const [loadingMri, setLoadingMri] = useState(false);
 
   useEffect(() => {
     // If user is already provided via navigation params (quick login), skip fetching
@@ -139,9 +186,38 @@ const HomeScreen = ({ route, navigation }) => {
     }
   };
 
+  const formatMriDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} lúc ${hours}:${minutes}`;
+  };
+
+  const fetchLatestMri = async () => {
+    setLoadingMri(true);
+    try {
+      const res = await get('/api/v1/imaging/my-results');
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setLatestMri(res.data[0]);
+      } else {
+        setLatestMri(null);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải kết quả phim chụp mới nhất:', err);
+      setLatestMri(null);
+    } finally {
+      setLoadingMri(false);
+    }
+  };
+
   useEffect(() => {
     if (!user || user.role !== 'patient') return;
     fetchTodayReminders();
+    fetchLatestMri();
   }, [user]);
 
   const handleMarkReminderDone = async (id) => {
@@ -232,7 +308,12 @@ const HomeScreen = ({ route, navigation }) => {
               ● {roleLabel}
             </Text>
           </View>
-          <Text style={styles.emailText}>{user.email}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.emailText}>{user.email}</Text>
+            <TouchableOpacity style={styles.editProfileTrigger} onPress={handleOpenEditProfile}>
+              <Text style={styles.editProfileTriggerText}>✏️ Chỉnh sửa thông tin</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {isPatient ? (
@@ -250,47 +331,71 @@ const HomeScreen = ({ route, navigation }) => {
               )}
 
               {/* MRI Result Card */}
-              <View style={styles.mriCard}>
-                <View style={isDesktop ? styles.mriRowLayout : styles.mriColumnLayout}>
-                  <View style={isDesktop ? styles.mriImageContainerDesktop : styles.mriImageContainerMobile}>
-                    <Image
-                      source={require('../../assets/nero3.png')}
-                      style={styles.mriImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.aiOverlayBadge}>
-                      <View style={styles.aiDot} />
-                      <Text style={styles.aiOverlayText}>PHÁT HIỆN BỞI AI</Text>
-                    </View>
-                  </View>
-                  <View style={styles.mriInfoContainer}>
-                    <View style={styles.mriHeaderRow}>
-                      <Text style={styles.mriIdText}>ID: NS-2024-0524</Text>
-                      <Text style={styles.mriTimeText}>Cập nhật 2 giờ trước</Text>
-                    </View>
-                    <Text style={styles.mriTitle}>Kết quả phân tích MRI Não</Text>
-                    <Text style={styles.mriDesc}>
-                      Hệ thống AI đã hoàn tất việc quét và so sánh dữ liệu với 1.2 triệu ca lâm sàng tương tự. Kết quả không cho thấy dấu hiệu bất thường về cấu trúc vỏ não.
-                    </Text>
-                    <View style={styles.mriSpecsGrid}>
-                      <View style={styles.mriSpecBox}>
-                        <Text style={styles.mriSpecLabel}>MẬT ĐỘ NƠ-RON</Text>
-                        <Text style={styles.mriSpecValue}>Bình thường</Text>
-                      </View>
-                      <View style={styles.mriSpecBox}>
-                        <Text style={styles.mriSpecLabel}>TỈ LỆ ĐỐI XỨNG</Text>
-                        <Text style={styles.mriSpecValue}>98.4%</Text>
+              {loadingMri ? (
+                <View style={styles.emptyMriCard}>
+                  <ActivityIndicator size="small" color="#15803D" />
+                  <Text style={[styles.emptyMriText, { marginTop: 12 }]}>Đang tải kết quả bệnh án...</Text>
+                </View>
+              ) : latestMri ? (
+                <View style={styles.mriCard}>
+                  <View style={isDesktop ? styles.mriRowLayout : styles.mriColumnLayout}>
+                    <View style={isDesktop ? styles.mriImageContainerDesktop : styles.mriImageContainerMobile}>
+                      <Image
+                        source={
+                          latestMri.images && latestMri.images.length > 0
+                            ? { uri: latestMri.images[0].startsWith('http') ? latestMri.images[0] : `${Config.API_URL}${latestMri.images[0]}` }
+                            : require('../../assets/nero3.png')
+                        }
+                        style={styles.mriImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.aiOverlayBadge}>
+                        <View style={styles.aiDot} />
+                        <Text style={styles.aiOverlayText}>PHÁT HIỆN BỞI AI</Text>
                       </View>
                     </View>
-                     <TouchableOpacity
-                       style={styles.mriReportBtn}
-                       onPress={() => navigation.navigate('ImagingHistory')}
-                     >
-                       <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
-                     </TouchableOpacity>
+                    <View style={styles.mriInfoContainer}>
+                      <View style={styles.mriHeaderRow}>
+                        <Text style={styles.mriIdText}>
+                          ID: {latestMri.medicalRecordNumber || `NS-${latestMri._id.toString().slice(-8).toUpperCase()}`}
+                        </Text>
+                        <Text style={styles.mriTimeText}>
+                          Cập nhật {formatMriDate(latestMri.reportDate)}
+                        </Text>
+                      </View>
+                      <Text style={styles.mriTitle}>{latestMri.procedure || 'Kết quả phân tích MRI Não'}</Text>
+                      <Text style={styles.mriDesc} numberOfLines={3}>
+                        {latestMri.findings || 'Chưa có mô tả chi tiết hình ảnh lâm sàng.'}
+                      </Text>
+                      <View style={styles.mriSpecsGrid}>
+                        <View style={styles.mriSpecBox}>
+                          <Text style={styles.mriSpecLabel}>KẾT LUẬN</Text>
+                          <Text style={styles.mriSpecValue} numberOfLines={2}>
+                            {latestMri.conclusion || 'Bình thường'}
+                          </Text>
+                        </View>
+                        <View style={styles.mriSpecBox}>
+                          <Text style={styles.mriSpecLabel}>BÁC SĨ ĐỌC PHIM</Text>
+                          <Text style={styles.mriSpecValue} numberOfLines={1}>
+                            {latestMri.radiologist || 'BS. Chẩn đoán hình ảnh'}
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.mriReportBtn}
+                        onPress={() => navigation.navigate('ImagingHistory')}
+                      >
+                        <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-              </View>
+              ) : (
+                <View style={styles.emptyMriCard}>
+                  <Text style={styles.emptyMriIcon}>📂</Text>
+                  <Text style={styles.emptyMriText}>Chưa có hồ sơ lưu trữ</Text>
+                </View>
+              )}
 
               {/* Mobile Only: Premium and Actions grid */}
               {!isDesktop && (
@@ -766,6 +871,79 @@ const HomeScreen = ({ route, navigation }) => {
         )}
       </ScrollView>
     </SafeAreaView>
+
+    {/* EDIT PROFILE MODAL */}
+    {showEditProfileModal && (
+      <Modal
+        visible={showEditProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>✏️ Chỉnh sửa thông tin cá nhân</Text>
+            <Text style={styles.modalSub}>Cập nhật họ tên, số điện thoại và địa chỉ liên hệ của bạn.</Text>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Họ và tên *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập họ và tên đầy đủ"
+                placeholderTextColor="#94A3B8"
+                value={editName}
+                onChangeText={setEditName}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Số điện thoại</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập số điện thoại mới"
+                placeholderTextColor="#94A3B8"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Địa chỉ</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập địa chỉ của bạn"
+                placeholderTextColor="#94A3B8"
+                value={editAddress}
+                onChangeText={setEditAddress}
+              />
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.btnCancel}
+                onPress={() => setShowEditProfileModal(false)}
+                disabled={updatingProfile}
+              >
+                <Text style={styles.btnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnSave, updatingProfile && { opacity: 0.7 }]}
+                onPress={handleSaveProfile}
+                disabled={updatingProfile}
+              >
+                {updatingProfile ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.btnSaveText}>💾 Lưu thay đổi</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    )}
     </ResponsiveLayout>
   );
 };

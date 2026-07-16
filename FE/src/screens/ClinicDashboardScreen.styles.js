@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export default StyleSheet.create({
   container: {
@@ -103,10 +103,10 @@ export default StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#0F172A',
-    marginBottom: 8,
+    marginVertical: 4,
   },
   badgeGreen: {
     backgroundColor: '#DCFCE7',
@@ -116,7 +116,7 @@ export default StyleSheet.create({
   },
   badgeGreenText: {
     fontSize: 10,
-    color: '#166534',
+    color: '#14532D',
     fontWeight: '600',
   },
   walletCard: {
@@ -262,7 +262,6 @@ export default StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 16,
-    paddingHorizontal: 16,
     marginBottom: 24,
   },
   activityRow: {
@@ -270,6 +269,7 @@ export default StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -322,6 +322,7 @@ export default StyleSheet.create({
     backgroundColor: '#0F172A',
     borderRadius: 16,
     padding: 20,
+    marginTop: 24,
     marginBottom: 20,
     position: 'relative',
     overflow: 'hidden',
@@ -408,5 +409,145 @@ export default StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  quickActionCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease',
+        cursor: 'pointer',
+      }
+    }),
+  },
+  quickActionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionIcon: {
+    fontSize: 16,
+  },
+  quickActionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
+  },
+  doctorsCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  doctorItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  doctorItemLeft: {
+    flex: 1,
+  },
+  doctorItemName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  doctorItemEmail: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  roleBadgeStyle: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  emptyChartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  emptyChartCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyChartPercent: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#94A3B8',
+  },
+  emptyChartText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  badgeBlue: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeBlueText: {
+    fontSize: 10,
+    color: '#1E3A8A',
+    fontWeight: '600',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  tableHeaderCell: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  patientNameText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  activityTableCellText: {
+    fontSize: 12,
+    color: '#475569',
+    alignSelf: 'center',
   },
 });

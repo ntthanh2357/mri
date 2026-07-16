@@ -68,7 +68,7 @@ const AdminBackofficeScreen = ({ navigation }) => {
     await setAuthToken('');
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Login' }],
+      routes: [{ name: 'Welcome' }],
     });
   };
 

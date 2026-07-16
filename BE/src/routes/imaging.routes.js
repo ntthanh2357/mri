@@ -4,6 +4,7 @@ import {
   getResultById, 
   createImagingResult, 
   getPatientResultsByMedicalId,
+  getResultsByPatientUserId,
   uploadImagingImage,
   analyzeImagingResultAI,
   feedbackImagingResultAI,
@@ -39,6 +40,9 @@ router.post("/approve-ai", protect, approveImagingResultAI);
 
 // Explain imaging result in simple, Hippocratic terms for patient (Requires login)
 router.post("/:id/explain-ai", protect, explainImagingResultAI);
+
+// Get imaging results by patient User ID (ObjectId) - fallback for patients without medicalId
+router.get("/by-patient/:patientId", protect, getResultsByPatientUserId);
 
 // Get single imaging result details (Requires login)
 router.get("/:id", protect, getResultById);

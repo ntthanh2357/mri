@@ -15,6 +15,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
   anticonvulsant: 'Động kinh',
@@ -292,11 +293,12 @@ export default function DrugManagementScreen({ navigation }) {
                   Quản lý danh mục thuốc sử dụng tại bệnh viện, theo dõi tồn kho, hạn sử dụng và cấu hình tương tác lâm sàng.
                 </Text>
               </View>
-              {alerts.length > 0 && (
-                <View style={styles.alertHeaderBadge}>
-                  <Text style={styles.alertHeaderBadgeText}>⚠️ {alerts.length} thuốc sắp hết</Text>
-                </View>
-              )}
+                {alerts.length > 0 && (
+                  <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                    <AlertTriangle size={12} color="#991B1B" />
+                    <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
+                  </View>
+                )}
             </View>
           </View>
 
@@ -306,17 +308,23 @@ export default function DrugManagementScreen({ navigation }) {
               style={[styles.tabButton, activeTab === 'list' && styles.tabButtonActive]}
               onPress={() => setActiveTab('list')}
             >
-              <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
-                📋 Danh mục thuốc & Tồn kho
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Pill size={14} color={activeTab === 'list' ? '#15803D' : '#64748B'} />
+                <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
+                  Danh mục thuốc & Tồn kho
+                </Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tabButton, activeTab === 'alerts' && styles.tabButtonActive]}
               onPress={() => setActiveTab('alerts')}
             >
-              <Text style={[styles.tabText, activeTab === 'alerts' && styles.tabTextActive]}>
-                ⚠️ Cảnh báo tồn kho thấp ({alerts.length})
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <AlertTriangle size={14} color={activeTab === 'alerts' ? '#DC2626' : '#64748B'} />
+                <Text style={[styles.tabText, activeTab === 'alerts' && styles.tabTextActive]}>
+                  Cảnh báo tồn kho thấp ({alerts.length})
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -326,9 +334,12 @@ export default function DrugManagementScreen({ navigation }) {
               {isHospitalAdmin && (
                 <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>
-                      {isEditing ? '✏️ Cập nhật thông tin thuốc' : '➕ Thêm thuốc vào danh mục'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      {isEditing ? <Edit2 size={16} color="#15803D" /> : <Plus size={16} color="#15803D" />}
+                      <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
+                        {isEditing ? 'Cập nhật thông tin thuốc' : 'Thêm thuốc vào danh mục'}
+                      </Text>
+                    </View>
                     <Text style={styles.cardSub}>
                       Các trường có dấu (*) là bắt buộc. Thuốc mới sẽ hiển thị trong phần kê đơn của bác sĩ.
                     </Text>
@@ -511,13 +522,18 @@ export default function DrugManagementScreen({ navigation }) {
                 <View style={styles.card}>
                   <View style={styles.listHeader}>
                     <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, width: '100%' }}>
-                      <TextInput
-                        style={[styles.searchInput, { flex: 2 }]}
-                        placeholder="Tìm kiếm theo tên thuốc, hoạt chất, hãng sản xuất..."
-                        placeholderTextColor="#94A3B8"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                      />
+                      <View style={{ flex: 2, position: 'relative', justifyContent: 'center' }}>
+                        <TextInput
+                          style={[styles.searchInput, { width: '100%', paddingLeft: 34 }]}
+                          placeholder="Tìm kiếm theo tên thuốc, hoạt chất, hãng sản xuất..."
+                          placeholderTextColor="#94A3B8"
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
+                        />
+                        <View style={{ position: 'absolute', left: 12 }}>
+                          <Search size={14} color="#94A3B8" />
+                        </View>
+                      </View>
                       <View style={[styles.selectWrapper, { flex: 1 }]}>
                         <select
                           value={selectedCategory}
@@ -637,21 +653,22 @@ export default function DrugManagementScreen({ navigation }) {
                                   <View style={[styles.tableCell, { width: 140, flexDirection: 'row', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }]}>
                                     <TouchableOpacity
                                       onPress={() => openStockModal(item)}
-                                      style={styles.tblBtnStock}
+                                      style={[styles.tblBtnStock, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     >
-                                      <Text style={styles.tblBtnStockText}>📦 Kho</Text>
+                                      <Plus size={10} color="#166534" />
+                                      <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       onPress={() => startEdit(item)}
                                       style={styles.tblBtnEdit}
                                     >
-                                      <Text style={styles.tblBtnEditText}>✏️</Text>
+                                      <Edit2 size={12} color="#1D4ED8" />
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       onPress={() => handleDeleteDrug(item._id, item.name)}
                                       style={styles.tblBtnDel}
                                     >
-                                      <Text style={styles.tblBtnDelText}>🗑️</Text>
+                                      <Trash2 size={12} color="#DC2626" />
                                     </TouchableOpacity>
                                   </View>
                                 )}
@@ -668,15 +685,19 @@ export default function DrugManagementScreen({ navigation }) {
           ) : (
             // Alerts Tab
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>⚠️ Danh sách thuốc cần nhập kho bổ sung</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <AlertTriangle size={16} color="#DC2626" />
+                <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách thuốc cần nhập kho bổ sung</Text>
+              </View>
               <Text style={styles.cardSub}>
                 Hiển thị tất cả các loại thuốc có lượng tồn kho nhỏ hơn ngưỡng cài đặt cảnh báo của khoa dược.
               </Text>
 
               {alerts.length === 0 ? (
-                <View style={styles.emptyBox}>
-                  <Text style={[styles.emptyText, { color: '#059669' }]}>
-                    ✅ Tuyệt vời! Hiện tại không có loại thuốc nào dưới ngưỡng an toàn.
+                <View style={[styles.emptyBox, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}>
+                  <CheckCircle2 size={16} color="#059669" />
+                  <Text style={[styles.emptyText, { color: '#059669', marginBottom: 0 }]}>
+                    Tuyệt vời! Hiện tại không có loại thuốc nào dưới ngưỡng an toàn.
                   </Text>
                 </View>
               ) : (

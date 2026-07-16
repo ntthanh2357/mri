@@ -14,6 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
+import { UserPlus, Save, Users, Lock, Unlock, Search } from 'lucide-react';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ & Kỹ thuật viên',
@@ -167,7 +168,10 @@ export default function StaffManagementScreen({ navigation }) {
             {/* Form Column */}
             <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <UserPlus size={16} color="#15803D" />
+                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
+                  </View>
                 <Text style={styles.cardSub}>Điền đầy đủ thông tin để cấp tài khoản. Tài khoản mới sẽ ở trạng thái chờ kích hoạt.</Text>
 
                 <View style={styles.field}>
@@ -221,7 +225,10 @@ export default function StaffManagementScreen({ navigation }) {
                   {creatingUser ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.submitButtonText}>💾 Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                      <Save size={14} color="#FFFFFF" />
+                      <Text style={styles.submitButtonText}>Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -231,14 +238,22 @@ export default function StaffManagementScreen({ navigation }) {
             <View style={isDesktop ? styles.listColumn : styles.fullWidth}>
               <View style={styles.card}>
                 <View style={styles.listHeader}>
-                  <Text style={styles.cardTitle}>📋 Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm kiếm theo tên, email..."
-                    placeholderTextColor="#94A3B8"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Users size={16} color="#15803D" />
+                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
+                  </View>
+                  <View style={{ position: 'relative', justifyContent: 'center' }}>
+                    <TextInput
+                      style={[styles.searchInput, { paddingLeft: 34 }]}
+                      placeholder="Tìm kiếm theo tên, email..."
+                      placeholderTextColor="#94A3B8"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    <View style={{ position: 'absolute', left: 12 }}>
+                      <Search size={14} color="#94A3B8" />
+                    </View>
+                  </View>
                 </View>
 
                 {loadingStaff ? (
@@ -278,9 +293,12 @@ export default function StaffManagementScreen({ navigation }) {
                               onPress={() => handleToggleLock(item._id, item.email, item.isLocked)}
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
-                              <Text style={styles.lockButtonText}>
-                                {item.isLocked ? '🔓 Mở khóa' : '🔒 Khóa'}
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                {item.isLocked ? <Unlock size={12} color="#166534" /> : <Lock size={12} color="#475569" />}
+                                <Text style={[styles.lockButtonText, item.isLocked && { color: '#166534' }]}>
+                                  {item.isLocked ? 'Mở khóa' : 'Khóa'}
+                                </Text>
+                              </View>
                             </TouchableOpacity>
                           </View>
                         </View>

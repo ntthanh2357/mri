@@ -26,6 +26,12 @@ export default StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
+  logoImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    marginRight: 8,
+  },
   logoInner: {
     width: 16,
     height: 16,
@@ -603,6 +609,12 @@ export default StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
+  logoImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    marginRight: 10,
+  },
   logoInner: {
     width: 16,
     height: 16,
@@ -741,5 +753,59 @@ export default StyleSheet.create({
   },
   activeMethodTabText: {
     color: '#15803D',
+  },
+  inputFocused: {
+    borderColor: '#047857',
+    borderWidth: 2,
+  },
+  roleTabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  roleTab: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  activeRoleTab: {
+    backgroundColor: '#15803D',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  roleTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  activeRoleTabText: {
+    color: '#FFFFFF',
+  },
+  inlineError: {
+    color: '#C2410C',
+    fontSize: 12,
+    marginTop: -12,
+    marginBottom: 16,
+    fontWeight: '500',
+    paddingLeft: 4,
+  },
+  hotlineText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 24,
+    lineHeight: 18,
+  },
+  hotlineLink: {
+    color: '#15803D',
+    fontWeight: 'bold',
   },
 });

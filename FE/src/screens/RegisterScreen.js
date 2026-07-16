@@ -10,6 +10,8 @@ import {
   ScrollView,
   SafeAreaView,
   Modal,
+  useWindowDimensions,
+  Image,
 } from 'react-native';
 import Config from '../constants/config';
 import { post } from '../services/api.service';
@@ -17,6 +19,8 @@ import styles from './RegisterScreen.styles';
 
 
 const RegisterScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -24,6 +28,7 @@ const RegisterScreen = ({ navigation }) => {
   const [role, setRole] = useState('patient'); // only 'patient' can self-register
   // BHYT removed for privacy regulations
   const [loading, setLoading] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null);
 
 
 
@@ -124,109 +129,313 @@ const RegisterScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-        {/* Header Logo */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Quay lại</Text>
-          </TouchableOpacity>
-          <Text style={styles.appName}>{Config.APP_NAME}</Text>
-        </View>
+      {isDesktop ? (
+        <View style={styles.desktopMainBody}>
+          <View style={styles.desktopCard}>
+            {/* Left Panel */}
+            <View style={styles.leftPanel}>
+              <Image
+                source={require('../../assets/nero.png')}
+                style={styles.leftPanelBg}
+                resizeMode="cover"
+              />
+              <View style={styles.leftPanelOverlay} />
+              <View style={styles.leftPanelContent}>
+                <View style={styles.statsBadgeContainer}>
+                  <View style={styles.statMiniCard}>
+                    <Text style={styles.statMiniLabel}>ĐỘ CHÍNH XÁC</Text>
+                    <Text style={styles.statMiniValue}>99.8%</Text>
+                  </View>
+                  <View style={styles.statMiniCard}>
+                    <Text style={styles.statMiniLabel}>THỜI GIAN XỬ LÝ</Text>
+                    <Text style={styles.statMiniValue}>&lt; 2 Giây</Text>
+                  </View>
+                </View>
+                <Text style={styles.leftPanelTextTitle}>
+                  Chẩn đoán thông minh hơn với{' '}
+                  <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
+                </Text>
+                <Text style={styles.leftPanelTextDesc}>
+                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng với độ chính xác tuyệt đối.
+                </Text>
+              </View>
+            </View>
 
-        {/* Title */}
-        <Text style={styles.title}>Đăng ký tài khoản</Text>
-        <Text style={styles.subtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+            {/* Right Panel (Form) */}
+            <View style={styles.rightPanel}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.desktopScrollContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Back Button */}
+                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ alignSelf: 'flex-start', marginBottom: 12 }}>
+                  <Text style={styles.backButtonText}>← Quay lại đăng nhập</Text>
+                </TouchableOpacity>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Họ và tên *</Text>
-          <TextInput
-            style={[styles.input, nameError ? styles.inputError : null]}
-            placeholder="Nguyễn Văn A"
-            placeholderTextColor="#94A3B8"
-            value={name}
-            onChangeText={(text) => {
-              setName(text);
-              if (nameError) setNameError('');
-            }}
-          />
-          {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+                {/* Title */}
+                <View style={styles.desktopTitleContainer}>
+                  <Text style={styles.desktopTitle}>Đăng ký tài khoản</Text>
+                  <Text style={styles.desktopSubtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+                </View>
 
-          <Text style={styles.label}>Địa chỉ Email *</Text>
-          <TextInput
-            style={[styles.input, emailError ? styles.inputError : null]}
-            placeholder="vidu@neuroscan.com"
-            placeholderTextColor="#94A3B8"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              if (emailError) setEmailError('');
-            }}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+                {/* Form */}
+                <View style={styles.desktopForm}>
+                  <Text style={styles.desktopLabel}>Họ và tên *</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.desktopInput,
+                      focusedInput === 'name' ? styles.inputFocused : null,
+                      nameError ? styles.inputError : null
+                    ]}
+                    placeholder="Nguyễn Văn A"
+                    placeholderTextColor="#94A3B8"
+                    value={name}
+                    onChangeText={(text) => {
+                      setName(text);
+                      if (nameError) setNameError('');
+                    }}
+                    onFocus={() => setFocusedInput('name')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                  {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
 
-          <Text style={styles.label}>Số điện thoại (tùy chọn)</Text>
-          <TextInput
-            style={[styles.input, phoneError ? styles.inputError : null]}
-            placeholder="09XXXXXXXX"
-            placeholderTextColor="#94A3B8"
-            value={phone}
-            onChangeText={(text) => {
-              setPhone(text);
-              if (phoneError) setPhoneError('');
-            }}
-            keyboardType="phone-pad"
-            onSubmitEditing={handleRegister}
-          />
-          {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+                  <Text style={styles.desktopLabel}>Địa chỉ Email *</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.desktopInput,
+                      focusedInput === 'email' ? styles.inputFocused : null,
+                      emailError ? styles.inputError : null
+                    ]}
+                    placeholder="vidu@neuroscan.com"
+                    placeholderTextColor="#94A3B8"
+                    value={email}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (emailError) setEmailError('');
+                    }}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    onFocus={() => setFocusedInput('email')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                  {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-          <Text style={styles.label}>Mật khẩu *</Text>
-          <TextInput
-            style={[styles.input, passwordError ? styles.inputError : null]}
-            placeholder="••••••••"
-            placeholderTextColor="#94A3B8"
-            secureTextEntry
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              if (passwordError) setPasswordError('');
-            }}
-            autoCapitalize="none"
-            onSubmitEditing={handleRegister}
-          />
-          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+                  <Text style={styles.desktopLabel}>Số điện thoại (tùy chọn)</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.desktopInput,
+                      focusedInput === 'phone' ? styles.inputFocused : null,
+                      phoneError ? styles.inputError : null
+                    ]}
+                    placeholder="09XXXXXXXX"
+                    placeholderTextColor="#94A3B8"
+                    value={phone}
+                    onChangeText={(text) => {
+                      setPhone(text);
+                      if (phoneError) setPhoneError('');
+                    }}
+                    keyboardType="phone-pad"
+                    onFocus={() => setFocusedInput('phone')}
+                    onBlur={() => setFocusedInput(null)}
+                    onSubmitEditing={handleRegister}
+                  />
+                  {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
 
-          {/* Info banner for staff */}
-          <View style={styles.staffNotice}>
-            <Text style={styles.staffNoticeIcon}>🏥</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
-              <Text style={styles.staffNoticeText}>
-                Tài khoản Bác sĩ, Điều dưỡng, KTV, Lễ tân được cấp bởi <Text style={{ fontWeight: 'bold' }}>Admin Bệnh viện</Text>. Vui lòng liên hệ quản trị viên cơ sở của bạn để được cấp thông tin đăng nhập.
-              </Text>
+                  <Text style={styles.desktopLabel}>Mật khẩu *</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.desktopInput,
+                      focusedInput === 'password' ? styles.inputFocused : null,
+                      passwordError ? styles.inputError : null
+                    ]}
+                    placeholder="••••••••"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (passwordError) setPasswordError('');
+                    }}
+                    autoCapitalize="none"
+                    onFocus={() => setFocusedInput('password')}
+                    onBlur={() => setFocusedInput(null)}
+                    onSubmitEditing={handleRegister}
+                  />
+                  {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+
+                  {/* Info banner for staff */}
+                  <View style={styles.staffNotice}>
+                    <Text style={styles.staffNoticeIcon}>🏥</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
+                      <Text style={styles.staffNoticeText}>
+                        Tài khoản Bác sĩ, Điều dưỡng, KTV được cấp bởi <Text style={{ fontWeight: 'bold' }}>Admin Bệnh viện</Text>.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Register Button */}
+                  <TouchableOpacity style={[styles.registerButton, { height: 42 }]} onPress={handleRegister} disabled={loading}>
+                    {loading ? (
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator color="#FFF" size="small" />
+                        <Text style={styles.registerButtonText}>Đang đăng ký...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.registerButtonText}>Đăng ký ngay</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Login Link */}
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>Đã có tài khoản? </Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                    <Text style={styles.footerLink}>Đăng nhập →</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-
-          {/* Register Button */}
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.registerButtonText}>Đăng ký ngay</Text>
-            )}
-          </TouchableOpacity>
         </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+          {/* Header Logo */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
+              <Text style={styles.backButtonText}>← Quay lại</Text>
+            </TouchableOpacity>
+            <Text style={styles.appName}>{Config.APP_NAME}</Text>
+          </View>
 
-        {/* Login Link */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Đã có tài khoản? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.footerLink}>Đăng nhập →</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          {/* Title */}
+          <Text style={styles.title}>Đăng ký tài khoản</Text>
+          <Text style={styles.subtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+
+          {/* Form */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Họ và tên *</Text>
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'name' ? styles.inputFocused : null,
+                nameError ? styles.inputError : null
+              ]}
+              placeholder="Nguyễn Văn A"
+              placeholderTextColor="#94A3B8"
+              value={name}
+              onChangeText={(text) => {
+                setName(text);
+                if (nameError) setNameError('');
+              }}
+              onFocus={() => setFocusedInput('name')}
+              onBlur={() => setFocusedInput(null)}
+            />
+            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+
+            <Text style={styles.label}>Địa chỉ Email *</Text>
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'email' ? styles.inputFocused : null,
+                emailError ? styles.inputError : null
+              ]}
+              placeholder="vidu@neuroscan.com"
+              placeholderTextColor="#94A3B8"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (emailError) setEmailError('');
+              }}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onFocus={() => setFocusedInput('email')}
+              onBlur={() => setFocusedInput(null)}
+            />
+            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+
+            <Text style={styles.label}>Số điện thoại (tùy chọn)</Text>
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'phone' ? styles.inputFocused : null,
+                phoneError ? styles.inputError : null
+              ]}
+              placeholder="09XXXXXXXX"
+              placeholderTextColor="#94A3B8"
+              value={phone}
+              onChangeText={(text) => {
+                setPhone(text);
+                if (phoneError) setPhoneError('');
+              }}
+              keyboardType="phone-pad"
+              onFocus={() => setFocusedInput('phone')}
+              onBlur={() => setFocusedInput(null)}
+              onSubmitEditing={handleRegister}
+            />
+            {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+
+            <Text style={styles.label}>Mật khẩu *</Text>
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'password' ? styles.inputFocused : null,
+                passwordError ? styles.inputError : null
+              ]}
+              placeholder="••••••••"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (passwordError) setPasswordError('');
+              }}
+              autoCapitalize="none"
+              onFocus={() => setFocusedInput('password')}
+              onBlur={() => setFocusedInput(null)}
+              onSubmitEditing={handleRegister}
+            />
+            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+
+            {/* Info banner for staff */}
+            <View style={styles.staffNotice}>
+              <Text style={styles.staffNoticeIcon}>🏥</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
+                <Text style={styles.staffNoticeText}>
+                  Tài khoản Bác sĩ, Điều dưỡng, KTV, Lễ tân được cấp bởi <Text style={{ fontWeight: 'bold' }}>Admin Bệnh viện</Text>. Vui lòng liên hệ quản trị viên cơ sở của bạn để được cấp thông tin đăng nhập.
+                </Text>
+              </View>
+            </View>
+
+            {/* Register Button */}
+            <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={loading}>
+              {loading ? (
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={styles.registerButtonText}>Đang đăng ký...</Text>
+                </View>
+              ) : (
+                <Text style={styles.registerButtonText}>Đăng ký ngay</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Login Link */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Đã có tài khoản? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.footerLink}>Đăng nhập →</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
 
 
       {/* Custom Alert Modal */}

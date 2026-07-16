@@ -18,6 +18,19 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
+import { 
+  Stethoscope, 
+  FileText, 
+  ClipboardList, 
+  Activity, 
+  PenTool, 
+  Pill, 
+  History, 
+  Brain,
+  RefreshCw,
+  Search,
+  Plus
+} from 'lucide-react';
 import { get, put, post } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {
@@ -266,20 +279,20 @@ const EMRDashboardScreen = ({ navigation }) => {
               <View style={styles.sidebarNav}>
                 {localUser?.role === 'nurse' && (
                   <SidebarItem
-                    icon="🩺"
+                    icon={Stethoscope}
                     label="Đo sinh hiệu"
                     active={activeTab === 'nurseQueue'}
                     onPress={() => setActiveTab('nurseQueue')}
                   />
                 )}
                 <SidebarItem
-                  icon="📋"
+                  icon={FileText}
                   label="Hồ sơ bệnh án"
                   active={activeTab === 'records'}
                   onPress={() => setActiveTab('records')}
                 />
                 <SidebarItem
-                  icon="📝"
+                  icon={ClipboardList}
                   label="Phiếu chăm sóc"
                   active={activeTab === 'care'}
                   onPress={() => setActiveTab('care')}
@@ -287,19 +300,19 @@ const EMRDashboardScreen = ({ navigation }) => {
                 {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
                   <>
                     <SidebarItem
-                      icon="🧠"
+                      icon={Activity}
                       label="Hội chẩn"
                       active={activeTab === 'consult'}
                       onPress={() => setActiveTab('consult')}
                     />
                     <SidebarItem
-                      icon="✍️"
+                      icon={PenTool}
                       label="Giấy cam đoan"
                       active={activeTab === 'consent'}
                       onPress={() => setActiveTab('consent')}
                     />
                     <SidebarItem
-                      icon="💊"
+                      icon={Pill}
                       label="Kê đơn thuốc"
                       active={activeTab === 'prescriptions'}
                       onPress={() => setActiveTab('prescriptions')}
@@ -307,14 +320,14 @@ const EMRDashboardScreen = ({ navigation }) => {
                   </>
                 )}
                 <SidebarItem
-                  icon="⏳"
+                  icon={History}
                   label="Lịch sử sửa đổi"
                   active={activeTab === 'versions'}
                   onPress={() => setActiveTab('versions')}
                 />
                 {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
                   <SidebarItem
-                    icon="🧠"
+                    icon={Brain}
                     label="Phim MRI & CT"
                     active={activeTab === 'imaging'}
                     onPress={() => setActiveTab('imaging')}
@@ -517,12 +530,14 @@ const EMRDashboardScreen = ({ navigation }) => {
 };
 
 // Sidebar Item Component
-const SidebarItem = ({ icon, label, active, onPress }) => (
+const SidebarItem = ({ icon: IconComponent, label, active, onPress }) => (
   <TouchableOpacity
     style={[styles.sidebarItem, active && styles.sidebarItemActive]}
     onPress={onPress}
   >
-    <Text style={styles.sidebarIcon}>{icon}</Text>
+    <View style={styles.sidebarIconContainer}>
+      <IconComponent size={16} color={active ? '#15803D' : '#64748B'} />
+    </View>
     <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
       {label}
     </Text>
@@ -612,9 +627,12 @@ const NurseQueueTab = ({ navigation }) => {
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <Text style={styles.tabTitle}>🩺 Hàng đợi đo sinh hiệu</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Stethoscope size={22} color="#15803D" />
+          <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
+        </View>
         <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
-          <Text style={styles.refreshButtonText}>🔄</Text>
+          <RefreshCw size={14} color="#64748B" />
         </TouchableOpacity>
       </View>
 
@@ -2154,13 +2172,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   sidebarItemActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0FDF4',
     borderLeftWidth: 3,
     borderLeftColor: '#15803D',
     paddingLeft: 11,
   },
-  sidebarIcon: {
-    fontSize: 18,
+  sidebarIconContainer: {
+    width: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
   sidebarItemText: {
     fontSize: 14,

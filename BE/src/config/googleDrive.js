@@ -7,19 +7,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const KEY_FILE_PATH = path.resolve(__dirname, "../../credentials.json");
-const PARENT_FOLDER_ID = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+const getParentFolderId = () => process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
 
 let driveClient = null;
 
 const getDriveClient = () => {
   if (driveClient) return driveClient;
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: KEY_FILE_PATH,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-
-  driveClient = google.drive({ version: "v3", auth });
+  if (process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_DRIVE_CLIENT_ID,
+      process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+      process.env.GOOGLE_DRIVE_REDIRECT_URI || "https://developers.google.com/oauthplayground"
+    );
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    });
+    driveClient = google.drive({ version: "v3", auth: oauth2Client });
+  } else {
+    const auth = new google.auth.GoogleAuth({
+      keyFile: KEY_FILE_PATH,
+      scopes: ["https://www.googleapis.com/auth/drive"],
+    });
+    driveClient = google.drive({ version: "v3", auth });
+  }
   return driveClient;
 };
 
@@ -34,12 +45,13 @@ const bufferToStream = (buffer) => {
 /**
  * Create a folder inside a parent folder on Google Drive
  */
-export const createFolder = async (folderName, parentId = PARENT_FOLDER_ID) => {
+export const createFolder = async (folderName, parentId = null) => {
   const drive = getDriveClient();
+  const actualParentId = parentId || getParentFolderId();
   const fileMetadata = {
     name: folderName,
     mimeType: "application/vnd.google-apps.folder",
-    parents: parentId ? [parentId] : [],
+    parents: actualParentId ? [actualParentId] : [],
   };
 
   try {
@@ -98,9 +110,10 @@ const getOrCreatePatientsParentFolder = async () => {
   if (patientsParentFolderId) return patientsParentFolderId;
 
   const drive = getDriveClient();
+  const parentFolderId = getParentFolderId();
   try {
     const response = await drive.files.list({
-      q: `name = 'Bệnh nhân tự tải lên' and mimeType = 'application/vnd.google-apps.folder' and '${PARENT_FOLDER_ID}' in parents and trashed = false`,
+      q: `name = 'Bệnh nhân tự tải lên' and mimeType = 'application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed = false`,
       fields: "files(id)",
     });
 
@@ -109,7 +122,7 @@ const getOrCreatePatientsParentFolder = async () => {
       return patientsParentFolderId;
     }
 
-    const newFolder = await createFolder("Bệnh nhân tự tải lên", PARENT_FOLDER_ID);
+    const newFolder = await createFolder("Bệnh nhân tự tải lên", parentFolderId);
     patientsParentFolderId = newFolder.id;
     return patientsParentFolderId;
   } catch (error) {
@@ -117,6 +130,37 @@ const getOrCreatePatientsParentFolder = async () => {
     throw error;
   }
 };
+
+/**
+ * Get or create the main hospital licenses parent folder on Google Drive
+ */
+let licensesParentFolderId = null;
+
+export const getOrCreateLicensesParentFolder = async () => {
+  if (licensesParentFolderId) return licensesParentFolderId;
+
+  const drive = getDriveClient();
+  const parentFolderId = getParentFolderId();
+  try {
+    const response = await drive.files.list({
+      q: `name = 'Giấy phép hoạt động bệnh viện' and mimeType = 'application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed = false`,
+      fields: "files(id)",
+    });
+
+    if (response.data.files && response.data.files.length > 0) {
+      licensesParentFolderId = response.data.files[0].id;
+      return licensesParentFolderId;
+    }
+
+    const newFolder = await createFolder("Giấy phép hoạt động bệnh viện", parentFolderId);
+    licensesParentFolderId = newFolder.id;
+    return licensesParentFolderId;
+  } catch (error) {
+    console.error("Error finding/creating licenses root folder:", error);
+    throw error;
+  }
+};
+
 
 /**
  * Get or create a specific patient's folder on Google Drive
