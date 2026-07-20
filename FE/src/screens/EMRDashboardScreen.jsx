@@ -16,20 +16,19 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
-import { 
-  Stethoscope, 
-  FileText, 
-  ClipboardList, 
-  Activity, 
-  PenTool, 
-  Pill, 
-  History, 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+// Lucide icons render raw <svg>/<path> — only safe inside the isDesktop-gated
+// sidebar below (web-only render path). Never use them outside that gate.
+import {
+  Stethoscope,
+  FileText,
+  ClipboardList,
+  Activity,
+  PenTool,
+  Pill,
+  History,
   Brain,
-  RefreshCw,
-  Search,
-  Plus
 } from 'lucide-react';
 import { get, put, post } from '../services/api.service';
 
@@ -47,8 +46,10 @@ const EMRDashboardScreen = ({ navigation }) => {
     const loadUser = async () => {
       try {
         let u = null;
-        // Try reading from localStorage first as a quick cache
-        const storedUser = localStorage.getItem('user');
+        // Try reading from local cache first (localStorage on web, AsyncStorage on native)
+        const storedUser = Platform.OS === 'web'
+          ? localStorage.getItem('user')
+          : await AsyncStorage.getItem('user');
         if (storedUser) {
           u = JSON.parse(storedUser);
           setLocalUser(u);
@@ -62,7 +63,11 @@ const EMRDashboardScreen = ({ navigation }) => {
         if (res && res.user) {
           u = res.user;
           setLocalUser(u);
-          localStorage.setItem('user', JSON.stringify(u));
+          if (Platform.OS === 'web') {
+            localStorage.setItem('user', JSON.stringify(u));
+          } else {
+            await AsyncStorage.setItem('user', JSON.stringify(u));
+          }
           if (u.role === 'nurse') {
             setActiveTab('records');
           }
@@ -628,11 +633,11 @@ const NurseQueueTab = ({ navigation }) => {
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Stethoscope size={22} color="#15803D" />
+          <Text style={{ fontSize: 20 }}>🩺</Text>
           <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
-          <RefreshCw size={14} color="#64748B" />
+          <Text style={{ fontSize: 14 }}>🔄</Text>
         </TouchableOpacity>
       </View>
 

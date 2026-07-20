@@ -14,7 +14,6 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
-import { UserPlus, Save, Users, Lock, Unlock, Search } from 'lucide-react';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ & Kỹ thuật viên',
@@ -169,7 +168,7 @@ export default function StaffManagementScreen({ navigation }) {
             <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
               <View style={styles.card}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <UserPlus size={16} color="#15803D" />
+                    <Text style={{ fontSize: 16 }}>➕</Text>
                     <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
                   </View>
                 <Text style={styles.cardSub}>Điền đầy đủ thông tin để cấp tài khoản. Tài khoản mới sẽ ở trạng thái chờ kích hoạt.</Text>
@@ -226,7 +225,7 @@ export default function StaffManagementScreen({ navigation }) {
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                      <Save size={14} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14 }}>💾</Text>
                       <Text style={styles.submitButtonText}>Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
                     </View>
                   )}
@@ -239,7 +238,7 @@ export default function StaffManagementScreen({ navigation }) {
               <View style={styles.card}>
                 <View style={styles.listHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Users size={16} color="#15803D" />
+                    <Text style={{ fontSize: 16 }}>👥</Text>
                     <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
                   </View>
                   <View style={{ position: 'relative', justifyContent: 'center' }}>
@@ -251,14 +250,14 @@ export default function StaffManagementScreen({ navigation }) {
                       onChangeText={setSearchQuery}
                     />
                     <View style={{ position: 'absolute', left: 12 }}>
-                      <Search size={14} color="#94A3B8" />
+                      <Text style={{ fontSize: 14 }}>🔍</Text>
                     </View>
                   </View>
                 </View>
 
                 {loadingStaff ? (
                   <View style={styles.loadingBox}>
-                    <ActivityIndicator size="medium" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={Colors.primary} />
                   </View>
                 ) : filteredStaff.length === 0 ? (
                   <View style={styles.emptyBox}>
@@ -294,7 +293,7 @@ export default function StaffManagementScreen({ navigation }) {
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                {item.isLocked ? <Unlock size={12} color="#166534" /> : <Lock size={12} color="#475569" />}
+                                <Text style={{ fontSize: 12, color: item.isLocked ? '#166534' : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
                                 <Text style={[styles.lockButtonText, item.isLocked && { color: '#166534' }]}>
                                   {item.isLocked ? 'Mở khóa' : 'Khóa'}
                                 </Text>

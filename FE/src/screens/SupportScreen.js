@@ -15,7 +15,6 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SupportScreen.styles';
 import { get, post } from '../services/api.service';
-import { MessageSquare, Phone, Mail, RefreshCw, ChevronDown, ChevronUp, AlertCircle, LifeBuoy } from 'lucide-react';
 
 const SupportScreen = ({ navigation }) => {
   const [openFaq, setOpenFaq] = useState(null);
@@ -32,9 +31,9 @@ const SupportScreen = ({ navigation }) => {
   const isDesktop = width > 768;
 
   const contactOptions = [
-    { icon: MessageSquare, title: 'Chat trực tiếp', desc: 'Phản hồi trong 2 phút', action: 'Bắt đầu chat', color: '#166534', url: null },
-    { icon: Phone, title: 'Hotline', desc: '1800 1234 — 24/7', action: 'Gọi ngay', color: '#2563EB', url: 'tel:18001234' },
-    { icon: Mail, title: 'Gửi email', desc: 'support@neuroscan.ai', action: 'Soạn email', color: '#7C3AED', url: 'mailto:support@neuroscan.ai?subject=Yêu cầu hỗ trợ kỹ thuật' },
+    { icon: '💬', title: 'Chat trực tiếp', desc: 'Phản hồi trong 2 phút', action: 'Bắt đầu chat', color: '#166534', url: null },
+    { icon: '📞', title: 'Hotline', desc: '1800 1234 — 24/7', action: 'Gọi ngay', color: '#2563EB', url: 'tel:18001234' },
+    { icon: '✉️', title: 'Gửi email', desc: 'support@neuroscan.ai', action: 'Soạn email', color: '#7C3AED', url: 'mailto:support@neuroscan.ai?subject=Yêu cầu hỗ trợ kỹ thuật' },
   ];
 
   const faqs = [
@@ -155,11 +154,10 @@ const SupportScreen = ({ navigation }) => {
         {/* Contact Grid */}
         <View style={styles.contactRow}>
           {contactOptions.map((opt, i) => {
-            const IconComponent = opt.icon;
             return (
               <TouchableOpacity key={i} style={styles.contactCard} onPress={() => handleContactAction(opt)}>
                 <View style={[styles.contactIconBg, { backgroundColor: opt.color, alignItems: 'center', justifyContent: 'center' }]}>
-                  <IconComponent size={20} color="#FFFFFF" />
+                  <Text style={{ fontSize: 20 }}>{opt.icon}</Text>
                 </View>
                 <Text style={styles.contactTitle}>{opt.title}</Text>
                 <Text style={styles.contactDesc}>{opt.desc}</Text>
@@ -172,11 +170,11 @@ const SupportScreen = ({ navigation }) => {
         {/* Support Tickets */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <LifeBuoy size={16} color="#15803D" />
+            <Text style={{ fontSize: 16 }}>🛟</Text>
             <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Yêu cầu hỗ trợ của tôi (Ticket)</Text>
           </View>
           <TouchableOpacity onPress={fetchTickets} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 }}>
-            <RefreshCw size={12} color="#15803D" />
+            <Text style={{ fontSize: 12 }}>🔄</Text>
             <Text style={{ fontSize: 12, color: '#15803D', fontWeight: '600' }}>Làm mới</Text>
           </TouchableOpacity>
         </View>
@@ -209,7 +207,7 @@ const SupportScreen = ({ navigation }) => {
 
         {/* FAQs */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 24, marginBottom: 12 }}>
-          <AlertCircle size={16} color="#15803D" />
+          <Text style={{ fontSize: 16 }}>❓</Text>
           <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>Câu hỏi thường gặp</Text>
         </View>
         <View style={styles.faqList}>
@@ -219,7 +217,7 @@ const SupportScreen = ({ navigation }) => {
               <View key={i} style={styles.faqCard}>
                 <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setOpenFaq(isOpened ? null : i)}>
                   <Text style={styles.faqQuestion}>{faq.q}</Text>
-                  {isOpened ? <ChevronUp size={14} color="#64748B" /> : <ChevronDown size={14} color="#64748B" />}
+                  <Text style={{ fontSize: 14, color: '#64748B' }}>{isOpened ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
                 {isOpened && (
                   <View style={styles.faqAnswerContainer}>
@@ -243,7 +241,7 @@ const SupportScreen = ({ navigation }) => {
             onPress={() => setShowTopicDropdown(!showTopicDropdown)}
           >
             <Text style={styles.dropdownTriggerText}>{selectedTopic}</Text>
-            {showTopicDropdown ? <ChevronUp size={14} color="#64748B" /> : <ChevronDown size={14} color="#64748B" />}
+            <Text style={{ fontSize: 14, color: '#64748B' }}>{showTopicDropdown ? '▲' : '▼'}</Text>
           </TouchableOpacity>
 
           {showTopicDropdown && (

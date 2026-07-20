@@ -9,7 +9,33 @@ export const getAllUsers = async () => {
   return User.find({}, "-passwordHash").lean();
 };
 
-export const toggleUserLock = async (userId, isLocked, adminId) => {
+// Higher rank can lock/unlock strictly lower-rank roles only — never a peer or higher.
+// admin > hospital_admin > (doctor/nurse/technician/patient). Blocks admin-vs-admin,
+// hospital_admin-vs-hospital_admin, and hospital_admin-vs-admin, including self-lock.
+const ROLE_RANK = {
+  admin: 3,
+  hospital_admin: 2,
+  doctor: 1,
+  nurse: 1,
+  technician: 1,
+  patient: 1,
+};
+
+export const canModerateRole = (actorRole, targetRole) => {
+  const actorRank = ROLE_RANK[actorRole] ?? 0;
+  const targetRank = ROLE_RANK[targetRole] ?? 0;
+  return actorRank > targetRank;
+};
+
+export const toggleUserLock = async (userId, isLocked, adminId, actorRole) => {
+  const target = await User.findById(userId).select("role email hospitalId").lean();
+  if (!target) {
+    throw new Error("User not found");
+  }
+  if (!canModerateRole(actorRole, target.role)) {
+    throw new Error("Bạn không có quyền khóa/mở khóa tài khoản này.");
+  }
+
   const user = await User.findByIdAndUpdate(
     userId,
     { isLocked },
@@ -30,11 +56,15 @@ export const toggleUserLock = async (userId, isLocked, adminId) => {
   return user;
 };
 
-export const lockUserById = async (id, adminId) => {
-  const user = await User.findById(id).select("isLocked email hospitalId").lean();
+export const lockUserById = async (id, adminId, actorRole) => {
+  const user = await User.findById(id).select("isLocked role email hospitalId").lean();
 
   if (!user) {
     throw new Error("User not found");
+  }
+
+  if (!canModerateRole(actorRole, user.role)) {
+    throw new Error("Bạn không có quyền khóa tài khoản này.");
   }
 
   if (user.isLocked) {
@@ -90,11 +120,15 @@ export const verifyAdminById = async (id, verified, adminId) => {
   return updated;
 };
 
-export const unlockUserById = async (id, adminId) => {
-  const existing = await User.findById(id).select("isLocked email hospitalId").lean();
+export const unlockUserById = async (id, adminId, actorRole) => {
+  const existing = await User.findById(id).select("isLocked role email hospitalId").lean();
 
   if (!existing) {
     throw new Error("User not found");
+  }
+
+  if (!canModerateRole(actorRole, existing.role)) {
+    throw new Error("Bạn không có quyền mở khóa tài khoản này.");
   }
 
   // Idempotent: already unlocked — return user without creating AuditLog

@@ -17,20 +17,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 import styles from './FinancialsScreen.styles';
 import Config from '../constants/config';
-import { 
-  DollarSign, 
-  CreditCard, 
-  TrendingUp, 
-  TrendingDown, 
-  BarChart2, 
-  Download, 
-  Plus, 
-  RefreshCw, 
-  X, 
-  Save, 
-  ArrowRight,
-  Pill
-} from 'lucide-react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DRUG_SUGGESTIONS = [
   { name: 'Keppra', unit: 'Viên' },
@@ -118,7 +105,7 @@ const FinancialsScreen = ({ navigation }) => {
   const handleExportRevenueCSV = async () => {
     try {
       setLoading(true);
-      const token = Platform.OS === 'web' ? localStorage.getItem('token') : '';
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : await AsyncStorage.getItem('token');
       const url = `${Config.API_URL}/admin/reports/revenue-export?month=${revMonth}&year=${revYear}`;
       
       const response = await fetch(url, {
@@ -467,7 +454,7 @@ const FinancialsScreen = ({ navigation }) => {
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
                       <View style={{ backgroundColor: '#DCFCE7', padding: 8, borderRadius: 8 }}>
-                        <DollarSign size={20} color="#15803D" />
+                        <Text style={{ fontSize: 20 }}>💰</Text>
                       </View>
                       <View style={styles.badgeGreen}>
                         <Text style={styles.badgeGreenText}>Hoạt động</Text>
@@ -480,7 +467,7 @@ const FinancialsScreen = ({ navigation }) => {
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
                       <View style={{ backgroundColor: '#DBEAFE', padding: 8, borderRadius: 8 }}>
-                        <CreditCard size={20} color="#1D4ED8" />
+                        <Text style={{ fontSize: 20 }}>💳</Text>
                       </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch đã thanh toán</Text>
@@ -492,7 +479,7 @@ const FinancialsScreen = ({ navigation }) => {
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
                       <View style={{ backgroundColor: '#F3E8FF', padding: 8, borderRadius: 8 }}>
-                        <TrendingUp size={20} color="#7C3AED" />
+                        <Text style={{ fontSize: 20 }}>📈</Text>
                       </View>
                     </View>
                     <Text style={styles.metricLabel}>Giá trị trung bình / GD</Text>
@@ -502,7 +489,7 @@ const FinancialsScreen = ({ navigation }) => {
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
                       <View style={{ backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 }}>
-                        <TrendingDown size={20} color="#DC2626" />
+                        <Text style={{ fontSize: 20 }}>📉</Text>
                       </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch hoàn trả</Text>
@@ -513,7 +500,7 @@ const FinancialsScreen = ({ navigation }) => {
               {/* Stacked Bar Chart for Revenue Distribution */}
               <View style={styles.chartCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <BarChart2 size={16} color="#15803D" />
+                  <Text style={{ fontSize: 16 }}>📊</Text>
                   <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
                 </View>
                 <Text style={styles.chartSub}>Tỷ lệ nguồn thu bóc tách từ các hóa đơn đã thanh toán</Text>
@@ -566,7 +553,7 @@ const FinancialsScreen = ({ navigation }) => {
               {/* Pricing Section Card */}
               <View style={styles.chartCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Pill size={16} color="#15803D" />
+                  <Text style={{ fontSize: 16 }}>💊</Text>
                   <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Bảng giá dịch vụ & Giới hạn tiếp đón</Text>
                 </View>
                 <Text style={styles.chartSub}>Cấu hình giá dịch vụ áp dụng cho hóa đơn và số lượng bệnh nhân tối đa tại cơ sở của bạn.</Text>
@@ -627,7 +614,7 @@ const FinancialsScreen = ({ navigation }) => {
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
-                        <Save size={16} color="#FFFFFF" />
+                        <Text style={{ fontSize: 16 }}>💾</Text>
                         <Text style={styles.btnPrimaryText}>Cập nhật bảng giá & giới hạn</Text>
                       </>
                     )}
@@ -639,7 +626,7 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Các hóa đơn phát sinh gần đây</Text>
                 <TouchableOpacity onPress={fetchFinancialData} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <RefreshCw size={12} color="#15803D" />
+                  <Text style={{ fontSize: 12 }}>🔄</Text>
                   <Text style={styles.viewAllText}>Làm mới</Text>
                 </TouchableOpacity>
               </View>
@@ -694,11 +681,11 @@ const FinancialsScreen = ({ navigation }) => {
                     />
                   </View>
                   <TouchableOpacity style={[styles.btnExport, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleExportRevenueCSV}>
-                    <Download size={12} color="#475569" />
+                    <Text style={{ fontSize: 12 }}>⬇️</Text>
                     <Text style={styles.btnExportText}>Xuất kiểm toán CSV</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.btnCreate, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setShowRevenueForm(true)}>
-                    <Plus size={12} color="#FFFFFF" />
+                    <Text style={{ fontSize: 12 }}>➕</Text>
                     <Text style={styles.btnCreateText}>Lập báo cáo mới</Text>
                   </TouchableOpacity>
                 </View>

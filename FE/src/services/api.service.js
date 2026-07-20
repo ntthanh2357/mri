@@ -1,19 +1,13 @@
 import Config from '../constants/config';
 import { Platform } from 'react-native';
-
-// AsyncStorage fallback for non-web
-const asyncStorageNoOp = {
-  getItem: () => Promise.resolve(null),
-  setItem: () => Promise.resolve(),
-  removeItem: () => Promise.resolve(),
-};
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Helper functions for token
 const getToken = async () => {
   if (Platform.OS === 'web') {
     return localStorage.getItem('token');
   }
-  return asyncStorageNoOp.getItem('token');
+  return AsyncStorage.getItem('token');
 };
 
 const setToken = async (token) => {
@@ -25,9 +19,9 @@ const setToken = async (token) => {
     }
   } else {
     if (token) {
-      await asyncStorageNoOp.setItem('token', token);
+      await AsyncStorage.setItem('token', token);
     } else {
-      await asyncStorageNoOp.removeItem('token');
+      await AsyncStorage.removeItem('token');
     }
   }
 };

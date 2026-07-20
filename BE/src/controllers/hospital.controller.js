@@ -2,6 +2,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { User } from "../models/user.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 import { uploadToGCS } from "../config/gcs.js";
+import { canModerateRole } from "../services/user.service.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -278,8 +279,8 @@ export const toggleStaffLock = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy nhân viên thuộc bệnh viện này." });
     }
 
-    if (staffMember.role === "hospital_admin") {
-      return res.status(400).json({ success: false, message: "Không thể khóa tài khoản quản trị bệnh viện." });
+    if (!canModerateRole(req.user.role, staffMember.role)) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền khóa/mở khóa tài khoản này." });
     }
 
     staffMember.isLocked = !staffMember.isLocked;

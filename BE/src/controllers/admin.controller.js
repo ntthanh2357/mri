@@ -42,10 +42,16 @@ export const lockUser = async (req, res) => {
   try {
     const { userId, isLocked } = req.body;
     const adminId = req.user.id;
-    const user = await toggleUserLock(userId, Boolean(isLocked), adminId);
+    const user = await toggleUserLock(userId, Boolean(isLocked), adminId, req.user.role);
     res.status(200).json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.message === "User not found") {
+      res.status(404).json({ success: false, message: error.message });
+    } else if (error.message.startsWith("Bạn không có quyền")) {
+      res.status(403).json({ success: false, message: error.message });
+    } else {
+      res.status(500).json({ success: false, message: error.message });
+    }
   }
 };
 
@@ -117,11 +123,13 @@ export const lockUserById = async (req, res) => {
       return;
     }
     const adminId = req.user.id;
-    const user = await lockUserByIdService(id, adminId);
+    const user = await lockUserByIdService(id, adminId, req.user.role);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "User not found") {
       res.status(404).json({ success: false, message: error.message });
+    } else if (error.message.startsWith("Bạn không có quyền")) {
+      res.status(403).json({ success: false, message: error.message });
     } else {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -137,11 +145,13 @@ export const unlockUserById = async (req, res) => {
       return;
     }
     const adminId = req.user.id;
-    const user = await unlockUserByIdService(id, adminId);
+    const user = await unlockUserByIdService(id, adminId, req.user.role);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "User not found") {
       res.status(404).json({ success: false, message: error.message });
+    } else if (error.message.startsWith("Bạn không có quyền")) {
+      res.status(403).json({ success: false, message: error.message });
     } else {
       res.status(500).json({ success: false, message: error.message });
     }
