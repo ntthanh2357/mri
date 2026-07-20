@@ -16,7 +16,7 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
-import { Users, FolderOpen, Calendar, TrendingUp, Brain, DollarSign, Activity } from 'lucide-react';
+import { Users, FolderOpen, Calendar, TrendingUp, Brain, DollarSign, Activity } from 'lucide-react-native';
 
 const getRoleBadgeStyle = (role) => {
   switch (role) {

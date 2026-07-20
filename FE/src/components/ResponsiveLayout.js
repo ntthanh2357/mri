@@ -26,7 +26,7 @@ import {
   ClipboardList, 
   Star, 
   CreditCard 
-} from 'lucide-react';
+} from 'lucide-react-native';
 
 const ResponsiveLayout = ({
   children,
@@ -128,7 +128,6 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: Brain },
-          { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
           { label: 'Khai báo bệnh án', route: 'RecordVault', icon: ClipboardList },
           { label: 'Mua Premium', route: 'Premium', icon: Star },
@@ -207,7 +206,7 @@ const ResponsiveLayout = ({
         {/* Brand Logo */}
         <View style={styles.brandContainer}>
           <Image
-            source={require('../../assets/logo.jpg')}
+            source={require('../../assets/icon.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -265,7 +264,16 @@ const ResponsiveLayout = ({
               <TouchableOpacity
                 key={`${item.route}_${item.label}`}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => navigation.navigate(item.route, item.params)}
+                onPress={() => {
+                  // Đang đứng ngay trên route đích (chỉ khác tab) — dùng setParams
+                  // vì navigate() tự điều hướng đến chính mình không đảm bảo cập nhật params.
+                  const currentBaseRoute = activeRoute?.split('_')[0];
+                  if (currentBaseRoute === item.route) {
+                    navigation.setParams(item.params || {});
+                  } else {
+                    navigation.navigate(item.route, item.params);
+                  }
+                }}
               >
                 <View style={styles.navIconContainer}>
                   <IconComponent size={16} color={isActive ? '#15803D' : '#64748B'} />

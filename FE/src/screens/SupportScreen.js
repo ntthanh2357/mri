@@ -15,7 +15,7 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SupportScreen.styles';
 import { get, post } from '../services/api.service';
-import { MessageSquare, Phone, Mail, RefreshCw, ChevronDown, ChevronUp, AlertCircle, LifeBuoy } from 'lucide-react';
+import { MessageSquare, Phone, Mail, RefreshCw, ChevronDown, ChevronUp, AlertCircle, LifeBuoy } from 'lucide-react-native';
 
 const SupportScreen = ({ navigation }) => {
   const [openFaq, setOpenFaq] = useState(null);

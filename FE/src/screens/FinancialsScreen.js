@@ -30,7 +30,7 @@ import {
   Save, 
   ArrowRight,
   Pill
-} from 'lucide-react';
+} from 'lucide-react-native';
 
 const DRUG_SUGGESTIONS = [
   { name: 'Keppra', unit: 'Viên' },

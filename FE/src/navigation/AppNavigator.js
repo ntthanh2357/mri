@@ -39,6 +39,10 @@ import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 
 const Stack = createNativeStackNavigator();
 
+// Trên web, ResponsiveLayout tự vẽ sidebar/back nav cho desktop nên ẩn header mặc định.
+// Trên mobile (Expo), không có nav chrome nào khác nên bật header gốc để có nút quay lại.
+const isNativeMobile = Platform.OS !== 'web';
+
 const AppNavigator = () => {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -92,27 +96,27 @@ const AppNavigator = () => {
         <Stack.Screen name="AIAnalysis" component={AIAnalysisScreen} options={{ title: 'Phân tích AI', headerShown: false }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Hội viên Premium', headerShown: false }} />
         <Stack.Screen name="SystemAdmin" component={SystemAdminScreen} options={{ title: 'Hệ thống Quản trị', headerShown: false }} />
-        <Stack.Screen name="AdminBackoffice" component={AdminBackofficeScreen} options={{ title: 'Admin Backoffice', headerShown: false }} />
+        <Stack.Screen name="AdminBackoffice" component={AdminBackofficeScreen} options={{ title: 'Admin Backoffice', headerShown: isNativeMobile }} />
         <Stack.Screen name="PatientRecords" component={PatientRecordsScreen} options={{ title: 'Hồ sơ bệnh nhân', headerShown: false }} />
         <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: 'Chi tiết bệnh án', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
         <Stack.Screen name="MedicalRecordForm" component={MedicalRecordFormScreen} options={{ title: 'Bệnh án Ung thư Não', headerShown: false }} />
-        <Stack.Screen name="DocumentDetail" component={DocumentDetailScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DocumentDetail" component={DocumentDetailScreen} options={{ title: 'Chi tiết tài liệu', headerShown: false }} />
         <Stack.Screen name="RecordVault" component={RecordVaultScreen} options={{ title: 'Khai báo bệnh án', headerShown: false }} />
-        <Stack.Screen name="DocumentForm" component={DocumentFormScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DocumentForm" component={DocumentFormScreen} options={{ title: 'Biểu mẫu tài liệu', headerShown: false }} />
         <Stack.Screen name="ImagingHistory" component={ImagingHistoryScreen} options={{ title: 'Lịch sử phim chụp', headerShown: false }} />
         <Stack.Screen name="ImagingResult" component={ImagingResultScreen} options={{ title: 'Chi tiết phim chụp', headerShown: false }} />
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
-        <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
-        <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: false }} />
-        <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
+        <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: isNativeMobile }} />
+        <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ title: 'Kích hoạt tài khoản', headerShown: isNativeMobile }} />
+        <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ title: 'Hàng đợi khám', headerShown: false }} />
+        <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ title: 'Thông tin bệnh viện', headerShown: false }} />
+        <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ title: 'Quản lý tài khoản', headerShown: isNativeMobile }} />
+        <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ title: 'Chi tiết bệnh nhân', headerShown: false }} />
+        <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: isNativeMobile }} />
+        <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: isNativeMobile }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

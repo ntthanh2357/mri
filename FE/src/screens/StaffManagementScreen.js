@@ -14,7 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
-import { UserPlus, Save, Users, Lock, Unlock, Search } from 'lucide-react';
+import { UserPlus, Save, Users, Lock, Unlock, Search } from 'lucide-react-native';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ & Kỹ thuật viên',

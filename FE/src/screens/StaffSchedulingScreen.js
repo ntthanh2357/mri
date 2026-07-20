@@ -14,7 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
-import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react';
+import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react-native';
 
 const SHIFT_LABELS = {
   'sáng': 'Ca Sáng',

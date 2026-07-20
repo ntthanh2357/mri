@@ -30,7 +30,7 @@ import {
   RefreshCw,
   Search,
   Plus
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { get, put, post } from '../services/api.service';
 
 const EMRDashboardScreen = ({ navigation }) => {

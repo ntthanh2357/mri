@@ -1,31 +1,20 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../constants/config.js';
 import { navigateTo } from './navigationRef.js';
-
-// AsyncStorage is not installed — provide a no-op fallback for non-web platforms.
-// The MVP targets web (Platform.OS === 'web'), so this is fine.
-const asyncStorageNoOp = {
-  getItem: (_key) => {
-    console.warn('[apiClient] @react-native-async-storage/async-storage is not installed. Token persistence is disabled on non-web platforms.');
-    return Promise.resolve(null);
-  },
-  removeItem: (_key) => {
-    return Promise.resolve();
-  },
-};
 
 async function getToken() {
   if (Platform.OS === 'web') {
     return localStorage.getItem('token');
   }
-  return asyncStorageNoOp.getItem('token');
+  return AsyncStorage.getItem('token');
 }
 
 async function clearToken() {
   if (Platform.OS === 'web') {
     localStorage.removeItem('token');
   } else {
-    await asyncStorageNoOp.removeItem('token');
+    await AsyncStorage.removeItem('token');
   }
 }
 

@@ -15,7 +15,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
-import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2 } from 'lucide-react-native';
 
 const CATEGORY_LABELS = {
   anticonvulsant: 'Động kinh',
