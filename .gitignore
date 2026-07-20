@@ -151,3 +151,10 @@ tmp_duck/
 TheDuckHospital-main/
 
 TheDuckHospital-main/
+
+# Agent & temporary files
+.agent/
+antigravity-awesome-skills-main*
+temp.txt
+BE/uploads/
+
