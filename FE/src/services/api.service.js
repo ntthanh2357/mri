@@ -1,6 +1,9 @@
 import Config from '../constants/config';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateTo } from '../utils/navigationRef';
+
+const SESSION_EXPIRED = { success: false, message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' };
 
 // Helper functions for token
 const getToken = async () => {
@@ -46,6 +49,13 @@ const request = async (endpoint, options = {}) => {
     ...options,
     headers,
   });
+
+  if (response.status === 401) {
+    await setToken('');
+    navigateTo('Welcome');
+    return SESSION_EXPIRED;
+  }
+
   let data;
   try {
     const text = await response.text();
@@ -73,6 +83,13 @@ export const postFormData = async (endpoint, formData) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
   const response = await fetch(url, { method: 'POST', headers, body: formData });
+
+  if (response.status === 401) {
+    await setToken('');
+    navigateTo('Welcome');
+    return SESSION_EXPIRED;
+  }
+
   let data;
   try {
     const text = await response.text();

@@ -193,6 +193,17 @@ const ResponsiveLayout = ({
     return activeRoute === item.route && item.route !== 'NurseReception';
   };
 
+  // Đang đứng ngay trên route đích (chỉ khác tab) — dùng setParams vì navigate()
+  // tự điều hướng đến chính mình không đảm bảo cập nhật params.
+  const goToMenuItem = (item) => {
+    const currentBaseRoute = activeRoute?.split('_')[0];
+    if (currentBaseRoute === item.route) {
+      navigation.setParams(item.params || {});
+    } else {
+      navigation.navigate(item.route, item.params);
+    }
+  };
+
   const renderNavItem = (item, onNavigate) => {
     const isActive = isItemActive(item);
     return (
@@ -251,7 +262,7 @@ const ResponsiveLayout = ({
                 {menuItems.map((item) =>
                   renderNavItem(item, (it) => {
                     setShowMobileMenu(false);
-                    navigation.navigate(it.route, it.params);
+                    goToMenuItem(it);
                   })
                 )}
               </ScrollView>
@@ -293,7 +304,7 @@ const ResponsiveLayout = ({
         {/* Brand Logo */}
         <View style={styles.brandContainer}>
           <Image
-            source={require('../../assets/logo.jpg')}
+            source={require('../../assets/icon.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -332,7 +343,7 @@ const ResponsiveLayout = ({
 
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
-          {menuItems.map((item) => renderNavItem(item, (it) => navigation.navigate(it.route, it.params)))}
+          {menuItems.map((item) => renderNavItem(item, goToMenuItem))}
         </ScrollView>
 
         {/* Footer Actions */}

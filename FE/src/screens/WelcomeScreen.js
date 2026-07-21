@@ -451,7 +451,7 @@ const WelcomeScreen = ({ navigation }) => {
               {/* Logo in white */}
               <View style={styles.brandContainerWhite}>
                 <Image
-                  source={require('../../assets/logo.jpg')}
+                  source={require('../../assets/icon.png')}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
@@ -867,7 +867,7 @@ const WelcomeScreen = ({ navigation }) => {
           <View style={styles.mobileHeader}>
             <View style={styles.brandContainer}>
               <Image
-                source={require('../../assets/logo.jpg')}
+                source={require('../../assets/icon.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

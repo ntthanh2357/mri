@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../constants/config.js';
 import { navigateTo } from './navigationRef.js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function getToken() {
   if (Platform.OS === 'web') {

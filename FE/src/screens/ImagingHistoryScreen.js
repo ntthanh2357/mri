@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   useWindowDimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './ImagingHistoryScreen.styles';
@@ -26,15 +25,9 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
     setLoading(true);
     setError(null);
     try {
-      const userStr = await AsyncStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : {};
-
-      let endpoint = '/api/v1/imaging/my-results';
-      if (patientMedicalId) {
-        endpoint = `/api/v1/imaging/patient/${patientMedicalId}`;
-      } else if (user.role && user.role !== 'patient') {
-        endpoint = '/api/v1/imaging';
-      }
+      const endpoint = patientMedicalId
+        ? `/api/v1/imaging/patient/${patientMedicalId}`
+        : '/api/v1/imaging/my-results';
 
       const response = await get(endpoint);
       if (response.success) {
@@ -65,7 +58,7 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
+        onPress={() => navigation.navigate('ImagingResult', { resultId: item._id, activeRoute: 'ImagingHistory' })}
       >
         <View style={styles.cardHeader}>
           <View style={[styles.badge, isMRI ? styles.mriBadge : styles.ctBadge]}>
@@ -103,15 +96,13 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+    <ResponsiveLayout navigation={navigation} activeRoute="ImagingHistory">
       <SafeAreaView style={styles.container}>
         <View style={styles.headerRow}>
           <View style={styles.headerTitleRow}>
-            {patientMedicalId && (
-              <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
-                <Text style={styles.backArrowText}>←</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
+              <Text style={styles.backArrowText}>←</Text>
+            </TouchableOpacity>
             <Text style={styles.title}>
               {patientName ? `Lịch sử phim: ${patientName}` : 'Lịch sử Chẩn đoán Hình ảnh'}
             </Text>
