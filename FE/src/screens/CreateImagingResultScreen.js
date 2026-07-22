@@ -160,7 +160,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       radiologist: null,
     }));
 
-    showAlert('Xác thực OCR', 'Đã tự động trích xuất và điền thông tin hành chính & chẩn đoán hình ảnh từ phim chụp giấy!');
+    showAlert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin hành chính & chẩn đoán hình ảnh mẫu từ mẫu phim chụp!');
   };
 
   // ── Điều hướng sang màn hình AI chuyên biệt ──
@@ -204,10 +204,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         gender,
         address,
         orderDate: new Date(),
-        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ Nguyễn Văn A',
+        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ chỉ định',
         orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
         medicalRecordNumber: `SBA-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-        diagnosis: visit?.reason || (imagingType === 'MRI' ? 'U não thái dương' : 'Theo dõi u não'),
+        diagnosis: visit?.reason || 'Theo dõi u não',
         procedure,
         technique,
         findings,
@@ -263,7 +263,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
             {/* Auto Fill Buttons */}
             <View style={[styles.helperRow, { gap: 10 }]}>
               <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#0F172A', borderColor: '#1E293B', flex: 1 }]} onPress={handleOcrFill}>
-                <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>⚡ Quét tự động (OCR & Fill)</Text>
+                <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 

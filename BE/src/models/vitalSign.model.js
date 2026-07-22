@@ -1,6 +1,13 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const vitalSignSchema = new Schema({
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: "Hospital",
+    required: true,
+    index: true
+  },
   patient_id: { 
     type: Schema.Types.ObjectId, 
     ref: "User",
@@ -34,5 +41,7 @@ const vitalSignSchema = new Schema({
 }, {
   timestamps: true
 });
+
+vitalSignSchema.plugin(tenancyPlugin);
 
 export const VitalSign = model("VitalSign", vitalSignSchema, "vital_signs");

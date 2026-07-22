@@ -11,9 +11,13 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
+import styles from './FinancialsScreen.styles';
+import Config from '../constants/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DRUG_SUGGESTIONS = [
   { name: 'Keppra', unit: 'Viên' },
@@ -41,6 +45,13 @@ const FinancialsScreen = ({ navigation }) => {
     refunds: 0,
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [revenueDistribution, setRevenueDistribution] = useState({
+    exam: 0,
+    mri: 0,
+    ai: 0,
+    drug: 0,
+    other: 0,
+  });
 
   // Reports lists
   const [revenueReports, setRevenueReports] = useState([]);
@@ -69,12 +80,18 @@ const FinancialsScreen = ({ navigation }) => {
   const [showDrugForm, setShowDrugForm] = useState(false);
   const [drugMonth, setDrugMonth] = useState(String(new Date().getMonth() + 1));
   const [drugYear, setDrugYear] = useState(String(new Date().getFullYear()));
-  const [drugItems, setDrugItems] = useState([
-    { drugName: 'Keppra', unit: 'Viên', quantity: '100', usedCount: '10' }
-  ]);
+  const [drugItems, setDrugItems] = useState([]);
+
+  // Pricing & Limits Form State
+  const [examFee, setExamFee] = useState('150000');
+  const [mriFee, setMriFee] = useState('1500000');
+  const [aiFee, setAiFee] = useState('200000');
+  const [maxPatients, setMaxPatients] = useState('50');
+  const [updatingPricing, setUpdatingPricing] = useState(false);
 
   useEffect(() => {
     fetchFinancialData();
+    fetchPricing();
   }, []);
 
   useEffect(() => {
@@ -85,6 +102,44 @@ const FinancialsScreen = ({ navigation }) => {
     }
   }, [activeTab]);
 
+  const handleExportRevenueCSV = async () => {
+    try {
+      setLoading(true);
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : await AsyncStorage.getItem('token');
+      const url = `${Config.API_URL}/admin/reports/revenue-export?month=${revMonth}&year=${revYear}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Không thể tải file báo cáo.');
+      }
+      
+      const csvText = await response.text();
+      
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `Bao_cao_doanh_thu_${revYear}_${revMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        Alert.alert('Thành công', 'Đã tải xuống báo cáo kiểm toán CSV.');
+      } else {
+        Alert.alert('Thành công', 'Đã tải dữ liệu báo cáo thành công.');
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Lỗi', 'Không thể xuất báo cáo kiểm toán CSV.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchFinancialData = async () => {
     setLoading(true);
     try {
@@ -93,14 +148,37 @@ const FinancialsScreen = ({ navigation }) => {
       if (res && res.invoices) {
         const invoices = res.invoices;
         const paid = invoices.filter(inv => inv.status === 'đã thanh toán');
+        const refunded = invoices.filter(inv => inv.status === 'hoàn trả');
         const totalPaid = paid.reduce((sum, inv) => sum + inv.totalAmount, 0);
-        
+        const totalRefunded = refunded.reduce((sum, inv) => sum + inv.totalAmount, 0);
+
         setStats({
           monthlyRevenue: totalPaid,
           transactionCount: paid.length,
           averageTransaction: paid.length > 0 ? Math.round(totalPaid / paid.length) : 0,
-          refunds: 0,
+          refunds: totalRefunded,
         });
+
+        // Tính toán phân bổ nguồn thu
+        let exam = 0;
+        let mri = 0;
+        let ai = 0;
+        let drug = 0;
+        let other = 0;
+
+        paid.forEach(inv => {
+          if (inv.items && Array.isArray(inv.items)) {
+            inv.items.forEach(item => {
+              if (item.type === 'exam') exam += item.amount;
+              else if (item.type === 'mri') mri += item.amount;
+              else if (item.type === 'ai') ai += item.amount;
+              else if (item.type === 'drug') drug += item.amount;
+              else other += item.amount;
+            });
+          }
+        });
+
+        setRevenueDistribution({ exam, mri, ai, drug, other });
 
         // Format recent transactions
         const txs = invoices.slice(0, 10).map(inv => {
@@ -120,6 +198,54 @@ const FinancialsScreen = ({ navigation }) => {
       console.error('Error fetching financial data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPricing = async () => {
+    try {
+      const res = await get('/api/v1/hospital/me');
+      const h = res.hospital || res.data?.hospital;
+      if (h && h.pricing) {
+        setExamFee(String(h.pricing.examFee ?? 150000));
+        setMriFee(String(h.pricing.mriFee ?? 1500000));
+        setAiFee(String(h.pricing.aiFee ?? 200000));
+        setMaxPatients(String(h.pricing.maxPatients ?? 50));
+      }
+    } catch (err) {
+      console.error('Error fetching hospital pricing:', err);
+    }
+  };
+
+  const handleUpdatePricing = async () => {
+    const parsedExam = Number(examFee);
+    const parsedMri = Number(mriFee);
+    const parsedAi = Number(aiFee);
+    const parsedMax = Number(maxPatients);
+
+    if (isNaN(parsedExam) || isNaN(parsedMri) || isNaN(parsedAi) || isNaN(parsedMax)) {
+      Alert.alert('Lỗi', 'Bảng giá dịch vụ và số bệnh nhân tối đa phải là chữ số hợp lệ.');
+      return;
+    }
+
+    setUpdatingPricing(true);
+    try {
+      const response = await put('/admin/hospital-pricing', {
+        examFee: parsedExam,
+        mriFee: parsedMri,
+        aiFee: parsedAi,
+        maxPatients: parsedMax
+      });
+
+      if (response && response.success) {
+        Alert.alert('Thành công', 'Cập nhật bảng giá dịch vụ bệnh viện thành công!');
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể cập nhật cấu hình.');
+      }
+    } catch (err) {
+      console.error('Error updating hospital pricing:', err);
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setUpdatingPricing(false);
     }
   };
 
@@ -181,7 +307,7 @@ const FinancialsScreen = ({ navigation }) => {
     try {
       // Calculate total amount
       const total = dailyRecords.reduce((sum, rec) => sum + (Number(rec.revenue) || 0), 0);
-      
+
       const payload = {
         month: Number(revMonth),
         year: Number(revYear),
@@ -296,20 +422,20 @@ const FinancialsScreen = ({ navigation }) => {
 
         {/* Tab Buttons */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]}
             onPress={() => setActiveTab('overview')}
           >
             <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Tổng quan chung</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]}
             onPress={() => setActiveTab('revenue')}
           >
             <Text style={[styles.tabText, activeTab === 'revenue' && styles.activeTabText]}>Báo cáo doanh thu</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]} 
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]}
             onPress={() => setActiveTab('drugs')}
           >
             <Text style={[styles.tabText, activeTab === 'drugs' && styles.activeTabText]}>Báo cáo thuốc</Text>
@@ -327,7 +453,9 @@ const FinancialsScreen = ({ navigation }) => {
                 <View style={styles.metricRow}>
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>💵</Text>
+                      <View style={{ backgroundColor: '#DCFCE7', padding: 8, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 20 }}>💰</Text>
+                      </View>
                       <View style={styles.badgeGreen}>
                         <Text style={styles.badgeGreenText}>Hoạt động</Text>
                       </View>
@@ -338,7 +466,9 @@ const FinancialsScreen = ({ navigation }) => {
 
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>💳</Text>
+                      <View style={{ backgroundColor: '#DBEAFE', padding: 8, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 20 }}>💳</Text>
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch đã thanh toán</Text>
                     <Text style={styles.metricVal}>{stats.transactionCount}</Text>
@@ -348,7 +478,9 @@ const FinancialsScreen = ({ navigation }) => {
                 <View style={styles.metricRow}>
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>📈</Text>
+                      <View style={{ backgroundColor: '#F3E8FF', padding: 8, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 20 }}>📈</Text>
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giá trị trung bình / GD</Text>
                     <Text style={styles.metricVal}>{stats.averageTransaction.toLocaleString('vi-VN')}đ</Text>
@@ -356,19 +488,146 @@ const FinancialsScreen = ({ navigation }) => {
 
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <Text style={styles.metricEmoji}>📉</Text>
+                      <View style={{ backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 20 }}>📉</Text>
+                      </View>
                     </View>
                     <Text style={styles.metricLabel}>Giao dịch hoàn trả</Text>
                     <Text style={styles.metricVal}>{stats.refunds.toLocaleString('vi-VN')}đ</Text>
                   </View>
                 </View>
               </View>
+              {/* Stacked Bar Chart for Revenue Distribution */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 16 }}>📊</Text>
+                  <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
+                </View>
+                <Text style={styles.chartSub}>Tỷ lệ nguồn thu bóc tách từ các hóa đơn đã thanh toán</Text>
+
+                {(() => {
+                  const total = (revenueDistribution.exam + revenueDistribution.mri + revenueDistribution.ai + revenueDistribution.drug + revenueDistribution.other) || 1;
+                  const pExam = Math.round((revenueDistribution.exam / total) * 100);
+                  const pMri = Math.round((revenueDistribution.mri / total) * 100);
+                  const pAi = Math.round((revenueDistribution.ai / total) * 100);
+                  const pDrug = Math.round((revenueDistribution.drug / total) * 100);
+                  const pOther = Math.round((revenueDistribution.other / total) * 100);
+
+                  return (
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.stackedBar}>
+                        {pExam > 0 && <View style={[styles.barSegment, { flex: pExam, backgroundColor: '#3B82F6' }]} />}
+                        {pMri > 0 && <View style={[styles.barSegment, { flex: pMri, backgroundColor: '#8B5CF6' }]} />}
+                        {pAi > 0 && <View style={[styles.barSegment, { flex: pAi, backgroundColor: '#10B981' }]} />}
+                        {pDrug > 0 && <View style={[styles.barSegment, { flex: pDrug, backgroundColor: '#F59E0B' }]} />}
+                        {pOther > 0 && <View style={[styles.barSegment, { flex: pOther, backgroundColor: '#64748B' }]} />}
+                      </View>
+
+                      <View style={styles.legendContainer}>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
+                          <Text style={styles.legendText}>Khám thần kinh ({pExam}%): {revenueDistribution.exam.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
+                          <Text style={styles.legendText}>Chụp MRI ({pMri}%): {revenueDistribution.mri.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                          <Text style={styles.legendText}>Phân tích AI ({pAi}%): {revenueDistribution.ai.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+                          <Text style={styles.legendText}>Thuốc hướng thần/não ({pDrug}%): {revenueDistribution.drug.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#64748B' }]} />
+                          <Text style={styles.legendText}>Chi phí khác ({pOther}%): {revenueDistribution.other.toLocaleString('vi-VN')}đ</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
+              </View>
+
+              {/* Pricing Section Card */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 16 }}>💊</Text>
+                  <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Bảng giá dịch vụ & Giới hạn tiếp đón</Text>
+                </View>
+                <Text style={styles.chartSub}>Cấu hình giá dịch vụ áp dụng cho hóa đơn và số lượng bệnh nhân tối đa tại cơ sở của bạn.</Text>
+
+                <View style={{ gap: 12, marginTop: 12 }}>
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí khám lâm sàng (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={examFee}
+                        onChangeText={setExamFee}
+                        placeholder="Ví dụ: 150000"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí chụp phim MRI (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={mriFee}
+                        onChangeText={setMriFee}
+                        placeholder="Ví dụ: 1500000"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Phí phân tích tự động AI (đ) *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={aiFee}
+                        onChangeText={setAiFee}
+                        placeholder="Ví dụ: 200000"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Số bệnh nhân tối đa trong ngày *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        keyboardType="numeric"
+                        value={maxPatients}
+                        onChangeText={setMaxPatients}
+                        placeholder="Ví dụ: 50"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.btnPrimary, { marginTop: 8, flexDirection: 'row', justifyContent: 'center', gap: 6 }]}
+                    onPress={handleUpdatePricing}
+                    disabled={updatingPricing}
+                  >
+                    {updatingPricing ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Text style={{ fontSize: 16 }}>💾</Text>
+                        <Text style={styles.btnPrimaryText}>Cập nhật bảng giá & giới hạn</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {/* Transactions List */}
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Các hóa đơn phát sinh gần đây</Text>
-                <TouchableOpacity onPress={fetchFinancialData}>
-                  <Text style={styles.viewAllText}>🔄 Làm mới</Text>
+                <TouchableOpacity onPress={fetchFinancialData} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 12 }}>🔄</Text>
+                  <Text style={styles.viewAllText}>Làm mới</Text>
                 </TouchableOpacity>
               </View>
 
@@ -404,9 +663,32 @@ const FinancialsScreen = ({ navigation }) => {
             <View>
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Danh sách báo cáo doanh thu tháng</Text>
-                <TouchableOpacity style={styles.btnCreate} onPress={() => setShowRevenueForm(true)}>
-                  <Text style={styles.btnCreateText}>➕ Lập báo cáo mới</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 12, color: '#475569', fontWeight: 'bold' }}>Tháng:</Text>
+                    <TextInput
+                      style={{ width: 30, fontSize: 12, padding: 0, fontWeight: 'bold', color: '#1E293B', outlineStyle: 'none' }}
+                      value={revMonth}
+                      onChangeText={setRevMonth}
+                      keyboardType="numeric"
+                    />
+                    <Text style={{ fontSize: 12, color: '#475569', fontWeight: 'bold' }}>Năm:</Text>
+                    <TextInput
+                      style={{ width: 45, fontSize: 12, padding: 0, fontWeight: 'bold', color: '#1E293B', outlineStyle: 'none' }}
+                      value={revYear}
+                      onChangeText={setRevYear}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <TouchableOpacity style={[styles.btnExport, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleExportRevenueCSV}>
+                    <Text style={{ fontSize: 12 }}>⬇️</Text>
+                    <Text style={styles.btnExportText}>Xuất kiểm toán CSV</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnCreate, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setShowRevenueForm(true)}>
+                    <Text style={{ fontSize: 12 }}>➕</Text>
+                    <Text style={styles.btnCreateText}>Lập báo cáo mới</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.reportsCard}>
@@ -416,8 +698,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   revenueReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'revenue')}
                     >
@@ -450,20 +732,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revMonth} 
-                    onChangeText={setRevMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revMonth}
+                    onChangeText={setRevMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={revYear} 
-                    onChangeText={setRevYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={revYear}
+                    onChangeText={setRevYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -471,7 +753,7 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
 
               <Text style={styles.formSectionSubtitle}>Nhập số liệu chi tiết từng ngày (1 - 31)</Text>
-              
+
               <View style={styles.gridTable}>
                 <View style={styles.gridTableHeader}>
                   <Text style={[styles.gridTh, { flex: 1 }]}>Ngày</Text>
@@ -479,13 +761,13 @@ const FinancialsScreen = ({ navigation }) => {
                   <Text style={[styles.gridTh, { flex: 3 }]}>Doanh thu (đ)</Text>
                   <Text style={[styles.gridTh, { flex: 2 }]}>Tỉ lệ (%)</Text>
                 </View>
-                
+
                 {dailyRecords.map((rec, index) => (
                   <View key={rec.day} style={styles.gridTableRow}>
                     <Text style={[styles.gridTd, { flex: 1, fontWeight: 'bold' }]}>Ngày {rec.day}</Text>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={rec.patientCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={rec.patientCount}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].patientCount = val;
@@ -493,9 +775,9 @@ const FinancialsScreen = ({ navigation }) => {
                       }}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={rec.revenue} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={rec.revenue}
                       onChangeText={(val) => {
                         const updated = [...dailyRecords];
                         updated[index].revenue = val;
@@ -536,8 +818,8 @@ const FinancialsScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   drugReports.map((report) => (
-                    <TouchableOpacity 
-                      key={report._id} 
+                    <TouchableOpacity
+                      key={report._id}
                       style={styles.reportRow}
                       onPress={() => viewReportDetails(report, 'drug')}
                     >
@@ -570,20 +852,20 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formInputsRow}>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Tháng</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugMonth} 
-                    onChangeText={setDrugMonth} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugMonth}
+                    onChangeText={setDrugMonth}
                     keyboardType="numeric"
                     placeholder="1-12"
                   />
                 </View>
                 <View style={styles.formInputGroup}>
                   <Text style={styles.formInputLabel}>Năm</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={drugYear} 
-                    onChangeText={setDrugYear} 
+                  <TextInput
+                    style={styles.formInput}
+                    value={drugYear}
+                    onChangeText={setDrugYear}
                     keyboardType="numeric"
                     placeholder="VD: 2026"
                   />
@@ -608,27 +890,27 @@ const FinancialsScreen = ({ navigation }) => {
 
                 {drugItems.map((item, idx) => (
                   <View key={idx} style={styles.gridTableRow}>
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 3 }]} 
-                      value={item.drugName} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 3 }]}
+                      value={item.drugName}
                       onChangeText={(val) => updateDrugItem(idx, 'drugName', val)}
                       placeholder="Tên thuốc"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.unit} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.unit}
                       onChangeText={(val) => updateDrugItem(idx, 'unit', val)}
                       placeholder="VD: Viên"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.quantity} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.quantity}
                       onChangeText={(val) => updateDrugItem(idx, 'quantity', val)}
                       keyboardType="numeric"
                     />
-                    <TextInput 
-                      style={[styles.gridTdInput, { flex: 2 }]} 
-                      value={item.usedCount} 
+                    <TextInput
+                      style={[styles.gridTdInput, { flex: 2 }]}
+                      value={item.usedCount}
                       onChangeText={(val) => updateDrugItem(idx, 'usedCount', val)}
                       keyboardType="numeric"
                     />
@@ -659,7 +941,7 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {detailsType === 'revenue' 
+                  {detailsType === 'revenue'
                     ? `Chi tiết báo cáo doanh thu - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                     : `Chi tiết báo cáo sử dụng thuốc - Tháng ${selectedReport?.month}/${selectedReport?.year}`
                   }
@@ -672,11 +954,11 @@ const FinancialsScreen = ({ navigation }) => {
               <ScrollView style={styles.modalBody}>
                 <Text style={styles.modalMeta}>Người lập: {selectedReport?.author?.profile?.name || selectedReport?.author?.email}</Text>
                 <Text style={styles.modalMeta}>Thời gian lập: {selectedReport ? new Date(selectedReport.createdAt).toLocaleString() : ''}</Text>
-                
+
                 {detailsType === 'revenue' && (
                   <View style={{ marginTop: 16 }}>
                     <Text style={styles.modalSummaryText}>Tổng doanh thu: {selectedReport?.totalAmount?.toLocaleString('vi-VN')}đ</Text>
-                    
+
                     <View style={styles.detailTable}>
                       <View style={styles.detailTableHeader}>
                         <Text style={[styles.detailTh, { flex: 1 }]}>Ngày</Text>
@@ -727,493 +1009,5 @@ const FinancialsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    paddingVertical: 4,
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: '#15803D',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 40,
-  },
-  metricsGrid: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 16,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  metricEmoji: {
-    fontSize: 18,
-  },
-  badgeGreen: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeGreenText: {
-    fontSize: 9,
-    color: '#166534',
-    fontWeight: 'bold',
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  metricVal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  recentHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  viewAllText: {
-    fontSize: 13,
-    color: '#15803D',
-    fontWeight: '600',
-  },
-  transactionsCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  txRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  lastTxRow: {
-    borderBottomWidth: 0,
-  },
-  txLeft: {
-    flex: 1,
-  },
-  txId: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  txDate: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  txRight: {
-    alignItems: 'flex-end',
-  },
-  txAmount: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusSuccess: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusPending: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  statusSuccessText: {
-    color: '#166534',
-  },
-  statusPendingText: {
-    color: '#B45309',
-  },
-  btnCreate: {
-    backgroundColor: '#15803D',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  btnCreateText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  reportsCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-  },
-  reportRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  reportLeft: {
-    flex: 1.5,
-  },
-  reportTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  reportSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  reportDate: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  reportRight: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  reportValue: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#15803D',
-    marginBottom: 4,
-  },
-  reportDetailLink: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 12,
-    marginBottom: 16,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  formCloseText: {
-    fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  formInputsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  formInputGroup: {
-    flex: 1,
-  },
-  formInputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  formInput: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-  },
-  formSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  formSectionSubtitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#334155',
-    marginBottom: 10,
-  },
-  btnAddRow: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  btnAddRowText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  gridTable: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  gridTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  gridTh: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#475569',
-  },
-  gridTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  gridTd: {
-    fontSize: 12,
-    color: '#0F172A',
-  },
-  gridTdInput: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    fontSize: 12,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-    marginRight: 4,
-    textAlign: 'center',
-  },
-  btnDeleteRow: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  btnDeleteRowText: {
-    color: '#EF4444',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  formActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 10,
-  },
-  btnPrimary: {
-    backgroundColor: '#15803D',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  btnPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  btnSecondary: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#15803D',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  btnSecondaryText: {
-    color: '#15803D',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  // Modal styling
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    maxWidth: 600,
-    maxHeight: '85%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#F8FAFC',
-  },
-  modalTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    flex: 1,
-  },
-  modalCloseBtn: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    marginLeft: 10,
-  },
-  modalBody: {
-    padding: 16,
-  },
-  modalMeta: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  modalSummaryText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#15803D',
-    marginVertical: 10,
-  },
-  detailTable: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  detailTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  detailTh: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#475569',
-  },
-  detailTableRow: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  detailTd: {
-    fontSize: 11,
-    color: '#0F172A',
-  },
-});
 
 export default FinancialsScreen;

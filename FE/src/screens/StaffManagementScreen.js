@@ -16,9 +16,8 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 
 const ROLE_LABELS = {
-  doctor: 'Bác sĩ',
+  doctor: 'Bác sĩ & Kỹ thuật viên',
   nurse: 'Điều dưỡng & Lễ tân',
-  technician: 'Kỹ thuật viên',
 };
 
 export default function StaffManagementScreen({ navigation }) {
@@ -71,12 +70,12 @@ export default function StaffManagementScreen({ navigation }) {
     }
     setCreatingUser(true);
     try {
+      // Không gửi hospitalId từ client — BE sẽ tự lấy từ JWT để bảo mật
       const response = await post('/auth/register', {
         email: newUserEmail.trim(),
         password: newUserPassword,
         name: newUserName.trim(),
         role: activeRoleTab,
-        hospitalId: currentUser?.hospitalId || undefined,
       });
 
       if (response.success || response.user) {
@@ -95,6 +94,7 @@ export default function StaffManagementScreen({ navigation }) {
       setCreatingUser(false);
     }
   };
+
 
   const handleToggleLock = async (staffId, email, isLocked) => {
     const actionText = isLocked ? 'MỞ KHÓA' : 'KHÓA';
@@ -156,7 +156,7 @@ export default function StaffManagementScreen({ navigation }) {
                 onPress={() => setActiveRoleTab(role)}
               >
                 <Text style={[styles.tabText, activeRoleTab === role && styles.tabTextActive]}>
-                  {role === 'doctor' ? '🩺 Bác sĩ' : role === 'nurse' ? '🏥 Điều dưỡng & Lễ tân' : '🔬 Kỹ thuật viên'}
+                  {ROLE_LABELS[role]}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -167,7 +167,10 @@ export default function StaffManagementScreen({ navigation }) {
             {/* Form Column */}
             <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Text style={{ fontSize: 16 }}>➕</Text>
+                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
+                  </View>
                 <Text style={styles.cardSub}>Điền đầy đủ thông tin để cấp tài khoản. Tài khoản mới sẽ ở trạng thái chờ kích hoạt.</Text>
 
                 <View style={styles.field}>
@@ -221,7 +224,10 @@ export default function StaffManagementScreen({ navigation }) {
                   {creatingUser ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.submitButtonText}>💾 Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 14 }}>💾</Text>
+                      <Text style={styles.submitButtonText}>Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -231,19 +237,27 @@ export default function StaffManagementScreen({ navigation }) {
             <View style={isDesktop ? styles.listColumn : styles.fullWidth}>
               <View style={styles.card}>
                 <View style={styles.listHeader}>
-                  <Text style={styles.cardTitle}>📋 Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm kiếm theo tên, email..."
-                    placeholderTextColor="#94A3B8"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Text style={{ fontSize: 16 }}>👥</Text>
+                    <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
+                  </View>
+                  <View style={{ position: 'relative', justifyContent: 'center' }}>
+                    <TextInput
+                      style={[styles.searchInput, { paddingLeft: 34 }]}
+                      placeholder="Tìm kiếm theo tên, email..."
+                      placeholderTextColor="#94A3B8"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    <View style={{ position: 'absolute', left: 12 }}>
+                      <Text style={{ fontSize: 14 }}>🔍</Text>
+                    </View>
+                  </View>
                 </View>
 
                 {loadingStaff ? (
                   <View style={styles.loadingBox}>
-                    <ActivityIndicator size="medium" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={Colors.primary} />
                   </View>
                 ) : filteredStaff.length === 0 ? (
                   <View style={styles.emptyBox}>
@@ -278,9 +292,12 @@ export default function StaffManagementScreen({ navigation }) {
                               onPress={() => handleToggleLock(item._id, item.email, item.isLocked)}
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
-                              <Text style={styles.lockButtonText}>
-                                {item.isLocked ? '🔓 Mở khóa' : '🔒 Khóa'}
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={{ fontSize: 12, color: item.isLocked ? '#166534' : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
+                                <Text style={[styles.lockButtonText, item.isLocked && { color: '#166534' }]}>
+                                  {item.isLocked ? 'Mở khóa' : 'Khóa'}
+                                </Text>
+                              </View>
                             </TouchableOpacity>
                           </View>
                         </View>

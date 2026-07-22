@@ -9,16 +9,24 @@ import { EMRVersion } from "../models/emrVersion.model.js";
 export const getRecords = async (req, res) => {
   try {
     const { search } = req.query;
-    let query = {};
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(403).json({ message: "Không thể xác định bệnh viện của người dùng." });
+    }
+
+    let query = { hospitalId };
     
     if (search) {
-      query = {
-        $or: [
-          { patientName: { $regex: search, $options: "i" } },
-          { patientId: { $regex: search, $options: "i" } },
-          { diagnosis: { $regex: search, $options: "i" } },
-        ],
-      };
+      query.$and = [
+        { hospitalId },
+        {
+          $or: [
+            { patientName: { $regex: search, $options: "i" } },
+            { patientId: { $regex: search, $options: "i" } },
+            { diagnosis: { $regex: search, $options: "i" } },
+          ]
+        }
+      ];
     }
 
     const records = await MedicalRecord.find(query).sort({ createdAt: -1 });
@@ -31,6 +39,11 @@ export const getRecords = async (req, res) => {
 
 export const createRecord = async (req, res) => {
   try {
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(403).json({ message: "Không thể xác định bệnh viện của người dùng." });
+    }
+
     const {
       patientId,
       patientName,
@@ -49,6 +62,7 @@ export const createRecord = async (req, res) => {
     }
 
     const newRecord = new MedicalRecord({
+      hospitalId,
       patientId,
       patientName,
       gender,
@@ -77,6 +91,9 @@ export const getRecordById = async (req, res) => {
     if (!record) {
       return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
     }
+
+    // Cho phép xem bệnh án liên viện. Quyền sửa đổi vẫn được bảo vệ trong updateRecord.
+
     res.status(200).json({ status: "success", data: record });
   } catch (error) {
     console.error("Lỗi chi tiết bệnh án:", error);
@@ -89,6 +106,11 @@ export const updateRecord = async (req, res) => {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) {
       return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+
+    // Tenancy Check
+    if (record.hospitalId && record.hospitalId.toString() !== req.user?.hospitalId?.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền cập nhật hồ sơ bệnh án này." });
     }
 
     const updates = req.body;
@@ -139,6 +161,11 @@ export const updateRecord = async (req, res) => {
 
 export const getRecordVersions = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    // Cho phép xem lịch sử bệnh án liên viện.
     const versions = await EMRVersion.find({ medicalRecordId: req.params.id }).sort({ version: -1 });
     res.status(200).json({ status: "success", data: versions });
   } catch (error) {
@@ -151,6 +178,12 @@ export const getRecordVersions = async (req, res) => {
 
 export const getCareSheets = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    // Cho phép xem danh sách phiếu chăm sóc liên viện.
+
     const careSheets = await CareSheet.find({ medicalRecordId: req.params.id }).sort({ createdAt: -1 });
     res.status(200).json({ status: "success", data: careSheets });
   } catch (error) {
@@ -161,6 +194,14 @@ export const getCareSheets = async (req, res) => {
 
 export const createCareSheet = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    if (record.hospitalId && record.hospitalId.toString() !== req.user?.hospitalId?.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền truy cập hồ sơ bệnh án này." });
+    }
+
     const { careLevel, pulse, bloodPressure, temperature, respiratoryRate, spo2, progressNotes, careActions, nurse } = req.body;
 
     if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
@@ -184,13 +225,12 @@ export const createCareSheet = async (req, res) => {
 
     // Đồng bộ sinh hiệu sang VitalSign
     try {
-      const medicalRecord = await MedicalRecord.findById(req.params.id);
-      if (medicalRecord) {
+      if (record) {
         let query = {};
-        if (/^[0-9a-fA-F]{24}$/.test(medicalRecord.patientId)) {
-          query = { $or: [{ _id: medicalRecord.patientId }, { "profile.medicalId": medicalRecord.patientId }] };
+        if (/^[0-9a-fA-F]{24}$/.test(record.patientId)) {
+          query = { $or: [{ _id: record.patientId }, { "profile.medicalId": record.patientId }] };
         } else {
-          query = { "profile.medicalId": medicalRecord.patientId };
+          query = { "profile.medicalId": record.patientId };
         }
 
         const { User } = await import("../models/user.model.js");
@@ -242,6 +282,12 @@ export const createCareSheet = async (req, res) => {
 
 export const getConsultations = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    // Cho phép xem danh sách hội chẩn liên viện.
+
     const consultations = await Consultation.find({ medicalRecordId: req.params.id }).sort({ meetingDate: -1 });
     res.status(200).json({ status: "success", data: consultations });
   } catch (error) {
@@ -252,6 +298,14 @@ export const getConsultations = async (req, res) => {
 
 export const createConsultation = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    if (record.hospitalId && record.hospitalId.toString() !== req.user?.hospitalId?.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền truy cập hồ sơ bệnh án này." });
+    }
+
     const { meetingDate, participants, clinicalSummary, diagnosis, treatmentConclusion } = req.body;
 
     if (!participants || participants.length === 0 || !clinicalSummary || !diagnosis || !treatmentConclusion) {
@@ -279,6 +333,12 @@ export const createConsultation = async (req, res) => {
 
 export const getConsents = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    // Cho phép xem danh sách giấy cam đoan liên viện.
+
     const consents = await ConsentForm.find({ medicalRecordId: req.params.id }).sort({ createdAt: -1 });
     res.status(200).json({ status: "success", data: consents });
   } catch (error) {
@@ -289,6 +349,14 @@ export const getConsents = async (req, res) => {
 
 export const createConsent = async (req, res) => {
   try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ bệnh án." });
+    }
+    if (record.hospitalId && record.hospitalId.toString() !== req.user?.hospitalId?.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền truy cập hồ sơ bệnh án này." });
+    }
+
     const { procedureName, risks, doctorExplanation } = req.body;
 
     if (!procedureName || !risks || !doctorExplanation) {
@@ -318,6 +386,11 @@ export const signConsent = async (req, res) => {
     const consent = await ConsentForm.findById(req.params.consentId);
     if (!consent) {
       return res.status(404).json({ message: "Không tìm thấy giấy cam đoan." });
+    }
+
+    const record = await MedicalRecord.findById(consent.medicalRecordId);
+    if (!record || (record.hospitalId && record.hospitalId.toString() !== req.user?.hospitalId?.toString())) {
+      return res.status(403).json({ message: "Bạn không có quyền thao tác trên giấy cam đoan này." });
     }
 
     if (role === "doctor") {

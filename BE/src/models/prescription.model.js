@@ -1,6 +1,13 @@
 import { Schema, model } from "mongoose";
+import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const prescriptionSchema = new Schema({
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: "Hospital",
+    required: true,
+    index: true
+  },
   patient_id: {
     type: Schema.Types.ObjectId,
     ref: "User",
@@ -21,11 +28,21 @@ const prescriptionSchema = new Schema({
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
     unit: { type: String, required: true, default: "viên" },
-    usage: { type: String, default: "" }
+    usage: { type: String, default: "" },
+    timesPerDay: { type: Number, default: 2 },
+    durationDays: { type: Number, default: 7 }
   }],
   note: {
     type: String,
     default: ""
+  },
+  isBilled: {
+    type: Boolean,
+    default: false
+  },
+  invoiceId: {
+    type: Schema.Types.ObjectId,
+    ref: "Invoice"
   },
   recorded_at: {
     type: Date,
@@ -34,6 +51,8 @@ const prescriptionSchema = new Schema({
 }, {
   timestamps: true
 });
+
+prescriptionSchema.plugin(tenancyPlugin);
 
 export const Prescription = model("Prescription", prescriptionSchema, "prescriptions");
 export default Prescription;

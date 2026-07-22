@@ -262,6 +262,7 @@ const seedAllData = async () => {
         phone: "+84999999993",
         passwordHash,
         role: "patient",
+        hospitalId: hospital._id,
         isVerified: true,
         profile: {
           name: "Bệnh nhân Tuấn Thành 1",
@@ -276,6 +277,7 @@ const seedAllData = async () => {
         phone: "+84999999998",
         passwordHash,
         role: "patient",
+        hospitalId: hospital._id,
         isVerified: true,
         profile: {
           name: "Bệnh nhân Minh Hằng 2",
@@ -290,6 +292,7 @@ const seedAllData = async () => {
         phone: "+84999999999",
         passwordHash,
         role: "patient",
+        hospitalId: hospital._id,
         isVerified: true,
         profile: {
           name: "Bệnh nhân Quốc Bảo 3",
@@ -321,6 +324,7 @@ const seedAllData = async () => {
     const now = new Date();
     await VitalSign.insertMany([
       {
+        hospitalId: hospital._id,
         patient_id: pat1._id,
         pulse: 75,
         blood_pressure: { systolic: 120, diastolic: 80 },
@@ -331,6 +335,7 @@ const seedAllData = async () => {
         recorded_at: new Date(now.getTime() - 24 * 3600000),
       },
       {
+        hospitalId: hospital._id,
         patient_id: pat2._id,
         pulse: 82,
         blood_pressure: { systolic: 135, diastolic: 85 },
@@ -341,6 +346,7 @@ const seedAllData = async () => {
         recorded_at: new Date(now.getTime() - 24 * 3600000),
       },
       {
+        hospitalId: hospital._id,
         patient_id: pat3._id,
         pulse: 70,
         blood_pressure: { systolic: 115, diastolic: 75 },
@@ -409,6 +415,7 @@ const seedAllData = async () => {
     console.log("Seeding Care Sheets...");
     await CareSheet.create([
       {
+        hospitalId: hospital._id,
         medicalRecordId: records[0]._id,
         careLevel: 2,
         pulse: 76,
@@ -421,6 +428,7 @@ const seedAllData = async () => {
         nurse: nurse1.profile.name,
       },
       {
+        hospitalId: hospital._id,
         medicalRecordId: records[1]._id,
         careLevel: 1,
         pulse: 84,
@@ -439,6 +447,7 @@ const seedAllData = async () => {
     console.log("Seeding Consultations...");
     await Consultation.create([
       {
+        hospitalId: hospital._id,
         medicalRecordId: records[0]._id,
         meetingDate: new Date(),
         participants: [doc1.profile.name, doc2.profile.name, "BS Nguyễn Hồng Hà (Chẩn đoán hình ảnh)"],
@@ -453,6 +462,7 @@ const seedAllData = async () => {
     console.log("Seeding Consent Forms...");
     await ConsentForm.create([
       {
+        hospitalId: hospital._id,
         medicalRecordId: records[1]._id,
         procedureName: "Phẫu thuật mở sọ cắt u màng não thùy trán",
         risks: "Chảy máu não, phù não, nhiễm trùng vết mổ, liệt nửa người tạm thời, động kinh.",
@@ -469,6 +479,7 @@ const seedAllData = async () => {
     console.log("Seeding Imaging Results...");
     const imagingResults = await ImagingResult.create([
       {
+        hospitalId: hospital._id,
         medicalId: "PT-001",
         patientName: pat1.profile.name,
         birthYear: 1981,
@@ -495,6 +506,7 @@ const seedAllData = async () => {
     console.log("Seeding Lab Orders...");
     await LabOrder.insertMany([
       {
+        hospitalId: hospital._id,
         patient_id: pat1._id,
         patient_gender: "Nam",
         barcode: "LH-2601",
@@ -509,6 +521,7 @@ const seedAllData = async () => {
         ],
       },
       {
+        hospitalId: hospital._id,
         patient_id: pat2._id,
         patient_gender: "Nữ",
         barcode: "HS-2602",
@@ -520,6 +533,16 @@ const seedAllData = async () => {
           { biomarker_code: "UREA", biomarker_name: "Urê (Thận)", value_result: 6.0, unit: "mmol/L", is_abnormal: false, abnormal_direction: "", reference_range_display: "2.5 - 7.5" },
           { biomarker_code: "GLU", biomarker_name: "Glucose (Đường huyết)", value_result: 7.2, unit: "mmol/L", is_abnormal: true, abnormal_direction: "HIGH", reference_range_display: "3.9 - 6.4" },
         ],
+      },
+      {
+        hospitalId: hospital._id,
+        patient_id: pat1._id,
+        patient_gender: "Nam",
+        barcode: "PREOP-NEURO-001",
+        category: "HOA_SINH",
+        status: "PENDING",
+        ordered_at: new Date(now.getTime() - 2 * 3600000),
+        results: [],
       },
     ]);
     console.log("✅ Seeded Lab Orders.");
@@ -628,6 +651,59 @@ const seedAllData = async () => {
       }
     ]);
     console.log("✅ Seeded Visits.");
+
+    // 14. Create Invoices
+    console.log("Seeding Invoices...");
+    await Invoice.insertMany([
+      {
+        hospitalId: hospital._id,
+        patientId: pat1._id,
+        items: [
+          { description: "Khám lâm sàng thần kinh", amount: 150000, type: "exam" },
+          { description: "Chụp cộng hưởng từ MRI sọ não 3D", amount: 1500000, type: "mri" },
+          { description: "Phân tích tự động u não qua AI", amount: 200000, type: "ai" }
+        ],
+        totalAmount: 1850000,
+        status: "đã thanh toán",
+        paymentMethod: "vietqr",
+        paidAt: new Date(now.getTime() - 1 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat2._id,
+        items: [
+          { description: "Khám lâm sàng thần kinh", amount: 150000, type: "exam" },
+          { description: "Phân tích tự động u não qua AI", amount: 200000, type: "ai" }
+        ],
+        totalAmount: 350000,
+        status: "đã thanh toán",
+        paymentMethod: "tiền mặt",
+        paidAt: new Date(now.getTime() - 2 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat3._id,
+        items: [
+          { description: "Chụp cộng hưởng từ MRI cột sống", amount: 1500000, type: "mri" }
+        ],
+        totalAmount: 1500000,
+        status: "hoàn trả",
+        paymentMethod: "chuyển khoản",
+        paidAt: new Date(now.getTime() - 4 * 3600000),
+      },
+      {
+        hospitalId: hospital._id,
+        patientId: pat1._id,
+        items: [
+          { description: "Khám chuyên khoa thần kinh", amount: 150000, type: "exam" }
+        ],
+        totalAmount: 150000,
+        status: "chờ thanh toán",
+        paymentMethod: "",
+        paidAt: null,
+      }
+    ]);
+    console.log("✅ Seeded Invoices.");
 
     console.log("\n🎉 ALL SEED DATA GENERATED SUCCESSFULLY! (Exactly 3 accounts per role, bound to Bệnh viện Bạch Mai)");
     process.exit(0);

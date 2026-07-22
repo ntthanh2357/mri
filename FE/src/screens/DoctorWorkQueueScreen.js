@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Modal, Alert,
+  ActivityIndicator, TextInput, Modal, Alert, Image, Platform,
 } from 'react-native';
-import { get, put } from '../services/api.service';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { get, put, post } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import Config from '../constants/config';
 
 const STATUS_CONFIG = {
   'đang chờ':       { color: '#FEF3C7', text: '#D97706', label: '⏳ Đang chờ' },
+  'chờ khám bệnh':  { color: '#E0F2FE', text: '#0284C7', label: '🩺 Chờ khám bệnh' },
   'đang khám':      { color: '#DBEAFE', text: '#2563EB', label: '🩺 Đang khám' },
   'chờ chụp':       { color: '#FDE8FF', text: '#9333EA', label: '📷 Chờ chụp MRI' },
   'đang chụp':      { color: '#E0F2FE', text: '#0284C7', label: '🔬 Đang chụp' },
@@ -18,6 +22,7 @@ const STATUS_CONFIG = {
 };
 
 const DoctorWorkQueueScreen = ({ navigation, route }) => {
+  const currentMode = route?.params?.tab || 'examQueue';
   const [user, setUser] = useState(route?.params?.user || null);
   const [visits, setVisits] = useState([]);
   const [technicians, setTechnicians] = useState([]);
@@ -33,13 +38,28 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [requestAi, setRequestAi] = useState(true);
   const [mriLoading, setMriLoading] = useState(false);
 
+  // Upload modal state
+  const [uploadModal, setUploadModal] = useState(false);
+  const [activeVisit, setActiveVisit] = useState(null);
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [techNotes, setTechNotes] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     if (!user) {
       get('/auth/me').then(r => { setUser(r.user); }).catch(() => {});
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [currentMode]);
+
+  // [FIX] Re-fetch when navigated back from ImagingResultScreen with refresh flag
+  useEffect(() => {
+    if (route.params?.refresh) {
+      fetchData();
+    }
+  }, [route.params?.refresh]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -60,15 +80,18 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const openMriModal = (visit) => {
     setSelectedVisit(visit);
     setTechnicianId('');
-    setRegion('');
+    setRegion('Não bộ');
     setInstructions('');
     setRequestAi(true);
     setMriModal(true);
   };
 
   const handleIssueMriOrder = async () => {
-    if (!technicianId) {
-      Alert.alert('Thông báo', 'Vui lòng chọn Kỹ thuật viên chụp MRI.');
+    // If roles are merged, the doctor is the technician.
+    const assignedTechnicianId = user?._id || technicianId;
+    
+    if (!assignedTechnicianId) {
+      Alert.alert('Thông báo', 'Không thể xác định người thực hiện (Lỗi phiên đăng nhập).');
       return;
     }
     if (!region) {
@@ -78,7 +101,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     setMriLoading(true);
     try {
       await put(`/api/v1/visits/${selectedVisit._id}/mri-order`, {
-        technicianId,
+        technicianId: assignedTechnicianId,
         region,
         instructions,
         requestAiAnalysis: requestAi,
@@ -93,15 +116,192 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
   };
 
-  const activeVisits = visits.filter(v => !['hoàn tất', 'đã đóng'].includes(v.status));
-  const doneVisits = visits.filter(v => ['hoàn tất', 'đã đóng'].includes(v.status));
+  const handleStartScan = async (visit) => {
+    try {
+      await put(`/api/v1/visits/${visit._id}/status`, { status: 'đang chụp' });
+      fetchData();
+    } catch (e) {
+      if (Platform.OS === 'web') alert('Lỗi: ' + e.message);
+      else Alert.alert('Lỗi', e.message);
+    }
+  };
 
-  const isNurse = user?.role === 'nurse';
+  const openUploadModal = (visit) => {
+    setActiveVisit(visit);
+    setUploadedImages([]);
+    setTechNotes('');
+    setUploadModal(true);
+  };
+
+  const readFileAsBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handlePickAndUpload = async () => {
+    if (Platform.OS === 'web') {
+      // Web: dùng native file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        if (uploadedImages.length + files.length > 5) {
+          alert('Tối đa 5 ảnh phim chụp mỗi lần nộp.');
+          return;
+        }
+        setUploading(true);
+        const results = [...uploadedImages];
+        for (const file of files) {
+          try {
+            const fileData = await readFileAsBase64(file);
+            const res = await post('/api/v1/imaging/upload', {
+              fileData,
+              fileName: file.name,
+              imagingType: 'MRI',
+            });
+            if (res.success && res.data?.imageUrl) {
+              results.push(res.data.imageUrl);
+            } else {
+              alert(`Tải ảnh "${file.name}" thất bại: ${res.message || 'Lỗi không xác định'}`);
+            }
+          } catch (err) {
+            alert(`Lỗi khi upload "${file.name}": ${err.message}`);
+          }
+        }
+        setUploadedImages(results);
+        setUploading(false);
+      };
+      input.click();
+    } else {
+      // Mobile (Android/iOS): dùng expo-image-picker
+      if (uploadedImages.length >= 5) {
+        Alert.alert('Giới hạn', 'Tối đa 5 ảnh phim chụp mỗi lần nộp.');
+        return;
+      }
+
+      // Xin quyền truy cập thư viện ảnh
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Quyền truy cập',
+          'Vui lòng cấp quyền truy cập ảnh để tải ảnh phim chụp MRI.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      setUploading(true);
+      const results = [...uploadedImages];
+      for (const asset of result.assets.slice(0, 5 - uploadedImages.length)) {
+        try {
+          const fileData = `data:image/jpeg;base64,${asset.base64}`;
+          const fileName = asset.fileName || `mri_${Date.now()}.jpg`;
+          const res = await post('/api/v1/imaging/upload', {
+            fileData,
+            fileName,
+            imagingType: 'MRI',
+          });
+          if (res.success && res.data?.imageUrl) {
+            results.push(res.data.imageUrl);
+          } else {
+            Alert.alert('Lỗi upload', res.message || 'Không thể tải ảnh này.');
+          }
+        } catch (err) {
+          Alert.alert('Lỗi', `Không thể upload ảnh: ${err.message}`);
+        }
+      }
+      setUploadedImages(results);
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = (idx) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmitResult = async () => {
+    if (uploadedImages.length === 0) {
+      if (Platform.OS === 'web') alert('Vui lòng tải lên ít nhất 1 ảnh phim chụp trước khi nộp.');
+      else Alert.alert('Yêu cầu', 'Vui lòng tải lên ít nhất 1 ảnh phim chụp trước khi nộp.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await post('/api/v1/imaging-results', {
+        visitId: activeVisit._id,
+        patientId: activeVisit.patientId?._id,
+        imageUrl: uploadedImages[0],          
+        techNotes: techNotes.trim(),
+        region: activeVisit.mriOrder?.region || '',
+        requestAiAnalysis: activeVisit.mriOrder?.requestAiAnalysis || false,
+      });
+
+      if (Platform.OS === 'web') {
+        alert('✅ Hoàn thành: Đã nộp ảnh phim chụp. Bác sĩ sẽ nhận thông báo đọc kết quả.');
+        setUploadModal(false);
+        fetchData();
+      } else {
+        Alert.alert(
+          '✅ Hoàn thành',
+          'Đã nộp ảnh phim chụp.',
+          [{ text: 'Đóng', onPress: () => { setUploadModal(false); fetchData(); } }]
+        );
+      }
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi: ' + (err.message || 'Không thể nộp kết quả.'));
+      else Alert.alert('Lỗi', err.message || 'Không thể nộp kết quả.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getImageUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${Config.API_URL}${url}`;
+  };
+
+
+  const activeVisits = visits.filter(v => {
+    if (['hoàn tất', 'đã đóng'].includes(v.status)) return false;
+    if (currentMode === 'mriQueue') {
+      return ['chờ chụp', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
+    } else {
+      return ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status);
+    }
+  });
+
+  const doneVisits = visits.filter(v => {
+    if (!['hoàn tất', 'đã đóng'].includes(v.status)) return false;
+    if (currentMode === 'mriQueue') {
+      return !!v.mriOrder?.region;
+    } else {
+      return !v.mriOrder?.region;
+    }
+  });
+
+  const isNurse = user?.role === 'nurse' || user?.role === 'receptionist';
 
   const renderVisitCard = (v) => {
     const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
     const canOrderMri = v.status === 'đang khám';
-    const hasReadResult = v.status === 'chờ bác sĩ đọc';
+    const canStartMri = v.status === 'chờ chụp';
+    const canUploadMri = v.status === 'đang chụp';
+    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI';
 
     return (
       <View key={v._id} style={styles.card}>
@@ -111,7 +311,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             <Text style={styles.patientName}>
               {v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân'}
             </Text>
-            <Text style={styles.reason} numberOfLines={1}>📋 {v.reason || 'Không có lý do'}</Text>
+            <Text style={styles.reason} numberOfLines={1}>📋 {v.reason || 'Khám tổng quát'} ({v.visitType || 'Ngoại trú'})</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: cfg.color }]}>
             <Text style={[styles.badgeText, { color: cfg.text }]}>{cfg.label}</Text>
@@ -153,15 +353,39 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <Text style={styles.btnMriText}>📷 Ra Y Lệnh MRI</Text>
             </TouchableOpacity>
           )}
+          {!isNurse && canStartMri && (
+            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#9333EA' }]} onPress={() => handleStartScan(v)}>
+              <Text style={styles.btnStartText}>🔬 Bắt Đầu Chụp</Text>
+            </TouchableOpacity>
+          )}
+          {!isNurse && canUploadMri && (
+            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#7C3AED' }]} onPress={() => openUploadModal(v)}>
+              <Text style={styles.btnStartText}>📤 Nộp Ảnh Phim</Text>
+            </TouchableOpacity>
+          )}
           {!isNurse && hasReadResult && (
             <TouchableOpacity
               style={styles.btnRead}
-              onPress={() => navigation.navigate('ImagingResult', { visitId: v._id, resultId: v.mriOrder?.imagingResultId, imagingResultId: v.mriOrder?.imagingResultId })}
+              onPress={() => {
+                const rid = v.mriOrder?.imagingResultId;
+                const ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
+                if (!ridStr) {
+                  Alert.alert('Chưa có kết quả', 'Kỹ thuật viên chưa upload kết quả phim chụp cho ca khám này.');
+                  return;
+                }
+                navigation.navigate('ImagingResult', {
+                  visitId: v._id,
+                  resultId: ridStr,
+                  imagingResultId: ridStr,
+                  activeRoute: `DoctorWorkQueue_${currentMode}`,
+                  visitStatus: v.status,
+                });
+              }}
             >
               <Text style={styles.btnReadText}>🔬 Đọc Kết Quả Phim</Text>
             </TouchableOpacity>
           )}
-          {!isNurse && v.status === 'đang chờ' && (
+          {!isNurse && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh') && (
             <TouchableOpacity
               style={styles.btnStart}
               onPress={async () => {
@@ -174,10 +398,54 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <Text style={styles.btnStartText}>🩺 Bắt đầu khám</Text>
             </TouchableOpacity>
           )}
+          {!isNurse && v.status === 'đang khám' && (
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                style={[styles.btnStart, { backgroundColor: '#3B82F6' }]}
+                onPress={() => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id })}
+              >
+                <Text style={styles.btnStartText}>💊 Khám & Kê đơn</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnStart, { backgroundColor: '#10B981' }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Kết thúc khám',
+                    'Vui lòng chọn hướng điều trị cho bệnh nhân này:',
+                    [
+                      { 
+                        text: 'Ngoại trú (Cấp toa)', 
+                        onPress: async () => {
+                          try {
+                            await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Ngoại trú' });
+                            fetchData();
+                            Alert.alert('Thành công', 'Đã hoàn tất ca khám (Ngoại trú).');
+                          } catch (e) { Alert.alert('Lỗi', e.message); }
+                        }
+                      },
+                      { 
+                        text: 'Nội trú (Nhập viện)', 
+                        onPress: async () => {
+                          try {
+                            await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Nội trú' });
+                            fetchData();
+                            Alert.alert('Thành công', 'Đã hoàn tất ca khám và chỉ định Nhập viện (Nội trú).');
+                          } catch (e) { Alert.alert('Lỗi', e.message); }
+                        }
+                      },
+                      { text: 'Hủy', style: 'cancel' }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.btnStartText}>✅ Kết thúc khám</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {isNurse && v.status === 'đang chờ' && (
             <TouchableOpacity
               style={styles.btnStart}
-              onPress={() => navigation.navigate('EMRDashboard')}
+              onPress={() => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } })}
             >
               <Text style={styles.btnStartText}>🩺 Nhập sinh hiệu</Text>
             </TouchableOpacity>
@@ -187,10 +455,23 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     );
   };
 
-  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : 'Hàng Đợi Khám';
+  const screenTitle = isNurse
+    ? 'Hàng đợi đo sinh hiệu'
+    : currentMode === 'mriQueue'
+      ? 'Hàng Đợi Chụp MRI'
+      : 'Hàng Đợi Khám';
 
   return (
-    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute="DoctorWorkQueue">
+    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backArrowText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{screenTitle}</Text>
+      </View>
+
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[
@@ -222,6 +503,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           )}
         </ScrollView>
       )}
+      </SafeAreaView>
 
       {/* MRI Order Modal */}
       <Modal visible={mriModal} transparent animationType="slide">
@@ -232,29 +514,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
             </Text>
 
-            {/* Chọn KTV */}
-            <Text style={styles.fieldLabel}>Chọn Kỹ Thuật Viên *</Text>
-            <View style={styles.chipRow}>
-              {technicians.length === 0 && (
-                <Text style={styles.noTechText}>⚠️ Không có KTV nào trong bệnh viện này</Text>
-              )}
-              {technicians.map(t => (
-                <TouchableOpacity
-                  key={t._id}
-                  style={[styles.chip, technicianId === t._id && styles.chipActive]}
-                  onPress={() => setTechnicianId(t._id)}
-                >
-                  <Text style={[styles.chipText, technicianId === t._id && styles.chipTextActive]}>
-                    {t.profile?.name || t.email}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
             {/* Vùng chụp */}
             <Text style={styles.fieldLabel}>Vùng Chụp *</Text>
             <View style={styles.chipRow}>
-              {['Não bộ', 'Tủy sống cổ', 'Tủy sống thắt lưng', 'Toàn thân'].map(r => (
+              {['Não bộ'].map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.chip, region === r && styles.chipActive]}
@@ -299,11 +562,95 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Upload Modal */}
+      <Modal visible={uploadModal} transparent animationType="slide" onRequestClose={() => setUploadModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { padding: 0, overflow: 'hidden' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>📤 Nộp Ảnh Phim Chụp</Text>
+              <TouchableOpacity onPress={() => setUploadModal(false)}>
+                <Text style={{ fontSize: 20, color: '#94A3B8' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ padding: 20, maxHeight: 500 }}>
+              <Text style={styles.fieldLabel}>① Ảnh phim chụp <Text style={{ color: '#EF4444' }}>*</Text></Text>
+              
+              {uploadedImages.length > 0 && (
+                <View style={styles.chipRow}>
+                  {uploadedImages.map((url, idx) => (
+                    <View key={idx} style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                      <Image source={{ uri: getImageUrl(url) }} style={{ width: '100%', height: '100%' }} />
+                      <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }} onPress={() => handleRemoveImage(idx)}>
+                        <Text style={{ color: '#fff', fontSize: 12 }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.textArea, { alignItems: 'center', justifyContent: 'center', paddingVertical: 30, borderStyle: 'dashed', borderColor: '#C4B5FD', borderWidth: 2, marginTop: 10 }]}
+                onPress={handlePickAndUpload}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <>
+                    <ActivityIndicator color="#7C3AED" />
+                    <Text style={{ color: '#7C3AED', marginTop: 10 }}>Đang tải ảnh lên...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 30 }}>🖼️</Text>
+                    <Text style={{ color: '#7C3AED', fontWeight: 'bold', marginTop: 10 }}>Nhấn để chọn ảnh phim</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>② Ghi chú kỹ thuật (tuỳ chọn)</Text>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Nhập ghi chú..."
+                multiline
+                numberOfLines={3}
+                value={techNotes}
+                onChangeText={setTechNotes}
+              />
+            </ScrollView>
+            
+            <View style={[styles.modalBtns, { padding: 20, marginTop: 0, borderTopWidth: 1, borderTopColor: '#E2E8F0' }]}>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setUploadModal(false)}>
+                <Text style={styles.btnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnConfirm, (uploadedImages.length === 0 || submitting) && { opacity: 0.5 }]}
+                onPress={handleSubmitResult}
+                disabled={uploadedImages.length === 0 || submitting}
+              >
+                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnConfirmText}>Nộp Kết Quả</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </ResponsiveLayout>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4,
+  },
+  backArrowBtn: {
+    marginRight: 14, paddingVertical: 4, paddingHorizontal: 8,
+    borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC',
+  },
+  backArrowText: { fontSize: 16, color: '#64748B', fontWeight: 'bold' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, margin: 16, padding: 4, gap: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
   tabActive: { backgroundColor: '#15803D' },

@@ -1,0 +1,312 @@
+import { google } from "googleapis";
+import path from "path";
+import { fileURLToPath } from "url";
+import { Readable } from "stream";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const KEY_FILE_PATH = path.resolve(__dirname, "../../credentials.json");
+const getParentFolderId = () => process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+
+let driveClient = null;
+
+const getDriveClient = () => {
+  if (driveClient) return driveClient;
+
+  if (process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_DRIVE_CLIENT_ID,
+      process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+      process.env.GOOGLE_DRIVE_REDIRECT_URI || "https://developers.google.com/oauthplayground"
+    );
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    });
+    driveClient = google.drive({ version: "v3", auth: oauth2Client });
+  } else {
+    const auth = new google.auth.GoogleAuth({
+      keyFile: KEY_FILE_PATH,
+      scopes: ["https://www.googleapis.com/auth/drive"],
+    });
+    driveClient = google.drive({ version: "v3", auth });
+  }
+  return driveClient;
+};
+
+// Helper to convert buffer to a readable stream
+const bufferToStream = (buffer) => {
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
+};
+
+/**
+ * Create a folder inside a parent folder on Google Drive
+ */
+export const createFolder = async (folderName, parentId = null) => {
+  const drive = getDriveClient();
+  const actualParentId = parentId || getParentFolderId();
+  const fileMetadata = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder",
+    parents: actualParentId ? [actualParentId] : [],
+  };
+
+  try {
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: "id, webViewLink",
+    });
+    return {
+      id: response.data.id,
+      url: response.data.webViewLink,
+    };
+  } catch (error) {
+    console.error("Error creating folder on Google Drive:", error);
+    throw error;
+  }
+};
+
+/**
+ * Automatically create the hospital root folder and its y tế subfolders
+ */
+export const setupHospitalDriveStructure = async (hospitalName) => {
+  try {
+    // 1. Create main hospital folder
+    const mainFolder = await createFolder(`Bệnh viện - ${hospitalName}`);
+
+    // 2. Create standard medical subfolders
+    const originalFolder = await createFolder("01_Original_Scans", mainFolder.id);
+    const aiFolder = await createFolder("02_AI_Predictions", mainFolder.id);
+    const doctorFolder = await createFolder("03_Doctor_Revisions", mainFolder.id);
+    const reportFolder = await createFolder("04_Patient_Reports", mainFolder.id);
+    const backupFolder = await createFolder("05_Metadata_Backups", mainFolder.id);
+
+    return {
+      mainFolderId: mainFolder.id,
+      mainFolderUrl: mainFolder.url,
+      subFolders: {
+        originalScansId: originalFolder.id,
+        aiPredictionsId: aiFolder.id,
+        doctorRevisionsId: doctorFolder.id,
+        patientReportsId: reportFolder.id,
+        metadataBackupsId: backupFolder.id,
+      },
+    };
+  } catch (error) {
+    console.error("Error setting up hospital drive structure:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get or create the main patients uploads parent folder
+ */
+let patientsParentFolderId = null;
+
+const getOrCreatePatientsParentFolder = async () => {
+  if (patientsParentFolderId) return patientsParentFolderId;
+
+  const drive = getDriveClient();
+  const parentFolderId = getParentFolderId();
+  try {
+    const response = await drive.files.list({
+      q: `name = 'Bệnh nhân tự tải lên' and mimeType = 'application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed = false`,
+      fields: "files(id)",
+    });
+
+    if (response.data.files && response.data.files.length > 0) {
+      patientsParentFolderId = response.data.files[0].id;
+      return patientsParentFolderId;
+    }
+
+    const newFolder = await createFolder("Bệnh nhân tự tải lên", parentFolderId);
+    patientsParentFolderId = newFolder.id;
+    return patientsParentFolderId;
+  } catch (error) {
+    console.error("Error finding/creating patients root folder:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get or create the main hospital licenses parent folder on Google Drive
+ */
+let licensesParentFolderId = null;
+
+export const getOrCreateLicensesParentFolder = async () => {
+  if (licensesParentFolderId) return licensesParentFolderId;
+
+  const drive = getDriveClient();
+  const parentFolderId = getParentFolderId();
+  try {
+    const response = await drive.files.list({
+      q: `name = 'Giấy phép hoạt động bệnh viện' and mimeType = 'application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed = false`,
+      fields: "files(id)",
+    });
+
+    if (response.data.files && response.data.files.length > 0) {
+      licensesParentFolderId = response.data.files[0].id;
+      return licensesParentFolderId;
+    }
+
+    const newFolder = await createFolder("Giấy phép hoạt động bệnh viện", parentFolderId);
+    licensesParentFolderId = newFolder.id;
+    return licensesParentFolderId;
+  } catch (error) {
+    console.error("Error finding/creating licenses root folder:", error);
+    throw error;
+  }
+};
+
+
+/**
+ * Get or create a specific patient's folder on Google Drive
+ */
+export const getOrCreatePatientFolder = async (userId, patientName = "Bệnh nhân") => {
+  try {
+    const { PatientProfile } = await import("../models/patientProfile.model.js");
+
+    // Bypass tenancy plugin: tìm trực tiếp theo userId không lọc hospitalId
+    // Dùng native collection để tránh Mongoose middleware (tenancyPlugin)
+    // Vì Drive folder là tài sản CÁ NHÂN của bệnh nhân, không thuộc bệnh viện nào
+    const mongoose = await import("mongoose");
+    const profile = await PatientProfile.collection.findOne({ userId: new mongoose.default.Types.ObjectId(userId) });
+
+
+    if (profile && profile.driveFolderId) {
+      return {
+        id: profile.driveFolderId,
+        url: profile.driveFolderUrl,
+      };
+    }
+
+    const patientsParentId = await getOrCreatePatientsParentFolder();
+    const patientFolder = await createFolder(`BN - ${patientName} (ID: ${userId.toString().substring(18)})`, patientsParentId);
+
+    if (profile) {
+      // Cập nhật driveFolderId — dùng native collection để bypass tenancy (kể cả khi đã chuyển viện)
+      await PatientProfile.collection.updateOne(
+        { _id: profile._id },
+        { $set: { driveFolderId: patientFolder.id, driveFolderUrl: patientFolder.url } }
+      );
+    } else {
+      // Lấy hospitalId từ User để điền trường required của PatientProfile
+      const { User } = await import("../models/user.model.js");
+      const user = await User.findById(userId).select("hospitalId").lean();
+      await PatientProfile.create({
+        userId,
+        hospitalId: user?.hospitalId,
+        driveFolderId: patientFolder.id,
+        driveFolderUrl: patientFolder.url,
+      });
+    }
+
+    return patientFolder;
+  } catch (error) {
+    console.error(`Error getting/creating folder for patient ${userId}:`, error);
+    throw error;
+  }
+};
+
+
+/**
+ * Upload a file from Express buffer to a specific Drive folder and make it public (view only)
+ */
+export const uploadToDrive = async (fileBuffer, originalName, mimeType, targetFolderId) => {
+  const drive = getDriveClient();
+  const timestamp = Date.now();
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const fileName = `${timestamp}_${safeName}`;
+
+  const fileMetadata = {
+    name: fileName,
+    parents: [targetFolderId],
+  };
+
+  const media = {
+    mimeType: mimeType,
+    body: bufferToStream(fileBuffer),
+  };
+
+  try {
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: "id, webViewLink",
+    });
+
+    const fileId = response.data.id;
+
+    // Grant public read permission so it can be retrieved by clients/frontend
+    await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        role: "reader",
+        type: "anyone",
+      },
+    });
+
+    return {
+      fileId: fileId,
+      // WebViewLink is for viewing on Google Drive web interface
+      webViewLink: response.data.webViewLink,
+      // Direct link suitable for <img src="..."> tags
+      downloadUrl: `https://lh3.googleusercontent.com/u/0/d/${fileId}`,
+    };
+  } catch (error) {
+    console.error("Error uploading file to Google Drive:", error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a file/folder from Google Drive by ID
+ */
+export const deleteFromDrive = async (fileId) => {
+  if (!fileId) return;
+  const drive = getDriveClient();
+  try {
+    await drive.files.delete({ fileId });
+  } catch (error) {
+    console.error(`Error deleting file ${fileId} from Google Drive:`, error);
+  }
+};
+
+/**
+ * Upload JSON metadata backup directly to hospital's 05_Metadata_Backups folder
+ */
+export const uploadMetadataBackup = async (metadata, hospitalId, fileNamePrefix = "annotations") => {
+  try {
+    if (!hospitalId) {
+      console.warn("Không có hospitalId để tải lên metadata.");
+      return null;
+    }
+
+    const { Hospital } = await import("../models/hospital.model.js");
+    const hospital = await Hospital.findById(hospitalId).lean();
+    if (!hospital || !hospital.subFolders || !hospital.subFolders.metadataBackupsId) {
+      console.warn("Bệnh viện không cấu hình thư mục backup hoặc không tìm thấy.");
+      return null;
+    }
+
+    const folderId = hospital.subFolders.metadataBackupsId;
+    const jsonString = JSON.stringify(metadata, null, 2);
+    const jsonBuffer = Buffer.from(jsonString, "utf-8");
+    const fileName = `${fileNamePrefix}_${Date.now()}.json`;
+
+    const uploadResult = await uploadToDrive(
+      jsonBuffer,
+      fileName,
+      "application/json",
+      folderId
+    );
+
+    return uploadResult;
+  } catch (error) {
+    console.error("Lỗi khi tải lên tệp JSON Metadata lên Google Drive:", error);
+    return null;
+  }
+};

@@ -2,12 +2,24 @@ import { Hospital } from "../models/hospital.model.js";
 import { User } from "../models/user.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 import { uploadToGCS } from "../config/gcs.js";
+import { canModerateRole } from "../services/user.service.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const removeVietnameseTones = (str) => {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9-_]/g, "");
+};
 
 // GET /api/v1/hospital/me — hospital_admin xem thông tin bệnh viện của mình
 export const getMyHospital = async (req, res) => {
@@ -182,6 +194,7 @@ export const submitOnboardingInfo = async (req, res) => {
       entity: "Hospital",
       entityId: hospitalId,
       performedBy: req.user.id,
+      hospitalId: hospitalId,
       details: `Bệnh viện ${name} cập nhật thông tin chi tiết.`,
     });
 
@@ -205,8 +218,19 @@ export const uploadLicenseFile = async (req, res) => {
 
     let fileUrl;
     try {
-      fileUrl = await uploadToGCS(req.file.buffer, req.file.originalname, req.file.mimetype, "licenses");
-    } catch {
+      const { getOrCreateLicensesParentFolder, uploadToDrive } = await import("../config/googleDrive.js");
+      const parentFolderId = await getOrCreateLicensesParentFolder();
+      
+      const hospital = await Hospital.findById(hospitalId).select("name").lean();
+      const hospitalName = hospital ? hospital.name : "Hospital";
+      const fileExt = path.extname(req.file.originalname) || ".pdf";
+      const sanitizedHospitalName = removeVietnameseTones(hospitalName);
+      const customFileName = `GPKD_${sanitizedHospitalName}${fileExt}`;
+      
+      const driveResult = await uploadToDrive(req.file.buffer, customFileName, req.file.mimetype, parentFolderId);
+      fileUrl = driveResult.downloadUrl || driveResult.webViewLink;
+    } catch (driveErr) {
+      console.warn("⚠️ Google Drive upload for license failed, falling back to local:", driveErr.message);
       // Fallback: save locally
       const uploadsDir = path.resolve(__dirname, "../../uploads/licenses");
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -230,7 +254,7 @@ export const getHospitalStaff = async (req, res) => {
       return res.status(400).json({ success: false, message: "Tài khoản không gắn với bệnh viện nào." });
     }
 
-    const staff = await User.find({ hospitalId })
+    const staff = await User.find({ hospitalId, role: { $ne: "patient" } })
       .select("email role profile.name isActive isLocked isVerified createdAt phone")
       .sort({ createdAt: -1 })
       .lean();
@@ -255,8 +279,8 @@ export const toggleStaffLock = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy nhân viên thuộc bệnh viện này." });
     }
 
-    if (staffMember.role === "hospital_admin") {
-      return res.status(400).json({ success: false, message: "Không thể khóa tài khoản quản trị bệnh viện." });
+    if (!canModerateRole(req.user.role, staffMember.role)) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền khóa/mở khóa tài khoản này." });
     }
 
     staffMember.isLocked = !staffMember.isLocked;
@@ -268,11 +292,47 @@ export const toggleStaffLock = async (req, res) => {
       entity: "User",
       entityId: staffMember._id,
       performedBy: req.user.id,
+      hospitalId: hospitalId,
       details: `Hospital Admin ${req.user.email} đã ${staffMember.isLocked ? "KHÓA" : "MỞ KHÓA"} tài khoản nhân sự ${staffMember.email}`,
     });
 
     res.status(200).json({ success: true, message: `Đã ${staffMember.isLocked ? "khóa" : "mở khóa"} tài khoản thành công.`, staffMember });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/v1/hospital/public/doctors — Public: Lấy danh sách bác sĩ từ bệnh viện đầu tiên trong hệ thống
+// Không cần xác thực, dùng cho trang WelcomeScreen để hiển thị đội ngũ y tế
+export const getPublicDoctors = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 4, 10);
+
+    // Lấy bệnh viện đầu tiên đang active
+    const hospital = await Hospital.findOne({ isActive: true }).select("_id name").lean();
+    if (!hospital) {
+      return res.status(200).json({ success: true, doctors: [] });
+    }
+
+    const doctors = await User.find({
+      hospitalId: hospital._id,
+      role: "doctor",
+      isLocked: false,
+    })
+      .select("profile.name profile.photoUrl departmentId")
+      .limit(limit)
+      .lean();
+
+    const formatted = doctors.map((d) => ({
+      id: d._id,
+      name: d.profile?.name || "Bác sĩ",
+      photoUrl: d.profile?.photoUrl || null,
+      department: d.departmentId || "Chẩn đoán hình ảnh",
+    }));
+
+    return res.status(200).json({ success: true, doctors: formatted, hospital: hospital.name });
+  } catch (error) {
+    console.error("getPublicDoctors error:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

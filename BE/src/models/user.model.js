@@ -27,7 +27,7 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin", "hospital_admin", "receptionist", "technician", "nurse"],
+      enum: ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"],
       default: "patient",
       required: true,
     },
@@ -43,6 +43,18 @@ const userSchema = new Schema(
     isLocked: {
       type: Boolean,
       default: false,
+    },
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
+    premiumUntil: {
+      type: Date,
+      default: null,
+    },
+    autoRenew: {
+      type: Boolean,
+      default: true,
     },
     otpCode: {
       type: String,

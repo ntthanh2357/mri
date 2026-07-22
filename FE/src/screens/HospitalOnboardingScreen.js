@@ -108,6 +108,8 @@ export default function HospitalOnboardingScreen({ navigation }) {
     })();
   }, []);
 
+
+
   const handlePickLicense = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -387,6 +389,8 @@ export default function HospitalOnboardingScreen({ navigation }) {
               </TouchableOpacity>
             )}
           </View>
+
+
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

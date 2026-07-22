@@ -15,6 +15,7 @@ import {
 import { post } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import styles from './AIAnalysisScreen.styles';
 
 const CLASS_META = {
   glioma: {
@@ -182,7 +183,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
         predicted_class: aiResult.class_name,
         confidence: aiResult.confidence ?? 0,
       });
-    } catch (_) {}
+    } catch (_) { }
     setApprovingAI(false);
 
     const meta = CLASS_META[aiResult.class_name] || CLASS_META.notumor;
@@ -194,48 +195,64 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     const findingsText =
       aiResult.class_name === 'notumor'
         ? `Kết quả phân tích AI từ hệ thống Ensemble (ResNet + EfficientNet + DenseNet) + YOLOv8 không ghi nhận tổn thương bất thường. Độ tự tin: ${aiResult.confidence}%. Đồng thuận: ${aiResult.consensus_message || 'Tất cả mô hình nhất quán.'}`
-        : `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Độ tự tin Ensemble: ${aiResult.confidence}%. ${aiResult.consensus_message || ''}`;
+        : (aiResult.clinical_report || `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Vị trí: ${aiResult.tumor_location?.note || 'Không xác định'}. Kích thước: xấp xỉ ${aiResult.tumor_location?.width}x${aiResult.tumor_location?.height} px. Độ tự tin: ${aiResult.confidence}%.`);
 
-    navigation.navigate('CreateImagingResult', {
-      ...(route.params || {}),
-      aiResult: {
+    // Navigate back to ImagingResult with pre-filled findings/conclusion
+    const targetResultId = route.params?.resultId || route.params?.imagingResultId;
+    const targetVisitId = route.params?.visitId;
+    const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue';
+
+    navigation.navigate('ImagingResult', {
+      resultId: targetResultId,
+      imagingResultId: targetResultId,
+      visitId: targetVisitId,
+      activeRoute: targetActiveRoute,
+      prefillFindings: findingsText,
+      prefillConclusion: conclusionText,
+      aiResultData: {
         ...aiResult,
         annotated_image: aiResult.annotated_image,
         confirmed: true,
         isWrong: false,
       },
-      prefillFindings: findingsText,
-      prefillConclusion: conclusionText,
     });
   };
 
-  // ── AI sai → gửi phản hồi rồi quay lại ────────────────────────────────────
+  // \u2500\u2500 AI sai \u2192 g\u1eedi ph\u1ea3n h\u1ed3i r\u1ed3i quay l\u1ea1i \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const handleConfirmWrong = async () => {
     if (!selectedCorrectClass) return;
     setSendingFeedback(true);
     try {
-      const filename = imageUrl?.split('/').pop() || 'scan.jpg';
       await post('/api/v1/imaging/feedback-ai', {
         imageUrl,
         correct_class: selectedCorrectClass,
         x: 120, y: 120, w: 100, h: 100,
       });
-    } catch (_) {}
+    } catch (_) { }
     setSendingFeedback(false);
 
     const correctMeta = CLASS_META[selectedCorrectClass] || CLASS_META.notumor;
     const aiMeta = CLASS_META[aiResult?.class_name] || CLASS_META.notumor;
 
-    const warningNote = `⚠️ LƯU Ý: AI chẩn đoán ban đầu là "${aiMeta.label}" nhưng bác sĩ đã điều chỉnh thành "${correctMeta.label}". Kết quả này cần được xem xét kỹ lưỡng bởi chuyên gia. Phản hồi điều chỉnh đã được ghi nhận để cải thiện mô hình AI.`;
+    const warningNote = `\u26a0\ufe0f L\u01af\u0301U \u00dd: AI ch\u1ea9n \u0111o\u00e1n ban \u0111\u1ea7u l\u00e0 "${aiMeta.label}" nh\u01b0ng b\u00e1c s\u0129 \u0111\u00e3 \u0111i\u1ec1u ch\u1ec9nh th\u00e0nh "${correctMeta.label}". K\u1ebft qu\u1ea3 n\u00e0y c\u1ea7n \u0111\u01b0\u1ee3c xem x\u00e9t k\u1ef9 l\u01b0\u1ee1ng b\u1edfi chuy\u00ean gia. Ph\u1ea3n h\u1ed3i \u0111i\u1ec1u ch\u1ec9nh \u0111\u00e3 \u0111\u01b0\u1ee3c ghi nh\u1eadn \u0111\u1ec3 c\u1ea3i thi\u1ec7n m\u00f4 h\u00ecnh AI.`;
 
     const conclusionText =
       selectedCorrectClass === 'notumor'
-        ? `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Không phát hiện bất thường sọ não.`
-        : `Sau khi bác sĩ xem xét và điều chỉnh kết quả AI: Hình ảnh gợi ý khối u loại ${correctMeta.label}. ${correctMeta.desc}`;
+        ? `Sau khi b\u00e1c s\u0129 xem x\u00e9t v\u00e0 \u0111i\u1ec1u ch\u1ec9nh k\u1ebft qu\u1ea3 AI: Kh\u00f4ng ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng s\u1ecd n\u00e3o.`
+        : `Sau khi b\u00e1c s\u0129 xem x\u00e9t v\u00e0 \u0111i\u1ec1u ch\u1ec9nh k\u1ebft qu\u1ea3 AI: H\u00ecnh \u1ea3nh g\u1ee3i \u00fd kh\u1ed1i u lo\u1ea1i ${correctMeta.label}. ${correctMeta.desc}`;
 
-    navigation.navigate('CreateImagingResult', {
-      ...(route.params || {}),
-      aiResult: {
+    const targetResultId = route.params?.resultId || route.params?.imagingResultId;
+    const targetVisitId = route.params?.visitId;
+    const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue';
+
+    navigation.navigate('ImagingResult', {
+      resultId: targetResultId,
+      imagingResultId: targetResultId,
+      visitId: targetVisitId,
+      activeRoute: targetActiveRoute,
+      prefillFindings: warningNote,
+      prefillConclusion: conclusionText,
+      aiResultData: {
         ...aiResult,
         class_name: selectedCorrectClass,
         confirmed: true,
@@ -243,23 +260,28 @@ const AIAnalysisScreen = ({ route, navigation }) => {
         originalClass: aiResult?.class_name,
         warningNote,
       },
-      prefillFindings: warningNote,
-      prefillConclusion: conclusionText,
     });
   };
 
   const meta = aiResult ? (CLASS_META[aiResult.class_name] || CLASS_META.notumor) : null;
   const imageFullUri = imageUrl?.startsWith('http') ? imageUrl : `${Config.API_URL}${imageUrl}`;
-  const annotatedUri = aiResult?.annotated_image || null;
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:image')) return url;
+    return `${Config.API_URL}${url}`;
+  };
+  const annotatedUri = getImageUrl(aiResult?.annotated_image);
 
   // Translate coordinates mapping box width
   const translateY = scanAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-140, 140],
+    outputRange: [-190, 190],
   });
 
+  const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue_examQueue';
+
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
+    <ResponsiveLayout navigation={navigation} activeRoute={targetActiveRoute}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>
@@ -534,444 +556,6 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  backBtnText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  retryBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: 6,
-  },
-  retryBtnText: {
-    color: '#2563EB',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
 
-  scrollContainer: {
-    padding: 16,
-  },
-  scrollContainerDesktop: {
-    maxWidth: 900,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  desktopRow: {
-    flexDirection: 'row',
-    gap: 20,
-    alignItems: 'flex-start',
-    width: '100%',
-  },
-  leftCol: {
-    flex: 1.1,
-    gap: 16,
-  },
-  rightCol: {
-    flex: 1,
-    gap: 16,
-  },
-  fullWidth: {
-    width: '100%',
-    marginBottom: 16,
-  },
-
-  // ── Analyzing phase ──
-  analyzingScreen: {
-    flex: 1,
-  },
-  scanPreviewBox: {
-    height: 300,
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  scanPreviewImg: {
-    width: '94%',
-    height: '94%',
-    borderRadius: 8,
-  },
-  scanOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanLine: {
-    position: 'absolute',
-    left: '5%',
-    right: '5%',
-    height: 3,
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-  },
-
-  // Steps style
-  stepItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 8,
-  },
-  stepItemActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  stepItemCompleted: {
-    borderColor: '#D1FAE5',
-    backgroundColor: '#F0FDF4',
-  },
-  stepStatusIcon: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  pendingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#94A3B8',
-  },
-  stepText: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  stepTextActive: {
-    color: '#1D4ED8',
-    fontWeight: 'bold',
-  },
-  stepTextCompleted: {
-    color: '#065F46',
-  },
-  stepDesc: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  stepDescActive: {
-    color: '#3B82F6',
-  },
-  stepDescCompleted: {
-    color: '#10B981',
-  },
-
-  // Images
-  imgCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  imgCardLabel: {
-    color: '#475569',
-    fontSize: 13,
-    fontWeight: '600',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#F8FAFC',
-  },
-  imgViewer: {
-    height: 300,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imgFull: {
-    width: '96%',
-    height: '96%',
-  },
-
-  // Result card
-  resultCard: {
-    borderRadius: 12,
-    borderWidth: 1.5,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  resultCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 16,
-  },
-  resultCardIcon: {
-    fontSize: 32,
-  },
-  resultLabel: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  resultDesc: {
-    fontSize: 13,
-    color: '#475569',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  confRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  confLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  confValue: {
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-
-  allProbBox: {
-    marginTop: 18,
-    backgroundColor: 'rgba(15, 23, 42, 0.03)',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  allProbTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#475569',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  probRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  probCls: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    width: 120,
-  },
-  probPct: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    width: 45,
-    textAlign: 'right',
-  },
-
-  consensusBox: {
-    marginTop: 16,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-    padding: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4F46E5',
-    borderWidth: 1,
-    borderColor: '#E0E7FF',
-  },
-  consensusTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3730A3',
-    marginBottom: 4,
-  },
-  consensusText: {
-    fontSize: 13,
-    color: '#312E81',
-    lineHeight: 18,
-  },
-
-  disclaimer: {
-    marginTop: 14,
-    backgroundColor: '#FFF7ED',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: '#C2410C',
-    fontStyle: 'italic',
-    lineHeight: 16,
-  },
-
-  // Action card
-  actionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  actionTitle: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginBottom: 14,
-    textTransform: 'uppercase',
-  },
-
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#10B981',
-    borderRadius: 10,
-    padding: 16,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  confirmBtnIcon: { fontSize: 24 },
-  confirmBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-  confirmBtnSub: { color: '#D1FAE5', fontSize: 11, marginTop: 3, lineHeight: 15 },
-
-  orDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginVertical: 20,
-  },
-  orLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
-  orText: { color: '#94A3B8', fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
-
-  feedbackTitle: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  classChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-  },
-  classChipText: { color: '#64748B', fontSize: 12, fontWeight: '600' },
-
-  wrongBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    padding: 16,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  wrongBtnIcon: { fontSize: 24 },
-  wrongBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-  wrongBtnSub: { color: '#DBEAFE', fontSize: 11, marginTop: 3, lineHeight: 15 },
-
-  btnDisabled: { opacity: 0.5 },
-
-  // Error card style
-  errorCard: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    padding: 40,
-    margin: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  errorIcon: { fontSize: 48, marginBottom: 12 },
-  errorTitle: { color: '#DC2626', fontSize: 20, fontWeight: 'bold' },
-  errorMsg: { color: '#64748B', fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8 },
-  retryBigBtn: {
-    marginTop: 20,
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-  },
-  retryBigBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-});
 
 export default AIAnalysisScreen;

@@ -36,21 +36,43 @@ export default function AdminMetricsView({
   const [userDistribution, setUserDistribution] = useState(null);
   const [monthlyScans, setMonthlyScans] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
+  
+  // Growth & Audit logs dynamic state
+  const [userGrowth, setUserGrowth] = useState(0);
+  const [scanGrowth, setScanGrowth] = useState(0);
+  const [revenueGrowth, setRevenueGrowth] = useState(0);
+  const [totalAuditLogs, setTotalAuditLogs] = useState(0);
+  const [aiAccuracy, setAiAccuracy] = useState(94.7);
 
   useEffect(() => {
-    apiRequest('/admin/stats')
-      .then((data) => {
-        setTotalUsers(data.stats.totalUsers);
-        setTotalDoctors(data.stats.totalDoctors);
-        setPendingDoctors(data.stats.pendingDoctors);
-        setTotalAiScans(data.stats.totalAiScans);
-        setTotalRevenue(data.stats.totalRevenue);
-        setUserDistribution(data.stats.userDistribution);
-        setMonthlyScans(data.stats.monthlyScans || []);
-        setRecentActivities(data.stats.recentActivities || []);
+    Promise.all([
+      apiRequest('/admin/stats'),
+      apiRequest('/admin/ai-training-stats').catch(() => null)
+    ])
+      .then(([statsData, aiStatsData]) => {
+        const statsObj = statsData.stats;
+        setTotalUsers(statsObj.totalUsers);
+        setTotalDoctors(statsObj.totalDoctors);
+        setPendingDoctors(statsObj.pendingDoctors);
+        setTotalAiScans(statsObj.totalAiScans);
+        setTotalRevenue(statsObj.totalRevenue);
+        setUserDistribution(statsObj.userDistribution);
+        setMonthlyScans(statsObj.monthlyScans || []);
+        setRecentActivities(statsObj.recentActivities || []);
         
-        if (data.stats.monthlyScans && data.stats.monthlyScans.length > 0) {
-          setHoveredMonth(data.stats.monthlyScans[data.stats.monthlyScans.length - 1].label);
+        setUserGrowth(statsObj.userGrowth || 0);
+        setScanGrowth(statsObj.scanGrowth || 0);
+        setRevenueGrowth(statsObj.revenueGrowth || 0);
+        setTotalAuditLogs(statsObj.totalAuditLogs || 0);
+
+        if (aiStatsData && aiStatsData.stats && aiStatsData.stats.total > 0) {
+          setAiAccuracy(aiStatsData.stats.accuracy);
+        } else {
+          setAiAccuracy(94.7); // Fallback to baseline
+        }
+        
+        if (statsObj.monthlyScans && statsObj.monthlyScans.length > 0) {
+          setHoveredMonth(statsObj.monthlyScans[statsObj.monthlyScans.length - 1].label);
         }
         setLoading(false);
       })
@@ -130,9 +152,9 @@ export default function AdminMetricsView({
             <div className="w-10 h-10 rounded-full bg-[#0ea5e9]/10 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5 text-[#0ea5e9]" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full select-none">
-              <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>+8.9% tháng này</span>
+            <div className={`flex items-center gap-1 text-[11px] font-semibold ${userGrowth >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'} px-2 py-0.5 rounded-full select-none`}>
+              {userGrowth >= 0 ? <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" /> : <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />}
+              <span>{userGrowth >= 0 ? '+' : ''}{userGrowth.toFixed(1)}% tháng này</span>
             </div>
           </div>
           <div className="mt-4">
@@ -178,9 +200,9 @@ export default function AdminMetricsView({
             <div className="w-10 h-10 rounded-full bg-[#6366f1]/10 flex items-center justify-center shrink-0">
               <Activity className="w-5 h-5 text-[#6366f1]" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full select-none">
-              <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>+22.1% tháng này</span>
+            <div className={`flex items-center gap-1 text-[11px] font-semibold ${scanGrowth >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'} px-2 py-0.5 rounded-full select-none`}>
+              {scanGrowth >= 0 ? <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" /> : <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />}
+              <span>{scanGrowth >= 0 ? '+' : ''}{scanGrowth.toFixed(1)}% tháng này</span>
             </div>
           </div>
           <div className="mt-4">
@@ -197,9 +219,9 @@ export default function AdminMetricsView({
             <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
               <Database className="w-5 h-5 text-emerald-600" />
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full select-none">
-              <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>+18.4% tháng này</span>
+            <div className={`flex items-center gap-1 text-[11px] font-semibold ${revenueGrowth >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'} px-2 py-0.5 rounded-full select-none`}>
+              {revenueGrowth >= 0 ? <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" /> : <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />}
+              <span>{revenueGrowth >= 0 ? '+' : ''}{revenueGrowth.toFixed(1)}% tháng này</span>
             </div>
           </div>
           <div className="mt-4">
@@ -496,7 +518,7 @@ export default function AdminMetricsView({
             {/* Average accuracy score indicator ribbon */}
             <div className="mt-5 p-3 rounded-xl bg-[#0ea5e9]/5 border border-[#0ea5e9]/10 flex items-center justify-between">
               <span className="text-[12.5px] text-[#0ea5e9] font-semibold">Độ chính xác trung bình</span>
-              <span className="text-sm font-extrabold text-[#0ea5e9] font-mono bg-white px-2.5 py-1 rounded-lg border border-[#0ea5e9]/10 shadow-3xs">94.7%</span>
+              <span className="text-sm font-extrabold text-[#0ea5e9] font-mono bg-white px-2.5 py-1 rounded-lg border border-[#0ea5e9]/10 shadow-3xs">{aiAccuracy.toFixed(1)}%</span>
             </div>
           </div>
         </div>
@@ -593,7 +615,7 @@ export default function AdminMetricsView({
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-800">Duyệt CCHN</p>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">48 chờ xử lý</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">{pendingDoctors ?? 0} chờ duyệt</p>
                   </div>
                 </div>
               </button>
@@ -625,7 +647,7 @@ export default function AdminMetricsView({
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-800">Audit Logs</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">1284 log hôm nay</p>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">{totalAuditLogs ?? 0} log hôm nay</p>
                   </div>
                 </div>
               </button>
