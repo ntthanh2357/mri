@@ -58,6 +58,7 @@ export default StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatarCircle: {
     width: 44,

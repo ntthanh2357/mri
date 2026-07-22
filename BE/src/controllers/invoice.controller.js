@@ -157,7 +157,7 @@ export const payInvoice = async (req, res) => {
     // Cập nhật trạng thái lượt khám và tính toán lại tiền thuốc trước khi lưu hóa đơn
     const visit = await Visit.findById(invoice.visitId);
     let prescription = null;
-    
+
     if (visit) {
       // 1. Tìm đơn thuốc chưa thanh toán của lượt khám này
       prescription = await Prescription.findOne({
@@ -208,7 +208,7 @@ export const payInvoice = async (req, res) => {
     }
 
     invoice.status = "đã thanh toán";
-    
+
     // Map payment method to database enum (tiền mặt / chuyển khoản)
     let mappedMethod = "tiền mặt";
     if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
@@ -216,7 +216,7 @@ export const payInvoice = async (req, res) => {
     }
     invoice.paymentMethod = mappedMethod;
     invoice.paidAt = new Date();
-    
+
     await invoice.save();
 
     // ── Ghi nhận Lịch sử sửa đổi bệnh án (Audit Trail / EMR Version) ──
@@ -225,14 +225,14 @@ export const payInvoice = async (req, res) => {
       if (patientUser) {
         const medicalId = patientUser.profile?.medicalId;
         const patientName = patientUser.profile?.name || patientUser.profile?.fullName;
-        
+
         let query = {};
         if (medicalId) {
           query = { $or: [{ patientId: medicalId }, { patientId: invoice.patientId.toString() }] };
         } else {
           query = { patientId: invoice.patientId.toString() };
         }
-        
+
         let medicalRecord = await MedicalRecord.findOne(query);
         if (!medicalRecord && patientName) {
           medicalRecord = await MedicalRecord.findOne({ patientName });
@@ -240,7 +240,7 @@ export const payInvoice = async (req, res) => {
 
         if (medicalRecord) {
           const nextVersion = (medicalRecord.currentVersion || 1) + 1;
-          
+
           const changes = {
             paymentStatus: {
               old: "Chờ thanh toán",
@@ -254,7 +254,7 @@ export const payInvoice = async (req, res) => {
             modifiedBy: `${req.user?.profile?.name || req.user?.email || "Điều dưỡng / Lễ tân"} (ID: ${req.user?.id})`,
             changes,
           });
-          
+
           await emrVersion.save();
           medicalRecord.currentVersion = nextVersion;
           await medicalRecord.save();

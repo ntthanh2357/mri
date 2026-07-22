@@ -247,8 +247,8 @@ const ResponsiveLayout = ({
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.userName} numberOfLines={1}>
-                      {localUser?.profile?.name || 'Người dùng'}
+                    <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
+                      {localUser?.role === 'doctor' ? 'Bác sĩ ' : ''}{localUser?.profile?.name || 'Người dùng'}
                     </Text>
                     <Text style={styles.userRole}>{roleLabel}</Text>
                   </View>
@@ -322,8 +322,8 @@ const ResponsiveLayout = ({
             </Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {localUser?.profile?.name || 'Người dùng'}
+            <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
+              {localUser?.role === 'doctor' ? 'Bác sĩ ' : ''}{localUser?.profile?.name || 'Người dùng'}
             </Text>
             <Text style={styles.userRole}>
               {roleLabel}

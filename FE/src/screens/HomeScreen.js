@@ -288,15 +288,13 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{getInitials(user.profile?.name)}</Text>
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.welcomeText}>Xin chào,</Text>
-                <Text style={styles.userName}>{user.profile?.name || 'Người dùng'}</Text>
+                <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
+                  {user.role === 'doctor' ? 'Bác sĩ ' : ''}{user.profile?.name || 'Người dùng'}
+                </Text>
               </View>
             </View>
-
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Đăng xuất 🚪</Text>
-            </TouchableOpacity>
           </View>
         )}
 
