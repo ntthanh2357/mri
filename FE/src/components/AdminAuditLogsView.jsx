@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  X,
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
@@ -385,7 +386,7 @@ export default function AdminAuditLogsView() {
                 onClick={() => setSelectedLog(null)}
                 className="text-slate-400 hover:text-slate-600"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

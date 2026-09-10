@@ -96,7 +96,22 @@ const transferFormSchema = new Schema({
   recorded_at: {
     type: Date,
     default: Date.now
-  }
+  },
+  // Module F — chuyển viện thông minh giữa các bệnh viện trong hệ thống
+  targetHospitalId: { type: Schema.Types.ObjectId, ref: "Hospital", default: null, index: true },
+  visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null },
+  imagingResultId: { type: Schema.Types.ObjectId, ref: "ImagingResult", default: null },
+  transferPackageDriveUrl: { type: String, default: "" }, // F.2: gói zip nén MRI + metadata
+  targetBedId: { type: Schema.Types.ObjectId, ref: "HospitalBed", default: null }, // F.3: giường được giữ chỗ viện đích
+  status: {
+    type: String,
+    enum: ["draft", "pending", "accepted", "rejected", "completed", "cancelled"],
+    default: "pending",
+    index: true
+  },
+  acceptedByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  acceptedAt: { type: Date, default: null },
+  rejectionReason: { type: String, default: "" },
 }, {
   timestamps: true
 });

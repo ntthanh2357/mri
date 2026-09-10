@@ -24,9 +24,11 @@
     "start": "npm run build:css && node update-ip.js && expo start",
     "dev": "npm run build:css && node update-ip.js && expo start --web --port 8083",
     "android": "npm run build:css && node update-ip.js && expo start --android",
+    "android:run": "npm run build:css && node update-ip.js && expo run:android",
     "ios": "npm run build:css && node update-ip.js && expo start --ios",
     "web": "npm run build:css && node update-ip.js && expo start --web --port 8083",
-    "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css"
+    "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
+    "test": "node src/tests/fe_models_utils.test.mjs"
   },
   "private": true,
   "devDependencies": {

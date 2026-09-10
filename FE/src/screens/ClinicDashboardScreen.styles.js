@@ -61,7 +61,7 @@ export default StyleSheet.create({
   actionButtonSolid: {
     flex: 1,
     height: 44,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -145,7 +145,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   walletDepositBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -254,7 +254,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#15803D',
+    color: '#0891B2',
     fontWeight: '500',
   },
   activityCard: {
@@ -398,7 +398,7 @@ export default StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   pricingSubmitBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     borderRadius: 8,
     height: 38,
     justifyContent: 'center',

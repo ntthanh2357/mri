@@ -9,6 +9,8 @@ import * as ImagePicker from 'expo-image-picker';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useDocumentVault } from '../controllers/useDocumentVault';
 import { DOC_TYPE_INFO, GROUPS } from '../models/documentVault.model';
+import { ShieldCheck, Image as ImageIcon, Edit3, Save, Plus } from 'lucide-react';
+import DocTypeIcon from '../components/DocTypeIcon';
 
 const GROUP_ORDER = [1, 2, 3, 5];
 
@@ -205,10 +207,23 @@ const RecordVaultScreen = ({ navigation }) => {
         )}
 
         <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.pageTitle}>Khai báo bệnh án</Text>
+          <Text style={styles.pageTitle}>Khai báo bệnh án (Sổ sức khỏe B2C)</Text>
           <Text style={styles.pageSubtitle}>
-            Lưu trữ bản sao 12 loại tài liệu y tế nhận được từ bệnh viện. Tất cả dữ liệu được lưu cục bộ trên thiết bị của bạn.
+            Lưu trữ bản sao 12 loại tài liệu y tế cá nhân. Hệ thống tự động phân loại và mã hóa dữ liệu.
           </Text>
+
+          {/* Privacy Security Notice Banner */}
+          <View style={{ backgroundColor: '#F0FDF4', borderLeftWidth: 4, borderLeftColor: '#16A34A', padding: 14, borderRadius: 8, marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <ShieldCheck size={16} color="#15803D" />
+              <Text style={{ fontWeight: 'bold', color: '#15803D', fontSize: 13 }}>
+                Bảo mật danh tính an toàn (Nghị định 13/2023/NĐ-CP)
+              </Text>
+            </View>
+            <Text style={{ fontSize: 12, color: '#166534', lineHeight: 18 }}>
+              Hệ thống không lưu trữ số CCCD hoặc số thẻ BHYT để bảo vệ dữ liệu cá nhân. Hồ sơ của bạn được định danh qua <Text style={{ fontWeight: 'bold' }}>Mã y tế (Medical ID)</Text> được cấp khi khám bệnh.
+            </Text>
+          </View>
 
           {GROUP_ORDER.map((groupId) => (
             <View key={groupId} style={styles.group}>
@@ -224,7 +239,7 @@ const RecordVaultScreen = ({ navigation }) => {
                   >
                     <View style={styles.cardLeft}>
                       <View style={styles.iconBox}>
-                        <Text style={styles.iconText}>{info.icon}</Text>
+                        <DocTypeIcon type={type} size={20} color="#0891B2" />
                       </View>
                       <View style={styles.cardMeta}>
                         <Text style={styles.cardLabel}>{info.label}</Text>
@@ -259,13 +274,16 @@ const RecordVaultScreen = ({ navigation }) => {
             {docModal && (
               <>
                 <View style={styles.sheetHandle} />
-                <Text style={styles.sheetTitle}>
-                  {docModal.info.icon}  {docModal.info.label}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <DocTypeIcon type={docModal.type} size={22} color="#0891B2" />
+                  <Text style={styles.sheetTitle}>
+                    {docModal.info.label}
+                  </Text>
+                </View>
 
                 {/* Upload */}
                 <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage} activeOpacity={0.8}>
-                  <Text style={styles.uploadSubIcon}>🖼️</Text>
+                  <ImageIcon size={22} color="#0891B2" style={{ marginRight: 8 }} />
                   <View>
                     <Text style={styles.sheetBtnLabel}>Tải ảnh lên</Text>
                     <Text style={styles.sheetBtnSub}>Chụp hoặc chọn ảnh/PDF từ thiết bị</Text>
@@ -273,7 +291,7 @@ const RecordVaultScreen = ({ navigation }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.sheetBtn, styles.sheetBtnPrimary]} onPress={handleFillManual}>
-                  <Text style={styles.sheetBtnIcon}>✏️</Text>
+                  <Edit3 size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
                   <View>
                     <Text style={[styles.sheetBtnLabel, styles.sheetBtnLabelPrimary]}>Điền thủ công</Text>
                     <Text style={[styles.sheetBtnSub, styles.sheetBtnSubPrimary]}>Nhập thông tin theo mẫu biểu chính thức</Text>
@@ -331,7 +349,10 @@ const RecordVaultScreen = ({ navigation }) => {
               <>
                 <View style={styles.sheetHandle} />
                 <Text style={styles.sheetTitle}>Lưu ảnh tài liệu</Text>
-                <Text style={styles.sheetSubtitle}>{uploadModal.info.icon}  {uploadModal.info.label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <DocTypeIcon type={uploadModal.type} size={16} color="#64748B" />
+                  <Text style={styles.sheetSubtitle}>{uploadModal.info.label}</Text>
+                </View>
 
                 {/* Preview */}
                 <Image
@@ -367,7 +388,7 @@ const RecordVaultScreen = ({ navigation }) => {
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
                     <>
-                      <Text style={styles.sheetBtnIcon}>💾</Text>
+                      <Save size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
                       <Text style={[styles.sheetBtnLabel, styles.sheetBtnLabelPrimary]}>Lưu vào kho hồ sơ</Text>
                     </>
                   )}

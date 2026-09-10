@@ -15,6 +15,32 @@ import {
 import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import {
+  FlaskConical,
+  Activity,
+  Pill,
+  FileText,
+  Share2,
+  Scan,
+  ChevronLeft,
+  Edit2,
+  Save,
+  Plus,
+  Printer,
+  ShieldAlert,
+  AlertTriangle,
+  FolderArchive,
+  Heart,
+  Wind,
+  Scale,
+  Sparkles,
+  Droplets,
+} from 'lucide-react';
+import ImagingTab from '../components/patientDetail/ImagingTab';
+import VitalsTab from '../components/patientDetail/VitalsTab';
+import LabOrdersTab from '../components/patientDetail/LabOrdersTab';
+import PrescriptionTab from '../components/patientDetail/PrescriptionTab';
+import DischargeTransferTab from '../components/patientDetail/DischargeTransferTab';
 
 const calculateAge = (dob, birthYear) => {
   if (dob) {
@@ -646,7 +672,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
     // Dùng trường abnormal_direction từ server (HIGH/LOW) nếu có
     if (result.abnormal_direction === 'HIGH') return '↑';
     if (result.abnormal_direction === 'LOW') return '↓';
-    return '⚠️'; // Fallback nếu không xác định được hướng
+    return '!'; // Fallback nếu không xác định được hướng
   };
 
   // Hàm vẽ SVG Line Chart cho Web
@@ -820,14 +846,20 @@ const PatientDetailScreen = ({ route, navigation }) => {
     return (
       <View style={styles.manualLabFormContainer}>
         <View style={styles.manualFormHeader}>
-          <Text style={styles.manualFormTitle}>
-            {selectedOrder.status === 'COMPLETED' ? '✏️ Chỉnh sửa kết quả xét nghiệm' : '✍️ Nhập kết quả xét nghiệm'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Edit2 size={15} color="#0891B2" />
+            <Text style={styles.manualFormTitle}>
+              {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.autofillBtn}
             onPress={handleAutoFillNormalLab}
           >
-            <Text style={styles.autofillBtnText}>⚡ Tự động điền giá trị chuẩn</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Sparkles size={13} color="#0891B2" />
+              <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -887,7 +919,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
             {savingManualLab ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveManualBtnText}>💾 Lưu kết quả xét nghiệm</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Save size={14} color="#FFF" />
+                <Text style={styles.saveManualBtnText}>Lưu kết quả xét nghiệm</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -895,884 +930,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
     );
   };
 
-  // ==========================================
-  // TAB 3: TOA THUỐC (PRESCRIPTION)
-  // ==========================================
-  const renderPrescriptionTab = () => {
-    const activePres = prescriptions.length > 0 ? prescriptions[0] : null;
+  // Ghi chú kiến trúc: Các tab Toa thuốc, Giấy ra viện, Phiếu chuyển tuyến, Sinh hiệu,
+  // Xét nghiệm LIS và Hình ảnh đã được module hóa thành các subcomponents chuyên biệt
+  // tại src/components/patientDetail/ để tuân thủ kiến trúc Single Responsibility.
 
-    return (
-      <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-        {/* Cột trái: Form kê đơn thuốc mới (Chỉ dành cho Bác sĩ) */}
-        {currentUser?.role !== 'patient' && (
-          <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitleText}>✍️ Kê đơn thuốc mới</Text>
-              <Text style={styles.cardSubtitleText}>Thiết lập danh mục và kiểm tra tương tác chéo</Text>
-
-              <View style={[styles.formGroup, { marginTop: 12 }]}>
-                <Text style={styles.inputLabel}>Chẩn đoán bệnh *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: U não thái dương..."
-                  value={prescriptionDiagnosis}
-                  onChangeText={setPrescriptionDiagnosis}
-                />
-              </View>
-
-              {/* Form thêm từng loại thuốc */}
-              <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 8 }}>Thêm thuốc vào đơn</Text>
-                
-                <View style={styles.formGroup}>
-                  <Text style={styles.inputLabel}>Tên thuốc điều trị *</Text>
-                  {Platform.OS === 'web' ? (
-                    <>
-                      <input
-                        type="text"
-                        list="drugs-datalist"
-                        value={selectedPredefinedDrug}
-                        onChange={(e) => {
-                          setSelectedPredefinedDrug(e.target.value);
-                          const drug = availableDrugs.find(d => d.name === e.target.value);
-                          if (drug) setDrugUnit(drug.stock?.unit || 'viên');
-                        }}
-                        placeholder="Nhập hoặc chọn tên thuốc (VD: Keppra...)"
-                        style={{
-                          width: '100%',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          border: '1px solid #CBD5E1',
-                          outline: 'none',
-                          fontSize: '14px',
-                          color: '#0F172A',
-                          backgroundColor: '#FFFFFF',
-                          fontFamily: 'inherit'
-                        }}
-                      />
-                      <datalist id="drugs-datalist">
-                        {availableDrugs.map(d => (
-                          <option key={d._id} value={d.name}>{`Tồn: ${d.stock?.quantity || 0} ${d.stock?.unit || 'viên'}`}</option>
-                        ))}
-                      </datalist>
-                    </>
-                  ) : (
-                    <View style={{ position: 'relative', zIndex: 1000 }}>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="Nhập tên thuốc (VD: Keppra, Depakine...)"
-                        value={selectedPredefinedDrug}
-                        onChangeText={setSelectedPredefinedDrug}
-                      />
-                      {(() => {
-                        const showSuggestions = selectedPredefinedDrug.trim().length > 0 && 
-                          !availableDrugs.find(d => d.name === selectedPredefinedDrug);
-                        
-                        const filtered = availableDrugs.filter(d => 
-                          d.name.toLowerCase().includes(selectedPredefinedDrug.toLowerCase())
-                        );
-                        
-                        if (showSuggestions && filtered.length > 0) {
-                          return (
-                            <View style={styles.suggestionsContainer}>
-                              {filtered.map((drug) => (
-                                <TouchableOpacity
-                                  key={drug._id}
-                                  style={styles.suggestionItem}
-                                  onPress={() => {
-                                    setSelectedPredefinedDrug(drug.name);
-                                    setDrugUnit(drug.stock?.unit || 'viên');
-                                  }}
-                                >
-                                  <Text style={styles.suggestionText}>
-                                    💊 {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={[styles.formGroup, { flex: 1.2 }]}>
-                    <Text style={styles.inputLabel}>Số lượng *</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="VD: 10"
-                      value={drugQuantity}
-                      onChangeText={setDrugQuantity}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Đơn vị</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="VD: viên"
-                      value={drugUnit}
-                      onChangeText={setDrugUnit}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.inputLabel}>Cách dùng / Liều lượng</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="VD: Ngày uống 2 lần, mỗi lần 1 viên sau ăn..."
-                    value={drugUsage}
-                    onChangeText={setDrugUsage}
-                  />
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Số lần uống/ngày</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="VD: 2"
-                      value={drugTimesPerDay}
-                      onChangeText={setDrugTimesPerDay}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Số ngày uống</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="VD: 7"
-                      value={drugDurationDays}
-                      onChangeText={setDrugDurationDays}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4 }]}
-                  onPress={handleAddDrugToPrescription}
-                >
-                  <Text style={styles.submitButtonText}>➕ Thêm vào đơn</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Danh sách thuốc đang kê nháp */}
-              {prescriptionDrugs.length > 0 && (
-                <View style={{ marginVertical: 10 }}>
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 6 }}>Danh sách thuốc đã chọn:</Text>
-                  {prescriptionDrugs.map((d, index) => (
-                    <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EFF6FF', padding: 8, borderRadius: 6, marginBottom: 6 }}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A' }}>{index + 1}. {d.name} ({d.quantity} {d.unit})</Text>
-                        <Text style={{ fontSize: 11, color: '#1E40AF' }}>HD: {d.usage}</Text>
-                        <Text style={{ fontSize: 11, color: '#1E40AF' }}>Nhắc uống: {d.timesPerDay} lần/ngày × {d.durationDays} ngày</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => handleRemoveDrugFromPrescription(index)} style={{ padding: 4, backgroundColor: '#FECACA', borderRadius: 4 }}>
-                        <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Xóa</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Cảnh báo tương tác lâm sàng real-time */}
-              {(clinicalWarnings.length > 0 || clinicalClassifications.length > 0) && (
-                <View style={{ marginVertical: 12, padding: 12, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FCD34D' }}>
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#B45309', marginBottom: 6 }}>🛡️ CẢNH BÁO DƯỢC LÂM SÀNG (REAL-TIME DSS):</Text>
-                  
-                  {clinicalWarnings.map((w, i) => (
-                    <Text key={i} style={{ fontSize: 11, color: w.severity === 'CRITICAL' ? '#DC2626' : '#D97706', fontWeight: w.severity === 'CRITICAL' ? 'bold' : 'normal', marginBottom: 4 }}>
-                      ⚠️ [{w.severity}] {w.message}
-                    </Text>
-                  ))}
-
-                  {clinicalClassifications.map((c, i) => (
-                    <Text key={i} style={{ fontSize: 11, color: '#4B5563', fontStyle: 'italic', marginBottom: 2 }}>
-                      ℹ️ {c.name}: {c.warning}
-                    </Text>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Lời dặn / Ghi chú đơn thuốc</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Tái khám sau 1 tháng mang theo đơn này..."
-                  value={prescriptionNote}
-                  onChangeText={setPrescriptionNote}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: '#16A34A' }]}
-                onPress={handleSavePrescription}
-                disabled={isSavingPrescription}
-              >
-                {isSavingPrescription ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.submitButtonText}>💾 Lưu đơn thuốc & Ký số</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Cột phải: Bản xem đơn thuốc chính thức (Print view) */}
-        <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
-          {activePres ? (
-            <View style={{ gap: 16 }}>
-              {/* Nút tác vụ in ấn */}
-              {Platform.OS === 'web' && (
-                <TouchableOpacity
-                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#475569', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                  onPress={() => window.print()}
-                >
-                  <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>🖨️ In đơn thuốc (PDF)</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Bản in đơn thuốc */}
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
-                {/* Header bệnh viện */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
-                  <View>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>Hotline: 1900 571 563 - ĐT Cấp cứu: 0236 3615 115</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 10, color: '#475569', fontWeight: '500' }}>Mã y tế: <Text style={{ fontWeight: 'bold' }}>PT-003</Text></Text>
-                    <Text style={{ fontSize: 10, color: '#475569', fontWeight: '500' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>NS-{patient?._id?.substring(18).toUpperCase()}</Text></Text>
-                  </View>
-                </View>
-
-                {/* Tiêu đề */}
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 16 }}>ĐƠN THUỐC (TOA THUỐC)</Text>
-
-                {/* Thông tin bệnh nhân */}
-                <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Giới tính: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
-                  </View>
-                  <Text style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Chẩn đoán lâm sàng: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activePres.diagnosis}</Text></Text>
-                </View>
-
-                {/* Bảng danh sách thuốc */}
-                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B', marginBottom: 8 }}>CHỈ ĐỊNH THUỐC ĐIỀU TRỊ:</Text>
-                <View style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
-                  {/* Header hàng */}
-                  <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#CBD5E1' }}>
-                    <Text style={{ flex: 0.4, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>STT</Text>
-                    <Text style={{ flex: 2.2, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>Tên thuốc / Hàm lượng</Text>
-                    <Text style={{ flex: 0.8, fontSize: 11, fontWeight: 'bold', color: '#475569', textAlign: 'center' }}>S.Lượng</Text>
-                    <Text style={{ flex: 0.8, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>Đơn vị</Text>
-                  </View>
-                  
-                  {/* Body hàng */}
-                  {activePres.drugs.map((drug, idx) => (
-                    <View key={idx} style={{ borderBottomWidth: idx === activePres.drugs.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0', paddingVertical: 8, paddingHorizontal: 12 }}>
-                      <View style={{ flexDirection: 'row' }}>
-                        <Text style={{ flex: 0.4, fontSize: 12, color: '#334155', fontWeight: '500' }}>{idx + 1}</Text>
-                        <Text style={{ flex: 2.2, fontSize: 12, color: '#1E3A8A', fontWeight: 'bold' }}>{drug.name}</Text>
-                        <Text style={{ flex: 0.8, fontSize: 12, color: '#334155', fontWeight: 'bold', textAlign: 'center' }}>{drug.quantity}</Text>
-                        <Text style={{ flex: 0.8, fontSize: 12, color: '#475569' }}>{drug.unit}</Text>
-                      </View>
-                      {drug.usage ? (
-                        <Text style={{ fontSize: 11, color: '#475569', fontStyle: 'italic', marginTop: 4, marginLeft: 20 }}>Cách dùng: {drug.usage}</Text>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-
-                {/* Cộng khoản và lời dặn */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 12, color: '#475569', fontWeight: '500', marginBottom: 8 }}>Cộng khoản: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{activePres.drugs.length} loại thuốc.</Text></Text>
-                  {activePres.note ? (
-                    <View style={{ padding: 10, backgroundColor: '#FFFBEB', borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
-                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#92400E' }}>Lời dặn bác sĩ:</Text>
-                      <Text style={{ fontSize: 12, color: '#78350F', marginTop: 2 }}>{activePres.note}</Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* Phần ký tên */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
-                  <View>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Khám ngày: {new Date(activePres.recorded_at).toLocaleDateString('vi-VN')}</Text>
-                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>Đã ghi nhận trên hệ thống</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>BÁC SĨ KHÁM BỆNH</Text>
-                    <Text style={{ fontSize: 10, color: '#64748B', marginBottom: 25 }}>{activePres.doctor_name}</Text>
-                    <View style={styles.signatureSigned}>
-                      <Text style={styles.badgeTextSmall}>Đã ký số điện tử</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.noOrderSelectedCard}>
-              <Text style={styles.noOrderSelectedText}>Bệnh án này chưa được kê đơn thuốc lâm sàng.</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  // ==========================================
-  // TAB 4: GIẤY RA VIỆN (DISCHARGE PAPER)
-  // ==========================================
-  const renderDischargeTab = () => {
-    const activeDisc = dischargePapers.length > 0 ? dischargePapers[0] : null;
-
-    return (
-      <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-        {/* Cột trái: Lập Giấy ra viện mới (Bác sĩ) */}
-        {currentUser?.role !== 'patient' && (
-          <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitleText}>📄 Lập Giấy ra viện</Text>
-              <Text style={styles.cardSubtitleText}>Hoàn tất thủ tục xuất viện cho người bệnh</Text>
-
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Số giấy ra viện</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Tự động sinh hoặc nhập..."
-                    value={dischargeNo}
-                    onChangeText={setDischargeNo}
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Số hồ sơ / Số BA</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Tự động sinh hoặc nhập..."
-                    value={hospitalNo}
-                    onChangeText={setHospitalNo}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Chẩn đoán ra viện *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: U não thái dương đã phẫu thuật..."
-                  value={dischargeDiagnosis}
-                  onChangeText={setDischargeDiagnosis}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Phương pháp điều trị *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Phẫu thuật bóc tách u + Điều trị nội khoa hậu phẫu..."
-                  value={dischargeTreatment}
-                  onChangeText={setDischargeTreatment}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Ghi chú ra viện / Lời dặn</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Tránh vận động mạnh, tái khám theo hẹn..."
-                  value={dischargeNote}
-                  onChangeText={setDischargeNote}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: '#16A34A' }]}
-                onPress={handleSaveDischargePaper}
-                disabled={isSavingDischarge}
-              >
-                {isSavingDischarge ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.submitButtonText}>💾 Cấp giấy ra viện & Ký duyệt</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Cột phải: Bản xem Giấy ra viện chính thức */}
-        <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
-          {activeDisc ? (
-            <View style={{ gap: 16 }}>
-              {Platform.OS === 'web' && (
-                <TouchableOpacity
-                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#475569', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                  onPress={() => window.print()}
-                >
-                  <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>🖨️ In giấy ra viện (PDF)</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#10B981' }]}>
-                {/* Header quốc hiệu quốc ngữ */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
-                  <View>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeDisc.dischargeNo}/GV</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
-                    <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
-                    <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>--------------------</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Mẫu số: <Text style={{ fontWeight: 'bold' }}>02-GV</Text></Text>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeDisc.hospitalNo}</Text></Text>
-                  </View>
-                </View>
-
-                {/* Tiêu đề */}
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 20 }}>GIẤY RA VIỆN</Text>
-
-                {/* Nội dung chi tiết */}
-                <View style={{ gap: 10, marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                  
-                  <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).toLocaleDateString('vi-VN') : patient?.profile?.birthYear || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>{calculateAge(patient?.profile?.dob, patient?.profile?.birthYear)}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Dân tộc: <Text style={{ fontWeight: '500' }}>Kinh</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Nghề nghiệp: <Text style={{ fontWeight: '500' }}>Kỹ sư</Text></Text>
-                  </View>
-
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Mã số BHXH / Thẻ BHYT số: <Text style={{ fontWeight: '500' }}>GD4797921800244</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
-                  
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4, gap: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Vào viện lúc: <Text style={{ fontWeight: '600' }}>08:30 ngày {new Date(activeDisc.dateIn).toLocaleDateString('vi-VN')}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Ra viện lúc: <Text style={{ fontWeight: '600' }}>16:00 ngày {new Date(activeDisc.dateOut).toLocaleDateString('vi-VN')}</Text></Text>
-                    
-                    <Text style={{ fontSize: 13, color: '#334155', marginTop: 4 }}>• Chẩn đoán ra viện: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeDisc.diagnosis}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Phương pháp điều trị: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeDisc.treatment}</Text></Text>
-                    
-                    {activeDisc.note ? (
-                      <Text style={{ fontSize: 13, color: '#334155' }}>• Lời dặn bác sĩ / Ghi chú: <Text style={{ fontWeight: '500', fontStyle: 'italic' }}>{activeDisc.note}</Text></Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                {/* Chữ ký phê duyệt */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>NGƯỜI HÀNH NGHỀ KCB</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
-                    <Text style={{ fontSize: 11, color: '#1E3A8A', fontWeight: 'bold', marginTop: 25 }}>{activeDisc.doctor_name}</Text>
-                  </View>
-                  
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeDisc.recorded_at).getDate()} tháng {new Date(activeDisc.recorded_at).getMonth() + 1} năm {new Date(activeDisc.recorded_at).getFullYear()}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN ĐƠN VỊ KCB</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
-                    <View style={[styles.signatureSigned, { marginTop: 15 }]}>
-                      <Text style={styles.badgeTextSmall}>Đã đóng dấu điện tử</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.noOrderSelectedCard}>
-              <Text style={styles.noOrderSelectedText}>Bệnh nhân chưa được lập giấy ra viện.</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  // ==========================================
-  // TAB 5: PHIẾU CHUYỂN TUYẾN (TRANSFER FORM)
-  // ==========================================
-  const renderTransferTab = () => {
-    const activeTrans = transferForms.length > 0 ? transferForms[0] : null;
-
-    // Tự động trích xuất cận lâm sàng (Lab summary) từ phiếu xét nghiệm gần nhất để điền tự động
-    const handleAutofillLabResults = () => {
-      const completedOrder = labOrders.find(o => o.status === 'COMPLETED');
-      if (!completedOrder || !completedOrder.results) {
-        Alert.alert('Thông báo', 'Không tìm thấy kết quả xét nghiệm đã hoàn thành để trích xuất.');
-        return;
-      }
-      
-      const summaryText = completedOrder.results.map(r => {
-        return `${r.biomarker_name} (${r.biomarker_code}): ${r.value_result} ${r.unit}${r.is_abnormal ? ' (Lệch chuẩn)' : ''}`;
-      }).join('\n');
-      
-      setTransferLabSummary(summaryText);
-      Alert.alert('Thành công', 'Đã trích xuất thành công kết quả xét nghiệm LIS gần nhất vào phiếu chuyển tuyến!');
-    };
-
-    return (
-      <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-        {/* Cột trái: Lập Phiếu chuyển tuyến mới (Bác sĩ) */}
-        {currentUser?.role !== 'patient' && (
-          <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitleText}>✈️ Lập Phiếu chuyển tuyến BHYT</Text>
-              <Text style={styles.cardSubtitleText}>Chuyển bệnh nhân lên tuyến trên hoặc bệnh viện khác</Text>
-
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Số phiếu chuyển</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Tự động sinh..."
-                    value={transferNo}
-                    onChangeText={setTransferNo}
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Số hồ sơ chuyển</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Tự động sinh..."
-                    value={transferHospitalNo}
-                    onChangeText={setTransferHospitalNo}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Kính gửi (Nơi chuyển đến) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Bệnh viện Trung ương Huế..."
-                  value={transferTo}
-                  onChangeText={setTransferTo}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Tóm tắt dấu hiệu lâm sàng</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Nhức đầu nhiều, nôn mửa, yếu liệt nửa người nhẹ..."
-                  value={transferClinicalSummary}
-                  onChangeText={setTransferClinicalSummary}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.inputLabel}>Tóm tắt cận lâm sàng chính</Text>
-                  <TouchableOpacity onPress={handleAutofillLabResults} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#3B82F6' }}>
-                    <Text style={{ fontSize: 10, color: Colors.primary, fontWeight: 'bold' }}>⚡ Trích LIS Lab gần nhất</Text>
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={[styles.textInput, { height: 60 }]}
-                  multiline
-                  placeholder="VD: MRI cho thấy khối u não thái dương kích thước lớn..."
-                  value={transferLabSummary}
-                  onChangeText={setTransferLabSummary}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Chẩn đoán chính khi chuyển tuyến *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: U não thái dương..."
-                  value={transferDiagnosis}
-                  onChangeText={setTransferDiagnosis}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Phương pháp, thủ thuật đã thực hiện</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Điều trị nâng đỡ, giảm phù não..."
-                  value={transferTreatment}
-                  onChangeText={setTransferTreatment}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Kỹ thuật, thuốc điều trị chính đã sử dụng</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Keppra 500mg, Dexamethasone kháng viêm..."
-                  value={transferDrugsUsed}
-                  onChangeText={setTransferDrugsUsed}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Tình trạng người bệnh lúc chuyển</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Tỉnh táo, sinh hiệu tạm ổn, đau đầu nhẹ..."
-                  value={transferPatientStatus}
-                  onChangeText={setTransferPatientStatus}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Lý do chuyển tuyến</Text>
-                {Platform.OS === 'web' ? (
-                  <select
-                    value={transferReason}
-                    onChange={(e) => {
-                      setTransferReason(e.target.value);
-                      if (e.target.value === '1') setTransferReasonDetail('Phù hợp với quy định chuyển cấp chuyên môn kỹ thuật (**)');
-                      else setTransferReasonDetail('Theo yêu cầu của người bệnh hoặc đại diện hợp pháp');
-                    }}
-                    style={{
-                      height: 38,
-                      borderRadius: 8,
-                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
-                      paddingLeft: 10,
-                      fontSize: 13,
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                      width: '100%'
-                    }}
-                  >
-                    <option value="1">1. Đủ điều kiện chuyển tuyến chuyên môn</option>
-                    <option value="2">2. Theo yêu cầu của người bệnh / người nhà</option>
-                  </select>
-                ) : (
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="VD: 1 hoặc 2"
-                    value={transferReason}
-                    onChangeText={setTransferReason}
-                  />
-                )}
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Chi tiết lý do chuyển</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={transferReasonDetail}
-                  onChangeText={setTransferReasonDetail}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Hướng điều trị tiếp theo</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: Phẫu thuật chuyên sâu, xạ trị..."
-                  value={transferDirection}
-                  onChangeText={setTransferDirection}
-                />
-              </View>
-
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1.2 }]}>
-                  <Text style={styles.inputLabel}>Phương tiện vận chuyển</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={transferTransportation}
-                    onChangeText={setTransferTransportation}
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Hộ tống (nếu có)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="VD: Điều dưỡng A"
-                    value={transferEscort}
-                    onChangeText={setTransferEscort}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Có giá trị trong 01 năm?</Text>
-                {Platform.OS === 'web' ? (
-                  <select
-                    value={transferOneYearValid}
-                    onChange={(e) => setTransferOneYearValid(e.target.value)}
-                    style={{
-                      height: 38,
-                      borderRadius: 8,
-                      borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'solid',
-                      paddingLeft: 10,
-                      fontSize: 13,
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                      width: '100%'
-                    }}
-                  >
-                    <option value="Không">Không</option>
-                    <option value="Có">Có</option>
-                  </select>
-                ) : (
-                  <TextInput
-                    style={styles.textInput}
-                    value={transferOneYearValid}
-                    onChangeText={setTransferOneYearValid}
-                  />
-                )}
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: '#16A34A' }]}
-                onPress={handleSaveTransferForm}
-                disabled={isSavingTransfer}
-              >
-                {isSavingTransfer ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.submitButtonText}>💾 Lập phiếu chuyển & Ký duyệt</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Cột phải: Bản xem Phiếu chuyển tuyến chính thức */}
-        <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
-          {activeTrans ? (
-            <View style={{ gap: 16 }}>
-              {Platform.OS === 'web' && (
-                <TouchableOpacity
-                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#475569', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                  onPress={() => window.print()}
-                >
-                  <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>🖨️ In phiếu chuyển tuyến (PDF)</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#F59E0B' }]}>
-                {/* Quốc hiệu quốc ngữ */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
-                  <View>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeTrans.transferNo}/GCT</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
-                    <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
-                    <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>--------------------</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeTrans.hospitalNo}</Text></Text>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Vào sổ chuyển số: <Text style={{ fontWeight: 'bold' }}>{activeTrans.transferNo}</Text></Text>
-                  </View>
-                </View>
-
-                {/* Tiêu đề */}
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 6 }}>PHIẾU CHUYỂN CƠ SỞ KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ</Text>
-                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A', textAlign: 'center', marginBottom: 20 }}>Kính gửi: {activeTrans.transferTo}</Text>
-
-                {/* Nội dung chi tiết chuyển tuyến */}
-                <View style={{ gap: 10, marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>Bệnh viện Đa khoa Tâm Trí Đà Nẵng</Text> trân trọng giới thiệu:</Text>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>- Họ và tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                  
-                  <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>- Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Năm sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).getFullYear() : patient?.profile?.birthYear || 'N/A'}</Text></Text>
-                  </View>
-
-                  <Text style={{ fontSize: 13, color: '#334155' }}>- Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
-                  
-                  <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.2 }}>- Dân tộc: <Text style={{ fontWeight: '500' }}>Kinh</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Quốc tịch: <Text style={{ fontWeight: '500' }}>Việt Nam</Text></Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.2 }}>- Nghề nghiệp: <Text style={{ fontWeight: '500' }}>Kỹ sư</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Nơi làm việc: <Text style={{ fontWeight: '500' }}>N/A</Text></Text>
-                  </View>
-
-                  <Text style={{ fontSize: 13, color: '#334155' }}>- Số thẻ Bảo hiểm y tế: <Text style={{ fontWeight: 'bold', color: '#1E3A8A' }}>GD4797921800244</Text></Text>
-                  
-                  {/* Tóm tắt bệnh án */}
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4 }}>
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B', marginBottom: 6 }}>TÓM TẮT BỆNH ÁN:</Text>
-                    
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>1. Tóm tắt dấu hiệu lâm sàng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.clinicalSummary || 'N/A'}</Text></Text>
-                    
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>2. Tóm tắt kết quả xét nghiệm, cận lâm sàng chính: </Text>
-                    <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginLeft: 12, marginBottom: 8 }}>
-                      <Text style={{ fontSize: 11, color: '#334155', fontFamily: 'monospace', lineHeight: 16 }}>{activeTrans.labSummary || 'N/A'}</Text>
-                    </View>
-
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>3. Chẩn đoán bệnh chính: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeTrans.diagnosis}</Text></Text>
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>4. Phương pháp, thủ thuật đã thực hiện: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.treatment || 'Chưa thực hiện thủ thuật'}</Text></Text>
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>5. Thuốc điều trị chính đã sử dụng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.drugsUsed || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>6. Tình trạng bệnh nhân khi chuyển tuyến: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.patientStatus || 'Ổn định'}</Text></Text>
-                  </View>
-
-                  {/* Lý do chuyển tuyến & Hướng điều trị */}
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4, gap: 4 }}>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>- Lý do chuyển tuyến: <Text style={{ fontWeight: 'bold', color: '#D97706' }}>Mục [{activeTrans.reason}] — {activeTrans.reasonDetail}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>- Hướng điều trị tiếp theo: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeTrans.treatmentDirection || 'Theo chỉ định của tuyến trên'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>- Thời gian chuyển tuyến: <Text style={{ fontWeight: '500' }}>{new Date(activeTrans.transferTime).toLocaleTimeString('vi-VN')} ngày {new Date(activeTrans.transferTime).toLocaleDateString('vi-VN')}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>- Trường hợp chuyển tuyến có giá trị trong 01 năm: <Text style={{ fontWeight: 'bold' }}>{activeTrans.isOneYearValid}</Text></Text>
-                    
-                    <View style={{ flexDirection: 'row', gap: 20, marginTop: 4 }}>
-                      <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>- Phương tiện vận chuyển: <Text style={{ fontWeight: '500' }}>{activeTrans.transportation}</Text></Text>
-                      {activeTrans.escort ? (
-                        <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Người hộ tống: <Text style={{ fontWeight: '500' }}>{activeTrans.escort}</Text></Text>
-                      ) : null}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Ký tên phê duyệt */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>Y BÁC SĨ ĐIỀU TRỊ</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
-                    <Text style={{ fontSize: 11, color: '#1E3A8A', fontWeight: 'bold', marginTop: 25 }}>{activeTrans.doctor_name}</Text>
-                  </View>
-                  
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeTrans.recorded_at).getDate()} tháng {new Date(activeTrans.recorded_at).getMonth() + 1} năm {new Date(activeTrans.recorded_at).getFullYear()}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN CƠ SỞ KCB</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
-                    <View style={[styles.signatureSigned, { marginTop: 15 }]}>
-                      <Text style={styles.badgeTextSmall}>Đã ký số phê duyệt</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.noOrderSelectedCard}>
-              <Text style={styles.noOrderSelectedText}>Bệnh nhân chưa được cấp phiếu chuyển tuyến.</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
 
   if (loading) {
     return (
@@ -1795,7 +956,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
         {!isDesktop && (
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Danh sách BN</Text>
+              <ChevronLeft size={18} color="#0891B2" />
+              <Text style={styles.backButtonText}>Danh sách BN</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
           </View>
@@ -1837,7 +999,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* 2. Bộ Tab chuyển màn hình */}
-          {/* 2. Bộ Tab chuyển màn hình */}
           <View style={styles.tabsWrapper}>
             <ScrollView
               horizontal
@@ -1848,8 +1009,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'lab' && styles.activeTabButton]}
                 onPress={() => setActiveTab('lab')}
               >
+                <FlaskConical size={16} color={activeTab === 'lab' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'lab' && styles.activeTabButtonText]}>
-                  🔬 Xét nghiệm LIS
+                  Xét nghiệm LIS
                 </Text>
               </TouchableOpacity>
 
@@ -1857,8 +1019,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'vitals' && styles.activeTabButton]}
                 onPress={() => setActiveTab('vitals')}
               >
+                <Activity size={16} color={activeTab === 'vitals' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'vitals' && styles.activeTabButtonText]}>
-                  📈 Sinh hiệu
+                  Sinh hiệu
                 </Text>
               </TouchableOpacity>
 
@@ -1866,8 +1029,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'prescription' && styles.activeTabButton]}
                 onPress={() => setActiveTab('prescription')}
               >
+                <Pill size={16} color={activeTab === 'prescription' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'prescription' && styles.activeTabButtonText]}>
-                  💊 Toa thuốc
+                  Toa thuốc
                 </Text>
               </TouchableOpacity>
 
@@ -1875,8 +1039,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'discharge' && styles.activeTabButton]}
                 onPress={() => setActiveTab('discharge')}
               >
+                <FileText size={16} color={activeTab === 'discharge' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'discharge' && styles.activeTabButtonText]}>
-                  📄 Giấy ra viện
+                  Giấy ra viện
                 </Text>
               </TouchableOpacity>
 
@@ -1884,8 +1049,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'transfer' && styles.activeTabButton]}
                 onPress={() => setActiveTab('transfer')}
               >
+                <Share2 size={16} color={activeTab === 'transfer' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'transfer' && styles.activeTabButtonText]}>
-                  ✈️ Chuyển tuyến
+                  Chuyển tuyến
                 </Text>
               </TouchableOpacity>
 
@@ -1893,8 +1059,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 style={[styles.tabButton, activeTab === 'imaging' && styles.activeTabButton]}
                 onPress={() => setActiveTab('imaging')}
               >
+                <Scan size={16} color={activeTab === 'imaging' ? '#FFFFFF' : '#64748B'} />
                 <Text style={[styles.tabButtonText, activeTab === 'imaging' && styles.activeTabButtonText]}>
-                  🧠 Phim MRI/CT
+                  Phim MRI/CT
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1902,403 +1069,146 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
           {/* 3. Nội dung TAB 1: SINH HIỆU */}
           {activeTab === 'vitals' && (
-            <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-              
-              {/* Cột trái: Đồ thị và Chỉ số hiện tại */}
-              <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
-                {/* 4 Chỉ số nhanh */}
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricEmoji}>❤️</Text>
-                    <View>
-                      <Text style={styles.metricLabelText}>Mạch</Text>
-                      <Text style={styles.metricValueText}>
-                        {latestVital?.pulse || '--'} <Text style={styles.metricUnitText}>bpm</Text>
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricEmoji}>🩸</Text>
-                    <View>
-                      <Text style={styles.metricLabelText}>Huyết áp</Text>
-                      <Text style={styles.metricValueText}>
-                        {latestVital ? `${latestVital.blood_pressure?.systolic}/${latestVital.blood_pressure?.diastolic}` : '--'} 
-                        <Text style={styles.metricUnitText}> mmHg</Text>
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricEmoji}>🌬️</Text>
-                    <View>
-                      <Text style={styles.metricLabelText}>SpO2</Text>
-                      <Text style={styles.metricValueText}>
-                        {latestVital?.spo2 || '--'} <Text style={styles.metricUnitText}>%</Text>
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricEmoji}>⚖️</Text>
-                    <View>
-                      <Text style={styles.metricLabelText}>Chỉ số BMI</Text>
-                      <Text style={styles.metricValueText}>
-                        {latestVital?.bmi || '--'} <Text style={styles.metricUnitText}>kg/m²</Text>
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Khung biểu đồ Line Chart */}
-                <View style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitleText}>Biểu đồ diễn tiến Mạch & Huyết áp</Text>
-                    <Text style={styles.cardSubtitleText}>Hệ trục tọa độ hợp nhất (40 - 200)</Text>
-                  </View>
-                  {renderSvgLineChart()}
-                </View>
-              </View>
-
-              {/* Cột phải: Form nhập sinh hiệu mới */}
-              {currentUser?.role !== 'patient' && (
-                <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
-                  <View style={styles.card}>
-                    <Text style={styles.cardTitleText}>Ghi nhận sinh hiệu mới</Text>
-                    <Text style={styles.cardSubtitleText}>Cập nhật lập tức số đo khám của bệnh nhân</Text>
-                    
-                    <View style={styles.formGroup}>
-                      <Text style={styles.inputLabel}>Mạch (lần/phút) *</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="VD: 75"
-                        value={pulseInput}
-                        onChangeText={setPulseInput}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>HA Tâm thu (mmHg) *</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="VD: 120"
-                          value={systolicInput}
-                          onChangeText={(v) => setSystolicInput(v)}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>HA Tâm trương *</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="VD: 80"
-                          value={diastolicInput}
-                          onChangeText={(v) => setDiastolicInput(v)}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formGroup}>
-                      <Text style={styles.inputLabel}>SpO2 (%) *</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="VD: 98"
-                        value={spo2Input}
-                        onChangeText={setSpo2Input}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>Chiều cao (cm)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="VD: 172"
-                          value={heightInput}
-                          onChangeText={setHeightInput}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>Cân nặng (kg)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="VD: 68"
-                          value={weightInput}
-                          onChangeText={setWeightInput}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.submitButton}
-                      onPress={handleAddVitals}
-                      disabled={isSubmittingVital}
-                    >
-                      {isSubmittingVital ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.submitButtonText}>💾 Lưu thông số sinh hiệu</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-            </View>
+            <VitalsTab
+              isDesktop={isDesktop}
+              latestVital={latestVital}
+              renderSvgLineChart={renderSvgLineChart}
+              currentUser={currentUser}
+              pulseInput={pulseInput}
+              setPulseInput={setPulseInput}
+              systolicInput={systolicInput}
+              setSystolicInput={setSystolicInput}
+              diastolicInput={diastolicInput}
+              setDiastolicInput={setDiastolicInput}
+              spo2Input={spo2Input}
+              setSpo2Input={setSpo2Input}
+              heightInput={heightInput}
+              setHeightInput={setHeightInput}
+              weightInput={weightInput}
+              setWeightInput={setWeightInput}
+              handleAddVitals={handleAddVitals}
+              isSubmittingVital={isSubmittingVital}
+              styles={styles}
+            />
           )}
 
           {/* 4. Nội dung TAB 2: PHIẾU XÉT NGHIỆM LIS */}
           {activeTab === 'lab' && (
-            <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-              
-              {/* Cột trái: Danh sách phiếu xét nghiệm & Tạo phiếu mới */}
-              <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
-                <View style={styles.card}>
-                  <Text style={styles.cardTitleText}>Phiếu chỉ định ({labOrders.length})</Text>
-                  <Text style={styles.cardSubtitleText}>Chọn phiếu xét nghiệm để xem kết quả chi tiết</Text>
-                  
-                  <View style={styles.labOrdersList}>
-                    {labOrders.map((order) => {
-                      const isSelected = selectedOrder?._id === order._id;
-                      const date = new Date(order.ordered_at);
-                      return (
-                        <TouchableOpacity
-                          key={order._id}
-                          style={[styles.orderItem, isSelected && styles.selectedOrderItem]}
-                          onPress={() => setSelectedOrder(order)}
-                        >
-                          <View style={styles.orderItemHeader}>
-                            <Text style={[styles.orderCategoryText, isSelected && styles.selectedOrderText]}>
-                              {order.category === 'HOA_SINH' ? '🧪 Hóa sinh máu' : '🩸 Huyết học'}
-                            </Text>
-                            <View style={[styles.statusBadgeSmall, order.status === 'COMPLETED' ? styles.badgeSuccess : styles.badgePending]}>
-                              <Text style={styles.badgeTextSmall}>
-                                {order.status === 'COMPLETED' ? 'Đã trả KQ' : 'Chờ KQ'}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={styles.orderBarcodeText}>Mã vạch: {order.barcode}</Text>
-                          <Text style={styles.orderDateText}>
-                            Yêu cầu: {date.getHours()}:{date.getMinutes()} - {date.getDate()}/{date.getMonth() + 1}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-
-                    {labOrders.length === 0 && (
-                      <Text style={styles.emptyText}>Chưa có chỉ định xét nghiệm nào.</Text>
-                    )}
-                  </View>
-
-                  {/* Bác sĩ/Admin có quyền chỉ định xét nghiệm mới */}
-                  {currentUser?.role !== 'patient' && (
-                    <View style={styles.createOrderActions}>
-                      <Text style={styles.actionSectionTitle}>Yêu cầu xét nghiệm mới</Text>
-                      <View style={styles.buttonRow}>
-                        <TouchableOpacity
-                          style={[styles.actionBtnOutline, { flex: 1 }]}
-                          onPress={() => handleCreateLabOrder('HOA_SINH')}
-                        >
-                          <Text style={styles.actionBtnOutlineText}>🧪 Hóa Sinh</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                          style={[styles.actionBtnOutline, { flex: 1 }]}
-                          onPress={() => handleCreateLabOrder('HUYET_HOC')}
-                        >
-                          <Text style={styles.actionBtnOutlineText}>🩸 Huyết Học</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Cột phải: Chi tiết phiếu kết quả & LIS Simulator */}
-              <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
-                {selectedOrder ? (
-                  <View>
-                    {/* Bảng kết quả xét nghiệm chuẩn Y tế */}
-                    <View style={styles.labReportSheet}>
-                      {/* Tiêu đề biểu mẫu */}
-                      <View style={styles.reportHeader}>
-                        <View style={styles.reportHeaderLeft}>
-                          <Text style={styles.hospitalName}>SỞ Y TẾ HÀ NỘI</Text>
-                          <Text style={styles.hospitalSub}>BỆNH VIỆN ĐA KHOA NEUROSCAN AI</Text>
-                        </View>
-                        <View style={styles.reportHeaderRight}>
-                          <Text style={styles.departmentName}>KHOA XÉT NGHIỆM CHI NHÁNH 1</Text>
-                          <Text style={styles.barcodeLabel}>Barcode: {selectedOrder.barcode}</Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.reportTitle}>PHIẾU KẾT QUẢ XÉT NGHIỆM</Text>
-                      <Text style={styles.reportSubtitle}>
-                        Chuyên khoa: {selectedOrder.category === 'HOA_SINH' ? 'Hóa sinh máu' : 'Huyết học tế bào'}
-                      </Text>
-
-                      {/* Thông tin hành chính bệnh nhân trên phiếu */}
-                      <View style={styles.reportDemographics}>
-                        <View style={styles.demoRow}>
-                          <Text style={styles.demoLabel}>Họ tên bệnh nhân:</Text>
-                          <Text style={styles.demoVal}>{patient?.profile?.name || 'N/A'}</Text>
-                          
-                          <Text style={styles.demoLabel}>Giới tính:</Text>
-                          <Text style={styles.demoVal}>{selectedOrder.patient_gender}</Text>
-                        </View>
-                        <View style={styles.demoRow}>
-                          <Text style={styles.demoLabel}>Số điện thoại:</Text>
-                          <Text style={styles.demoVal}>{patient?.phone || 'Chưa cập nhật'}</Text>
-
-                          <Text style={styles.demoLabel}>Thời gian chỉ định:</Text>
-                          <Text style={styles.demoVal}>
-                            {new Date(selectedOrder.ordered_at).toLocaleString('vi-VN')}
-                          </Text>
-                        </View>
-                        {selectedOrder.resulted_at && (
-                          <View style={styles.demoRow}>
-                            <Text style={styles.demoLabel}>Thời gian trả kết quả:</Text>
-                            <Text style={[styles.demoVal, { color: Colors.success, fontWeight: 'bold' }]}>
-                              {new Date(selectedOrder.resulted_at).toLocaleString('vi-VN')}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {selectedOrder.status === 'COMPLETED' && !isEditingLab && currentUser?.role !== 'patient' && (
-                        <TouchableOpacity
-                          style={styles.editLabResultsBtn}
-                          onPress={() => setIsEditingLab(true)}
-                        >
-                          <Text style={styles.editLabResultsBtnText}>✏️ Chỉnh sửa kết quả xét nghiệm</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Bảng kết quả chi tiết */}
-                      {selectedOrder.status === 'COMPLETED' && !isEditingLab ? (
-                        <View style={styles.tableContainer}>
-                          <View style={styles.tableRowHeader}>
-                            <Text style={[styles.colHeader, { flex: 2.2 }]}>Tên chỉ số xét nghiệm</Text>
-                            <Text style={[styles.colHeader, { flex: 1.2 }]}>Trị số kết quả</Text>
-                            <Text style={[styles.colHeader, { flex: 0.8 }]}>Đơn vị</Text>
-                            <Text style={[styles.colHeader, { flex: 1.8 }]}>Khoảng tham chiếu</Text>
-                            <Text style={[styles.colHeader, { flex: 0.8, textAlign: 'center' }]}>Cảnh báo</Text>
-                          </View>
-                          
-                          {selectedOrder.results.map((res, index) => {
-                            const direction = getAbnormalDirection(res);
-                            return (
-                              <View
-                                key={index}
-                                style={[
-                                  styles.tableRow,
-                                  res.is_abnormal && styles.tableRowAbnormal,
-                                  index === selectedOrder.results.length - 1 && styles.lastTableRow
-                                ]}
-                              >
-                                <Text style={[styles.colCell, { flex: 2.2 }, res.is_abnormal && styles.textAbnormalBold]}>
-                                  {res.biomarker_name} ({res.biomarker_code})
-                                </Text>
-                                <Text style={[styles.colCell, { flex: 1.2 }, res.is_abnormal && styles.textAbnormalBold]}>
-                                  {res.value_result}
-                                </Text>
-                                <Text style={[styles.colCell, { flex: 0.8 }, res.is_abnormal && styles.textAbnormalBold]}>
-                                  {res.unit}
-                                </Text>
-                                <Text style={[styles.colCell, { flex: 1.8 }, styles.textMuted]}>
-                                  {/* Khoảng tham chiếu lấy trực tiếp từ server (dynamic, theo giới tính) */}
-                                  {res.reference_range_display || '—'}
-                                </Text>
-                                <View style={[styles.colCell, { flex: 0.8, alignItems: 'center', justifyContent: 'center' }]}>
-                                  {res.is_abnormal && (
-                                    <View style={styles.alertIndicator}>
-                                      <Text style={styles.alertIndicatorText}>{direction}</Text>
-                                    </View>
-                                  )}
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ) : currentUser?.role !== 'patient' ? (
-                        renderManualLabForm()
-                      ) : (
-                        <View style={styles.pendingReportBox}>
-                          <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: 12 }} />
-                          <Text style={styles.pendingReportText}>Đang chờ kết quả từ phòng xét nghiệm LIS...</Text>
-                          <Text style={styles.pendingReportSubText}>
-                            Hệ thống sẽ tự động cập nhật ngay khi phòng xét nghiệm trả kết quả.
-                          </Text>
-                        </View>
-                      )}
-
-                      <View style={styles.signatureRow}>
-                        <Text style={styles.signatureTitle}>TRƯỞNG KHOA XÉT NGHIỆM</Text>
-                        <Text style={styles.signatureSigned}>Đã phê duyệt điện tử</Text>
-                      </View>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.noOrderSelectedCard}>
-                    <Text style={styles.noOrderSelectedText}>Chọn phiếu xét nghiệm ở menu bên trái để xem báo cáo chi tiết.</Text>
-                  </View>
-                )}
-              </View>
-
-            </View>
+            <LabOrdersTab
+              isDesktop={isDesktop}
+              labOrders={labOrders}
+              selectedOrder={selectedOrder}
+              setSelectedOrder={setSelectedOrder}
+              currentUser={currentUser}
+              handleCreateLabOrder={handleCreateLabOrder}
+              patient={patient}
+              isEditingLab={isEditingLab}
+              setIsEditingLab={setIsEditingLab}
+              getAbnormalDirection={getAbnormalDirection}
+              renderManualLabForm={renderManualLabForm}
+              styles={styles}
+            />
           )}
 
           {/* Nội dung TAB: TOA THUỐC */}
-          {activeTab === 'prescription' && renderPrescriptionTab()}
+          {activeTab === 'prescription' && (
+            <PrescriptionTab
+              isDesktop={isDesktop}
+              currentUser={currentUser}
+              patient={patient}
+              prescriptions={prescriptions}
+              prescriptionDiagnosis={prescriptionDiagnosis}
+              setPrescriptionDiagnosis={setPrescriptionDiagnosis}
+              selectedPredefinedDrug={selectedPredefinedDrug}
+              setSelectedPredefinedDrug={setSelectedPredefinedDrug}
+              availableDrugs={availableDrugs}
+              drugQuantity={drugQuantity}
+              setDrugQuantity={setDrugQuantity}
+              drugUnit={drugUnit}
+              setDrugUnit={setDrugUnit}
+              drugUsage={drugUsage}
+              setDrugUsage={setDrugUsage}
+              drugTimesPerDay={drugTimesPerDay}
+              setDrugTimesPerDay={setDrugTimesPerDay}
+              drugDurationDays={drugDurationDays}
+              setDrugDurationDays={setDrugDurationDays}
+              handleAddDrugToPrescription={handleAddDrugToPrescription}
+              prescriptionDrugs={prescriptionDrugs}
+              handleRemoveDrugFromPrescription={handleRemoveDrugFromPrescription}
+              clinicalWarnings={clinicalWarnings}
+              clinicalClassifications={clinicalClassifications}
+              prescriptionNote={prescriptionNote}
+              setPrescriptionNote={setPrescriptionNote}
+              handleSavePrescription={handleSavePrescription}
+              isSavingPrescription={isSavingPrescription}
+              calculateAge={calculateAge}
+            />
+          )}
 
-          {/* Nội dung TAB: GIẤY RA VIỆN */}
-          {activeTab === 'discharge' && renderDischargeTab()}
-
-          {/* Nội dung TAB: CHUYỂN TUYẾN */}
-          {activeTab === 'transfer' && renderTransferTab()}
+          {/* Nội dung TAB: GIẤY RA VIỆN & CHUYỂN TUYẾN */}
+          {(activeTab === 'discharge' || activeTab === 'transfer') && (
+            <DischargeTransferTab
+              activeTab={activeTab}
+              isDesktop={isDesktop}
+              currentUser={currentUser}
+              patient={patient}
+              calculateAge={calculateAge}
+              dischargePapers={dischargePapers}
+              dischargeNo={dischargeNo}
+              setDischargeNo={setDischargeNo}
+              hospitalNo={hospitalNo}
+              setHospitalNo={setHospitalNo}
+              dischargeDiagnosis={dischargeDiagnosis}
+              setDischargeDiagnosis={setDischargeDiagnosis}
+              dischargeTreatment={dischargeTreatment}
+              setDischargeTreatment={setDischargeTreatment}
+              dischargeNote={dischargeNote}
+              setDischargeNote={setDischargeNote}
+              handleSaveDischargePaper={handleSaveDischargePaper}
+              isSavingDischarge={isSavingDischarge}
+              transferForms={transferForms}
+              transferNo={transferNo}
+              setTransferNo={setTransferNo}
+              transferHospitalNo={transferHospitalNo}
+              setTransferHospitalNo={setTransferHospitalNo}
+              transferTo={transferTo}
+              setTransferTo={setTransferTo}
+              transferClinicalSummary={transferClinicalSummary}
+              setTransferClinicalSummary={setTransferClinicalSummary}
+              transferLabSummary={transferLabSummary}
+              setTransferLabSummary={setTransferLabSummary}
+              transferDiagnosis={transferDiagnosis}
+              setTransferDiagnosis={setTransferDiagnosis}
+              transferTreatment={transferTreatment}
+              setTransferTreatment={setTransferTreatment}
+              transferDrugsUsed={transferDrugsUsed}
+              setTransferDrugsUsed={setTransferDrugsUsed}
+              transferPatientStatus={transferPatientStatus}
+              setTransferPatientStatus={setTransferPatientStatus}
+              transferReason={transferReason}
+              setTransferReason={setTransferReason}
+              transferReasonDetail={transferReasonDetail}
+              setTransferReasonDetail={setTransferReasonDetail}
+              transferDirection={transferDirection}
+              setTransferDirection={setTransferDirection}
+              transferTransportation={transferTransportation}
+              setTransferTransportation={setTransferTransportation}
+              transferEscort={transferEscort}
+              setTransferEscort={setTransferEscort}
+              transferOneYearValid={transferOneYearValid}
+              setTransferOneYearValid={setTransferOneYearValid}
+              handleSaveTransferForm={handleSaveTransferForm}
+              isSavingTransfer={isSavingTransfer}
+              labOrders={labOrders}
+            />
+          )}
 
           {/* 5. Nội dung TAB 3: HÌNH ẢNH PHIM MRI/CT */}
           {activeTab === 'imaging' && (
-            <View style={{ marginTop: 16 }}>
-              {imagingResults.length === 0 ? (
-                <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12 }}>
-                  <Text style={{ fontSize: 40, marginBottom: 12 }}>📂</Text>
-                  <Text style={{ color: '#64748B', fontSize: 14 }}>Chưa có phim chụp nào được ghi nhận cho bệnh án này.</Text>
-                </View>
-              ) : (
-                imagingResults.map((item) => {
-                  const date = new Date(item.reportDate);
-                  const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                  
-                  return (
-                    <TouchableOpacity
-                      key={item._id}
-                      style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}
-                      onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
-                    >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                          <Text style={{ color: item.imagingType === 'MRI' ? Colors.info : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
-                        </View>
-                        <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
-                      </View>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>{item.procedure}</Text>
-                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 4 }}>Bác sĩ: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.radiologist}</Text></Text>
-                      <Text style={{ color: '#475569', fontSize: 14, marginBottom: 12 }}>Chẩn đoán: <Text style={{ fontWeight: '500', color: '#1E293B' }}>{item.diagnosis}</Text></Text>
-                      <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
-                      <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
-                      <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
+            <ImagingTab
+              imagingResults={imagingResults}
+              navigation={navigation}
+            />
           )}
 
         </ScrollView>
@@ -2333,13 +1243,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingVertical: 4,
     marginRight: 16,
   },
   backButtonText: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
+    color: '#0891B2',
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 18,
@@ -2363,13 +1276,15 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#ECFEFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#CFFAFE',
   },
   avatarBigText: {
-    color: Colors.primary,
+    color: '#0891B2',
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -2388,14 +1303,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   genderBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#ECFEFF',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
   },
   genderBadgeText: {
     fontSize: 11,
-    color: Colors.primary,
+    color: '#0891B2',
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -2436,14 +1351,19 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 10,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   activeTabButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#0891B2',
+    borderColor: '#0891B2',
   },
   tabButtonText: {
     fontSize: 14,

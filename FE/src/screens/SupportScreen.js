@@ -84,7 +84,7 @@ const SupportScreen = ({ navigation }) => {
         priority: 'medium',
       });
       if (res && res.success) {
-        Alert.alert('Thành công ✅', res.message || 'Yêu cầu hỗ trợ đã được ghi nhận!');
+        Alert.alert('Thành công', res.message || 'Yêu cầu hỗ trợ đã được ghi nhận!');
         setMessage('');
         setSelectedTopic('Chưa chọn chủ đề...');
         // Refresh danh sách ticket

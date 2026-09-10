@@ -7,7 +7,10 @@
     "dev": "node src/index.js",
     "start": "node src/index.js",
     "seed:biomarkers": "node src/seedBiomarkers.js",
-    "test": "jest"
+    "test": "node src/tests/test_runner.js",
+    "test:security": "node src/tests/security_audit.test.js",
+    "test:all": "node src/tests/run_all_tests.js",
+    "test:coverage": "c8 --reporter=text --reporter=html node src/tests/run_all_tests.js"
   },
   "type": "module",
   "dependencies": {
@@ -25,6 +28,7 @@
     "nodemailer": "^9.0.1"
   },
   "devDependencies": {
+    "c8": "^12.0.0",
     "fast-check": "^4.8.0",
     "jest": "^25.0.0",
     "mongodb-memory-server": "^11.2.0"

@@ -1,8 +1,14 @@
+import mongoose from "mongoose";
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
+import {
+  submitMriSafetyCheckService,
+  requestMriRescanService,
+  cancelMriOrderService
+} from "../services/visit.service.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -21,27 +27,36 @@ export const getStaff = async (req, res) => {
       User.find({ hospitalId, role: "technician" }).select("profile email role"),
     ]);
 
-    // Tính toán hàng đợi hiện tại trong ngày của các bác sĩ (trạng thái đang chờ hoặc đang khám)
+    // TỐI ƯU HÓA O(1) BẰNG MONGODB AGGREGATION: Gom nhóm và đếm hàng đợi trực tiếp tại Database
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const activeVisits = await Visit.find({
-      hospitalId,
-      status: { $in: ["đang chờ", "đang khám"] },
-      createdAt: { $gte: startOfDay }
-    }).select("doctorId").lean();
+    const hospObjId = mongoose.Types.ObjectId.isValid(hospitalId)
+      ? new mongoose.Types.ObjectId(hospitalId)
+      : hospitalId;
 
-    const queueMap = {};
-    activeVisits.forEach(v => {
-      if (v.doctorId) {
-        const docId = v.doctorId.toString();
-        queueMap[docId] = (queueMap[docId] || 0) + 1;
+    const queueAgg = await Visit.aggregate([
+      {
+        $match: {
+          hospitalId: hospObjId,
+          status: { $in: ["đang chờ", "đang khám"] },
+          createdAt: { $gte: startOfDay },
+          doctorId: { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: "$doctorId",
+          queueSize: { $sum: 1 }
+        }
       }
-    });
+    ]);
+
+    const queueMap = new Map(queueAgg.map(item => [item._id.toString(), item.queueSize]));
 
     const doctors = doctorsList.map(doc => ({
       ...doc,
-      queueSize: queueMap[doc._id.toString()] || 0
+      queueSize: queueMap.get(doc._id.toString()) || 0
     }));
 
     // Bác sĩ kiêm KTV nếu bệnh viện không có KTV chuyên biệt
@@ -101,6 +116,14 @@ export const createVisit = async (req, res) => {
 
     await visit.save();
 
+    // ── Module I.2 — Tự động tạo 8 task theo quy trình ──────────────────
+    try {
+      const { createTasksForVisit } = await import("./task.controller.js");
+      await createTasksForVisit(visit._id, hospitalId);
+    } catch (taskErr) {
+      console.warn("⚠️ Không thể tự động tạo task quy trình:", taskErr.message);
+    }
+
     // ── Gửi thông báo tự động cho Bác sĩ và Điều dưỡng ────────────────────
     try {
       const patient = await User.findById(patientId).lean();
@@ -159,15 +182,16 @@ export const getMyQueue = async (req, res) => {
       filter.$or = [
         { doctorId: id },
         { 
-          status: { $in: ["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] },
+          status: { $in: ["chờ chụp", "chờ chụp lại", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] },
           "mriOrder.orderedAt": { $exists: true }
         }
       ];
     } else if (role === "nurse") {
       // Điều dưỡng kiêm Lễ tân: Thấy lượt khám đang chờ khám (vai trò ĐD) HOẶC tất cả trong ngày (vai trò Lễ tân)
+      // [LOGIC-04 FIX] Thêm hospitalId vào cả hai mệnh đề của OR để tránh lấy dữ liệu chéo tenant
       filter.$or = [
-        { nurseId: id, status: "đang chờ" },
-        { createdAt: { $gte: startOfDay } }
+        { nurseId: id, status: "đang chờ", hospitalId: req.user.hospitalId },
+        { createdAt: { $gte: startOfDay }, hospitalId: req.user.hospitalId }
       ];
     } else if (role === "technician") {
       filter.$or = [
@@ -175,7 +199,7 @@ export const getMyQueue = async (req, res) => {
         { technicianId: null },
         { technicianId: { $exists: false } }
       ];
-      filter.status = { $in: ["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
+      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
@@ -192,6 +216,7 @@ export const getMyQueue = async (req, res) => {
       .populate("doctorId", "profile.name")
       .populate("nurseId", "profile.name")
       .populate("technicianId", "profile.name")
+      .populate("invoiceId", "status totalAmount items paymentMethod paidAt")
       .sort({ createdAt: -1 });
 
     res.status(200).json({ visits });
@@ -256,6 +281,39 @@ export const createMriOrder = async (req, res) => {
     visit.mriOrder = { region, instructions, requestAiAnalysis, orderedAt: new Date() };
     visit.status = "chờ chụp";
 
+    // ── [THỰC TẾ BV: NGHỊCH LÝ 1] Lập hóa đơn viện phí tạm tính khi ra y lệnh MRI ──
+    try {
+      if (!visit.invoiceId) {
+        const hospital = await Hospital.findById(visit.hospitalId);
+        const examFee = hospital?.pricing?.examFee ?? 50000;
+        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+        const aiFee = hospital?.pricing?.aiFee ?? 200000;
+
+        const items = [
+          { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
+          { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
+        ];
+        if (requestAiAnalysis) {
+          items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
+        }
+        const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+        const draftInvoice = new Invoice({
+          hospitalId: visit.hospitalId,
+          patientId: visit.patientId,
+          visitId: visit._id,
+          items,
+          totalAmount,
+          status: "chờ thanh toán"
+        });
+        await draftInvoice.save();
+        visit.invoiceId = draftInvoice._id;
+      }
+    } catch (invErr) {
+      console.warn("⚠️ Không thể tạo hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
+
     await visit.save();
 
     // ── Gửi thông báo tới Kỹ thuật viên chụp MRI ─────────────────────────────
@@ -306,16 +364,20 @@ export const updateStatus = async (req, res) => {
     }
 
     if (status === "hoàn tất") {
-      // Tự động tạo hóa đơn nếu chưa có
+      // Tự động tạo hoặc cập nhật hóa đơn nếu chưa có
       const existingInvoice = await Invoice.findOne({ visitId: visit._id });
       if (!existingInvoice) {
         const hospital = await Hospital.findById(visit.hospitalId);
         if (hospital) {
-          let items = [{ description: "Khám bệnh", amount: hospital.pricing.examFee, type: "exam" }];
+          const examFee = hospital?.pricing?.examFee ?? 50000;
+          const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+          const aiFee = hospital?.pricing?.aiFee ?? 200000;
+
+          let items = [{ description: "Khám bệnh", amount: examFee, type: "exam" }];
           if (visit.mriOrder && visit.mriOrder.orderedAt) {
-            items.push({ description: "Chụp MRI", amount: hospital.pricing.mriFee, type: "mri" });
+            items.push({ description: "Chụp MRI", amount: mriFee, type: "mri" });
             if (visit.mriOrder.requestAiAnalysis) {
-              items.push({ description: "Phân tích AI chẩn đoán", amount: hospital.pricing.aiFee, type: "ai" });
+              items.push({ description: "Phân tích AI chẩn đoán", amount: aiFee, type: "ai" });
             }
           }
 
@@ -331,11 +393,15 @@ export const updateStatus = async (req, res) => {
             });
 
             if (prescription && prescription.drugs && prescription.drugs.length > 0) {
+              const drugNames = prescription.drugs.map(d => new RegExp(`^${d.name.trim()}$`, "i"));
+              const dbDrugs = await Drug.find({
+                hospitalId: visit.hospitalId,
+                name: { $in: drugNames }
+              }).lean();
+
               for (const pDrug of prescription.drugs) {
-                const dbDrug = await Drug.findOne({
-                  hospitalId: visit.hospitalId,
-                  name: { $regex: new RegExp(`^${pDrug.name.trim()}$`, "i") }
-                });
+                const pDrugRegex = new RegExp(`^${pDrug.name.trim()}$`, "i");
+                const dbDrug = dbDrugs.find(d => pDrugRegex.test(d.name));
 
                 const unitPrice = dbDrug ? dbDrug.price : 0;
                 const totalDrugPrice = unitPrice * pDrug.quantity;
@@ -346,7 +412,6 @@ export const updateStatus = async (req, res) => {
                   type: "drug"
                 });
               }
-              // Lưu ý: Chưa trừ kho ở bước này, việc trừ kho sẽ thực hiện khi thanh toán (payInvoice)
             }
           } catch (err) {
             console.error("Lỗi thêm thuốc vào hóa đơn tự động:", err);
@@ -376,3 +441,88 @@ export const updateStatus = async (req, res) => {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
+
+// ─── [THỰC TẾ BV: NGHỊCH LÝ 3] BẢNG KIỂM AN TOÀN CHỤP MRI TRƯỚC BUỒNG MÁY ───────
+// @desc    KTV hoặc Điều dưỡng kiểm tra an toàn MRI trước khi đưa bệnh nhân vào buồng chụp
+// @route   POST /api/v1/visits/:id/mri-safety-check
+// @access  Private (Technician, Nurse, Doctor, Admin)
+export const submitMriSafetyCheck = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await submitMriSafetyCheckService({
+      visitId: id,
+      hospitalId: req.user.hospitalId,
+      user: req.user,
+      checklistData: req.body
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã hoàn tất bảng kiểm an toàn MRI. Bệnh nhân đủ điều kiện vào buồng chụp.",
+      checklist: result.checklist,
+      visit: result.visit
+    });
+  } catch (error) {
+    if (error.checklist) {
+      return res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message,
+        checklist: error.checklist,
+        visit: error.visit
+      });
+    }
+    return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// ─── [THỰC TẾ BV: NGHỊCH LÝ 4] QUY TRÌNH YÊU CẦU CHỤP LẠI (RESCAN WORKFLOW) ─────
+// @desc    KTV yêu cầu chụp lại do ảnh bị nhiễu động (Motion Artifact) hoặc lỗi kỹ thuật
+// @route   POST /api/v1/visits/:id/mri-rescan
+// @access  Private (Technician, Doctor, Admin)
+export const requestMriRescan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const visit = await requestMriRescanService({
+      visitId: id,
+      hospitalId: req.user.hospitalId,
+      user: req.user,
+      reason
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã ghi nhận yêu cầu chụp lại MRI và chuyển ca về hàng chờ.",
+      visit
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// ─── [THỰC TẾ BV: NGHỊCH LÝ 4] QUY TRÌNH HỦY CA CHỤP MRI (CANCELLATION WORKFLOW) ──
+// @desc    Hủy ca chụp MRI do chống chỉ định hoặc bệnh nhân từ chối / hoảng sợ
+// @route   POST /api/v1/visits/:id/mri-cancel
+// @access  Private (Technician, Doctor, Admin)
+export const cancelMriOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const visit = await cancelMriOrderService({
+      visitId: id,
+      hospitalId: req.user.hospitalId,
+      user: req.user,
+      reason
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã hủy ca chụp MRI thành công.",
+      visit
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi máy chủ", error: error.message });
+  }
+};
+
+

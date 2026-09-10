@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { tenantStorage } from "./tenant.middleware.js";
+import { authCache } from "../utils/authCache.util.js";
+import { getJwtSecret } from "../config/jwt.config.js";
 
 export const protect = async (req, res, next) => {
   let token;
@@ -10,13 +12,20 @@ export const protect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
     try {
       token = req.headers.authorization.split(" ")[1];
-      const secret = process.env.JWT_SECRET || "access_secret";
+      const secret = getJwtSecret();
 
       // Verify token
       const decoded = jwt.verify(token, secret);
 
-      // Fetch user from database to check token version and locked status
-      const user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId");
+      // Tầng đệm Auth Cache (In-Memory Fast Path): Tránh gọi DB lặp lại trên mọi request
+      let user = authCache.getUserAuth(decoded.id);
+      if (!user) {
+        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role").lean();
+        if (user) {
+          authCache.setUserAuth(decoded.id, user, 60000); // Cache 60s
+        }
+      }
+
       if (!user) {
         res.status(401).json({ message: "Người dùng không tồn tại hoặc tài khoản đã bị khóa." });
         return;
@@ -27,9 +36,16 @@ export const protect = async (req, res, next) => {
         return;
       }
 
-      // Check if hospital is deactivated/locked or subscription has expired
+      // Check if hospital is deactivated/locked or subscription has expired (với Hospital Cache)
       if (user.hospitalId) {
-        const hospital = await Hospital.findById(user.hospitalId).select("isActive subscriptionExpiresAt subscriptionStatus");
+        let hospital = authCache.getHospitalAuth(user.hospitalId);
+        if (!hospital) {
+          hospital = await Hospital.findById(user.hospitalId).select("isActive subscriptionExpiresAt subscriptionStatus").lean();
+          if (hospital) {
+            authCache.setHospitalAuth(user.hospitalId, hospital, 120000); // Cache 120s
+          }
+        }
+
         if (hospital) {
           if (hospital.isActive === false) {
             res.status(403).json({ message: "Bệnh viện của bạn đang bị khóa. Vui lòng liên hệ quản trị viên." });
@@ -55,7 +71,7 @@ export const protect = async (req, res, next) => {
 
       // Add user info to request
       req.user = decoded;
-      req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null; // [BUG FIX] Lấy hospitalId từ DB
+      req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null;
 
       if (user.hospitalId) {
         tenantStorage.run({ hospitalId: user.hospitalId.toString() }, () => {
@@ -82,9 +98,17 @@ export const optionalProtect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
     try {
       token = req.headers.authorization.split(" ")[1];
-      const secret = process.env.JWT_SECRET || "access_secret";
+      const secret = getJwtSecret();
       const decoded = jwt.verify(token, secret);
-      const user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId");
+
+      let user = authCache.getUserAuth(decoded.id);
+      if (!user) {
+        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId").lean();
+        if (user) {
+          authCache.setUserAuth(decoded.id, user, 60000);
+        }
+      }
+
       if (user && !user.isLocked) {
         const tokenVersionInJwt = decoded.tokenVersion !== undefined ? decoded.tokenVersion : 0;
         if (user.tokenVersion === tokenVersionInJwt) {

@@ -6,6 +6,23 @@ import {
 import ResponsiveLayout from "../components/ResponsiveLayout";
 import Colors from "../constants/colors";
 import { get, post, put } from "../services/api.service";
+import safeStorage from "../utils/safeStorage.js";
+import {
+  User,
+  ClipboardList,
+  FileText,
+  CreditCard,
+  CheckCircle2,
+  ChevronLeft,
+  Edit2,
+  Printer,
+  Save,
+  Trash2,
+  HelpCircle,
+  Building2,
+  Activity,
+  Plus
+} from 'lucide-react';
 
 const NursePatientDetailScreen = ({ navigation, route }) => {
   const patient = route?.params?.patient || {};
@@ -60,12 +77,10 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        if (Platform.OS === 'web') {
-          const storedUser = localStorage.getItem('user');
-          if (storedUser) {
-            setLocalUser(JSON.parse(storedUser));
-            return;
-          }
+        const storedUser = safeStorage.getItem('user');
+        if (storedUser) {
+          setLocalUser(typeof storedUser === 'string' ? JSON.parse(storedUser) : storedUser);
+          return;
         }
         const res = await get('/auth/me');
         if (res && res.user) {
@@ -78,60 +93,58 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     loadUser();
   }, []);
 
-  // 2. Load Patient-Specific Form Cache from localStorage
+  // 2. Load Patient-Specific Form Cache from safeStorage
   useEffect(() => {
     if (!patient._id) return;
     try {
-      if (Platform.OS === 'web') {
-        const savedData = localStorage.getItem(`emr_detail_${patient._id}`);
-        if (savedData) {
-          const data = JSON.parse(savedData);
-          
-          if (data.examDone !== undefined) setExamDone(data.examDone);
-          if (data.examPulse !== undefined) setExamPulse(data.examPulse);
-          if (data.examBP !== undefined) setExamBP(data.examBP);
-          if (data.examHeight !== undefined) setExamHeight(data.examHeight);
-          if (data.examWeight !== undefined) setExamWeight(data.examWeight);
-          if (data.examBreath !== undefined) setExamBreath(data.examBreath);
-          if (data.examTemp !== undefined) setExamTemp(data.examTemp);
-          if (data.examSpo2 !== undefined) setExamSpo2(data.examSpo2);
-          if (data.examRequest !== undefined) setExamRequest(data.examRequest);
-          if (data.examObject !== undefined) setExamObject(data.examObject);
-          
-          if (data.orderDone !== undefined) setOrderDone(data.orderDone);
-          if (data.orderPriority !== undefined) setOrderPriority(data.orderPriority);
-          if (data.orderDiagnosis !== undefined) setOrderDiagnosis(data.orderDiagnosis);
-          if (data.orderServices !== undefined) setOrderServices(data.orderServices);
-          
-          if (data.feeItems !== undefined) setFeeItems(data.feeItems);
-          if (data.feeNote !== undefined) setFeeNote(data.feeNote);
-          if (data.invoiceDone !== undefined) setInvoiceDone(data.invoiceDone);
-        } else {
-          // Reset to defaults for a new patient
-          setExamDone(false);
-          setExamPulse("");
-          setExamBP("");
-          setExamHeight("");
-          setExamWeight("");
-          setExamBreath("");
-          setExamTemp("");
-          setExamSpo2("");
-          setExamRequest("Khám sức khỏe tổng quát");
-          setExamObject("Thu phí");
-          
-          setOrderDone(false);
-          setOrderPriority("Thường");
-          setOrderDiagnosis("");
-          setOrderServices(["Chụp MRI sọ não lát cắt mỏng", "Xét nghiệm máu"]);
-          
-          setFeeItems([
-            { name: "Khám chuyên khoa thần kinh", amount: "150000" },
-            { name: "Chụp MRI sọ não lát cắt mỏng", amount: "1500000" },
-            { name: "Xét nghiệm tổng phân tích tế bào máu", amount: "150000" }
-          ]);
-          setFeeNote("");
-          setInvoiceDone(false);
-        }
+      const savedData = safeStorage.getItem(`emr_detail_${patient._id}`);
+      if (savedData) {
+        const data = typeof savedData === 'string' ? JSON.parse(savedData) : savedData;
+        
+        if (data.examDone !== undefined) setExamDone(data.examDone);
+        if (data.examPulse !== undefined) setExamPulse(data.examPulse);
+        if (data.examBP !== undefined) setExamBP(data.examBP);
+        if (data.examHeight !== undefined) setExamHeight(data.examHeight);
+        if (data.examWeight !== undefined) setExamWeight(data.examWeight);
+        if (data.examBreath !== undefined) setExamBreath(data.examBreath);
+        if (data.examTemp !== undefined) setExamTemp(data.examTemp);
+        if (data.examSpo2 !== undefined) setExamSpo2(data.examSpo2);
+        if (data.examRequest !== undefined) setExamRequest(data.examRequest);
+        if (data.examObject !== undefined) setExamObject(data.examObject);
+        
+        if (data.orderDone !== undefined) setOrderDone(data.orderDone);
+        if (data.orderPriority !== undefined) setOrderPriority(data.orderPriority);
+        if (data.orderDiagnosis !== undefined) setOrderDiagnosis(data.orderDiagnosis);
+        if (data.orderServices !== undefined) setOrderServices(data.orderServices);
+        
+        if (data.feeItems !== undefined) setFeeItems(data.feeItems);
+        if (data.feeNote !== undefined) setFeeNote(data.feeNote);
+        if (data.invoiceDone !== undefined) setInvoiceDone(data.invoiceDone);
+      } else {
+        // Reset to defaults for a new patient
+        setExamDone(false);
+        setExamPulse("");
+        setExamBP("");
+        setExamHeight("");
+        setExamWeight("");
+        setExamBreath("");
+        setExamTemp("");
+        setExamSpo2("");
+        setExamRequest("Khám sức khỏe tổng quát");
+        setExamObject("Thu phí");
+        
+        setOrderDone(false);
+        setOrderPriority("Thường");
+        setOrderDiagnosis("");
+        setOrderServices(["Chụp MRI sọ não lát cắt mỏng", "Xét nghiệm máu"]);
+        
+        setFeeItems([
+          { name: "Khám chuyên khoa thần kinh", amount: "150000" },
+          { name: "Chụp MRI sọ não lát cắt mỏng", amount: "1500000" },
+          { name: "Xét nghiệm tổng phân tích tế bào máu", amount: "150000" }
+        ]);
+        setFeeNote("");
+        setInvoiceDone(false);
       }
     } catch (e) {
       console.log("Error loading cached patient form data:", e);
@@ -140,32 +153,30 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     }
   }, [patient._id]);
 
-  // 3. Auto-Save Patient-Specific Form Cache to localStorage when state changes
+  // 3. Auto-Save Patient-Specific Form Cache to safeStorage when state changes
   useEffect(() => {
     if (!patient._id || !isLoaded) return;
     try {
-      if (Platform.OS === 'web') {
-        const cacheData = {
-          examDone,
-          examPulse,
-          examBP,
-          examHeight,
-          examWeight,
-          examBreath,
-          examTemp,
-          examSpo2,
-          examRequest,
-          examObject,
-          orderDone,
-          orderPriority,
-          orderDiagnosis,
-          orderServices,
-          feeItems,
-          feeNote,
-          invoiceDone
-        };
-        localStorage.setItem(`emr_detail_${patient._id}`, JSON.stringify(cacheData));
-      }
+      const cacheData = {
+        examDone,
+        examPulse,
+        examBP,
+        examHeight,
+        examWeight,
+        examBreath,
+        examTemp,
+        examSpo2,
+        examRequest,
+        examObject,
+        orderDone,
+        orderPriority,
+        orderDiagnosis,
+        orderServices,
+        feeItems,
+        feeNote,
+        invoiceDone
+      };
+      safeStorage.setItem(`emr_detail_${patient._id}`, JSON.stringify(cacheData));
     } catch (e) {
       console.log("Error caching patient form data:", e);
     }
@@ -410,10 +421,10 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   };
 
   const FORM_TABS = [
-    { key: "info",  label: "👤 Thông tin" },
-    { key: "exam",  label: "📋 Khám bệnh" },
-    { key: "order", label: "📝 Chỉ định" },
-    { key: "fee",   label: "💰 Viện phí" },
+    { key: "info",  label: "Thông tin", Icon: User },
+    { key: "exam",  label: "Khám bệnh", Icon: Activity },
+    { key: "order", label: "Chỉ định", Icon: FileText },
+    { key: "fee",   label: "Viện phí", Icon: CreditCard },
   ];
 
   const QUICK_SERVICES = ["Khám chuyên khoa thần kinh", "Chụp MRI sọ não", "Phân tích AI chẩn đoán"];
@@ -423,12 +434,18 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }}>
         {/* Top bar */}
         <View style={s.topHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
-            <Text style={s.backBtnText}>← Quay lại</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[s.backBtn, { flexDirection: "row", alignItems: "center", gap: 4 }]}>
+            <ChevronLeft size={16} color="#fff" />
+            <Text style={s.backBtnText}>Quay lại</Text>
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={s.headerTitle}>🏥 {patientName}</Text>
-            <Text style={s.headerSub}>{gender}{age ? " • " + age + " tuổi" : ""}{department ? " • " + department : ""}</Text>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+              <Building2 size={20} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.headerTitle}>{patientName}</Text>
+              <Text style={s.headerSub}>{gender}{age ? " • " + age + " tuổi" : ""}{department ? " • " + department : ""}</Text>
+            </View>
           </View>
         </View>
 
@@ -437,17 +454,18 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabBar}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 10, flexDirection: "row" }}>
             {FORM_TABS.map(t => {
-              let statusMark = "";
-              if (t.key === 'exam' && examDone) statusMark = " ✅";
-              if (t.key === 'order' && orderDone) statusMark = " ✅";
-              if (t.key === 'fee' && invoiceDone) statusMark = " ✅";
+              const IconComponent = t.Icon;
+              const isDone = (t.key === 'exam' && examDone) || (t.key === 'order' && orderDone) || (t.key === 'fee' && invoiceDone);
+              const isActive = activeForm === t.key;
               
               return (
                 <TouchableOpacity key={t.key} onPress={() => setActiveForm(t.key)}
-                  style={[s.tabPill, activeForm === t.key && s.tabPillActive]}>
-                  <Text style={[s.tabPillText, activeForm === t.key && s.tabPillTextActive]}>
-                    {t.label}{statusMark}
+                  style={[s.tabPill, isActive && s.tabPillActive, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                  <IconComponent size={14} color={isActive ? "#FFFFFF" : "#64748B"} />
+                  <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>
+                    {t.label}
                   </Text>
+                  {isDone && <CheckCircle2 size={13} color={isActive ? "#FFFFFF" : "#059669"} />}
                 </TouchableOpacity>
               );
             })}
@@ -480,9 +498,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 ))}
               </View>
               <View style={s.guideBox}>
-                <Text style={s.guideTitle}>💡 Quy trình điền hồ sơ (Dành cho Điều dưỡng)</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <HelpCircle size={16} color="#065F46" />
+                  <Text style={s.guideTitle}>Quy trình điền hồ sơ (Dành cho Điều dưỡng)</Text>
+                </View>
                 <Text style={s.guideText}>
-                  {"1. Tab Khám bệnh ➔ Ghi nhận sinh hiệu ➔ Bấm Xác nhận để lưu Phiếu khám.\n2. Tab Chỉ định ➔ Thêm chỉ định lâm sàng ➔ Bấm Xác nhận để lưu Phiếu chỉ định.\n3. Tab Viện phí ➔ Xác nhận hóa đơn dịch vụ ➔ Gửi thông tin sang quầy Thu ngân thanh toán."}
+                  {"1. Tab Khám bệnh → Ghi nhận sinh hiệu → Bấm Xác nhận để lưu Phiếu khám.\n2. Tab Chỉ định → Thêm chỉ định lâm sàng → Bấm Xác nhận để lưu Phiếu chỉ định.\n3. Tab Viện phí → Xác nhận hóa đơn dịch vụ → Gửi thông tin sang quầy Thu ngân thanh toán."}
                 </Text>
               </View>
             </View>
@@ -501,7 +522,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>SỞ Y TẾ ĐÀ NẴNG</Text>
                       <Text style={s.docHospitalSub}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
                     </View>
-                    <Text style={s.docLogoText}>🏥</Text>
+                    <Building2 size={26} color="#0891B2" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THÔNG TIN KHÁM BỆNH</Text>
@@ -521,7 +542,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
                   </View>
                   
-                  <Text style={s.docSectionHeader}>🫀 SINH HIỆU LÂM SÀNG (VITAL SIGNS)</Text>
+                  <Text style={s.docSectionHeader}>SINH HIỆU LÂM SÀNG (VITAL SIGNS)</Text>
                   <View style={s.docTable}>
                     <View style={s.docTableRowHeader}>
                       <Text style={[s.docTableCellHeader, { flex: 2 }]}>Chỉ số sinh hiệu</Text>
@@ -558,11 +579,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </View>
                   
                   <View style={s.docActionRow}>
-                    <TouchableOpacity onPress={() => setExamDone(false)} style={s.docEditBtn}>
-                      <Text style={s.docEditBtnText}>✏️ Sửa lại phiếu</Text>
+                    <TouchableOpacity onPress={() => setExamDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                      <Edit2 size={13} color="#0891B2" />
+                      <Text style={s.docEditBtnText}>Sửa lại phiếu</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
-                      <Text style={s.docPrintBtnText}>🖨️ In Phiếu Khám</Text>
+                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                      <Printer size={13} color="#fff" />
+                      <Text style={s.docPrintBtnText}>In Phiếu Khám</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -607,12 +630,15 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity 
                       onPress={handleSaveExamToBackend}
                       disabled={submitting}
-                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }]}
+                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}
                     >
                       {submitting ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={s.confirmBtnText}>💾 Xác nhận & Lưu phiếu khám</Text>
+                        <>
+                          <Save size={16} color="#fff" />
+                          <Text style={s.confirmBtnText}>Xác nhận & Lưu phiếu khám</Text>
+                        </>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -634,7 +660,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
                       <Text style={s.docHospitalSub}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
                     </View>
-                    <Text style={s.docLogoText}>📝</Text>
+                    <FileText size={26} color="#0891B2" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU CHỈ ĐỊNH DỊCH VỤ</Text>
@@ -660,7 +686,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
                   </View>
                   
-                  <Text style={s.docSectionHeader}>📋 DANH SÁCH CÁC DỊCH VỤ KỸ THUẬT CHỈ ĐỊNH</Text>
+                  <Text style={s.docSectionHeader}>DANH SÁCH CÁC DỊCH VỤ KỸ THUẬT CHỈ ĐỊNH</Text>
                   <View style={s.docTable}>
                     <View style={s.docTableRowHeader}>
                       <Text style={[s.docTableCellHeader, { flex: 1, textAlign: 'center' }]}>STT</Text>
@@ -690,11 +716,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </View>
                   
                   <View style={s.docActionRow}>
-                    <TouchableOpacity onPress={() => setOrderDone(false)} style={s.docEditBtn}>
-                      <Text style={s.docEditBtnText}>✏️ Sửa lại chỉ định</Text>
+                    <TouchableOpacity onPress={() => setOrderDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                      <Edit2 size={13} color="#0891B2" />
+                      <Text style={s.docEditBtnText}>Sửa lại chỉ định</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => window.print()} style={s.docPrintBtn}>
-                      <Text style={s.docPrintBtnText}>🖨️ In Phiếu Chỉ Định</Text>
+                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                      <Printer size={13} color="#fff" />
+                      <Text style={s.docPrintBtnText}>In Phiếu Chỉ Định</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -721,9 +749,10 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     {orderServices.length === 0 && <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", paddingVertical: 12 }}>Chưa chọn dịch vụ chỉ định nào.</Text>}
                     {orderServices.map((svc, idx) => (
                       <View key={idx} style={s.serviceRow}>
-                        <Text style={{ flex: 1, color: "#065F46", fontSize: 13 }}>📌 {svc}</Text>
-                        <TouchableOpacity onPress={() => setOrderServices(p => p.filter((_, i) => i !== idx))}>
-                          <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 16 }}>✕</Text>
+                        <FileText size={14} color="#059669" />
+                        <Text style={{ flex: 1, color: "#065F46", fontSize: 13, marginLeft: 8 }}>{svc}</Text>
+                        <TouchableOpacity onPress={() => setOrderServices(p => p.filter((_, i) => i !== idx))} style={{ padding: 4 }}>
+                          <Trash2 size={15} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
                     ))}
@@ -746,12 +775,15 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <TouchableOpacity 
                       onPress={handleSaveOrderToBackend}
                       disabled={submitting}
-                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }]}
+                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}
                     >
                       {submitting ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={s.confirmBtnText}>💾 Xác nhận & Lưu phiếu chỉ định</Text>
+                        <>
+                          <Save size={16} color="#fff" />
+                          <Text style={s.confirmBtnText}>Xác nhận & Lưu phiếu chỉ định</Text>
+                        </>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -773,7 +805,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
                       <Text style={s.docHospitalAddress}>64, Cách Mạng Tháng 8, P. Khuê Trung, Q. Cẩm Lệ, TP Đà Nẵng</Text>
                     </View>
-                    <Text style={s.docLogoText}>💰</Text>
+                    <CreditCard size={26} color="#0891B2" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THU VIỆN PHÍ</Text>
@@ -793,7 +825,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
                   </View>
                   
-                  <Text style={s.docSectionHeader}>💰 CHI TIẾT CÁ C KHOẢN THU (BILLING DETAILS)</Text>
+                  <Text style={s.docSectionHeader}>CHI TIẾT CÁC KHOẢN THU (BILLING DETAILS)</Text>
                   <View style={s.docTable}>
                     <View style={s.docTableRowHeader}>
                       <Text style={[s.docTableCellHeader, { flex: 1, textAlign: 'center' }]}>STT</Text>
@@ -842,8 +874,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </Text>
                   
                   <View style={s.docActionRow}>
-                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flex: 1 }]}>
-                      <Text style={s.docPrintBtnText}>🖨️ In Hóa Đơn Thu Viện Phí</Text>
+                    <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}>
+                      <Printer size={14} color="#fff" />
+                      <Text style={s.docPrintBtnText}>In Hóa Đơn Thu Viện Phí</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -869,8 +902,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                         <Text style={{ flex: 2, fontSize: 13, fontWeight: "600", color: "#0F172A", textAlign: "right" }}>
                           {parseFloat(item.amount).toLocaleString("vi-VN")}
                         </Text>
-                        <TouchableOpacity onPress={() => setFeeItems(p => p.filter((_, i) => i !== idx))} style={{ width: 28, alignItems: "center" }}>
-                          <Text style={{ color: "#EF4444", fontWeight: "700" }}>✕</Text>
+                        <TouchableOpacity onPress={() => setFeeItems(p => p.filter((_, i) => i !== idx))} style={{ width: 28, alignItems: "center", padding: 4 }}>
+                          <Trash2 size={14} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
                     ))}
@@ -893,8 +926,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
                     {/* CONFIRM / SUBMIT BUTTON */}
                     <TouchableOpacity onPress={handleConfirmFee} disabled={submitting}
-                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }]}>
-                      {submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.confirmBtnText}>Xác nhận & Gửi sang Thu Ngân</Text>}
+                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}>
+                      {submitting ? <ActivityIndicator color="#fff" /> : (
+                        <>
+                          <CreditCard size={16} color="#fff" />
+                          <Text style={s.confirmBtnText}>Xác nhận & Gửi sang Thu Ngân</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                     
                     <Text style={s.hintText}>Sau khi xác nhận, hóa đơn sẽ tự động chuyển sang hàng đợi Chờ Thanh Toán của quầy Lễ tân/Thu ngân.</Text>

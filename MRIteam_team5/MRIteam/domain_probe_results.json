@@ -1,0 +1,14 @@
+{
+  "n_probe_images": 3061,
+  "mean_auc": 0.9905,
+  "std_auc": 0.0033,
+  "fold_aucs": [
+    0.9931,
+    0.9877,
+    0.9948,
+    0.9909,
+    0.9861
+  ],
+  "interpretation": "HIGH -- model CAN distinguish data sources. Source confounding is real. Must fully acknowledge in paper.",
+  "method": "Logistic regression (C=0.1) on ResNet50 penultimate-layer features, 5-fold stratified CV. Tumor classes only (notumor excluded for fairness)."
+}

@@ -1,0 +1,188 @@
+{
+  "contingency_plan_a": {
+    "active": true,
+    "reason": "Tam Tri hospital dataset contains no no-tumor (healthy) cases. All no-tumor test images (N=400) originate from the Kaggle public benchmark. No-tumor recall and Fatal FNR metrics CANNOT be interpreted as hospital-validated negative controls."
+  },
+  "overall": {
+    "n_images": 3461,
+    "accuracy": 91.01,
+    "f1_macro": 92.04,
+    "fatal_fnr_glioma_as_notumor": 0.43,
+    "per_class": {
+      "glioma": {
+        "precision": 96.2,
+        "recall": 90.31,
+        "f1": 93.16,
+        "support": 1176
+      },
+      "meningioma": {
+        "precision": 84.13,
+        "recall": 89.56,
+        "f1": 86.76,
+        "support": 900
+      },
+      "notumor": {
+        "precision": 98.51,
+        "recall": 99.25,
+        "f1": 98.88,
+        "support": 400
+      },
+      "pituitary": {
+        "precision": 88.86,
+        "recall": 89.85,
+        "f1": 89.35,
+        "support": 985
+      }
+    }
+  },
+  "kaggle": {
+    "n_images": 1600,
+    "accuracy": 96.19,
+    "f1_macro": 96.17,
+    "fatal_fnr_glioma_as_notumor": 1.0,
+    "per_class": {
+      "glioma": {
+        "precision": 97.34,
+        "recall": 91.5,
+        "f1": 94.33,
+        "support": 400
+      },
+      "meningioma": {
+        "precision": 94.04,
+        "recall": 94.75,
+        "f1": 94.4,
+        "support": 400
+      },
+      "notumor": {
+        "precision": 99.0,
+        "recall": 99.25,
+        "f1": 99.13,
+        "support": 400
+      },
+      "pituitary": {
+        "precision": 94.52,
+        "recall": 99.25,
+        "f1": 96.83,
+        "support": 400
+      }
+    }
+  },
+  "tamtri": {
+    "n_images": 1861,
+    "accuracy": 86.57,
+    "f1_macro": 64.39,
+    "fatal_fnr_glioma_as_notumor": 0.13,
+    "per_class": {
+      "glioma": {
+        "precision": 95.6,
+        "recall": 89.69,
+        "f1": 92.55,
+        "support": 776
+      },
+      "meningioma": {
+        "precision": 76.94,
+        "recall": 85.4,
+        "f1": 80.95,
+        "support": 500
+      },
+      "notumor": {
+        "precision": null,
+        "recall": null,
+        "f1": null,
+        "support": 0,
+        "note": "Class not present in this subset"
+      },
+      "pituitary": {
+        "precision": 84.72,
+        "recall": 83.42,
+        "f1": 84.07,
+        "support": 585
+      }
+    }
+  },
+  "source_counts": {
+    "kaggle": 1600,
+    "tamtri": 1861,
+    "unknown": 0
+  },
+  "tamtri_tumor_only": {
+    "n_images": 1861,
+    "accuracy": 86.57,
+    "f1_macro": 64.39,
+    "fatal_fnr_glioma_as_notumor": 0.13,
+    "per_class": {
+      "glioma": {
+        "precision": 95.6,
+        "recall": 89.69,
+        "f1": 92.55,
+        "support": 776
+      },
+      "meningioma": {
+        "precision": 76.94,
+        "recall": 85.4,
+        "f1": 80.95,
+        "support": 500
+      },
+      "notumor": {
+        "precision": null,
+        "recall": null,
+        "f1": null,
+        "support": 0,
+        "note": "Class not present in this subset"
+      },
+      "pituitary": {
+        "precision": 84.72,
+        "recall": 83.42,
+        "f1": 84.07,
+        "support": 585
+      }
+    }
+  },
+  "kaggle_tumor_only": {
+    "n_images": 1200,
+    "accuracy": 95.17,
+    "f1_macro": 71.48,
+    "fatal_fnr_glioma_as_notumor": 1.0,
+    "per_class": {
+      "glioma": {
+        "precision": 97.86,
+        "recall": 91.5,
+        "f1": 94.57,
+        "support": 400
+      },
+      "meningioma": {
+        "precision": 94.04,
+        "recall": 94.75,
+        "f1": 94.4,
+        "support": 400
+      },
+      "notumor": {
+        "precision": null,
+        "recall": null,
+        "f1": null,
+        "support": 0,
+        "note": "Class not present in this subset"
+      },
+      "pituitary": {
+        "precision": 94.75,
+        "recall": 99.25,
+        "f1": 96.95,
+        "support": 400
+      }
+    }
+  },
+  "domain_confusion_probe": {
+    "n_probe_images": 3061,
+    "mean_auc": 0.9905,
+    "std_auc": 0.0033,
+    "fold_aucs": [
+      0.9931,
+      0.9877,
+      0.9948,
+      0.9909,
+      0.9861
+    ],
+    "interpretation": "HIGH -- model CAN distinguish data sources. Source confounding is real. Must fully acknowledge in paper.",
+    "method": "Logistic regression (C=0.1) on ResNet50 penultimate-layer features, 5-fold stratified CV. Tumor classes only (notumor excluded for fairness)."
+  }
+}

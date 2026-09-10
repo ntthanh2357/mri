@@ -213,9 +213,9 @@ export const getOrCreatePatientFolder = async (userId, patientName = "Bá»‡nh nhÃ
 
 
 /**
- * Upload a file from Express buffer to a specific Drive folder and make it public (view only)
+ * Upload a file from Express buffer or Readable stream to a specific Drive folder and make it public (view only)
  */
-export const uploadToDrive = async (fileBuffer, originalName, mimeType, targetFolderId) => {
+export const uploadToDrive = async (fileBufferOrStream, originalName, mimeType, targetFolderId) => {
   const drive = getDriveClient();
   const timestamp = Date.now();
   const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -226,9 +226,14 @@ export const uploadToDrive = async (fileBuffer, originalName, mimeType, targetFo
     parents: [targetFolderId],
   };
 
+  const bodyStream =
+    fileBufferOrStream instanceof Readable || typeof fileBufferOrStream?.pipe === "function"
+      ? fileBufferOrStream
+      : bufferToStream(fileBufferOrStream);
+
   const media = {
     mimeType: mimeType,
-    body: bufferToStream(fileBuffer),
+    body: bodyStream,
   };
 
   try {

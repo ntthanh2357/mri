@@ -16,7 +16,23 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
-import { Users, FolderOpen, Calendar, TrendingUp, Brain, DollarSign, Activity } from 'lucide-react';
+import { 
+  Users, 
+  FolderOpen, 
+  Calendar, 
+  TrendingUp, 
+  Brain, 
+  DollarSign, 
+  Activity,
+  Stethoscope, 
+  HeartPulse, 
+  Microscope, 
+  Briefcase, 
+  UserPlus, 
+  List, 
+  Save, 
+  X 
+} from 'lucide-react';
 
 const getRoleBadgeStyle = (role) => {
   switch (role) {
@@ -415,7 +431,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Phân quyền và cấp tài khoản làm việc cho từng chức vụ.</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowAddUserModal(false)} style={{ padding: 6 }}>
-                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#94A3B8' }}>✕</Text>
+                  <X size={20} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
 
@@ -428,14 +444,25 @@ const ClinicDashboardScreen = ({ navigation }) => {
                       paddingHorizontal: 16,
                       paddingBottom: 10,
                       borderBottomWidth: 2,
-                      borderBottomColor: activeRoleTab === role ? '#15803D' : 'transparent',
+                      borderBottomColor: activeRoleTab === role ? '#0891B2' : 'transparent',
                       marginRight: 8,
                     }}
                     onPress={() => setActiveRoleTab(role)}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? '#15803D' : '#64748B' }}>
-                      {role === 'doctor' ? '🩺 Bác sĩ' : role === 'nurse' ? '🏥 Điều dưỡng' : role === 'technician' ? '🔬 Kỹ thuật viên' : '💼 Lễ tân'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {role === 'doctor' ? (
+                        <Stethoscope size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                      ) : role === 'nurse' ? (
+                        <HeartPulse size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                      ) : role === 'technician' ? (
+                        <Microscope size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                      ) : (
+                        <Briefcase size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                      )}
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? '#0891B2' : '#64748B' }}>
+                        {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Điều dưỡng' : role === 'technician' ? 'Kỹ thuật viên' : 'Lễ tân'}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -444,9 +471,12 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                 {/* Form Section */}
                 <View style={{ marginBottom: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 14 }}>
-                    ➕ Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                    <UserPlus size={16} color="#0891B2" />
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155' }}>
+                      Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
+                    </Text>
+                  </View>
 
                   <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 14 }}>
                     <View style={{ flex: 1 }}>
@@ -486,14 +516,17 @@ const ClinicDashboardScreen = ({ navigation }) => {
                     </View>
                     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
                       <TouchableOpacity
-                        style={{ height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
+                        style={{ height: 40, backgroundColor: '#0891B2', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
                         onPress={handleCreateUser}
                         disabled={creatingUser}
                       >
                         {creatingUser ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>💾 Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Save size={14} color="#FFF" />
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
+                          </View>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -502,9 +535,12 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                 {/* List Section */}
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 12 }}>
-                    📋 Danh sách {ROLE_LABELS[activeRoleTab]} hiện tại ({hospitalStaff.filter(s => s.role === activeRoleTab).length})
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                    <List size={16} color="#0891B2" />
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155' }}>
+                      Danh sách {ROLE_LABELS[activeRoleTab]} hiện tại ({hospitalStaff.filter(s => s.role === activeRoleTab).length})
+                    </Text>
+                  </View>
 
                   {loadingStaff ? (
                     <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />

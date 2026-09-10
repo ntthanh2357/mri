@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useMedicalRecordForm } from '../controllers/useMedicalRecordForm';
+import { Check, ChevronUp, ChevronDown } from 'lucide-react';
 
 const FormField = ({ label, value, onChangeText, placeholder, multiline, keyboardType, half }) => (
   <View style={[styles.fieldContainer, half && styles.fieldHalf]}>
@@ -36,7 +37,7 @@ const CheckboxItem = ({ label, checked, onToggle, indent }) => (
     activeOpacity={0.7}
   >
     <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-      {checked && <Text style={styles.checkboxTick}>✓</Text>}
+      {checked && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
     </View>
     <Text style={[styles.checkboxLabel, checked && styles.checkboxLabelChecked]}>{label}</Text>
   </TouchableOpacity>
@@ -46,7 +47,7 @@ const Section = ({ title, sectionKey, expanded, onToggle, children }) => (
   <View style={styles.sectionCard}>
     <TouchableOpacity style={styles.sectionHeader} onPress={() => onToggle(sectionKey)} activeOpacity={0.7}>
       <Text style={styles.sectionHeaderText}>{title}</Text>
-      <Text style={styles.sectionToggleIcon}>{expanded ? '▲' : '▼'}</Text>
+      {expanded ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
     </TouchableOpacity>
     {expanded && <View style={styles.sectionBody}>{children}</View>}
   </View>

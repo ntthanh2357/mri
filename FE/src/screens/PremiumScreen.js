@@ -16,6 +16,7 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './PremiumScreen.styles';
 import { get, post } from '../services/api.service';
+import { Check, X, Shield, FileCheck, Zap, ChevronUp, ChevronDown, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 const PremiumScreen = ({ navigation }) => {
   const [openFaq, setOpenFaq] = useState(null);
@@ -238,9 +239,9 @@ const PremiumScreen = ({ navigation }) => {
                 <View style={styles.featuresList}>
                   {freeFeatures.map((f, i) => (
                     <View key={i} style={styles.featureItem}>
-                      <Text style={[styles.featureIcon, !f.included && styles.featureIconDisabled]}>
-                        {f.included ? '✓' : '✗'}
-                      </Text>
+                      <View style={{ width: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        {f.included ? <Check size={14} color="#059669" /> : <X size={14} color="#94A3B8" />}
+                      </View>
                       <Text style={[styles.featureText, !f.included && styles.featureTextDisabled]}>
                         {f.text}
                       </Text>
@@ -273,7 +274,9 @@ const PremiumScreen = ({ navigation }) => {
                 <View style={styles.featuresList}>
                   {premiumFeatures.map((f, i) => (
                     <View key={i} style={styles.featureItem}>
-                      <Text style={styles.featureIconPremium}>✓</Text>
+                      <View style={{ width: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        <Check size={14} color="#059669" />
+                      </View>
                       <Text style={styles.featureTextPremium}>{f.text}</Text>
                     </View>
                   ))}
@@ -284,9 +287,12 @@ const PremiumScreen = ({ navigation }) => {
                   onPress={user?.isPremium ? null : handleUpgrade}
                   disabled={user?.isPremium || processing}
                 >
-                  <Text style={[styles.premiumBtnText, user?.isPremium && { color: '#FFFFFF' }]}>
-                    {processing ? 'Đang xử lý...' : user?.isPremium ? '✓ Đang sử dụng' : 'Nâng cấp ngay'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    {user?.isPremium && <Check size={16} color="#FFFFFF" strokeWidth={2.5} />}
+                    <Text style={[styles.premiumBtnText, user?.isPremium && { color: '#FFFFFF' }]}>
+                      {processing ? 'Đang xử lý...' : user?.isPremium ? 'Đang sử dụng' : 'Nâng cấp ngay'}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
 
                 {user?.isPremium && user?.autoRenew && (
@@ -310,15 +316,15 @@ const PremiumScreen = ({ navigation }) => {
             {/* Trust Badges */}
             <View style={styles.trustContainer}>
               <View style={styles.trustItem}>
-                <Text style={styles.trustIcon}>🛡️</Text>
+                <Shield size={20} color="#0891B2" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>BẢO MẬT DỮ LIỆU</Text>
               </View>
               <View style={styles.trustItem}>
-                <Text style={styles.trustIcon}>📋</Text>
+                <FileCheck size={20} color="#0891B2" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>CHỨNG NHẬN Y KHOA</Text>
               </View>
               <View style={styles.trustItem}>
-                <Text style={styles.trustIcon}>⚡</Text>
+                <Zap size={20} color="#0891B2" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>KẾT QUẢ TỨC THÌ</Text>
               </View>
             </View>
@@ -332,7 +338,7 @@ const PremiumScreen = ({ navigation }) => {
                   <View key={i} style={styles.faqCard}>
                     <TouchableOpacity style={styles.faqQuestionRow} onPress={() => toggleFaq(i)}>
                       <Text style={styles.faqQuestion}>{faq.q}</Text>
-                      <Text style={styles.faqArrow}>{isOpened ? '▲' : '▼'}</Text>
+                      {isOpened ? <ChevronUp size={16} color="#64748B" /> : <ChevronDown size={16} color="#64748B" />}
                     </TouchableOpacity>
                     {isOpened && (
                       <View style={styles.faqAnswerContainer}>
@@ -357,10 +363,10 @@ const PremiumScreen = ({ navigation }) => {
                 popup.severity === 'warning' && { backgroundColor: '#FFFBEB' },
                 popup.severity === 'info' && { backgroundColor: '#EFF6FF' },
               ]}>
-                {popup.severity === 'success' && <Text style={[styles.popupIconText, { color: '#16A34A' }]}>✓</Text>}
-                {popup.severity === 'error' && <Text style={[styles.popupIconText, { color: '#DC2626' }]}>✕</Text>}
-                {popup.severity === 'warning' && <Text style={[styles.popupIconText, { color: '#D97706' }]}>⚠️</Text>}
-                {popup.severity === 'info' && <Text style={[styles.popupIconText, { color: '#2563EB' }]}>ℹ</Text>}
+                {popup.severity === 'success' && <CheckCircle2 size={32} color="#16A34A" />}
+                {popup.severity === 'error' && <AlertCircle size={32} color="#DC2626" />}
+                {popup.severity === 'warning' && <AlertTriangle size={32} color="#D97706" />}
+                {popup.severity === 'info' && <Info size={32} color="#2563EB" />}
               </View>
               <Text style={styles.popupTitle}>{popup.title}</Text>
               <Text style={styles.popupMessage}>{popup.message}</Text>

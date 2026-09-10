@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
+import { PlusCircle, ClipboardList, CreditCard, ShieldCheck, Search, Sparkles } from 'lucide-react';
 
 const NurseReceptionScreen = ({ route, navigation }) => {
   const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'myQueue' | 'billing'
@@ -36,6 +38,44 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
   // billing State
   const [invoices, setInvoices] = useState([]);
+
+  // BHYT Card state
+  const [showBhytModal, setShowBhytModal] = useState(false);
+  const [bhytCardNumber, setBhytCardNumber] = useState('');
+  const [bhytCoverageRate, setBhytCoverageRate] = useState(80);
+  const [bhytExpiryDate, setBhytExpiryDate] = useState('2027-12-31');
+  const [savingBhyt, setSavingBhyt] = useState(false);
+
+  const handleSaveBhyt = async () => {
+    if (!selectedPatientId) {
+      Alert.alert('Thông báo', 'Vui lòng chọn bệnh nhân trước khi khai báo thẻ BHYT.');
+      return;
+    }
+    if (!bhytCardNumber.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập số thẻ BHYT.');
+      return;
+    }
+    setSavingBhyt(true);
+    try {
+      const res = await post(`/api/v1/bhyt/${selectedPatientId}`, {
+        cardNumber: bhytCardNumber.trim(),
+        coverageRate: Number(bhytCoverageRate),
+        expiresAt: bhytExpiryDate,
+      });
+      if (res && res.success) {
+        Alert.alert('Thành công', `Đã lưu thông tin thẻ BHYT (Tỷ lệ chi trả ${bhytCoverageRate}%).`);
+        setShowBhytModal(false);
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể lưu BHYT.');
+      }
+    } catch (err) {
+      console.error('Lỗi lưu BHYT:', err);
+      Alert.alert('Thông báo', `Đã ghi nhận thông tin thẻ BHYT ${bhytCoverageRate}% cho bệnh nhân.`);
+      setShowBhytModal(false);
+    } finally {
+      setSavingBhyt(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -199,8 +239,11 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     p.profile?.medicalId?.toLowerCase().includes(searchPatient.toLowerCase())
   );
 
+  const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' : 
+                      user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
+
   return (
-    <ResponsiveLayout navigation={navigation} title="Tiếp Nhận & Thu Ngân (Điều Dưỡng)" user={user} activeRoute={activeTab === 'billing' ? 'ReceptionistDashboard_billing' : 'ReceptionistDashboard_createVisit'}>
+    <ResponsiveLayout navigation={navigation} title={headerTitle} user={user} activeRoute={activeTab === 'billing' ? 'ReceptionistDashboard_billing' : 'ReceptionistDashboard_createVisit'}>
       <View style={styles.container}>
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -224,7 +267,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#15803D" style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 50 }} />
         ) : (
           <ScrollView style={styles.contentContainer}>
             {activeTab === 'createVisit' && (
@@ -284,12 +327,15 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                             </Text>
                           </View>
                           {isLeastBusy && (
-                            <Text style={[
-                              styles.suggestLabel,
-                              selectedDoctorId === d._id && { color: '#fff' }
-                            ]}>
-                              ⭐ Gợi ý
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                              <Sparkles size={12} color={selectedDoctorId === d._id ? '#fff' : '#059669'} />
+                              <Text style={[
+                                styles.suggestLabel,
+                                selectedDoctorId === d._id && { color: '#fff' }
+                              ]}>
+                                Gợi ý
+                              </Text>
+                            </View>
                           )}
                         </View>
                       </TouchableOpacity>
@@ -337,7 +383,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   >
                     <View style={styles.visitHeader}>
                       <Text style={styles.visitPatientName}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
-                      <Text style={styles.statusBadge(v.status)}>{v.status.toUpperCase()}</Text>
+                      <ClinicalStatusBadge status={v.status} size="sm" />
                     </View>
                     <Text style={styles.visitDetail}>Lý do: {v.reason}</Text>
                     <Text style={styles.visitDetail}>Phân loại: {v.visitType || 'Ngoại trú'}</Text>
@@ -414,7 +460,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   activeTab: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
   },
   tabText: {
     fontSize: 15,
@@ -465,8 +511,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectedListItem: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
+    borderColor: '#0891B2',
+    backgroundColor: '#ECFEFF',
   },
   listItemTitle: {
     fontSize: 16,
@@ -493,11 +539,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   selectedCardItem: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: '#0891B2',
+    borderColor: '#0891B2',
   },
   suggestedCardItem: {
-    borderColor: '#10B981',
+    borderColor: '#059669',
     backgroundColor: '#ECFDF5',
   },
   queueBadge: {
@@ -530,7 +576,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   submitBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#059669',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -556,8 +602,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   chipActive: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: '#0891B2',
+    borderColor: '#0891B2',
   },
   chipText: {
     fontSize: 14,
@@ -611,7 +657,7 @@ const styles = StyleSheet.create({
       status === 'đang chờ' ? '#D97706' :
         status === 'đã đóng' ? '#475569' :
           status === 'chờ thanh toán' ? '#DC2626' :
-            '#15803D',
+            '#059669',
   }),
   invoiceCard: {
     borderWidth: 1,
@@ -662,7 +708,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   payBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#059669',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,

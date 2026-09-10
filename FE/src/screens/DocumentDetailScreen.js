@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import Config from '../constants/config';
 import { apiRequest } from '../utils/apiClient';
+import { FileText, Image as ImageIcon, Paperclip, AlertTriangle } from 'lucide-react';
+import DocTypeIcon from '../components/DocTypeIcon';
 
 const extractMedications = (text) => {
   if (!text) return [];
@@ -258,12 +260,15 @@ const buildFileUrl = (fileUrl) => {
   return `${Config.API_URL}${fileUrl}`;
 };
 
-const getFileIcon = (fileName, fileType) => {
-  const name = (fileName || '').toLowerCase();
-  const type = (fileType || '').toLowerCase();
-  if (type.includes('pdf') || name.endsWith('.pdf')) return '📄';
-  if (type.includes('image') || name.match(/\.(jpg|jpeg|png|webp|heic)$/)) return '🖼️';
-  return '📎';
+const RenderFileIcon = ({ fileName, fileType, docType, isUpload }) => {
+  if (isUpload) {
+    const name = (fileName || '').toLowerCase();
+    const type = (fileType || '').toLowerCase();
+    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText size={20} color="#0891B2" />;
+    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|webp|heic)$/)) return <ImageIcon size={20} color="#059669" />;
+    return <Paperclip size={20} color="#64748B" />;
+  }
+  return <DocTypeIcon docType={docType} size={20} color="#0891B2" />;
 };
 
 // ── SavedDocRow ───────────────────────────────────────────────────────────────
@@ -284,9 +289,9 @@ const SavedDocRow = ({ savedDoc, onView, onOpen }) => {
 
   return (
     <View style={[styles.savedRow, hovered && styles.savedRowHovered]} {...hoverProps}>
-      <Text style={styles.savedRowIcon}>
-        {isUpload ? getFileIcon(savedDoc.fileName, savedDoc.fileType) : '📋'}
-      </Text>
+      <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+        <RenderFileIcon fileName={savedDoc.fileName} fileType={savedDoc.fileType} docType={savedDoc.docType} isUpload={isUpload} />
+      </View>
       <View style={styles.savedRowInfo}>
         {isUpload ? (
           <>
@@ -426,7 +431,10 @@ const DocumentDetailScreen = ({ route, navigation }) => {
 
       {warnings.length > 0 && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningBannerTitle}>⚠️ Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <AlertTriangle size={15} color="#DC2626" />
+            <Text style={styles.warningBannerTitle}>Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+          </View>
           {warnings.map((w, idx) => (
             <Text key={idx} style={styles.warningItem}>
               • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})

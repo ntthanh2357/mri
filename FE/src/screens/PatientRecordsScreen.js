@@ -9,6 +9,21 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
+import {
+  FolderArchive,
+  Stethoscope,
+  Microscope,
+  ShieldCheck,
+  UploadCloud,
+  Paperclip,
+  ClipboardList,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  Search,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
@@ -16,10 +31,10 @@ import styles from './PatientRecordsScreen.styles';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GROUP_META = {
-  nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', icon: '🗂️', color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
-  nhom2: { label: 'Nhóm 2 — Lâm sàng', icon: '🩺', color: '#F0FDF4', border: '#BBF7D0', text: '#15803D' },
-  nhom3: { label: 'Nhóm 3 — Cận lâm sàng', icon: '🔬', color: '#FFF7ED', border: '#FED7AA', text: '#C2410C' },
-  nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', icon: '📝', color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
+  nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', Icon: FolderArchive, color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
+  nhom2: { label: 'Nhóm 2 — Lâm sàng', Icon: Stethoscope, color: '#F0FDF4', border: '#BBF7D0', text: '#059669' },
+  nhom3: { label: 'Nhóm 3 — Cận lâm sàng', Icon: Microscope, color: '#FFF7ED', border: '#FED7AA', text: '#D97706' },
+  nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', Icon: ShieldCheck, color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
 };
 
 
@@ -62,15 +77,16 @@ const DocCard = ({ slot, savedDocs = [], onPress }) => {
     return parts.join(' · ');
   };
 
+  const DocIcon = !hasSaved ? UploadCloud : uploadCount > 0 ? Paperclip : ClipboardList;
+  const docIconColor = !hasSaved ? '#94A3B8' : uploadCount > 0 ? '#0891B2' : '#059669';
+
   return (
     <TouchableOpacity
       style={[styles.docCard, hasSaved ? styles.docCardHas : styles.docCardMissing]}
       onPress={() => onPress(slot, savedDocs)}
     >
       <View style={styles.docCardLeft}>
-        <Text style={styles.docIcon}>
-          {!hasSaved ? '📤' : uploadCount > 0 ? '📎' : '📋'}
-        </Text>
+        <DocIcon size={18} color={docIconColor} />
         <View style={styles.docInfo}>
           <Text style={[styles.docLabel, !hasSaved && styles.docLabelMissing]} numberOfLines={2}>
             {slot.label}
@@ -120,7 +136,9 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
         <View style={styles.visitHeaderRight}>
           <Text style={styles.visitDocCount}>{savedCount}/{totalSlots}</Text>
           <Text style={styles.visitDocCountLabel}>tài liệu</Text>
-          <Text style={styles.visitToggle}>{expanded ? '▲' : '▼'}</Text>
+          <View style={{ marginTop: 4 }}>
+            {expanded ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -152,7 +170,9 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
 
           {Object.entries(ALL_DOCS).map(([groupKey, slots]) => {
             const meta = GROUP_META[groupKey];
+            const GroupIcon = meta.Icon;
             const groupSaved = slots.filter((s) => savedMap[s.docKey]).length;
+            const isGroupExpanded = expandedGroups[groupKey];
             return (
               <View key={groupKey} style={[styles.groupCard, { borderColor: meta.border, backgroundColor: meta.color }]}>
                 <TouchableOpacity
@@ -160,12 +180,16 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
                   onPress={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.groupIcon}>{meta.icon}</Text>
+                  <GroupIcon size={16} color={meta.text} />
                   <Text style={[styles.groupLabel, { color: meta.text }]}>{meta.label}</Text>
                   <Text style={[styles.groupCount, { color: meta.text }]}>{groupSaved}/{slots.length}</Text>
-                  <Text style={[styles.groupToggle, { color: meta.text }]}>{expandedGroups[groupKey] ? '▲' : '▼'}</Text>
+                  {isGroupExpanded ? (
+                    <ChevronUp size={16} color={meta.text} />
+                  ) : (
+                    <ChevronDown size={16} color={meta.text} />
+                  )}
                 </TouchableOpacity>
-                {expandedGroups[groupKey] && (
+                {isGroupExpanded && (
                   <View style={styles.docList}>
                     {slots.map((slot) => (
                       <DocCard
@@ -219,7 +243,7 @@ const PatientRecordsScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#15803D" />
+          <ActivityIndicator size="large" color="#0891B2" />
           <Text style={styles.centerText}>Đang tải hồ sơ...</Text>
         </View>
       </ResponsiveLayout>
@@ -230,7 +254,7 @@ const PatientRecordsScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
         <View style={styles.centerState}>
-          <Text style={styles.errorIcon}>⚠️</Text>
+          <AlertTriangle size={36} color="#EF4444" />
           <Text style={styles.centerText}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={reload}>
             <Text style={styles.retryBtnText}>Thử lại</Text>
@@ -245,8 +269,9 @@ const PatientRecordsScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         {!isDesktop && (
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Quay lại</Text>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <ChevronLeft size={18} color="#64748B" />
+              <Text style={styles.backButtonText}>Quay lại</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Kho hồ sơ sức khỏe</Text>
           </View>
@@ -266,7 +291,7 @@ const PatientRecordsScreen = ({ navigation }) => {
               <Text style={styles.statLabel}>Lượt khám</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#15803D' }]}>{savedCount}</Text>
+              <Text style={[styles.statValue, { color: '#0891B2' }]}>{savedCount}</Text>
               <Text style={styles.statLabel}>Tài liệu đã lưu</Text>
             </View>
             <View style={styles.statCard}>
@@ -298,7 +323,7 @@ const PatientRecordsScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
@@ -312,7 +337,7 @@ const PatientRecordsScreen = ({ navigation }) => {
 
           {filtered.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🗂️</Text>
+              <FolderArchive size={40} color="#CBD5E1" style={{ marginBottom: 12 }} />
               <Text style={styles.emptyText}>
                 {visits.length === 0
                   ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
@@ -341,7 +366,7 @@ const PatientRecordsScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.infoNote}>
-            <Text style={styles.infoNoteIcon}>ℹ️</Text>
+            <Info size={16} color="#0891B2" style={{ marginTop: 2, marginRight: 8 }} />
             <Text style={styles.infoNoteText}>
               Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>

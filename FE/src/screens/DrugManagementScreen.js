@@ -14,8 +14,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import { get, post, put, del } from '../services/api.service';
-import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
 
 const CATEGORY_LABELS = {
   anticonvulsant: 'Động kinh',
@@ -507,9 +506,12 @@ export default function DrugManagementScreen({ navigation }) {
                         {submitting ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
-                          <Text style={styles.submitButtonText}>
-                            {isEditing ? '💾 Cập nhật thuốc' : '💾 Lưu vào danh mục'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Save size={15} color="#FFFFFF" />
+                            <Text style={styles.submitButtonText}>
+                              {isEditing ? 'Cập nhật thuốc' : 'Lưu vào danh mục'}
+                            </Text>
+                          </View>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -719,10 +721,11 @@ export default function DrugManagementScreen({ navigation }) {
                         </Text>
                         {isHospitalAdmin && (
                           <TouchableOpacity
-                            style={styles.alertActionBtn}
+                            style={[styles.alertActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                             onPress={() => openStockModal(item)}
                           >
-                            <Text style={styles.alertActionBtnText}>➕ Nhập kho ngay</Text>
+                            <Plus size={12} color="#FFFFFF" />
+                            <Text style={styles.alertActionBtnText}>Nhập kho ngay</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -745,7 +748,10 @@ export default function DrugManagementScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>📦 Cập nhật tồn kho dược phẩm</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Package size={18} color="#0891B2" />
+                <Text style={styles.modalTitle}>Cập nhật tồn kho dược phẩm</Text>
+              </View>
               <Text style={styles.modalSub}>
                 Thuốc: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{stockDrug.name}</Text> | Đơn vị: {stockDrug.stock?.unit}
               </Text>
@@ -756,7 +762,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('add')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'add' && styles.modalActionTextActive]}>
-                    ➕ Nhập kho (Thêm)
+                    Nhập kho (Thêm)
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -764,7 +770,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('subtract')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'subtract' && styles.modalActionTextActive]}>
-                    ➖ Xuất kho (Bớt)
+                    Xuất kho (Bớt)
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -772,7 +778,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('set')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'set' && styles.modalActionTextActive]}>
-                    💾 Đặt cố định
+                    Đặt cố định
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -804,7 +810,10 @@ export default function DrugManagementScreen({ navigation }) {
                   {submitting ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>💾 Lưu thay đổi</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <Save size={14} color="#FFFFFF" />
+                      <Text style={styles.modalSubmitText}>Lưu thay đổi</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>

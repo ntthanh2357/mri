@@ -1,0 +1,179 @@
+{
+  "methodology_note": "Each Tam Tri _TT_XXXX filename corresponds to one unique diagnostic case (1 representative slice per case; Slices/patient=1.0). Patient-level aggregation is equivalent to case-level for Tam Tri data. Kaggle test images lack patient identifiers and are evaluated as independent slices.",
+  "overall": {
+    "n_cases": 3461,
+    "accuracy": 91.01,
+    "ci_95_accuracy": [
+      90.02,
+      91.92
+    ],
+    "f1_macro": 92.04,
+    "fatal_fnr": 0.43,
+    "fatal_fnr_ci_95": [
+      0.18,
+      0.99
+    ],
+    "per_class": {
+      "glioma": {
+        "recall": 90.31,
+        "ci_95": [
+          88.48,
+          91.87
+        ],
+        "precision": 96.2,
+        "f1": 93.16,
+        "support": 1176
+      },
+      "meningioma": {
+        "recall": 89.56,
+        "ci_95": [
+          87.39,
+          91.39
+        ],
+        "precision": 84.13,
+        "f1": 86.76,
+        "support": 900
+      },
+      "notumor": {
+        "recall": 99.25,
+        "ci_95": [
+          97.82,
+          99.74
+        ],
+        "precision": 98.51,
+        "f1": 98.88,
+        "support": 400
+      },
+      "pituitary": {
+        "recall": 89.85,
+        "ci_95": [
+          87.8,
+          91.58
+        ],
+        "precision": 88.86,
+        "f1": 89.35,
+        "support": 985
+      }
+    },
+    "mcnemar_vs_guardoff": {
+      "p_value": 0.893695,
+      "n_on_correct_off_wrong": 27,
+      "n_off_correct_on_wrong": 29,
+      "note": "Not significant at a=0.05 (p=0.8937; N_cases=3461 -- reduced power vs slice-level test)"
+    }
+  },
+  "tamtri": {
+    "n_cases": 1861,
+    "accuracy": 86.57,
+    "ci_95_accuracy": [
+      84.94,
+      88.04
+    ],
+    "f1_macro": 64.39,
+    "fatal_fnr": 0.13,
+    "fatal_fnr_ci_95": [
+      0.02,
+      0.73
+    ],
+    "per_class": {
+      "glioma": {
+        "recall": 89.69,
+        "ci_95": [
+          87.35,
+          91.64
+        ],
+        "precision": 95.6,
+        "f1": 92.55,
+        "support": 776
+      },
+      "meningioma": {
+        "recall": 85.4,
+        "ci_95": [
+          82.04,
+          88.23
+        ],
+        "precision": 76.94,
+        "f1": 80.95,
+        "support": 500
+      },
+      "notumor": {
+        "recall": null,
+        "ci_95": null,
+        "support": 0,
+        "note": "Not present in this subset"
+      },
+      "pituitary": {
+        "recall": 83.42,
+        "ci_95": [
+          80.19,
+          86.21
+        ],
+        "precision": 84.72,
+        "f1": 84.07,
+        "support": 585
+      }
+    },
+    "mcnemar_vs_guardoff": {
+      "p_value": 0.090969,
+      "n_on_correct_off_wrong": 12,
+      "n_off_correct_on_wrong": 23,
+      "note": "Not significant at a=0.05 (p=0.0910; N_cases=1861 -- reduced power vs slice-level test)"
+    }
+  },
+  "kaggle": {
+    "n_cases": 1600,
+    "accuracy": 96.19,
+    "ci_95_accuracy": [
+      95.13,
+      97.02
+    ],
+    "f1_macro": 96.17,
+    "fatal_fnr": 1.0,
+    "fatal_fnr_ci_95": [
+      0.39,
+      2.54
+    ],
+    "per_class": {
+      "glioma": {
+        "recall": 91.5,
+        "ci_95": [
+          88.36,
+          93.85
+        ],
+        "precision": 97.34,
+        "f1": 94.33,
+        "support": 400
+      },
+      "meningioma": {
+        "recall": 94.75,
+        "ci_95": [
+          92.11,
+          96.54
+        ],
+        "precision": 94.04,
+        "f1": 94.4,
+        "support": 400
+      },
+      "notumor": {
+        "recall": 99.25,
+        "ci_95": [
+          97.82,
+          99.74
+        ],
+        "precision": 99.0,
+        "f1": 99.13,
+        "support": 400
+      },
+      "pituitary": {
+        "recall": 99.25,
+        "ci_95": [
+          97.82,
+          99.74
+        ],
+        "precision": 94.52,
+        "f1": 96.83,
+        "support": 400
+      }
+    }
+  }
+}

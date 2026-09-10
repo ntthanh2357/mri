@@ -15,6 +15,18 @@ import {
 import { post } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { 
+  Scan, 
+  RotateCcw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  AlertCircle, 
+  Activity, 
+  ShieldCheck, 
+  Edit3, 
+  Layers, 
+  ArrowLeft 
+} from 'lucide-react';
 import styles from './AIAnalysisScreen.styles';
 
 const CLASS_META = {
@@ -23,23 +35,23 @@ const CLASS_META = {
     color: '#DC2626',
     bg: '#FEF2F2',
     border: '#FECACA',
-    icon: '🔴',
-    desc: 'Khối u thần kinh đệm — cần hội chẩn chuyên khoa ngay.',
+    icon: AlertTriangle,
+    desc: 'Khối u thần kinh đệm — cần hội chẩn chuyên khoa khẩn cấp.',
   },
   meningioma: {
     label: 'MENINGIOMA',
     color: '#D97706',
     bg: '#FFFBEB',
     border: '#FDE68A',
-    icon: '🟡',
-    desc: 'U màng não — thường lành tính, có thể theo dõi hoặc phẫu thuật.',
+    icon: AlertCircle,
+    desc: 'U màng não — thường lành tính, có thể theo dõi hoặc can thiệp.',
   },
   pituitary: {
     label: 'PITUITARY',
     color: '#7C3AED',
     bg: '#F5F3FF',
     border: '#DDD6FE',
-    icon: '🟣',
+    icon: Activity,
     desc: 'U tuyến yên — cần kiểm tra nội tiết và hội chẩn chuyên khoa.',
   },
   notumor: {
@@ -47,7 +59,7 @@ const CLASS_META = {
     color: '#059669',
     bg: '#ECFDF5',
     border: '#A7F3D0',
-    icon: '🟢',
+    icon: ShieldCheck,
     desc: 'Không phát hiện khối u não bất thường trên hình ảnh MRI.',
   },
 };
@@ -119,11 +131,11 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   }, [phase]);
 
   const steps = [
-    { label: '🔬 Tiền xử lý ảnh y khoa (OpenCV)', desc: 'Chuẩn hóa độ sáng, khử nhiễu ảnh MRI' },
-    { label: '🤖 Ensemble 3 mô hình phân loại u não', desc: 'ResNet50 + EfficientNetB0 + DenseNet121' },
-    { label: '📦 YOLOv8 phát hiện và khoanh vùng', desc: 'Định vị tọa độ khối u trên lát cắt' },
-    { label: '🧠 Gemini VLM phân xử đa thức', desc: 'Nhận diện ngữ cảnh và kiểm chứng chéo' },
-    { label: '🗺️ Grad-CAM vẽ Heatmap bất thường', desc: 'Trực quan hóa vùng kích hoạt mô hình' },
+    { label: 'Tiền xử lý ảnh y khoa (OpenCV)', desc: 'Chuẩn hóa độ sáng, khử nhiễu ảnh MRI' },
+    { label: 'Ensemble 3 mô hình phân loại u não', desc: 'ResNet50 + EfficientNetB0 + DenseNet121' },
+    { label: 'YOLOv8 phát hiện và khoanh vùng', desc: 'Định vị tọa độ khối u trên lát cắt' },
+    { label: 'Gemini VLM phân xử đa thức', desc: 'Nhận diện ngữ cảnh và kiểm chứng chéo' },
+    { label: 'Grad-CAM vẽ Heatmap bất thường', desc: 'Trực quan hóa vùng kích hoạt mô hình' },
   ];
 
   // Auto-start analysis when screen mounts
@@ -285,13 +297,15 @@ const AIAnalysisScreen = ({ route, navigation }) => {
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.backBtnText}>← Hủy</Text>
+          <TouchableOpacity style={[styles.backBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => navigation.goBack()}>
+            <ArrowLeft size={16} color="#64748B" strokeWidth={2.2} />
+            <Text style={styles.backBtnText}>Hủy</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chẩn Đoán Hình Ảnh AI</Text>
           {phase === 'result' ? (
-            <TouchableOpacity onPress={runAnalysis} style={styles.retryBtn}>
-              <Text style={styles.retryBtnText}>🔄 Quét lại</Text>
+            <TouchableOpacity onPress={runAnalysis} style={[styles.retryBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+              <RotateCcw size={13} color="#2563EB" strokeWidth={2.2} />
+              <Text style={styles.retryBtnText}>Quét lại</Text>
             </TouchableOpacity>
           ) : (
             <View style={{ width: 80 }} />
@@ -305,7 +319,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
               {/* Left col: brain scan visualization */}
               <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
                 <View style={styles.imgCard}>
-                  <Text style={styles.imgCardLabel}>📷 Phim chụp MRI đang phân tích</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                    <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Phim chụp MRI đang phân tích</Text>
+                  </View>
                   <View style={styles.scanPreviewBox}>
                     {imageUrl ? (
                       <Image source={{ uri: imageFullUri }} style={styles.scanPreviewImg} resizeMode="contain" />
@@ -355,8 +372,8 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                           ]}
                         >
                           <View style={styles.stepStatusIcon}>
-                            {isCompleted && <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 13 }}>✓</Text>}
-                            {isCurrent && <ActivityIndicator size="small" color="#3B82F6" />}
+                            {isCompleted && <CheckCircle2 size={16} color="#059669" />}
+                            {isCurrent && <ActivityIndicator size="small" color="#0891B2" />}
                             {isPending && <View style={styles.pendingDot} />}
                           </View>
                           <View style={{ flex: 1 }}>
@@ -388,7 +405,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
           <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
             {error ? (
               <View style={styles.errorCard}>
-                <Text style={styles.errorIcon}>⚠️</Text>
+                <AlertTriangle size={36} color="#DC2626" style={{ marginBottom: 8 }} />
                 <Text style={styles.errorTitle}>Lỗi kết nối AI</Text>
                 <Text style={styles.errorMsg}>{error}</Text>
                 <TouchableOpacity style={styles.retryBigBtn} onPress={runAnalysis}>
@@ -401,7 +418,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                 <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
                   {/* Original image */}
                   <View style={styles.imgCard}>
-                    <Text style={styles.imgCardLabel}>📷 Ảnh gốc MRI</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                      <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                      <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Ảnh gốc MRI</Text>
+                    </View>
                     <View style={styles.imgViewer}>
                       {imageUrl ? (
                         <Image source={{ uri: imageFullUri }} style={styles.imgFull} resizeMode="contain" />
@@ -414,7 +434,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                   {/* Annotated image (Heatmap / GradCAM) */}
                   {annotatedUri && (
                     <View style={styles.imgCard}>
-                      <Text style={styles.imgCardLabel}>🗺️ Heatmap phân tích (Grad-CAM + YOLO)</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                        <Layers size={16} color="#0891B2" strokeWidth={2.2} />
+                        <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Bản đồ nhiệt kích hoạt (Grad-CAM + YOLO)</Text>
+                      </View>
                       <View style={styles.imgViewer}>
                         <Image source={{ uri: annotatedUri }} style={styles.imgFull} resizeMode="contain" />
                       </View>
@@ -425,60 +448,79 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                 {/* ── RIGHT: Result + Actions ───────────────────────────────── */}
                 <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
                   {/* Main result card */}
-                  {meta && (
-                    <View style={[styles.resultCard, { borderColor: meta.border, backgroundColor: meta.bg }]}>
-                      <View style={styles.resultCardHeader}>
-                        <Text style={styles.resultCardIcon}>{meta.icon}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.resultLabel, { color: meta.color }]}>
-                            {meta.label}
+                  {meta && (() => {
+                    const MetaIcon = meta.icon;
+                    return (
+                      <View style={[styles.resultCard, { borderColor: meta.border, backgroundColor: meta.bg }]}>
+                        <View style={styles.resultCardHeader}>
+                          <View style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: meta.color + '18',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}>
+                            <MetaIcon size={24} color={meta.color} strokeWidth={2.5} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.resultLabel, { color: meta.color }]}>
+                              {meta.label}
+                            </Text>
+                            <Text style={styles.resultDesc}>{meta.desc}</Text>
+                          </View>
+                        </View>
+
+                        {/* Confidence gauge */}
+                        <View style={styles.confRow}>
+                          <Text style={styles.confLabel}>
+                            Độ tự tin: <Text style={[styles.confValue, { color: meta.color }]}>{aiResult.confidence}%</Text>
                           </Text>
-                          <Text style={styles.resultDesc}>{meta.desc}</Text>
                         </View>
-                      </View>
+                        <ConfidenceBar value={aiResult.confidence} color={meta.color} />
 
-                      {/* Confidence gauge */}
-                      <View style={styles.confRow}>
-                        <Text style={styles.confLabel}>
-                          Độ tự tin: <Text style={[styles.confValue, { color: meta.color }]}>{aiResult.confidence}%</Text>
-                        </Text>
-                      </View>
-                      <ConfidenceBar value={aiResult.confidence} color={meta.color} />
-
-                      {/* All probabilities */}
-                      {aiResult.all_probabilities && (
-                        <View style={styles.allProbBox}>
-                          <Text style={styles.allProbTitle}>Phân phối xác suất Ensemble:</Text>
-                          {Object.entries(aiResult.all_probabilities).map(([cls, pct]) => {
-                            const m = CLASS_META[cls] || CLASS_META.notumor;
-                            return (
-                              <View key={cls} style={styles.probRow}>
-                                <Text style={styles.probCls}>{m.icon} {m.label}</Text>
-                                <View style={{ flex: 1, marginHorizontal: 8 }}>
-                                  <ConfidenceBar value={pct} color={m.color} />
+                        {/* All probabilities */}
+                        {aiResult.all_probabilities && (
+                          <View style={styles.allProbBox}>
+                            <Text style={styles.allProbTitle}>Phân phối xác suất Ensemble:</Text>
+                            {Object.entries(aiResult.all_probabilities).map(([cls, pct]) => {
+                              const m = CLASS_META[cls] || CLASS_META.notumor;
+                              const ItemIcon = m.icon;
+                              return (
+                                <View key={cls} style={styles.probRow}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', width: 130, gap: 6 }}>
+                                    <ItemIcon size={13} color={m.color} strokeWidth={2.2} />
+                                    <Text style={styles.probCls}>{m.label}</Text>
+                                  </View>
+                                  <View style={{ flex: 1, marginHorizontal: 8 }}>
+                                    <ConfidenceBar value={pct} color={m.color} />
+                                  </View>
+                                  <Text style={[styles.probPct, { color: m.color }]}>{pct}%</Text>
                                 </View>
-                                <Text style={[styles.probPct, { color: m.color }]}>{pct}%</Text>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
+                              );
+                            })}
+                          </View>
+                        )}
 
-                      {/* Consensus message */}
-                      {aiResult.consensus_message ? (
-                        <View style={styles.consensusBox}>
-                          <Text style={styles.consensusTitle}>Đồng thuận mô hình:</Text>
-                          <Text style={styles.consensusText}>{aiResult.consensus_message}</Text>
-                        </View>
-                      ) : null}
+                        {/* Consensus message */}
+                        {aiResult.consensus_message ? (
+                          <View style={styles.consensusBox}>
+                            <Text style={styles.consensusTitle}>Đồng thuận mô hình:</Text>
+                            <Text style={styles.consensusText}>{aiResult.consensus_message}</Text>
+                          </View>
+                        ) : null}
 
-                      <View style={styles.disclaimer}>
-                        <Text style={styles.disclaimerText}>
-                          ⚠️ Kết quả AI chỉ mang tính chất hỗ trợ tham khảo, không thay thế kết luận của bác sĩ chuyên khoa.
-                        </Text>
+                        <View style={styles.disclaimer}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <AlertTriangle size={14} color="#D97706" />
+                            <Text style={styles.disclaimerText}>
+                              Kết quả AI mang tính chất hỗ trợ quyết định lâm sàng, không thay thế chẩn đoán sau cùng của bác sĩ.
+                            </Text>
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                  )}
+                    );
+                  })()}
 
                   {/* ── CONFIRM CORRECT ──────────────────────────────────────── */}
                   <View style={styles.actionCard}>
@@ -493,10 +535,20 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         <ActivityIndicator color="#fff" size="small" />
                       ) : (
                         <>
-                          <Text style={styles.confirmBtnIcon}>✅</Text>
+                          <View style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(255,255,255,0.2)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 10,
+                          }}>
+                            <CheckCircle2 size={20} color="#FFFFFF" strokeWidth={2.5} />
+                          </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.confirmBtnTitle}>AI đúng — Xác nhận & Điền kết quả</Text>
-                            <Text style={styles.confirmBtnSub}>Trả về form với ảnh gốc + ảnh heatmap + kết quả AI đã điền sẵn</Text>
+                            <Text style={styles.confirmBtnTitle}>AI đúng — Duyệt chẩn đoán & Điền kết quả</Text>
+                            <Text style={styles.confirmBtnSub}>Điền sẵn hình ảnh lát cắt, heatmap và kết luận vào hồ sơ</Text>
                           </View>
                         </>
                       )}
@@ -510,26 +562,31 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                     </View>
 
                     {/* Wrong → feedback */}
-                    <Text style={styles.feedbackTitle}>AI sai — Chọn kết quả đúng:</Text>
+                    <Text style={styles.feedbackTitle}>AI sai — Chọn chẩn đoán đúng của Bác sĩ:</Text>
                     <View style={styles.classGrid}>
-                      {Object.entries(CLASS_META).map(([cls, m]) => (
-                        <TouchableOpacity
-                          key={cls}
-                          style={[
-                            styles.classChip,
-                            selectedCorrectClass === cls && { backgroundColor: m.color, borderColor: m.color },
-                          ]}
-                          onPress={() => setSelectedCorrectClass(cls)}
-                        >
-                          <Text style={[styles.classChipText, selectedCorrectClass === cls && { color: '#fff' }]}>
-                            {m.icon} {m.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                      {Object.entries(CLASS_META).map(([cls, m]) => {
+                        const ChipIcon = m.icon;
+                        const isSelected = selectedCorrectClass === cls;
+                        return (
+                          <TouchableOpacity
+                            key={cls}
+                            style={[
+                              styles.classChip,
+                              isSelected && { backgroundColor: m.color, borderColor: m.color },
+                            ]}
+                            onPress={() => setSelectedCorrectClass(cls)}
+                          >
+                            <ChipIcon size={13} color={isSelected ? '#FFFFFF' : m.color} strokeWidth={2.2} />
+                            <Text style={[styles.classChipText, isSelected && { color: '#fff' }]}>
+                              {m.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.wrongBtn, sendingFeedback && styles.btnDisabled]}
+                      style={[styles.wrongBtn, (sendingFeedback || !selectedCorrectClass) && styles.btnDisabled]}
                       onPress={handleConfirmWrong}
                       disabled={sendingFeedback || !selectedCorrectClass}
                     >
@@ -537,10 +594,20 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         <ActivityIndicator color="#fff" size="small" />
                       ) : (
                         <>
-                          <Text style={styles.wrongBtnIcon}>✍️</Text>
+                          <View style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(255,255,255,0.2)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 10,
+                          }}>
+                            <Edit3 size={18} color="#FFFFFF" strokeWidth={2.4} />
+                          </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.wrongBtnTitle}>AI sai — Gửi hiệu chỉnh & Trở về</Text>
-                            <Text style={styles.wrongBtnSub}>Điền kết quả đúng + ghi lưu ý cảnh báo vào form</Text>
+                            <Text style={styles.wrongBtnTitle}>Gửi hiệu chỉnh & Cập nhật chẩn đoán</Text>
+                            <Text style={styles.wrongBtnSub}>Lưu ghi chú bác sĩ và gửi phản hồi huấn luyện AI</Text>
                           </View>
                         </>
                       )}

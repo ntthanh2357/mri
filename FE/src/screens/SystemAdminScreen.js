@@ -15,6 +15,7 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SystemAdminScreen.styles';
 import { get, post } from '../services/api.service';
+import { AlertTriangle, FileText, MessageSquare, Folder, Zap } from 'lucide-react';
 
 const METRICS_POLL_INTERVAL = 30000; // 30 giây
 
@@ -71,7 +72,7 @@ const SystemAdminScreen = ({ navigation }) => {
         updatedAt: new Date().toISOString(),
       });
       Alert.alert(
-        'Triển khai thành công ✅',
+        'Triển khai thành công',
         'Cấu hình mạng neuron đã được lưu. Hệ thống sẽ áp dụng trong lần truy vấn tiếp theo.'
       );
     } catch (err) {
@@ -211,7 +212,7 @@ const SystemAdminScreen = ({ navigation }) => {
               ) : (
                 <>
                   <Text style={styles.metricValue}>{activeStaff}</Text>
-                  <Text style={styles.metricSub}>👥 Bác sĩ, điều dưỡng, KTV</Text>
+                  <Text style={styles.metricSub}>Bác sĩ, điều dưỡng, KTV</Text>
                 </>
               )}
             </View>
@@ -223,7 +224,7 @@ const SystemAdminScreen = ({ navigation }) => {
               ) : (
                 <>
                   <Text style={styles.metricValue}>{metrics?.visitedToday ?? 0}</Text>
-                  <Text style={styles.metricSub}>🏥 Tháng này: {metrics?.visitedThisMonth ?? 0}</Text>
+                  <Text style={styles.metricSub}>Tháng này: {metrics?.visitedThisMonth ?? 0}</Text>
                 </>
               )}
             </View>
@@ -232,7 +233,10 @@ const SystemAdminScreen = ({ navigation }) => {
           {/* Card 5 — Ticket mở + ảnh hưởng AI */}
           {openTickets > 0 && (
             <View style={[styles.metricCard, { marginHorizontal: 4, marginBottom: 8, backgroundColor: '#FFF7ED', borderColor: '#F59E0B', borderWidth: 1, borderRadius: 12 }]}>
-              <Text style={[styles.metricLabel, { color: '#92400E' }]}>⚠️ TICKET HỖ TRỢ ĐANG MỞ</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <AlertTriangle size={14} color="#D97706" />
+                <Text style={[styles.metricLabel, { color: '#92400E', marginBottom: 0 }]}>TICKET HỖ TRỢ ĐANG MỞ</Text>
+              </View>
               <Text style={[styles.metricValue, { color: '#D97706' }]}>{openTickets}</Text>
               <Text style={[styles.metricSub, { color: '#92400E' }]}>Cần xử lý sớm</Text>
             </View>
@@ -255,7 +259,7 @@ const SystemAdminScreen = ({ navigation }) => {
         <View style={styles.agentCard}>
           <View style={styles.agentHeader}>
             <View style={styles.agentTitleRow}>
-              <Text style={styles.agentEmoji}>📄</Text>
+              <FileText size={20} color="#0891B2" style={{ marginRight: 8 }} />
               <Text style={styles.agentName}>OCR Transformer</Text>
             </View>
             <View style={styles.activeTag}>
@@ -295,7 +299,7 @@ const SystemAdminScreen = ({ navigation }) => {
         <View style={styles.agentCard}>
           <View style={styles.agentHeader}>
             <View style={styles.agentTitleRow}>
-              <Text style={styles.agentEmoji}>💬</Text>
+              <MessageSquare size={20} color="#0891B2" style={{ marginRight: 8 }} />
               <Text style={styles.agentName}>Thông dịch viên Thần kinh</Text>
             </View>
             <View style={styles.activeTag}>
@@ -384,8 +388,8 @@ const SystemAdminScreen = ({ navigation }) => {
             ) : (
               ragDocs.map((doc, idx) => (
                 <View key={idx} style={styles.docRow}>
-                  <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#166534' : '#991B1B' }]}>
-                    <Text style={styles.docIconText}>📁</Text>
+                  <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#166534' : '#991B1B', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Folder size={16} color="#FFFFFF" />
                   </View>
                   <View style={styles.docInfo}>
                     <Text style={styles.docName}>{doc.name}</Text>
@@ -416,7 +420,7 @@ const SystemAdminScreen = ({ navigation }) => {
         <View style={styles.promptCard}>
           <View style={styles.promptHeader}>
             <Text style={styles.promptTitle}>Lời nhắc Hệ thống (System Prompt)</Text>
-            <Text style={styles.promptIcon}>⚡</Text>
+            <Zap size={18} color="#EAB308" />
           </View>
           <TextInput
             style={styles.promptInput}

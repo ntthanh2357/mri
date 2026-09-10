@@ -14,7 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
-import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react';
+import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users, Filter, Edit2, Clock, PlusCircle, ArrowLeftRight } from 'lucide-react';
 
 const SHIFT_LABELS = {
   'sáng': 'Ca Sáng',
@@ -489,7 +489,10 @@ export default function StaffSchedulingScreen({ navigation }) {
 
               {/* Advanced Role Filter for Managing MRI Modalities */}
               <View style={styles.filterRow}>
-                <Text style={styles.filterLabel}>🔍 Lọc nhân sự buồng máy:</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Filter size={14} color="#64748B" />
+                  <Text style={styles.filterLabel}>Lọc nhân sự buồng máy:</Text>
+                </View>
                 <View style={styles.filterSelectWrapper}>
                   <select
                     value={roleFilter}
@@ -604,9 +607,12 @@ export default function StaffSchedulingScreen({ navigation }) {
                                     disabled={!isHospitalAdmin}
                                     style={isHospitalAdmin ? styles.emptyCellAdmin : styles.emptyCell}
                                   >
-                                    <Text style={isHospitalAdmin ? styles.emptyCellAdminText : styles.emptyCellText}>
-                                      {isHospitalAdmin ? '➕ Xếp ca' : 'Nghỉ'}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                      {isHospitalAdmin && <Plus size={12} color="#0891B2" />}
+                                      <Text style={isHospitalAdmin ? styles.emptyCellAdminText : styles.emptyCellText}>
+                                        {isHospitalAdmin ? 'Xếp ca' : 'Nghỉ'}
+                                      </Text>
+                                    </View>
                                   </TouchableOpacity>
                                 )}
                               </View>
@@ -624,12 +630,14 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'my-schedule' && (
             <View style={styles.card}>
               <View style={styles.weekNavRow}>
-                <TouchableOpacity style={styles.navBtn} onPress={handlePrevWeek}>
-                  <Text style={styles.navBtnText}>◀ Tuần trước</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handlePrevWeek}>
+                  <ChevronLeft size={16} color="#475569" />
+                  <Text style={styles.navBtnText}>Tuần trước</Text>
                 </TouchableOpacity>
                 <Text style={styles.weekRangeTitle}>{formatWeekRange()}</Text>
-                <TouchableOpacity style={styles.navBtn} onPress={handleNextWeek}>
-                  <Text style={styles.navBtnText}>Tuần sau ▶</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleNextWeek}>
+                  <Text style={styles.navBtnText}>Tuần sau</Text>
+                  <ChevronRight size={16} color="#475569" />
                 </TouchableOpacity>
               </View>
 
@@ -812,9 +820,18 @@ export default function StaffSchedulingScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>
-                {!isHospitalAdmin ? '📝 Đăng ký ca làm việc' : (selectedSchedule ? '✏️ Cập nhật ca làm việc' : '➕ Phân ca làm việc')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                {!isHospitalAdmin ? (
+                  <Clock size={18} color="#0891B2" />
+                ) : selectedSchedule ? (
+                  <Edit2 size={18} color="#0891B2" />
+                ) : (
+                  <PlusCircle size={18} color="#0891B2" />
+                )}
+                <Text style={styles.modalTitle}>
+                  {!isHospitalAdmin ? 'Đăng ký ca làm việc' : (selectedSchedule ? 'Cập nhật ca làm việc' : 'Phân ca làm việc')}
+                </Text>
+              </View>
               {selectedStaff && (
                 <Text style={styles.modalSub}>
                   Nhân sự: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{selectedStaff.profile?.name}</Text>
@@ -840,10 +857,10 @@ export default function StaffSchedulingScreen({ navigation }) {
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="sáng">Ca Sáng (🌅)</option>
-                    <option value="chiều">Ca Chiều (☀️)</option>
-                    <option value="tối">Ca Tối (🌙)</option>
-                    <option value="cả ngày">Cả Ngày (🕒)</option>
+                    <option value="sáng">Ca Sáng (06:00 - 14:00)</option>
+                    <option value="chiều">Ca Chiều (14:00 - 22:00)</option>
+                    <option value="tối">Ca Tối (22:00 - 06:00)</option>
+                    <option value="cả ngày">Trực Cả Ngày (24h)</option>
                   </select>
                 </View>
               </View>
@@ -955,7 +972,10 @@ export default function StaffSchedulingScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>🔄 Tạo yêu cầu đổi ca trực</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ArrowLeftRight size={18} color="#0891B2" />
+                <Text style={styles.modalTitle}>Tạo yêu cầu đổi ca trực</Text>
+              </View>
               <Text style={styles.modalSub}>
                 Đang chọn ca: {SHIFT_LABELS[swapSchedule.shift]} ngày {new Date(swapSchedule.date).toLocaleDateString('vi-VN')}
               </Text>

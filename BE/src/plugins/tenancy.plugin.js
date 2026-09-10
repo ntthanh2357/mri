@@ -4,11 +4,8 @@ export const tenancyPlugin = (schema) => {
   const applyTenancy = function(next) {
     const store = tenantStorage.getStore();
     if (store && store.hospitalId) {
-      const query = this.getQuery();
-      // Chỉ tự động chèn hospitalId nếu câu truy vấn chưa chỉ định rõ hospitalId
-      if (query.hospitalId === undefined) {
-        this.where({ hospitalId: store.hospitalId });
-      }
+      // Ép buộc hospitalId theo tenant context hiện tại để chống IDOR và Query Tampering
+      this.where({ hospitalId: store.hospitalId });
     }
     next();
   };
@@ -28,10 +25,10 @@ export const tenancyPlugin = (schema) => {
   schema.pre("deleteOne", applyTenancy);
   schema.pre("deleteMany", applyTenancy);
 
-  // Hook lưu bản ghi mới (Tự động gán hospitalId trước khi validate)
+  // Hook lưu bản ghi mới (Luôn ép buộc hospitalId từ context nếu đang trong phiên đa viện)
   schema.pre("validate", function(next) {
     const store = tenantStorage.getStore();
-    if (store && store.hospitalId && !this.hospitalId) {
+    if (store && store.hospitalId) {
       this.hospitalId = store.hospitalId;
     }
     next();
