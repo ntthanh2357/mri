@@ -65,10 +65,25 @@ web_modules/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
+# ==============================================================================
+# 🔐 CRITICAL SECURITY: Environment variables & Cloud Service Credentials
+# ==============================================================================
 .env
 .env.*
-!.env.example
+*.env
+**/.env
+**/.env.*
+!*.env.example
+!**/.env.example
+
+# Service account credentials, private keys & tokens
+credentials.json
+**/credentials.json
+*service-account*.json
+**/*service-account*.json
+*.pem
+*.key
+*.cert
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -150,11 +165,21 @@ tmp_clone/
 tmp_duck/
 TheDuckHospital-main/
 
-TheDuckHospital-main/
-
 # Agent & temporary files
 .agent/
 antigravity-awesome-skills-main*
 temp.txt
-BE/uploads/
 
+# Uploads & Large data archives
+uploads/
+**/uploads/
+*.zip
+*.tar
+*.gz
+*.pt
+*.h5
+*.pkl
+*.db
+*.sqlite
+*.sqlite3
+BE/test_upload.js
