@@ -16,24 +16,40 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import Config from '../constants/config';
+import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-// Lucide icons render raw <svg>/<path> — only safe inside the isDesktop-gated
-// sidebar below (web-only render path). Never use them outside that gate.
-import {
-  Stethoscope,
-  FileText,
-  ClipboardList,
-  Activity,
-  PenTool,
-  Pill,
-  History,
+import { 
+  Stethoscope, 
+  FileText, 
+  ClipboardList, 
+  Activity, 
+  PenTool, 
+  Pill, 
+  History, 
   Brain,
+  RefreshCw,
+  Search,
+  Plus,
+  CheckCircle2,
+  X,
+  Download,
+  Zap,
+  User,
+  Building2,
+  Calendar,
+  FolderArchive,
+  Inbox,
+  ArrowLeft,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { get, put, post } from '../services/api.service';
+import safeStorage from '../utils/safeStorage.js';
+import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
+import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
 
-const EMRDashboardScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('records');
+const EMRDashboardScreen = ({ navigation, route }) => {
+  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -42,18 +58,84 @@ const EMRDashboardScreen = ({ navigation }) => {
   // Nurse workflow: selected patient for detail panel
   const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
 
+  // EMR Signing & Addendum states (Thông tư 46/2018/TT-BYT)
+  const [addendumModal, setAddendumModal] = useState(false);
+  const [addendumRecord, setAddendumRecord] = useState(null);
+  const [addendumTitle, setAddendumTitle] = useState('');
+  const [addendumReason, setAddendumReason] = useState('');
+  const [addendumContent, setAddendumContent] = useState('');
+  const [submittingAddendum, setSubmittingAddendum] = useState(false);
+
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route?.params?.tab]);
+
+  const handleSignRecord = async (record) => {
+    if (!confirm(`Xác nhận ký số điện tử cho hồ sơ bệnh án của bệnh nhân ${record.patientName}? Hồ sơ sau khi ký sẽ được xác thực toàn vẹn chống sửa đổi theo quy định Bộ Y Tế.`)) return;
+    try {
+      const res = await apiRequest(`/emr/records/${record._id}/sign`, {
+        method: 'PUT',
+      });
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã ký số hồ sơ bệnh án điện tử thành công!');
+        fetchRecords();
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể ký số bệnh án.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Ký số thất bại.');
+    }
+  };
+
+  const handleOpenAddendum = (record) => {
+    setAddendumRecord(record);
+    setAddendumTitle('');
+    setAddendumReason('');
+    setAddendumContent('');
+    setAddendumModal(true);
+  };
+
+  const handleCreateAddendum = async () => {
+    if (!addendumTitle.trim() || !addendumContent.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
+      return;
+    }
+    setSubmittingAddendum(true);
+    try {
+      const res = await apiRequest(`/emr/records/${addendumRecord._id}/addendum`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: addendumTitle.trim(),
+          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 46/2018/TT-BYT',
+          content: addendumContent.trim(),
+        }),
+      });
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
+        setAddendumModal(false);
+        fetchRecords();
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể tạo phụ lục.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Tạo phụ lục thất bại.');
+    } finally {
+      setSubmittingAddendum(false);
+    }
+  };
+
   useEffect(() => {
     const loadUser = async () => {
       try {
         let u = null;
-        // Try reading from local cache first (localStorage on web, AsyncStorage on native)
-        const storedUser = Platform.OS === 'web'
-          ? localStorage.getItem('user')
-          : await AsyncStorage.getItem('user');
+        // Try reading from safeStorage first as a quick cache
+        const storedUser = safeStorage.getItem('user');
         if (storedUser) {
-          u = JSON.parse(storedUser);
+          u = typeof storedUser === 'string' ? JSON.parse(storedUser) : storedUser;
           setLocalUser(u);
-          if (u.role === 'nurse') {
+          if (u.role === 'nurse' && !route?.params?.tab) {
             setActiveTab('records');
           }
         }
@@ -63,12 +145,8 @@ const EMRDashboardScreen = ({ navigation }) => {
         if (res && res.user) {
           u = res.user;
           setLocalUser(u);
-          if (Platform.OS === 'web') {
-            localStorage.setItem('user', JSON.stringify(u));
-          } else {
-            await AsyncStorage.setItem('user', JSON.stringify(u));
-          }
-          if (u.role === 'nurse') {
+          safeStorage.setItem('user', JSON.stringify(u));
+          if (u.role === 'nurse' && !route?.params?.tab) {
             setActiveTab('records');
           }
         }
@@ -338,6 +416,18 @@ const EMRDashboardScreen = ({ navigation }) => {
                     onPress={() => setActiveTab('imaging')}
                   />
                 )}
+                <SidebarItem
+                  icon={Building2}
+                  label="Sơ đồ Giường bệnh"
+                  active={activeTab === 'beds'}
+                  onPress={() => setActiveTab('beds')}
+                />
+                <SidebarItem
+                  icon={ArrowRightLeft}
+                  label="Chuyển viện Liên viện"
+                  active={activeTab === 'transfers'}
+                  onPress={() => setActiveTab('transfers')}
+                />
               </View>
               {selectedRecord && localUser?.role !== 'nurse' && (
                 <View style={styles.selectedRecordBox}>
@@ -419,12 +509,22 @@ const EMRDashboardScreen = ({ navigation }) => {
                     onPress={() => setActiveTab('imaging')}
                   />
                 )}
+                <MobileTab
+                  label="Giường bệnh"
+                  active={activeTab === 'beds'}
+                  onPress={() => setActiveTab('beds')}
+                />
+                <MobileTab
+                  label="Chuyển viện"
+                  active={activeTab === 'transfers'}
+                  onPress={() => setActiveTab('transfers')}
+                />
               </View>
             )}
 
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#15803D" />
+                <ActivityIndicator size="large" color="#0891B2" />
                 <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
               </View>
             ) : (
@@ -451,6 +551,8 @@ const EMRDashboardScreen = ({ navigation }) => {
                       }
                     }}
                     onRefresh={fetchRecords}
+                    onSign={handleSignRecord}
+                    onAddendum={handleOpenAddendum}
                   />
                 )}
 
@@ -513,6 +615,14 @@ const EMRDashboardScreen = ({ navigation }) => {
                     navigation={navigation}
                   />
                 )}
+
+                {activeTab === 'beds' && (
+                  <HospitalBedManagementView currentUser={localUser} />
+                )}
+
+                {activeTab === 'transfers' && (
+                  <InterHospitalTransferView currentUser={localUser} />
+                )}
               </ScrollView>
             )}
           </View>
@@ -529,6 +639,70 @@ const EMRDashboardScreen = ({ navigation }) => {
           onCreatePrescription={handleCreatePrescription}
           availableDrugs={availableDrugs}
         />
+
+        {/* Modal Lập Phụ Lục Bệnh Án theo TT 46/2018/TT-BYT */}
+        <Modal visible={addendumModal} transparent animationType="slide" onRequestClose={() => setAddendumModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { maxWidth: 500, backgroundColor: '#fff', borderRadius: 16, padding: 20 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>Lập Phụ Lục Bệnh Án (TT 46/2018)</Text>
+                <TouchableOpacity onPress={() => setAddendumModal(false)}>
+                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#0891B2', backgroundColor: '#ECFEFF', padding: 8, borderRadius: 8, marginBottom: 12 }}>
+                ℹ️ Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
+              </Text>
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>Tiêu đề phụ lục *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="VD: Bổ sung diễn tiến lâm sàng sau phẫu thuật..."
+                value={addendumTitle}
+                onChangeText={setAddendumTitle}
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4, marginTop: 8 }}>Lý do lập phụ lục</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="VD: Cập nhật kết quả giải phẫu bệnh mới nhận từ phòng xét nghiệm..."
+                value={addendumReason}
+                onChangeText={setAddendumReason}
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4, marginTop: 8 }}>Nội dung bổ sung *</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                placeholder="Nhập chi tiết diễn biến, y lệnh bổ sung hoặc kết quả cận lâm sàng..."
+                value={addendumContent}
+                onChangeText={setAddendumContent}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', backgroundColor: '#F1F5F9' }}
+                  onPress={() => setAddendumModal(false)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569' }}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#0891B2', opacity: submittingAddendum ? 0.6 : 1 }}
+                  onPress={handleCreateAddendum}
+                  disabled={submittingAddendum}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#fff' }}>
+                    {submittingAddendum ? 'Đang lưu phụ lục...' : 'Lưu Phụ Lục Bệnh Án'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ResponsiveLayout>
   );
@@ -541,7 +715,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onPress }) => (
     onPress={onPress}
   >
     <View style={styles.sidebarIconContainer}>
-      <IconComponent size={16} color={active ? '#15803D' : '#64748B'} />
+      <IconComponent size={16} color={active ? '#0891B2' : '#64748B'} />
     </View>
     <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
       {label}
@@ -633,21 +807,21 @@ const NurseQueueTab = ({ navigation }) => {
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 20 }}>🩺</Text>
+          <Stethoscope size={22} color="#0891B2" />
           <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
-          <Text style={{ fontSize: 14 }}>🔄</Text>
+          <RefreshCw size={14} color="#64748B" />
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#15803D" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 40 }} />
       ) : (
         <View style={{ gap: 12 }}>
           {visits.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>✨</Text>
+              <Stethoscope size={36} color="#94A3B8" style={{ marginBottom: 8 }} />
               <Text style={styles.emptyText}>Không có ca khám nào đang chờ đo sinh hiệu.</Text>
             </View>
           ) : (
@@ -858,7 +1032,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 
       setInvoiceCreated(true);
       Alert.alert(
-        '✅ Xác nhận thành công',
+        'Xác nhận thành công',
         `Phiếu thu viện phí của ${patientName} đã được gửi sang hàng đợi Thu Ngân.\nTổng tiền: ${totalFee.toLocaleString('vi-VN')} VNĐ`,
         [{ text: 'OK', onPress: () => onBack() }]
       );
@@ -870,10 +1044,10 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
   };
 
   const formTabs = [
-    { key: 'info',  label: '👤 Thông tin' },
-    { key: 'exam',  label: '📋 Khám bệnh' },
-    { key: 'order', label: '📝 Chỉ định' },
-    { key: 'fee',   label: '💰 Viện phí' },
+    { key: 'info',  label: 'Thông tin' },
+    { key: 'exam',  label: 'Khám bệnh' },
+    { key: 'order', label: 'Chỉ định' },
+    { key: 'fee',   label: 'Viện phí' },
   ];
 
   return (
@@ -883,16 +1057,16 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
         onPress={onBack}
         style={{ flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: 4 }}
       >
-        <Text style={{ color: '#15803D', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
+        <Text style={{ color: '#0891B2', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
       </TouchableOpacity>
 
       {/* Patient name header */}
-      <View style={{ backgroundColor: '#15803D', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
-        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>🏥 {patientName}</Text>
+      <View style={{ backgroundColor: '#0891B2', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>{patientName}</Text>
         <Text style={{ color: '#CCFBF1', fontSize: 13, marginTop: 2 }}>
           {gender}{age ? ` • ${age} tuổi` : ''}{department ? ` • ${department}` : ''}
         </Text>
-        {doctor ? <Text style={{ color: '#CCFBF1', fontSize: 12, marginTop: 1 }}>👨‍⚕️ {doctor}</Text> : null}
+        {doctor ? <Text style={{ color: '#CCFBF1', fontSize: 12, marginTop: 1 }}>BS: {doctor}</Text> : null}
       </View>
 
       {/* Form tab bar */}
@@ -905,9 +1079,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               style={{
                 paddingHorizontal: 14, paddingVertical: 8,
                 borderRadius: 20,
-                backgroundColor: activeForm === t.key ? '#15803D' : '#fff',
+                backgroundColor: activeForm === t.key ? '#0891B2' : '#fff',
                 borderWidth: 1,
-                borderColor: activeForm === t.key ? '#15803D' : '#CBD5E1',
+                borderColor: activeForm === t.key ? '#0891B2' : '#CBD5E1',
               }}
             >
               <Text style={{ color: activeForm === t.key ? '#fff' : '#475569', fontWeight: '600', fontSize: 13 }}>
@@ -938,13 +1112,13 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 <Text style={{ flex: 1, color: '#0F172A', fontSize: 13, fontWeight: '500' }}>{value}</Text>
               </View>
             ))}
-            <View style={{ backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#6EE7B7' }}>
-              <Text style={{ color: '#065F46', fontWeight: '600', fontSize: 13 }}>💡 Hướng dẫn</Text>
-              <Text style={{ color: '#047857', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
+            <View style={{ backgroundColor: '#ECFEFF', borderRadius: 10, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#A5F3FC' }}>
+              <Text style={{ color: '#0E7490', fontWeight: '600', fontSize: 13 }}>Hướng dẫn quy trình</Text>
+              <Text style={{ color: '#155E75', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
                 Điền đầy đủ 3 phiếu bên dưới theo trình tự:{'\n'}
-                1. 📋 Mẫu khám bệnh – nhập sinh hiệu{'\n'}
-                2. 📝 Phiếu chỉ định – thêm dịch vụ chỉ định{'\n'}
-                3. 💰 Phiếu thu viện phí – xác nhận để gửi Thu Ngân
+                1. Mẫu khám bệnh – nhập sinh hiệu{'\n'}
+                2. Phiếu chỉ định – thêm dịch vụ chỉ định{'\n'}
+                3. Phiếu thu viện phí – xác nhận để gửi Thu Ngân
               </Text>
             </View>
           </View>
@@ -955,11 +1129,11 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
           <View style={{ gap: 14 }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 12 }}>
-                📋 PHIẾU THÔNG TIN KHÁM BỆNH
+                PHIẾU THÔNG TIN KHÁM BỆNH
               </Text>
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>Patient Information Registration Form</Text>
 
-              <Text style={{ fontWeight: '700', color: '#15803D', marginBottom: 8 }}>🫀 Sinh hiệu (Vital Signs)</Text>
+              <Text style={{ fontWeight: '700', color: '#0891B2', marginBottom: 8 }}>Sinh hiệu (Vital Signs)</Text>
               {[
                 ['Mạch (lần/phút)', examPulse, setExamPulse, 'numeric', 'Ví dụ: 80'],
                 ['Huyết áp (mmHg)', examBP, setExamBP, 'default', 'Ví dụ: 120/80'],
@@ -982,7 +1156,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 </View>
               ))}
 
-              <Text style={{ fontWeight: '700', color: '#15803D', marginBottom: 8, marginTop: 8 }}>📄 Thông tin khám</Text>
+              <Text style={{ fontWeight: '700', color: '#0891B2', marginBottom: 8, marginTop: 8 }}>Thông tin khám</Text>
               <View style={{ marginBottom: 10 }}>
                 <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Yêu cầu khám (Request)</Text>
                 <TextInput
@@ -1013,7 +1187,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
           <View style={{ gap: 14 }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
-                📝 PHIẾU CHỈ ĐỊNH DỊCH VỤ
+                PHIẾU CHỈ ĐỊNH DỊCH VỤ
               </Text>
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
 
@@ -1030,7 +1204,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                     }}
                   >
                     <Text style={{ color: orderPriority === p ? (p === 'Cấp Cứu' ? '#DC2626' : '#065F46') : '#64748B', fontWeight: '600', fontSize: 13 }}>
-                      {p === 'Cấp Cứu' ? '🚨 ' : '✅ '}{p}
+                      {p}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1051,9 +1225,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 
               {orderServices.map((svc, idx) => (
                 <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#BBF7D0' }}>
-                  <Text style={{ flex: 1, color: '#065F46', fontSize: 13 }}>📌 {svc}</Text>
+                  <Text style={{ flex: 1, color: '#065F46', fontSize: 13 }}>{svc}</Text>
                   <TouchableOpacity onPress={() => removeOrderService(idx)}>
-                    <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16 }}>✕</Text>
+                    <X size={16} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -1072,7 +1246,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 />
                 <TouchableOpacity
                   onPress={addOrderService}
-                  style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}
+                  style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
                 </TouchableOpacity>
@@ -1087,7 +1261,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                     onPress={() => { setOrderServices(prev => prev.includes(s) ? prev : [...prev, s]); }}
                     style={{ backgroundColor: '#EFF6FF', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#BFDBFE' }}
                   >
-                    <Text style={{ color: '#15803D', fontSize: 12 }}>{s}</Text>
+                    <Text style={{ color: '#0891B2', fontSize: 12 }}>{s}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1100,7 +1274,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
           <View style={{ gap: 14 }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
-                💰 PHIẾU THU VIỆN PHÍ
+                PHIẾU THU VIỆN PHÍ
               </Text>
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
 
@@ -1127,7 +1301,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                       {parseFloat(item.amount).toLocaleString('vi-VN')}
                     </Text>
                     <TouchableOpacity onPress={() => removeFeeItem(idx)} style={{ width: 30, alignItems: 'center' }}>
-                      <Text style={{ color: '#EF4444', fontWeight: '700' }}>✕</Text>
+                      <X size={16} color="#EF4444" />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -1152,7 +1326,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 />
                 <TouchableOpacity
                   onPress={addFeeItem}
-                  style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 12, justifyContent: 'center' }}
+                  style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 12, justifyContent: 'center' }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>+</Text>
                 </TouchableOpacity>
@@ -1171,7 +1345,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </View>
 
               {/* Total */}
-              <View style={{ backgroundColor: '#15803D', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <View style={{ backgroundColor: '#0891B2', borderRadius: 10, padding: 14, marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>TỔNG CỘNG:</Text>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
@@ -1181,8 +1355,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </View>
 
               {invoiceCreated ? (
-                <View style={{ backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#6EE7B7' }}>
-                  <Text style={{ color: '#065F46', fontWeight: '700', textAlign: 'center' }}>✅ Đã gửi sang hàng đợi Thu Ngân</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#6EE7B7' }}>
+                  <CheckCircle2 size={18} color="#059669" />
+                  <Text style={{ color: '#065F46', fontWeight: '700', textAlign: 'center' }}>Đã gửi sang hàng đợi Thu Ngân</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -1192,14 +1367,20 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                     backgroundColor: submitting ? '#94A3B8' : '#059669',
                     borderRadius: 10, padding: 14,
                     alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8,
                   }}
                 >
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                      ✅ Xác nhận & Gửi sang Thu Ngân
-                    </Text>
+                    <>
+                      <CheckCircle2 size={18} color="#FFFFFF" />
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+                        Xác nhận & Gửi sang Thu Ngân
+                      </Text>
+                    </>
                   )}
                 </TouchableOpacity>
               )}
@@ -1217,15 +1398,18 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 };
 
 // Tab Components
-const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh }) => {
+const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum }) => {
 
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <Text style={styles.tabTitle}>📋 Hồ sơ bệnh án</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ClipboardList size={22} color="#0891B2" />
+          <Text style={styles.tabTitle}>Hồ sơ bệnh án</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <Text style={styles.refreshButtonText}>🔄</Text>
+            <RefreshCw size={14} color="#64748B" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={onNewRecord}>
             <Text style={styles.actionButtonText}>+ Thêm mới</Text>
@@ -1234,7 +1418,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
       </View>
 
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Tìm kiếm theo tên bệnh nhân, mã hồ sơ..."
@@ -1247,7 +1431,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
       <View style={styles.listContainer}>
         {records.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <Inbox size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Không tìm thấy hồ sơ nào</Text>
           </View>
         ) : (
@@ -1256,6 +1440,8 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
               key={record._id || record.id}
               record={record}
               onPress={() => onViewRecord(record)}
+              onSign={onSign}
+              onAddendum={onAddendum}
             />
           ))
         )}
@@ -1264,31 +1450,64 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
   );
 };
 
-const RecordCard = ({ record, onPress }) => (
-  <TouchableOpacity style={styles.card} onPress={onPress}>
-    <View style={styles.cardHeader}>
-      <View>
-        <Text style={styles.patientName}>{record.patientName}</Text>
-        <Text style={styles.patientInfo}>
-          {record.gender} • {record.age} tuổi • {record.patientId}
-        </Text>
+const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
+  <View style={styles.card}>
+    <TouchableOpacity onPress={onPress}>
+      <View style={styles.cardHeader}>
+        <View>
+          <Text style={styles.patientName}>{record.patientName}</Text>
+          <Text style={styles.patientInfo}>
+            {record.gender} • {record.age} tuổi • {record.patientId}
+          </Text>
+        </View>
+        <View style={styles.badgeContainer}>
+          <StatusBadge status={record.status} />
+          <SignBadge signStatus={record.signStatus} />
+        </View>
       </View>
-      <View style={styles.badgeContainer}>
-        <StatusBadge status={record.status} />
-        <SignBadge signStatus={record.signStatus} />
+      <View style={styles.cardFooter}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <User size={12} color="#64748B" />
+          <Text style={styles.footerText}>{record.doctorInCharge}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Building2 size={12} color="#64748B" />
+          <Text style={styles.footerText}>{record.department} • {record.admissionType}</Text>
+        </View>
       </View>
+    </TouchableOpacity>
+
+    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 46/2018 */}
+    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+      {record.signStatus !== 'đã ký' ? (
+        <TouchableOpacity
+          style={{ backgroundColor: '#0284C7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          onPress={() => onSign && onSign(record)}
+        >
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>✍️ Ký Số EMR</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6 }}>
+          <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>✓ Đã Ký Số Toàn Vẹn</Text>
+        </View>
+      )}
+      <TouchableOpacity
+        style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+        onPress={() => onAddendum && onAddendum(record)}
+      >
+        <Text style={{ color: '#475569', fontSize: 11, fontWeight: 'bold' }}>+ Lập Phụ Lục (TT 46)</Text>
+      </TouchableOpacity>
     </View>
-    <View style={styles.cardFooter}>
-      <Text style={styles.footerText}>👨‍⚕️ {record.doctorInCharge}</Text>
-      <Text style={styles.footerText}>🏥 {record.department} • {record.admissionType}</Text>
-    </View>
-  </TouchableOpacity>
+  </View>
 );
 
 const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <Text style={styles.tabTitle}>📝 Phiếu chăm sóc</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <FileText size={18} color="#0891B2" />
+        <Text style={styles.tabTitle}>Phiếu chăm sóc</Text>
+      </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
         <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
       </TouchableOpacity>
@@ -1296,23 +1515,26 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>👈</Text>
+        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
         {careSheets.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <Inbox size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có phiếu chăm sóc nào</Text>
           </View>
         ) : (
           careSheets.map(cs => (
             <View key={cs._id || cs.id} style={styles.itemCard}>
               <Text style={styles.itemTitle}>Phiếu chăm sóc Cấp {cs.careLevel}</Text>
-              <Text style={styles.itemSubtitle}>
-                📅 {new Date(cs.createdAt).toLocaleDateString('vi-VN')} • Y tá: {cs.nurse}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
+                <Calendar size={12} color="#64748B" />
+                <Text style={styles.itemSubtitle}>
+                  {new Date(cs.createdAt).toLocaleDateString('vi-VN')} • Y tá: {cs.nurse}
+                </Text>
+              </View>
               <View style={styles.vitalsRow}>
                 <Text style={styles.vitalText}>Mạch: {cs.pulse} bpm</Text>
                 <Text style={styles.vitalText}>HA: {cs.bloodPressure}</Text>
@@ -1330,7 +1552,10 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
 const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <Text style={styles.tabTitle}>🧠 Hội chẩn</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Brain size={18} color="#0891B2" />
+        <Text style={styles.tabTitle}>Hội chẩn chuyên khoa</Text>
+      </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewConsult}>
         <Text style={styles.actionButtonText}>+ Tạo hội chẩn</Text>
       </TouchableOpacity>
@@ -1338,23 +1563,26 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>👈</Text>
+        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
         {consultations.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <Inbox size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có biên bản hội chẩn nào</Text>
           </View>
         ) : (
           consultations.map(c => (
             <View key={c._id || c.id} style={styles.itemCard}>
               <Text style={styles.itemTitle}>{`Hội chẩn ${new Date(c.meetingDate).toLocaleDateString('vi-VN')}`}</Text>
-              <Text style={styles.itemSubtitle}>
-                📅 {new Date(c.meetingDate).toLocaleDateString('vi-VN')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
+                <Calendar size={12} color="#64748B" />
+                <Text style={styles.itemSubtitle}>
+                  {new Date(c.meetingDate).toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
               <Text style={styles.itemDescription}>Tham gia: {c.participants?.join(', ')}</Text>
               <Text style={styles.itemDescription}>Kết luận: {c.treatmentConclusion}</Text>
             </View>
@@ -1368,7 +1596,10 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
 const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <Text style={styles.tabTitle}>✍️ Giấy cam đoan</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <PenTool size={18} color="#0891B2" />
+        <Text style={styles.tabTitle}>Giấy cam đoan</Text>
+      </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewConsent}>
         <Text style={styles.actionButtonText}>+ Tạo giấy cam đoan</Text>
       </TouchableOpacity>
@@ -1376,23 +1607,26 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>👈</Text>
+        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
         {consents.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <Inbox size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có giấy cam đoan nào</Text>
           </View>
         ) : (
           consents.map(c => (
             <View key={c._id || c.id} style={styles.itemCard}>
               <Text style={styles.itemTitle}>{c.procedureName}</Text>
-              <Text style={styles.itemSubtitle}>
-                📅 {new Date(c.createdAt).toLocaleDateString('vi-VN')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
+                <Calendar size={12} color="#64748B" />
+                <Text style={styles.itemSubtitle}>
+                  {new Date(c.createdAt).toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
               <View style={styles.signatureRow}>
                 <StatusBadge status={c.doctorSigned ? 'Đã ký' : 'Chưa ký'} color="blue" />
                 <StatusBadge status={c.patientSigned ? 'Đã ký' : 'Chưa ký'} color="green" />
@@ -1408,7 +1642,10 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
 const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewPrescription }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <Text style={styles.tabTitle}>💊 Kê đơn thuốc</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Pill size={18} color="#0891B2" />
+        <Text style={styles.tabTitle}>Kê đơn thuốc</Text>
+      </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewPrescription}>
         <Text style={styles.actionButtonText}>+ Thêm đơn thuốc</Text>
       </TouchableOpacity>
@@ -1416,14 +1653,14 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>👈</Text>
+        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
         {prescriptions.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <Inbox size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có đơn thuốc nào</Text>
           </View>
         ) : (
@@ -1449,26 +1686,29 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
 const VersionTab = ({ versions, selectedRecord }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <Text style={styles.tabTitle}>⏳ Lịch sử sửa đổi bệnh án (Audit Trail)</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <History size={18} color="#0891B2" />
+        <Text style={styles.tabTitle}>Lịch sử sửa đổi bệnh án (Audit Trail)</Text>
+      </View>
     </View>
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>👈</Text>
+        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
         {versions.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
+            <History size={36} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có bản ghi nhận chỉnh sửa nào (Phiên bản đầu tiên v1)</Text>
           </View>
         ) : (
           versions.map(v => (
             <View key={v._id || v.id} style={styles.itemCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={[styles.itemTitle, { color: '#15803D' }]}>Phiên bản EMR v{v.version}</Text>
+                <Text style={[styles.itemTitle, { color: '#0891B2' }]}>Phiên bản EMR v{v.version}</Text>
                 <Text style={{ fontSize: 11, color: '#64748B', fontWeight: 'bold' }}>
                   {new Date(v.modifiedAt).toLocaleString('vi-VN')}
                 </Text>
@@ -1505,7 +1745,7 @@ const StatusBadge = ({ status }) => {
   let color, bg;
   if (status === 'Đang điều trị' || status === 'Đang điều trị') {
     bg = '#EFF6FF';
-    color = '#15803D';
+    color = '#059669';
   } else if (status === 'Xuất viện' || status === 'Đã ký') {
     bg = '#DCFCE7';
     color = '#166534';
@@ -1527,7 +1767,7 @@ const SignBadge = ({ signStatus }) => {
     color = '#166534';
   } else if (signStatus === 'Đã duyệt') {
     bg = '#EFF6FF';
-    color = '#15803D';
+    color = '#059669';
   } else {
     bg = '#FEF3C7';
     color = '#B45309';
@@ -1543,17 +1783,20 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <Text style={styles.tabTitle}>🧠 Lịch sử Chẩn đoán Hình ảnh</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Brain size={18} color="#0891B2" />
+          <Text style={styles.tabTitle}>Lịch sử Chẩn đoán Hình ảnh</Text>
+        </View>
       </View>
 
       {!selectedRecord ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>👈</Text>
+          <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
           <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
         </View>
       ) : imagingResults.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📂</Text>
+          <FolderArchive size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
           <Text style={styles.emptyText}>Chưa có kết quả chẩn đoán hình ảnh nào được lưu trữ cho bệnh án này.</Text>
         </View>
       ) : (
@@ -1569,8 +1812,18 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
                 onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
               >
                 <View style={[styles.cardHeader, { marginBottom: 12 }]}>
-                  <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
-                    <Text style={{ color: item.imagingType === 'MRI' ? '#0284C7' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <View style={{ backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 }}>
+                      <Text style={{ color: item.imagingType === 'MRI' ? '#0284C7' : '#C026D3', fontWeight: 'bold' }}>{item.imagingType}</Text>
+                    </View>
+                    {item.dicomZipUrl && (
+                      <View style={{ backgroundColor: '#F5F3FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: '#DDD6FE', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <FolderArchive size={12} color="#7C3AED" />
+                        <Text style={{ color: '#7C3AED', fontSize: 11, fontWeight: 'bold' }}>
+                          DICOM gốc {item.dicomZipSize ? `(${(item.dicomZipSize / (1024 * 1024)).toFixed(1)} MB)` : ''}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={{ color: '#64748B', fontSize: 13 }}>{dateStr}</Text>
                 </View>
@@ -1580,6 +1833,34 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
                 <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
                 <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>Kết luận:</Text>
                 <Text style={{ color: '#334155', fontSize: 14 }} numberOfLines={2}>{item.conclusion}</Text>
+
+                {item.dicomZipUrl && (
+                  <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'flex-end' }}>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#0891B2',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        const url = item.dicomZipUrl.startsWith('http') ? item.dicomZipUrl : `${Config.API_URL}${item.dicomZipUrl}`;
+                        if (Platform.OS === 'web') {
+                          window.open(url, '_blank');
+                        } else {
+                          Alert.alert('Tải phim DICOM', `Mở liên kết tải: ${url}`);
+                        }
+                      }}
+                    >
+                      <Download size={14} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>Tải trọn bộ DICOM (.zip)</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -1662,12 +1943,13 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Tạo Hồ sơ bệnh án mới</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <X size={20} color="#64748B" />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
+        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
+          <Zap size={14} color="#4ADE80" />
+          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Mã bệnh nhân"
@@ -1794,12 +2076,13 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Tạo Phiếu chăm sóc</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <X size={20} color="#64748B" />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
+        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
+          <Zap size={14} color="#4ADE80" />
+          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Cấp chăm sóc (1-3)"
@@ -1911,12 +2194,13 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Tạo Biên bản hội chẩn</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <X size={20} color="#64748B" />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={styles.ocrFillBtn} onPress={handleOcrFill}>
-          <Text style={styles.ocrFillBtnText}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
+        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
+          <Zap size={14} color="#4ADE80" />
+          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
         </TouchableOpacity>
         <FormField
           label="Ngày hội chẩn"
@@ -1985,7 +2269,7 @@ const NewConsentForm = ({ onClose, onSubmit }) => {
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Tạo Giấy cam đoan</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <X size={20} color="#64748B" />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
@@ -2058,7 +2342,7 @@ const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Kê Đơn Thuốc</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <X size={20} color="#64748B" />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
@@ -2072,7 +2356,7 @@ const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
               {availableDrugs.map(ad => (
                  <TouchableOpacity 
                    key={ad._id} 
-                   style={{ padding: 8, backgroundColor: d.drugId === ad._id ? '#15803D' : '#F1F5F9', borderRadius: 6, marginRight: 8 }}
+                   style={{ padding: 8, backgroundColor: d.drugId === ad._id ? '#0891B2' : '#F1F5F9', borderRadius: 6, marginRight: 8 }}
                    onPress={() => updateDrug(index, 'drugId', ad._id)}
                  >
                    <Text style={{ color: d.drugId === ad._id ? '#FFF' : '#374151', fontSize: 12 }}>{ad.name}</Text>
@@ -2177,9 +2461,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   sidebarItemActive: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#ECFEFF',
     borderLeftWidth: 3,
-    borderLeftColor: '#15803D',
+    borderLeftColor: '#0891B2',
     paddingLeft: 11,
   },
   sidebarIconContainer: {
@@ -2194,7 +2478,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sidebarItemTextActive: {
-    color: '#15803D',
+    color: '#0891B2',
     fontWeight: '700',
   },
   selectedRecordBox: {
@@ -2248,7 +2532,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   mobileTabItemActive: {
-    borderBottomColor: '#15803D',
+    borderBottomColor: '#0891B2',
   },
   mobileTabText: {
     fontSize: 13,
@@ -2256,7 +2540,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   mobileTabTextActive: {
-    color: '#15803D',
+    color: '#0891B2',
     fontWeight: '700',
   },
   scrollContainer: {
@@ -2293,11 +2577,11 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   actionButton: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#15803D',
+    shadowColor: '#0891B2',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
@@ -2552,10 +2836,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: '#15803D',
+    backgroundColor: '#059669',
     borderRadius: 10,
     alignItems: 'center',
-    shadowColor: '#15803D',
+    shadowColor: '#059669',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,

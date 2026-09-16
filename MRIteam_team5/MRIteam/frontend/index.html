@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chẩn Đoán Khối U Não | Brain Tumor Diagnosis</title>
+    <meta name="description" content="Hệ thống AI hỗ trợ bác sĩ chẩn đoán khối u não qua hình ảnh chụp MRI.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=2">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-brain"></i>
+                <h1>NeuroAI <span>Tri-Modal</span></h1>
+            </div>
+            <p class="subtitle">Unified Diagnostic Pipeline (CNN Ensemble + YOLO + VLM)</p>
+        </header>
+
+        <main class="dashboard" style="display: flex; flex-direction: column; gap: 2rem;">
+            <!-- Top panel: Upload and Preview -->
+            <section class="upload-section glass-panel" style="width: 100%;">
+                <h2><i class="fa-solid fa-cloud-arrow-up"></i> Tải ảnh MRI</h2>
+                
+                <div class="upload-area" id="upload-area" style="height: 450px;">
+                    <input type="file" id="file-input" accept="image/png, image/jpeg, image/jpg" hidden>
+                    <div class="upload-content" id="upload-content">
+                        <i class="fa-regular fa-image upload-icon"></i>
+                        <p>Kéo thả ảnh hoặc <strong>nhấn để chọn file</strong></p>
+                        <span class="file-hint">Hỗ trợ định dạng: JPG, PNG, JPEG</span>
+                    </div>
+                    <div class="preview-container hidden" id="preview-container">
+                        <div class="comparison-layout" style="display: flex; width: 100%; height: 100%; justify-content: space-around; align-items: center; padding: 15px;">
+                            <div class="img-box" style="display: flex; flex-direction: column; align-items: center; width: 45%; height: 100%;">
+                                <span style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 10px; font-weight: bold;">📸 Ảnh MRI Gốc</span>
+                                <div class="image-wrapper" id="image-wrapper" style="width: 100%; height: calc(100% - 30px);">
+                                    <img id="image-preview" src="" alt="MRI Preview" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                                    <canvas id="draw-canvas" class="hidden"></canvas>
+                                </div>
+                            </div>
+                            <div class="img-box result-img-box hidden" id="result-img-box" style="display: flex; flex-direction: column; align-items: center; width: 45%; height: 100%;">
+                                <span style="font-size: 0.9rem; color: var(--accent-primary); margin-bottom: 10px; font-weight: bold;">🤖 Ảnh Kết Quả</span>
+                                <div style="width: 100%; height: calc(100% - 30px); display: flex; justify-content: center; align-items: center;">
+                                    <img id="image-result" src="" alt="AI Result" style="max-width: 100%; max-height: 100%; object-fit: contain; border: 2px solid var(--accent-primary); box-shadow: 0 0 15px var(--accent-glow); border-radius: 8px;">
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn-remove" id="btn-remove" title="Xóa ảnh"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <button id="btn-analyze" class="btn-primary" disabled style="max-width: 400px; margin: 0 auto;">
+                    <i class="fa-solid fa-microchip"></i> Phân Tích Hình Ảnh
+                </button>
+            </section>
+
+            <!-- Bottom panel: Results -->
+            <section class="result-section glass-panel" style="width: 100%;">
+                <h2><i class="fa-solid fa-chart-pie"></i> Kết Quả Chẩn Đoán</h2>
+                
+                <div class="status-state empty-state" id="empty-state">
+                    <i class="fa-solid fa-file-medical empty-icon"></i>
+                    <p>Vui lòng tải ảnh lên và nhấn phân tích để xem kết quả.</p>
+                </div>
+
+                <div class="status-state loading-state hidden" id="loading-state">
+                    <div class="loader"></div>
+                    <p>Hệ thống AI đang phân tích đa luồng...</p>
+                    <span class="processing-time">Đang thực thi Pipeline Đa Thể Thức (CNN Ensemble + YOLOv8 + Gemini)...</span>
+                </div>
+
+                <!-- NEW LAYOUT: 3 COLUMNS -->
+                <div class="result-content hidden" id="result-content" style="display: grid; grid-template-columns: 1fr 1.5fr 1.5fr; gap: 20px; align-items: stretch;">
+                    
+                    <!-- COLUMN 1: KẾT LUẬN HỆ THỐNG -->
+                    <div class="col-1" style="display: flex; flex-direction: column;">
+                        <div class="primary-result" style="border: 2px solid var(--accent-primary); background: rgba(15, 23, 42, 0.6); box-shadow: 0 0 30px rgba(59, 130, 246, 0.2); height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; margin: 0; padding: 40px 20px; border-radius: 16px;">
+                            <span class="result-label" style="color: var(--accent-primary); font-weight: bold; font-size: 1.1rem; letter-spacing: 2px; margin-bottom: 25px;">KẾT LUẬN HỆ THỐNG</span>
+                            <h3 id="predicted-class" style="font-size: 2.5rem; margin: 0 0 25px 0; text-shadow: 0 0 20px rgba(59, 130, 246, 0.4); line-height: 1.2;">---</h3>
+                            <div class="confidence-badge" id="final-confidence-badge" style="margin: 0; padding: 12px 25px; font-size: 1.15rem; border-radius: 30px;">
+                                <i class="fa-solid fa-bullseye"></i> Độ tin cậy: <span id="confidence-score">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMN 2: BẢNG BIỂU ĐỒ VỚI CẢNH BÁO -->
+                    <div class="col-2" style="display: flex; flex-direction: column; gap: 15px;">
+                        <!-- BẢNG HỘI CHẨN 3 MÔ HÌNH -->
+                        <div class="consultation-panel" style="background: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 15px; border: 1px solid rgba(255,255,255,0.1);">
+                            <h4 style="margin-bottom: 10px; color: var(--text-secondary); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;"><i class="fa-solid fa-users-viewfinder"></i> Pipeline Đa Thể Thức (Tri-Modal)</h4>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                    <span><i class="fa-solid fa-layer-group" style="color: var(--info);"></i> Stage 1: CNN Ensemble</span>
+                                    <strong id="resnet-consult-result" style="color: var(--info);">---</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                    <span><i class="fa-solid fa-crosshairs" style="color: var(--warning);"></i> Stage 2: YOLOv8</span>
+                                    <strong id="yolo-consult-result" style="color: var(--warning);">---</strong>
+                                </div>
+                                <div id="gemini-consult-box" style="padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border-left: 3px solid var(--success);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="font-weight: bold; color: var(--success);" id="gemini-consult-title"><i class="fa-solid fa-handshake"></i> Stage 3: VLM Consensus</span>
+                                    </div>
+                                    <p id="gemini-consult-message" style="font-size: 0.85rem; color: #cbd5e1; margin: 0; line-height: 1.4;"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BIỂU ĐỒ -->
+                        <div class="detailed-analysis" style="display: flex; flex-direction: column; gap: 15px; background: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 15px; border: 1px solid rgba(255,255,255,0.1);">
+                            <div>
+                                <h4 style="font-size: 0.85rem; color: var(--info); border-bottom: 1px solid rgba(14,165,233,0.3); padding-bottom: 5px; margin-bottom: 10px;"><i class="fa-solid fa-chart-bar"></i> Soft-Voting Ensemble (3 CNNs)</h4>
+                                <div class="prob-bars" id="prob-bars-container"></div>
+                            </div>
+                            <div>
+                                <h4 style="font-size: 0.85rem; color: var(--warning); border-bottom: 1px solid rgba(245,158,11,0.3); padding-bottom: 5px; margin-bottom: 10px;"><i class="fa-solid fa-chart-bar"></i> Độ tự tin Khoanh vùng (YOLO)</h4>
+                                <div class="prob-bars" id="yolo-prob-bars-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMN 3: BÁO CÁO Y TẾ VÀ DẠY HỌC LẠI -->
+                    <div class="col-3" style="display: flex; flex-direction: column; gap: 15px;">
+                        
+                        <div class="action-buttons" style="display: flex; gap: 15px; padding: 0;">
+                            <button class="btn-secondary" id="btn-print" style="flex: 1; padding: 12px; font-size: 1rem;"><i class="fa-solid fa-print"></i> In Báo Cáo</button>
+                            <button class="btn-warning" id="btn-feedback-mode" style="flex: 1; margin-left: 0; padding: 12px; font-size: 1rem;"><i class="fa-solid fa-pen-to-square"></i> Dạy Lại AI</button>
+                        </div>
+
+                        <!-- Gemini Report Approval Section -->
+                        <div class="gemini-report-panel hidden" id="gemini-report-panel" style="padding: 20px; background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); flex: 1; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 12px; font-size: 1.1rem;"><i class="fa-solid fa-file-signature"></i> Báo Cáo Y Tế (Nháp)</h4>
+                            <div class="pending-badge" style="background: #ffcc00; color: #000; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; display: inline-block; margin-bottom: 15px; align-self: flex-start;">⚠️ BẢN NHÁP - CHƯA PHÊ DUYỆT</div>
+                            <textarea id="gemini-draft-report" class="report-textarea" style="flex: 1; width: 100%; padding: 15px; border-radius: 8px; background: rgba(0,0,0,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; resize: none; min-height: 180px; font-size: 0.95rem; line-height: 1.5; font-family: var(--font-main);"></textarea>
+                            <div class="report-actions" style="display: flex; gap: 12px;">
+                                <button class="btn-primary" id="btn-approve-report" style="flex: 1; padding: 10px; font-size: 0.95rem;">Xác nhận</button>
+                                <button class="btn-secondary" id="btn-edit-report" style="flex: 1; padding: 10px; font-size: 0.95rem;">Sửa</button>
+                                <button class="btn-warning" id="btn-reject-report" style="flex: 1; padding: 10px; font-size: 0.95rem;">Từ chối</button>
+                            </div>
+                            <button class="btn-primary" id="btn-translate-report" style="margin-top: 12px; width: 100%; background-color: #10b981; padding: 12px; font-size: 1rem;">
+                                <i class="fa-solid fa-language"></i> Dịch sang đời thường
+                            </button>
+                        </div>
+                        
+                        <div class="feedback-panel hidden" id="feedback-panel">
+                            <h4><i class="fa-solid fa-chalkboard-user"></i> Dạy Lại AI (Active Learning)</h4>
+                            <p class="feedback-hint">Kéo thả trên ảnh bên trái để khoanh vùng khối u đúng.</p>
+                            
+                            <div class="feedback-controls">
+                                <select id="correct-class-select" class="feedback-select">
+                                    <option value="glioma">Khối U Glioma</option>
+                                    <option value="meningioma">Khối U Meningioma</option>
+                                    <option value="pituitary">Khối U Pituitary</option>
+                                    <option value="notumor">Bình Thường (Không Có U)</option>
+                                </select>
+                                
+                                <div class="feedback-actions">
+                                    <button class="btn-primary btn-submit-warning" id="btn-submit-feedback"><i class="fa-solid fa-paper-plane"></i> Gửi Phản Hồi</button>
+                                    <button class="btn-secondary" id="btn-cancel-feedback">Hủy</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Assistant Sidebar -->
+    <div class="assistant-sidebar hidden" id="assistant-sidebar" style="position: fixed; right: 0; top: 0; width: 350px; height: 100vh; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-left: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; z-index: 1000; box-shadow: -5px 0 15px rgba(0,0,0,0.5);">
+        <div class="sidebar-header" style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; color: #38bdf8;"><i class="fa-solid fa-robot"></i> Gemini Medical</h3>
+            <button id="close-sidebar" style="background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="chat-history" id="chat-history" style="flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+            <div class="chat-msg ai-msg" style="background: rgba(56, 189, 248, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.2); font-size: 0.9rem;">
+                Xin chào Bác sĩ. Tôi là trợ lý AI (có tích hợp RAG). Bác sĩ cần tư vấn phác đồ hay xử lý biến chứng gì ạ?
+            </div>
+        </div>
+        <div class="chat-input" style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 10px;">
+            <input type="text" id="chat-input-field" placeholder="Nhập câu hỏi..." style="flex: 1; padding: 10px; border-radius: 5px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+            <button id="btn-send-chat" style="padding: 10px 15px; background: #38bdf8; border: none; border-radius: 5px; color: #fff; cursor: pointer;"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+        <button id="btn-summarize-meeting" style="padding: 12px; background: rgba(255,255,255,0.05); border: none; border-top: 1px solid rgba(255,255,255,0.1); color: #fff; cursor: pointer; transition: 0.3s;">
+            <i class="fa-solid fa-list-check"></i> Tóm tắt hội chẩn
+        </button>
+    </div>
+    
+    <button class="btn-floating-assistant" id="btn-toggle-assistant" style="position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; background: #38bdf8; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); z-index: 999;">
+        <i class="fa-solid fa-comment-medical"></i>
+    </button>
+
+    <script src="script.js?v=2"></script>
+</body>
+</html>

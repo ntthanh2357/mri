@@ -314,12 +314,12 @@ export default function AdminUsersView() {
           className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full lg:w-48"
         >
           <option value="">Tất cả các Role</option>
-          <option value="patient">🧑‍⚕️ Bệnh nhân</option>
-          <option value="doctor">👨‍⚕️ Bác sĩ</option>
-          <option value="hospital_admin">🏥 Quản lý Bệnh viện</option>
-          <option value="nurse">👩‍⚕️ Y tá / Điều dưỡng</option>
-          <option value="technician">🔬 Kỹ thuật viên</option>
-          <option value="admin">🛡️ System Admin</option>
+          <option value="patient">Bệnh nhân</option>
+          <option value="doctor">Bác sĩ</option>
+          <option value="hospital_admin">Quản lý Bệnh viện</option>
+          <option value="nurse">Y tá / Điều dưỡng</option>
+          <option value="technician">Kỹ thuật viên</option>
+          <option value="admin">System Admin</option>
         </select>
 
         {/* Filter Status */}
@@ -663,7 +663,7 @@ export default function AdminUsersView() {
                 onClick={() => { setShowCreateModal(false); resetCreateForm(); }}
                 className="text-slate-450 hover:text-slate-700 font-bold p-1 cursor-pointer transition-colors"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

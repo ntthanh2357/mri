@@ -1,4 +1,5 @@
 import { User } from "../models/user.model.js";
+import { Visit } from "../models/visit.model.js";
 import { VitalSign } from "../models/vitalSign.model.js";
 import { LabOrder } from "../models/labOrder.model.js";
 import { Prescription } from "../models/prescription.model.js";
@@ -7,6 +8,8 @@ import { TransferForm } from "../models/transferForm.model.js";
 import { Drug } from "../models/drug.model.js";
 import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { checkPatientTenancy } from "../utils/tenancy.util.js";
+export { checkPatientTenancy };
 
 // Khung giờ nhắc uống thuốc cố định theo số lần/ngày
 const REMINDER_TIME_SLOTS = {
@@ -49,95 +52,149 @@ const generateRemindersForPrescription = async (prescription) => {
   }
 };
 
-const checkPatientTenancy = async (patientId, userHospitalId) => {
-  if (!userHospitalId) return null;
-  const patient = await User.findById(patientId);
-  if (!patient || patient.role !== "patient") return null;
-  // Cho phép mọi nhân viên y tế từ bất kỳ bệnh viện nào xem hồ sơ để phục vụ chuyển tuyến
-  return patient;
-};
+// checkPatientTenancy đã được chuẩn hóa và tách vào src/utils/tenancy.util.js
 
-// Lấy danh sách bệnh nhân kèm thống kê (số phiếu XN, lần đo sinh hiệu gần nhất)
+// Lấy danh sách bệnh nhân kèm thống kê (đã tối ưu hóa O(1) truy vấn, chống N+1 và hỗ trợ phân trang)
 export const getPatients = async (req, res) => {
   try {
-    // [BUG-06 FIX] Bắt buộc phải có hospitalId — không cho phép query toàn hệ thống
-    if (!req.user?.hospitalId) {
+    const userRole = req.user?.role;
+    const userHospitalId = req.user?.hospitalId;
+
+    // Bắt buộc phải có hospitalId (trừ Admin cấp cao)
+    if (!userHospitalId && userRole !== "admin") {
       return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào. Không thể truy xuất danh sách bệnh nhân.", 403);
     }
 
-    // [FIX] Tìm bệnh nhân thuộc bệnh viện này HOẶC bệnh nhân B2C chưa được gán viện (hospitalId = null)
-    const query = {
-      role: "patient",
-      $or: [
-        { hospitalId: req.user.hospitalId },
-        { hospitalId: null },
-        { hospitalId: { $exists: false } }
-      ]
-    };
+    // [BẢO MẬT ĐA CƠ SỞ & BẢO VỆ DỮ LIỆU B2C]:
+    // - Bác sĩ/Điều dưỡng/Lễ tân CHỈ ĐƯỢC XEM bệnh nhân thuộc bệnh viện của mình (hospitalId: req.user.hospitalId).
+    // - Bệnh nhân B2C tự do (hospitalId == null) được bảo vệ quyền riêng tư tuyệt đối,
+    //   không hiển thị tràn lan ra danh sách bệnh nhân của các bệnh viện khác.
+    // - Chỉ Admin hệ thống mới có thể xem toàn bộ hoặc lọc riêng bệnh nhân B2C (req.query.b2cOnly).
+    const query = { role: "patient" };
+
+    if (userRole === "admin") {
+      if (req.query.b2cOnly === "true") {
+        query.$or = [{ hospitalId: null }, { hospitalId: { $exists: false } }];
+      } else if (userHospitalId && req.query.allHospitals !== "true") {
+        query.hospitalId = userHospitalId;
+      }
+    } else {
+      // Nhân viên y tế thông thường: Ép buộc 100% cô lập theo hospitalId của bệnh viện
+      query.hospitalId = userHospitalId;
+    }
     
-    // [BUG FIX] Hỗ trợ tìm kiếm liên viện để chuyển tuyến
-    if (req.query.search) {
-      query.$and = [
-        {
-          $or: [
-            { "profile.medicalId": new RegExp(req.query.search, "i") },
-            { email: new RegExp(req.query.search, "i") },
-            { "profile.phone": new RegExp(req.query.search, "i") },
-            { "profile.name": new RegExp(req.query.search, "i") },
-            { "profile.fullName": new RegExp(req.query.search, "i") }
-          ]
-        }
+    // [SECURITY FIX] Khắc phục ReDoS & bảo vệ triệt để ranh giới bệnh viện (Cross-tenant Isolation)
+    if (req.query.search && req.query.search.trim()) {
+      const escaped = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escaped, "i");
+      const searchConditions = [
+        { "profile.medicalId": searchRegex },
+        { email: searchRegex },
+        { "profile.phone": searchRegex },
+        { "profile.name": searchRegex },
+        { "profile.fullName": searchRegex }
       ];
-      delete query.$or; // Khi search liên viện, bỏ giới hạn bệnh viện
-      delete query.$and;
-      query.$or = [
-        { "profile.medicalId": new RegExp(req.query.search, "i") },
-        { email: new RegExp(req.query.search, "i") },
-        { "profile.phone": new RegExp(req.query.search, "i") },
-        { "profile.name": new RegExp(req.query.search, "i") },
-        { "profile.fullName": new RegExp(req.query.search, "i") }
-      ];
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchConditions }];
+        delete query.$or;
+      } else {
+        query.$or = searchConditions;
+      }
     }
 
-    const patients = await User.find(query).select("-passwordHash").lean();
+    // Phân trang: Mặc định lấy trang 1, 20 bản ghi (hỗ trợ all=true cho các màn hình tổng hợp)
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = req.query.all === "true" ? 100 : Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
 
-    // Với mỗi bệnh nhân, lấy thêm: tổng số phiếu XN, số phiếu đã có KQ, sinh hiệu gần nhất
-    const enrichedPatients = await Promise.all(
-      patients.map(async (patient) => {
-        const [totalOrders, completedOrders, latestVital] = await Promise.all([
-          LabOrder.countDocuments({ patient_id: patient._id }),
-          LabOrder.countDocuments({ patient_id: patient._id, status: "COMPLETED" }),
-          VitalSign.findOne({ patient_id: patient._id })
-            .sort({ recorded_at: -1 })
-            .select("pulse blood_pressure spo2 recorded_at")
-            .lean()
-        ]);
+    const [totalPatients, patients] = await Promise.all([
+      User.countDocuments(query),
+      User.find(query)
+        .select("-passwordHash")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
 
-        return {
-          ...patient,
-          stats: {
-            total_lab_orders: totalOrders,
-            completed_lab_orders: completedOrders,
-            last_vital: latestVital || null,
+    if (patients.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Lấy danh sách bệnh nhân thành công.",
+        data: [],
+        pagination: { total: totalPatients, page, limit, totalPages: Math.ceil(totalPatients / limit) || 1 }
+      });
+    }
+
+    const patientIds = patients.map((p) => p._id);
+
+    // TỐI ƯU HÓA N+1: Gom toàn bộ thống kê bằng Aggregate Bulk Group O(1)
+    const [totalOrdersAgg, completedOrdersAgg, latestVitalsAgg] = await Promise.all([
+      LabOrder.aggregate([
+        { $match: { patient_id: { $in: patientIds } } },
+        { $group: { _id: "$patient_id", count: { $sum: 1 } } }
+      ]),
+      LabOrder.aggregate([
+        { $match: { patient_id: { $in: patientIds }, status: "COMPLETED" } },
+        { $group: { _id: "$patient_id", count: { $sum: 1 } } }
+      ]),
+      VitalSign.aggregate([
+        { $match: { patient_id: { $in: patientIds } } },
+        { $sort: { recorded_at: -1 } },
+        {
+          $group: {
+            _id: "$patient_id",
+            pulse: { $first: "$pulse" },
+            blood_pressure: { $first: "$blood_pressure" },
+            spo2: { $first: "$spo2" },
+            recorded_at: { $first: "$recorded_at" }
           }
-        };
-      })
-    );
+        }
+      ])
+    ]);
 
-    return successResponse(res, enrichedPatients, "Lấy danh sách bệnh nhân thành công.");
+    // Tạo bảng tra cứu Map O(1)
+    const totalOrdersMap = new Map(totalOrdersAgg.map(item => [item._id.toString(), item.count]));
+    const completedOrdersMap = new Map(completedOrdersAgg.map(item => [item._id.toString(), item.count]));
+    const latestVitalsMap = new Map(latestVitalsAgg.map(item => [item._id.toString(), item]));
+
+    const enrichedPatients = patients.map((patient) => {
+      const pIdStr = patient._id.toString();
+      return {
+        ...patient,
+        stats: {
+          total_lab_orders: totalOrdersMap.get(pIdStr) || 0,
+          completed_lab_orders: completedOrdersMap.get(pIdStr) || 0,
+          last_vital: latestVitalsMap.get(pIdStr) || null,
+        }
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Lấy danh sách bệnh nhân thành công.",
+      data: enrichedPatients,
+      pagination: {
+        total: totalPatients,
+        page,
+        limit,
+        totalPages: Math.ceil(totalPatients / limit) || 1
+      }
+    });
   } catch (error) {
     console.error("Lỗi lấy danh sách bệnh nhân:", error);
     return errorResponse(res, "Lỗi lấy danh sách bệnh nhân.", 500);
   }
 };
 
-// Lấy chi tiết 1 bệnh nhân theo ID — cho phép xem xuyên viện để phục vụ chuyển tuyến
+// Lấy chi tiết 1 bệnh nhân theo ID — chỉ cho phép khi cùng viện hoặc có phiếu chuyển viện hợp lệ
 export const getPatientById = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patient = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patient = await checkPatientTenancy(patientId, req.user);
     if (!patient) {
-      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 404);
+      return errorResponse(res, "Không tìm thấy bệnh nhân hoặc bạn không có quyền truy cập hồ sơ (vi phạm ranh giới bệnh viện và chưa có phiếu chuyển tuyến).", 403);
     }
     const { passwordHash, ...safePatient } = patient.toObject();
     return successResponse(res, safePatient, "Lấy thông tin bệnh nhân thành công.");
@@ -152,7 +209,7 @@ export const getPatientById = async (req, res) => {
 export const getPatientVitals = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -175,7 +232,7 @@ export const addPatientVitals = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin mạch, huyết áp hoặc SpO2.", 400);
     }
 
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -209,7 +266,7 @@ export const addPatientVitals = async (req, res) => {
 export const getPatientLabOrders = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -233,7 +290,7 @@ export const createPatientLabOrder = async (req, res) => {
     }
 
     // Xác thực bệnh nhân có tồn tại và thuộc cùng bệnh viện
-    const patient = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patient = await checkPatientTenancy(patientId, req.user);
     if (!patient) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -268,7 +325,7 @@ export const createPatientLabOrder = async (req, res) => {
 export const getPatientPrescriptions = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -291,7 +348,7 @@ export const addPatientPrescription = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
     }
 
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -322,7 +379,7 @@ export const addPatientPrescription = async (req, res) => {
 export const getPatientDischargePapers = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -341,7 +398,7 @@ export const addPatientDischargePaper = async (req, res) => {
     const { patientId } = req.params;
     const { doctor_name, dischargeNo, hospitalNo, dateIn, dateOut, diagnosis, treatment, note } = req.body;
 
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -370,7 +427,7 @@ export const addPatientDischargePaper = async (req, res) => {
 export const getPatientTransferForms = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
@@ -389,7 +446,7 @@ export const addPatientTransferForm = async (req, res) => {
     const { patientId } = req.params;
     const fields = req.body;
 
-    const patientExists = await checkPatientTenancy(patientId, req.user?.hospitalId);
+    const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }

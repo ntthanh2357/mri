@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import { get, post, put, del } from '../services/api.service';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
 
 const CATEGORY_LABELS = {
   anticonvulsant: 'Động kinh',
@@ -50,7 +50,6 @@ export default function DrugManagementScreen({ navigation }) {
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showCategoryFilterDropdown, setShowCategoryFilterDropdown] = useState(false);
 
   // Form State for Add / Edit
   const [isEditing, setIsEditing] = useState(false);
@@ -58,7 +57,6 @@ export default function DrugManagementScreen({ navigation }) {
   const [drugName, setDrugName] = useState('');
   const [activeIngredient, setActiveIngredient] = useState('');
   const [category, setCategory] = useState('other');
-  const [showCategoryFormDropdown, setShowCategoryFormDropdown] = useState(false);
   const [manufacturer, setManufacturer] = useState('');
   const [dosageInstructions, setDosageInstructions] = useState('');
   const [price, setPrice] = useState('');
@@ -296,7 +294,7 @@ export default function DrugManagementScreen({ navigation }) {
               </View>
                 {alerts.length > 0 && (
                   <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-                    <Text style={{ fontSize: 12 }}>⚠️</Text>
+                    <AlertTriangle size={12} color="#991B1B" />
                     <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
                   </View>
                 )}
@@ -310,7 +308,7 @@ export default function DrugManagementScreen({ navigation }) {
               onPress={() => setActiveTab('list')}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 14 }}>💊</Text>
+                <Pill size={14} color={activeTab === 'list' ? '#15803D' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
                   Danh mục thuốc & Tồn kho
                 </Text>
@@ -321,7 +319,7 @@ export default function DrugManagementScreen({ navigation }) {
               onPress={() => setActiveTab('alerts')}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 14 }}>⚠️</Text>
+                <AlertTriangle size={14} color={activeTab === 'alerts' ? '#DC2626' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'alerts' && styles.tabTextActive]}>
                   Cảnh báo tồn kho thấp ({alerts.length})
                 </Text>
@@ -336,7 +334,7 @@ export default function DrugManagementScreen({ navigation }) {
                 <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
                   <View style={styles.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                      <Text style={{ fontSize: 16 }}>{isEditing ? '✏️' : '➕'}</Text>
+                      {isEditing ? <Edit2 size={16} color="#15803D" /> : <Plus size={16} color="#15803D" />}
                       <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
                         {isEditing ? 'Cập nhật thông tin thuốc' : 'Thêm thuốc vào danh mục'}
                       </Text>
@@ -369,27 +367,29 @@ export default function DrugManagementScreen({ navigation }) {
                     </View>
 
                     <View style={styles.fieldRow}>
-                      <View style={{ flex: 1, marginRight: 8, position: 'relative', zIndex: 20 }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={styles.label}>Phân loại dược lý</Text>
-                        <TouchableOpacity
-                          style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                          onPress={() => setShowCategoryFormDropdown(!showCategoryFormDropdown)}
-                        >
-                          <Text style={{ fontSize: 13, color: '#0F172A' }}>{CATEGORY_LABELS[category]}</Text>
-                        </TouchableOpacity>
-                        {showCategoryFormDropdown && (
-                          <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]}>
+                        <View style={styles.selectWrapper}>
+                           <select
+                             value={category}
+                             onChange={(e) => setCategory(e.target.value)}
+                             style={{
+                               width: '100%',
+                               height: '100%',
+                               borderWidth: 0,
+                               backgroundColor: 'transparent',
+                               paddingHorizontal: 10,
+                               fontSize: 13,
+                               color: '#0F172A',
+                               outline: 'none',
+                               cursor: 'pointer',
+                             }}
+                           >
                             {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                              <TouchableOpacity
-                                key={k}
-                                style={styles.dropdownOption}
-                                onPress={() => { setCategory(k); setShowCategoryFormDropdown(false); }}
-                              >
-                                <Text style={styles.dropdownOptionText}>{v}</Text>
-                              </TouchableOpacity>
+                              <option key={k} value={k}>{v}</option>
                             ))}
-                          </ScrollView>
-                        )}
+                          </select>
+                        </View>
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Hãng sản xuất</Text>
@@ -506,9 +506,12 @@ export default function DrugManagementScreen({ navigation }) {
                         {submitting ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
-                          <Text style={styles.submitButtonText}>
-                            {isEditing ? '💾 Cập nhật thuốc' : '💾 Lưu vào danh mục'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Save size={15} color="#FFFFFF" />
+                            <Text style={styles.submitButtonText}>
+                              {isEditing ? 'Cập nhật thuốc' : 'Lưu vào danh mục'}
+                            </Text>
+                          </View>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -530,37 +533,30 @@ export default function DrugManagementScreen({ navigation }) {
                           onChangeText={setSearchQuery}
                         />
                         <View style={{ position: 'absolute', left: 12 }}>
-                          <Text style={{ fontSize: 14 }}>🔍</Text>
+                          <Search size={14} color="#94A3B8" />
                         </View>
                       </View>
-                      <View style={{ flex: 1, position: 'relative', zIndex: 20 }}>
-                        <TouchableOpacity
-                          style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                          onPress={() => setShowCategoryFilterDropdown(!showCategoryFilterDropdown)}
+                      <View style={[styles.selectWrapper, { flex: 1 }]}>
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            borderWidth: 0,
+                            backgroundColor: 'transparent',
+                            paddingHorizontal: 10,
+                            fontSize: 13,
+                            color: '#0F172A',
+                            outline: 'none',
+                            cursor: 'pointer',
+                          }}
                         >
-                          <Text style={{ fontSize: 13, color: '#0F172A' }}>
-                            {selectedCategory === 'all' ? 'Tất cả phân nhóm' : CATEGORY_LABELS[selectedCategory]}
-                          </Text>
-                        </TouchableOpacity>
-                        {showCategoryFilterDropdown && (
-                          <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]}>
-                            <TouchableOpacity
-                              style={styles.dropdownOption}
-                              onPress={() => { setSelectedCategory('all'); setShowCategoryFilterDropdown(false); }}
-                            >
-                              <Text style={styles.dropdownOptionText}>Tất cả phân nhóm</Text>
-                            </TouchableOpacity>
-                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                              <TouchableOpacity
-                                key={k}
-                                style={styles.dropdownOption}
-                                onPress={() => { setSelectedCategory(k); setShowCategoryFilterDropdown(false); }}
-                              >
-                                <Text style={styles.dropdownOptionText}>{v}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        )}
+                          <option value="all">Tất cả phân nhóm</option>
+                          {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
                       </View>
                     </View>
                   </View>
@@ -661,20 +657,20 @@ export default function DrugManagementScreen({ navigation }) {
                                       onPress={() => openStockModal(item)}
                                       style={[styles.tblBtnStock, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     >
-                                      <Text style={{ fontSize: 10 }}>➕</Text>
+                                      <Plus size={10} color="#166534" />
                                       <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       onPress={() => startEdit(item)}
                                       style={styles.tblBtnEdit}
                                     >
-                                      <Text style={{ fontSize: 12 }}>✏️</Text>
+                                      <Edit2 size={12} color="#1D4ED8" />
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       onPress={() => handleDeleteDrug(item._id, item.name)}
                                       style={styles.tblBtnDel}
                                     >
-                                      <Text style={{ fontSize: 12 }}>🗑️</Text>
+                                      <Trash2 size={12} color="#DC2626" />
                                     </TouchableOpacity>
                                   </View>
                                 )}
@@ -692,7 +688,7 @@ export default function DrugManagementScreen({ navigation }) {
             // Alerts Tab
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Text style={{ fontSize: 16 }}>⚠️</Text>
+                <AlertTriangle size={16} color="#DC2626" />
                 <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách thuốc cần nhập kho bổ sung</Text>
               </View>
               <Text style={styles.cardSub}>
@@ -701,7 +697,7 @@ export default function DrugManagementScreen({ navigation }) {
 
               {alerts.length === 0 ? (
                 <View style={[styles.emptyBox, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}>
-                  <Text style={{ fontSize: 16 }}>✅</Text>
+                  <CheckCircle2 size={16} color="#059669" />
                   <Text style={[styles.emptyText, { color: '#059669', marginBottom: 0 }]}>
                     Tuyệt vời! Hiện tại không có loại thuốc nào dưới ngưỡng an toàn.
                   </Text>
@@ -725,10 +721,11 @@ export default function DrugManagementScreen({ navigation }) {
                         </Text>
                         {isHospitalAdmin && (
                           <TouchableOpacity
-                            style={styles.alertActionBtn}
+                            style={[styles.alertActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                             onPress={() => openStockModal(item)}
                           >
-                            <Text style={styles.alertActionBtnText}>➕ Nhập kho ngay</Text>
+                            <Plus size={12} color="#FFFFFF" />
+                            <Text style={styles.alertActionBtnText}>Nhập kho ngay</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -751,7 +748,10 @@ export default function DrugManagementScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>📦 Cập nhật tồn kho dược phẩm</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Package size={18} color="#0891B2" />
+                <Text style={styles.modalTitle}>Cập nhật tồn kho dược phẩm</Text>
+              </View>
               <Text style={styles.modalSub}>
                 Thuốc: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{stockDrug.name}</Text> | Đơn vị: {stockDrug.stock?.unit}
               </Text>
@@ -762,7 +762,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('add')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'add' && styles.modalActionTextActive]}>
-                    ➕ Nhập kho (Thêm)
+                    Nhập kho (Thêm)
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -770,7 +770,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('subtract')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'subtract' && styles.modalActionTextActive]}>
-                    ➖ Xuất kho (Bớt)
+                    Xuất kho (Bớt)
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -778,7 +778,7 @@ export default function DrugManagementScreen({ navigation }) {
                   onPress={() => setStockAction('set')}
                 >
                   <Text style={[styles.modalActionText, stockAction === 'set' && styles.modalActionTextActive]}>
-                    💾 Đặt cố định
+                    Đặt cố định
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -810,7 +810,10 @@ export default function DrugManagementScreen({ navigation }) {
                   {submitting ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>💾 Lưu thay đổi</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <Save size={14} color="#FFFFFF" />
+                      <Text style={styles.modalSubmitText}>Lưu thay đổi</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -876,33 +879,6 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     outlineStyle: 'none',
     cursor: 'pointer',
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    zIndex: 50,
-  },
-  dropdownOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  dropdownOptionText: {
-    fontSize: 13,
-    color: '#0F172A',
   },
   submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   buttonDisabled: { opacity: 0.7 },

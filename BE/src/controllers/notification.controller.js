@@ -114,3 +114,43 @@ export const markAllAsRead = async (req, res) => {
     return errorResponse(res, "Lỗi máy chủ.", 500);
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NT-04 — J.4 Mobile Push Notification (FCM)
+// PUT /api/v1/notifications/fcm-token
+// @access Private (All users)
+// ─────────────────────────────────────────────────────────────────────────────
+export const updateFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      return errorResponse(res, "Thiếu fcmToken.", 400);
+    }
+
+    const { User } = await import("../models/user.model.js");
+    await User.findByIdAndUpdate(req.user.id, {
+      "profile.fcmToken": fcmToken
+    });
+
+    return successResponse(res, null, "Cập nhật FCM token thành công.");
+  } catch (error) {
+    console.error("Lỗi updateFcmToken:", error);
+    return errorResponse(res, "Lỗi máy chủ.", 500);
+  }
+};
+
+/**
+ * Giả lập hoặc gọi Firebase Cloud Messaging API gửi Push Notification
+ */
+export const sendFcmPushNotification = async (fcmToken, title, body, data = {}) => {
+  if (!fcmToken) return false;
+  try {
+    // Log mô phỏng gửi Push Notification tới React Native mobile app
+    console.log(`📱 [FCM Push] Sent to token: ${fcmToken.slice(0, 10)}... | Title: "${title}" | Body: "${body}"`);
+    return true;
+  } catch (err) {
+    console.error("Lỗi gửi FCM push:", err.message);
+    return false;
+  }
+};
+

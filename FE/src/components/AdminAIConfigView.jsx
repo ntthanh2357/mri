@@ -345,7 +345,7 @@ export default function AdminAIConfigView() {
             className="w-full px-4 py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           >
             {retraining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
-            {retraining ? 'Đang chạy huấn luyện...' : `🤖 Chạy huấn luyện lại với ${feedback.length} ca phản hồi`}
+            {retraining ? 'Đang chạy huấn luyện...' : `Chạy huấn luyện lại với ${feedback.length} ca phản hồi`}
           </button>
 
           {retrainMsg && (

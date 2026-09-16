@@ -14,6 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put, del } from '../services/api.service';
+import { Calendar, User, RefreshCw, ChevronLeft, ChevronRight, Plus, Users, Filter, Edit2, Clock, PlusCircle, ArrowLeftRight } from 'lucide-react';
 
 const SHIFT_LABELS = {
   'sáng': 'Ca Sáng',
@@ -67,7 +68,6 @@ export default function StaffSchedulingScreen({ navigation }) {
   const [weeklySchedules, setWeeklySchedules] = useState([]);
   const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
   const [roleFilter, setRoleFilter] = useState('');
-  const [showRoleFilterDropdown, setShowRoleFilterDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,14 +86,11 @@ export default function StaffSchedulingScreen({ navigation }) {
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('confirmed');
-  const [showShiftDropdown, setShowShiftDropdown] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   // Swap Request Form Modal
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapSchedule, setSwapSchedule] = useState(null);
   const [targetStaffId, setTargetStaffId] = useState('');
-  const [showTargetStaffDropdown, setShowTargetStaffDropdown] = useState(false);
   const [targetDateStr, setTargetDateStr] = useState('');
   const [swapReason, setSwapReason] = useState('');
 
@@ -440,7 +437,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                 onPress={() => setActiveTab('weekly')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 14 }}>📅</Text>
+                  <Calendar size={14} color={activeTab === 'weekly' ? '#15803D' : '#64748B'} />
                   <Text style={[styles.tabText, activeTab === 'weekly' && styles.tabTextActive]}>
                     Toàn bộ thời khóa biểu
                   </Text>
@@ -454,7 +451,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                 onPress={() => setActiveTab('my-schedule')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 14 }}>👤</Text>
+                  <User size={14} color={activeTab === 'my-schedule' ? '#15803D' : '#64748B'} />
                   <Text style={[styles.tabText, activeTab === 'my-schedule' && styles.tabTextActive]}>
                     Lịch làm của tôi
                   </Text>
@@ -467,7 +464,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               onPress={() => setActiveTab('swap')}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 14 }}>🔄</Text>
+                <RefreshCw size={14} color={activeTab === 'swap' ? '#15803D' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'swap' && styles.tabTextActive]}>
                   Yêu cầu đổi ca
                 </Text>
@@ -480,40 +477,42 @@ export default function StaffSchedulingScreen({ navigation }) {
             <View style={styles.card}>
               <View style={styles.weekNavRow}>
                 <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handlePrevWeek}>
-                  <Text style={{ fontSize: 14, color: '#15803D' }}>◀</Text>
+                  <ChevronLeft size={14} color="#15803D" />
                   <Text style={styles.navBtnText}>Tuần trước</Text>
                 </TouchableOpacity>
                 <Text style={styles.weekRangeTitle}>{formatWeekRange()}</Text>
                 <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleNextWeek}>
                   <Text style={styles.navBtnText}>Tuần sau</Text>
-                  <Text style={{ fontSize: 14, color: '#15803D' }}>▶</Text>
+                  <ChevronRight size={14} color="#15803D" />
                 </TouchableOpacity>
               </View>
 
               {/* Advanced Role Filter for Managing MRI Modalities */}
-              <View style={[styles.filterRow, { position: 'relative', zIndex: 10 }]}>
-                <Text style={styles.filterLabel}>🔍 Lọc nhân sự buồng máy:</Text>
-                <TouchableOpacity
-                  style={[styles.filterSelectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                  onPress={() => setShowRoleFilterDropdown(!showRoleFilterDropdown)}
-                >
-                  <Text style={{ fontSize: 12, color: '#0F172A' }}>
-                    {roleFilter === 'doctor' ? 'Bác sĩ' : roleFilter === 'nurse' ? 'Điều dưỡng' : 'Tất cả chức vụ'}
-                  </Text>
-                </TouchableOpacity>
-                {showRoleFilterDropdown && (
-                  <View style={styles.dropdownMenu}>
-                    {[{ v: '', l: 'Tất cả chức vụ' }, { v: 'doctor', l: 'Bác sĩ' }, { v: 'nurse', l: 'Điều dưỡng' }].map((o) => (
-                      <TouchableOpacity
-                        key={o.v}
-                        style={styles.dropdownOption}
-                        onPress={() => { setRoleFilter(o.v); setShowRoleFilterDropdown(false); }}
-                      >
-                        <Text style={styles.dropdownOptionText}>{o.l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+              <View style={styles.filterRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Filter size={14} color="#64748B" />
+                  <Text style={styles.filterLabel}>Lọc nhân sự buồng máy:</Text>
+                </View>
+                <View style={styles.filterSelectWrapper}>
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      paddingHorizontal: 10,
+                      fontSize: 12,
+                      color: '#0F172A',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="">Tất cả chức vụ</option>
+                    <option value="doctor">Bác sĩ</option>
+                    <option value="nurse">Điều dưỡng</option>
+                  </select>
+                </View>
               </View>
 
               {loading ? (
@@ -608,9 +607,12 @@ export default function StaffSchedulingScreen({ navigation }) {
                                     disabled={!isHospitalAdmin}
                                     style={isHospitalAdmin ? styles.emptyCellAdmin : styles.emptyCell}
                                   >
-                                    <Text style={isHospitalAdmin ? styles.emptyCellAdminText : styles.emptyCellText}>
-                                      {isHospitalAdmin ? '➕ Xếp ca' : 'Nghỉ'}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                      {isHospitalAdmin && <Plus size={12} color="#0891B2" />}
+                                      <Text style={isHospitalAdmin ? styles.emptyCellAdminText : styles.emptyCellText}>
+                                        {isHospitalAdmin ? 'Xếp ca' : 'Nghỉ'}
+                                      </Text>
+                                    </View>
                                   </TouchableOpacity>
                                 )}
                               </View>
@@ -628,12 +630,14 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'my-schedule' && (
             <View style={styles.card}>
               <View style={styles.weekNavRow}>
-                <TouchableOpacity style={styles.navBtn} onPress={handlePrevWeek}>
-                  <Text style={styles.navBtnText}>◀ Tuần trước</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handlePrevWeek}>
+                  <ChevronLeft size={16} color="#475569" />
+                  <Text style={styles.navBtnText}>Tuần trước</Text>
                 </TouchableOpacity>
                 <Text style={styles.weekRangeTitle}>{formatWeekRange()}</Text>
-                <TouchableOpacity style={styles.navBtn} onPress={handleNextWeek}>
-                  <Text style={styles.navBtnText}>Tuần sau ▶</Text>
+                <TouchableOpacity style={[styles.navBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={handleNextWeek}>
+                  <Text style={styles.navBtnText}>Tuần sau</Text>
+                  <ChevronRight size={16} color="#475569" />
                 </TouchableOpacity>
               </View>
 
@@ -689,7 +693,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                     style={[styles.btnSwapRequest, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}
                                     onPress={() => handleOpenSwapModal(sched)}
                                   >
-                                    <Text style={{ fontSize: 12 }}>🔄</Text>
+                                    <RefreshCw size={12} color="#15803D" />
                                     <Text style={styles.btnSwapText}>Yêu cầu đổi ca làm việc</Text>
                                   </TouchableOpacity>
                                 </View>
@@ -714,7 +718,7 @@ export default function StaffSchedulingScreen({ navigation }) {
             <View style={styles.card}>
               <View style={styles.listHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <Text style={{ fontSize: 16 }}>🔄</Text>
+                  <RefreshCw size={16} color="#15803D" />
                   <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Phê duyệt yêu cầu đổi ca trực</Text>
                 </View>
                 <Text style={styles.cardSub}>
@@ -737,7 +741,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                       <View key={req._id} style={styles.requestCard}>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                            <Text style={{ fontSize: 14 }}>👤</Text>
+                            <User size={14} color="#475569" />
                             <Text style={styles.reqHeader}>
                               {req.requesterId?.profile?.name || 'Nhân sự'} ({getRoleLabel(req.requesterId?.role)})
                             </Text>
@@ -816,9 +820,18 @@ export default function StaffSchedulingScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>
-                {!isHospitalAdmin ? '📝 Đăng ký ca làm việc' : (selectedSchedule ? '✏️ Cập nhật ca làm việc' : '➕ Phân ca làm việc')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                {!isHospitalAdmin ? (
+                  <Clock size={18} color="#0891B2" />
+                ) : selectedSchedule ? (
+                  <Edit2 size={18} color="#0891B2" />
+                ) : (
+                  <PlusCircle size={18} color="#0891B2" />
+                )}
+                <Text style={styles.modalTitle}>
+                  {!isHospitalAdmin ? 'Đăng ký ca làm việc' : (selectedSchedule ? 'Cập nhật ca làm việc' : 'Phân ca làm việc')}
+                </Text>
+              </View>
               {selectedStaff && (
                 <Text style={styles.modalSub}>
                   Nhân sự: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{selectedStaff.profile?.name}</Text>
@@ -826,34 +839,30 @@ export default function StaffSchedulingScreen({ navigation }) {
                 </Text>
               )}
 
-              <View style={[styles.field, { position: 'relative', zIndex: 20 }]}>
+              <View style={styles.field}>
                 <Text style={styles.label}>Ca làm việc *</Text>
-                <TouchableOpacity
-                  style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                  onPress={() => setShowShiftDropdown(!showShiftDropdown)}
-                >
-                  <Text style={{ fontSize: 13, color: '#0F172A' }}>
-                    {shift === 'sáng' ? 'Ca Sáng (🌅)' : shift === 'chiều' ? 'Ca Chiều (☀️)' : shift === 'tối' ? 'Ca Tối (🌙)' : 'Cả Ngày (🕒)'}
-                  </Text>
-                </TouchableOpacity>
-                {showShiftDropdown && (
-                  <View style={styles.dropdownMenu}>
-                    {[
-                      { v: 'sáng', l: 'Ca Sáng (🌅)' },
-                      { v: 'chiều', l: 'Ca Chiều (☀️)' },
-                      { v: 'tối', l: 'Ca Tối (🌙)' },
-                      { v: 'cả ngày', l: 'Cả Ngày (🕒)' },
-                    ].map((o) => (
-                      <TouchableOpacity
-                        key={o.v}
-                        style={styles.dropdownOption}
-                        onPress={() => { setShift(o.v); setShowShiftDropdown(false); }}
-                      >
-                        <Text style={styles.dropdownOptionText}>{o.l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                <View style={styles.selectWrapper}>
+                  <select
+                    value={shift}
+                    onChange={(e) => setShift(e.target.value)}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderWidth: 0,
+                      backgroundColor: 'transparent',
+                      paddingHorizontal: 10,
+                      fontSize: 13,
+                      color: '#0F172A',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="sáng">Ca Sáng (06:00 - 14:00)</option>
+                    <option value="chiều">Ca Chiều (14:00 - 22:00)</option>
+                    <option value="tối">Ca Tối (22:00 - 06:00)</option>
+                    <option value="cả ngày">Trực Cả Ngày (24h)</option>
+                  </select>
+                </View>
               </View>
 
               <View style={styles.fieldRow}>
@@ -891,33 +900,30 @@ export default function StaffSchedulingScreen({ navigation }) {
               </View>
 
               {isHospitalAdmin && (
-                <View style={[styles.field, { position: 'relative', zIndex: 15 }]}>
+                <View style={styles.field}>
                   <Text style={styles.label}>Trạng thái phê duyệt</Text>
-                  <TouchableOpacity
-                    style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                    onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-                  >
-                    <Text style={{ fontSize: 13, color: status === 'pending' ? '#F59E0B' : '#15803D', fontWeight: 'bold' }}>
-                      {status === 'confirmed' ? 'Đã phê duyệt (Confirmed)' : status === 'pending' ? 'Chờ phê duyệt (Pending)' : 'Nghỉ (Off)'}
-                    </Text>
-                  </TouchableOpacity>
-                  {showStatusDropdown && (
-                    <View style={styles.dropdownMenu}>
-                      {[
-                        { v: 'confirmed', l: 'Đã phê duyệt (Confirmed)' },
-                        { v: 'pending', l: 'Chờ phê duyệt (Pending)' },
-                        { v: 'off', l: 'Nghỉ (Off)' },
-                      ].map((o) => (
-                        <TouchableOpacity
-                          key={o.v}
-                          style={styles.dropdownOption}
-                          onPress={() => { setStatus(o.v); setShowStatusDropdown(false); }}
-                        >
-                          <Text style={styles.dropdownOptionText}>{o.l}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
+                  <View style={styles.selectWrapper}>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderWidth: 0,
+                        backgroundColor: 'transparent',
+                        paddingHorizontal: 10,
+                        fontSize: 13,
+                        color: status === 'pending' ? '#F59E0B' : '#15803D',
+                        fontWeight: 'bold',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="confirmed">Đã phê duyệt (Confirmed)</option>
+                      <option value="pending">Chờ phê duyệt (Pending)</option>
+                      <option value="off">Nghỉ (Off)</option>
+                    </select>
+                  </View>
                 </View>
               )}
 
@@ -966,7 +972,10 @@ export default function StaffSchedulingScreen({ navigation }) {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>🔄 Tạo yêu cầu đổi ca trực</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ArrowLeftRight size={18} color="#0891B2" />
+                <Text style={styles.modalTitle}>Tạo yêu cầu đổi ca trực</Text>
+              </View>
               <Text style={styles.modalSub}>
                 Đang chọn ca: {SHIFT_LABELS[swapSchedule.shift]} ngày {new Date(swapSchedule.date).toLocaleDateString('vi-VN')}
               </Text>
@@ -982,42 +991,34 @@ export default function StaffSchedulingScreen({ navigation }) {
                 />
               </View>
 
-              <View style={[styles.field, { position: 'relative', zIndex: 15 }]}>
+              <View style={styles.field}>
                 <Text style={styles.label}>Đổi cùng với nhân sự (Để trống nếu muốn nhường ca)</Text>
-                <TouchableOpacity
-                  style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                  onPress={() => setShowTargetStaffDropdown(!showTargetStaffDropdown)}
-                >
-                  <Text style={{ fontSize: 13, color: '#0F172A' }} numberOfLines={1}>
-                    {targetStaffId
-                      ? (() => {
-                          const s = staffList.find((s) => s._id === targetStaffId);
-                          return s ? `${s.profile?.name} (${getRoleLabel(s.role)})` : 'Chọn nhân sự đổi chéo (Không bắt buộc)';
-                        })()
-                      : 'Chọn nhân sự đổi chéo (Không bắt buộc)'}
-                  </Text>
-                </TouchableOpacity>
-                {showTargetStaffDropdown && (
-                  <ScrollView style={[styles.dropdownMenu, { maxHeight: 180 }]}>
-                    <TouchableOpacity
-                      style={styles.dropdownOption}
-                      onPress={() => { setTargetStaffId(''); setShowTargetStaffDropdown(false); }}
-                    >
-                      <Text style={styles.dropdownOptionText}>Chọn nhân sự đổi chéo (Không bắt buộc)</Text>
-                    </TouchableOpacity>
+                <View style={styles.selectWrapper}>
+                  <select
+                    value={targetStaffId}
+                    onChange={(e) => setTargetStaffId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderWidth: 0,
+                      backgroundColor: 'transparent',
+                      paddingHorizontal: 10,
+                      fontSize: 13,
+                      color: '#0F172A',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Chọn nhân sự đổi chéo (Không bắt buộc)</option>
                     {staffList
                       .filter((s) => s._id !== currentUser?.id)
                       .map((s) => (
-                        <TouchableOpacity
-                          key={s._id}
-                          style={styles.dropdownOption}
-                          onPress={() => { setTargetStaffId(s._id); setShowTargetStaffDropdown(false); }}
-                        >
-                          <Text style={styles.dropdownOptionText}>{s.profile?.name} ({getRoleLabel(s.role)})</Text>
-                        </TouchableOpacity>
+                        <option key={s._id} value={s._id}>
+                          {s.profile?.name} ({getRoleLabel(s.role)})
+                        </option>
                       ))}
-                  </ScrollView>
-                )}
+                  </select>
+                </View>
               </View>
 
               <View style={styles.field}>
@@ -1195,33 +1196,6 @@ const styles = StyleSheet.create({
     height: '100%',
     paddingHorizontal: 10,
     fontSize: 12,
-    color: '#0F172A',
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    zIndex: 50,
-  },
-  dropdownOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  dropdownOptionText: {
-    fontSize: 13,
     color: '#0F172A',
   },
 

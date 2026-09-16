@@ -16,18 +16,18 @@ export const DOC_TYPES = {
 };
 
 export const DOC_TYPE_INFO = {
-  kham_benh:    { label: 'Phiếu thông tin khám bệnh', group: 1, icon: '🏥' },
-  vien_phi:     { label: 'Phiếu thu viện phí',         group: 1, icon: '🧾' },
-  tom_tat_hsba: { label: 'Tóm tắt hồ sơ bệnh án',     group: 1, icon: '📄' },
-  chi_dinh_dv:  { label: 'Phiếu chỉ định dịch vụ',    group: 2, icon: '📋' },
-  toa_thuoc:    { label: 'Toa thuốc điều trị',          group: 2, icon: '💊' },
-  giay_ra_vien: { label: 'Giấy ra viện',                group: 2, icon: '🏠' },
-  chuyen_tuyen: { label: 'Phiếu chuyển tuyến TT01',   group: 2, icon: '🚑' },
-  huyet_hoc:    { label: 'Kết quả xét nghiệm huyết học', group: 3, icon: '🩸' },
-  hoa_sinh:     { label: 'Kết quả hóa sinh máu',       group: 3, icon: '🧪' },
-  ct_scan:      { label: 'Kết quả CT-Scan',             group: 3, icon: '🖼️' },
-  mri:          { label: 'Kết quả MRI',                 group: 3, icon: '🧠' },
-  cam_ket_pt:   { label: 'Giấy cam kết phẫu thuật',    group: 5, icon: '✍️' },
+  kham_benh:    { label: 'Phiếu thông tin khám bệnh', group: 1, icon: '' },
+  vien_phi:     { label: 'Phiếu thu viện phí',         group: 1, icon: '' },
+  tom_tat_hsba: { label: 'Tóm tắt hồ sơ bệnh án',     group: 1, icon: '' },
+  chi_dinh_dv:  { label: 'Phiếu chỉ định dịch vụ',    group: 2, icon: '' },
+  toa_thuoc:    { label: 'Toa thuốc điều trị',          group: 2, icon: '' },
+  giay_ra_vien: { label: 'Giấy ra viện',                group: 2, icon: '' },
+  chuyen_tuyen: { label: 'Phiếu chuyển tuyến TT01',   group: 2, icon: '' },
+  huyet_hoc:    { label: 'Kết quả xét nghiệm huyết học', group: 3, icon: '' },
+  hoa_sinh:     { label: 'Kết quả hóa sinh máu',       group: 3, icon: '' },
+  ct_scan:      { label: 'Kết quả CT-Scan',             group: 3, icon: '' },
+  mri:          { label: 'Kết quả MRI',                 group: 3, icon: '' },
+  cam_ket_pt:   { label: 'Giấy cam kết phẫu thuật',    group: 5, icon: '' },
 };
 
 export const GROUPS = {

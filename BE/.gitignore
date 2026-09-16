@@ -4,17 +4,28 @@ node_modules/
 # Production build
 dist/
 
-# Env files (contains sensitive credentials)
+# ==============================================================================
+# 🔐 CRITICAL SECURITY: Environment variables & Cloud Service Credentials
+# ==============================================================================
 .env
-.env.local
-firebase-service-account.json
+.env.*
+*.env
+!.env.example
 
-
-# Firebase / GCS service account keys
+# Firebase / Google Cloud service account keys & tokens
+credentials.json
 firebase-service-account.json
 *-service-account.json
 gcs-service-account.json
-credentials.json
+*.pem
+*.key
+*.cert
+
+# Uploads & local databases
+uploads/
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log

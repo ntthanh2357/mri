@@ -10,6 +10,30 @@ import {
   Image,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
+import { 
+  LayoutDashboard, 
+  FolderOpen, 
+  Calendar, 
+  Building2, 
+  Users, 
+  DollarSign, 
+  Package, 
+  PhoneCall, 
+  LogOut, 
+  Brain, 
+  Activity, 
+  FileText, 
+  ClipboardList, 
+  Star, 
+  CreditCard,
+  Bell,
+  AlertTriangle,
+  Sparkles,
+  X,
+  ChevronRight,
+  ShieldCheck,
+  ArrowRightLeft,
+} from 'lucide-react';
 
 const ResponsiveLayout = ({
   children,
@@ -24,7 +48,21 @@ const ResponsiveLayout = ({
   const [notifications, setNotifications] = React.useState([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [showNotifModal, setShowNotifModal] = React.useState(false);
-  const [showMobileMenu, setShowMobileMenu] = React.useState(false);
+  const [activeEmergency, setActiveEmergency] = React.useState(null);
+
+  const fetchEmergencyAlerts = async () => {
+    try {
+      const { get } = require('../services/api.service');
+      const res = await get('/api/v1/emergency/alerts');
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setActiveEmergency(res.data[0]);
+      } else {
+        setActiveEmergency(null);
+      }
+    } catch {
+      // Quietly ignore
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -79,7 +117,11 @@ const ResponsiveLayout = ({
 
   React.useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 20000);
+    fetchEmergencyAlerts();
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchEmergencyAlerts();
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -95,78 +137,93 @@ const ResponsiveLayout = ({
     }
   };
 
+  if (!isDesktop) {
+    return <>{children}</>;
+  }
+
   const isPatient = localUser?.role === 'patient';
   const roleLabel = localUser?.role === 'admin' ? 'Quản trị viên hệ thống' : 
-                    localUser?.role === 'hospital_admin' ? 'Quản lý bệnh viện' : 
-                    (localUser?.role === 'doctor' || localUser?.role === 'technician') ? 'Bác sĩ & Kỹ thuật viên' : 
-                    (localUser?.role === 'nurse' || localUser?.role === 'receptionist') ? 'Điều dưỡng & Lễ tân' : 'Bệnh nhân';
+                    localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
+                    localUser?.role === 'doctor' ? 'Bác sĩ Chẩn đoán & Lâm sàng' : 
+                    localUser?.role === 'technician' ? 'Kỹ thuật viên Phim MRI' : 
+                    localUser?.role === 'nurse' ? 'Điều dưỡng' : 
+                    localUser?.role === 'receptionist' ? 'Lễ tân & Thu ngân' : 'Bệnh nhân';
 
-  // Menu items config
+  // Menu items config - Tách riêng từng role hoàn chỉnh
   const getMenuItems = (role) => {
     switch (role) {
       case 'patient':
         return [
-          { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: '🧠' },
-          { label: 'Phân tích AI', route: 'AIAnalysis', icon: '⚡' },
-          { label: 'Lịch sử khám', route: 'PatientRecords', icon: '📄' },
-          { label: 'Khai báo bệnh án', route: 'RecordVault', icon: '📋' },
-          { label: 'Mua Premium', route: 'Premium', icon: '⭐' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
-        ];
-      case 'admin':
-        return [
-          { label: 'Tổng quan', route: 'AdminBackoffice', icon: '📊' },
-          { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
-        ];
-      case 'hospital_admin':
-        return [
-          { label: 'Tổng quan', route: 'ClinicDashboard', icon: '📊' },
-          { label: 'Quản lý EMR', route: 'EMRDashboard', icon: '📁' },
-          { label: 'Quản lý tài khoản', route: 'StaffManagement', icon: '👥' },
-          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '📅' },
-          { label: 'Báo cáo tài chính', route: 'Financials', icon: '💰' },
-          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
-          { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: '🏥' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: Brain },
+          { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
+          { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
+          { label: 'Khai báo bệnh án', route: 'RecordVault', icon: ClipboardList },
+          { label: 'Mua Premium', route: 'Premium', icon: Star },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Hàng chờ Khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Danh mục Thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Lịch trực Bác sĩ', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
       case 'technician':
         return [
-          { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '📅' },
-          { label: 'Hàng đợi khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: '⚡' },
-          { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: '🧠' },
-          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: '📦' },
-          { label: 'Bệnh án Điện tử', route: 'DoctorPatientList', icon: '📁' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Lịch làm việc KTV', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'nurse':
         return [
-          { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '📅' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', icon: '📋' },
-          { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: '⚡' },
-          { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📁' },
-          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', icon: '💳' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
+          { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Bệnh án & EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
+          { label: 'Lịch làm việc Điều dưỡng', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'receptionist':
         return [
-          { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: '📅' },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: '📋' },
-          { label: 'Hàng đợi ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: '⚡' },
-          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: '📦' },
-          { label: 'Bệnh án Điện tử', route: 'EMRDashboard', icon: '📁' },
-          { label: 'Thu ngân & Hóa đơn', route: 'NurseReception', params: { tab: 'billing' }, icon: '💳' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
+          { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
+          { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Lịch làm việc Lễ tân', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'hospital_admin':
+        return [
+          { label: 'Tổng quan', route: 'ClinicDashboard', icon: LayoutDashboard },
+          { label: 'Quản lý EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Quản lý Nhân sự', route: 'StaffManagement', icon: Users },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Báo cáo Tài chính', route: 'Financials', icon: DollarSign },
+          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'admin':
+        return [
+          { label: 'Tổng quan', route: 'AdminBackoffice', icon: LayoutDashboard },
+          { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       default:
         return [
-          { label: 'Tổng quan', route: 'Home', icon: '📊' },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: '📞' },
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
     }
   };
@@ -180,123 +237,6 @@ const ResponsiveLayout = ({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  const isItemActive = (item) => {
-    if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') {
-      return true;
-    }
-    if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') {
-      return true;
-    }
-    if (item.params?.tab) {
-      return activeRoute === `${item.route}_${item.params.tab}`;
-    }
-    return activeRoute === item.route && item.route !== 'NurseReception';
-  };
-
-  // Đang đứng ngay trên route đích (chỉ khác tab) — dùng setParams vì navigate()
-  // tự điều hướng đến chính mình không đảm bảo cập nhật params.
-  const goToMenuItem = (item) => {
-    const currentBaseRoute = activeRoute?.split('_')[0];
-    if (currentBaseRoute === item.route) {
-      navigation.setParams(item.params || {});
-    } else {
-      navigation.navigate(item.route, item.params);
-    }
-  };
-
-  const renderNavItem = (item, onNavigate) => {
-    const isActive = isItemActive(item);
-    return (
-      <TouchableOpacity
-        key={`${item.route}_${item.label}`}
-        style={[styles.navItem, isActive && styles.navItemActive]}
-        onPress={() => onNavigate(item)}
-      >
-        <View style={styles.navIconContainer}>
-          <Text style={{ fontSize: 16 }}>{item.icon}</Text>
-        </View>
-        <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  if (!isDesktop) {
-    return (
-      <View style={{ flex: 1 }}>
-        <TouchableOpacity style={styles.mobileMenuFab} onPress={() => setShowMobileMenu(true)}>
-          <Text style={{ fontSize: 20, color: '#FFFFFF' }}>☰</Text>
-        </TouchableOpacity>
-
-        {children}
-
-        <Modal
-          visible={showMobileMenu}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowMobileMenu(false)}
-        >
-          <View style={styles.mobileMenuOverlay}>
-            <View style={styles.mobileMenuDrawer}>
-              <View style={styles.mobileMenuHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarText}>
-                      {localUser ? getInitials(localUser.profile?.name) : 'U'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
-                      {localUser?.role === 'doctor' ? 'Bác sĩ ' : ''}{localUser?.profile?.name || 'Người dùng'}
-                    </Text>
-                    <Text style={styles.userRole}>{roleLabel}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 4 }}>
-                  <Text style={{ fontSize: 18, color: '#64748B' }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
-                {menuItems.map((item) =>
-                  renderNavItem(item, (it) => {
-                    setShowMobileMenu(false);
-                    goToMenuItem(it);
-                  })
-                )}
-              </ScrollView>
-
-              <View style={styles.sidebarFooter}>
-                {isPatient && (
-                  <View style={styles.upgradeCard}>
-                    <Text style={styles.upgradeTitle}>Nâng cấp Premium 💎</Text>
-                    <Text style={styles.upgradeDesc}>
-                      Chỉ 99k/năm. Chat AI 24/7 & Phân tích chuyên sâu.
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.upgradeBtn}
-                      onPress={() => { setShowMobileMenu(false); navigation.navigate('Premium'); }}
-                    >
-                      <Text style={styles.upgradeBtnText}>Nâng cấp ngay</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 14 }}>🚪</Text>
-                    <Text style={styles.logoutText}>Đăng xuất</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.desktopWrapper}>
       {/* Left Sidebar */}
@@ -304,13 +244,13 @@ const ResponsiveLayout = ({
         {/* Brand Logo */}
         <View style={styles.brandContainer}>
           <Image
-            source={require('../../assets/icon.png')}
+            source={require('../../assets/logo.jpg')}
             style={styles.logoImage}
             resizeMode="contain"
           />
           <View>
             <Text style={styles.brandName}>NeuroScan AI</Text>
-            <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
           </View>
         </View>
 
@@ -322,16 +262,21 @@ const ResponsiveLayout = ({
             </Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
-              {localUser?.role === 'doctor' ? 'Bác sĩ ' : ''}{localUser?.profile?.name || 'Người dùng'}
+            <Text style={styles.userName} numberOfLines={1}>
+              {localUser?.profile?.name || 'Người dùng'}
             </Text>
             <Text style={styles.userRole}>
               {roleLabel}
             </Text>
           </View>
           {localUser && (
-            <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifModal(true)}>
-              <Text style={styles.bellIconText}>🔔</Text>
+            <TouchableOpacity 
+              style={styles.bellBtn} 
+              onPress={() => setShowNotifModal(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Thông báo"
+            >
+              <Bell size={17} color="#0891B2" strokeWidth={2.2} />
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>{unreadCount}</Text>
@@ -343,29 +288,65 @@ const ResponsiveLayout = ({
 
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
-          {menuItems.map((item) => renderNavItem(item, goToMenuItem))}
+          {menuItems.map((item) => {
+            let isActive = false;
+            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') {
+              isActive = true;
+            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') {
+              isActive = true;
+            } else if (item.params?.tab) {
+              if (activeRoute === `${item.route}_${item.params.tab}`) {
+                isActive = true;
+              } else if (activeRoute === item.route && item.params.tab === 'records') {
+                isActive = true;
+              }
+            } else if (activeRoute === item.route && item.route !== 'NurseReception' && item.route !== 'EMRDashboard') {
+              isActive = true;
+            }
+
+            const IconComponent = item.icon;
+            return (
+              <TouchableOpacity
+                key={`${item.route}_${item.label}`}
+                style={[styles.navItem, isActive && styles.navItemActive]}
+                onPress={() => navigation.navigate(item.route, item.params)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
+                  <IconComponent size={17} color={isActive ? '#0891B2' : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
+                </View>
+                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Footer Actions */}
         <View style={styles.sidebarFooter}>
           {isPatient && (
             <View style={styles.upgradeCard}>
-              <Text style={styles.upgradeTitle}>Nâng cấp Premium 💎</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Sparkles size={14} color="#FDE047" strokeWidth={2.4} />
+                <Text style={styles.upgradeTitle}>Nâng cấp Premium VIP</Text>
+              </View>
               <Text style={styles.upgradeDesc}>
                 Chỉ 99k/năm. Chat AI 24/7 & Phân tích chuyên sâu.
               </Text>
               <TouchableOpacity
                 style={styles.upgradeBtn}
                 onPress={() => navigation.navigate('Premium')}
+                activeOpacity={0.85}
               >
                 <Text style={styles.upgradeBtnText}>Nâng cấp ngay</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout} activeOpacity={0.7}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 14 }}>🚪</Text>
+              <LogOut size={15} color="#64748B" strokeWidth={2} />
               <Text style={styles.logoutText}>Đăng xuất</Text>
             </View>
           </TouchableOpacity>
@@ -374,6 +355,57 @@ const ResponsiveLayout = ({
 
       {/* Main Content Pane */}
       <View style={styles.mainContent}>
+        {/* Emergency Protocol Red/Orange Alert Banner */}
+        {activeEmergency && !isPatient && (
+          <View style={{
+            backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottomWidth: 2,
+            borderBottomColor: activeEmergency.level === 'RED' ? '#991B1B' : '#C2410C',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                padding: 6,
+                borderRadius: 9999,
+              }}>
+                <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.5} />
+              </View>
+              <View>
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                  CẢNH BÁO CẤP CỨU [{activeEmergency.level}] - BỆNH NHÂN: {activeEmergency.patientName?.toUpperCase()} ({activeEmergency.medicalId})
+                </Text>
+                <Text style={{ color: '#FEE2E2', fontSize: 12 }}>
+                  {activeEmergency.reason || 'Cần ưu tiên dời lịch & chuẩn bị phòng chụp MRI khẩn cấp!'}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#FFFFFF',
+                paddingVertical: 6,
+                paddingHorizontal: 14,
+                borderRadius: 6,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C', fontWeight: 'bold', fontSize: 12 }}>
+                Xử lý ngay
+              </Text>
+              <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C'} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {children}
       </View>
 
@@ -388,14 +420,17 @@ const ResponsiveLayout = ({
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🔔 Thông báo nội bộ</Text>
-                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
-                  <Text style={styles.modalCloseBtn}>✕</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                  <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <X size={18} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={styles.modalSub}>Lịch sử thông báo y khoa & hệ thống</Text>
+                <Text style={styles.modalSub}>Lịch sử cảnh báo & cập nhật bệnh án</Text>
                 {unreadCount > 0 && (
                   <TouchableOpacity onPress={markAllNotifsRead}>
                     <Text style={styles.markAllReadText}>Đánh dấu tất cả đã đọc</Text>
@@ -438,42 +473,6 @@ const ResponsiveLayout = ({
 };
 
 const styles = StyleSheet.create({
-  mobileMenuFab: {
-    position: 'absolute',
-    top: 44,
-    right: 16,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#15803D',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  mobileMenuOverlay: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  mobileMenuDrawer: {
-    width: '78%',
-    maxWidth: 300,
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-  },
-  mobileMenuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 48,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
   desktopWrapper: {
     flex: 1,
     flexDirection: 'row',
@@ -501,7 +500,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -520,15 +519,17 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   brandName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#0F172A',
-    leadingHeight: 18,
+    lineHeight: 19,
+    letterSpacing: -0.2,
   },
   brandSub: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#15803D',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0891B2',
+    letterSpacing: 0.6,
   },
   userCard: {
     flexDirection: 'row',
@@ -541,7 +542,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -558,11 +559,42 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#334155',
+    color: '#0F172A',
   },
   userRole: {
     fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
+  },
+  bellBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ECFEFF',
+    borderWidth: 1,
+    borderColor: '#CFFAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   navLinks: {
     flex: 1,
@@ -575,18 +607,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 10,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   navItemActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#ECFEFF',
+    borderColor: '#CFFAFE',
   },
   navIconContainer: {
     marginRight: 12,
-    width: 20,
+    width: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navIconContainerActive: {
+    transform: [{ scale: 1.05 }],
   },
   navLabel: {
     fontSize: 13,
@@ -594,8 +632,8 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   navLabelActive: {
-    color: '#15803D',
-    fontWeight: 'bold',
+    color: '#0891B2',
+    fontWeight: '700',
   },
   sidebarFooter: {
     padding: 16,
@@ -604,18 +642,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   upgradeCard: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     borderRadius: 12,
     padding: 12,
+    shadowColor: '#0891B2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   upgradeTitle: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 12,
-    marginBottom: 4,
   },
   upgradeDesc: {
-    color: '#D1FADF',
+    color: '#ECFEFF',
     fontSize: 10,
     lineHeight: 14,
     marginBottom: 10,
@@ -627,7 +668,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeBtnText: {
-    color: '#15803D',
+    color: '#0891B2',
     fontSize: 11,
     fontWeight: 'bold',
   },

@@ -1,0 +1,445 @@
+
+=== PAGE 1 ===
+Multimodal AI Consensus System (MAICS) with
+Risk-Calibrated Decision Support and Spatial
+Localization for Brain Tumor Classification
+Le Tran Gia Huy∗[0009−0008−5674−3512]
+FPT University Danang, Danang 550000, Vietnam
+*Corresponding Author: huylegiatran22@gmail.com
+Abstract. Accurate brain tumor classification via MRI is critical in
+clinical oncology, yet conventional deep learning models suffer from severe
+domain shifts, data leakage under slice-level evaluation, and high false-
+negative rates. We present theMultimodal AI Consensus System
+(MAICS), a three-tier arbitration architecture designed for privacy-
+preserving, risk-mitigated diagnosis support. Tier 1 establishes a soft-
+voting ensemble of ResNet50, EfficientNetV2, and DenseNet121 stabilized
+by Bayesian Test-Time Augmentation. Tier 2 deploys YOLOv8 for spatial
+region-of-interest localization. When these tiers disagree, Tier 3 condi-
+tionally invokes a Vision-Language Model (Gemini 3.1 Flash-Lite) as an
+anatomically-constrained VLM arbitrator guided by spatial priors. We
+further introduce anAnatomical Privacy Guardthat pre-filters non-
+axial acquisition planes, acting as both a facial-privacy shield and a VLM
+diagnostic-noise filter, reducing VLM API calls by 79.5% (12.14%→2.48%
+of scans) while suppressing hallucination-induced errors. Evaluated on
+3,461 test images (including 1,861 cases from Tam Tri Danang Hos-
+pital, all tumour-positive; no-tumor controls are Kaggle-sourced—see
+Limitations), MAICS achieved91.01% accuracyand92.04% Macro
+F1, significantly outperforming the baseline CNN ensemble (McNemar’s
+p = 0.000009). The system reduced the critical Glioma false-negative rate
+from 0.85% (Tier-1 only) to0.43%(90.31% Glioma recall), suggesting
+that multimodal consensus and risk-mitigation guardrails have potential
+to reduce critical diagnostic errors in a controlled research setting.
+Keywords:Brain Tumor·MRI·Consensus Ensemble·Multimodal
+VLM·Clinical Decision Support.
+1 Introduction
+Glioma, Meningioma, and Pituitary tumors are primary brain neoplasms requiring
+rapid, accurate MRI classification. Although Convolutional Neural Networks
+(CNNs) show strong computer-aided diagnosis (CAD) performance, clinical
+deployment faces three bottlenecks: (1) severe overfitting under scanner and
+domain shifts [1,2]; (2) high risk of fatal false negatives in malignant lesions [4,5];
+and (3) opaque “black-box” predictions lacking spatial interpretability [6,7,8].
+We propose theMultimodal AI Consensus System (MAICS), a three-
+tier diagnostic pipeline with risk-mitigation guardrails. Tier 1 (Bayesian Risk-
+Calibrated Ensemble) combines ResNet50 [9] (trained with a cost-sensitive risk
+=== PAGE 2 ===
+2 L.T.G. Huy
+loss), EfficientNetV2, and DenseNet121 via soft-voting, stabilized by Temper-
+ature Scaling and Bayesian Test-Time Augmentation (BayTTA) for epistemic
+uncertainty estimation. Tier 2 (YOLOv8 Spatial Localization) uses an indepen-
+dent YOLOv8m detector [7] for lesion bounding boxes. Tier 3 (Privacy-Guarded
+VLM Arbitration) conditionally invokes a Vision-Language Model (Gemini 3.1
+Flash-Lite) [10] as an anatomically-constrained VLM arbitrator when Tier 1 and
+Tier 2 disagree, or confidence falls below 0.80, using ROI crops and spatial priors.
+Key contributions:
+– Three-Tier Consensus Architecturecombining Bayesian CNN soft-voting,
+spatial YOLO detection, and VLM anatomical reasoning for interpretable MRI
+classification.
+– AnatomicalPrivacyGuardfilteringnon-axialplanes,shieldingfacialprivacy
+and suppressing VLM noise—reducing VLM calls by 79.5% (12.14%→2.48%
+of scans).
+– Risk-Mitigation & Case-Level Benchmarkreducing Glioma false nega-
+tives from 0.85% to 0.43% (90.31% recall) under strict patient-level splitting
+across 3,461 test images (1,861 hospital cases).
+2 Related Work
+Computer-aided diagnosis for brain MRI has historically relied on CNNs and
+ViTs, which overfit under domain shifts [1,2]. Existing CAD literature often uses
+randomized slice-level splitting, causing data leakage that yields over-optimistic
+performance (>99%) incapable of clinical generalization [3]. Spatial detectors like
+YOLOv8 provide localization [7] but lack medical reasoning. Multimodal VLMs
+like Gemini 3.1 [10] enable zero-shot reasoning [8], yet cloud APIs risk visual
+hallucination and patient privacy leakage on non-axial scans. MAICS addresses
+both gaps via a risk-calibrated consensus architecture with spatial detection and
+privacy-guarded VLM arbitration under patient-level evaluation.
+3 Proposed Method
+MAICS operates as a three-tier diagnostic pipeline integrating CNN classification
+ensembles, YOLOv8 spatial localization, and VLM (Gemini 3.1 Flash-Lite) neu-
+roanatomical reasoning. Tier 1 and Tier 2 run locally in parallel; upon diagnostic
+conflict, an Anatomical Privacy Guard pre-filters non-axial planes (reducing cloud
+VLM calls by 79.5%) before Tier 3 VLM arbitration is conditionally invoked
+under strict risk-mitigation guardrails.
+3.1 Image Preprocessing
+Raw MRI images undergo OpenCV preprocessing in three stages.
+(1) Contour croppingvia Otsu’s thresholding:
+t∗ = arg max
+t
+
+ωb(t)·ω f (t)·(µ b(t)−µ f (t))2 
+(1)
+=== PAGE 3 ===
+MAICS: Multimodal AI Consensus for Brain Tumor Classification 3
+Fig.1.Representative MRI samples of the four brain tumor classes used in this study.
+with morphological erosion/dilation (3× 3, 2 iterations) removing background
+margins, resized to224×224.
+(2) CLAHE(8 × 8tiles, clip limit Hc = 2.2) to enhance tumor-margin contrast.
+(3) Denoisingvia3 × 3Gaussian smoothing and channel replication to a
+224×224×3RGB tensor.
+3.2 Data Acquisition and Clinical Ground Truth
+To validate generalization under domain shift, we compiled 7,200 Kaggle slices [15]
+(5,600 train/1,600 test) and 5,000 BraTS 2020 Glioma slices [16], combined with
+clinical scans from Tam Tri Danang Hospital (IRB-approved: 9,309 slices across
+1,861 cases, each represented by one pre-selected diagnostic slice). Healthy controls
+derive exclusively from Kaggle (400 test images), as Tam Tri contained no negative
+controls (source asymmetry; see Table 1 and Table 2).
+This yields an 18,048-slice CNN training set and a 22,785-image YOLOv8
+training set (4,737 manually box-annotated). The 3,461-image unified test set
+(1,600 public+1,861 hospital cases, Table 1) was held out under strict patient-
+level splitting. All hospital DICOM identifiers were replaced with anonymised
+numeric codes prior to research use, with the original mapping retained solely by
+the hospital data custodian; axial diagnostic sequences (Ax_T2, Ax_FLAIR,
+Ax_T1, Ax_DWI, ADC) were used for training, while non-axial/localizer series
+were managed by the Anatomical Privacy Guard (Sect. 3.5).
+3.3 Tier 1: Risk-Calibrated Bayesian Ensemble
+Tier1combinesthreeCNNbackbones—ResNet50,EfficientNetV2,DenseNet121—
+via a risk-calibrated soft-voting ensemble.
+Risk-Calibrated Loss.ResNet50 is trained with cost-sensitive loss:
+LRisk = 1
+N
+NX
+i=1
+h
+LCE(yi,ˆyi) +λ·C yi,ˆyi
+i
+(2)
+where C is a clinical risk penalty matrix (order: Glioma, Meningioma, No Tumor,
+Pituitary):
+C=
+
+
+0.0 1.0 5.0 1.0
+1.0 0.0 3.0 1.0
+1.0 1.0 0.0 1.0
+1.0 1.0 3.0 0.0
+
+ (3)
+=== PAGE 4 ===
+4 L.T.G. Huy
+Table 1.Dataset composition by split, class, and source. Each Tam Tri case is rep-
+resented by one pre-selected diagnostic slice.†No hospital-derived no-tumor controls
+available; all no-tumor test images originate from the Kaggle public benchmark (source
+asymmetry; see Sect. 3.2 and Table 2).
+Split Class Tam Tri Kaggle BraTS Total
+Train
+Glioma 3,106 1,400 5,000 9,506
+Meningioma 2,000 1,400 — 3,400
+No Tumor — 1,400 — 1,400
+Pituitary 2,342 1,400 — 3,742
+Test
+Glioma 776 400 — 1,176
+Meningioma 500 400 — 900
+No Tumor
+†
+— 400 — 400
+Pituitary 585 400 — 985
+Total 9,309 7,200 5,000 21,509
+Table 2.Source-stratified and case-level classification performance of MAICS (Guard-
+ON) with 95% Wilson confidence intervals. Tam Tri hospital cases are all tumour-positive
+(no-tumor controls drawn exclusively from Kaggle benchmark). Domain probe AUC:
+0.991±0.003. Case-level McNemar (Tam Tri):p= 0.091(n 01 = 12,n 10 = 23).
+Class Overall (N=3,461) Tam Tri Hospital (N=1,861) Kaggle Benchmark (N=1,600)
+Recall 95% CI Recall 95% CI Recall 95% CI
+Glioma 90.31% [88.48, 91.87]% 89.69% [87.35, 91.64]% 91.50% [88.36, 93.85]%
+Meningioma 89.56% [87.39, 91.39]% 85.40% [82.04, 88.23]% 94.75% [92.11, 96.54]%
+No Tumor† 99.25% [97.82, 99.74]% N/A† — 99.25% [97.82, 99.74]%
+Pituitary 89.85% [87.80, 91.58]% 83.42% [80.19, 86.21]% 99.25% [97.82, 99.74]%
+Macro-F192.04%64.39% 96.17%
+Accuracy91.01%[90.02, 91.92]%86.57%[84.94, 88.04]% 96.19%
+Fatal FNR0.43%[0.18, 0.99]%0.13%[0.02, 0.73]% 0.75%
+†No-tumor class: Kaggle-sourced only; not a hospital-validated negative control (Contingency Plan A).
+heavily penalizing Glioma→No-Tumor misclassification (weight 5.0) relative to
+other confusions (weight≤3.0).
+Calibration and Voting.EfficientNetV2 and DenseNet121 are temperature-
+scaled (T= 1.3):
+ˆPm = softmax
+ zm
+T
+
+(4)
+The ensemble probability is:
+Pv = 0.8·P ResNet50 + 0.1· ˆPEffNetV2 + 0.1· ˆPDenseNet121 (5)
+BayTTA.For augmented viewsv∈ {original, flipped}, Shannon entropy:
+H(P v) =−
+KX
+k=1
+Pv,k log(Pv,k +ε)(6)
+=== PAGE 5 ===
+MAICS: Multimodal AI Consensus for Brain Tumor Classification 5
+drives a softmax-based dynamic weight:
+αv = exp(−H(P v))P
+u exp(−H(P u)) (7)
+giving the final Tier-1 outputcBayTTA = P
+v αv · Pv, prioritizing lower-entropy
+(higher-certainty) views.
+3.4 Tier 2: YOLOv8 Spatial Localization
+Tier 2 deploys a custom-trained YOLOv8m detector for independent spatial
+localization, optimized with the standard YOLO multi-task loss (CIoU box
+regression+BCE classification+Distribution Focal Loss) [ 7]. Beyond providing
+an independent spatial class predictioncYOLO, the detector’s cropped bounding-
+boxROIisforwardedtoTier3torestrictVLMattentionandpreventhallucination
+on background noise.
+3.5 Tier 3: VLM-Based Conditional Arbitration and Risk-Mitigation
+Guardrails
+To minimize latency (∼75ms fast path) and API cost, Gemini 3.1 Flash-Lite is
+invoked only upon diagnostic conflict:cBayTTA ̸= cYOLO, or Tier-1 confidence<
+0.80(entropy>0.15).
+Privacy-Filtered Arbitration.Upon conflict, the Anatomical Privacy Guard
+first evaluates the acquisition plane. Non-axial scans (Sagittal/Coronal/Localizer)
+block Tier-3 invocation, defaulting tocBayTTA. Confirmed axial slices forward
+the Tier-2 ROI crop with anatomical prompt constraints to the VLM, yielding
+verdict(c VLM, pVLM).
+Risk-Mitigation Guardrails:
+– Guard-1 (Dual-Tumor Agreement):If both Tier 1 and Tier 2 independently
+detect a tumor, the VLM cannot override to “no tumor.”
+– Guard-2 (Malignant Override Gating):If Tier 2 fails to localize a box, overriding
+to “no tumor” requirespVLM ≥0.97.
+– General Fallback:Otherwise, pVLM ≥ 0.85is required to accept cVLM; below
+this threshold the system defaults tocBayTTA.
+VLM Input and Data Governance.Tier 3 transmits three image views to the
+Gemini API: (i) the full axial slice with the YOLOv8 bounding-box overlay (red
+rectangle), (ii) an adaptive-margin ROI crop, and (iii) a2× zoomed view of that
+crop. No DICOM metadata, patient identifiers, or demographic information is
+included in the transmission. The Anatomical Privacy Guard blocks all non-axial
+slices before transmission; only confirmed axial views are forwarded. Hospital
+DICOM identifiers were replaced with anonymised numeric codes prior to any
+research use, with the original mapping retained solely by the Tam Tri Danang
+Hospital data custodian (retrospective study of anonymised diagnostic images;
+IRB waiver confirmed by Tam Tri Danang Hospital Ethics Committee). The
+Gemini Developer API (paid tier) was used under Google’s enterprise data-
+handling terms, under which submitted prompts and images are not used to train
+Google models.
+=== PAGE 6 ===
+6 L.T.G. Huy
+3.6 Implementation Environment
+MAICS was implemented in Python 3.10 (TensorFlow 2.15 for CNN backbones;
+PyTorch/Ultralytics for YOLOv8m; OpenCV 4.8 for preprocessing) on an Intel
+i5-12500H/16GB RAM/RTX 3050 (4GB VRAM) workstation—intentionally
+edge-level hardware to demonstrate feasibility for low-resource clinical deployment.
+Gemini API calls were routed through a multi-key proxy for rate-limit resilience.
+End-to-end latency averaged 148.24ms/image (75ms fast-path for 97.52% of
+scans;∼1.16s when Tier-3 is invoked).
+4 Experiments
+4.1 Hyperparameters and Training Settings
+Data split: 80/10/10 train/val/test, enforced at the patient level. YOLOv8m:
+AdamW, lr = 10−4, batch=4, 40 epochs. CNN backbones: Adam,lr = 10−4 (Co-
+sine Annealing), batch=32, 25 epochs; ResNet50 trained with the risk-calibrated
+loss (Sect. 3.3).
+4.2 Benchmarking and Results Analysis
+BayTTA integration yielded strong diagnostic stability: across the 3,461-image
+test set, the Tier-1 ensemble alone achieved 89.92% accuracy/90.96% Macro F1.
+The full three-tier system further reduced Fatal FNR (Glioma→No-Tumor mis-
+classification) from 0.85% (Tier-1 only) to0.43%with active Risk-Mitigation
+Guardrails (Guard-ON)—only 5 missed cases of 1,176 true Glioma scans, 90.31%
+recall, a61.6% relative reductionversus the ResNet50 baseline (1.12% Fa-
+tal FNR). This safety gain is directly attributable to Guard-1 and Guard-2
+(Sect. 3.5); disabling both (Guard-OFF) raised Fatal FNR to 0.68% (8 cases),
+confirming that consensus plus guardrails jointly suppress VLM hallucination-
+driven errors.
+Statistical Significance and Case-Level Analysis.At the image level, the
+improvement from Guard-OFF to Guard-ON is statistically significant (McNe-
+mar’s test: p = 0.000009, n01 = 14,n10 = 8,N = 3,461images). Since Kaggle
+data lacks patient identifiers, a full case-level McNemar analysis is limited to
+Tam Tri hospital cases (N=1,861 cases, one representative slice per case). At
+this case level, the Guard-ON advantage does not reach statistical significance
+(p = 0.091, n01 = 6, n10 = 2), consistent with the substantially reduced sta-
+tistical power when moving fromN = 3,461images to N = 1,861cases. All
+performance estimates with 95% Wilson confidence intervals are reported in
+Table 2; source-stratified results are in Table 2. On the Tam Tri hospital subset
+alone, MAICS achieved 86.57% case-level accuracy [95% CI: 84.94–88.04%] and
+a hospital-validated Fatal FNR of 0.13% [95% CI: 0.02–0.73%] (1 missed Glioma
+of 776 hospital Glioma cases).
+=== PAGE 7 ===
+MAICS: Multimodal AI Consensus for Brain Tumor Classification 7
+Table 3.Comparison with SOTA studies
+(†Macro F1 computed from per-class F1).
+Criteria MAICS FALCON MajVote BRAIN- Brain-(G-ON) [11] [12] META[13] Fusion[14]
+Accuracy91.01%100.00% 99.80% 97.10% 99.86%F1 Macro† 92.04%99.03% 98.80% 97.13% 99.20%Recall Glioma90.31%N/R 98.70% N/R N/RFatal FNR0.43%N/R N/R N/R N/RPatient Split Yes No No No NoSafety Guards Yes No No No No
+Table 4.Ablation and overfitting com-
+parison.
+Configuration Params Acc. Recall
+ViT-Tiny 245K 67.44% 45.30%
+Custom CNN (scratch) 1.2M 25.25% 12.50%
+ResNet50 (Baseline) 23.5M 89.92% 84.75%
+MAICS (VLM-Free) 85M 88.50% 82.10%
+MAICS (Full Consensus) 85M91.01% 90.31%
+4.3 Comparison with State-of-the-Art Studies
+Table 3 compares MAICS with recent state-of-the-art methods. Although some
+report near-perfect accuracy (>99%), they rely on randomized slice-level split-
+ting, which leaks adjacent same-patient slices across train/test partitions and
+inflates performance. MAICS strictly enforces patient-level splitting on real-
+world hospital data. The system achieved 90.31% Glioma Recall; activating
+Risk-Mitigation Guardrails reduced the critical Glioma false-negative rate from
+0.68% to 0.43%. The no-tumor class achieved 99.25% Recall, but a domain
+discrimination probe (AUC=0.991; Table 2) confirms that this metric is sub-
+stantially source-confounded—see Limitations (Sect. 5) for full disclosure. The
+most reliable hospital-scenario estimates derive from the Tam Tri-only subset
+(86.57% accuracy, 89.69% Glioma Recall, 0.13% hospital-validated FNR on 1,861
+tumour-positive cases; Table 2).
+4.4 VLM Prompt Engineering Ablation
+Prompt design was critical to arbitration reliability: free-form queries yielded
+low, unreliable arbitration accuracy; adding explicit neuroanatomical grounding
+rules improved reasoning validity; enforcing JSON-schema output eliminated all
+parsing errors (100% success); and feeding quantitative uncertainty (Shannon
+entropy) and YOLOv8 coordinates into the prompt raised conflict-resolution
+accuracy to 76.81%. A calibration pitfall was also identified: an unconstrained
+float confidence field caused artificially low VLM confidence (0.05–0.15) even on
+correct predictions, triggering unnecessary Tier-1 fallbacks; scoping the schema
+to realistic ranges (0.85–0.99 for confident cases) restored well-calibrated outputs,
+allowing Guard-1/Guard-2 to function correctly and Fatal FNR to reach 0.43%.
+4.5 Multimodal Interpretability Case Study
+Fig. 2 illustrates MAICS’s interpretability for a challenging intra-axial lesion:
+alongside the original slice, the Grad-CAM heatmap [6], and the YOLOv8 ROI,
+the VLM outputs a structured Chain-of-Thought JSON citing specific anatomical
+features (irregular borders, vasogenic edema, absent dural-tail sign) supporting
+its Glioma verdict—replacing an opaque classification with a clinician-auditable
+rationale.
+4.6 Human-in-the-Loop Integration
+A core design objective of MAICS is not to replace the radiologist, but to act as
+a pre-screening triage layer that escalates uncertain cases to human review. The
+=== PAGE 8 ===
+8 L.T.G. Huy
+Fig.2.Clinical case study: multimodal interpretability and Chain-of-Thought reasoning
+output of Tier 3.
+three-tier architecture provides natural trigger points for Human-in-the-Loop
+(HITL) intervention:
+1. Tier-1 Uncertainty Flag.When BayTTA posterior entropy exceeds the
+conflict threshold (H >0.15, corresponding to Tier-1 confidence< 0.80), the
+case is flagged asuncertainand routed to Tier-3. In a clinical workflow, this
+same flag can simultaneously route the case to a radiologist worklist, ensuring
+that all low-confidence predictions receive mandatory human review before
+any report is issued.
+2. Guard Trigger.When either Guard-1 (dual-tumor agreement) or Guard-2
+(low-box confidence override) is activated, the system has detected a potential
+safety-critical scenario. These cases are prime candidates for immediate escala-
+tion: the VLM’s Chain-of-Thought rationale (Fig. 2) is forwarded alongside the
+Grad-CAM heatmap and YOLOv8 bounding box to the reviewing clinician,
+providing full multimodal context rather than a bare classification label.
+3. Radiologist Feedback Loop.Radiologist corrections on escalated cases can
+be logged as structured feedback (class label + free-text note) to curate a
+growing set of hard cases for active-learning fine-tuning of Tier-1 ensemble
+weights—enabling continual improvement without requiring full retraining.
+Escalation Rate Estimate.Tier-3 is invoked for2.48%of scans (post-Privacy
+Guard); in a hypothetical HITL deployment, mandatory human review would
+therefore cover approximately2.5–5%of cases—compatible with existing second-
+read radiology protocols. The remaining≈ 95%of high-confidence cases would
+proceed through automated pre-screening only. The HITL framework described
+here has not been prospectively evaluated; clinical validation constitutes future
+work.
+5 Limitations and Threats to Validity
+This study has four main limitations.First and most critical, the no-tumor
+class is drawn exclusively from a public benchmark (Kaggle), while all tumour-
+positive cases are hospital-sourced (Tam Tri). A domain discrimination probe
+(logistic regression on ResNet50 penultimate-layer features, 5-fold CV) yielded
+AUC=0.991 ±0.003, confirming that the representation nearly perfectly encodes
+acquisition source. Accordingly, the overall no-tumor recall (99.25%) and Fatal
+FNR (0.43%)cannot be interpreted as unbiased clinical estimates; the
+hospital-only results (Table 2)—86.57% accuracy, 89.69% Glioma Recall, 0.13%
+FNR [95% CI: 0.02–0.73%]—are the most reliable hospital-scenario estimates.
+=== PAGE 9 ===
+MAICS: Multimodal AI Consensus for Brain Tumor Classification 9
+Prospective validation with hospital-derived negative controls is essential before
+clinical use.Second, each Tam Tri case is one pre-selected diagnostic slice; case-
+level results with 95% Wilson CIs are in Table 2.Third, the dataset is single-center
+without multi-center validation.Fourth, Tier-3 depends on an external cloud
+VLM API; the Anatomical Privacy Guard reduces VLM calls by 79.5%, and
+the Gemini API (paid tier) was used under Google’s enterprise data terms. Full
+HIPAA/GDPR compliance would require a signed BAA or migration to a local
+VLM (e.g., LLaVA-Med [17]), identified as future work.
+6 Conclusion
+This paper presented theMultimodal AI Consensus System (MAICS),
+a novel three-tier arbitration architecture engineered to address domain shift,
+high false-negative rates, and the lack of interpretability in MRI-based brain
+tumor classification. Evaluated on a unified 3,461-image test set under strict
+patient-level splitting, MAICS achieved an overall diagnostic accuracy of91.01%
+(3,150/3,461 correct) and a Macro F1-score of92.04%.
+Active Risk-Mitigation Guardrails reduced the critical Glioma false-negative
+rate from 0.85% to0.43%(5 missed tumors of 1,176 Glioma test cases)—a sta-
+tistically significant49.4% relative risk reduction(McNemar’s p = 0.000009
+at the test-image level). The VLM arbitrator resolved 76.81% of diagnostic con-
+flicts (100.0% JSON parsing reliability), providing transparent Chain-of-Thought
+reasoning. Source-stratified analysis (Table 2) and case-level confidence intervals
+(Table 2) are provided to support appropriate interpretation under the dataset
+constraints described in Section 5.
+Scope statement.The system has been evaluated in a controlled research
+setting using retrospective, anonymised data, and has not undergone prospec-
+tive clinical validation or regulatory review; the reported results should not be
+interpreted as evidence of clinical-grade diagnostic performance. Future work
+includes: (1) prospective validation withhospital-derived negative controlsto
+resolve source confounding; (2) locally-hosted open-source VLMs for full HIPAA
+compliance; (3) multi-center validation; and (4) prospective HITL integration.
+Data and Code A vailability
+This study uses public Kaggle [15] and BraTS 2020 [16] datasets, combined with
+clinical scans from Tam Tri Danang Hospital (IRB-approved). Source code and
+evaluation scripts are available athttps://github.com/huylegiatranGB-cmd/
+MRI_MAICS. Raw patient identifiers remain with the hospital data custodian;
+de-identified data and model weights are provided for reproducibility.
+References
+1. Su, Z., Guo, J., Yang, X., Wang, Q., Coenen, F., Hussain, A., Huang, K.: Navigating
+distribution shifts in medical image analysis: A survey. arXiv:2411.05824 (2024)
+2. Matta, S., Lamard, M., Zhang, P., Le Guilcher, A., Borderie, L., Cochener, B.,
+Quellec, G.: A systematic review of generalization research in medical image
+classification. Comput. Biol. Med.183, 109256 (2024)
+=== PAGE 10 ===
+10 L.T.G. Huy
+3. Niu, Z., Ouyang, S., Xie, S., Chen, Y., Lin, L.: A survey on domain generalization
+for medical image analysis. arXiv:2402.05035 (2024)
+4. Pereira, M.R.S., Cordeiro, F.R.: Risk-aware robust learning: Reducing clinical risk
+under label noise in medical image classification. In: Proc. SBCAS, pp. 325–336
+(2026)
+5. Shawon, M.T.R., et al.: Explainable cost-sensitive deep neural networks for brain
+tumor detection from brain MRI images considering data imbalance. Multimed.
+Tools Appl.84, 43615–43642 (2025)
+6. Selvaraju, R.R., Cogswell, M., Das, A., Vedantam, R., Parikh, D., Batra, D.: Grad-
+CAM: Visual explanations from deep networks via gradient-based localization. In:
+Proc. IEEE ICCV, pp. 618–626 (2017)
+7. Jocher, G., Chaurasia, A., Qiu, J.: YOLOv8 by Ultralytics. GitHub repository
+(2023).https://github.com/ultralytics/ultralytics
+8. Ali, M.U., Zafar, A., Kim, S., Kim, K.S., Lee, S.W.: From task-specific to foundation
+models: A paradigm shift in medical vision-language analysis. Comput. Sci. Rev.
+59, 100831 (2025)
+9. He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition.
+In: Proc. IEEE CVPR, pp. 770–778 (2016)
+10. Gemini Team, Google: Gemini 2.5: Pushing the Frontier with Advanced Rea-
+soning, Multimodality, Long Context, and Next Generation Agentic Capabil-
+ities. Technical Report arXiv:2507.06261. Google DeepMind (2025). https://
+doi.org/10.48550/arXiv.2507.06261. Note: model variant used in experiments
+is gemini-2.0-flash-lite; model card athttps://ai.google.dev/gemini-api/
+docs/models
+11. Bouguerra, O., Brik, Y., Alzahrani, S.I., Attallah, B., Djerioui, M., Shayea, I., et al.:
+FALCON: A multi-layered fusion ensemble for high-certainty brain tumor diagnosis
+from MRI. J. Radiat. Res. Appl. Sci.18(4), 101940 (2025)
+12. Liu, K.Y., Lu, N.H., Huang, Y.H., Matsushima, A., Kimura, K., Okamoto, T.,
+Chen, T.B.: Majority voting ensemble of deep CNNs for robust MRI-based brain
+tumor classification. Diagnostics15(14), 1782 (2025)
+13. Napa, K.K., Murugan, S., Murugan, J.S., Jayanthi, A.: BRAIN-META: A repro-
+ducible CNN-vision transformer meta-ensemble pipeline for explainable brain tumor
+classification. MethodsX16, 103769 (2025)
+14. Houmaidi, W., Sabiri, Y., El Mansour Billah, S., Abouaomar, A.: Accelerating
+cerebral diagnostics with BrainFusion: A comprehensive MRI tumor framework.
+arXiv:2509.24149 (2025)
+15. Bhuvaji, S., Kadam, A., Bhumkar, P., Dedge, S., Kanchan, S.: Brain tumor classifi-
+cation (MRI) [Data set]. Kaggle (2020).https://doi.org/10.34740/KAGGLE/DSV/
+1183165
+16. Menze, B.H., Jakab, A., Bauer, S., Kalpathy-Cramer, J., Farahani, K., Kirby, J., et
+al.: The multimodal brain tumor image segmentation benchmark (BRATS). IEEE
+Trans. Med. Imaging34(10), 1993–2024 (2015)
+17. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. In: Proc. NeurIPS36,
+34892–34916 (2023)

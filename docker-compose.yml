@@ -1,0 +1,116 @@
+version: '3.8'
+
+# ==============================================================================
+# NeuroScan AI - Multi-Container Production Orchestration
+# Services:
+#   1. mongodb: MongoDB 7.0 Community Database
+#   2. backend: Node.js Express REST API & Mini-PACS Controller
+#   3. ai-service: Python 3.10 FastAPI YOLOv8 Brain Tumor Detector
+#   4. frontend: Expo React Native Web App (Nginx SPA)
+#   5. nginx: Central Reverse Proxy Gateway
+# ==============================================================================
+
+services:
+  # ── 1. Cơ sở dữ liệu MongoDB ───────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: neuroscan-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - neuroscan-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 2. Node.js Backend API Core ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    container_name: neuroscan-backend
+    restart: unless-stopped
+    env_file:
+      - ./BE/.env
+    environment:
+      - PORT=5000
+      - NODE_ENV=${NODE_ENV:-production}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/neuroscan}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - AI_SERVER_URL=http://ai-service:8000/predict
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - neuroscan-network
+
+  # ── 3. FastAPI YOLOv8 Brain Tumor AI Engine ───────────────────────────────
+  ai-service:
+    build:
+      context: ./MRIteam_team5/MRIteam
+      dockerfile: Dockerfile
+    container_name: neuroscan-ai
+    restart: unless-stopped
+    env_file:
+      - ./MRIteam_team5/MRIteam/.env
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - AUDIT_DB_PATH=/app/data/audit_logs.db
+    volumes:
+      - ai_data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - neuroscan-network
+
+  # ── 4. Expo React Native Web Frontend ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./FE
+      dockerfile: Dockerfile
+      args:
+        - EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL:-}
+    container_name: neuroscan-frontend
+    restart: unless-stopped
+    networks:
+      - neuroscan-network
+
+  # ── 5. Nginx Reverse Proxy Gateway ─────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: neuroscan-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - ai-service
+      - frontend
+    networks:
+      - neuroscan-network
+
+networks:
+  neuroscan-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
+  uploads_data:
+    driver: local
+  ai_data:
+    driver: local
+

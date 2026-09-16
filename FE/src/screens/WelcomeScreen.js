@@ -17,13 +17,14 @@ import {
 import Config from '../constants/config';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
+import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check } from 'lucide-react';
 import styles from './WelcomeScreen.styles';
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
 const servicesData = [
-  { id: 1, title: 'Chụp cộng hưởng từ MRI Não', icon: '🧠' },
-  { id: 2, title: 'Phân tích & Tầm soát U não AI', icon: '🤖' },
-  { id: 3, title: 'Chẩn đoán hình ảnh Ung thư Não', icon: '🔬' },
+  { id: 1, title: 'Chụp cộng hưởng từ MRI Não', icon: 'Brain' },
+  { id: 2, title: 'Phân tích & Tầm soát U não AI', icon: 'Sparkles' },
+  { id: 3, title: 'Chẩn đoán hình ảnh Ung thư Não', icon: 'Microscope' },
 ];
 
 const WelcomeScreen = ({ navigation }) => {
@@ -273,7 +274,7 @@ const WelcomeScreen = ({ navigation }) => {
         setPassword(password);
         showAlert(
           'success',
-          'Đăng ký thành công! 🎉',
+          'Đăng ký thành công!',
           'Tài khoản bệnh nhân đã được tạo. Vui lòng nhập mã OTP 6 chữ số vừa gửi đến email của bạn vào ô OTP xuất hiện ở form đăng nhập bên dưới để kích hoạt.' +
           (data.debugOtp ? ` (Mã debug: ${data.debugOtp})` : '')
         );
@@ -311,7 +312,7 @@ const WelcomeScreen = ({ navigation }) => {
         email: verificationEmail,
         otp: verificationCode
       });
-      showAlert('success', 'Kích hoạt thành công! 🎉', 'Tài khoản bệnh nhân đã được kích hoạt thành công. Bây giờ bạn có thể đăng nhập.', () => {
+      showAlert('success', 'Kích hoạt thành công!', 'Tài khoản bệnh nhân đã được kích hoạt thành công. Bây giờ bạn có thể đăng nhập.', () => {
         setShowVerification(false);
         setVerificationCode('');
         setActiveForm('login');
@@ -630,7 +631,7 @@ const WelcomeScreen = ({ navigation }) => {
                       style={styles.passwordVisibilityBtn}
                       onPress={() => setShowPassword(!showPassword)}
                     >
-                      <Text style={styles.passwordVisibilityText}>{showPassword ? '👁️' : '🔒'}</Text>
+                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                     </TouchableOpacity>
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
@@ -677,7 +678,7 @@ const WelcomeScreen = ({ navigation }) => {
                       onPress={() => setRememberMe(!rememberMe)}
                     >
                       <View style={[styles.checkbox, rememberMe ? styles.checkboxChecked : null]}>
-                        {rememberMe && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                        {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
                       </View>
                       <Text style={styles.rememberText}>
                         Lưu thông tin đăng nhập (Không khuyến nghị trên thiết bị công cộng)
@@ -697,7 +698,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập ➔' : 'Đăng nhập ➔'}
+                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -815,7 +816,7 @@ const WelcomeScreen = ({ navigation }) => {
                       style={styles.passwordVisibilityBtn}
                       onPress={() => setShowPassword(!showPassword)}
                     >
-                      <Text style={styles.passwordVisibilityText}>{showPassword ? '👁️' : '🔒'}</Text>
+                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                     </TouchableOpacity>
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
@@ -1023,7 +1024,7 @@ const WelcomeScreen = ({ navigation }) => {
                       style={styles.passwordVisibilityBtn}
                       onPress={() => setShowPassword(!showPassword)}
                     >
-                      <Text style={styles.passwordVisibilityText}>{showPassword ? '👁️' : '🔒'}</Text>
+                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                     </TouchableOpacity>
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
@@ -1070,7 +1071,7 @@ const WelcomeScreen = ({ navigation }) => {
                       onPress={() => setRememberMe(!rememberMe)}
                     >
                       <View style={[styles.checkbox, rememberMe ? styles.checkboxChecked : null]}>
-                        {rememberMe && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                        {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
                       </View>
                       <Text style={styles.rememberText}>
                         Lưu thông tin đăng nhập (Không khuyến nghị trên thiết bị công cộng)
@@ -1090,7 +1091,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập ➔' : 'Đăng nhập ➔'}
+                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -1208,7 +1209,7 @@ const WelcomeScreen = ({ navigation }) => {
                       style={styles.passwordVisibilityBtn}
                       onPress={() => setShowPassword(!showPassword)}
                     >
-                      <Text style={styles.passwordVisibilityText}>{showPassword ? '👁️' : '🔒'}</Text>
+                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                     </TouchableOpacity>
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
@@ -1259,22 +1260,22 @@ const WelcomeScreen = ({ navigation }) => {
           <View style={styles.alertCard}>
             <View style={[
               styles.alertIconCircle,
-              customAlert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              customAlert.type === 'success' && { backgroundColor: '#ECFDF5' },
               customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
-              customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
+              customAlert.type === 'info' && { backgroundColor: '#F0F9FF' },
             ]}>
-              {customAlert.type === 'success' && <Text style={[styles.alertIconText, { color: '#16A34A' }]}>✓</Text>}
-              {customAlert.type === 'error' && <Text style={[styles.alertIconText, { color: '#DC2626' }]}>✕</Text>}
-              {customAlert.type === 'info' && <Text style={[styles.alertIconText, { color: '#2563EB' }]}>ℹ</Text>}
+              {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" strokeWidth={2.5} />}
+              {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" strokeWidth={2.5} />}
+              {customAlert.type === 'info' && <Info size={28} color="#0891B2" strokeWidth={2.5} />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
             <TouchableOpacity
               style={[
                 styles.alertButton,
-                customAlert.type === 'success' && { backgroundColor: '#15803D' },
+                customAlert.type === 'success' && { backgroundColor: '#059669' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
-                customAlert.type === 'info' && { backgroundColor: '#2563EB' },
+                customAlert.type === 'info' && { backgroundColor: '#0891B2' },
               ]}
               onPress={() => {
                 setCustomAlert(prev => ({ ...prev, visible: false }));

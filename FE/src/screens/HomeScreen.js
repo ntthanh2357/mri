@@ -17,6 +17,28 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './HomeScreen.styles';
 import Colors from '../constants/colors';
 import Config from '../constants/config';
+import {
+  UploadCloud,
+  Scan,
+  UserCheck,
+  ClipboardList,
+  PhoneCall,
+  MessageSquare,
+  Clock,
+  Stethoscope,
+  Microscope,
+  FolderArchive,
+  UserPlus,
+  FileText,
+  CreditCard,
+  Settings,
+  Edit3,
+  LogOut,
+  AlertCircle,
+  Folder,
+  Sparkles,
+  Save,
+} from 'lucide-react';
 
 const SHIFT_LABELS = {
   'sáng': 'Ca Sáng',
@@ -151,11 +173,11 @@ const HomeScreen = ({ route, navigation }) => {
           const pending = emrRes.data.filter(r => r.signStatus === 'Chưa duyệt');
           setPendingRecords(pending);
         }
-
+        
         if (queueRes && queueRes.visits) {
           setQueueVisits(queueRes.visits);
         }
-
+        
         const todaySchedules = schedRes?.data?.schedules;
         if (Array.isArray(todaySchedules)) {
           const todayStr = new Date().toDateString();
@@ -247,7 +269,7 @@ const HomeScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#15803D" />
+        <ActivityIndicator size="large" color="#0891B2" />
         <Text style={styles.loadingText}>Đang tải thông tin cá nhân...</Text>
       </View>
     );
@@ -256,7 +278,7 @@ const HomeScreen = ({ route, navigation }) => {
   if (error || !user) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorIcon}>⚠️</Text>
+        <AlertCircle size={48} color="#EF4444" style={{ marginBottom: 16 }} />
         <Text style={styles.errorText}>{error || 'Không tìm thấy thông tin người dùng.'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={handleLogout}>
           <Text style={styles.retryButtonText}>Quay lại trang chủ</Text>
@@ -268,10 +290,15 @@ const HomeScreen = ({ route, navigation }) => {
   const isPatient = user.role === 'patient';
   const isNurse = user.role === 'nurse';
   const isDoctor = user.role === 'doctor';
-  const roleLabel =
-    user.role === 'admin' ? 'Quản trị viên' :
-      user.role === 'doctor' ? 'Bác sĩ' :
-        user.role === 'nurse' ? 'Điều dưỡng' : 'Bệnh nhân';
+  const isTechnician = user.role === 'technician';
+  const isReceptionist = user.role === 'receptionist';
+  const roleLabel = 
+    user.role === 'admin' ? 'Quản trị viên' : 
+    user.role === 'hospital_admin' ? 'Quản trị Bệnh viện' :
+    user.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
+    user.role === 'technician' ? 'Kỹ thuật viên Chẩn đoán Hình ảnh' :
+    user.role === 'nurse' ? 'Điều dưỡng' : 
+    user.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 'Bệnh nhân';
 
   return (
     <ResponsiveLayout
@@ -288,394 +315,416 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{getInitials(user.profile?.name)}</Text>
               </View>
-              <View style={{ flex: 1 }}>
+              <View>
                 <Text style={styles.welcomeText}>Xin chào,</Text>
-                <Text style={styles.userName} numberOfLines={1} ellipsisMode="tail">
-                  {user.role === 'doctor' ? 'Bác sĩ ' : ''}{user.profile?.name || 'Người dùng'}
-                </Text>
+                <Text style={styles.userName}>{user.profile?.name || 'Người dùng'}</Text>
               </View>
             </View>
+
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <LogOut size={14} color="#64748B" />
+                <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* User Role Badge */}
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, isPatient ? styles.patientBadge : styles.doctorBadge]}>
-              <Text style={[styles.badgeText, isPatient ? styles.patientBadgeText : styles.doctorBadgeText]}>
-                ● {roleLabel}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.emailText}>{user.email}</Text>
-              <TouchableOpacity style={styles.editProfileTrigger} onPress={handleOpenEditProfile}>
-                <Text style={styles.editProfileTriggerText}>✏️ Chỉnh sửa thông tin</Text>
-              </TouchableOpacity>
-            </View>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {/* User Role Badge */}
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, isPatient ? styles.patientBadge : styles.doctorBadge]}>
+            <Text style={[styles.badgeText, isPatient ? styles.patientBadgeText : styles.doctorBadgeText]}>
+              ● {roleLabel}
+            </Text>
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.emailText}>{user.email}</Text>
+            <TouchableOpacity style={styles.editProfileTrigger} onPress={handleOpenEditProfile}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Edit3 size={11} color="#1D4ED8" />
+                <Text style={styles.editProfileTriggerText}>Chỉnh sửa thông tin</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-          {isPatient ? (
-            /* PATIENT PORTAL */
-            <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-              {/* Left Column (flex: 2) */}
-              <View style={isDesktop ? styles.patientMainColumn : styles.fullWidth}>
-                {isDesktop && (
-                  <View style={styles.desktopGreeting}>
-                    <Text style={styles.greetingTitle}>Chào buổi sáng, {user.profile?.name || 'Người dùng'}</Text>
-                    <Text style={styles.greetingSubtitle}>
-                      Hôm nay là {(() => { const d = new Date(); const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; return days[d.getDay()]; })()}, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}. Sức khỏe của bạn đang rất tốt.
-                    </Text>
-                  </View>
-                )}
+        {isPatient ? (
+          /* PATIENT PORTAL */
+          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
+            {/* Left Column (flex: 2) */}
+            <View style={isDesktop ? styles.patientMainColumn : styles.fullWidth}>
+              {isDesktop && (
+                <View style={styles.desktopGreeting}>
+                  <Text style={styles.greetingTitle}>Chào buổi sáng, {user.profile?.name || 'Người dùng'}</Text>
+                  <Text style={styles.greetingSubtitle}>
+                    Hôm nay là {(() => { const d = new Date(); const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; return days[d.getDay()]; })()}, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}. Sức khỏe của bạn đang rất tốt.
+                  </Text>
+                </View>
+              )}
 
-                {/* MRI Result Card */}
-                {loadingMri ? (
-                  <View style={styles.emptyMriCard}>
-                    <ActivityIndicator size="small" color="#15803D" />
-                    <Text style={[styles.emptyMriText, { marginTop: 12 }]}>Đang tải kết quả bệnh án...</Text>
-                  </View>
-                ) : latestMri ? (
-                  <View style={styles.mriCard}>
-                    <View style={isDesktop ? styles.mriRowLayout : styles.mriColumnLayout}>
-                      <View style={isDesktop ? styles.mriImageContainerDesktop : styles.mriImageContainerMobile}>
-                        <Image
-                          source={
-                            latestMri.images && latestMri.images.length > 0
-                              ? { uri: latestMri.images[0].startsWith('http') ? latestMri.images[0] : `${Config.API_URL}${latestMri.images[0]}` }
-                              : require('../../assets/nero3.png')
-                          }
-                          style={styles.mriImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.aiOverlayBadge}>
-                          <View style={styles.aiDot} />
-                          <Text style={styles.aiOverlayText}>PHÁT HIỆN BỞI AI</Text>
-                        </View>
+              {/* MRI Result Card */}
+              {loadingMri ? (
+                <View style={styles.emptyMriCard}>
+                  <ActivityIndicator size="small" color="#0891B2" />
+                  <Text style={[styles.emptyMriText, { marginTop: 12 }]}>Đang tải kết quả bệnh án...</Text>
+                </View>
+              ) : latestMri ? (
+                <View style={styles.mriCard}>
+                  <View style={isDesktop ? styles.mriRowLayout : styles.mriColumnLayout}>
+                    <View style={isDesktop ? styles.mriImageContainerDesktop : styles.mriImageContainerMobile}>
+                      <Image
+                        source={
+                          latestMri.images && latestMri.images.length > 0
+                            ? { uri: latestMri.images[0].startsWith('http') ? latestMri.images[0] : `${Config.API_URL}${latestMri.images[0]}` }
+                            : require('../../assets/nero3.png')
+                        }
+                        style={styles.mriImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.aiOverlayBadge}>
+                        <View style={styles.aiDot} />
+                        <Text style={styles.aiOverlayText}>PHÁT HIỆN BỞI AI</Text>
                       </View>
-                      <View style={styles.mriInfoContainer}>
-                        <View style={styles.mriHeaderRow}>
-                          <Text style={styles.mriIdText}>
-                            ID: {latestMri.medicalRecordNumber || `NS-${latestMri._id.toString().slice(-8).toUpperCase()}`}
-                          </Text>
-                          <Text style={styles.mriTimeText}>
-                            Cập nhật {formatMriDate(latestMri.reportDate)}
-                          </Text>
-                        </View>
-                        <Text style={styles.mriTitle}>{latestMri.procedure || 'Kết quả phân tích MRI Não'}</Text>
-                        <Text style={styles.mriDesc} numberOfLines={3}>
-                          {latestMri.findings || 'Chưa có mô tả chi tiết hình ảnh lâm sàng.'}
+                    </View>
+                    <View style={styles.mriInfoContainer}>
+                      <View style={styles.mriHeaderRow}>
+                        <Text style={styles.mriIdText}>
+                          ID: {latestMri.medicalRecordNumber || `NS-${latestMri._id.toString().slice(-8).toUpperCase()}`}
                         </Text>
-                        <View style={styles.mriSpecsGrid}>
-                          <View style={styles.mriSpecBox}>
-                            <Text style={styles.mriSpecLabel}>KẾT LUẬN</Text>
-                            <Text style={styles.mriSpecValue} numberOfLines={2}>
-                              {latestMri.conclusion || 'Bình thường'}
-                            </Text>
-                          </View>
-                          <View style={styles.mriSpecBox}>
-                            <Text style={styles.mriSpecLabel}>BÁC SĨ ĐỌC PHIM</Text>
-                            <Text style={styles.mriSpecValue} numberOfLines={1}>
-                              {latestMri.radiologist || 'BS. Chẩn đoán hình ảnh'}
-                            </Text>
-                          </View>
+                        <Text style={styles.mriTimeText}>
+                          Cập nhật {formatMriDate(latestMri.reportDate)}
+                        </Text>
+                      </View>
+                      <Text style={styles.mriTitle}>{latestMri.procedure || 'Kết quả phân tích MRI Não'}</Text>
+                      <Text style={styles.mriDesc} numberOfLines={3}>
+                        {latestMri.findings || 'Chưa có mô tả chi tiết hình ảnh lâm sàng.'}
+                      </Text>
+                      <View style={styles.mriSpecsGrid}>
+                        <View style={styles.mriSpecBox}>
+                          <Text style={styles.mriSpecLabel}>KẾT LUẬN</Text>
+                          <Text style={styles.mriSpecValue} numberOfLines={2}>
+                            {latestMri.conclusion || 'Bình thường'}
+                          </Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.mriReportBtn}
-                          onPress={() => navigation.navigate('ImagingHistory')}
-                        >
-                          <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.emptyMriCard}>
-                    <Text style={styles.emptyMriIcon}>📂</Text>
-                    <Text style={styles.emptyMriText}>Chưa có hồ sơ lưu trữ</Text>
-                  </View>
-                )}
-
-                {/* Mobile Only: Premium and Actions grid */}
-                {!isDesktop && (
-                  <>
-                    {/* Premium Promo */}
-                    <View style={styles.promoCard}>
-                      <View style={styles.promoLeft}>
-                        <Text style={styles.promoTitle}>Nâng cấp Premium 💎</Text>
-                        <Text style={styles.promoDesc}>Chẩn đoán MRI không giới hạn, xem kết quả dạng 3D.</Text>
+                        <View style={styles.mriSpecBox}>
+                          <Text style={styles.mriSpecLabel}>BÁC SĨ ĐỌC PHIM</Text>
+                          <Text style={styles.mriSpecValue} numberOfLines={1}>
+                            {latestMri.radiologist || 'BS. Chẩn đoán hình ảnh'}
+                          </Text>
+                        </View>
                       </View>
                       <TouchableOpacity
-                        style={styles.promoButton}
-                        onPress={() => navigation.navigate('Premium')}
-                      >
-                        <Text style={styles.promoButtonText}>Mua</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Quick Actions Grid */}
-                    <Text style={styles.sectionTitle}>Chức năng chính</Text>
-                    <View style={styles.grid}>
-                      <TouchableOpacity
-                        style={styles.gridCard}
-                        onPress={() => navigation.navigate('AIAnalysis')}
-                      >
-                        <Text style={styles.gridIcon}>📸</Text>
-                        <Text style={styles.gridLabel}>Tải ảnh MRI</Text>
-                        <Text style={styles.gridSub}>Phân tích bằng AI</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.gridCard}
+                        style={styles.mriReportBtn}
                         onPress={() => navigation.navigate('ImagingHistory')}
                       >
-                        <Text style={styles.gridIcon}>🧠</Text>
-                        <Text style={styles.gridLabel}>Phim MRI & CT</Text>
-                        <Text style={styles.gridSub}>Xem phim & kết quả</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.gridCard}
-                        onPress={() => navigation.navigate('Support')}
-                      >
-                        <Text style={styles.gridIcon}>👨‍⚕️</Text>
-                        <Text style={styles.gridLabel}>Tư vấn Bác sĩ</Text>
-                        <Text style={styles.gridSub}>Đặt lịch trực tiếp</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.gridCard}
-                        onPress={() => navigation.navigate('RecordVault')}
-                      >
-                        <Text style={styles.gridIcon}>📋</Text>
-                        <Text style={styles.gridLabel}>Khai báo bệnh án</Text>
-                        <Text style={styles.gridSub}>Bệnh sử, tiền sử</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.gridCard}
-                        onPress={() => Alert.alert('Thông tin liên hệ', 'Email: ' + user.email + '\nSố điện thoại: ' + (user.phone || 'Chưa cập nhật'))}
-                      >
-                        <Text style={styles.gridIcon}>📞</Text>
-                        <Text style={styles.gridLabel}>Thông tin liên hệ</Text>
-                        <Text style={styles.gridSub}>Xem thông tin</Text>
+                        <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
                       </TouchableOpacity>
                     </View>
-                  </>
-                )}
-              </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.emptyMriCard}>
+                  <Folder size={36} color="#94A3B8" style={{ marginBottom: 8 }} />
+                  <Text style={styles.emptyMriText}>Chưa có hồ sơ lưu trữ</Text>
+                </View>
+              )}
 
-              {/* Right Column (flex: 1.2) */}
-              <View style={isDesktop ? styles.patientSideColumn : styles.fullWidth}>
-                {/* Lịch trình (Schedule) */}
-                <View style={styles.sideCard}>
-                  <View style={styles.sideCardHeader}>
-                    <Text style={styles.sideCardTitle}>Lịch trình</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
-                      <Text style={styles.sideCardLink}>Xem tất cả</Text>
+              {/* Mobile Only: Premium and Actions grid */}
+              {!isDesktop && (
+                <>
+                  {/* Premium Promo */}
+                  <View style={styles.promoCard}>
+                    <View style={styles.promoLeft}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Sparkles size={16} color="#F59E0B" />
+                        <Text style={styles.promoTitle}>Nâng cấp Premium</Text>
+                      </View>
+                      <Text style={styles.promoDesc}>Chẩn đoán MRI không giới hạn, xem kết quả dạng 3D.</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.promoButton}
+                      onPress={() => navigation.navigate('Premium')}
+                    >
+                      <Text style={styles.promoButtonText}>Mua</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.scheduleList}>
-                    {loadingReminders ? (
-                      <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 16 }} />
-                    ) : todayReminders.length === 0 ? (
-                      <Text style={styles.scheduleDesc}>Không có lịch uống thuốc nào hôm nay.</Text>
-                    ) : (
-                      todayReminders.map((item, idx) => {
-                        const isDone = item.status === 'done';
-                        const isSkipped = item.status === 'skipped';
-                        const dotColor = isDone ? '#22C55E' : isSkipped ? '#94A3B8' : '#3B82F6';
-                        return (
-                          <View key={item._id} style={styles.scheduleItem}>
-                            <View style={styles.scheduleTimeline}>
-                              <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
-                              {idx < todayReminders.length - 1 && <View style={styles.timelineLine} />}
-                            </View>
-                            <View style={styles.scheduleContent}>
-                              <Text style={styles.scheduleTime}>{item.time}</Text>
-                              <Text style={styles.scheduleTitle}>Uống thuốc: {item.drugName}</Text>
-                              <Text style={styles.scheduleDesc}>{item.dosageText}</Text>
-                              <View style={styles.scheduleTags}>
-                                {isDone ? (
-                                  <View style={[styles.scheduleTag, styles.tagSuccess]}>
-                                    <Text style={[styles.scheduleTagText, styles.tagSuccessText]}>Đã uống</Text>
-                                  </View>
-                                ) : isSkipped ? (
-                                  <View style={styles.scheduleTag}>
-                                    <Text style={styles.scheduleTagText}>Đã bỏ qua</Text>
-                                  </View>
-                                ) : (
-                                  <TouchableOpacity
-                                    style={[styles.scheduleTag, styles.tagInfo]}
-                                    onPress={() => handleMarkReminderDone(item._id)}
-                                  >
-                                    <Text style={[styles.scheduleTagText, styles.tagInfoText]}>Đánh dấu đã uống</Text>
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                            </View>
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
-                </View>
+                  {/* Quick Actions Grid */}
+                  <Text style={styles.sectionTitle}>Chức năng chính</Text>
+                  <View style={styles.grid}>
+                    <TouchableOpacity
+                      style={styles.gridCard}
+                      onPress={() => navigation.navigate('AIAnalysis')}
+                    >
+                      <UploadCloud size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.gridLabel}>Tải ảnh MRI</Text>
+                      <Text style={styles.gridSub}>Phân tích bằng AI</Text>
+                    </TouchableOpacity>
 
-                {/* NeuroAI Chat Box */}
-                <View style={styles.aiChatCard}>
-                  <View style={styles.aiChatHeader}>
-                    <View style={styles.aiChatStatusDot} />
-                    <Text style={styles.aiChatTitle}>NEUROAI TRỰC TUYẾN</Text>
+                     <TouchableOpacity
+                       style={styles.gridCard}
+                       onPress={() => navigation.navigate('ImagingHistory')}
+                     >
+                       <Scan size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                       <Text style={styles.gridLabel}>Phim MRI & CT</Text>
+                       <Text style={styles.gridSub}>Xem phim & kết quả</Text>
+                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.gridCard}
+                      onPress={() => navigation.navigate('Support')}
+                    >
+                      <UserCheck size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.gridLabel}>Tư vấn Bác sĩ</Text>
+                      <Text style={styles.gridSub}>Đặt lịch trực tiếp</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.gridCard}
+                      onPress={() => navigation.navigate('RecordVault')}
+                    >
+                      <ClipboardList size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.gridLabel}>Khai báo bệnh án</Text>
+                      <Text style={styles.gridSub}>Bệnh sử, tiền sử</Text>
+                    </TouchableOpacity>
+
+                     <TouchableOpacity
+                       style={styles.gridCard}
+                       onPress={() => Alert.alert('Thông tin liên hệ', 'Email: ' + user.email + '\nSố điện thoại: ' + (user.phone || 'Chưa cập nhật'))}
+                     >
+                       <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                       <Text style={styles.gridLabel}>Thông tin liên hệ</Text>
+                       <Text style={styles.gridSub}>Xem thông tin</Text>
+                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.aiChatQuestion}>Bạn cần hỗ trợ gì ngay bây giờ không?</Text>
-                  <View style={styles.aiChatQuote}>
-                    <Text style={styles.aiChatQuoteText}>
-                      "Hôm nay tôi thấy hơi đau đầu nhẹ ở vùng thái dương, đây có phải là tác dụng phụ của thuốc không?"
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.aiChatBtn}
-                    onPress={() => navigation.navigate('Support')}
-                  >
-                    <Text style={styles.aiChatBtnText}>💬 Hỏi AI ngay</Text>
+                </>
+              )}
+            </View>
+
+            {/* Right Column (flex: 1.2) */}
+            <View style={isDesktop ? styles.patientSideColumn : styles.fullWidth}>
+              {/* Lịch trình (Schedule) */}
+              <View style={styles.sideCard}>
+                <View style={styles.sideCardHeader}>
+                  <Text style={styles.sideCardTitle}>Lịch trình</Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
+                    <Text style={styles.sideCardLink}>Xem tất cả</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            </View>
-          ) : (
-            /* ALL STAFF CONSOLE: TECHNICIAN, NURSE, RECEPTIONIST, DOCTOR & ADMIN */
-            /* NURSE, RECEPTIONIST, DOCTOR & ADMIN CONSOLE */
-            <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-              {/* Left Column (flex: 2) */}
-              <View style={isDesktop ? styles.doctorMainColumn : styles.fullWidth}>
-                {isDesktop && (
-                  <View style={styles.desktopGreeting}>
-                    <Text style={styles.greetingTitle}>
-                      {isNurse ? 'Bảng điều khiển Điều dưỡng'
-                        : 'Bảng điều khiển Bác sĩ'}
-                    </Text>
-                    <Text style={styles.greetingSubtitle}>
-                      {isNurse
-                        ? `Chào mừng trở lại, ${user.profile?.name || 'Nhân viên'}. Quản lý hàng đợi, tiếp đón bệnh nhân và cập nhật sinh hiệu.`
-                        : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
-                      }
-                    </Text>
-                  </View>
-                )}
 
-                {/* Stats Row */}
-                <View style={styles.doctorStatsRow}>
-                  {isNurse ? (
-                    <>
-                      <View style={styles.doctorStatCard}>
-                        {loadingStats ? (
-                          <ActivityIndicator size="small" color="#15803D" />
-                        ) : (
-                          <Text style={[styles.doctorStatVal, { color: '#15803D' }]}>
-                            {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
-                          </Text>
-                        )}
-                        <Text style={styles.doctorStatLabel}>
-                          {todaySchedule?.startTime ? `${todaySchedule.startTime} - ${todaySchedule.endTime}` : 'Ca trực hôm nay'}
-                        </Text>
-                      </View>
-                      <View style={styles.doctorStatCard}>
-                        {loadingStats ? (
-                          <ActivityIndicator size="small" color="#D97706" />
-                        ) : (
-                          <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>
-                            {pendingRecords.length} phiếu
-                          </Text>
-                        )}
-                        <Text style={styles.doctorStatLabel}>
-                          {user.role === 'nurse' ? 'Chăm sóc cần lập' : 'Tiếp nhận hôm nay'}
-                        </Text>
-                      </View>
-                      <View style={styles.doctorStatCard}>
-                        {loadingStats ? (
-                          <ActivityIndicator size="small" color="#15803D" />
-                        ) : (
-                          <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
-                            {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
-                          </Text>
-                        )}
-                        <Text style={styles.doctorStatLabel}>Bệnh nhân nội trú</Text>
-                      </View>
-                    </>
+                <View style={styles.scheduleList}>
+                  {loadingReminders ? (
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 16 }} />
+                  ) : todayReminders.length === 0 ? (
+                    <Text style={styles.scheduleDesc}>Không có lịch uống thuốc nào hôm nay.</Text>
                   ) : (
-                    <>
-                      <TouchableOpacity
-                        style={styles.doctorStatCard}
-                        onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
-                      >
-                        {loadingStats ? (
-                          <ActivityIndicator size="small" color="#15803D" />
-                        ) : (
-                          <Text style={styles.doctorStatVal}>{pendingRecords.length}</Text>
-                        )}
-                        <Text style={styles.doctorStatLabel}>Ca chờ duyệt</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.doctorStatCard}
-                        onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
-                      >
-                        <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>MRI/PACS</Text>
-                        <Text style={styles.doctorStatLabel}>Hàng đợi chụp</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.doctorStatCard}
-                        onPress={() => navigation.navigate('DoctorPatientList')}
-                      >
-                        {loadingStats ? (
-                          <ActivityIndicator size="small" color="#15803D" />
-                        ) : (
-                          <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>{totalPatients}</Text>
-                        )}
-                        <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
-                      </TouchableOpacity>
-                      <View style={styles.doctorStatCard}>
-                        <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>94.7%</Text>
-                        <Text style={styles.doctorStatLabel}>AI Chính xác</Text>
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {/* Today's Schedule Section (FIX-9) */}
-                {(user.role === 'doctor' || user.role === 'nurse') && (
-                  <>
-                    <Text style={styles.sectionTitle}>Lịch Làm Việc Hôm Nay</Text>
-                    <View style={[styles.queueCard, { marginBottom: 20 }]}>
-                      {todaySchedule ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 24, marginRight: 12 }}>⏰</Text>
-                          <View>
-                            <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift}</Text>
-                            {todaySchedule.startTime ? (
-                              <Text style={{ fontSize: 13, color: '#64748B' }}>Giờ: {todaySchedule.startTime} - {todaySchedule.endTime}</Text>
-                            ) : null}
+                    todayReminders.map((item, idx) => {
+                      const isDone = item.status === 'done';
+                      const isSkipped = item.status === 'skipped';
+                      const dotColor = isDone ? '#22C55E' : isSkipped ? '#94A3B8' : '#3B82F6';
+                      return (
+                        <View key={item._id} style={styles.scheduleItem}>
+                          <View style={styles.scheduleTimeline}>
+                            <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
+                            {idx < todayReminders.length - 1 && <View style={styles.timelineLine} />}
+                          </View>
+                          <View style={styles.scheduleContent}>
+                            <Text style={styles.scheduleTime}>{item.time}</Text>
+                            <Text style={styles.scheduleTitle}>Uống thuốc: {item.drugName}</Text>
+                            <Text style={styles.scheduleDesc}>{item.dosageText}</Text>
+                            <View style={styles.scheduleTags}>
+                              {isDone ? (
+                                <View style={[styles.scheduleTag, styles.tagSuccess]}>
+                                  <Text style={[styles.scheduleTagText, styles.tagSuccessText]}>Đã uống</Text>
+                                </View>
+                              ) : isSkipped ? (
+                                <View style={styles.scheduleTag}>
+                                  <Text style={styles.scheduleTagText}>Đã bỏ qua</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={[styles.scheduleTag, styles.tagInfo]}
+                                  onPress={() => handleMarkReminderDone(item._id)}
+                                >
+                                  <Text style={[styles.scheduleTagText, styles.tagInfoText]}>Đánh dấu đã uống</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
                         </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+
+              {/* NeuroAI Chat Box */}
+              <View style={styles.aiChatCard}>
+                <View style={styles.aiChatHeader}>
+                  <View style={styles.aiChatStatusDot} />
+                  <Text style={styles.aiChatTitle}>NEUROAI TRỰC TUYẾN</Text>
+                </View>
+                <Text style={styles.aiChatQuestion}>Bạn cần hỗ trợ gì ngay bây giờ không?</Text>
+                <View style={styles.aiChatQuote}>
+                  <Text style={styles.aiChatQuoteText}>
+                    "Hôm nay tôi thấy hơi đau đầu nhẹ ở vùng thái dương, đây có phải là tác dụng phụ của thuốc không?"
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.aiChatBtn}
+                  onPress={() => navigation.navigate('Support')}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MessageSquare size={14} color="#fff" />
+                    <Text style={styles.aiChatBtnText}>Hỏi AI ngay</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ) : (
+          /* ALL STAFF CONSOLE: TECHNICIAN, NURSE, RECEPTIONIST, DOCTOR & ADMIN */
+          /* NURSE, RECEPTIONIST, DOCTOR & ADMIN CONSOLE */
+          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
+            {/* Left Column (flex: 2) */}
+            <View style={isDesktop ? styles.doctorMainColumn : styles.fullWidth}>
+              {isDesktop && (
+                <View style={styles.desktopGreeting}>
+                  <Text style={styles.greetingTitle}>
+                    {isNurse ? 'Bảng điều khiển Điều dưỡng'
+                      : isTechnician ? 'Bảng điều khiển Kỹ thuật viên (MRI)'
+                      : isReceptionist ? 'Bảng điều khiển Tiếp đón & Thu ngân'
+                      : 'Bảng điều khiển Bác sĩ'}
+                  </Text>
+                  <Text style={styles.greetingSubtitle}>
+                    {isNurse
+                      ? `Chào mừng trở lại, ${user.profile?.name || 'Nhân viên'}. Quản lý hàng đợi, tiếp đón bệnh nhân và cập nhật sinh hiệu.`
+                      : isTechnician
+                      ? `Chào mừng trở lại, KTV ${user?.profile?.name || user?.email || 'Kỹ thuật viên'}. Quản lý danh sách ca chụp MRI và tải phim lên hệ thống.`
+                      : isReceptionist
+                      ? `Chào mừng trở lại, ${user.profile?.name || 'Nhân viên'}. Quản lý tiếp đón và viện phí.`
+                      : `Chào mừng trở lại, Bs. ${user?.profile?.name || user?.email || 'Bác sĩ'}. Đây là tổng quan hiệu suất phòng khám của bạn.`
+                    }
+                  </Text>
+                </View>
+              )}
+
+              {/* Stats Row */}
+              <View style={styles.doctorStatsRow}>
+                {isNurse ? (
+                  <>
+                    <View style={styles.doctorStatCard}>
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#0891B2" />
                       ) : (
-                        <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 10 }}>Hôm nay bạn không có lịch trực.</Text>
+                        <Text style={[styles.doctorStatVal, { color: '#0891B2' }]}>
+                          {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
+                        </Text>
                       )}
+                      <Text style={styles.doctorStatLabel}>
+                        {todaySchedule?.startTime ? `${todaySchedule.startTime} - ${todaySchedule.endTime}` : 'Ca trực hôm nay'}
+                      </Text>
+                    </View>
+                    <View style={styles.doctorStatCard}>
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#D97706" />
+                      ) : (
+                        <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>
+                          {pendingRecords.length} phiếu
+                        </Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>
+                        {user.role === 'nurse' ? 'Chăm sóc cần lập' : 'Tiếp nhận hôm nay'}
+                      </Text>
+                    </View>
+                    <View style={styles.doctorStatCard}>
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#0891B2" />
+                      ) : (
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
+                          {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
+                        </Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>Bệnh nhân nội trú</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.doctorStatCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#0891B2" />
+                      ) : (
+                        <Text style={styles.doctorStatVal}>{pendingRecords.length}</Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>Ca chờ duyệt</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.doctorStatCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>MRI/PACS</Text>
+                      <Text style={styles.doctorStatLabel}>Hàng đợi chụp</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.doctorStatCard}
+                      onPress={() => navigation.navigate('DoctorPatientList')}
+                    >
+                      {loadingStats ? (
+                        <ActivityIndicator size="small" color="#0891B2" />
+                      ) : (
+                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>{totalPatients}</Text>
+                      )}
+                      <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
+                    </TouchableOpacity>
+                    <View style={styles.doctorStatCard}>
+                      <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>94.7%</Text>
+                      <Text style={styles.doctorStatLabel}>AI Chính xác</Text>
                     </View>
                   </>
                 )}
+              </View>
 
-                {/* Queue Section - differs by role */}
-                <Text style={styles.sectionTitle}>
-                  {isNurse
-                    ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu'
-                    : 'Danh sách ca bệnh & Chỉ định chờ xử lý'
-                  }
-                </Text>
-                <View style={styles.queueCard}>
-                  {loadingStats ? (
-                    <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                      <ActivityIndicator size="small" color="#15803D" />
-                    </View>
-                  ) : isNurse ? (
+              {/* Today's Schedule Section (FIX-9) */}
+              {(user.role === 'doctor' || user.role === 'nurse' || user.role === 'technician') && (
+                <>
+                  <Text style={styles.sectionTitle}>Lịch Làm Việc Hôm Nay</Text>
+                  <View style={[styles.queueCard, { marginBottom: 20 }]}>
+                    {todaySchedule ? (
+                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                         <Clock size={24} color="#0891B2" style={{ marginRight: 12 }} />
+                         <View>
+                           <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift}</Text>
+                           {todaySchedule.startTime ? (
+                             <Text style={{ fontSize: 13, color: '#64748B' }}>Giờ: {todaySchedule.startTime} - {todaySchedule.endTime}</Text>
+                           ) : null}
+                         </View>
+                       </View>
+                    ) : (
+                       <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 10 }}>Hôm nay bạn không có lịch trực.</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* Queue Section - differs by role */}
+              <Text style={styles.sectionTitle}>
+                {isNurse
+                  ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu'
+                  : isTechnician
+                  ? 'Danh sách ca chỉ định chụp MRI cần thực hiện'
+                  : 'Danh sách ca bệnh & Chỉ định chờ xử lý'
+                }
+              </Text>
+              <View style={styles.queueCard}>
+                {loadingStats ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#0891B2" />
+                  </View>
+                ) : isNurse ? (
                     /* Nurse: inpatient list */
                     emrRecords.filter(r => r.admissionType === 'Nội trú').length === 0 ? (
                       <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -700,248 +749,295 @@ const HomeScreen = ({ route, navigation }) => {
                         );
                       })
                     )
-                  ) : (
-                    <>
-                      {/* Doctor pending records from Queue */}
-                      {queueVisits.length === 0 ? (
-                        <View style={{ paddingVertical: 10, alignItems: 'center' }}>
-                          <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có ca bệnh nào chờ duyệt.</Text>
-                        </View>
-                      ) : (
-                        queueVisits.map((v, index) => {
-                          const isLast = index === queueVisits.length - 1;
-                          return (
-                            <TouchableOpacity
-                              key={v._id}
-                              style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
-                              onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
-                            >
-                              <View style={styles.queueLeftInfo}>
-                                <Text style={styles.queuePatientName}>🩺 {v.patientId?.profile?.name || v.patientId?.email}</Text>
-                                <Text style={styles.queueDetailsText}>{v.reason}</Text>
+                ) : (
+                  <>
+                    {/* Doctor pending records from Queue */}
+                    {queueVisits.length === 0 ? (
+                      <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+                        <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có ca bệnh nào chờ duyệt.</Text>
+                      </View>
+                    ) : (
+                      queueVisits.map((v, index) => {
+                        const isLast = index === queueVisits.length - 1;
+                        return (
+                          <TouchableOpacity
+                            key={v._id}
+                            style={[styles.queueItemRow, isLast && styles.lastQueueItemRow]}
+                            onPress={() => navigation.navigate('DoctorWorkQueue')}
+                          >
+                            <View style={styles.queueLeftInfo}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <Stethoscope size={14} color="#0891B2" />
+                                <Text style={styles.queuePatientName}>{v.patientId?.profile?.name || v.patientId?.email}</Text>
                               </View>
-                              <View style={[styles.statusBadge, v.status === 'đang chờ' ? styles.statusDanger : styles.statusWarn]}>
-                                <Text style={styles.statusBadgeText}>
-                                  {v.status === 'đang chờ' ? 'Chưa bắt đầu' : v.status}
-                                </Text>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-                </View>
-              </View>
-
-              {/* Right Column (flex: 1) */}
-              <View style={isDesktop ? styles.doctorSideColumn : styles.fullWidth}>
-                {/* Quick Actions Grid - differs by role */}
-                <Text style={styles.sectionTitle}>
-                  {isNurse ? 'Công cụ điều dưỡng & tiếp đón' : 'Công cụ nghiệp vụ & Quản lý'}
-                </Text>
-                <View style={styles.doctorGrid}>
-                  {isNurse ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('NurseReception')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📋</Text>
-                        <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân</Text>
-                        <Text style={styles.doctorGridSub}>Tạo Visit mới & phân ca</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
-                      >
-                        <Text style={styles.doctorGridIcon}>🩺</Text>
-                        <Text style={styles.doctorGridLabel}>Hàng đợi ca khám</Text>
-                        <Text style={styles.doctorGridSub}>Xem ca đợi & sinh hiệu</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('EMRDashboard')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📝</Text>
-                        <Text style={styles.doctorGridLabel}>Phiếu chăm sóc EMR</Text>
-                        <Text style={styles.doctorGridSub}>Quản lý & đo sinh hiệu</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('NurseReception')}
-                      >
-                        <Text style={styles.doctorGridIcon}>💳</Text>
-                        <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
-                        <Text style={styles.doctorGridSub}>Quản lý hóa đơn chờ</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('Support')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📞</Text>
-                        <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
-                        <Text style={styles.doctorGridSub}>Liên hệ nhanh</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
-                      >
-                        <Text style={styles.doctorGridIcon}>🩺</Text>
-                        <Text style={styles.doctorGridLabel}>Hàng đợi khám</Text>
-                        <Text style={styles.doctorGridSub}>Khám bệnh & Y lệnh</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
-                      >
-                        <Text style={styles.doctorGridIcon}>🔬</Text>
-                        <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
-                        <Text style={styles.doctorGridSub}>Chỉ định & Kết quả MRI</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('CreateImagingResult')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📸</Text>
-                        <Text style={styles.doctorGridLabel}>Tải phim MRI/PACS</Text>
-                        <Text style={styles.doctorGridSub}>Tải kết quả chẩn đoán</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('DoctorPatientList')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📂</Text>
-                        <Text style={styles.doctorGridLabel}>Bệnh án Điện tử</Text>
-                        <Text style={styles.doctorGridSub}>Quản lý hồ sơ</Text>
-                      </TouchableOpacity>
-
-                      {user.role === 'admin' && (
-                        <TouchableOpacity
-                          style={styles.doctorGridCard}
-                          onPress={() => navigation.navigate('AdminBackoffice')}
-                        >
-                          <Text style={styles.doctorGridIcon}>🛠️</Text>
-                          <Text style={styles.doctorGridLabel}>Admin Backoffice</Text>
-                          <Text style={styles.doctorGridSub}>Dashboard quản trị</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      <TouchableOpacity
-                        style={styles.doctorGridCard}
-                        onPress={() => navigation.navigate('Support')}
-                      >
-                        <Text style={styles.doctorGridIcon}>📞</Text>
-                        <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
-                        <Text style={styles.doctorGridSub}>Ticket & Hotline</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-
-                {/* Research Whitepaper Card */}
-                <View style={styles.researchCard}>
-                  <Text style={styles.researchCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
-                  <Text style={styles.researchTitle}>Sách trắng kết nối thần kinh 2024</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      const Linking = require('react-native').Linking;
-                      Linking.openURL('https://www.nejm.org/doi/full/10.1056/NEJMoa2118542').catch(() =>
-                        Alert.alert('Không thể mở', 'Vui lòng kiểm tra kết nối internet.')
-                      );
-                    }}
-                  >
-                    <Text style={styles.researchLink}>Đọc thêm →</Text>
-                  </TouchableOpacity>
-                </View>
+                              <Text style={styles.queueDetailsText}>{v.reason}</Text>
+                            </View>
+                            <View style={[styles.statusBadge, v.status === 'đang chờ' ? styles.statusDanger : styles.statusWarn]}>
+                              <Text style={styles.statusBadgeText}>
+                                {v.status === 'đang chờ' ? 'Chưa bắt đầu' : v.status}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </>
+                )}
               </View>
             </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
 
-      {/* EDIT PROFILE MODAL */}
-      {showEditProfileModal && (
-        <Modal
-          visible={showEditProfileModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowEditProfileModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>✏️ Chỉnh sửa thông tin cá nhân</Text>
-              <Text style={styles.modalSub}>Cập nhật họ tên, số điện thoại và địa chỉ liên hệ của bạn.</Text>
+            {/* Right Column (flex: 1) */}
+            <View style={isDesktop ? styles.doctorSideColumn : styles.fullWidth}>
+              {/* Quick Actions Grid - differs by role */}
+              <Text style={styles.sectionTitle}>
+                {isNurse ? 'Công cụ điều dưỡng & tiếp đón' : isTechnician ? 'Công cụ Kỹ thuật viên MRI' : 'Công cụ nghiệp vụ & Quản lý'}
+              </Text>
+              <View style={styles.doctorGrid}>
+                {isTechnician ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      <Microscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
+                      <Text style={styles.doctorGridSub}>Tiếp nhận & thực hiện chụp</Text>
+                    </TouchableOpacity>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>Họ và tên *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập họ và tên đầy đủ"
-                  placeholderTextColor="#94A3B8"
-                  value={editName}
-                  onChangeText={setEditName}
-                />
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('CreateImagingResult')}
+                    >
+                      <UploadCloud size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Tải phim MRI/PACS</Text>
+                      <Text style={styles.doctorGridSub}>Nộp ảnh & kích hoạt AI</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorPatientList')}
+                    >
+                      <FolderArchive size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Tra cứu Bệnh án</Text>
+                      <Text style={styles.doctorGridSub}>Xem lịch sử bệnh nhân</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('Support')}
+                    >
+                      <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
+                      <Text style={styles.doctorGridSub}>Liên hệ PACS / IT</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : isNurse ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('NurseReception')}
+                    >
+                      <UserPlus size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân</Text>
+                      <Text style={styles.doctorGridSub}>Tạo Visit mới & phân ca</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      <Stethoscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hàng đợi ca khám</Text>
+                      <Text style={styles.doctorGridSub}>Xem ca đợi & sinh hiệu</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('EMRDashboard')}
+                    >
+                      <FileText size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Phiếu chăm sóc EMR</Text>
+                      <Text style={styles.doctorGridSub}>Quản lý & đo sinh hiệu</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('NurseReception')}
+                    >
+                      <CreditCard size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Thanh toán & Thu ngân</Text>
+                      <Text style={styles.doctorGridSub}>Quản lý hóa đơn chờ</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('Support')}
+                    >
+                      <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
+                      <Text style={styles.doctorGridSub}>Liên hệ nhanh</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      <Stethoscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hàng đợi khám</Text>
+                      <Text style={styles.doctorGridSub}>Khám bệnh & Y lệnh</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorWorkQueue')}
+                    >
+                      <Microscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
+                      <Text style={styles.doctorGridSub}>Chỉ định & Kết quả MRI</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('CreateImagingResult')}
+                    >
+                      <UploadCloud size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Tải phim MRI/PACS</Text>
+                      <Text style={styles.doctorGridSub}>Tải kết quả chẩn đoán</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('DoctorPatientList')}
+                    >
+                      <FolderArchive size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Bệnh án Điện tử</Text>
+                      <Text style={styles.doctorGridSub}>Quản lý hồ sơ</Text>
+                    </TouchableOpacity>
+
+                    {user.role === 'admin' && (
+                      <TouchableOpacity
+                        style={styles.doctorGridCard}
+                        onPress={() => navigation.navigate('AdminBackoffice')}
+                      >
+                        <Settings size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                        <Text style={styles.doctorGridLabel}>Admin Backoffice</Text>
+                        <Text style={styles.doctorGridSub}>Dashboard quản trị</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.doctorGridCard}
+                      onPress={() => navigation.navigate('Support')}
+                    >
+                      <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
+                      <Text style={styles.doctorGridSub}>Ticket & Hotline</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>Số điện thoại</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập số điện thoại mới"
-                  placeholderTextColor="#94A3B8"
-                  value={editPhone}
-                  onChangeText={setEditPhone}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Địa chỉ</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập địa chỉ của bạn"
-                  placeholderTextColor="#94A3B8"
-                  value={editAddress}
-                  onChangeText={setEditAddress}
-                />
-              </View>
-
-              <View style={styles.modalButtonRow}>
+              {/* Research Whitepaper Card */}
+              <View style={styles.researchCard}>
+                <Text style={styles.researchCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
+                <Text style={styles.researchTitle}>Sách trắng kết nối thần kinh 2024</Text>
                 <TouchableOpacity
-                  style={styles.btnCancel}
-                  onPress={() => setShowEditProfileModal(false)}
-                  disabled={updatingProfile}
+                  onPress={() => {
+                    const Linking = require('react-native').Linking;
+                    Linking.openURL('https://www.nejm.org/doi/full/10.1056/NEJMoa2118542').catch(() =>
+                      Alert.alert('Không thể mở', 'Vui lòng kiểm tra kết nối internet.')
+                    );
+                  }}
                 >
-                  <Text style={styles.btnCancelText}>Hủy</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btnSave, updatingProfile && { opacity: 0.7 }]}
-                  onPress={handleSaveProfile}
-                  disabled={updatingProfile}
-                >
-                  {updatingProfile ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.btnSaveText}>💾 Lưu thay đổi</Text>
-                  )}
+                  <Text style={styles.researchLink}>Đọc thêm →</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
-        </Modal>
-      )}
+        )}
+      </ScrollView>
+    </SafeAreaView>
+
+    {/* EDIT PROFILE MODAL */}
+    {showEditProfileModal && (
+      <Modal
+        visible={showEditProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Edit3 size={18} color="#0891B2" />
+              <Text style={styles.modalTitle}>Chỉnh sửa thông tin cá nhân</Text>
+            </View>
+            <Text style={styles.modalSub}>Cập nhật họ tên, số điện thoại và địa chỉ liên hệ của bạn.</Text>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Họ và tên *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập họ và tên đầy đủ"
+                placeholderTextColor="#94A3B8"
+                value={editName}
+                onChangeText={setEditName}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Số điện thoại</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập số điện thoại mới"
+                placeholderTextColor="#94A3B8"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Địa chỉ</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập địa chỉ của bạn"
+                placeholderTextColor="#94A3B8"
+                value={editAddress}
+                onChangeText={setEditAddress}
+              />
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.btnCancel}
+                onPress={() => setShowEditProfileModal(false)}
+                disabled={updatingProfile}
+              >
+                <Text style={styles.btnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnSave, updatingProfile && { opacity: 0.7 }]}
+                onPress={handleSaveProfile}
+                disabled={updatingProfile}
+              >
+                {updatingProfile ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Save size={16} color="#FFFFFF" />
+                    <Text style={styles.btnSaveText}>Lưu thay đổi</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    )}
     </ResponsiveLayout>
   );
 };
