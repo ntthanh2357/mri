@@ -88,6 +88,25 @@ global.expect = (actual) => {
         throw new Error(`Expected ${actual} to be greater than or equal to ${expected}`);
       }
     },
+    toBeLessThan: (expected) => {
+      if (!(actual < expected)) {
+        throw new Error(`Expected ${actual} to be less than ${expected}`);
+      }
+    },
+    toBeLessThanOrEqual: (expected) => {
+      if (!(actual <= expected)) {
+        throw new Error(`Expected ${actual} to be less than or equal to ${expected}`);
+      }
+    },
+    toContain: (expected) => {
+      if (typeof actual === 'string' || Array.isArray(actual)) {
+        if (!actual.includes(expected)) {
+          throw new Error(`Expected ${JSON.stringify(actual)} to contain ${JSON.stringify(expected)}`);
+        }
+      } else {
+        throw new Error(`Expected ${actual} to be string or array for toContain`);
+      }
+    },
     toBeTruthy: () => {
       if (!actual) {
         throw new Error(`Expected truthy, but got ${actual}`);
@@ -221,12 +240,20 @@ async function runAllTests() {
 
   if (failedTests > 0) {
     process.exit(1);
-  } else {
+  }
+
+  const isMain = process.argv[1] && (process.argv[1].endsWith("test_runner.js") || process.argv[1].endsWith("test_runner"));
+  if (isMain) {
     process.exit(0);
   }
 }
 
-runAllTests().catch((err) => {
-  console.error("FATAL RUNNER ERROR:", err);
-  process.exit(1);
-});
+export const runClinicalTests = runAllTests;
+
+const isMain = process.argv[1] && (process.argv[1].endsWith("test_runner.js") || process.argv[1].endsWith("test_runner"));
+if (isMain) {
+  runAllTests().catch((err) => {
+    console.error("FATAL RUNNER ERROR:", err);
+    process.exit(1);
+  });
+}

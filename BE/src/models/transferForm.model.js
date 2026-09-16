@@ -112,6 +112,11 @@ const transferFormSchema = new Schema({
   acceptedByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
   acceptedAt: { type: Date, default: null },
   rejectionReason: { type: String, default: "" },
+  // Vòng đời mã token xem bệnh án liên viện (F.5 & HIPAA / TT46)
+  crossHospitalToken: { type: String, default: null, index: true, sparse: true },
+  crossHospitalTokenExpiresAt: { type: Date, default: null },
+  crossHospitalTokenRevokedAt: { type: Date, default: null },
+  crossHospitalTokenRevokedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
 }, {
   timestamps: true
 });

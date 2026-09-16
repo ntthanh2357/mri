@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 
 // ─── Định nghĩa 8 bước quy trình chuẩn theo spec I.2 ────────────────────────
 const WORKFLOW_STEPS = [
@@ -84,10 +85,7 @@ export const getKanbanBoard = async (req, res) => {
     }
 
     if (date) {
-      const searchDate = new Date(date);
-      searchDate.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(searchDate);
-      endOfDay.setHours(23, 59, 59, 999);
+      const { startOfDay: searchDate, endOfDay } = getDayRangeVN(date);
       filter.createdAt = { $gte: searchDate, $lte: endOfDay };
     }
 
@@ -214,10 +212,7 @@ export const getShiftOverviewDashboard = async (req, res) => {
     const hospitalId = req.user.hospitalId;
     if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setHours(23, 59, 59, 999);
+    const { startOfDay: todayStart, endOfDay: todayEnd } = getDayRangeVN();
 
     // Thống kê Visit trong ngày
     const totalVisitsToday = await Visit.countDocuments({

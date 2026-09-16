@@ -131,7 +131,7 @@ export const signAndFinalizeResultService = async ({ resultId, hospitalId, user,
   await result.save();
 
   // Cập nhật trạng thái ca khám liên kết nếu có
-  const linkedVisit = await Visit.findOne({ "mriOrder.imagingResultId": result._id });
+  const linkedVisit = await Visit.findOne({ hospitalId, "mriOrder.imagingResultId": result._id });
   if (linkedVisit && linkedVisit.status === "chờ bác sĩ đọc") {
     linkedVisit.status = "hoàn tất";
     await linkedVisit.save();

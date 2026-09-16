@@ -41,12 +41,15 @@ import {
   FolderArchive,
   Inbox,
   ArrowLeft,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
+import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
+import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
 
-const EMRDashboardScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('records');
+const EMRDashboardScreen = ({ navigation, route }) => {
+  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -54,6 +57,74 @@ const EMRDashboardScreen = ({ navigation }) => {
   const [localUser, setLocalUser] = useState(null);
   // Nurse workflow: selected patient for detail panel
   const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
+
+  // EMR Signing & Addendum states (Thông tư 46/2018/TT-BYT)
+  const [addendumModal, setAddendumModal] = useState(false);
+  const [addendumRecord, setAddendumRecord] = useState(null);
+  const [addendumTitle, setAddendumTitle] = useState('');
+  const [addendumReason, setAddendumReason] = useState('');
+  const [addendumContent, setAddendumContent] = useState('');
+  const [submittingAddendum, setSubmittingAddendum] = useState(false);
+
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route?.params?.tab]);
+
+  const handleSignRecord = async (record) => {
+    if (!confirm(`Xác nhận ký số điện tử cho hồ sơ bệnh án của bệnh nhân ${record.patientName}? Hồ sơ sau khi ký sẽ được xác thực toàn vẹn chống sửa đổi theo quy định Bộ Y Tế.`)) return;
+    try {
+      const res = await apiRequest(`/emr/records/${record._id}/sign`, {
+        method: 'PUT',
+      });
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã ký số hồ sơ bệnh án điện tử thành công!');
+        fetchRecords();
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể ký số bệnh án.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Ký số thất bại.');
+    }
+  };
+
+  const handleOpenAddendum = (record) => {
+    setAddendumRecord(record);
+    setAddendumTitle('');
+    setAddendumReason('');
+    setAddendumContent('');
+    setAddendumModal(true);
+  };
+
+  const handleCreateAddendum = async () => {
+    if (!addendumTitle.trim() || !addendumContent.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
+      return;
+    }
+    setSubmittingAddendum(true);
+    try {
+      const res = await apiRequest(`/emr/records/${addendumRecord._id}/addendum`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: addendumTitle.trim(),
+          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 46/2018/TT-BYT',
+          content: addendumContent.trim(),
+        }),
+      });
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
+        setAddendumModal(false);
+        fetchRecords();
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể tạo phụ lục.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Tạo phụ lục thất bại.');
+    } finally {
+      setSubmittingAddendum(false);
+    }
+  };
 
   useEffect(() => {
     const loadUser = async () => {
@@ -64,7 +135,7 @@ const EMRDashboardScreen = ({ navigation }) => {
         if (storedUser) {
           u = typeof storedUser === 'string' ? JSON.parse(storedUser) : storedUser;
           setLocalUser(u);
-          if (u.role === 'nurse') {
+          if (u.role === 'nurse' && !route?.params?.tab) {
             setActiveTab('records');
           }
         }
@@ -75,7 +146,7 @@ const EMRDashboardScreen = ({ navigation }) => {
           u = res.user;
           setLocalUser(u);
           safeStorage.setItem('user', JSON.stringify(u));
-          if (u.role === 'nurse') {
+          if (u.role === 'nurse' && !route?.params?.tab) {
             setActiveTab('records');
           }
         }
@@ -345,6 +416,18 @@ const EMRDashboardScreen = ({ navigation }) => {
                     onPress={() => setActiveTab('imaging')}
                   />
                 )}
+                <SidebarItem
+                  icon={Building2}
+                  label="Sơ đồ Giường bệnh"
+                  active={activeTab === 'beds'}
+                  onPress={() => setActiveTab('beds')}
+                />
+                <SidebarItem
+                  icon={ArrowRightLeft}
+                  label="Chuyển viện Liên viện"
+                  active={activeTab === 'transfers'}
+                  onPress={() => setActiveTab('transfers')}
+                />
               </View>
               {selectedRecord && localUser?.role !== 'nurse' && (
                 <View style={styles.selectedRecordBox}>
@@ -426,6 +509,16 @@ const EMRDashboardScreen = ({ navigation }) => {
                     onPress={() => setActiveTab('imaging')}
                   />
                 )}
+                <MobileTab
+                  label="Giường bệnh"
+                  active={activeTab === 'beds'}
+                  onPress={() => setActiveTab('beds')}
+                />
+                <MobileTab
+                  label="Chuyển viện"
+                  active={activeTab === 'transfers'}
+                  onPress={() => setActiveTab('transfers')}
+                />
               </View>
             )}
 
@@ -458,6 +551,8 @@ const EMRDashboardScreen = ({ navigation }) => {
                       }
                     }}
                     onRefresh={fetchRecords}
+                    onSign={handleSignRecord}
+                    onAddendum={handleOpenAddendum}
                   />
                 )}
 
@@ -520,6 +615,14 @@ const EMRDashboardScreen = ({ navigation }) => {
                     navigation={navigation}
                   />
                 )}
+
+                {activeTab === 'beds' && (
+                  <HospitalBedManagementView currentUser={localUser} />
+                )}
+
+                {activeTab === 'transfers' && (
+                  <InterHospitalTransferView currentUser={localUser} />
+                )}
               </ScrollView>
             )}
           </View>
@@ -536,6 +639,70 @@ const EMRDashboardScreen = ({ navigation }) => {
           onCreatePrescription={handleCreatePrescription}
           availableDrugs={availableDrugs}
         />
+
+        {/* Modal Lập Phụ Lục Bệnh Án theo TT 46/2018/TT-BYT */}
+        <Modal visible={addendumModal} transparent animationType="slide" onRequestClose={() => setAddendumModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { maxWidth: 500, backgroundColor: '#fff', borderRadius: 16, padding: 20 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>Lập Phụ Lục Bệnh Án (TT 46/2018)</Text>
+                <TouchableOpacity onPress={() => setAddendumModal(false)}>
+                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#0891B2', backgroundColor: '#ECFEFF', padding: 8, borderRadius: 8, marginBottom: 12 }}>
+                ℹ️ Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
+              </Text>
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>Tiêu đề phụ lục *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="VD: Bổ sung diễn tiến lâm sàng sau phẫu thuật..."
+                value={addendumTitle}
+                onChangeText={setAddendumTitle}
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4, marginTop: 8 }}>Lý do lập phụ lục</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="VD: Cập nhật kết quả giải phẫu bệnh mới nhận từ phòng xét nghiệm..."
+                value={addendumReason}
+                onChangeText={setAddendumReason}
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4, marginTop: 8 }}>Nội dung bổ sung *</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                placeholder="Nhập chi tiết diễn biến, y lệnh bổ sung hoặc kết quả cận lâm sàng..."
+                value={addendumContent}
+                onChangeText={setAddendumContent}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', backgroundColor: '#F1F5F9' }}
+                  onPress={() => setAddendumModal(false)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569' }}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, paddingVertical: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#0891B2', opacity: submittingAddendum ? 0.6 : 1 }}
+                  onPress={handleCreateAddendum}
+                  disabled={submittingAddendum}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#fff' }}>
+                    {submittingAddendum ? 'Đang lưu phụ lục...' : 'Lưu Phụ Lục Bệnh Án'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ResponsiveLayout>
   );
@@ -1231,7 +1398,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 };
 
 // Tab Components
-const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh }) => {
+const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum }) => {
 
   return (
     <View style={styles.tabContainer}>
@@ -1273,6 +1440,8 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
               key={record._id || record.id}
               record={record}
               onPress={() => onViewRecord(record)}
+              onSign={onSign}
+              onAddendum={onAddendum}
             />
           ))
         )}
@@ -1281,31 +1450,55 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
   );
 };
 
-const RecordCard = ({ record, onPress }) => (
-  <TouchableOpacity style={styles.card} onPress={onPress}>
-    <View style={styles.cardHeader}>
-      <View>
-        <Text style={styles.patientName}>{record.patientName}</Text>
-        <Text style={styles.patientInfo}>
-          {record.gender} • {record.age} tuổi • {record.patientId}
-        </Text>
+const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
+  <View style={styles.card}>
+    <TouchableOpacity onPress={onPress}>
+      <View style={styles.cardHeader}>
+        <View>
+          <Text style={styles.patientName}>{record.patientName}</Text>
+          <Text style={styles.patientInfo}>
+            {record.gender} • {record.age} tuổi • {record.patientId}
+          </Text>
+        </View>
+        <View style={styles.badgeContainer}>
+          <StatusBadge status={record.status} />
+          <SignBadge signStatus={record.signStatus} />
+        </View>
       </View>
-      <View style={styles.badgeContainer}>
-        <StatusBadge status={record.status} />
-        <SignBadge signStatus={record.signStatus} />
+      <View style={styles.cardFooter}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <User size={12} color="#64748B" />
+          <Text style={styles.footerText}>{record.doctorInCharge}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Building2 size={12} color="#64748B" />
+          <Text style={styles.footerText}>{record.department} • {record.admissionType}</Text>
+        </View>
       </View>
+    </TouchableOpacity>
+
+    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 46/2018 */}
+    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+      {record.signStatus !== 'đã ký' ? (
+        <TouchableOpacity
+          style={{ backgroundColor: '#0284C7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          onPress={() => onSign && onSign(record)}
+        >
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>✍️ Ký Số EMR</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6 }}>
+          <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>✓ Đã Ký Số Toàn Vẹn</Text>
+        </View>
+      )}
+      <TouchableOpacity
+        style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+        onPress={() => onAddendum && onAddendum(record)}
+      >
+        <Text style={{ color: '#475569', fontSize: 11, fontWeight: 'bold' }}>+ Lập Phụ Lục (TT 46)</Text>
+      </TouchableOpacity>
     </View>
-    <View style={styles.cardFooter}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <User size={12} color="#64748B" />
-        <Text style={styles.footerText}>{record.doctorInCharge}</Text>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Building2 size={12} color="#64748B" />
-        <Text style={styles.footerText}>{record.department} • {record.admissionType}</Text>
-      </View>
-    </View>
-  </TouchableOpacity>
+  </View>
 );
 
 const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (

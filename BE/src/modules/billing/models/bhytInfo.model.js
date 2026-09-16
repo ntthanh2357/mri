@@ -26,6 +26,22 @@ const bhytInfoSchema = new Schema(
     // Thông tin này được copy vào Invoice khi lập hóa đơn
     invoiceId: { type: Schema.Types.ObjectId, ref: "Invoice", default: null },
 
+    // Quản lý trần BHYT & Trái tuyến & Phê duyệt thuốc đặc trị (TT30/2018/TT-BYT & NĐ 146/2018)
+    annualCap: { type: Number, default: 72000000 },       // Trần BHYT 40 tháng lương cơ sở (~72M VNĐ)
+    usedThisYear: { type: Number, default: 0 },           // Lũy kế BHYT đã thanh toán trong năm
+    isOutOfNetwork: { type: Boolean, default: false },     // KCB trái tuyến
+    treatmentType: { type: String, enum: ["outpatient", "inpatient"], default: "outpatient" }, // Ngoại trú / Nội trú
+    hasTransferForm: { type: Boolean, default: false },    // Có giấy chuyển tuyến đúng quy định
+    priorAuthorizations: [
+      {
+        drugCode: { type: String, required: true },       // Mã hoạt chất/thuốc (ví dụ: Bevacizumab, Temozolomide)
+        approvalNumber: { type: String, required: true }, // Số văn bản phê duyệt / biên bản hội chẩn
+        approvedAt: { type: Date, default: Date.now },
+        expiresAt: { type: Date, default: null },
+        indications: [{ type: String }]                   // Chỉ định ung thư não được duyệt
+      }
+    ],
+
     // Ghi chú
     note: { type: String, default: "" },
   },

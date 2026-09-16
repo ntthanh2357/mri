@@ -107,19 +107,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [submittingCancel, setSubmittingCancel] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (!user) {
-      get('/auth/me').then(r => { setUser(r.user); }).catch(() => {});
+      get('/auth/me').then(r => { if (isMounted) setUser(r.user); }).catch(() => {});
     }
+    return () => { isMounted = false; };
   }, []);
-
-  useEffect(() => { fetchData(); }, [currentMode]);
-
-  // [FIX] Re-fetch when navigated back from ImagingResultScreen with refresh flag
-  useEffect(() => {
-    if (route.params?.refresh) {
-      fetchData();
-    }
-  }, [route.params?.refresh]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -136,6 +129,30 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    const runFetch = async () => {
+      setLoading(true);
+      try {
+        const [visitRes, staffRes] = await Promise.all([
+          get('/api/v1/visits/my-queue'),
+          get('/api/v1/visits/staff'),
+        ]);
+        if (isMounted) {
+          setVisits(visitRes.visits || []);
+          setTechnicians(staffRes.technicians || []);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    runFetch();
+    return () => { isMounted = false; };
+  }, [currentMode, route.params?.refresh]);
 
   // Emergency Modal states
   const [emergencyModal, setEmergencyModal] = useState(false);
@@ -594,7 +611,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         </View>
 
         {/* [THỰC TẾ BV: NGHỊCH LÝ 1] Trạng thái Viện phí & Quy chuẩn BHYT/Cấp cứu */}
-        {v.mriOrder?.region && (
+        {Boolean(v.mriOrder?.region) && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
             {v.priority === 'khẩn cấp' ? (
               <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FCA5A5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -654,7 +671,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         )}
 
         {/* Vitals */}
-        {v.vitals?.bloodPressure && (
+        {Boolean(v.vitals?.bloodPressure) && (
           <View style={styles.vitalsRow}>
             <Activity size={13} color="#0891B2" strokeWidth={2.2} />
             <Text style={styles.vitalsLabel}>Sinh hiệu:</Text>
@@ -665,7 +682,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         )}
 
         {/* MRI Order info */}
-        {v.mriOrder?.region && (
+        {Boolean(v.mriOrder?.region) && (
           <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
             <Scan size={13} color="#0891B2" strokeWidth={2.2} />
             <Text style={styles.mriInfoText}>

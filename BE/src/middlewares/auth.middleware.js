@@ -4,6 +4,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { tenantStorage } from "./tenant.middleware.js";
 import { authCache } from "../utils/authCache.util.js";
 import { getJwtSecret } from "../config/jwt.config.js";
+import { FEATURES } from "../config/features.config.js";
 
 export const protect = async (req, res, next) => {
   let token;
@@ -14,8 +15,18 @@ export const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const secret = getJwtSecret();
 
+      // [OWASP API2:2023 HARDENING]: Chống tấn công alg: none và Algorithm Confusion
+      if (FEATURES.ENABLE_JWT_ALGORITHM_LOCK) {
+        const unverified = jwt.decode(token, { complete: true });
+        if (!unverified || !unverified.header || unverified.header.alg === "none" || !["HS256"].includes(unverified.header.alg)) {
+          res.status(401).json({ message: "Thuật toán xác thực JWT không hợp lệ hoặc bị cấm (chống giả mạo alg:none)." });
+          return;
+        }
+      }
+
       // Verify token
-      const decoded = jwt.verify(token, secret);
+      const verifyOptions = FEATURES.ENABLE_JWT_ALGORITHM_LOCK ? { algorithms: ["HS256"] } : {};
+      const decoded = jwt.verify(token, secret, verifyOptions);
 
       // Tầng đệm Auth Cache (In-Memory Fast Path): Tránh gọi DB lặp lại trên mọi request
       let user = authCache.getUserAuth(decoded.id);
@@ -71,15 +82,18 @@ export const protect = async (req, res, next) => {
 
       // Add user info to request
       req.user = decoded;
+      req.user.role = user.role || decoded.role;
       req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null;
 
-      if (user.hospitalId) {
-        tenantStorage.run({ hospitalId: user.hospitalId.toString() }, () => {
-          next();
-        });
-      } else {
+      const isSuperAdmin = req.user.role === "admin" || req.user.role === "system_admin";
+      tenantStorage.run({
+        hospitalId: req.user.hospitalId,
+        isSuperAdmin,
+        role: req.user.role,
+        userId: decoded.id
+      }, () => {
         next();
-      }
+      });
     } catch (error) {
       console.error("Lỗi xác thực token:", error);
       res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn." });
@@ -99,11 +113,12 @@ export const optionalProtect = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(" ")[1];
       const secret = getJwtSecret();
-      const decoded = jwt.verify(token, secret);
+      const verifyOptions = FEATURES.ENABLE_JWT_ALGORITHM_LOCK ? { algorithms: ["HS256"] } : {};
+      const decoded = jwt.verify(token, secret, verifyOptions);
 
       let user = authCache.getUserAuth(decoded.id);
       if (!user) {
-        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId").lean();
+        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role").lean();
         if (user) {
           authCache.setUserAuth(decoded.id, user, 60000);
         }
@@ -113,6 +128,8 @@ export const optionalProtect = async (req, res, next) => {
         const tokenVersionInJwt = decoded.tokenVersion !== undefined ? decoded.tokenVersion : 0;
         if (user.tokenVersion === tokenVersionInJwt) {
           req.user = decoded;
+          req.user.role = user.role || decoded.role;
+          req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null;
         }
       }
     } catch (error) {
@@ -120,8 +137,14 @@ export const optionalProtect = async (req, res, next) => {
     }
   }
   
-  if (req.user && req.user.hospitalId) {
-    tenantStorage.run({ hospitalId: req.user.hospitalId.toString() }, () => {
+  if (req.user) {
+    const isSuperAdmin = req.user.role === "admin" || req.user.role === "system_admin";
+    tenantStorage.run({
+      hospitalId: req.user.hospitalId || null,
+      isSuperAdmin,
+      role: req.user.role,
+      userId: req.user.id
+    }, () => {
       next();
     });
   } else {
@@ -129,7 +152,8 @@ export const optionalProtect = async (req, res, next) => {
   }
 };
 
-export const checkRole = (allowedRoles) => {
+export const checkRole = (...roles) => {
+  const allowedRoles = roles.flat().filter(Boolean);
   return (req, res, next) => {
     if (!req.user || !req.user.role) {
       res.status(403).json({ message: "Quyền truy cập bị từ chối, thiếu vai trò người dùng." });
@@ -144,4 +168,5 @@ export const checkRole = (allowedRoles) => {
     next();
   };
 };
+
 

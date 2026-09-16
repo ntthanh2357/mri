@@ -22,12 +22,20 @@ const visitSchema = new Schema(
         fileName: { type: String },
         fileType: { type: String },
         manualData: { type: Schema.Types.Mixed },
-        uploadedAt: { type: Date, default: Date.now }
+        uploadedAt: { type: Date, default: Date.now },
+        isDeleted: { type: Boolean, default: false },
+        deletedAt: { type: Date, default: null },
+        deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
       }
     ],
     status: {
       type: String,
-      enum: ['đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ chụp lại', 'đã hủy', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'hoàn tất', 'đã đóng', 'lỗi AI'],
+      enum: [
+        'đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ chụp lại', 
+        'chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 
+        'chờ hội chẩn', 'chờ nhập viện', 'chờ chụp sau phẫu thuật', 'tái khám định kỳ', 'no_show',
+        'hoàn tất', 'đã đóng', 'đã hủy'
+      ],
       default: 'đang chờ'
     },
     priority: { type: String, enum: ['thấp', 'trung bình', 'cao', 'khẩn cấp'], default: 'trung bình' },
@@ -71,6 +79,10 @@ const visitSchema = new Schema(
     invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', default: null },
     // [BUG-06 FIX] Flag để tránh gửi nhắc lịch MRI lặp vô hạn
     reminderSent: { type: Boolean, default: false },
+    // Soft Delete tuân thủ Luật Khám bệnh, chữa bệnh 2023 & Thông tư 46/2018/TT-BYT
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

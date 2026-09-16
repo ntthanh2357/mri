@@ -28,6 +28,7 @@ import {
   ArrowLeft 
 } from 'lucide-react';
 import styles from './AIAnalysisScreen.styles';
+import FormattedConsensusMessage, { stripHtml } from '../components/FormattedConsensusMessage';
 
 const CLASS_META = {
   glioma: {
@@ -199,14 +200,15 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     setApprovingAI(false);
 
     const meta = CLASS_META[aiResult.class_name] || CLASS_META.notumor;
+    const cleanConsensus = stripHtml(aiResult.consensus_message);
     const conclusionText =
       aiResult.class_name === 'notumor'
-        ? `Không phát hiện bất thường sọ não trên hình ảnh MRI (Độ tự tin AI: ${aiResult.confidence}%). Đồng thuận: ${aiResult.consensus_message || 'Kết quả bình thường.'}`
+        ? `Không phát hiện bất thường sọ não trên hình ảnh MRI (Độ tự tin AI: ${aiResult.confidence}%). Đồng thuận: ${cleanConsensus || 'Kết quả bình thường.'}`
         : `Hình ảnh gợi ý khối u loại ${meta.label} (Độ tự tin AI: ${aiResult.confidence}%). ${meta.desc} Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.`;
 
     const findingsText =
       aiResult.class_name === 'notumor'
-        ? `Kết quả phân tích AI từ hệ thống Ensemble (ResNet + EfficientNet + DenseNet) + YOLOv8 không ghi nhận tổn thương bất thường. Độ tự tin: ${aiResult.confidence}%. Đồng thuận: ${aiResult.consensus_message || 'Tất cả mô hình nhất quán.'}`
+        ? `Kết quả phân tích AI từ hệ thống Ensemble (ResNet + EfficientNet + DenseNet) + YOLOv8 không ghi nhận tổn thương bất thường. Độ tự tin: ${aiResult.confidence}%. Đồng thuận: ${cleanConsensus || 'Tất cả mô hình nhất quán.'}`
         : (aiResult.clinical_report || `Phát hiện vùng tổn thương gợi ý khối u loại ${meta.label}. Vị trí: ${aiResult.tumor_location?.note || 'Không xác định'}. Kích thước: xấp xỉ ${aiResult.tumor_location?.width}x${aiResult.tumor_location?.height} px. Độ tự tin: ${aiResult.confidence}%.`);
 
     // Navigate back to ImagingResult with pre-filled findings/conclusion
@@ -506,7 +508,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         {aiResult.consensus_message ? (
                           <View style={styles.consensusBox}>
                             <Text style={styles.consensusTitle}>Đồng thuận mô hình:</Text>
-                            <Text style={styles.consensusText}>{aiResult.consensus_message}</Text>
+                            <FormattedConsensusMessage message={aiResult.consensus_message} />
                           </View>
                         ) : null}
 

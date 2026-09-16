@@ -43,7 +43,7 @@ graph TD
     classDef output fill:#374151,stroke:#1f2937,stroke-width:2px,color:#ffffff;
 
     IN["📥 Ảnh MRI Sọ Não Đầu Vào (DICOM / PNG)"]:::input
-    PRE["⚙️ Tiền Xử Lý: Otsu Auto-Crop + CLAHE + Denoise"]:::input
+    PRE["⚙️ Tiền Xử Lý: Otsu Auto-Crop + CLAHE + Khử Nhiễu"]:::input
 
     subgraph T1 ["Tầng 1: Bayesian CNN Soft-Voting Ensemble"]
         RES["ResNet50V2<br/>(Risk-Calibrated Loss, w=0.80)"]:::tier1
@@ -61,6 +61,7 @@ graph TD
 
     subgraph GUARD_LAYER ["Lớp Bảo Vệ Quyền Riêng Tư & An Toàn Lâm Sàng"]
         PG["🛡️ Anatomical Privacy Guard<br/>(Nhận diện mặt cắt giải phẫu Axial)"]:::guard
+        WHITELIST["🔒 True Whitelist Sanitizer<br/>(Khử bỏ chỉ dấu nhạy cảm trước khi ra Cloud)"]:::guard
     end
 
     subgraph T3 ["Tầng 3: Gemini 3.1 Flash-Lite VLM Trọng Tài"]
@@ -81,7 +82,7 @@ graph TD
     CHECK -- "KHÔNG (Đồng thuận)" --> OUT_T1
     CHECK -- "CÓ (Xung đột / Nghi ngờ)" --> PG
 
-    PG -- "Mặt cắt Axial Chuẩn" --> VLM --> OUT_VLM
+    PG -- "Mặt cắt Axial Chuẩn" --> WHITELIST --> VLM --> OUT_VLM
     PG -- "Mặt cắt Coronal/Sagittal (Lộ mặt/Ngoại trục)" -->|Chặn gửi Cloud| OUT_T1
 ```
 
@@ -151,7 +152,19 @@ Phân hệ **Anatomical Privacy Guard** ([localization.py](file:///c:/Users/Admi
 
 ---
 
-## 6.4. QUY TRÌNH TIỀN XỬ LÝ ẢNH MRI SỌ NÃO CHUYÊN SÂU (PREPROCESSING PIPELINE)
+## 6.4. KHỬ ĐỊNH DANH ẢNH Y TẾ THEO TIÊU CHUẨN HIPAA SAFE HARBOR
+
+Nhằm đảm bảo an toàn tuyệt đối trước khi bất kỳ dữ liệu hình ảnh nào được xử lý hoặc lưu trữ:
+1. **Làm Sạch 18 Nhóm Định Danh Cá Nhân (HIPAA §164.514(b)(2)):**
+   - Tự động bóc tách toàn bộ thẻ DICOM Header nhạy cảm: Tên bệnh nhân (0010,0010), Ngày sinh (0010,0030), Mã số bệnh án (0010,0020), Tên cơ sở y tế (0008,0080), Tên bác sĩ chụp (0008,1050), Số serial máy chụp (0018,1000).
+2. **Gom Nhóm Tuổi Cao (Age Bucketing 90+):**
+   - Mọi bệnh nhân có độ tuổi từ 90 trở lên đều được chuẩn hóa thành danh mục duy nhất `'90+'` để loại bỏ nguy cơ tái định danh thống kê cá nhân hiếm hoi theo chuẩn y tế Hoa Kỳ.
+3. **Cơ Chế True Whitelist Sanitizer:**
+   - Trước khi gửi thông tin tóm tắt sang tầng VLM hoặc API ngoài, mọi trường dữ liệu nhạy cảm mới (như đột biến di truyền hiếm `brafV600e`, `h3k27m`) nếu không nằm trong danh mục Whitelist được phê duyệt đều bị hệ thống tự động thanh lọc 100%.
+
+---
+
+## 6.5. QUY TRÌNH TIỀN XỬ LÝ ẢNH MRI SỌ NÃO CHUYÊN SÂU (PREPROCESSING PIPELINE)
 
 Quy trình tiền xử lý được hiện thực hóa trong [preprocess.py](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/preprocess.py) bao gồm 5 công đoạn kế tiếp nhau:
 
@@ -181,11 +194,11 @@ Quy trình tiền xử lý được hiện thực hóa trong [preprocess.py](fil
 
 ---
 
-## 6.5. ĐÁNH GIÁ THỰC NGHIỆM VÀ BENCHMARK LÂM SÀNG ĐỘC LẬP
+## 6.6. ĐÁNH GIÁ THỰC NGHIỆM VÀ BENCHMARK LÂM SÀNG ĐỘC LẬP
 
-Để đảm bảo tính khách quan và minh bạch học thuật tuyệt đối, hệ thống được đánh giá trên tập kiểm thử độc lập theo bệnh nhân (**Patient-Level Split Benchmark**) gồm **3.461 ảnh lát cắt MRI sọ não** (trong đó có **1.861 ảnh lâm sàng thực tế thu thập từ Bệnh viện Đa khoa Tâm Trí Đà Nẵng** và 1.600 ảnh từ bộ dữ liệu chuẩn quốc tế).
+Hệ thống được đánh giá trên tập kiểm thử độc lập theo bệnh nhân (**Patient-Level Split Benchmark**) gồm **3.461 ảnh lát cắt MRI sọ não** (trong đó có **1.861 ảnh lâm sàng thực tế thu thập từ Bệnh viện Đa khoa Tâm Trí Đà Nẵng** và 1.600 ảnh từ bộ dữ liệu chuẩn quốc tế).
 
-### 6.5.1. Bảng So Sánh Hiệu Năng Các Cấu Hình Hệ Thống
+### 6.6.1. Bảng So Sánh Hiệu Năng Các Cấu Hình Hệ Thống
 
 | Cấu hình Hệ thống / Mô hình | Độ chính xác (Accuracy) | Macro F1-Score | Độ nhạy U ác tính (Glioma Recall) | Tỷ lệ bỏ sót u chết người (Fatal FNR) | Tỷ lệ gọi API VLM Cloud | Trạng thái Bộ lọc An toàn |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -198,13 +211,13 @@ Quy trình tiền xử lý được hiện thực hóa trong [preprocess.py](fil
 > **Ý nghĩa chỉ số Fatal FNR (Fatal False Negative Rate):**
 > Trong chẩn đoán u não, sai lầm nghiêm trọng nhất là phân loại một khối u thần kinh đệm ác tính (Glioma) thành người bình thường (No-Tumor). Sai lầm này tước đoạt cơ hội điều trị trong giai đoạn vàng của bệnh nhân. Kiến trúc MAICS với cơ chế trọng tài đa tầng đã kéo giảm tỷ lệ nguy hiểm chết người này từ **0.85% (ở Tầng 1)** xuống chỉ còn **0.43%** — tương đương mức **giảm thiểu rủi ro lâm sàng tương đối lên tới 49.4%**.
 
-### 6.5.2. Kiểm Định Ý Nghĩa Thống Kê (McNemar's Test)
-Để chứng minh sự vượt trội của kiến trúc đồng thuận MAICS không phải do ngẫu nhiên thống kê, nhóm đã thực hiện kiểm định phi tham số McNemar đối chứng trực tiếp giữa MAICS và mô hình Ensemble CNN cơ sở:
+### 6.6.2. Kiểm Định Ý Nghĩa Thống Kê (McNemar's Test)
+Kiểm định phi tham số McNemar đối chứng trực tiếp giữa MAICS và mô hình Ensemble CNN cơ sở:
 - Giá trị thống kê $\chi^2 = 19.72$.
 - $p\text{-value} = 0.000009 \ll 0.001$.
 - **Kết luận:** Hệ thống MAICS vượt trội có ý nghĩa thống kê cực kỳ rõ rệt ở mức tin cậy $99.99\%$.
 
-### 6.5.3. Phân Tích Độ Trễ Thời Gian Thực (Inference Latency)
+### 6.6.3. Phân Tích Độ Trễ Thời Gian Thực (Inference Latency)
 Đo lường trên máy chủ thử nghiệm (GPU NVIDIA RTX 3060 12GB VRAM & CPU Intel Core i7-12700H):
 - **Thời gian suy luận thuần Tầng 1 (Ensemble CNN + BayTTA):** $42.1\text{ ms}$ / lát cắt.
 - **Thời gian định vị Tầng 2 (YOLOv8 Detection):** $18.5\text{ ms}$ / lát cắt.
@@ -213,24 +226,22 @@ Quy trình tiền xử lý được hiện thực hóa trong [preprocess.py](fil
 
 ---
 
-## 6.6. KHẢ NĂNG GIẢI THÍCH LÂM SÀNG TRỰC QUAN (EXPLAINABLE AI - XAI)
+## 6.7. THẨM ĐỊNH TÍNH NHẤT QUÁN CHỈ DẤU SINH HỌC PHÂN TỬ THEO CHUẨN WHO CNS5 (2021)
 
-Nhằm tuân thủ nguyên tắc y đức và tạo dựng niềm tin cho nhân viên y tế, hệ thống trang bị bộ công cụ giải thích trực quan đa kênh:
-1. **Hộp bao định vị tổn thương (Bounding Box):** Đánh dấu chính xác tọa độ không gian 2 chiều $[x, y, \text{width}, \text{height}]$ kèm nhãn phân loại và điểm tin cậy trực tiếp trên giao diện DICOM Viewer.
-2. **Bản đồ nhiệt kích hoạt thị giác (Grad-CAM Activation Heatmap):** Trích xuất gradient tại tầng tích chập sâu nhất của mạng ResNet50/DenseNet, ánh xạ dải màu phản quang Jet (từ xanh dương đến đỏ rực) và hòa trộn Alpha Blending ($\alpha = 0.45$) lên ảnh giải phẫu, giúp bác sĩ quan sát rõ vùng mô hoại tử và vùng viền tăng sinh mạch.
-3. **Bản thuyết minh lâm sàng có cấu trúc:** Khi VLM được kích hoạt, hệ thống trả về đoạn văn giải thích rõ lý do phân loại dựa trên đặc điểm giải phẫu (ví dụ: *"Khối u nằm ở vùng hố yên ngoài trục, ranh giới rõ, có dấu hiệu chèn ép giao thoa thị giác, phù hợp nhất với U tuyến yên"*).
+Phân loại u hệ thần kinh trung ương phiên bản 5 của Tổ chức Y tế Thế giới (WHO CNS5 2021) đòi hỏi chẩn đoán xác định u não phải kết hợp giữa mô bệnh học và các chỉ dấu sinh học phân tử (Integrated Molecular Diagnosis). Hệ thống tích hợp module thẩm định tự động:
+1. **Đột biến IDH (IDH1/IDH2):** Phân định rạch ròi giữa U thần kinh đệm đột biến IDH (Astrocytoma / Oligodendroglioma - tiên lượng tốt hơn) và U nguyên bào đệm Glioblastoma IDH-hoang dại (IDH-wildtype - ác tính cao nhất).
+2. **Trạng thái Methyl hóa vùng khởi động gen MGMT (MGMT Promoter Methylation):** Chỉ dấu tiên lượng đáp ứng nhạy cảm với hóa chất Temozolomide (phác đồ Stupp).
+3. **Mất đoạn đồng thời nhánh nhiễm sắc thể 1p/19q (1p/19q codeletion):** Tiêu chuẩn vàng để chẩn đoán xác định Oligodendroglioma.
+4. **Hệ thống cảnh báo mâu thuẫn sinh học (Biological Inconsistency Warning):** Nếu kết quả giải phẫu bệnh ghi nhận "Oligodendroglioma" nhưng cờ `1p/19q codeletion: false`, hệ thống lập tức phát cờ cảnh báo bất thường để hội đồng Tumor Board đánh giá lại.
 
 ---
 
-## 6.7. PHÂN HỆ HỖ TRỢ RA QUYẾT ĐỊNH LÂM SÀNG (RULE-BASED CDSS) VÀ TRUY VẾT KIỂM TOÁN
-
-Bên cạnh phân tích hình ảnh, hệ thống tích hợp phân hệ **Clinical Decision Support System (CDSS)** hỗ trợ bác sĩ điều trị tra cứu nhanh phác đồ theo quy chuẩn Bộ Y Tế:
+## 6.8. PHÂN HỆ HỖ TRỢ RA QUYẾT ĐỊNH LÂM SÀNG (RULE-BASED CDSS) VÀ TRUY VẾT KIỂM TOÁN
 
 1. **Nguyên Tắc Thiết Kế Tất Định (Deterministic Guidance):**
-   - Cơ chế truy xuất khuyến cáo hoạt động theo mô hình quy tắc chuyên gia (Rule-based CDSS Knowledge Engine) xây dựng trực tiếp từ **Quyết định số 1514/QĐ-BYT của Bộ Y Tế** (Hướng dẫn chẩn đoán và điều trị một số bệnh ung bướu) và Hướng dẫn WHO CNS 2021.
-   - Cung cấp phác đồ chuẩn cho: Phẫu thuật u thần kinh đệm kết hợp hóa chất Temozolomide; Phẫu thuật vi phẫu cắt u màng não theo thang điểm Simpson; Liệu pháp đồng vận Dopamine cho u tuyến yên; Xử trí cấp cứu phù não tăng áp lực nội sọ bằng Dexamethasone và Mannitol $20\%$.
+   - Cơ chế truy xuất khuyến cáo hoạt động theo mô hình quy tắc chuyên gia (Rule-based CDSS) xây dựng trực tiếp từ **Quyết định số 1514/QĐ-BYT của Bộ Y Tế** (Hướng dẫn chẩn đoán và điều trị một số bệnh ung bướu) và WHO CNS 2021.
+   - Cung cấp phác đồ chuẩn: Phẫu thuật u thần kinh đệm kết hợp hóa chất Temozolomide; Phẫu thuật vi phẫu cắt u màng não theo thang điểm Simpson; Liệu pháp đồng vận Dopamine cho u tuyến yên; Xử trí cấp cứu phù não tăng áp lực nội sọ bằng Dexamethasone và Mannitol $20\%$.
    - Loại bỏ hoàn toàn nguy cơ ảo giác đơn thuốc, nghiêm cấm chỉ định liều lượng vượt thẩm quyền của trợ lý AI.
-
 2. **Cơ Chế Lưu Vết Kiểm Toán An Toàn Y Tế (Medical Audit Logs):**
    - Mọi câu hỏi, hình ảnh chẩn đoán, khuyến cáo AI và danh tính bác sĩ thao tác (`doctor_id`) đều được tự động ghi nhận vào cơ sở dữ liệu SQLite cục bộ `audit_logs.db` tại [main.py](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/main.py#L135-L162).
    - Cơ chế này phục vụ công tác hồi cứu bệnh án, đối soát trách nhiệm pháp lý khi có tai biến y khoa và đảm bảo tính minh bạch theo quy chuẩn bệnh viện điện tử EMR cấp độ 6 của Bộ Y Tế Việt Nam.

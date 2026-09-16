@@ -183,3 +183,8 @@ uploads/
 *.sqlite
 *.sqlite3
 BE/test_upload.js
+
+# Office temporary files & backups
+~$*
+*backup.xlsx
+*.tmp

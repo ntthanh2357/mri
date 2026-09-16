@@ -194,15 +194,21 @@ export const viewSharedResult = async (req, res) => {
 // @access Private (Patient)
 export const bookFollowUp = async (req, res) => {
   try {
-    const { preferredDate, reason, doctorId } = req.body;
+    const { preferredDate, reason, doctorId, hospitalId } = req.body;
     const patientId = req.user.id;
 
     if (!reason) return errorResponse(res, "Vui lòng nêu lý do tái khám.", 400);
 
+    // [BUG-06 FIX]: Bệnh nhân B2C có hospitalId = null, cho phép chọn cơ sở khám từ body
+    const targetHospitalId = req.user.hospitalId || hospitalId;
+    if (!targetHospitalId) {
+      return errorResponse(res, "Vui lòng chọn cơ sở y tế muốn đăng ký tái khám.", 400);
+    }
+
     // Tạo Visit mới với trạng thái đặt lịch
-    const { Visit } = await import("../models/visit.model.js");
+    const { Visit } = await import("../../models/visit.model.js");
     const newVisit = new Visit({
-      hospitalId: req.user.hospitalId,
+      hospitalId: targetHospitalId,
       patientId,
       doctorId: doctorId || null,
       date: preferredDate ? new Date(preferredDate) : null,

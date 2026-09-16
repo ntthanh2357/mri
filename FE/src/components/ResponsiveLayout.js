@@ -32,6 +32,7 @@ import {
   X,
   ChevronRight,
   ShieldCheck,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 const ResponsiveLayout = ({
@@ -166,6 +167,8 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Hàng chờ Khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Danh mục Thuốc', route: 'DrugManagement', icon: Package },
           { label: 'Lịch trực Bác sĩ', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -182,7 +185,8 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Sơ đồ Giường bệnh & EMR', route: 'EMRDashboard', icon: FolderOpen },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Bệnh án & EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
           { label: 'Lịch làm việc Điều dưỡng', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -198,7 +202,9 @@ const ResponsiveLayout = ({
       case 'hospital_admin':
         return [
           { label: 'Tổng quan', route: 'ClinicDashboard', icon: LayoutDashboard },
-          { label: 'Quản lý EMR', route: 'EMRDashboard', icon: FolderOpen },
+          { label: 'Quản lý EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
+          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Quản lý Nhân sự', route: 'StaffManagement', icon: Users },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Báo cáo Tài chính', route: 'Financials', icon: DollarSign },
@@ -209,6 +215,8 @@ const ResponsiveLayout = ({
       case 'admin':
         return [
           { label: 'Tổng quan', route: 'AdminBackoffice', icon: LayoutDashboard },
+          { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -289,8 +297,10 @@ const ResponsiveLayout = ({
             } else if (item.params?.tab) {
               if (activeRoute === `${item.route}_${item.params.tab}`) {
                 isActive = true;
+              } else if (activeRoute === item.route && item.params.tab === 'records') {
+                isActive = true;
               }
-            } else if (activeRoute === item.route && item.route !== 'NurseReception') {
+            } else if (activeRoute === item.route && item.route !== 'NurseReception' && item.route !== 'EMRDashboard') {
               isActive = true;
             }
 

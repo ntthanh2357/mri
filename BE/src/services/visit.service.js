@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 
 /**
  * Service: Lấy danh sách nhân sự (Bác sĩ, Điều dưỡng, KTV) kèm tải hàng đợi trong ngày
@@ -21,8 +22,7 @@ export const getStaffService = async ({ hospitalId }) => {
     User.find({ hospitalId, role: "technician" }).select("profile email role"),
   ]);
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const { startOfDay } = getDayRangeVN();
 
   const activeVisits = await Visit.find({
     hospitalId,
@@ -63,10 +63,7 @@ export const createVisitService = async ({ hospitalId, userId, patientId, doctor
     throw err;
   }
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+  const { startOfDay, endOfDay } = getDayRangeVN();
 
   const [visitCountToday, hospital] = await Promise.all([
     Visit.countDocuments({
@@ -145,14 +142,13 @@ export const getMyQueueService = async ({ role, id, hospitalId, query = {} }) =>
   }
 
   let filter = { hospitalId };
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const { startOfDay } = getDayRangeVN();
 
   if (role === "doctor") {
     filter.$or = [
       { doctorId: id },
       { 
-        status: { $in: ["chờ chụp", "chờ chụp lại", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] },
+        status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] },
         "mriOrder.orderedAt": { $exists: true }
       }
     ];
@@ -167,7 +163,7 @@ export const getMyQueueService = async ({ role, id, hospitalId, query = {} }) =>
       { technicianId: null },
       { technicianId: { $exists: false } }
     ];
-    filter.status = { $in: ["chờ chụp", "chờ chụp lại", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
+    filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] };
   }
 
   if (role === "receptionist" || role === "admin" || role === "hospital_admin" || query.today === "true") {

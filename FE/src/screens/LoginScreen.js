@@ -216,7 +216,7 @@ const LoginScreen = ({ navigation }) => {
         setTempLoginResponse(data);
         setShowTwoFactor(true);
       } else {
-        await setAuthToken(data.accessToken);
+        await setAuthToken(data.accessToken, data.refreshToken);
         const destination = data.user && data.user.role === 'admin'
           ? 'AdminBackoffice'
           : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
@@ -233,7 +233,7 @@ const LoginScreen = ({ navigation }) => {
       if (errMsg.toLowerCase().includes('không chính xác') || errMsg.toLowerCase().includes('không tồn tại')) {
         setPasswordError('Thông tin đăng nhập chưa chính xác, bạn vui lòng kiểm tra lại nhé.');
       } else {
-        setPasswordError(errMsg);
+        showAlert('error', 'Đăng nhập thất bại', errMsg);
       }
     } finally {
       setLoading(false);
@@ -257,7 +257,7 @@ const LoginScreen = ({ navigation }) => {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const data = tempLoginResponse;
-      await setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && data.user.role === 'admin'
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');

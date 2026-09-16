@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { TransferForm } from "../models/transferForm.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { HospitalBed } from "../models/hospitalBed.model.js";
@@ -5,6 +6,7 @@ import { Visit } from "../models/visit.model.js";
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 
 // ─── F.1 — Kiểm tra khả năng tiếp nhận phẫu thuật & giường viện đích ─────────
 // @route POST /api/v1/transfers/check-capacity
@@ -131,26 +133,53 @@ export const acceptTransferRequest = async (req, res) => {
     const transfer = await TransferForm.findById(req.params.id);
     if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
 
+    // [BOLA/IDOR GUARD]: Chỉ nhân viên y tế thuộc bệnh viện đích (tiếp nhận) mới có thẩm quyền duyệt (Luật 15/2023 Điều 66)
+    if (req.user.role !== 'admin' && req.user.hospitalId?.toString() !== transfer.targetHospitalId?.toString()) {
+      return errorResponse(res, "Chỉ bác sĩ hoặc quản trị viên của bệnh viện tiếp nhận mới có quyền duyệt phiếu chuyển viện.", 403);
+    }
+
     if (transfer.status !== 'pending') {
       return errorResponse(res, `Yêu cầu này đã ở trạng thái: ${transfer.status}.`, 400);
     }
 
-    // F.3 — Tự động giữ chỗ giường trống tại viện đích
-    const availableBed = await HospitalBed.findOne({
-      hospitalId: transfer.targetHospitalId,
-      status: 'available'
-    });
+    // [P0 CONCURRENCY FIX]: Tự động giữ chỗ giường trống nguyên tử bằng findOneAndUpdate
+    // Ngăn chặn race condition khi 2 ca chuyển viện cấp cứu được duyệt đồng thời bị gán trùng 1 giường
+    const availableBed = await HospitalBed.findOneAndUpdate(
+      {
+        hospitalId: transfer.targetHospitalId,
+        $or: [
+          { status: 'available' },
+          { status: 'reserved', reservedUntil: { $lt: new Date() } }
+        ]
+      },
+      {
+        $set: {
+          status: 'reserved',
+          reservedUntil: new Date(Date.now() + 4 * 60 * 60 * 1000), // Giữ 4 tiếng
+          reserveReason: 'inter_hospital_transfer',
+          reservedForPatientId: transfer.patient_id,
+          reservedForVisitId: transfer.visitId || null,
+          reservedByUserId: req.user.id,
+          reservedAt: new Date()
+        }
+      },
+      { new: true }
+    );
 
     if (availableBed) {
-      const reservedUntil = new Date(Date.now() + 4 * 60 * 60 * 1000); // Giữ 4 tiếng
-      availableBed.status = 'reserved';
-      availableBed.reservedUntil = reservedUntil;
-      availableBed.reservedForPatientId = transfer.patient_id;
-      availableBed.reservedForVisitId = transfer.visitId;
-      availableBed.reservedByUserId = req.user.id;
-      await availableBed.save();
-
       transfer.targetBedId = availableBed._id;
+      // Ghi audit log giữ chỗ giường chuyển viện
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.BED_RESERVED,
+          entity: "HospitalBed",
+          entityId: availableBed._id,
+          performedBy: req.user.id,
+          hospitalId: transfer.targetHospitalId,
+          details: `Tự động giữ chỗ giường ${availableBed.bedNumber} cho bệnh nhân chuyển viện ${transfer.patient_id}`,
+          payload: { transferId: transfer._id, bedId: availableBed._id }
+        });
+      } catch (_) {}
     }
 
     transfer.status = 'accepted';
@@ -188,15 +217,38 @@ export const acceptTransferRequest = async (req, res) => {
 
 // ─── Từ chối chuyển viện ──────────────────────────────────────────────────────
 // @route PUT /api/v1/transfers/:id/reject
-// @access Private
+// @access Private (Doctor/Admin at Target Hospital)
 export const rejectTransferRequest = async (req, res) => {
   try {
     const transfer = await TransferForm.findById(req.params.id);
     if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
 
+    // [BOLA/IDOR GUARD]: Chỉ bệnh viện tiếp nhận được quyền từ chối
+    if (req.user.role !== 'admin' && req.user.hospitalId?.toString() !== transfer.targetHospitalId?.toString()) {
+      return errorResponse(res, "Chỉ bác sĩ hoặc quản trị viên của bệnh viện tiếp nhận mới có quyền từ chối phiếu chuyển viện.", 403);
+    }
+
     const { reason } = req.body;
     transfer.status = 'rejected';
     transfer.rejectionReason = reason || "Bệnh viện quá tải";
+
+    // Tự động thu hồi giường giữ chỗ viện đích nếu có
+    if (transfer.targetBedId) {
+      await HospitalBed.findOneAndUpdate(
+        { _id: transfer.targetBedId, status: 'reserved', reservedForPatientId: transfer.patient_id },
+        { $set: { status: 'available', reservedUntil: null, reservedForPatientId: null, reservedForVisitId: null, reserveReason: null } }
+      );
+      transfer.targetBedId = null;
+    }
+
+    // Tự động hủy token xem liên viện khi ca bị từ chối
+    if (transfer.crossHospitalToken) {
+      transfer.crossHospitalToken = null;
+      transfer.crossHospitalTokenExpiresAt = null;
+      transfer.crossHospitalTokenRevokedAt = new Date();
+      transfer.crossHospitalTokenRevokedBy = req.user.id;
+    }
+
     await transfer.save();
 
     return successResponse(res, { transfer }, "Đã từ chối yêu cầu chuyển viện.");
@@ -207,9 +259,13 @@ export const rejectTransferRequest = async (req, res) => {
 
 // ─── F.5 — Audit log danh sách chuyển viện ───────────────────────────────────
 // @route GET /api/v1/transfers
-// @access Private
+// @access Private (Doctor, Nurse, Admin)
 export const getTransfers = async (req, res) => {
   try {
+    if (!["doctor", "nurse", "admin", "hospital_admin"].includes(req.user?.role)) {
+      return errorResponse(res, "Không có quyền xem danh sách chuyển viện của cơ sở y tế.", 403);
+    }
+
     const hospitalId = req.user.hospitalId;
     const { type = 'outgoing', status } = req.query;
 
@@ -240,17 +296,41 @@ export const grantCrossHospitalView = async (req, res) => {
     const transfer = await TransferForm.findById(req.params.id);
     if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
 
+    const userHosp = req.user.hospitalId?.toString();
+    const isAuthorized = req.user.role === 'admin' ||
+      userHosp === transfer.hospitalId?.toString() ||
+      userHosp === transfer.targetHospitalId?.toString();
+
+    if (!isAuthorized) {
+      return errorResponse(res, "Không có quyền cấp token xem chéo viện cho hồ sơ chuyển viện này.", 403);
+    }
+
     if (transfer.status !== 'accepted') {
       return errorResponse(res, "Chỉ có thể tạo token liên viện cho các ca đã được chấp nhận chuyển viện.", 400);
     }
 
-    const { crypto } = await import("crypto");
+    // Sử dụng crypto module tĩnh đã import ở đầu file
     const accessToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 ngày
 
     transfer.crossHospitalToken = accessToken;
     transfer.crossHospitalTokenExpiresAt = expiresAt;
+    transfer.crossHospitalTokenRevokedAt = null;
+    transfer.crossHospitalTokenRevokedBy = null;
     await transfer.save();
+
+    // Ghi vết audit log
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.CROSS_HOSPITAL_TOKEN_ISSUED,
+        entity: "TransferForm",
+        entityId: transfer._id,
+        performedBy: req.user.id,
+        hospitalId: transfer.hospitalId,
+        details: `Cấp mã token xem bệnh án liên viện 7 ngày cho ca chuyển viện ${transfer.transferNo}`,
+        payload: { transferId: transfer._id, expiresAt }
+      });
+    } catch (_) {}
 
     return successResponse(res, {
       transferId: transfer._id,
@@ -258,6 +338,107 @@ export const grantCrossHospitalView = async (req, res) => {
       expiresAt,
       viewUrl: `/api/v1/transfers/cross-view/${accessToken}`
     }, "Cấp token xem bệnh án liên viện 7 ngày thành công (F.5).");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// ─── F.5 — Thu hồi token xem bệnh án liên viện trước thời hạn ─────────────────
+// @route POST /api/v1/transfers/:id/revoke-cross-view
+// @access Private (Doctor, Admin at Target Hospital or Source Hospital)
+export const revokeCrossHospitalView = async (req, res) => {
+  try {
+    const transfer = await TransferForm.findById(req.params.id);
+    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
+
+    const userHosp = req.user.hospitalId?.toString();
+    const isAuthorized = req.user.role === 'admin' ||
+      userHosp === transfer.hospitalId?.toString() ||
+      userHosp === transfer.targetHospitalId?.toString();
+
+    if (!isAuthorized) {
+      return errorResponse(res, "Không có quyền thu hồi token cho hồ sơ chuyển viện này.", 403);
+    }
+
+    transfer.crossHospitalToken = null;
+    transfer.crossHospitalTokenExpiresAt = null;
+    transfer.crossHospitalTokenRevokedAt = new Date();
+    transfer.crossHospitalTokenRevokedBy = req.user.id;
+    await transfer.save();
+
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.CROSS_HOSPITAL_TOKEN_REVOKED,
+        entity: "TransferForm",
+        entityId: transfer._id,
+        performedBy: req.user.id,
+        hospitalId: transfer.hospitalId,
+        details: `Đã thu hồi token xem bệnh án liên viện của ca chuyển viện ${transfer.transferNo}`,
+        payload: { transferId: transfer._id, revokedBy: req.user.id }
+      });
+    } catch (_) {}
+
+    return successResponse(res, { transferId: transfer._id }, "Đã thu hồi quyền xem bệnh án liên viện thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// ─── F.5 — Đọc hồ sơ bệnh án liên viện thông qua Access Token ──────────────────
+// @route GET /api/v1/transfers/cross-view/:token
+// @access Token-Authorized (Doctor at Target Hospital)
+export const accessCrossHospitalView = async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token) return errorResponse(res, "Thiếu mã token truy cập liên viện.", 400);
+
+    const transfer = await TransferForm.findOne({
+      crossHospitalToken: token,
+      status: 'accepted'
+    })
+      .populate("patient_id", "profile.name profile.fullName profile.dob profile.gender profile.phone")
+      .populate("hospitalId", "name code address")
+      .populate("targetHospitalId", "name code address")
+      .populate("imagingResultId")
+      .lean();
+
+    if (!transfer) {
+      return errorResponse(res, "Mã token không hợp lệ hoặc ca chuyển viện chưa được chấp nhận/đã bị thu hồi.", 404);
+    }
+
+    // Kiểm tra thời hạn hiệu lực của Token
+    if (!transfer.crossHospitalTokenExpiresAt || new Date(transfer.crossHospitalTokenExpiresAt) < new Date()) {
+      return errorResponse(res, "Mã token xem bệnh án liên viện đã hết hạn hiệu lực.", 401);
+    }
+
+    // Ghi vết audit log truy cập theo TT 46/2018/TT-BYT Điều 18
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.CROSS_HOSPITAL_VIEW_ACCESSED,
+        entity: "TransferForm",
+        entityId: transfer._id,
+        performedBy: req.user?.id || "token_bearer",
+        hospitalId: transfer.targetHospitalId?._id || transfer.targetHospitalId,
+        details: `Bác sĩ truy cập hồ sơ bệnh án liên viện của bệnh nhân ${transfer.patient_id?._id} qua token an toàn.`,
+        payload: { transferId: transfer._id, patientId: transfer.patient_id?._id }
+      });
+    } catch (_) {}
+
+    return successResponse(res, {
+      transferNo: transfer.transferNo,
+      sourceHospital: transfer.hospitalId,
+      targetHospital: transfer.targetHospitalId,
+      patient: transfer.patient_id,
+      clinicalSummary: transfer.clinicalSummary,
+      labSummary: transfer.labSummary,
+      diagnosis: transfer.diagnosis,
+      treatment: transfer.treatment,
+      drugsUsed: transfer.drugsUsed,
+      patientStatus: transfer.patientStatus,
+      transferPackageDriveUrl: transfer.transferPackageDriveUrl,
+      imagingResult: transfer.imagingResultId,
+      expiresAt: transfer.crossHospitalTokenExpiresAt
+    }, "Truy xuất hồ sơ bệnh án chuyển viện thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

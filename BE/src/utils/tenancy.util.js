@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { TransferForm } from "../models/transferForm.model.js";
 import { Visit } from "../models/visit.model.js";
@@ -26,7 +27,14 @@ export const checkPatientTenancy = async (patientId, userOrHospitalId, roleArg, 
     userId = userOrHospitalId.id || userOrHospitalId._id || userOrHospitalId.userId;
   }
 
-  const patient = await User.findById(patientId);
+  // Hỗ trợ tìm bệnh nhân bằng ObjectId hoặc profile.medicalId chuỗi, tránh CastError
+  let patient = null;
+  if (mongoose.Types.ObjectId.isValid(patientId)) {
+    patient = await User.findById(patientId);
+  }
+  if (!patient) {
+    patient = await User.findOne({ "profile.medicalId": patientId });
+  }
   if (!patient || patient.role !== "patient") return null;
 
   // 1. Quản trị viên cấp cao có quyền giám sát hệ thống
@@ -37,6 +45,12 @@ export const checkPatientTenancy = async (patientId, userOrHospitalId, roleArg, 
   // 2. Chính bệnh nhân đang tự truy xuất hồ sơ của mình (Token cá nhân B2C)
   if (userId && patient._id.toString() === userId.toString()) {
     return patient;
+  }
+
+  // 2.1. Chặn đứng BOLA giữa các bệnh nhân: Nếu là tài khoản vai trò patient mà không phải chính mình,
+  // tuyệt đối không được xem hồ sơ bệnh nhân khác (kể cả cùng cơ sở khám chữa bệnh)
+  if (userRole === "patient") {
+    return null;
   }
 
   // 3. Nhân viên y tế bắt buộc phải được gán vào bệnh viện
@@ -61,7 +75,9 @@ export const checkPatientTenancy = async (patientId, userOrHospitalId, roleArg, 
         { to_hospital_id: currentHospId }
       ],
       status: { $in: ["pending", "accepted", "in_transit", "completed", "PENDING", "APPROVED", "ACCEPTED"] },
-    }).lean();
+    })
+      .setOptions({ bypassTenancy: true })
+      .lean();
 
     if (activeTransfer) {
       return patient;
@@ -75,7 +91,9 @@ export const checkPatientTenancy = async (patientId, userOrHospitalId, roleArg, 
   const activeVisit = await Visit.findOne({
     patientId: patient._id,
     hospitalId: currentHospId,
-  }).lean();
+  })
+    .setOptions({ bypassTenancy: true })
+    .lean();
 
   if (activeVisit) {
     return patient;

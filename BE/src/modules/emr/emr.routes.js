@@ -12,6 +12,8 @@ import {
   createConsent,
   signConsent,
   getRecordVersions,
+  createRecordAddendum,
+  signMedicalRecord,
 } from "./emr.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 
@@ -45,5 +47,11 @@ router.route("/consents/:consentId/sign")
 
 router.route("/records/:id/versions")
   .get(checkRole(["doctor", "admin", "hospital_admin"]), getRecordVersions);
+
+router.route("/records/:id/addendum")
+  .post(checkRole(["doctor", "admin", "hospital_admin"]), createRecordAddendum);
+
+router.route("/records/:id/sign")
+  .put(checkRole(["doctor", "admin", "hospital_admin"]), signMedicalRecord);
 
 export default router;

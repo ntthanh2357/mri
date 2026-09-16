@@ -17,6 +17,8 @@ import { get, post, put } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, Copy, AlertTriangle, Brain } from 'lucide-react';
+import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
+import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
 import styles from './ImagingResultScreen.styles';
 
 const ImagingResultScreen = ({ route, navigation }) => {
@@ -451,7 +453,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
               </TouchableOpacity>
 
-              {result.dicomZipUrl && (
+              {Boolean(result.dicomZipUrl) && (
                 <TouchableOpacity
                   style={{
                     backgroundColor: '#7C3AED',
@@ -544,7 +546,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
             <View style={styles.sectionDivider} />
 
-            {result.images && result.images.length > 0 && (
+            {Boolean(result.images && result.images.length > 0) && (
               <View style={styles.gallerySection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>
@@ -584,9 +586,10 @@ const ImagingResultScreen = ({ route, navigation }) => {
                       - Độ tự tin: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
                     </Text>
                     {aiResult.consensus_message ? (
-                      <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginBottom: 10 }}>
-                        {aiResult.consensus_message}
-                      </Text>
+                      <FormattedConsensusMessage
+                        message={aiResult.consensus_message}
+                        style={{ marginBottom: 10 }}
+                      />
                     ) : null}
 
                     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
@@ -904,7 +907,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
         </Modal>
 
         {/* Zoom Image Modal */}
-        {result.images && result.images.length > 0 && (
+        {Boolean(result.images && result.images.length > 0) && (
           <Modal
             visible={zoomVisible}
             transparent={true}

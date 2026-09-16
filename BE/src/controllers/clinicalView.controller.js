@@ -21,6 +21,10 @@ export const getDicomViewerData = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
+    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+      return errorResponse(res, "Bạn không có quyền xem dữ liệu DICOM của cơ sở y tế khác.", 403);
+    }
+
     // Lấy Study và Series liên kết
     const study = imaging.studyId
       ? await DicomStudy.findById(imaging.studyId).lean()
@@ -78,6 +82,10 @@ export const getAiOverlays = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
+    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+      return errorResponse(res, "Bạn không có quyền xem overlay AI của cơ sở y tế khác.", 403);
+    }
+
     const aiJob = imaging.aiJobId
       ? await AiJob.findById(imaging.aiJobId).lean()
       : null;
@@ -132,6 +140,10 @@ export const getFullAiReport = async (req, res) => {
       .populate("signedBy", "profile.name profile.specialty")
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
+
+    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+      return errorResponse(res, "Bạn không có quyền xem báo cáo AI của cơ sở y tế khác.", 403);
+    }
 
     const aiJob = imaging.aiJobId
       ? await AiJob.findById(imaging.aiJobId).select("-errorLog").lean()
@@ -203,9 +215,13 @@ export const get3dModelUrl = async (req, res) => {
 
     const { imagingResultId } = req.params;
     const imaging = await ImagingResult.findById(imagingResultId)
-      .select("model3dUrl patientName orderDate aiReport")
+      .select("model3dUrl patientName orderDate aiReport hospitalId")
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
+
+    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+      return errorResponse(res, "Bạn không có quyền xem mô hình 3D của cơ sở y tế khác.", 403);
+    }
 
     if (!imaging.model3dUrl) {
       return errorResponse(res, "Mô hình 3D chưa được tạo cho ca này. AI cần hoàn thành bước C.5.", 404);
@@ -245,6 +261,12 @@ export const signImagingReport = async (req, res) => {
 
     const imaging = await ImagingResult.findById(imagingResultId);
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
+
+    // Multi-tenant check: Bác sĩ không có quyền ký duyệt kết quả của bệnh viện khác
+    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+      return errorResponse(res, "Bác sĩ không có quyền ký duyệt kết quả hình ảnh của bệnh viện khác.", 403);
+    }
+
     if (imaging.isSigned) {
       return errorResponse(res, "Kết quả này đã được ký duyệt.", 400);
     }

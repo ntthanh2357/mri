@@ -4,6 +4,7 @@ import { AuditLog } from "../models/auditLog.model.js";
 import { Dataset } from "../models/dataset.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
+import { authCache } from "../utils/authCache.util.js";
 
 export const getAllUsers = async () => {
   return User.find({}, "-passwordHash").lean();
@@ -12,11 +13,12 @@ export const getAllUsers = async () => {
 export const toggleUserLock = async (userId, isLocked, adminId) => {
   const user = await User.findByIdAndUpdate(
     userId,
-    { isLocked },
+    { isLocked, $inc: { tokenVersion: 1 } },
     { new: true }
   ).select("-passwordHash");
 
   if (user) {
+    authCache.invalidateUser(userId);
     await AuditLog.create({
       action: isLocked ? "lock-user" : "unlock-user",
       entity: "User",
@@ -45,11 +47,13 @@ export const lockUserById = async (id, adminId) => {
 
   const updatedUser = await User.findByIdAndUpdate(
     id,
-    { isLocked: true },
+    { isLocked: true, $inc: { tokenVersion: 1 } },
     { new: true }
   )
     .select("-passwordHash -otpCode -otpExpires -tokenVersion")
     .lean();
+
+  authCache.invalidateUser(id);
 
   await AuditLog.create({
     action: "lock-user",
@@ -107,11 +111,13 @@ export const unlockUserById = async (id, adminId) => {
   // Lock is active — unlock and audit
   const updated = await User.findByIdAndUpdate(
     id,
-    { isLocked: false },
+    { isLocked: false, $inc: { tokenVersion: 1 } },
     { new: true }
   )
     .select("-passwordHash -otpCode -otpExpires -tokenVersion")
     .lean();
+
+  authCache.invalidateUser(id);
 
   await AuditLog.create({
     action: "unlock-user",

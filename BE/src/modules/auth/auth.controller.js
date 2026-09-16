@@ -8,6 +8,7 @@ import { AuditLog } from "../../models/auditLog.model.js";
 import crypto from "crypto";
 import { authCache } from "../../utils/authCache.util.js";
 import { getJwtSecret, getRefreshSecret, generateSecureOtp } from "../../config/jwt.config.js";
+import { FEATURES } from "../../config/features.config.js";
 
 const hashPhone = (phone) => {
   if (!phone) return null;
@@ -18,13 +19,13 @@ const hashPhone = (phone) => {
 // Helper function to generate JWT Access Token
 const generateAccessToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = getJwtSecret();
-  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "1h" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "1h", algorithm: "HS256" });
 };
 
 // Helper function to generate JWT Refresh Token
 const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = getRefreshSecret();
-  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d", algorithm: "HS256" });
 };
 
 // @desc    Register a new user
@@ -430,8 +431,9 @@ export const refresh = async (req, res) => {
 
     const secret = getRefreshSecret();
 
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, secret);
+    // Verify refresh token với kiểm soát thuật toán an toàn
+    const verifyOptions = FEATURES.ENABLE_JWT_ALGORITHM_LOCK ? { algorithms: ["HS256"] } : {};
+    const decoded = jwt.verify(refreshToken, secret, verifyOptions);
 
     // Fetch user to verify active session version
     const user = await User.findById(decoded.id).select("tokenVersion role hospitalId");

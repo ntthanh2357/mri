@@ -4,6 +4,7 @@ import { Visit } from "../../models/visit.model.js";
 import { User } from "../auth/models/user.model.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
+import { getDayRangeVN } from "../../utils/date.util.js";
 
 // ─── A.1 — Lấy danh sách phòng MRI ───────────────────────────────────────────
 export const getRooms = async (req, res) => {
@@ -108,10 +109,7 @@ export const autoScheduleSlot = async (req, res) => {
     const rooms = await MriRoom.find({ hospitalId, status: 'active' }).lean();
     if (!rooms.length) return errorResponse(res, "Bệnh viện chưa có phòng MRI nào đang hoạt động.", 400);
 
-    const searchDate = preferredDate ? new Date(preferredDate) : new Date();
-    searchDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(searchDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay: searchDate, endOfDay } = getDayRangeVN(preferredDate || new Date());
 
     // Tìm phòng có ít slot nhất trong ngày
     let bestRoom = null;
@@ -133,11 +131,40 @@ export const autoScheduleSlot = async (req, res) => {
       return errorResponse(res, "Không có phòng MRI trống trong ngày đã chọn. Thử ngày khác.", 400);
     }
 
-    // Tính giờ bắt đầu: bắt đầu giờ làm việc + số slot đã đặt × slotDuration
+    // Lấy danh sách các slot đã đặt trong ngày của phòng được chọn để tránh trùng lịch (overlap)
+    const existingSlots = await MriSlot.find({
+      roomId: bestRoom._id,
+      startTime: { $gte: searchDate, $lte: endOfDay },
+      status: { $in: ['booked', 'in_progress'] }
+    }).select('startTime endTime').sort({ startTime: 1 }).lean();
+
+    // Tính giờ bắt đầu theo múi giờ chuẩn VN (GMT+7) dựa trên offset từ searchDate (00:00:00 GMT+7)
+    // Tránh dùng Date.prototype.setHours vì setHours bị lệch theo múi giờ cục bộ của server runtime (UTC)
     const [startH, startM] = (bestRoom.operatingHours?.start || "07:00").split(":").map(Number);
-    const slotStart = new Date(searchDate);
-    slotStart.setHours(startH, startM + minSlots * bestRoom.slotDurationMinutes, 0, 0);
-    const slotEnd = new Date(slotStart.getTime() + bestRoom.slotDurationMinutes * 60000);
+    let slotStart = null;
+    let slotEnd = null;
+
+    for (let i = 0; i < bestRoom.maxSlotsPerDay; i++) {
+      const candidateStartMs = searchDate.getTime() + (startH * 60 + startM + i * bestRoom.slotDurationMinutes) * 60000;
+      const candidateEndMs = candidateStartMs + bestRoom.slotDurationMinutes * 60000;
+
+      // Kiểm tra xem khung giờ này có bị trùng với slot nào đã đặt không (chống đè slot khi có ca hủy ở giữa)
+      const isConflict = existingSlots.some(s => {
+        const sStart = new Date(s.startTime).getTime();
+        const sEnd = new Date(s.endTime).getTime();
+        return candidateStartMs < sEnd && candidateEndMs > sStart;
+      });
+
+      if (!isConflict) {
+        slotStart = new Date(candidateStartMs);
+        slotEnd = new Date(candidateEndMs);
+        break;
+      }
+    }
+
+    if (!slotStart) {
+      return errorResponse(res, "Không còn khung giờ trống trong ngày đã chọn cho phòng này.", 400);
+    }
 
     const slot = new MriSlot({
       hospitalId,
@@ -239,10 +266,7 @@ export const handleEmergencyOverride = async (req, res) => {
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
 
-    const searchDate = preferredDate ? new Date(preferredDate) : new Date();
-    searchDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(searchDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay: searchDate, endOfDay } = getDayRangeVN(preferredDate || new Date());
 
     // Tìm slot trống ngay bây giờ hoặc sắp tới
     const now = new Date();
@@ -351,7 +375,24 @@ export const confirmReschedule = async (req, res) => {
           });
         }
       } catch (notifErr) {
-        console.warn("⚠️ Không thể gửi thông báo dời lịch:", notifErr.message);
+        console.warn("⚠️ Không thể gửi thông báo dời lịch cho bệnh nhân:", notifErr.message);
+      }
+    }
+
+    // Gửi thông báo tự động cho Kỹ thuật viên qua notification system
+    if (slot.technicianId) {
+      try {
+        await createNotificationInternal({
+          hospitalId: req.user.hospitalId,
+          recipientId: slot.technicianId,
+          senderId: req.user.id,
+          type: "emergency_slot_override",
+          title: "🚨 CA CẤP CỨU CHÈN LỊCH CHỤP MRI",
+          message: `Slot chụp lúc ${slot.startTime.toLocaleString('vi-VN')} đã được điều phối cho ca cấp cứu khẩn cấp.`,
+          relatedId: slot._id,
+        });
+      } catch (ktvErr) {
+        console.warn("⚠️ Không thể gửi thông báo cho KTV:", ktvErr.message);
       }
     }
 

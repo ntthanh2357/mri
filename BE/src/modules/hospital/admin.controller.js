@@ -12,6 +12,7 @@ import { DrugReport } from "../../models/drugReport.model.js";
 import { Announcement } from "../../models/announcement.model.js";
 import bcrypt from "bcryptjs";
 import { setupHospitalDriveStructure } from "../../config/googleDrive.js";
+import { getDayRangeVN } from "../../utils/date.util.js";
 
 import {
   getAllUsers,
@@ -632,10 +633,8 @@ export const getDashboardStats = async (req, res) => {
       return res.status(400).json({ success: false, message: "Vui lòng cung cấp hospitalId (Global Admin: dùng ?hospitalId=xxx)." });
     }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    // [TIMEZONE FIX]: Chuẩn hóa mốc ngày theo múi giờ Việt Nam (Asia/Ho_Chi_Minh GMT+7)
+    const { startOfDay, endOfDay } = getDayRangeVN();
 
     // 1. Visits today
     const visitsToday = await Visit.find({
@@ -1995,6 +1994,26 @@ export const upgradeHospitalSubscription = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const checkAuditIntegrity = async (req, res) => {
+  try {
+    const { verifyAuditChainIntegrity } = await import("../../services/auditLog.service.js");
+    const result = await verifyAuditChainIntegrity(Number(req.query.limit) || 1000);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const runEmrMigration = async (req, res) => {
+  try {
+    const { migrateLegacyEMR } = await import("../../scripts/migrate_legacy_emr.js");
+    const result = await migrateLegacyEMR();
+    res.status(200).json({ success: true, message: "Chuẩn hóa dữ liệu EMR thành công.", ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

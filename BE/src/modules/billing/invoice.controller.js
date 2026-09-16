@@ -9,6 +9,7 @@ import { User } from "../auth/models/user.model.js";
 import { Drug } from "../pharmacy/models/drug.model.js";
 import { Prescription } from "../pharmacy/models/prescription.model.js";
 import { executeWithTransaction } from "../../utils/transaction.util.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
@@ -81,7 +82,13 @@ export const createAndPayInvoice = async (req, res) => {
         items.push({
           description: `Thuốc: ${pDrug.name} (SL: ${pDrug.quantity} ${pDrug.unit || 'Viên'})`,
           amount: totalDrugPrice,
-          type: "drug"
+          type: "drug",
+          drugId: dbDrug ? dbDrug._id : null,
+          drugName: pDrug.name,
+          quantity: pDrug.quantity,
+          unitPrice: unitPrice,
+          unit: pDrug.unit || dbDrug?.stock?.unit || 'Viên',
+          dosage: pDrug.dosage || null
         });
 
         // Trừ tồn kho nguyên tử (Atomic decrement) chống Race Condition & Lost Updates
@@ -91,7 +98,17 @@ export const createAndPayInvoice = async (req, res) => {
               filter: { _id: dbDrug._id, "stock.quantity": { $gte: pDrug.quantity } },
               update: { 
                 $inc: { "stock.quantity": -pDrug.quantity },
-                $set: { "stock.lastUpdated": new Date() }
+                $set: { "stock.lastUpdated": new Date() },
+                $push: {
+                  stockMovements: {
+                    type: "dispense",
+                    quantity: pDrug.quantity,
+                    visitId: visit._id,
+                    performedBy: req.user.id,
+                    reason: `Kê đơn viện phí lượt khám ${visit._id}`,
+                    timestamp: new Date()
+                  }
+                }
               }
             }
           });
@@ -277,7 +294,13 @@ export const payInvoice = async (req, res) => {
           invoice.items.push({
             description: `Thuốc: ${pDrug.name} (SL: ${pDrug.quantity} ${pDrug.unit || 'Viên'})`,
             amount: totalDrugPrice,
-            type: "drug"
+            type: "drug",
+            drugId: dbDrug ? dbDrug._id : null,
+            drugName: pDrug.name,
+            quantity: pDrug.quantity,
+            unitPrice: unitPrice,
+            unit: pDrug.unit || dbDrug?.stock?.unit || 'Viên',
+            dosage: pDrug.dosage || null
           });
 
           // Trừ tồn kho nguyên tử (Atomic decrement) chống Race Condition & Lost Updates
@@ -287,7 +310,18 @@ export const payInvoice = async (req, res) => {
                 filter: { _id: dbDrug._id, "stock.quantity": { $gte: pDrug.quantity } },
                 update: { 
                   $inc: { "stock.quantity": -pDrug.quantity },
-                  $set: { "stock.lastUpdated": new Date() }
+                  $set: { "stock.lastUpdated": new Date() },
+                  $push: {
+                    stockMovements: {
+                      type: "dispense",
+                      quantity: pDrug.quantity,
+                      visitId: visit._id,
+                      invoiceId: invoice._id,
+                      performedBy: req.user.id,
+                      reason: `Thanh toán đơn thuốc hóa đơn ${invoice._id}`,
+                      timestamp: new Date()
+                    }
+                  }
                 } 
               }
             });
@@ -647,62 +681,14 @@ export const createPremiumPayment = async (req, res) => {
 // @access  Public
 export const paymentSuccess = async (req, res) => {
   try {
-    const { orderCode, invoiceId } = req.query;
-
-    if (orderCode) {
-      // 1. Kiểm tra và kích hoạt đơn hàng Premium
-      const premiumOrder = await PremiumOrder.findOne({ orderCode });
-      if (premiumOrder && premiumOrder.status !== "completed") {
-        premiumOrder.status = "completed";
-        premiumOrder.paidAt = new Date();
-        await premiumOrder.save();
-
-        const user = await User.findById(premiumOrder.userId);
-        if (user) {
-          user.isPremium = true;
-          const oneYearFromNow = new Date();
-          oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-          user.premiumUntil = oneYearFromNow;
-          user.autoRenew = true; // Bật tự động gia hạn khi đăng ký mới
-          await user.save();
-          console.log(`[Local Direct Activation] Activated Premium for User: ${user.email}, orderCode: ${orderCode}`);
-        }
-      }
-
-      // 2. Kiểm tra và xác nhận hóa đơn lượt khám
-      const invoice = await Invoice.findOne({ orderCode });
-      if (invoice && invoice.status !== "đã thanh toán") {
-        invoice.status = "đã thanh toán";
-        invoice.paidAt = new Date();
-        await invoice.save();
-
-        const visit = await Visit.findById(invoice.visitId);
-        if (visit) {
-          visit.invoiceId = invoice._id;
-          visit.status = "đã đóng";
-          await visit.save();
-        }
-        console.log(`[Local Direct Activation] Paid invoice: ${invoice._id}, orderCode: ${orderCode}`);
-      }
-    } else if (invoiceId) {
-      // Xác nhận trực tiếp bằng invoiceId
-      const invoice = await Invoice.findById(invoiceId);
-      if (invoice && invoice.status !== "đã thanh toán") {
-        invoice.status = "đã thanh toán";
-        invoice.paidAt = new Date();
-        await invoice.save();
-
-        const visit = await Visit.findById(invoice.invoiceId || invoice.visitId);
-        if (visit) {
-          visit.invoiceId = invoice._id;
-          visit.status = "đã đóng";
-          await visit.save();
-        }
-        console.log(`[Local Direct Activation] Paid invoice via invoiceId: ${invoice._id}`);
-      }
+    // BẢO MẬT (BUG-01): Tuyệt đối không thay đổi trạng thái hóa đơn hay kích hoạt Premium tại returnUrl công khai.
+    // Toàn bộ việc cập nhật trạng thái thanh toán bắt buộc phải thông qua Webhook PayOS đã xác thực chữ ký số HMAC.
+    const { orderCode, invoiceId } = req.query || {};
+    if (orderCode || invoiceId) {
+      console.log(`[PaymentSuccess Redirect] User redirected back with orderCode: ${orderCode || 'N/A'}, invoiceId: ${invoiceId || 'N/A'}. Waiting for webhook confirmation.`);
     }
   } catch (error) {
-    console.error("Lỗi cập nhật trực tiếp tại paymentSuccess:", error);
+    console.error("Lỗi paymentSuccess:", error);
   }
 
   res.send(`
@@ -932,14 +918,14 @@ export const paymentCancel = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M.5 — Hoàn tiền hóa đơn
+// M.5 — Hoàn tiền hóa đơn (Full & Partial Refund, Drug FK Restock, Dual Approval, AML)
 // PUT /api/v1/invoices/:id/refund
 // @access Private (Receptionist, Admin)
 // ─────────────────────────────────────────────────────────────────────────────
 export const refundInvoice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { refundReason } = req.body;
+    const { refundReason, itemsToRefund, secondApproverId } = req.body;
 
     if (!["admin", "hospital_admin", "receptionist"].includes(req.user.role)) {
       return res.status(403).json({ message: "Không có quyền thực hiện hoàn tiền hóa đơn." });
@@ -952,15 +938,206 @@ export const refundInvoice = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 
-    if (invoice.status === "hoàn tiền" || invoice.status === "hủy") {
+    if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
       return res.status(400).json({ message: `Hóa đơn này đã ở trạng thái '${invoice.status}'.` });
     }
 
-    invoice.status = "hoàn tiền";
-    invoice.notes = `[HOÀN TIỀN] Lý do: ${refundReason || 'Theo yêu cầu khách hàng'}. Thực hiện bởi: ${req.user.id} vào ${new Date().toLocaleString('vi-VN')}`;
+    // 1. Phê duyệt 2 cấp cho hóa đơn giá trị cao (Dual Approval Workflow >= 10.000.000 VNĐ - Neuro-Oncology Protocol)
+    if (invoice.totalAmount >= 10000000 && req.user.role === "receptionist") {
+      if (secondApproverId && (secondApproverId.toString() === req.user.id.toString() || (invoice.refundApproval?.firstApproverId && secondApproverId.toString() === invoice.refundApproval.firstApproverId.toString()))) {
+        return res.status(400).json({
+          message: "Người phê duyệt cấp 2 (Kế toán trưởng / Ban Giám Đốc) phải khác người lập/yêu cầu cấp 1.",
+        });
+      }
+      if (!secondApproverId && invoice.refundApproval?.approvalStatus !== "approved") {
+        invoice.refundApproval = {
+          requiresDualApproval: true,
+          firstApproverId: req.user.id,
+          approvalStatus: "pending_second_approval"
+        };
+        await invoice.save();
+        return res.status(403).json({
+          message: "Hóa đơn giá trị cao (≥ 10.000.000 VNĐ) yêu cầu phê duyệt 2 cấp (Kế toán trưởng / Ban Giám Đốc). Đã chuyển sang trạng thái chờ duyệt cấp 2.",
+          approvalStatus: "pending_second_approval"
+        });
+      }
+      if (secondApproverId) {
+        if (!invoice.refundApproval) invoice.refundApproval = {};
+        invoice.refundApproval.secondApproverId = secondApproverId;
+        invoice.refundApproval.approvedAt = new Date();
+        invoice.refundApproval.approvalStatus = "approved";
+      }
+    }
+
+    // 2. Cảnh báo AML & Báo cáo Giao dịch đáng ngờ STR (Thông tư 35/2013/TT-NHNN >= 300.000.000 VNĐ)
+    if (invoice.totalAmount >= 300000000) {
+      const now = new Date();
+      const strDeadline = new Date(now.getTime() + 48 * 3600 * 1000); // Báo cáo trong 48h
+      const retentionUntil = new Date(now);
+      retentionUntil.setFullYear(retentionUntil.getFullYear() + 5); // Lưu trữ tối thiểu 5 năm
+      const strReportId = `STR-${invoice.hospitalId ? invoice.hospitalId.toString().slice(-4) : "HOSP"}-${Date.now()}`;
+
+      invoice.amlReport = {
+        isFlagged: true,
+        flaggedAt: now,
+        reportedToAuthority: false,
+        strReportId,
+        strDeadline,
+        retentionUntil,
+        reason: "Giao dịch y tế hoàn tiền quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN.",
+        kycVerified: true,
+        kycDetails: {
+          fullName: req.body.patientFullName || "Chủ thể giao dịch",
+          idCardNumber: req.body.patientIdCard || "N/A",
+          nationality: "Việt Nam"
+        }
+      };
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.AML_STR_REPORTED,
+          entity: "Invoice",
+          entityId: invoice._id,
+          performedBy: req.user.id,
+          hospitalId: req.user.hospitalId,
+          details: `Lập hồ sơ STR phòng chống rửa tiền: ${strReportId}. Hạn chót báo cáo NHNN trong 48h (${strDeadline.toISOString()}). Thời hạn lưu trữ tối thiểu 5 năm theo TT35/2013/TT-NHNN.`
+        });
+      } catch (amlErr) {
+        console.warn("[AML AuditLog Warn]", amlErr.message);
+      }
+    }
+
+    // 3. Phân biệt Hoàn tiền từng phần (Partial Refund) vs Toàn bộ (Full Refund)
+    const isPartial = Array.isArray(itemsToRefund) && itemsToRefund.length > 0;
+    let targetDrugItems = [];
+    let refundedAmount = 0;
+
+    if (isPartial) {
+      invoice.items.forEach((item, index) => {
+        const matchRefund = itemsToRefund.find(r => 
+          (r.itemIndex !== undefined && r.itemIndex === index) ||
+          (r.drugId && item.drugId && r.drugId.toString() === item.drugId.toString()) ||
+          (r.description && item.description.includes(r.description))
+        );
+        if (matchRefund && !item.isRefunded) {
+          item.isRefunded = true;
+          item.refundedQuantity = matchRefund.quantity || item.quantity;
+          const itemRefundPrice = (item.amount / item.quantity) * item.refundedQuantity;
+          refundedAmount += itemRefundPrice;
+          if (item.type === "drug") {
+            targetDrugItems.push({ ...item.toObject ? item.toObject() : item, refundQuantity: item.refundedQuantity });
+          }
+        }
+      });
+      invoice.isPartialRefund = true;
+      invoice.refundAmount = (invoice.refundAmount || 0) + refundedAmount;
+      const allItemsRefunded = invoice.items.every(i => i.isRefunded);
+      invoice.status = allItemsRefunded ? "hoàn trả" : "đã thanh toán";
+    } else {
+      // Full refund
+      refundedAmount = invoice.totalAmount;
+      invoice.items.forEach(item => {
+        item.isRefunded = true;
+        item.refundedQuantity = item.quantity;
+      });
+      targetDrugItems = (invoice.items || []).filter(item => item.type === "drug");
+      invoice.isPartialRefund = false;
+      invoice.refundAmount = invoice.totalAmount;
+      invoice.status = "hoàn trả";
+    }
+
+    // 4. [BUG-08 REFACTOR] Hoàn trả tồn kho dược phẩm: ƯU TIÊN DÙNG KHÓA NGOẠI TRỰC TIẾP (drugId FK)
+    if (targetDrugItems.length > 0) {
+      try {
+        const bulkOps = [];
+        for (const item of targetDrugItems) {
+          const qty = item.refundQuantity || item.quantity;
+          if (item.drugId) {
+            // Chuẩn hóa Enterprise: Trực tiếp hoàn kho bằng Foreign Key drugId (Chính xác 100% SKU, không phụ thuộc chuỗi văn bản)
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: item.drugId, hospitalId: invoice.hospitalId },
+                update: {
+                  $inc: { "stock.quantity": qty },
+                  $set: { "stock.lastUpdated": new Date() },
+                  $push: {
+                    stockMovements: {
+                      type: "refund",
+                      quantity: qty,
+                      invoiceId: invoice._id,
+                      performedBy: req.user.id,
+                      reason: refundReason || "Hoàn tiền đơn thuốc",
+                      timestamp: new Date()
+                    }
+                  }
+                }
+              }
+            });
+          } else {
+            // Fallback an toàn cho các hóa đơn cũ lưu dạng text description
+            console.warn(`[LEGACY_REFUND_MIGRATION_WARN] Invoice ${invoice._id} item '${item.description}' using regex fallback. Migration deadline: 2026-12-31.`);
+            const match = item.description?.match(/Thuốc:\s*(.+?)\s*\(SL:\s*(\d+)/i);
+            if (match) {
+              const drugName = match[1].trim();
+              const parsedQty = parseInt(match[2], 10);
+              if (drugName && !isNaN(parsedQty) && parsedQty > 0) {
+                const escapedName = drugName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                bulkOps.push({
+                  updateOne: {
+                    filter: { hospitalId: invoice.hospitalId, name: new RegExp(`^${escapedName}$`, "i") },
+                    update: {
+                      $inc: { "stock.quantity": parsedQty },
+                      $set: { "stock.lastUpdated": new Date() }
+                    }
+                  }
+                });
+              }
+            }
+          }
+        }
+
+        if (bulkOps.length > 0) {
+          await Drug.bulkWrite(bulkOps);
+          console.log(`[RefundInvoice] Đã hoàn trả tồn kho cho ${bulkOps.length} loại thuốc của hóa đơn ${invoice._id}`);
+          
+          try {
+            await recordAuditLog({
+              action: AUDIT_ACTIONS.STOCK_RESTOCKED,
+              entity: "Drug",
+              entityId: invoice._id,
+              performedBy: req.user.id,
+              hospitalId: req.user.hospitalId,
+              details: `Hoàn kho thành công ${bulkOps.length} loại thuốc từ hóa đơn ${invoice._id}`
+            });
+          } catch (stockLogErr) {
+            console.warn("[Stock AuditLog Warn]", stockLogErr.message);
+          }
+        }
+      } catch (stockErr) {
+        console.error("⚠️ Lỗi hoàn trả kho thuốc khi refundInvoice:", stockErr);
+      }
+    }
+
+    invoice.refundReason = refundReason || 'Theo yêu cầu khách hàng';
+    invoice.refundedAt = new Date();
+    invoice.refundedBy = req.user.id;
+    invoice.notes = `[HOÀN TIỀN ${isPartial ? 'MỘT PHẦN' : 'TOÀN BỘ'}] Số tiền: ${refundedAmount.toLocaleString('vi-VN')} VNĐ. Lý do: ${refundReason || 'N/A'}. Thực hiện bởi: ${req.user.id} vào ${new Date().toLocaleString('vi-VN')}`;
     await invoice.save();
 
-    // Ghi audit log EMRVersion
+    // 5. Ghi nhận chuỗi băm Audit Trail (TT46/2018/TT-BYT)
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.REFUND_APPROVED,
+        entity: "Invoice",
+        entityId: invoice._id,
+        performedBy: req.user.id,
+        hospitalId: req.user.hospitalId,
+        details: `Hoàn tiền hóa đơn viện phí (${invoice.isPartialRefund ? 'Một phần' : 'Toàn bộ'}). Số tiền hoàn: ${refundedAmount} VNĐ. Lý do: ${refundReason || 'N/A'}`
+      });
+    } catch (auditErr) {
+      console.warn("⚠️ Lỗi ghi recordAuditLog cho refundInvoice:", auditErr.message);
+    }
+
+    // 6. Ghi EMRVersion
     try {
       await EMRVersion.create({
         hospitalId: req.user.hospitalId,
@@ -969,7 +1146,7 @@ export const refundInvoice = async (req, res) => {
         version: 2,
         data: invoice.toObject(),
         changedBy: req.user.id,
-        changeReason: `Hoàn tiền hóa đơn: ${refundReason || 'Hủy ca/Thu sai'}`
+        changeReason: `Hoàn tiền hóa đơn (${isPartial ? 'Một phần' : 'Toàn bộ'}): ${refundReason || 'Hủy ca/Thu sai'}`
       });
     } catch (auditErr) {
       console.warn("⚠️ Lỗi ghi EMRVersion cho hoàn tiền hóa đơn:", auditErr.message);
@@ -977,8 +1154,8 @@ export const refundInvoice = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Hoàn tiền hóa đơn thành công.",
-      data: { invoice }
+      message: isPartial ? "Hoàn tiền một phần thành công." : "Hoàn tiền toàn bộ hóa đơn thành công.",
+      data: { invoice, refundedAmount, isPartial }
     });
   } catch (error) {
     console.error("Lỗi refundInvoice:", error);

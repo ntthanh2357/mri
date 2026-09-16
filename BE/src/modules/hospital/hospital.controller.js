@@ -2,6 +2,7 @@ import { Hospital } from "./models/hospital.model.js";
 import { User } from "../auth/models/user.model.js";
 import { AuditLog } from "../../models/auditLog.model.js";
 import { uploadToGCS } from "../../config/gcs.js";
+import { authCache } from "../../utils/authCache.util.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -283,7 +284,9 @@ export const toggleStaffLock = async (req, res) => {
     }
 
     staffMember.isLocked = !staffMember.isLocked;
+    staffMember.tokenVersion = (staffMember.tokenVersion || 0) + 1;
     await staffMember.save();
+    authCache.invalidateUser(staffMember._id);
 
     // Log the change
     await AuditLog.create({

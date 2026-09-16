@@ -21,12 +21,12 @@ export const hashPhone = (phone) => {
 
 export const generateAccessToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = getJwtSecret();
-  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "1h" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "1h", algorithm: "HS256" });
 };
 
 export const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
   const secret = getRefreshSecret();
-  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d" });
+  return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d", algorithm: "HS256" });
 };
 
 /**

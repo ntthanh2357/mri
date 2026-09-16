@@ -5,5 +5,7 @@ uploads
 scratch
 .env
 .env.*
-!credentials.json
-!firebase-service-account.json
+*.json.key
+credentials.json
+firebase-service-account.json
+*-service-account.json

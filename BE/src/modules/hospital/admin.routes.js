@@ -48,6 +48,8 @@ updateDatasetPrice,
   repairHospitalDrive,
   getSubscriptionDashboard,
   upgradeHospitalSubscription,
+  checkAuditIntegrity,
+  runEmrMigration,
 } from "./admin.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 import { requireSystemAdmin, requireHospitalAdmin } from "../../middlewares/role.middleware.js";
@@ -117,5 +119,9 @@ router.get("/announcements", getAnnouncements);
 // ─── K.6 — Subscription Dashboard ──────────────────────────────────────────
 router.get("/subscription-dashboard", requireHospitalAdmin, getSubscriptionDashboard);
 router.put("/hospitals/:hospitalId/upgrade-subscription", requireSystemAdmin, upgradeHospitalSubscription);
+
+// ─── Compliance & Audit Trail Verification (TT46/2018 & HIPAA §164.312) ─────
+router.get("/compliance/audit-integrity", requireSystemAdmin, checkAuditIntegrity);
+router.post("/compliance/migrate-emr", requireSystemAdmin, runEmrMigration);
 
 export default router;

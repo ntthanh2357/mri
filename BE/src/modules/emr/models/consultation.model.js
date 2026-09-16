@@ -39,6 +39,21 @@ const consultationSchema = new Schema(
       required: true,
       default: "",
     },
+    // [NEURO-ONCOLOGY TUMOR BOARD]: Hội chẩn đa chuyên khoa ung thư thần kinh
+    consultationType: {
+      type: String,
+      enum: ["ordinary", "tumor_board"],
+      default: "ordinary",
+      index: true,
+    },
+    tumorBoardDetails: {
+      surgicalPlan: { type: String, default: "" }, // Ngoại thần kinh (vi phẫu, navigation)
+      radiotherapyPlan: { type: String, default: "" }, // Xạ phẫu Gamma Knife / CyberKnife / IMRT
+      chemotherapyPlan: { type: String, default: "" }, // Hóa chất (Temozolomide phác đồ Stupp)
+      molecularReview: { type: String, default: "" }, // Đánh giá IDH, MGMT, 1p/19q
+      imagingReview: { type: String, default: "" }, // So sánh MRI đa thời điểm (RANO criteria)
+      consensusDecision: { type: String, default: "" }, // Kết luận đồng thuận của Hội đồng
+    },
   },
   {
     timestamps: true,

@@ -2,14 +2,17 @@ import * as service from "../services/patientRecord.service.js";
 import { User } from "../models/user.model.js";
 import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { checkPatientTenancy } from "../utils/tenancy.util.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 
 const getTargetPatientId = async (req) => {
   if (req.user && req.user.role !== 'patient') {
     const patientId = req.query.patientId || req.body.patientId || req.user.id;
     if (patientId !== req.user.id) {
-      const patient = await User.findById(patientId);
-      if (!patient || (patient.hospitalId && patient.hospitalId.toString() !== req.user.hospitalId.toString())) {
-        throw { status: 403, message: "Không tìm thấy bệnh nhân hoặc không có quyền truy cập." };
+      // [BUG-03 FIX]: BẢO VỆ BỆNH NHÂN B2C KHỎI IDOR BẰNG TENANCY CHUẨN HÓA
+      const authorizedPatient = await checkPatientTenancy(patientId, req.user);
+      if (!authorizedPatient) {
+        throw { status: 403, message: "Không tìm thấy bệnh nhân hoặc không có quyền truy cập hồ sơ." };
       }
     }
     return patientId;
@@ -94,8 +97,8 @@ export const updateVisit = async (req, res, next) => {
 export const deleteVisit = async (req, res, next) => {
   try {
     const targetId = await getTargetPatientId(req);
-    await service.deleteVisit(targetId, req.params.visitId);
-    return successResponse(res, null, "Đã xóa lượt khám.");
+    await service.deleteVisit(targetId, req.params.visitId, req.user);
+    return successResponse(res, null, "Đã hủy/ẩn lượt khám theo quy định y tế.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
@@ -157,7 +160,8 @@ export const deleteDocument = async (req, res, next) => {
     const visit = await service.deleteDocument(
       targetId,
       req.params.visitId,
-      req.params.docId
+      req.params.docId,
+      req.user
     );
     return successResponse(res, visit, "Đã xóa tài liệu.");
   } catch (err) {
@@ -171,14 +175,11 @@ export const deleteDocument = async (req, res, next) => {
 export const getTodayReminders = async (req, res, next) => {
   try {
     const targetId = await getTargetPatientId(req);
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    const { startOfDay, endOfDay } = getDayRangeVN();
 
     const reminders = await MedicineReminder.find({
       patientId: targetId,
-      date: { $gte: startOfDay, $lt: endOfDay },
+      date: { $gte: startOfDay, $lte: endOfDay },
     }).sort({ time: 1 });
 
     return successResponse(res, reminders, "Lấy lịch trình uống thuốc hôm nay thành công.");

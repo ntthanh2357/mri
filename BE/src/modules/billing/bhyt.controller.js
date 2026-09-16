@@ -3,6 +3,7 @@ import { Invoice } from "./models/invoice.model.js";
 import { User } from "../auth/models/user.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 // ─── R.1 — Lưu / Cập nhật thông tin thẻ BHYT cho bệnh nhân ─────────────────
 // @route POST /api/v1/bhyt/:patientId
@@ -22,6 +23,12 @@ export const saveBhytInfo = async (req, res) => {
       registrationPlace,
       patientName,
       visitId,
+      annualCap = 72000000,
+      usedThisYear = 0,
+      isOutOfNetwork = false,
+      treatmentType = "outpatient",
+      hasTransferForm = false,
+      priorAuthorizations = [],
       note,
     } = req.body;
 
@@ -50,6 +57,12 @@ export const saveBhytInfo = async (req, res) => {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         registrationPlace: registrationPlace || "",
         patientName: patientName || patient.profile?.name || "",
+        annualCap: Number(annualCap) || 72000000,
+        usedThisYear: Number(usedThisYear) || 0,
+        isOutOfNetwork: Boolean(isOutOfNetwork),
+        treatmentType,
+        hasTransferForm: Boolean(hasTransferForm),
+        priorAuthorizations: Array.isArray(priorAuthorizations) ? priorAuthorizations : [],
         isValid,
         verifiedAt: new Date(),
         note: note || "",
@@ -59,12 +72,15 @@ export const saveBhytInfo = async (req, res) => {
 
     return successResponse(res, {
       bhytId: bhyt._id,
-      cardNumber: `****${cardNumber.slice(-4)}`, // Che số thẻ trong response
+      patientId: bhyt.patientId,
+      cardNumber: `****${bhyt.cardNumber.slice(-4)}`,
       coverageRate: bhyt.coverageRate,
-      expiresAt: bhyt.expiresAt,
+      annualCap: bhyt.annualCap,
+      usedThisYear: bhyt.usedThisYear,
+      isOutOfNetwork: bhyt.isOutOfNetwork,
       isValid: bhyt.isValid,
-      patientCopayRate: 100 - bhyt.coverageRate, // Tỷ lệ đồng chi trả
-    }, "Lưu thông tin thẻ BHYT thành công.", 201);
+      expiresAt: bhyt.expiresAt,
+    }, "Lưu thông tin BHYT thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
@@ -100,9 +116,17 @@ export const getBhytInfo = async (req, res) => {
 // @access Private (Receptionist, Nurse, Admin)
 export const calculateCopay = async (req, res) => {
   try {
-    const { patientId, visitId, totalAmount } = req.body;
+    const {
+      patientId,
+      visitId,
+      totalAmount,
+      items = [],
+      treatmentType = "outpatient",
+      isOutOfNetwork = false,
+      hasTransferForm = false
+    } = req.body;
 
-    if (!patientId || !totalAmount) {
+    if (!patientId || totalAmount === undefined || totalAmount === null) {
       return errorResponse(res, "Thiếu patientId hoặc tổng tiền hóa đơn.", 400);
     }
 
@@ -127,22 +151,121 @@ export const calculateCopay = async (req, res) => {
       }, "Tính đồng chi trả thành công.");
     }
 
-    // R.2 — Tính mức chi trả
-    const coverageRate = bhyt.coverageRate / 100;
-    const bhytAmount = Math.round(totalAmount * coverageRate);
+    // 1. Kiểm tra chính sách KCB Trái tuyến (Out-of-network)
+    const effectiveOutOfNetwork = isOutOfNetwork || bhyt.isOutOfNetwork;
+    const effectiveTransferForm = hasTransferForm || bhyt.hasTransferForm;
+    let effectiveRate = bhyt.coverageRate;
+    let outOfNetworkWarning = null;
+
+    if (effectiveOutOfNetwork && !effectiveTransferForm) {
+      if (treatmentType === "outpatient") {
+        // Ngoại trú trái tuyến không có giấy chuyển tuyến: BHYT chi trả 0%
+        effectiveRate = 0;
+        outOfNetworkWarning = "KCB ngoại trú trái tuyến không có giấy chuyển viện: BHYT chi trả 0% theo Luật BHYT.";
+      } else if (treatmentType === "inpatient") {
+        // Nội trú trái tuyến tuyến tỉnh: Thông tuyến tỉnh 100% mức hưởng quy định
+        effectiveRate = bhyt.coverageRate;
+      }
+    }
+
+    // 2. Kiểm duyệt thuốc chuyên khoa đặc trị yêu cầu Prior Authorization (Thông tư 30/2018/TT-BYT)
+    // Ví dụ: Bevacizumab (Avastin) điều trị u nguyên bào đệm GBM tái phát
+    let eligibleAmount = totalAmount;
+    let priorAuthWarning = null;
+    let rejectedItems = [];
+
+    if (Array.isArray(items) && items.length > 0) {
+      let nonCoveredItemAmount = 0;
+      items.forEach((item) => {
+        const desc = (item.description || item.name || "").toLowerCase();
+        const isSpecialDrug = desc.includes("bevacizumab") || desc.includes("avastin") || desc.includes("bev");
+        
+        if (isSpecialDrug) {
+          const hasPriorAuth = (bhyt.priorAuthorizations || []).some((pa) => {
+            const codeMatch = pa.drugCode && (pa.drugCode.toLowerCase().includes("bev") || pa.drugCode.toLowerCase().includes("bevacizumab"));
+            const notExpired = !pa.expiresAt || new Date(pa.expiresAt) >= new Date();
+            return codeMatch && notExpired;
+          });
+
+          if (!hasPriorAuth) {
+            nonCoveredItemAmount += Number(item.amount || 0);
+            rejectedItems.push({
+              description: item.description || item.name,
+              amount: item.amount,
+              reason: "Thiếu giấy phê duyệt điều trị đặc biệt/hội chẩn chuyên khoa theo Thông tư 30/2018/TT-BYT"
+            });
+          }
+        }
+      });
+
+      if (nonCoveredItemAmount > 0) {
+        eligibleAmount = Math.max(0, totalAmount - nonCoveredItemAmount);
+        priorAuthWarning = `Đã loại trừ ${nonCoveredItemAmount.toLocaleString("vi-VN")}đ thuốc đặc trị (Bevacizumab) do chưa có phê duyệt Prior Authorization.`;
+      }
+    }
+
+    // 3. Tính toán BHYT cơ sở
+    const tentativeBhytAmount = Math.round(eligibleAmount * (effectiveRate / 100));
+
+    // 4. Kiểm soát trần thanh toán BHYT (40 tháng lương cơ sở ~ 72.000.000 VNĐ / năm tài chính)
+    const annualCap = bhyt.annualCap || 72000000;
+    const usedThisYear = bhyt.usedThisYear || 0;
+    const remainingCap = Math.max(0, annualCap - usedThisYear);
+    let capWarning = null;
+    let bhytAmount = tentativeBhytAmount;
+
+    if (tentativeBhytAmount > remainingCap) {
+      bhytAmount = remainingCap;
+      capWarning = `Đã chạm trần BHYT năm tài chính (Hạn mức còn lại: ${remainingCap.toLocaleString("vi-VN")}đ / Trần: ${annualCap.toLocaleString("vi-VN")}đ). Phần vượt trần do người bệnh tự chi trả.`;
+    }
+
     const patientAmount = totalAmount - bhytAmount;
+
+    // Ghi nhận Audit Log (TT46/2018/TT-BYT)
+    try {
+      if (bhytAmount > 0) {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.BHYT_CLAIM_SUBMITTED,
+          entity: "Invoice",
+          performedBy: req.user?.id || "system",
+          hospitalId: req.user?.hospitalId || bhyt.hospitalId,
+          details: `Tính toán đồng chi trả BHYT: Tổng ${totalAmount.toLocaleString("vi-VN")}đ, BHYT trả ${bhytAmount.toLocaleString("vi-VN")}đ, BN trả ${patientAmount.toLocaleString("vi-VN")}đ.`
+        });
+      }
+      if (rejectedItems.length > 0 || effectiveRate === 0) {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.BHYT_CLAIM_REJECTED,
+          entity: "Invoice",
+          performedBy: req.user?.id || "system",
+          hospitalId: req.user?.hospitalId || bhyt.hospitalId,
+          details: `Từ chối thanh toán một phần hoặc toàn bộ BHYT: ${outOfNetworkWarning || priorAuthWarning || "Lý do thẩm định"}`
+        });
+      }
+    } catch (auditErr) {
+      console.warn("[BHYT AuditLog Warn]", auditErr.message);
+    }
 
     return successResponse(res, {
       hasBhyt: true,
       bhytId: bhyt._id,
       cardNumber: `****${bhyt.cardNumber?.slice(-4)}`,
-      coverageRate: bhyt.coverageRate,
+      coverageRate: effectiveRate,
+      baseCoverageRate: bhyt.coverageRate,
+      isOutOfNetwork: effectiveOutOfNetwork,
+      hasTransferForm: effectiveTransferForm,
+      treatmentType,
       totalAmount,
+      eligibleAmount,
       bhytAmount,       // BHYT chi trả
       patientAmount,    // Bệnh nhân đồng chi trả
+      annualCap,
+      usedThisYear,
+      remainingCap,
       breakdown: {
-        bhytCoverage: `${bhyt.coverageRate}% = ${bhytAmount.toLocaleString("vi-VN")}đ`,
-        patientCopay: `${100 - bhyt.coverageRate}% = ${patientAmount.toLocaleString("vi-VN")}đ`,
+        bhytCoverage: `${effectiveRate}% = ${bhytAmount.toLocaleString("vi-VN")}đ`,
+        patientCopay: `${totalAmount > 0 ? Math.round((patientAmount / totalAmount) * 100) : 0}% = ${patientAmount.toLocaleString("vi-VN")}đ`,
+        warnings: [outOfNetworkWarning, priorAuthWarning, capWarning].filter(Boolean),
+        rejectedItems
       },
     }, "Tính đồng chi trả BHYT thành công.");
   } catch (err) {
@@ -161,7 +284,7 @@ export const applyBhytToInvoice = async (req, res) => {
     }
 
     const { invoiceId } = req.params;
-    const { bhytId } = req.body;
+    const { bhytId, treatmentType = "outpatient", isOutOfNetwork = false, hasTransferForm = false } = req.body;
 
     const invoice = await Invoice.findOne({
       _id: invoiceId,
@@ -172,30 +295,64 @@ export const applyBhytToInvoice = async (req, res) => {
       return errorResponse(res, "Không thể chỉnh sửa hóa đơn đã thanh toán.", 400);
     }
 
-    const bhyt = await BhytInfo.findById(bhytId).lean();
+    const bhyt = await BhytInfo.findById(bhytId);
     if (!bhyt || !bhyt.isValid) {
       return errorResponse(res, "Thẻ BHYT không hợp lệ hoặc đã hết hạn.", 400);
     }
 
     const totalAmount = invoice.totalAmount || 0;
-    const coverageRate = bhyt.coverageRate / 100;
-    const bhytAmount = Math.round(totalAmount * coverageRate);
+    const effectiveOutOfNetwork = isOutOfNetwork || bhyt.isOutOfNetwork;
+    const effectiveTransferForm = hasTransferForm || bhyt.hasTransferForm;
+    let effectiveRate = bhyt.coverageRate;
+
+    if (effectiveOutOfNetwork && !effectiveTransferForm) {
+      if (treatmentType === "outpatient") {
+        effectiveRate = 0;
+      }
+    }
+
+    // Kiểm tra trần thanh toán BHYT
+    const annualCap = bhyt.annualCap || 72000000;
+    const usedThisYear = bhyt.usedThisYear || 0;
+    const remainingCap = Math.max(0, annualCap - usedThisYear);
+    const tentativeBhytAmount = Math.round(totalAmount * (effectiveRate / 100));
+    const bhytAmount = Math.min(tentativeBhytAmount, remainingCap);
     const patientAmount = totalAmount - bhytAmount;
 
-    // Cập nhật Invoice với thông tin BHYT
+    // Cập nhật Invoice với thông tin BHYT hoàn chỉnh
     invoice.bhytInfo = {
       bhytId: bhyt._id,
       cardNumber: `****${bhyt.cardNumber?.slice(-4)}`,
-      coverageRate: bhyt.coverageRate,
+      coverageRate: effectiveRate,
       bhytAmount,
       patientCopayAmount: patientAmount,
+      annualCap,
+      usedThisYear: usedThisYear + bhytAmount,
+      isOutOfNetwork: effectiveOutOfNetwork,
+      priorAuthorization: bhyt.priorAuthorizations?.[0]?.approvalNumber || null,
     };
     invoice.patientPayAmount = patientAmount; // Bệnh nhân chỉ trả phần đồng chi trả
 
     await invoice.save();
 
-    // Cập nhật BhytInfo với invoiceId
-    await BhytInfo.findByIdAndUpdate(bhytId, { invoiceId: invoice._id });
+    // Cập nhật BhytInfo với invoiceId và lũy kế đã dùng
+    bhyt.invoiceId = invoice._id;
+    bhyt.usedThisYear = usedThisYear + bhytAmount;
+    await bhyt.save();
+
+    // Ghi nhận Audit Log
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.BHYT_CLAIM_APPROVED,
+        entity: "Invoice",
+        entityId: invoice._id,
+        performedBy: req.user.id,
+        hospitalId: req.user.hospitalId,
+        details: `Áp dụng thành công BHYT vào hóa đơn ${invoice._id}: BHYT chi trả ${bhytAmount.toLocaleString("vi-VN")}đ, BN đồng chi trả ${patientAmount.toLocaleString("vi-VN")}đ.`
+      });
+    } catch (auditErr) {
+      console.warn("[BHYT Apply AuditLog Warn]", auditErr.message);
+    }
 
     return successResponse(res, {
       invoiceId: invoice._id,

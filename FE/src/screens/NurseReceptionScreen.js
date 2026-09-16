@@ -10,6 +10,7 @@ import {
   Alert,
   FlatList,
   Linking,
+  Modal,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -44,7 +45,12 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [bhytCardNumber, setBhytCardNumber] = useState('');
   const [bhytCoverageRate, setBhytCoverageRate] = useState(80);
   const [bhytExpiryDate, setBhytExpiryDate] = useState('2027-12-31');
+  const [bhytRegistrationPlace, setBhytRegistrationPlace] = useState('');
+  const [bhytTreatmentType, setBhytTreatmentType] = useState('outpatient');
+  const [bhytIsOutOfNetwork, setBhytIsOutOfNetwork] = useState(false);
+  const [bhytHasTransferForm, setBhytHasTransferForm] = useState(false);
   const [savingBhyt, setSavingBhyt] = useState(false);
+  const [applyingBhytId, setApplyingBhytId] = useState(null);
 
   const handleSaveBhyt = async () => {
     if (!selectedPatientId) {
@@ -61,9 +67,13 @@ const NurseReceptionScreen = ({ route, navigation }) => {
         cardNumber: bhytCardNumber.trim(),
         coverageRate: Number(bhytCoverageRate),
         expiresAt: bhytExpiryDate,
+        registrationPlace: bhytRegistrationPlace.trim(),
+        treatmentType: bhytTreatmentType,
+        isOutOfNetwork: bhytIsOutOfNetwork,
+        hasTransferForm: bhytHasTransferForm,
       });
       if (res && res.success) {
-        Alert.alert('Thành công', `Đã lưu thông tin thẻ BHYT (Tỷ lệ chi trả ${bhytCoverageRate}%).`);
+        Alert.alert('Thành công', `Đã lưu và xác thực thẻ BHYT (${bhytCoverageRate}%).`);
         setShowBhytModal(false);
       } else {
         Alert.alert('Lỗi', res.message || 'Không thể lưu BHYT.');
@@ -77,12 +87,47 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleApplyBhyt = async (invoice) => {
+    const ptId = invoice.patientId?._id || invoice.patientId;
+    if (!ptId) {
+      Alert.alert('Thông báo', 'Không xác định được mã bệnh nhân.');
+      return;
+    }
+    setApplyingBhytId(invoice._id);
+    try {
+      const bhytRes = await get(`/api/v1/bhyt/${ptId}`);
+      if (!bhytRes || !bhytRes.success || !bhytRes.data) {
+        Alert.alert('Thông báo', 'Bệnh nhân chưa có thông tin thẻ BHYT trong hệ thống. Vui lòng bấm "+ Khai Báo Thẻ BHYT" ở bước 1 để lưu thẻ trước.');
+        return;
+      }
+      const bhyt = bhytRes.data;
+      const applyRes = await put(`/api/v1/bhyt/apply-to-invoice/${invoice._id}`, {
+        bhytId: bhyt.bhytId || bhyt._id,
+        treatmentType: bhyt.treatmentType || 'outpatient',
+        isOutOfNetwork: bhyt.isOutOfNetwork || false,
+        hasTransferForm: bhyt.hasTransferForm || false,
+      });
+      if (applyRes && applyRes.success) {
+        Alert.alert('Thành công', `Đã áp dụng BHYT (${bhyt.coverageRate}%) vào hóa đơn! BHYT chi trả: ${applyRes.data.bhytAmount?.toLocaleString()} VNĐ.`);
+        fetchInvoices();
+      } else {
+        Alert.alert('Lỗi', applyRes.message || 'Không thể áp dụng BHYT.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Không thể áp dụng BHYT vào hóa đơn.');
+    } finally {
+      setApplyingBhytId(null);
+    }
+  };
+
   useEffect(() => {
+    let isMounted = true;
     if (!user) {
       get('/auth/me')
-        .then(res => setUser(res.user))
-        .catch(() => Alert.alert("Lỗi", "Vui lòng đăng nhập lại"));
+        .then(res => { if (isMounted) setUser(res.user); })
+        .catch(() => { if (isMounted) Alert.alert("Lỗi", "Vui lòng đăng nhập lại"); });
     }
+    return () => { isMounted = false; };
   }, [user]);
 
   useEffect(() => {
@@ -92,6 +137,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   }, [route.params?.tab]);
 
   useEffect(() => {
+    let isMounted = true;
     if (activeTab === 'createVisit') {
       fetchStaffAndPatients();
     } else if (activeTab === 'myQueue') {
@@ -99,14 +145,37 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     } else if (activeTab === 'billing') {
       fetchInvoices();
     }
+    return () => { isMounted = false; };
   }, [activeTab]);
+
+  // Debounce tìm kiếm bệnh nhân trực tiếp từ máy chủ khi người dùng nhập từ khóa
+  useEffect(() => {
+    if (!searchPatient.trim()) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await get(`/api/patients?all=true&search=${encodeURIComponent(searchPatient.trim())}`);
+        if (res && res.success && Array.isArray(res.data)) {
+          // Trộn và loại bỏ trùng lặp với danh sách bệnh nhân hiện tại
+          setPatients(prev => {
+            const map = new Map();
+            [...res.data, ...prev].forEach(p => map.set(p._id, p));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Lỗi tìm kiếm bệnh nhân trực tiếp:', err);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchPatient]);
 
   const fetchStaffAndPatients = async () => {
     setLoading(true);
     try {
-      // Fetch Patients
-      const ptRes = await get('/api/patients');
-      if (ptRes.success) setPatients(ptRes.data);
+      // [BUG FIX]: Truyền ?all=true để tải trọn vẹn danh sách bệnh nhân cơ sở thay vì bị cắt ở 20 người
+      const ptRes = await get('/api/patients?all=true');
+      if (ptRes.success) setPatients(ptRes.data || []);
 
       // Fetch Staff
       const stRes = await get('/api/v1/visits/staff');
@@ -272,7 +341,21 @@ const NurseReceptionScreen = ({ route, navigation }) => {
           <ScrollView style={styles.contentContainer}>
             {activeTab === 'createVisit' && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>1. Chọn Bệnh Nhân</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={styles.sectionTitle}>1. Chọn Bệnh Nhân</Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#0284C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    onPress={() => {
+                      if (!selectedPatientId) {
+                        Alert.alert('Thông báo', 'Vui lòng bấm chọn 1 bệnh nhân trong danh sách trước khi khai báo thẻ BHYT.');
+                        return;
+                      }
+                      setShowBhytModal(true);
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>+ Khai Báo Thẻ BHYT</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.input}
                   placeholder="Tìm theo tên, email, hoặc mã y tế..."
@@ -280,7 +363,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   onChangeText={setSearchPatient}
                 />
                 <View style={styles.listWrapper}>
-                  {filteredPatients.slice(0, 5).map(p => (
+                  {filteredPatients.slice(0, 20).map(p => (
                     <TouchableOpacity
                       key={p._id}
                       style={[styles.listItem, selectedPatientId === p._id && styles.selectedListItem]}
@@ -397,39 +480,161 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
             {activeTab === 'billing' && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Chờ Thanh Toán</Text>
+                <Text style={styles.sectionTitle}>Chờ Thanh Toán (Viện Phí & Đồng Chi Trả BHYT)</Text>
                 {invoices.length === 0 ? <Text style={styles.emptyText}>Không có hóa đơn chờ thanh toán.</Text> : null}
-                {invoices.map(inv => (
-                  <View key={inv._id} style={styles.invoiceCard}>
-                    <View style={styles.invoiceHeader}>
-                      <Text style={styles.invoiceTitle}>Mã Visit: {inv.visitId}</Text>
-                      <Text style={styles.invoiceTotal}>{inv.totalAmount.toLocaleString()} VNĐ</Text>
-                    </View>
-                    {inv.items.map((item, idx) => (
-                      <View key={idx} style={styles.invoiceItemRow}>
-                        <Text style={styles.invoiceItemDesc}>{item.description}</Text>
-                        <Text style={styles.invoiceItemAmount}>{item.amount.toLocaleString()}</Text>
-                      </View>
-                    ))}
-                    <View style={styles.invoiceFooter}>
-                      <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
-                      {inv.status === 'chờ thanh toán' && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                            <Text style={styles.payBtnText}>Tiền Mặt</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={[styles.payBtn]} onPress={() => handlePayOSPayment(inv._id)}>
-                            <Text style={styles.payBtnText}>Chuyển Khoản QR</Text>
-                          </TouchableOpacity>
+                {invoices.map(inv => {
+                  const bhytCovered = inv.bhytInfo?.bhytAmount > 0;
+                  const patientMustPay = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+
+                  return (
+                    <View key={inv._id} style={styles.invoiceCard}>
+                      <View style={styles.invoiceHeader}>
+                        <View>
+                          <Text style={styles.invoiceTitle}>Mã Visit: {inv.visitId}</Text>
+                          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                            BN: {inv.patientId?.profile?.name || inv.patientId?.profile?.fullName || inv.patientId?.email || 'N/A'}
+                          </Text>
                         </View>
-                      )}
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.invoiceTotal}>Tổng: {inv.totalAmount.toLocaleString()} VNĐ</Text>
+                          {bhytCovered ? (
+                            <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
+                              <Text style={{ fontSize: 11, color: '#059669', fontWeight: 'bold' }}>
+                                BHYT chi trả ({inv.bhytInfo.coverageRate}%): -{inv.bhytInfo.bhytAmount.toLocaleString()} VNĐ
+                              </Text>
+                              <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: 'bold', marginTop: 1 }}>
+                                BN đồng chi trả: {patientMustPay.toLocaleString()} VNĐ
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Chưa khấu trừ BHYT</Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {inv.items.map((item, idx) => (
+                        <View key={idx} style={styles.invoiceItemRow}>
+                          <Text style={styles.invoiceItemDesc}>{item.description}</Text>
+                          <Text style={styles.invoiceItemAmount}>{item.amount.toLocaleString()} VNĐ</Text>
+                        </View>
+                      ))}
+
+                      <View style={styles.invoiceFooter}>
+                        <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
+                        {inv.status === 'chờ thanh toán' && (
+                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            {!bhytCovered && (
+                              <TouchableOpacity
+                                style={[styles.payBtn, { backgroundColor: '#0284C7' }]}
+                                onPress={() => handleApplyBhyt(inv)}
+                                disabled={applyingBhytId === inv._id}
+                              >
+                                <Text style={styles.payBtnText}>
+                                  {applyingBhytId === inv._id ? 'Đang tính...' : 'Áp Dụng BHYT'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
+                              <Text style={styles.payBtnText}>Tiền Mặt ({patientMustPay.toLocaleString()}đ)</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.payBtn]} onPress={() => handlePayOSPayment(inv._id)}>
+                              <Text style={styles.payBtnText}>PayOS QR</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
           </ScrollView>
         )}
+
+        {/* ── MODAL KHAI BÁO THẺ BHYT ────────────────────────────────────────── */}
+        <Modal visible={showBhytModal} transparent animationType="slide" onRequestClose={() => setShowBhytModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={styles.modalTitle}>Khai Báo Thẻ Bảo Hiểm Y Tế (BHYT)</Text>
+                <TouchableOpacity onPress={() => setShowBhytModal(false)}>
+                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modalSub}>
+                Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patients.find(p => p._id === selectedPatientId)?.profile?.name || 'Đã chọn'}</Text>
+              </Text>
+
+              <Text style={styles.fieldLabel}>Mã số thẻ BHYT (15 ký tự):</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="VD: GD4912345678901..."
+                value={bhytCardNumber}
+                onChangeText={setBhytCardNumber}
+                autoCapitalize="characters"
+              />
+
+              <Text style={styles.fieldLabel}>Mức hưởng BHYT theo quy định:</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                {[80, 95, 100].map((rate) => (
+                  <TouchableOpacity
+                    key={rate}
+                    style={[
+                      styles.rateBtn,
+                      bhytCoverageRate === rate && styles.rateBtnActive
+                    ]}
+                    onPress={() => setBhytCoverageRate(rate)}
+                  >
+                    <Text style={[styles.rateBtnText, bhytCoverageRate === rate && styles.rateBtnTextActive]}>
+                      Hưởng {rate}%
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Nơi đăng ký KCB ban đầu:</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="VD: Bệnh viện Đa khoa Tỉnh..."
+                value={bhytRegistrationPlace}
+                onChangeText={setBhytRegistrationPlace}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginVertical: 6 }}>
+                <TouchableOpacity
+                  style={[styles.checkRow, bhytIsOutOfNetwork && styles.checkRowActive]}
+                  onPress={() => setBhytIsOutOfNetwork(!bhytIsOutOfNetwork)}
+                >
+                  <Text style={[styles.checkText, bhytIsOutOfNetwork && { color: '#B45309' }]}>
+                    {bhytIsOutOfNetwork ? '☑ Trái tuyến' : '☐ Trái tuyến'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.checkRow, bhytHasTransferForm && styles.checkRowActive]}
+                  onPress={() => setBhytHasTransferForm(!bhytHasTransferForm)}
+                >
+                  <Text style={[styles.checkText, bhytHasTransferForm && { color: '#047857' }]}>
+                    {bhytHasTransferForm ? '☑ Có giấy chuyển tuyến' : '☐ Có giấy chuyển tuyến'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setShowBhytModal(false)}>
+                  <Text style={styles.btnCancelText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnConfirm, savingBhyt && { opacity: 0.6 }]}
+                  onPress={handleSaveBhyt}
+                  disabled={savingBhyt}
+                >
+                  <Text style={styles.btnConfirmText}>{savingBhyt ? 'Đang lưu...' : 'Lưu & Thẩm Định Quyền Lợi'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ResponsiveLayout>
   );
@@ -717,7 +922,119 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
-  }
+  },
+  // Modal BHYT Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalBox: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 6,
+  },
+  rateBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  rateBtnActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  rateBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#475569',
+  },
+  rateBtnTextActive: {
+    color: '#fff',
+  },
+  checkRow: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+  },
+  checkRowActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  checkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  btnCancel: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  btnConfirm: {
+    flex: 2,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#0284C7',
+  },
+  btnConfirmText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
 });
 
 export default NurseReceptionScreen;

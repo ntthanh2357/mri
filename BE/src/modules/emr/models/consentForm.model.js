@@ -63,6 +63,16 @@ const consentFormSchema = new Schema(
     doctorOverrideReason: { type: String, default: "" },
     doctorOverrideByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     signedAt: { type: Date, default: null },
+    // Chuẩn hóa Chữ ký số y tế PKI / Cloud HSM / SmartCard theo NĐ 130/2018/NĐ-CP & TT 46/2018/TT-BYT
+    digitalSignatureMetadata: {
+      signatureType: { type: String, enum: ['electronic', 'pki_token', 'cloud_hsm', 'smartcard'], default: 'electronic' },
+      certificateSerial: { type: String, default: "" },
+      signingAlgorithm: { type: String, default: "" },
+      timestampToken: { type: String, default: "" },
+      caProvider: { type: String, default: "" },
+      signedHash: { type: String, default: "" },
+      signedAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true,

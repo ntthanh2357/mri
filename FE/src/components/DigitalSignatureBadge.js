@@ -24,7 +24,7 @@ const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn }) 
         <Text style={styles.stampText}>
           Bác sĩ ký duyệt: <Text style={styles.stampBold}>{radiologist || 'Bác sĩ CĐHA'}</Text>
         </Text>
-        {doctorCchn && (
+        {Boolean(doctorCchn) && (
           <Text style={styles.stampText}>
             Chứng chỉ hành nghề: <Text style={styles.stampBold}>{doctorCchn}</Text>
           </Text>

@@ -66,6 +66,25 @@ const drugSchema = new Schema(
       },
     ],
 
+    // ── Lịch sử biến động kho (Stock Movement Audit Trail - TT46/2018) ─────
+    stockMovements: [
+      {
+        type: {
+          type: String,
+          enum: ["import", "dispense", "refund", "adjustment", "clinical_trial_dispense"],
+          required: true
+        },
+        quantity: { type: Number, required: true },
+        invoiceId: { type: Schema.Types.ObjectId, ref: "Invoice", default: null },
+        visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null },
+        performedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        reason: { type: String, default: "" },
+        batchNumber: { type: String, default: null },
+        balanceAfter: { type: Number, default: 0 }, // Số lượng tồn kho tức thời sau biến động (Running Balance)
+        timestamp: { type: Date, default: Date.now }
+      }
+    ],
+
     // ── Trạng thái ────────────────────────────────────────────────────────────
     isActive: {
       type: Boolean,

@@ -31,11 +31,12 @@ export const getDrugs = async (req, res) => {
     const filter = { hospitalId };
     if (category) filter.category = category;
     if (isActive !== undefined) filter.isActive = isActive === "true";
-    if (search) {
+    if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { activeIngredient: { $regex: search, $options: "i" } },
-        { manufacturer: { $regex: search, $options: "i" } },
+        { name: { $regex: escaped, $options: "i" } },
+        { activeIngredient: { $regex: escaped, $options: "i" } },
+        { manufacturer: { $regex: escaped, $options: "i" } },
       ];
     }
     // Lọc thuốc tồn kho thấp (< minStock)

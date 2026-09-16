@@ -5,7 +5,10 @@ import { successResponse, errorResponse } from "../../utils/response.util.js";
 import {
   reserveBedAtomicService,
   occupyBedAtomicService,
-  releaseBedService
+  releaseBedService,
+  completeCleaningService,
+  transferBedWithinHospitalService,
+  checkNeuroIcuCapacityAlertService
 } from "../../services/hospitalBed.service.js";
 
 // ─── Q.1 — Lấy danh sách giường bệnh theo khoa ──────────────────────────────
@@ -203,3 +206,64 @@ export const getBedMapSummary = async (req, res) => {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
+
+// ─── Q.5 — Hoàn tất khử khuẩn buồng bệnh ────────────────────────────────────
+// @route PUT /api/v1/hospital-beds/:id/cleaning-complete
+// @access Private (Nurse, Doctor, Admin, Cleaner)
+export const completeCleaning = async (req, res) => {
+  try {
+    const bed = await completeCleaningService({
+      bedId: req.params.id,
+      hospitalId: req.user.hospitalId,
+      user: req.user,
+      cleaningData: req.body
+    });
+
+    return successResponse(res, bed, `Đã hoàn tất khử khuẩn buồng bệnh. Giường ${bed.bedNumber} sẵn sàng đón bệnh nhân mới.`);
+  } catch (err) {
+    return errorResponse(res, err.message || "Lỗi máy chủ", err.statusCode || 500);
+  }
+};
+
+// ─── Q.6 — Điều chuyển bệnh nhân giữa các giường nội viện ────────────────────
+// @route POST /api/v1/hospital-beds/transfer-internal
+// @access Private (Doctor, Nurse, Admin)
+export const transferBedInternal = async (req, res) => {
+  try {
+    const { fromBedId, toBedId, patientId, reason, diagnosis } = req.body;
+    if (!fromBedId || !toBedId || !patientId) {
+      return errorResponse(res, "Thiếu thông tin bắt buộc: fromBedId, toBedId, patientId.", 400);
+    }
+
+    const result = await transferBedWithinHospitalService({
+      fromBedId,
+      toBedId,
+      hospitalId: req.user.hospitalId,
+      user: req.user,
+      transferData: { patientId, reason, diagnosis }
+    });
+
+    return successResponse(res, result, "Điều chuyển bệnh nhân giữa các buồng giường nội viện thành công.");
+  } catch (err) {
+    if (err.statusCode === 409) {
+      return errorResponse(res, err.message, 409);
+    }
+    return errorResponse(res, err.message || "Lỗi máy chủ", err.statusCode || 500);
+  }
+};
+
+// ─── Q.7 — Kiểm tra và cảnh báo công suất giường ICU U não ───────────────────
+// @route GET /api/v1/hospital-beds/neuro-icu-capacity
+// @access Private (Doctor, Nurse, Admin)
+export const getNeuroIcuCapacityAlert = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
+
+    const alertInfo = await checkNeuroIcuCapacityAlertService({ hospitalId });
+    return successResponse(res, alertInfo, "Kiểm tra công suất giường Neuro-ICU thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
