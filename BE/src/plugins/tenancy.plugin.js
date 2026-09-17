@@ -24,7 +24,16 @@ export const tenancyPlugin = (schema) => {
         return next();
       }
 
-      // 4. Fail-safe: Nếu store tồn tại nhưng không có hospitalId và không phải Super Admin
+      // 3.5. Bệnh nhân cá nhân (B2C Patient Portal): Không gán cứng hospitalId
+      // Ép buộc truy vấn theo chính ID bệnh nhân hiện tại để bảo vệ quyền riêng tư và chống IDOR chéo
+      if (store && store.role === "patient" && store.userId) {
+        if (typeof this.where === "function") {
+          this.where({ $or: [{ patientId: store.userId }, { userId: store.userId }] });
+        }
+        return next();
+      }
+
+      // 4. Fail-safe: Nếu store tồn tại nhưng không có hospitalId và không phải Super Admin hay Patient
       // Tuyệt đối không cho phép truy vấn mở toàn hệ thống -> Ép về điều kiện rỗng
       if (store && !store.hospitalId && !store.isSuperAdmin) {
         if (typeof this.where === "function") {
@@ -33,10 +42,10 @@ export const tenancyPlugin = (schema) => {
         return next();
       }
 
-      // 5. Fail-safe: Nếu store không tồn tại (AsyncLocalStorage Context Loss):
-      // Nếu query hoàn toàn không có hospitalId và không có _id cụ thể -> Ép về rỗng để chặn rò rỉ dữ liệu
+      // 5. Fail-safe: Nếu store không tồn tại (AsyncLocalStorage Context Loss hoặc Public API):
+      // Cho phép nếu có hospitalId, _id cụ thể, hoặc shareToken công khai. Ngược lại ép về rỗng để chặn rò rỉ dữ liệu
       const currentFilter = typeof this.getQuery === "function" ? this.getQuery() : {};
-      if (!currentFilter || (!currentFilter.hospitalId && !currentFilter._id)) {
+      if (!currentFilter || (!currentFilter.hospitalId && !currentFilter._id && !currentFilter.shareToken)) {
         if (typeof this.where === "function") {
           this.where({ _id: null });
         }

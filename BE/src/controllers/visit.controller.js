@@ -201,7 +201,7 @@ export const getMyQueue = async (req, res) => {
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
-    if (role === "receptionist" || role === "admin" || role === "hospital_admin" || req.query.today === "true") {
+    if (["receptionist", "admin", "system_admin", "hospital_admin"].includes(role) || req.query.today === "true") {
       filter.createdAt = { $gte: startOfDay };
     }
 
@@ -235,7 +235,7 @@ export const updateVitals = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy lượt khám" });
     }
     
-    if (visit.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && visit.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
@@ -264,7 +264,7 @@ export const createMriOrder = async (req, res) => {
     if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
 
     // Tenancy Check
-    if (visit.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && visit.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền thao tác lượt khám này." });
     }
 
@@ -373,7 +373,7 @@ export const updateStatus = async (req, res) => {
     if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
 
     // Tenancy Check
-    if (visit.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && visit.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền thao tác lượt khám này." });
     }
 

@@ -7,7 +7,7 @@ import { createNotificationInternal } from "../../controllers/notification.contr
 
 // ── Helper: Lấy hospitalId từ user (Admin dùng query, hospital_admin dùng JWT) ─
 function resolveHospitalId(req) {
-  if (req.user.role === "admin" && req.query.hospitalId) {
+  if (["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
     return req.query.hospitalId;
   }
   return req.user.hospitalId || null;
@@ -73,7 +73,7 @@ export const getDrugById = async (req, res) => {
     }
 
     // Ownership check
-    if (req.user.role !== "admin" && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền xem thuốc này.", 403);
     }
 
@@ -156,7 +156,7 @@ export const updateDrug = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền sửa thuốc này.", 403);
     }
 
@@ -207,7 +207,7 @@ export const deleteDrug = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền xóa thuốc này.", 403);
     }
 
@@ -235,7 +235,7 @@ export const updateStock = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền cập nhật tồn kho thuốc này.", 403);
     }
 

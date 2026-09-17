@@ -22,7 +22,7 @@ export const createAndPayInvoice = async (req, res) => {
     const visit = await Visit.findById(visitId);
     if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
 
-    if (visit.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && visit.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền" });
     }
 
@@ -33,7 +33,7 @@ export const createAndPayInvoice = async (req, res) => {
       return res.status(400).json({ message: "Lượt khám này đã có hóa đơn đã được thanh toán." });
     }
 
-    const hospital = await Hospital.findById(req.user.hospitalId);
+    const hospital = await Hospital.findById(req.user.hospitalId || visit.hospitalId);
     const examFee = hospital?.pricing?.examFee ?? 50000;
     const mriFee = hospital?.pricing?.mriFee ?? 1500000;
     const aiFee = hospital?.pricing?.aiFee ?? 200000;
@@ -251,7 +251,7 @@ export const payInvoice = async (req, res) => {
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn" });
 
-    if (invoice.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
@@ -927,14 +927,14 @@ export const refundInvoice = async (req, res) => {
     const { id } = req.params;
     const { refundReason, itemsToRefund, secondApproverId } = req.body;
 
-    if (!["admin", "hospital_admin", "receptionist"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "receptionist"].includes(req.user.role)) {
       return res.status(403).json({ message: "Không có quyền thực hiện hoàn tiền hóa đơn." });
     }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
 
-    if (invoice.hospitalId.toString() !== req.user.hospitalId) {
+    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 

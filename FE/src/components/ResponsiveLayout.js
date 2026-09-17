@@ -49,8 +49,10 @@ const ResponsiveLayout = ({
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [showNotifModal, setShowNotifModal] = React.useState(false);
   const [activeEmergency, setActiveEmergency] = React.useState(null);
+  const isPollingStoppedRef = React.useRef(false);
 
   const fetchEmergencyAlerts = async () => {
+    if (isPollingStoppedRef.current) return;
     try {
       const { get } = require('../services/api.service');
       const res = await get('/api/v1/emergency/alerts');
@@ -59,12 +61,15 @@ const ResponsiveLayout = ({
       } else {
         setActiveEmergency(null);
       }
-    } catch {
-      // Quietly ignore
+    } catch (err) {
+      if (err.message?.includes('401') || err.message?.includes('403') || err.message?.includes('hết hạn') || err.message?.includes('khóa')) {
+        isPollingStoppedRef.current = true;
+      }
     }
   };
 
   const fetchNotifications = async () => {
+    if (isPollingStoppedRef.current) return;
     try {
       const { get } = require('../services/api.service');
       const res = await get('/api/v1/notifications');
@@ -73,7 +78,9 @@ const ResponsiveLayout = ({
         setUnreadCount(res.data?.unreadCount || 0);
       }
     } catch (err) {
-      // Quietly ignore network failures in background polling
+      if (err.message?.includes('401') || err.message?.includes('403') || err.message?.includes('hết hạn') || err.message?.includes('khóa')) {
+        isPollingStoppedRef.current = true;
+      }
     }
   };
 
@@ -142,7 +149,7 @@ const ResponsiveLayout = ({
   }
 
   const isPatient = localUser?.role === 'patient';
-  const roleLabel = localUser?.role === 'admin' ? 'Quản trị viên hệ thống' : 
+  const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
                     localUser?.role === 'doctor' ? 'Bác sĩ Chẩn đoán & Lâm sàng' : 
                     localUser?.role === 'technician' ? 'Kỹ thuật viên Phim MRI' : 
@@ -213,6 +220,7 @@ const ResponsiveLayout = ({
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'admin':
+      case 'system_admin':
         return [
           { label: 'Tổng quan', route: 'AdminBackoffice', icon: LayoutDashboard },
           { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },

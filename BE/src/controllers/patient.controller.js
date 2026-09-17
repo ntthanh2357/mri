@@ -9,6 +9,7 @@ import { Drug } from "../models/drug.model.js";
 import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 export { checkPatientTenancy };
 
 // Khung giờ nhắc uống thuốc cố định theo số lần/ngày
@@ -21,8 +22,7 @@ const REMINDER_TIME_SLOTS = {
 
 const generateRemindersForPrescription = async (prescription) => {
   const reminders = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const { startOfDay: today } = getDayRangeVN();
 
   for (const drug of prescription.drugs) {
     const timesPerDay = Math.min(Math.max(drug.timesPerDay || 2, 1), 4);
@@ -72,7 +72,7 @@ export const getPatients = async (req, res) => {
     // - Chỉ Admin hệ thống mới có thể xem toàn bộ hoặc lọc riêng bệnh nhân B2C (req.query.b2cOnly).
     const query = { role: "patient" };
 
-    if (userRole === "admin") {
+    if (userRole === "admin" || userRole === "system_admin") {
       if (req.query.b2cOnly === "true") {
         query.$or = [{ hospitalId: null }, { hospitalId: { $exists: false } }];
       } else if (userHospitalId && req.query.allHospitals !== "true") {

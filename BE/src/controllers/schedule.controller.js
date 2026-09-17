@@ -5,6 +5,7 @@ import { User } from "../models/user.model.js";
 import { Visit } from "../models/visit.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { sendSwapRequestResultEmail } from "../services/email.service.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 
 // Helper to get week start and end dates
 function getWeekRange(weekStr) {
@@ -17,12 +18,12 @@ function getWeekRange(weekStr) {
   
   const day = start.getDay();
   const diff = start.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-  const monday = new Date(start.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
+  const mondayDate = new Date(start.setDate(diff));
+  const { startOfDay: monday } = getDayRangeVN(mondayDate);
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
+  const sundayDate = new Date(monday);
+  sundayDate.setDate(monday.getDate() + 6);
+  const { endOfDay: sunday } = getDayRangeVN(sundayDate);
 
   return { start: monday, end: sunday };
 }
@@ -55,8 +56,7 @@ export const createSchedule = async (req, res) => {
       return errorResponse(res, "Nhân sự không tồn tại hoặc không thuộc cơ sở của bạn.", 404);
     }
 
-    const parsedDate = new Date(date);
-    parsedDate.setHours(0, 0, 0, 0);
+    const { startOfDay: parsedDate } = getDayRangeVN(date);
 
     // Prevent duplicate shifts for the same staff member on the same date
     const existing = await WorkSchedule.findOne({ staffId, date: parsedDate, shift });
@@ -104,8 +104,7 @@ export const registerSchedule = async (req, res) => {
       return errorResponse(res, "Vui lòng chọn ngày và ca muốn đăng ký.", 400);
     }
 
-    const parsedDate = new Date(date);
-    parsedDate.setHours(0, 0, 0, 0);
+    const { startOfDay: parsedDate } = getDayRangeVN(date);
 
     const existing = await WorkSchedule.findOne({ staffId, date: parsedDate, shift });
     if (existing) {
@@ -138,7 +137,7 @@ export const registerSchedule = async (req, res) => {
 export const getWeeklySchedules = async (req, res) => {
   try {
     let hospitalId = req.user.hospitalId;
-    if (!hospitalId && req.user.role === "admin" && req.query.hospitalId) {
+    if (!hospitalId && ["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
       hospitalId = req.query.hospitalId;
     }
     
@@ -213,7 +212,7 @@ export const updateSchedule = async (req, res) => {
     }
 
     // Ownership check
-    if (schedule.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && schedule.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Không có quyền chỉnh sửa lịch này.", 403);
     }
 
@@ -251,16 +250,13 @@ export const deleteSchedule = async (req, res) => {
     }
 
     // Ownership check
-    if (schedule.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && schedule.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Không có quyền xóa lịch này.", 403);
     }
 
     // ── Safe Schedule Cancellation Policy ─────────────────────────────────────
     // Chặn xóa ca trực nếu nhân sự đang có bệnh nhân trong hàng đợi dở dang
-    const startOfDay = new Date(schedule.date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(schedule.date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getDayRangeVN(schedule.date);
 
     const activeVisit = await Visit.findOne({
       hospitalId: schedule.hospitalId,

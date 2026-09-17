@@ -79,7 +79,7 @@ export const fetchAuditLogs = async (req, res) => {
     
     if (userRole === "hospital_admin") {
       logs = await getAuditLogs(req.user.hospitalId);
-    } else if (userRole === "admin") {
+    } else if (userRole === "admin" || userRole === "system_admin") {
       const filterHospitalId = req.query.hospitalId;
       logs = await getAuditLogs(filterHospitalId);
     } else {
@@ -1123,7 +1123,7 @@ export const getRevenueReports = async (req, res) => {
     // SaaS Admin (role=admin) không có hospitalId → cho phép truyền ?hospitalId
     // Hospital Admin → dùng hospitalId từ JWT (không tin client)
     let hospitalId = req.user.hospitalId;
-    if (!hospitalId && req.user.role === "admin" && req.query.hospitalId) {
+    if (!hospitalId && ["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
       if (!isValidObjectId(req.query.hospitalId)) {
         return res.status(400).json({ success: false, message: "hospitalId không hợp lệ." });
       }
@@ -1153,7 +1153,7 @@ export const getRevenueReportById = async (req, res) => {
     }
 
     // ── Kiểm tra ownership: ngăn cross-hospital data leak ────────────────────
-    if (req.user.role !== "admin") {
+    if (!["admin", "system_admin"].includes(req.user.role)) {
       if (!req.user.hospitalId || report.hospitalId.toString() !== req.user.hospitalId.toString()) {
         return res.status(403).json({ success: false, message: "Bạn không có quyền xem báo cáo này." });
       }
@@ -1169,7 +1169,7 @@ export const getRevenueReportById = async (req, res) => {
 export const exportRevenueCSV = async (req, res) => {
   try {
     let hospitalId = req.user.hospitalId;
-    if (!hospitalId && req.user.role === "admin" && req.query.hospitalId) {
+    if (!hospitalId && ["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
       if (!isValidObjectId(req.query.hospitalId)) {
         return res.status(400).json({ success: false, message: "hospitalId không hợp lệ." });
       }
@@ -1327,7 +1327,7 @@ export const getDrugReports = async (req, res) => {
   try {
     // SaaS Admin (role=admin) không có hospitalId → cho phép truyền ?hospitalId
     let hospitalId = req.user.hospitalId;
-    if (!hospitalId && req.user.role === "admin" && req.query.hospitalId) {
+    if (!hospitalId && ["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
       if (!isValidObjectId(req.query.hospitalId)) {
         return res.status(400).json({ success: false, message: "hospitalId không hợp lệ." });
       }
@@ -1357,7 +1357,7 @@ export const getDrugReportById = async (req, res) => {
     }
 
     // ── Kiểm tra ownership: ngăn cross-hospital data leak ────────────────────
-    if (req.user.role !== "admin") {
+    if (!["admin", "system_admin"].includes(req.user.role)) {
       if (!req.user.hospitalId || report.hospitalId.toString() !== req.user.hospitalId.toString()) {
         return res.status(403).json({ success: false, message: "Bạn không có quyền xem báo cáo này." });
       }

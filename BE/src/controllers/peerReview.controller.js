@@ -5,13 +5,14 @@ import { Hospital } from "../models/hospital.model.js";
 import { User } from "../models/user.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { getDayRangeVN } from "../utils/date.util.js";
 
 // ─── P.1 — Gắn cờ ca cần bình duyệt lần 2 ────────────────────────────────────
 // @route POST /api/v1/peer-reviews
 // @access Private (Doctor, Admin)
 export const flagForPeerReview = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Không có quyền yêu cầu bình duyệt.", 403);
     }
 
@@ -214,9 +215,9 @@ export const runRandomQaSampling = async (req, res) => {
 
     // Lấy tuần hiện tại
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
-    weekStart.setHours(0, 0, 0, 0);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+    const { startOfDay: weekStart } = getDayRangeVN(monday);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 7);
     const weekKey = `${now.getFullYear()}-W${Math.ceil((weekStart.getDate() + 6 - weekStart.getDay()) / 7).toString().padStart(2, '0')}`;

@@ -100,7 +100,7 @@ const WelcomeScreen = ({ navigation }) => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin'
+          const destination = (data.user.role === 'admin' || data.user.role === 'system_admin')
             ? 'AdminBackoffice'
             : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.reset({
@@ -111,6 +111,8 @@ const WelcomeScreen = ({ navigation }) => {
         }
       } catch (err) {
         console.log('Welcome auto-login check failed or no token:', err.message);
+        // Xóa token chết hoặc hết hạn để tránh lặp vô tận
+        await setAuthToken(null);
       } finally {
         setCheckingAuth(false);
       }
@@ -184,7 +186,7 @@ const WelcomeScreen = ({ navigation }) => {
         );
       } else {
         await setAuthToken(data.accessToken);
-        const destination = data.user && data.user.role === 'admin'
+        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
           ? 'AdminBackoffice'
           : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
         showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
@@ -373,7 +375,7 @@ const WelcomeScreen = ({ navigation }) => {
 
       const data = tempLoginResponse;
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin'
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
 
@@ -420,7 +422,7 @@ const WelcomeScreen = ({ navigation }) => {
 
       const data = await post('/auth/sso/google', { idToken });
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
           index: 0,

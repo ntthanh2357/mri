@@ -165,7 +165,7 @@ export const viewSharedResult = async (req, res) => {
   try {
     const { shareToken } = req.params;
 
-    const imaging = await ImagingResult.findOne({ shareToken }).lean();
+    const imaging = await ImagingResult.findOne({ shareToken }).setOptions({ bypassTenancy: true }).lean();
     if (!imaging) return errorResponse(res, "Link chia sẻ không hợp lệ hoặc đã hết hạn.", 404);
 
     if (imaging.shareTokenExpiresAt && new Date() > imaging.shareTokenExpiresAt) {

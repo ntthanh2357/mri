@@ -217,12 +217,13 @@ export const getWeeklySchedule = async (req, res) => {
     const hospitalId = req.user.hospitalId;
     if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
 
-    const { weekStart, roomId } = req.query;
     const startDate = weekStart ? new Date(weekStart) : (() => {
-      const d = new Date(); d.setHours(0, 0, 0, 0);
-      const day = d.getDay();
-      d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); // Thứ 2
-      return d;
+      const now = new Date();
+      const day = now.getDay();
+      const diff = now.getDate() - (day === 0 ? 6 : day - 1); // Thứ 2
+      const monday = new Date(now.setDate(diff));
+      const { startOfDay } = getDayRangeVN(monday);
+      return startOfDay;
     })();
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7);

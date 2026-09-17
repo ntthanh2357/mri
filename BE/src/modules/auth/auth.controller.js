@@ -219,12 +219,23 @@ export const login = async (req, res) => {
       return;
     }
 
-    // Reject login if user's hospital is deactivated/locked
+    // Reject login if user's hospital is deactivated, locked, or subscription has expired
     if (user.hospitalId) {
-      const hospitalObj = await Hospital.findById(user.hospitalId).select("isActive");
-      if (hospitalObj && hospitalObj.isActive === false) {
-        res.status(403).json({ message: "Bệnh viện của bạn đang bị khóa. Vui lòng liên hệ quản trị viên." });
-        return;
+      const hospitalObj = await Hospital.findById(user.hospitalId).select("isActive subscriptionExpiresAt subscriptionStatus");
+      if (hospitalObj) {
+        if (hospitalObj.isActive === false) {
+          res.status(403).json({ message: "Bệnh viện của bạn đang bị khóa. Vui lòng liên hệ quản trị viên." });
+          return;
+        }
+        const now = new Date();
+        const hasExpired = hospitalObj.subscriptionExpiresAt && new Date(hospitalObj.subscriptionExpiresAt) < now;
+        const isSuspended = hospitalObj.subscriptionStatus === "suspended" || hospitalObj.subscriptionStatus === "expired";
+        if ((hasExpired || isSuspended) && !["admin", "system_admin"].includes(user.role)) {
+          res.status(403).json({
+            message: "Gói đăng ký dịch vụ của bệnh viện đã hết hạn hoặc bị tạm ngưng. Vui lòng liên hệ quản trị viên để gia hạn."
+          });
+          return;
+        }
       }
     }
 
