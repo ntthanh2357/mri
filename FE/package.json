@@ -28,7 +28,7 @@
     "ios": "npm run build:css && node update-ip.js && expo start --ios",
     "web": "npm run build:css && node update-ip.js && expo start --web --port 8083",
     "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
-    "test": "node src/tests/fe_models_utils.test.mjs"
+    "test": "node src/tests/fe_models_utils.test.mjs && node src/tests/fe_navigation_linking.test.mjs"
   },
   "private": true,
   "devDependencies": {

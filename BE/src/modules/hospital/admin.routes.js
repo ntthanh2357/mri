@@ -14,6 +14,9 @@ updateDatasetPrice,
   anonymizeData,
   getAiFeedback,
   retrainAiModel,
+  getAiRetrainStatus,
+  deployAiRetrainedModel,
+  rollbackAiRetrainedModel,
   getChatbotConfig,
   saveChatbotConfig,
   verifyAdminUser,
@@ -87,6 +90,9 @@ router.post("/hospitals/:id/setup-drive", requireSystemAdmin, repairHospitalDriv
 // ─── AI & Chatbot Management routes ──────────────────────────────────────────
 router.get("/ai-feedback", requireSystemAdmin, getAiFeedback);
 router.post("/ai-retrain", requireSystemAdmin, retrainAiModel);
+router.get("/ai-retrain-status", requireSystemAdmin, getAiRetrainStatus);
+router.post("/ai-retrain-deploy", requireSystemAdmin, deployAiRetrainedModel);
+router.post("/ai-retrain-rollback", requireSystemAdmin, rollbackAiRetrainedModel);
 router.get("/chatbot-config", requireSystemAdmin, getChatbotConfig);
 router.post("/chatbot-config", requireSystemAdmin, saveChatbotConfig);
 router.get("/ai-training-stats", requireSystemAdmin, getAiTrainingStats);

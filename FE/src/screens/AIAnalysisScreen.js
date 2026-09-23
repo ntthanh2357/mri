@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import styles from './AIAnalysisScreen.styles';
 import FormattedConsensusMessage, { stripHtml } from '../components/FormattedConsensusMessage';
+import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 
 const CLASS_META = {
   glioma: {
@@ -100,6 +101,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
 
   // Feedback state
   const [selectedCorrectClass, setSelectedCorrectClass] = useState(null);
+  const [feedbackRoi, setFeedbackRoi] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [approvingAI, setApprovingAI] = useState(false);
 
@@ -240,7 +242,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
       await post('/api/v1/imaging/feedback-ai', {
         imageUrl,
         correct_class: selectedCorrectClass,
-        x: 120, y: 120, w: 100, h: 100,
+        x: selectedCorrectClass === 'notumor' ? 0 : (feedbackRoi.x || 0),
+        y: selectedCorrectClass === 'notumor' ? 0 : (feedbackRoi.y || 0),
+        w: selectedCorrectClass === 'notumor' ? 0 : (feedbackRoi.w || 0),
+        h: selectedCorrectClass === 'notumor' ? 0 : (feedbackRoi.h || 0),
       });
     } catch (_) { }
     setSendingFeedback(false);
@@ -576,7 +581,12 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                               styles.classChip,
                               isSelected && { backgroundColor: m.color, borderColor: m.color },
                             ]}
-                            onPress={() => setSelectedCorrectClass(cls)}
+                            onPress={() => {
+                              setSelectedCorrectClass(cls);
+                              if (cls === 'notumor') {
+                                setFeedbackRoi({ x: 0, y: 0, w: 0, h: 0 });
+                              }
+                            }}
                           >
                             <ChipIcon size={13} color={isSelected ? '#FFFFFF' : m.color} strokeWidth={2.2} />
                             <Text style={[styles.classChipText, isSelected && { color: '#fff' }]}>
@@ -586,6 +596,22 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         );
                       })}
                     </View>
+
+                    {/* Interactive ROI Bounding Box Drawer */}
+                    {selectedCorrectClass && selectedCorrectClass !== 'notumor' && (
+                      <View style={{ marginTop: 12, marginBottom: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 }}>
+                          Khoanh vùng tổn thương u trên ảnh (Kéo thả chuột):
+                        </Text>
+                        <InteractiveRoiDrawer
+                          imageUrl={imageFullUri}
+                          initialBox={feedbackRoi}
+                          onBoxChange={(box) => setFeedbackRoi(box)}
+                          disabled={selectedCorrectClass === 'notumor'}
+                          containerHeight={280}
+                        />
+                      </View>
+                    )}
 
                     <TouchableOpacity
                       style={[styles.wrongBtn, (sendingFeedback || !selectedCorrectClass) && styles.btnDisabled]}

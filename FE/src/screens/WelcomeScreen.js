@@ -148,8 +148,28 @@ const WelcomeScreen = ({ navigation }) => {
       const data = await post('/auth/login', { 
         email, 
         password,
+        roleType: loginRole,
         otp: showVerification ? verificationCode : undefined
       });
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense)
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
 
       // Bệnh nhân chưa kích hoạt/xác thực email
       if (data.requiresVerification) {

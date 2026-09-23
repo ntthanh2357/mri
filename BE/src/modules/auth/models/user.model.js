@@ -85,7 +85,7 @@ const userSchema = new Schema(
     },
     departmentId: {
       type: String,
-      default: "KNT",
+      default: "KUTN", // Chuẩn Khoa Ung Thư Não (KUTN-SURG, KUTN-ICU, KUTN-CHEMO, KUTN-PAL, KUTN-CLI, KCDHA, KD, KXN)
       trim: true,
     },
     profile: {

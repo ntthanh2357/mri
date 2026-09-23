@@ -19,6 +19,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, Copy, AlertTriangle, Brain } from 'lucide-react';
 import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
+import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 import styles from './ImagingResultScreen.styles';
 
 const ImagingResultScreen = ({ route, navigation }) => {
@@ -484,7 +485,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
             <View style={styles.hospitalHeader}>
               <View style={styles.hospitalInfo}>
                 <Text style={styles.deptText}>SỞ Y TẾ ĐÀ NẴNG</Text>
-                <Text style={styles.hospitalName}>BỆNH VIỆN ĐA KHOA ĐÀ NẴNG</Text>
+                <Text style={styles.hospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
               </View>
               <View style={styles.recordMeta}>
                 <Text style={styles.metaLabelText}>Mã y tế: <Text style={styles.metaValText}>{result.medicalId}</Text></Text>
@@ -641,25 +642,49 @@ const ImagingResultScreen = ({ route, navigation }) => {
                             <TouchableOpacity
                               key={cls}
                               style={{ paddingVertical: 5, paddingHorizontal: 10, backgroundColor: correctClass === cls ? '#B91C1C' : '#F1F5F9', borderRadius: 4 }}
-                              onPress={() => setCorrectClass(cls)}
+                              onPress={() => {
+                                setCorrectClass(cls);
+                                if (cls === 'notumor') {
+                                  setCoordX('0');
+                                  setCoordY('0');
+                                  setCoordW('0');
+                                  setCoordH('0');
+                                }
+                              }}
                             >
                               <Text style={{ color: correctClass === cls ? '#FFFFFF' : '#334155', fontSize: 11, fontWeight: 'bold' }}>{cls.toUpperCase()}</Text>
                             </TouchableOpacity>
                           ))}
                         </View>
 
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Tọa độ vùng khối u (Khoanh vùng/Segmentation):</Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                          {['X', 'Y', 'W', 'H'].map((label, idx) => {
-                            const val = idx === 0 ? coordX : idx === 1 ? coordY : idx === 2 ? coordW : coordH;
-                            const setVal = idx === 0 ? setCoordX : idx === 1 ? setCoordY : idx === 2 ? setCoordW : setCoordH;
-                            return (
-                              <View key={label} style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 10, color: '#94A3B8' }}>{label}</Text>
-                                <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={val} onChangeText={setVal} keyboardType="numeric" />
-                              </View>
-                            );
-                          })}
+                        {/* Interactive ROI Bounding Box Drawer */}
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>
+                          Khoanh vùng khối u trực tiếp trên ảnh (Kéo thả chuột):
+                        </Text>
+                        <InteractiveRoiDrawer
+                          imageUrl={result?.images && result.images.length > 0 ? getImageUrl(result.images[0]) : ''}
+                          initialBox={{
+                            x: parseInt(coordX) || 0,
+                            y: parseInt(coordY) || 0,
+                            w: parseInt(coordW) || 0,
+                            h: parseInt(coordH) || 0,
+                          }}
+                          onBoxChange={({ x, y, w, h }) => {
+                            setCoordX(String(x));
+                            setCoordY(String(y));
+                            setCoordW(String(w));
+                            setCoordH(String(h));
+                          }}
+                          disabled={correctClass === 'notumor'}
+                          containerHeight={320}
+                        />
+
+                        {/* Tóm tắt tọa độ sẽ gửi lên server */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Tọa độ gửi AI:</Text>
+                          <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: 'bold' }}>
+                            {correctClass === 'notumor' ? 'X: 0 | Y: 0 | W: 0 | H: 0 (Không u)' : `X: ${coordX} | Y: ${coordY} | W: ${coordW} | H: ${coordH} (px)`}
+                          </Text>
                         </View>
 
                         <TouchableOpacity 

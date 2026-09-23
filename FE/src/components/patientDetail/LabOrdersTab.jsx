@@ -106,7 +106,7 @@ const LabOrdersTab = ({
               <View style={styles.reportHeader}>
                 <View style={styles.reportHeaderLeft}>
                   <Text style={styles.hospitalName}>SỞ Y TẾ HÀ NỘI</Text>
-                  <Text style={styles.hospitalSub}>BỆNH VIỆN ĐA KHOA NEUROSCAN AI</Text>
+                  <Text style={styles.hospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                 </View>
                 <View style={styles.reportHeaderRight}>
                   <Text style={styles.departmentName}>KHOA XÉT NGHIỆM CHI NHÁNH 1</Text>

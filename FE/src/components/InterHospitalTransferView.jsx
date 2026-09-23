@@ -161,7 +161,7 @@ export default function InterHospitalTransferView({ currentUser }) {
     try {
       const res = await post('/api/v1/transfers/check-capacity', {
         targetHospitalId: selectedTargetHospId,
-        departmentId: 'KNT',
+        departmentId: 'KUTN-SURG',
       });
       if (res && res.success) {
         setCapacityResult(res.data);

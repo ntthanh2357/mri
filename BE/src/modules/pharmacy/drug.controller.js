@@ -349,14 +349,17 @@ export const getLowStockAlerts = async (req, res) => {
 // POST /api/drugs/check-prescription
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Danh mục thuốc mặc định phục vụ kiểm tra lâm sàng thần kinh
+// Danh mục thuốc mặc định chuyên khoa Ung Thư Não & Phẫu thuật Thần kinh
 const defaultDrugs = [
-  { name: "Keppra", category: "anticonvulsant", dosageInstructions: "500mg - 1500mg mỗi ngày, chia 2 lần", interactions: ["Depakine", "Tegretol"] },
-  { name: "Depakine", category: "anticonvulsant", dosageInstructions: "20mg - 30mg/kg/ngày", interactions: ["Keppra", "Phenobarbital", "Diazepam"] },
+  { name: "Temozolomide", category: "chemotherapy", dosageInstructions: "150mg - 200mg/m2/ngày x 5 ngày chu kỳ 28 ngày (Phác đồ Stupp)", interactions: ["Valproate"] },
+  { name: "Mannitol", category: "anti_edema", dosageInstructions: "0.25g - 1g/kg truyền tĩnh mạch trong 30-60 phút chống phù não cấp", interactions: [] },
+  { name: "Dexamethasone", category: "corticosteroid", dosageInstructions: "4mg - 16mg mỗi ngày uống sáng sau ăn chống phù não quanh u", interactions: [] },
+  { name: "Bevacizumab", category: "chemotherapy", dosageInstructions: "10mg/kg truyền tĩnh mạch mỗi 2 tuần điều trị u thần kinh đệm tái phát", interactions: [] },
+  { name: "Keppra", category: "anticonvulsant", dosageInstructions: "500mg - 1500mg mỗi ngày, chia 2 lần chống co giật do u não", interactions: ["Depakine", "Tegretol"] },
+  { name: "Depakine", category: "anticonvulsant", dosageInstructions: "20mg - 30mg/kg/ngày", interactions: ["Keppra", "Phenobarbital", "Diazepam", "Temozolomide"] },
   { name: "Tegretol", category: "anticonvulsant", dosageInstructions: "200mg - 1200mg mỗi ngày", interactions: ["Keppra"] },
   { name: "Phenobarbital", category: "psychotropic", dosageInstructions: "50mg - 200mg uống trước khi đi ngủ", interactions: ["Depakine", "Diazepam", "Donepezil"] },
   { name: "Diazepam", category: "psychotropic", dosageInstructions: "2mg - 10mg mỗi ngày", interactions: ["Phenobarbital", "Depakine"] },
-  { name: "Dexamethasone", category: "corticosteroid", dosageInstructions: "4mg - 16mg mỗi ngày uống sáng sau ăn", interactions: [] },
   { name: "Donepezil", category: "other", dosageInstructions: "5mg - 10mg uống tối trước ngủ", interactions: ["Phenobarbital"] },
 ];
 

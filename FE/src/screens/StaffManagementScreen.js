@@ -17,8 +17,11 @@ import { get, post, put } from '../services/api.service';
 import { UserPlus, Save, Users, Lock, Unlock, Search } from 'lucide-react';
 
 const ROLE_LABELS = {
-  doctor: 'Bác sĩ & Kỹ thuật viên',
-  nurse: 'Điều dưỡng & Lễ tân',
+  doctor: 'Bác sĩ Ung Thư Não',
+  nurse: 'Điều dưỡng Hồi sức & Chăm sóc',
+  technician: 'Kỹ thuật viên CĐHA & MRI',
+  receptionist: 'Nhân viên Tiếp đón & Thu ngân',
+  hospital_admin: 'Ban Lãnh đạo Khoa / Quản lý',
 };
 
 export default function StaffManagementScreen({ navigation }) {
@@ -26,6 +29,7 @@ export default function StaffManagementScreen({ navigation }) {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [newDepartmentId, setNewDepartmentId] = useState('KUTN-SURG');
   const [creatingUser, setCreatingUser] = useState(false);
 
   const [hospitalStaff, setHospitalStaff] = useState([]);
@@ -77,6 +81,7 @@ export default function StaffManagementScreen({ navigation }) {
         password: newUserPassword,
         name: newUserName.trim(),
         role: activeRoleTab,
+        departmentId: newDepartmentId,
       });
 
       if (response.success || response.user) {
@@ -84,6 +89,7 @@ export default function StaffManagementScreen({ navigation }) {
         setNewUserName('');
         setNewUserEmail('');
         setNewUserPassword('');
+        setNewDepartmentId('KUTN-SURG');
         fetchHospitalStaff();
       } else {
         Alert.alert('Lỗi', response.message || 'Không thể tạo tài khoản.');
@@ -217,6 +223,38 @@ export default function StaffManagementScreen({ navigation }) {
                   />
                 </View>
 
+                <View style={styles.field}>
+                  <Text style={styles.label}>Đơn nguyên / Khoa phòng lâm sàng *</Text>
+                  <View style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
+                    <select
+                      value={newDepartmentId}
+                      onChange={(e) => setNewDepartmentId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: 40,
+                        paddingLeft: 12,
+                        paddingRight: 12,
+                        fontSize: 13,
+                        color: '#0F172A',
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="KUTN-SURG">Đơn nguyên Phẫu thuật & Hồi tỉnh Mở Sọ (KUTN-SURG)</option>
+                      <option value="KUTN-ICU">Đơn nguyên Hồi sức Cấp cứu U Não - Neuro-ICU (KUTN-ICU)</option>
+                      <option value="KUTN-CHEMO">Đơn nguyên Hóa trị & Xạ trị U Não - Phác đồ Stupp (KUTN-CHEMO)</option>
+                      <option value="KUTN-PAL">Đơn nguyên Chăm sóc Giảm nhẹ & Phục hồi (KUTN-PAL)</option>
+                      <option value="KUTN-CLI">Phòng khám Chuyên khoa U Não & Tiếp đón (KUTN-CLI)</option>
+                      <option value="KCDHA">Khoa Chẩn đoán Hình ảnh Thần kinh & Mini-PACS (KCDHA)</option>
+                      <option value="KD">Khoa Dược Lâm sàng & Pha chế Hóa chất (KD)</option>
+                      <option value="KXN">Khoa Xét nghiệm & GPB Sinh học Phân tử (KXN)</option>
+                      <option value="KUTN">Khoa Ung Thư Não - Văn phòng Khoa (KUTN)</option>
+                    </select>
+                  </View>
+                </View>
+
                 <TouchableOpacity
                   style={[styles.submitButton, creatingUser && styles.buttonDisabled]}
                   onPress={handleCreateUser}
@@ -273,7 +311,16 @@ export default function StaffManagementScreen({ navigation }) {
                           <View style={styles.staffInfo}>
                             <Text style={styles.staffName}>{item.profile?.name || 'Nhân viên'}</Text>
                             <Text style={styles.staffEmail}>{item.email}</Text>
-                            <Text style={styles.staffDate}>Ngày tạo: {dateStr}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                              {item.departmentId ? (
+                                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#334155' }}>
+                                    {item.departmentId}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              <Text style={styles.staffDate}>Ngày tạo: {dateStr}</Text>
+                            </View>
                           </View>
                           
                           <View style={styles.staffActions}>
@@ -321,7 +368,7 @@ const styles = StyleSheet.create({
   titleContainer: { marginBottom: 12 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 0, marginBottom: 16 },
+  tabBar: { flexDirection: 'row', flexWrap: 'wrap', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 0, marginBottom: 16 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
   tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#15803D' },
   tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },

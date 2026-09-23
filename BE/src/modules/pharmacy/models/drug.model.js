@@ -23,7 +23,7 @@ const drugSchema = new Schema(
     },
     category: {
       type: String,
-      enum: ["anticonvulsant", "corticosteroid", "psychotropic", "pain_reliever", "antibiotic", "cardiovascular", "other"],
+      enum: ["anticonvulsant", "corticosteroid", "chemotherapy", "anti_edema", "psychotropic", "pain_reliever", "antibiotic", "cardiovascular", "other"],
       default: "other",
     },
     manufacturer: {

@@ -31,7 +31,11 @@ import {
   UserPlus, 
   List, 
   Save, 
-  X 
+  X,
+  Building2,
+  ArrowRightLeft,
+  Package,
+  FileText,
 } from 'lucide-react';
 
 const getRoleBadgeStyle = (role) => {
@@ -201,10 +205,159 @@ const ClinicDashboardScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           {/* Title */}
           <View style={styles.titleContainer}>
-            <Text style={styles.title}>Bảng điều khiển Phòng khám</Text>
+            <Text style={styles.title}>Bảng điều khiển Bệnh viện / Phòng khám</Text>
             <Text style={styles.subtitle}>
-              Chào mừng trở lại, Bs. {currentUser?.profile?.name || currentUser?.email || 'Bác sĩ'}. Đây là tổng quan phòng khám.
+              Chào mừng trở lại, {currentUser?.profile?.name || currentUser?.email || 'Quản lý'}. Đây là tổng quan điều hành lâm sàng Khoa Ung Thư Não.
             </Text>
+          </View>
+
+          {/* Management Quick Hub */}
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            padding: 16,
+            marginBottom: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 6,
+          }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A', marginBottom: 12 }}>
+              Điều Hành Lâm Sàng & Nghiệp Vụ Khoa Ung Thư Não
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
+              >
+                <Building2 size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Sơ đồ Giường</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Khoa & Neuro-ICU</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('EMRDashboard', { tab: 'transfers' })}
+              >
+                <ArrowRightLeft size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Chuyển Viện</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Liên viện Bạch Mai</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('EMRDashboard', { tab: 'records' })}
+              >
+                <FileText size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Quản lý EMR</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Hồ sơ & Ký số</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('StaffManagement')}
+              >
+                <Users size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Quản lý Nhân sự</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Bác sĩ & Điều dưỡng</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('StaffScheduling')}
+              >
+                <Calendar size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Lịch Phân Ca</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Sắp xếp ca trực</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('DrugManagement')}
+              >
+                <Package size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Kho Thuốc</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Thuốc ung bướu</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: isDesktop ? 1 : 0,
+                  minWidth: isDesktop ? 130 : '47%',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => navigation.navigate('Financials')}
+              >
+                <DollarSign size={22} color="#0891B2" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Báo Cáo Viện Phí</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Doanh thu & BHYT</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>

@@ -95,8 +95,8 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// 200MB limit to safely support CT/MRI DICOM zip archives without memory issues
-const MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+// 600MB limit to safely support CT/MRI DICOM zip archives (gói lát cắt MRI nén đến 500MB+)
+const MAX_FILE_SIZE_BYTES = 600 * 1024 * 1024;
 
 const upload = multer({
   storage,
@@ -105,6 +105,65 @@ const upload = multer({
     fileSize: MAX_FILE_SIZE_BYTES,
   },
 });
+
+/**
+ * Xác thực chữ ký Magic Bytes của tệp tin đã tải lên đĩa để chặn tệp giả mạo đuôi.
+ */
+export const validateMagicBytes = (filePath, ext) => {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    const buffer = Buffer.alloc(132);
+    const bytesRead = fs.readSync(fd, buffer, 0, 132, 0);
+    fs.closeSync(fd);
+
+    if (bytesRead < 4) return false;
+
+    // PNG: 89 50 4E 47
+    if (ext === ".png") {
+      return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+    }
+    // JPEG: FF D8 FF
+    if (ext === ".jpg" || ext === ".jpeg") {
+      return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    }
+    // ZIP: 50 4B 03 04 or 50 4B 05 06
+    if (ext === ".zip") {
+      return buffer[0] === 0x50 && buffer[1] === 0x4b && (buffer[2] === 0x03 || buffer[2] === 0x05);
+    }
+    // GZIP: 1F 8B
+    if (ext === ".gz") {
+      return buffer[0] === 0x1f && buffer[1] === 0x8b;
+    }
+    // DICOM: bytes 128-131 contain 'DICM'
+    if (ext === ".dcm") {
+      if (bytesRead >= 132) {
+        const dicmTag = buffer.subarray(128, 132).toString("ascii");
+        if (dicmTag === "DICM") return true;
+      }
+      return true;
+    }
+    // WebP: RIFF ... WEBP
+    if (ext === ".webp") {
+      return buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+    }
+    // BMP: 42 4D
+    if (ext === ".bmp") {
+      return buffer[0] === 0x42 && buffer[1] === 0x4d;
+    }
+    // RAR: 52 61 72 21
+    if (ext === ".rar") {
+      return buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21;
+    }
+    // 7-Zip: 37 7A BC AF
+    if (ext === ".7z") {
+      return buffer[0] === 0x37 && buffer[1] === 0x7a && buffer[2] === 0xbc && buffer[3] === 0xaf;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Middleware wrapper handling single multipart file upload under "file" field.
@@ -123,7 +182,7 @@ export const uploadImagingFile = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
           status: "error",
-          message: "Dung lượng tệp vượt quá giới hạn cho phép (tối đa 200MB).",
+          message: "Dung lượng tệp vượt quá giới hạn cho phép (tối đa 600MB).",
         });
       }
       return res.status(400).json({
@@ -131,6 +190,22 @@ export const uploadImagingFile = (req, res, next) => {
         message: err.message || "Lỗi khi xử lý tải lên tệp tin.",
       });
     }
+
+    // Kiểm tra tính toàn vẹn và chữ ký Magic Bytes của tệp tin
+    if (req.file) {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const isValid = validateMagicBytes(req.file.path, ext);
+      if (!isValid) {
+        try {
+          fs.unlinkSync(req.file.path); // Xóa ngay tệp độc hại khỏi đĩa
+        } catch { /* ignore */ }
+        return res.status(400).json({
+          status: "error",
+          message: "Nội dung tệp tin không khớp với định dạng khai báo (Chữ ký Magic Bytes không hợp lệ).",
+        });
+      }
+    }
+
     next();
   });
 };

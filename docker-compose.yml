@@ -16,10 +16,12 @@ services:
     image: mongo:7.0
     container_name: neuroscan-mongodb
     restart: unless-stopped
+    # An ninh: Chỉ lắng nghe trên 127.0.0.1 (Localhost), không mở 0.0.0.0 ra Internet công cộng
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
+      - ./docker/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - neuroscan-network
     healthcheck:

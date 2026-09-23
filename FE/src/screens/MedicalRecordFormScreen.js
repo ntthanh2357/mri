@@ -401,8 +401,8 @@ const MedicalRecordFormScreen = ({ navigation, route }) => {
             />
           </Section>
 
-          {/* VI. KHÁM CHUYÊN KHOA THẦN KINH */}
-          <Section title="VI. KHÁM CHUYÊN KHOA THẦN KINH" sectionKey="khamChuyenKhoa" expanded={expanded.khamChuyenKhoa} onToggle={toggleSection}>
+          {/* VI. KHÁM CHUYÊN KHOA UNG THƯ NÃO - THẦN KINH */}
+          <Section title="VI. KHÁM CHUYÊN KHOA UNG THƯ NÃO - THẦN KINH" sectionKey="khamChuyenKhoa" expanded={expanded.khamChuyenKhoa} onToggle={toggleSection}>
             <FormField
               value={formData.khamChuyenKhoa}
               onChangeText={(t) => updateField('khamChuyenKhoa', null, t)}

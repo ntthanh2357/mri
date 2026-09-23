@@ -257,14 +257,14 @@ export const anonymizeData = async (req, res) => {
 
 export const createUser = async (req, res) => {
   try {
-    const { email, password, role, name, phone, hospitalName, hospitalAddress } = req.body;
+    const { email, password, role, name, phone, hospitalName, hospitalAddress, departmentId, specialty } = req.body;
     const adminId = req.user.id;
 
     if (!email || !password || !name || !role) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse"];
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
     }
@@ -276,7 +276,7 @@ export const createUser = async (req, res) => {
 
     // Process hospital reference on the fly if role requires it
     let resolvedHospitalId = undefined;
-    if (["hospital_admin", "doctor", "nurse", "technician"].includes(role)) {
+    if (["hospital_admin", "doctor", "nurse", "technician", "receptionist"].includes(role)) {
       if (!hospitalName || !hospitalName.trim()) {
         return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện/cơ sở." });
       }
@@ -328,10 +328,12 @@ export const createUser = async (req, res) => {
       passwordHash,
       role,
       hospitalId: resolvedHospitalId,
+      departmentId: departmentId || (role === "patient" ? undefined : "KUTN"),
       isVerified: true, // Accounts created by system admin are verified by default
       profile: {
         name,
         photoUrl: "",
+        specialty: specialty || "",
       },
     });
 
@@ -486,6 +488,9 @@ export const getAiFeedback = async (req, res) => {
 // @desc    Confirm retrain has been done manually and reset feedback counter
 // @route   POST /api/v1/admin/ai-retrain
 // @access  Private (Admin only)
+// @desc    Trigger AI Active Learning Retrain job asynchronously
+// @route   POST /api/v1/admin/ai-retrain
+// @access  Private (Admin only)
 export const retrainAiModel = async (req, res) => {
   try {
     const feedbackPath = process.env.AI_FEEDBACK_PATH
@@ -493,6 +498,7 @@ export const retrainAiModel = async (req, res) => {
       : path.resolve(__dirname, "../../../MRIteam/hard_examples/feedback_log.csv");
 
     const RETRAIN_THRESHOLD = parseInt(process.env.AI_RETRAIN_THRESHOLD || "50");
+    const isForce = req.query?.force === "true" || req.body?.force === true;
 
     // Đếm số mẫu hiện có
     let currentCount = 0;
@@ -502,7 +508,7 @@ export const retrainAiModel = async (req, res) => {
       currentCount = Math.max(0, lines.length - 1); // trừ header
     }
 
-    if (currentCount < RETRAIN_THRESHOLD) {
+    if (currentCount < RETRAIN_THRESHOLD && !isForce) {
       return res.status(400).json({
         success: false,
         message: `Chưa đủ dữ liệu để retrain. Hiện có ${currentCount}/${RETRAIN_THRESHOLD} mẫu feedback.`,
@@ -511,28 +517,107 @@ export const retrainAiModel = async (req, res) => {
       });
     }
 
-    // Lưu bản backup trước khi reset
-    const backupPath = feedbackPath.replace(".csv", `_backup_${Date.now()}.csv`);
-    if (fs.existsSync(feedbackPath)) {
-      fs.copyFileSync(feedbackPath, backupPath);
+    // Gửi yêu cầu khởi động background training tới AI Server
+    const AI_SERVER = process.env.AI_SERVER_URL
+      ? process.env.AI_SERVER_URL.replace("/predict", "")
+      : "http://localhost:8000";
+
+    const aiRes = await fetch(`${AI_SERVER}/retrain/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      return res.status(500).json({
+        success: false,
+        message: `Lỗi từ AI Server khi kích hoạt retrain: ${errText || aiRes.statusText}`
+      });
     }
 
-    // Reset file feedback (giữ header)
-    const header = "filename,correct_class,x,y,w,h,timestamp\n";
-    fs.writeFileSync(feedbackPath, header, "utf8");
+    const aiData = await aiRes.json();
 
     res.status(200).json({
       success: true,
-      message: `Đã ghi nhận xác nhận retrain. Feedback log đã được reset (backup tại: ${path.basename(backupPath)}).`,
+      message: aiData.message || `Đã kích hoạt tiến trình huấn luyện lại ngầm với ${currentCount} ca phản hồi.`,
       samplesUsed: currentCount,
-      backupFile: path.basename(backupPath),
-      instructions: [
-        "1. SSH vào AI server",
-        `2. Chạy: python train.py --data hard_examples/ --epochs 20`,
-        "3. Sau khi train xong, restart AI service để load model mới",
-      ],
-      status: "confirmed",
+      aiStatus: aiData.status || "running",
+      status: "running",
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get AI Retrain job status & benchmark metrics
+// @route   GET /api/v1/admin/ai-retrain-status
+// @access  Private (Admin only)
+export const getAiRetrainStatus = async (req, res) => {
+  try {
+    const AI_SERVER = process.env.AI_SERVER_URL
+      ? process.env.AI_SERVER_URL.replace("/predict", "")
+      : "http://localhost:8000";
+
+    const aiRes = await fetch(`${AI_SERVER}/retrain/status`);
+    if (!aiRes.ok) {
+      return res.status(200).json({
+        success: false,
+        status: "offline",
+        message: "Không thể kết nối đến máy chủ AI."
+      });
+    }
+
+    const data = await aiRes.json();
+    res.status(200).json({
+      success: true,
+      ...data
+    });
+  } catch (error) {
+    res.status(200).json({
+      success: false,
+      status: "error",
+      message: error.message
+    });
+  }
+};
+
+// @desc    Hot-Reload deploy retrained candidate model
+// @route   POST /api/v1/admin/ai-retrain-deploy
+// @access  Private (Admin only)
+export const deployAiRetrainedModel = async (req, res) => {
+  try {
+    const AI_SERVER = process.env.AI_SERVER_URL
+      ? process.env.AI_SERVER_URL.replace("/predict", "")
+      : "http://localhost:8000";
+
+    const aiRes = await fetch(`${AI_SERVER}/retrain/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const data = await aiRes.json();
+    res.status(aiRes.ok ? 200 : 500).json(data);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Rollback to baseline production model
+// @route   POST /api/v1/admin/ai-retrain-rollback
+// @access  Private (Admin only)
+export const rollbackAiRetrainedModel = async (req, res) => {
+  try {
+    const AI_SERVER = process.env.AI_SERVER_URL
+      ? process.env.AI_SERVER_URL.replace("/predict", "")
+      : "http://localhost:8000";
+
+    const aiRes = await fetch(`${AI_SERVER}/retrain/rollback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const data = await aiRes.json();
+    res.status(aiRes.ok ? 200 : 500).json(data);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

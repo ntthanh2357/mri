@@ -37,7 +37,7 @@ const medicalRecordSchema = new Schema(
     department: {
       type: String,
       required: true,
-      default: "Khoa Nội Thần Kinh",
+      default: "Khoa Ung Thư Não",
     },
     paymentMethod: {
       type: String,

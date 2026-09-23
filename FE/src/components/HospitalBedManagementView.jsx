@@ -25,11 +25,24 @@ const STATUS_MAP = {
 };
 
 const BED_TYPES = {
-  standard: 'Tiêu chuẩn',
-  icu: 'Hồi sức cấp cứu (ICU)',
-  isolation: 'Cách ly',
-  vip: 'Theo yêu cầu (VIP)',
+  standard: 'Nội trú U Não tiêu chuẩn',
+  icu: 'Hồi sức Cấp cứu U Não (Neuro-ICU)',
+  icu_standard: 'Hồi sức Cấp cứu U Não',
+  icu_neuro_icp: 'Neuro-ICU Monitor ICP (Áp lực nội sọ)',
+  icu_neuro_eeg: 'Neuro-ICU Monitor EEG (Chống co giật)',
+  post_op_recovery: 'Hồi tỉnh sau mổ cắt u não (Craniotomy)',
+  isolation: 'Cách ly vô trùng (Hóa trị Temozolomide)',
+  vip: 'Phòng chăm sóc U Não VIP',
 };
+
+// Danh mục 4 Phân khu lâm sàng chuyên biệt thuộc Khoa Ung Thư Não
+const NEURO_ONCOLOGY_DIVISIONS = [
+  { id: 'all', name: 'Tất cả phân khu u não' },
+  { id: 'KUTN-ICU', name: 'Hồi sức Cấp cứu U Não (Neuro-ICU)' },
+  { id: 'KUTN-SURG', name: 'Phẫu thuật & Hồi tỉnh Mổ Mở Sọ' },
+  { id: 'KUTN-CHEMO', name: 'Hóa trị & Xạ trị U Não' },
+  { id: 'KUTN-PAL', name: 'Chăm sóc giảm nhẹ & Phục hồi' },
+];
 
 export default function HospitalBedManagementView({ currentUser }) {
   const [loading, setLoading] = useState(false);
@@ -52,12 +65,12 @@ export default function HospitalBedManagementView({ currentUser }) {
   const [formDiagnosis, setFormDiagnosis] = useState('');
   const [formTargetBedId, setFormTargetBedId] = useState('');
 
-  // Create bed form (Admin only)
-  const [newBedDept, setNewBedDept] = useState('ICU');
+  // Create bed form (Admin only) - Mặc định Đơn nguyên Hồi sức Cấp cứu U Não
+  const [newBedDept, setNewBedDept] = useState('KUTN-ICU');
   const [newBedNumber, setNewBedNumber] = useState('');
   const [newBedRoom, setNewBedRoom] = useState('');
-  const [newBedFloor, setNewBedFloor] = useState('Tầng 3');
-  const [newBedType, setNewBedType] = useState('icu');
+  const [newBedFloor, setNewBedFloor] = useState('Tầng 2');
+  const [newBedType, setNewBedType] = useState('icu_neuro_icp');
 
   // Fetch bed map data
   const fetchBedData = useCallback(async () => {
@@ -239,17 +252,33 @@ export default function HospitalBedManagementView({ currentUser }) {
     }
     setActionLoading(true);
     try {
+      const getDepartmentFullName = (deptId) => {
+        switch (deptId) {
+          case 'KUTN-ICU':
+          case 'ICU':
+            return 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)';
+          case 'KUTN-SURG':
+          case 'KNT':
+            return 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)';
+          case 'KUTN-CHEMO':
+            return 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)';
+          case 'KUTN-PAL':
+            return 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng';
+          default:
+            return 'Khoa Ung Thư Não';
+        }
+      };
+
       const res = await post('/api/v1/hospital-beds', {
         departmentId: newBedDept,
-        departmentName: newBedDept === 'ICU' ? 'Hồi sức cấp cứu Ngoại Thần Kinh (Neuro-ICU)' :
-                        newBedDept === 'KNT' ? 'Khoa Ngoại Thần Kinh' : 'Khoa Nội Thần Kinh',
+        departmentName: getDepartmentFullName(newBedDept),
         bedNumber: newBedNumber.trim(),
-        roomNumber: newBedRoom.trim() || 'Phòng 101',
+        roomNumber: newBedRoom.trim() || 'Phòng U Não 101',
         floor: newBedFloor,
         type: newBedType,
       });
       if (res && res.success) {
-        alert('Tạo giường bệnh mới thành công!');
+        alert('Tạo giường bệnh chuyên khoa Ung Thư Não mới thành công!');
         handleCloseModal();
         setNewBedNumber('');
         fetchBedData();
@@ -271,8 +300,10 @@ export default function HospitalBedManagementView({ currentUser }) {
   const availableBedsList = allBeds.filter(b => b.status === 'available');
 
   const filteredDepartments = (bedMapData.departments || []).filter(dept => {
-    if (selectedDepartment !== 'all' && dept.departmentId !== selectedDepartment) return false;
-    return true;
+    if (selectedDepartment === 'all') return true;
+    if (selectedDepartment === 'KUTN-ICU' && (dept.departmentId === 'KUTN-ICU' || dept.departmentId === 'ICU')) return true;
+    if (selectedDepartment === 'KUTN-SURG' && (dept.departmentId === 'KUTN-SURG' || dept.departmentId === 'KNT')) return true;
+    return dept.departmentId === selectedDepartment;
   });
 
   const isHospitalAdmin = currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin';
@@ -289,10 +320,10 @@ export default function HospitalBedManagementView({ currentUser }) {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
-                Sơ Đồ Buồng Giường Bệnh (Real-Time Bed Map)
+                Sơ Đồ Buồng Giường Khoa Ung Thư Não (Neuro-Oncology Bed Map)
               </h1>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                Quản lý phân bổ giường nội trú, điều chuyển nội bộ và khóa giữ chỗ cấp cứu 4h
+                Quản lý phân bổ buồng giường nội trú u não: Hồi sức tụt não, Hậu phẫu mổ mở sọ vi phẫu, Hóa - Xạ trị và Chăm sóc giảm nhẹ
               </p>
             </div>
           </div>
@@ -305,7 +336,7 @@ export default function HospitalBedManagementView({ currentUser }) {
               className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs md:text-sm font-semibold rounded-xl shadow-sm transition-all"
             >
               <Plus className="w-4 h-4" />
-              Thêm Giường Bệnh
+              Thêm Giường U Não
             </button>
           )}
           <button
@@ -333,10 +364,10 @@ export default function HospitalBedManagementView({ currentUser }) {
             }`} />
             <div>
               <p className="text-sm font-bold">
-                Công suất Giường Hồi sức U não (Neuro-ICU): {icuAlert.occupancyRate}% ({icuAlert.occupiedBeds}/{icuAlert.totalBeds} giường)
+                Công suất Giường Hồi sức U Não (Neuro-ICU): {icuAlert.occupancyRate}% ({icuAlert.occupiedBeds}/{icuAlert.totalBeds} giường)
               </p>
               <p className="text-xs opacity-80 mt-0.5">
-                {icuAlert.alertMessage || `Khoa ICU còn ${icuAlert.availableBeds} giường trống sẵn sàng tiếp nhận cấp cứu.`}
+                {icuAlert.alertMessage || `Khoa Ung Thư Não còn ${icuAlert.availableBeds} giường Neuro-ICU sẵn sàng cấp cứu tăng áp lực nội sọ / tụt não.`}
               </p>
             </div>
           </div>
@@ -353,7 +384,7 @@ export default function HospitalBedManagementView({ currentUser }) {
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
           <p className="text-xs text-slate-500 font-medium">Tổng số giường</p>
           <p className="text-2xl font-bold text-slate-800 mt-1">{bedMapData.summary?.totalBeds || 0}</p>
-          <div className="mt-2 text-[11px] text-slate-400">Toàn viện</div>
+          <div className="mt-2 text-[11px] text-cyan-700 font-medium">Khoa Ung Thư Não</div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-2xs">
@@ -365,7 +396,7 @@ export default function HospitalBedManagementView({ currentUser }) {
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-amber-100 shadow-2xs">
-          <p className="text-xs text-amber-700 font-medium">Đang giữ chỗ (4h)</p>
+          <p className="text-xs text-amber-700 font-medium">Đang giữ chỗ (4h/48h)</p>
           <p className="text-2xl font-bold text-amber-600 mt-1">{bedMapData.summary?.reservedCount || 0}</p>
           <div className="mt-2 text-[11px] text-amber-600 flex items-center gap-1 font-semibold">
             <Clock className="w-3 h-3" /> Đang khóa chỗ
@@ -373,42 +404,34 @@ export default function HospitalBedManagementView({ currentUser }) {
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-2xs">
-          <p className="text-xs text-rose-700 font-medium">Đang điều trị</p>
+          <p className="text-xs text-rose-700 font-medium">Đang điều trị u não</p>
           <p className="text-2xl font-bold text-rose-600 mt-1">{bedMapData.summary?.occupiedCount || 0}</p>
           <div className="mt-2 text-[11px] text-rose-600 flex items-center gap-1 font-semibold">
-            <User className="w-3 h-3" /> Có người nằm
+            <User className="w-3 h-3" /> Bệnh nhân nội trú
           </div>
         </div>
       </div>
 
       {/* ── FILTERS ────────────────────────────────────────────────────── */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">Khoa:</span>
-          <button
-            onClick={() => setSelectedDepartment('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedDepartment === 'all' ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Tất cả khoa
-          </button>
-          <button
-            onClick={() => setSelectedDepartment('ICU')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedDepartment === 'ICU' ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Neuro-ICU
-          </button>
-          <button
-            onClick={() => setSelectedDepartment('KNT')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedDepartment === 'KNT' ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Ngoại Thần Kinh
-          </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">Phân khu:</span>
+          {NEURO_ONCOLOGY_DIVISIONS.map((div) => {
+            const isActive = selectedDepartment === div.id || 
+              (div.id === 'KUTN-ICU' && selectedDepartment === 'ICU') ||
+              (div.id === 'KUTN-SURG' && selectedDepartment === 'KNT');
+            return (
+              <button
+                key={div.id}
+                onClick={() => setSelectedDepartment(div.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  isActive ? 'bg-cyan-700 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {div.name}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2">
@@ -515,12 +538,42 @@ export default function HospitalBedManagementView({ currentUser }) {
                                 </div>
 
                                 <p className="text-[11px] text-slate-500">
-                                  Loại: <span className="font-semibold text-slate-700">{BED_TYPES[bed.type] || bed.type}</span>
+                                  Phân loại: <span className="font-semibold text-slate-700">{BED_TYPES[bed.type] || bed.type}</span>
                                 </p>
+
+                                {/* Nhãn trang thiết bị chuyên khoa Ung Thư Não */}
+                                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                  {(bed.hasIcpMonitor || bed.type === 'icu_neuro_icp') && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                                      🧠 ICP Monitor
+                                    </span>
+                                  )}
+                                  {(bed.hasEegMonitor || bed.type === 'icu_neuro_eeg') && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                                      ⚡ EEG Monitor
+                                    </span>
+                                  )}
+                                  {(bed.isIsolationRoom || bed.type === 'isolation') && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                                      🛡️ Buồng vô trùng
+                                    </span>
+                                  )}
+                                  {bed.type === 'post_op_recovery' && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 font-semibold">
+                                      🩺 Hậu phẫu mở sọ
+                                    </span>
+                                  )}
+                                </div>
+
+                                {bed.notes && (
+                                  <p className="text-[10px] text-slate-500 mt-1.5 line-clamp-2 italic bg-slate-50 p-1.5 rounded border border-slate-100">
+                                    {bed.notes}
+                                  </p>
+                                )}
 
                                 {patientName && (
                                   <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                    <p className="text-[11px] text-slate-400 font-medium">Bệnh nhân:</p>
+                                    <p className="text-[11px] text-slate-400 font-medium">Bệnh nhân u não:</p>
                                     <p className="text-xs font-bold text-slate-800 truncate">{patientName}</p>
                                     {bed.reservedUntil && bed.status === 'reserved' && (
                                       <p className="text-[10px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
@@ -654,17 +707,36 @@ export default function HospitalBedManagementView({ currentUser }) {
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
                   >
                     <option value={2}>2 giờ</option>
-                    <option value={4}>4 giờ (Mặc định chuẩn BV)</option>
-                    <option value={8}>8 giờ (Ca phẫu thuật dài)</option>
+                    <option value={4}>4 giờ (Cấp cứu u não / Tăng áp lực nội sọ cấp)</option>
+                    <option value={8}>8 giờ (Hội chẩn / Chờ kết quả MRI)</option>
                     <option value={12}>12 giờ</option>
+                    <option value={48}>48 giờ (Mổ mở sọ vi phẫu cắt u não theo kế hoạch - Craniotomy)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Lý do giữ chỗ:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Lý do giữ chỗ chuyên môn:</label>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {[
+                      'Mổ mở sọ vi phẫu cắt u não (Craniotomy)',
+                      'Cấp cứu tăng áp lực nội sọ / Tụt kẹt não',
+                      'Hồi sức tích cực sau phẫu thuật u não (Neuro-ICU)',
+                      'Vào viện truyền hóa chất Temozolomide (Phác đồ Stupp)',
+                      'Hội chẩn Tumor Board u não đa chuyên khoa'
+                    ].map((reasonText) => (
+                      <button
+                        key={reasonText}
+                        type="button"
+                        onClick={() => setFormReason(reasonText)}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-cyan-50 hover:text-cyan-700 border border-slate-200 transition-all"
+                      >
+                        + {reasonText}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     rows={2}
-                    placeholder="VD: Cấp cứu chấn thương sọ não, đang làm xét nghiệm tiền phẫu..."
+                    placeholder="Nhập hoặc chọn nhanh lý do chuyên môn u não ở trên..."
                     value={formReason}
                     onChange={(e) => setFormReason(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
@@ -706,10 +778,29 @@ export default function HospitalBedManagementView({ currentUser }) {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Chẩn đoán nhập khoa:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Chẩn đoán u não nhập khoa:</label>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {[
+                      'U nguyên bào thần kinh đệm (Glioblastoma - GBM)',
+                      'U màng não thùy trán / thái dương (Meningioma)',
+                      'U tuyến yên chèn ép giao thoa thị (Pituitary Adenoma)',
+                      'U sao bào lông độ I-II (Astrocytoma)',
+                      'U thần kinh thính giác (Vestibular Schwannoma)',
+                      'U não thứ phát di căn (Metastatic Brain Tumor)'
+                    ].map((diagText) => (
+                      <button
+                        key={diagText}
+                        type="button"
+                        onClick={() => setFormDiagnosis(diagText)}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 transition-all"
+                      >
+                        + {diagText}
+                      </button>
+                    ))}
+                  </div>
                   <input
                     type="text"
-                    placeholder="VD: U thần kinh đệm độ III (Glioblastoma)..."
+                    placeholder="Nhập hoặc chọn nhanh chẩn đoán u não..."
                     value={formDiagnosis}
                     onChange={(e) => setFormDiagnosis(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
@@ -782,10 +873,27 @@ export default function HospitalBedManagementView({ currentUser }) {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Lý do điều chuyển nội bộ:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Lý do điều chuyển buồng nội khoa U Não:</label>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {[
+                      'Hậu phẫu u não ổn định: Chuyển từ Hồi tỉnh về Buồng nội trú',
+                      'Tăng áp lực nội sọ / Co giật: Chuyển khẩn cấp vào Neuro-ICU (ICP/EEG)',
+                      'Chu kỳ hóa trị: Chuyển vào buồng cách ly vô trùng Temozolomide',
+                      'Chuyển sang buồng Chăm sóc giảm nhẹ & Phục hồi chức năng'
+                    ].map((transReason) => (
+                      <button
+                        key={transReason}
+                        type="button"
+                        onClick={() => setFormReason(transReason)}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-cyan-50 hover:text-cyan-700 border border-slate-200 transition-all"
+                      >
+                        + {transReason}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     rows={2}
-                    placeholder="VD: Chuyển từ ICU sang phòng bệnh thường sau mổ 48h..."
+                    placeholder="VD: Chuyển từ ICU sang phòng nội trú sau mổ u não 48h..."
                     value={formReason}
                     onChange={(e) => setFormReason(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
@@ -811,15 +919,16 @@ export default function HospitalBedManagementView({ currentUser }) {
             {activeModal === 'create' && (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Khoa phòng:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Đơn nguyên thuộc Khoa Ung Thư Não:</label>
                   <select
                     value={newBedDept}
                     onChange={(e) => setNewBedDept(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
                   >
-                    <option value="ICU">Khoa Hồi sức cấp cứu Ngoại Thần Kinh (Neuro-ICU)</option>
-                    <option value="KNT">Khoa Ngoại Thần Kinh (Phẫu thuật não)</option>
-                    <option value="KNoiTK">Khoa Nội Thần Kinh</option>
+                    <option value="KUTN-ICU">Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)</option>
+                    <option value="KUTN-SURG">Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ</option>
+                    <option value="KUTN-CHEMO">Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp)</option>
+                    <option value="KUTN-PAL">Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng</option>
                   </select>
                 </div>
 
@@ -828,7 +937,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     <label className="text-xs font-bold text-slate-700 mb-1 block">Số giường:</label>
                     <input
                       type="text"
-                      placeholder="VD: G-305"
+                      placeholder="VD: ICU-04, SURG-205..."
                       value={newBedNumber}
                       onChange={(e) => setNewBedNumber(e.target.value)}
                       className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
@@ -838,7 +947,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     <label className="text-xs font-bold text-slate-700 mb-1 block">Phòng:</label>
                     <input
                       type="text"
-                      placeholder="VD: Phòng 301"
+                      placeholder="VD: Phòng Hồi tỉnh 201"
                       value={newBedRoom}
                       onChange={(e) => setNewBedRoom(e.target.value)}
                       className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
@@ -851,23 +960,25 @@ export default function HospitalBedManagementView({ currentUser }) {
                     <label className="text-xs font-bold text-slate-700 mb-1 block">Tầng:</label>
                     <input
                       type="text"
-                      placeholder="VD: Tầng 3"
+                      placeholder="VD: Tầng 2"
                       value={newBedFloor}
                       onChange={(e) => setNewBedFloor(e.target.value)}
                       className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 mb-1 block">Phân loại:</label>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Phân loại giường u não:</label>
                     <select
                       value={newBedType}
                       onChange={(e) => setNewBedType(e.target.value)}
                       className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
                     >
-                      <option value="icu">Hồi sức ICU</option>
-                      <option value="standard">Tiêu chuẩn</option>
-                      <option value="vip">Theo yêu cầu (VIP)</option>
-                      <option value="isolation">Cách ly</option>
+                      <option value="icu_neuro_icp">Neuro-ICU (Monitor ICP đo áp lực nội sọ)</option>
+                      <option value="icu_neuro_eeg">Neuro-ICU (Monitor EEG theo dõi co giật u não)</option>
+                      <option value="post_op_recovery">Hồi tỉnh sau mổ mở sọ (Post-Op Craniotomy)</option>
+                      <option value="isolation">Buồng cách ly vô trùng (Hóa trị Temozolomide)</option>
+                      <option value="standard">Nội trú U Não tiêu chuẩn</option>
+                      <option value="vip">Phòng chăm sóc U Não VIP</option>
                     </select>
                   </div>
                 </div>

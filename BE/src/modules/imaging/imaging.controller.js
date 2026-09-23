@@ -318,10 +318,18 @@ export const uploadImagingImage = async (req, res) => {
         const scansFolderId = hospital?.subFolders?.originalScansId;
         if (!scansFolderId) {
           console.warn(`⚠️ [Drive] Bệnh viện "${hospital?.name}" chưa cấu hình thư mục 01_Original_Scans.`);
-        } else if (streamOrBuffer) {
-          const driveResult = await uploadToDrive(streamOrBuffer, originalName, mimeType, scansFolderId);
-          driveViewLink = driveResult.webViewLink;
-          console.log(`✅ [Drive] Tệp ${originalName} đã lưu vào 01_Original_Scans: ${driveResult.webViewLink}`);
+        } else {
+          // Sao lưu ngầm lên Google Drive (Asynchronous Background Job) — Không bắt bác sĩ/client phải chờ upload 500MB
+          const bgStream = (req.file && req.file.path) ? fs.createReadStream(req.file.path) : streamOrBuffer;
+          if (bgStream) {
+            uploadToDrive(bgStream, originalName, mimeType, scansFolderId)
+              .then((driveResult) => {
+                console.log(`✅ [Drive Background] Tệp ${originalName} đã sao lưu ngầm thành công vào 01_Original_Scans: ${driveResult.webViewLink}`);
+              })
+              .catch((driveErr) => {
+                console.warn("⚠️ [Drive Background] Lỗi sao lưu ngầm lên Google Drive:", driveErr.message);
+              });
+          }
         }
       }
     } catch (driveErr) {

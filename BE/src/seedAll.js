@@ -13,11 +13,14 @@ import ConsentForm from "./models/consentForm.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { Visit } from "./models/visit.model.js";
 import { Invoice } from "./models/invoice.model.js";
+import { HospitalBed } from "./models/hospitalBed.model.js";
 import { connectDB } from "./config/db.js";
+import { tenantStorage } from "./middlewares/tenant.middleware.js";
 
 dotenv.config();
 
 const seedAllData = async () => {
+  return tenantStorage.run({ bypassTenancy: true, isSuperAdmin: true }, async () => {
   try {
     console.log("Connecting to database...");
     await connectDB();
@@ -36,6 +39,7 @@ const seedAllData = async () => {
       ImagingResult.deleteMany({}),
       Visit.deleteMany({}),
       Invoice.deleteMany({}),
+      HospitalBed.deleteMany({}),
     ]);
     console.log("🧹 All old data cleared successfully.");
 
@@ -79,28 +83,31 @@ const seedAllData = async () => {
         phone: "+84999999991",
         passwordHash,
         role: "admin",
+        departmentId: "KUTN",
         isVerified: true,
-        profile: { name: "Huy Hoàng Admin 1", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KS. Huy Hoàng (Quản trị Hệ thống HIS/PACS)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "it_admin" },
       },
       {
         email: "admin2@neuroscan.com",
         phone: "+84999999994",
         passwordHash,
         role: "admin",
+        departmentId: "KUTN",
         isVerified: true,
-        profile: { name: "Đại Nghĩa Admin 2", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KS. Đại Nghĩa (Bảo mật Y tế & Hạ tầng Mạng)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "security_admin" },
       },
       {
         email: "admin3@neuroscan.com",
         phone: "+84999999995",
         passwordHash,
         role: "admin",
+        departmentId: "KUTN",
         isVerified: true,
-        profile: { name: "Minh Trí Admin 3", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KS. Minh Trí (Quản trị AI & Dữ liệu Bệnh án EMR)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "ai_engineer" },
       },
 
       // ==========================================
-      // ROLE: HOSPITAL_ADMIN (Quản lý bệnh viện)
+      // ROLE: HOSPITAL_ADMIN (Lãnh đạo Bệnh viện & Khoa)
       // ==========================================
       {
         email: "admin.bvbm@neuroscan.com",
@@ -108,8 +115,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "hospital_admin",
         hospitalId: hospital._id,
+        departmentId: "KUTN",
         isVerified: true,
-        profile: { name: "Quản lý Bạch Mai 1", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "PGS.TS Vũ Đình Hoàng (Giám đốc Điều hành Khối Thần kinh & Ung Bướu)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "hospital_director" },
       },
       {
         email: "hospital_admin2@neuroscan.com",
@@ -117,8 +125,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "hospital_admin",
         hospitalId: hospital._id,
+        departmentId: "KUTN",
         isVerified: true,
-        profile: { name: "Quản lý Bạch Mai 2", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "ThS.BS Nguyễn Bích Thủy (Trưởng phòng Kế hoạch Tổng hợp & QLCL)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "medical_affairs" },
       },
       {
         email: "hospital_admin3@neuroscan.com",
@@ -126,12 +135,13 @@ const seedAllData = async () => {
         passwordHash,
         role: "hospital_admin",
         hospitalId: hospital._id,
+        departmentId: "KD",
         isVerified: true,
-        profile: { name: "Quản lý Bạch Mai 3", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "DS.CKII Đỗ Trọng Quân (Trưởng khoa Dược & Giám sát Dược Lâm sàng)", photoUrl: "", medicalId: "", licenseUrl: "", address: "", specialty: "clinical_pharmacist" },
       },
 
       // ==========================================
-      // ROLE: DOCTOR (Bác sĩ)
+      // ROLE: DOCTOR (Bác sĩ Ung Thư Não & Thần Kinh)
       // ==========================================
       {
         email: "doctor@neuroscan.com",
@@ -139,8 +149,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "doctor",
         hospitalId: hospital._id,
+        departmentId: "KUTN-SURG",
         isVerified: true,
-        profile: { name: "Bác sĩ Gia Huy 1", photoUrl: "", medicalId: "", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_gia_huy.pdf", address: "" },
+        profile: { name: "TS.BS.CKII Nguyễn Gia Huy (Trưởng khoa Ung Thư Não - Phẫu thuật Thần kinh)", photoUrl: "", medicalId: "BS-001", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_gia_huy.pdf", address: "Hà Nội", specialty: "neurosurgeon" },
       },
       {
         email: "doctor2@neuroscan.com",
@@ -148,8 +159,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "doctor",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CHEMO",
         isVerified: true,
-        profile: { name: "Bác sĩ Khánh An 2", photoUrl: "", medicalId: "", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_khanh_an.pdf", address: "" },
+        profile: { name: "ThS.BS Trần Khánh An (Phó khoa - Ung Thư Thần Kinh Lâm Sàng & Hóa Xạ Trị)", photoUrl: "", medicalId: "BS-002", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_khanh_an.pdf", address: "Hà Nội", specialty: "neuro_oncologist" },
       },
       {
         email: "doctor3@neuroscan.com",
@@ -157,12 +169,13 @@ const seedAllData = async () => {
         passwordHash,
         role: "doctor",
         hospitalId: hospital._id,
+        departmentId: "KCDHA",
         isVerified: true,
-        profile: { name: "Bác sĩ Thanh Hải 3", photoUrl: "", medicalId: "", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_thanh_hai.pdf", address: "" },
+        profile: { name: "BS.CKI Phạm Thanh Hải (Bác sĩ Chẩn đoán Hình ảnh Thần kinh & MRI 3.0T)", photoUrl: "", medicalId: "BS-003", licenseUrl: "https://storage.googleapis.com/neuroscan-cchn/cchn_thanh_hai.pdf", address: "Hà Nội", specialty: "neuroradiologist" },
       },
 
       // ==========================================
-      // ROLE: NURSE (Điều dưỡng / Y tá)
+      // ROLE: NURSE (Điều dưỡng Hồi sức & Chăm sóc U Não)
       // ==========================================
       {
         email: "nurse@neuroscan.com",
@@ -170,8 +183,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "nurse",
         hospitalId: hospital._id,
+        departmentId: "KUTN-ICU",
         isVerified: true,
-        profile: { name: "Điều dưỡng Lê Thị Hoa 1", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "ĐD.CKI Lê Thị Hoa (Điều dưỡng Trưởng Khoa Ung Thư Não)", photoUrl: "", medicalId: "DD-001", licenseUrl: "", address: "Hà Nội", specialty: "neuro_icu_nurse" },
       },
       {
         email: "nurse2@neuroscan.com",
@@ -179,8 +193,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "nurse",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CHEMO",
         isVerified: true,
-        profile: { name: "Điều dưỡng Nguyễn Thị Bình 2", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "CNĐD Nguyễn Thị Bình (Điều dưỡng Chăm sóc Hóa trị U Não)", photoUrl: "", medicalId: "DD-002", licenseUrl: "", address: "Hà Nội", specialty: "oncology_nurse" },
       },
       {
         email: "nurse3@neuroscan.com",
@@ -188,12 +203,13 @@ const seedAllData = async () => {
         passwordHash,
         role: "nurse",
         hospitalId: hospital._id,
+        departmentId: "KUTN-SURG",
         isVerified: true,
-        profile: { name: "Điều dưỡng Phạm Văn Cường 3", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "CNĐD Phạm Văn Cường (Điều dưỡng Hồi tỉnh Sau Phẫu thuật Mở Sọ)", photoUrl: "", medicalId: "DD-003", licenseUrl: "", address: "Hà Nội", specialty: "surgical_nurse" },
       },
 
       // ==========================================
-      // ROLE: TECHNICIAN (Kỹ thuật viên)
+      // ROLE: TECHNICIAN (Kỹ thuật viên CĐHA & MRI)
       // ==========================================
       {
         email: "technician@neuroscan.com",
@@ -201,8 +217,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "technician",
         hospitalId: hospital._id,
+        departmentId: "KCDHA",
         isVerified: true,
-        profile: { name: "KTV Nguyễn Văn Nam 1", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KTV.CKI Nguyễn Văn Nam (Kỹ thuật viên Trưởng Máy MRI 3.0T Sọ Não)", photoUrl: "", medicalId: "KTV-001", licenseUrl: "", address: "Hà Nội", specialty: "mri_technician" },
       },
       {
         email: "technician2@neuroscan.com",
@@ -210,8 +227,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "technician",
         hospitalId: hospital._id,
+        departmentId: "KCDHA",
         isVerified: true,
-        profile: { name: "KTV Trần Hữu Đạt 2", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KTV Trần Hữu Đạt (KTV Vận hành MRI & Xử lý Dựng hình 3D Khối U)", photoUrl: "", medicalId: "KTV-002", licenseUrl: "", address: "Hà Nội", specialty: "mri_technician" },
       },
       {
         email: "technician3@neuroscan.com",
@@ -219,12 +237,13 @@ const seedAllData = async () => {
         passwordHash,
         role: "technician",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CHEMO",
         isVerified: true,
-        profile: { name: "KTV Lê Hoàng Long 3", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "KTV Lê Hoàng Long (KTV Mô phỏng Xạ trị Thần kinh Gia tốc)", photoUrl: "", medicalId: "KTV-003", licenseUrl: "", address: "Hà Nội", specialty: "radiation_technician" },
       },
 
       // ==========================================
-      // ROLE: RECEPTIONIST (Lễ tân)
+      // ROLE: RECEPTIONIST (Nhân viên Tiếp đón & Thu ngân)
       // ==========================================
       {
         email: "receptionist@neuroscan.com",
@@ -232,8 +251,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "receptionist",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CLI",
         isVerified: true,
-        profile: { name: "Lễ tân Trần Mai 1", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "Trần Mai (Điều phối viên Tiếp đón & Đăng ký Khám U Não)", photoUrl: "", medicalId: "NV-001", licenseUrl: "", address: "Hà Nội", specialty: "receptionist" },
       },
       {
         email: "receptionist2@neuroscan.com",
@@ -241,8 +261,9 @@ const seedAllData = async () => {
         passwordHash,
         role: "receptionist",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CLI",
         isVerified: true,
-        profile: { name: "Lễ tân Ngô Thị Tuyết 2", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "Ngô Thị Tuyết (Chuyên viên Phân luồng Cấp cứu & BHYT U Não)", photoUrl: "", medicalId: "NV-002", licenseUrl: "", address: "Hà Nội", specialty: "receptionist" },
       },
       {
         email: "receptionist3@neuroscan.com",
@@ -250,12 +271,13 @@ const seedAllData = async () => {
         passwordHash,
         role: "receptionist",
         hospitalId: hospital._id,
+        departmentId: "KUTN-CLI",
         isVerified: true,
-        profile: { name: "Lễ tân Phan Anh Tuấn 3", photoUrl: "", medicalId: "", licenseUrl: "", address: "" },
+        profile: { name: "Phan Anh Tuấn (Điều phối viên Hội chẩn & Chuyển tuyến U Não)", photoUrl: "", medicalId: "NV-003", licenseUrl: "", address: "Hà Nội", specialty: "receptionist" },
       },
 
       // ==========================================
-      // ROLE: PATIENT (Bệnh nhân)
+      // ROLE: PATIENT (Bệnh nhân U Não)
       // ==========================================
       {
         email: "patient@neuroscan.com",
@@ -265,7 +287,7 @@ const seedAllData = async () => {
         hospitalId: hospital._id,
         isVerified: true,
         profile: {
-          name: "Bệnh nhân Tuấn Thành 1",
+          name: "Bệnh nhân Tuấn Thành (U Màng Não Meningioma)",
           photoUrl: "",
           bhytNumber: "GD4797932200123",
           medicalId: "PT-001",
@@ -280,7 +302,7 @@ const seedAllData = async () => {
         hospitalId: hospital._id,
         isVerified: true,
         profile: {
-          name: "Bệnh nhân Minh Hằng 2",
+          name: "Bệnh nhân Minh Hằng (Glioblastoma Đa Hình Phù Não)",
           photoUrl: "",
           bhytNumber: "GD4797932200456",
           medicalId: "PT-002",
@@ -295,11 +317,11 @@ const seedAllData = async () => {
         hospitalId: hospital._id,
         isVerified: true,
         profile: {
-          name: "Bệnh nhân Quốc Bảo 3",
+          name: "Bệnh nhân Quốc Bảo (U Tuyến Yên Đè Giao Thoa Thị Giác)",
           photoUrl: "",
           bhytNumber: "GD4797932200789",
           medicalId: "PT-003",
-          address: "Nam Định",
+          address: "Bắc Ninh",
         },
       },
     ];
@@ -369,7 +391,7 @@ const seedAllData = async () => {
         gender: "Nam",
         age: 45,
         admissionType: "Nội trú",
-        department: "Khoa Nội Thần Kinh",
+        department: "Khoa Ung Thư Não - Phân khu Phẫu thuật & Hồi tỉnh",
         paymentMethod: "Viện phí",
         doctorInCharge: doc1.profile.name,
         diagnosis: "U não thùy thái dương trái (Meningioma) - theo dõi",
@@ -384,7 +406,7 @@ const seedAllData = async () => {
         gender: "Nữ",
         age: 52,
         admissionType: "Nội trú",
-        department: "Khoa Phẫu Thuật Thần Kinh",
+        department: "Khoa Ung Thư Não - Phân khu Hồi Sức Cấp Cứu (Neuro-ICU)",
         paymentMethod: "BHYT",
         doctorInCharge: doc2.profile.name,
         diagnosis: "U màng não (Meningioma) thùy trán - chỉ định phẫu thuật",
@@ -399,7 +421,7 @@ const seedAllData = async () => {
         gender: "Nam",
         age: 38,
         admissionType: "Ngoại trú",
-        department: "Khoa Nội Thần Kinh",
+        department: "Khoa Ung Thư Não - Phân khu Chăm Sóc Giảm Nhẹ",
         paymentMethod: "Dịch vụ",
         doctorInCharge: doc3.profile.name,
         diagnosis: "Động kinh cục bộ thứ phát sau u não - đã phẫu thuật ổn định",
@@ -487,7 +509,7 @@ const seedAllData = async () => {
         address: pat1.profile.address,
         orderDate: new Date(),
         orderingDoctor: doc1.profile.name,
-        orderingDepartment: "Khoa Nội Thần Kinh",
+        orderingDepartment: "Khoa Ung Thư Não",
         medicalRecordNumber: "SBA-2026-99123",
         diagnosis: "U não thùy thái dương trái",
         procedure: "Chụp MRI sọ não 3D",
@@ -684,7 +706,7 @@ const seedAllData = async () => {
         hospitalId: hospital._id,
         patientId: pat3._id,
         items: [
-          { description: "Chụp cộng hưởng từ MRI cột sống", amount: 1500000, type: "mri" }
+          { description: "Chụp cộng hưởng từ MRI sọ não cản từ đa chuỗi xung", amount: 1500000, type: "mri" }
         ],
         totalAmount: 1500000,
         status: "hoàn trả",
@@ -705,12 +727,214 @@ const seedAllData = async () => {
     ]);
     console.log("✅ Seeded Invoices.");
 
+    // 13. Create Hospital Beds for Khoa Ung Thư Não (Neuro-Oncology Department)
+    console.log("Seeding Hospital Beds for Khoa Ung Thư Não...");
+    await HospitalBed.insertMany([
+      // ── 1. ĐƠN NGUYÊN HỒI SỨC CẤP CỨU U NÃO (NEURO-ICU) ─────────────
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-01',
+        roomNumber: 'ICU-Neuro-1',
+        floor: 'Tầng 2',
+        type: 'icu_neuro_icp',
+        status: 'available',
+        hasIcpMonitor: true,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức tích cực u não trang bị Monitor đo áp lực nội sọ liên tục (ICP Monitor) - Cấp cứu tụt não',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-02',
+        roomNumber: 'ICU-Neuro-1',
+        floor: 'Tầng 2',
+        type: 'icu_neuro_eeg',
+        status: 'available',
+        hasIcpMonitor: true,
+        hasEegMonitor: true,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức u não có Monitor ICP và máy đo điện não liên tục (Continuous EEG) phát hiện co giật u não',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-03',
+        roomNumber: 'ICU-Neuro-2',
+        floor: 'Tầng 2',
+        type: 'icu_standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức tích cực u não cấp cứu theo dõi tri giác GCS',
+      },
+
+      // ── 2. ĐƠN NGUYÊN PHẪU THUẬT U NÃO & HỒI TỈNH (SURGICAL & POST-OP) ──
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-201',
+        roomNumber: 'Phòng 201 - Hậu phẫu',
+        floor: 'Tầng 2',
+        type: 'post_op_recovery',
+        status: 'occupied',
+        currentPatientId: pat1._id,
+        admittedAt: new Date(now.getTime() - 12 * 3600000),
+        occupiedAt: new Date(now.getTime() - 12 * 3600000),
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Chẩn đoán: Hậu phẫu ngày thứ 2 mổ mở sọ cắt u màng não (Meningioma) thùy thái dương trái',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-202',
+        roomNumber: 'Phòng 201 - Hậu phẫu',
+        floor: 'Tầng 2',
+        type: 'post_op_recovery',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường theo dõi hậu phẫu mở sọ, tri giác và dẫn lưu não thất ngoài (EVD)',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-203',
+        roomNumber: 'Phòng 202',
+        floor: 'Tầng 2',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường nội trú tiền phẫu chuẩn bị mổ u não (Chụp định vị thần kinh Neuronavigation)',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-VIP',
+        roomNumber: 'Phòng VIP-21',
+        floor: 'Tầng 2',
+        type: 'vip',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Phòng chăm sóc u não hậu phẫu tiện nghi cao theo yêu cầu',
+      },
+
+      // ── 3. ĐƠN NGUYÊN HÓA TRỊ & XẠ TRỊ U NÃO (CHEMOTHERAPY & IMMUNO) ──
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-301',
+        roomNumber: 'Phòng 301 - Cách ly',
+        floor: 'Tầng 3',
+        type: 'isolation',
+        status: 'reserved',
+        reservedForPatientId: pat2._id,
+        reservedUntil: new Date(now.getTime() + 4 * 3600000),
+        reserveReason: 'scheduled_craniotomy',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: true,
+        notes: 'Giữ chỗ trước đợt hóa chất Temozolomide phác đồ Stupp (Bảo vệ bệnh nhân suy giảm bạch cầu)',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-302',
+        roomNumber: 'Phòng 302',
+        floor: 'Tầng 3',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường nội trú điều trị hóa chất đường uống Temozolomide kết hợp xạ trị gia tốc phân liều',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-303',
+        roomNumber: 'Phòng 302',
+        floor: 'Tầng 3',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường theo dõi đáp ứng điều trị đích và tác dụng phụ thần kinh sau truyền hóa chất',
+      },
+
+      // ── 4. ĐƠN NGUYÊN CHĂM SÓC GIẢM NHẸ & PHỤC HỒI CHỨC NĂNG U NÃO ───
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-401',
+        roomNumber: 'Phòng 401',
+        floor: 'Tầng 4',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Kiểm soát đau trung ương, chống phù não bằng Corticosteroid và chăm sóc giảm nhẹ u não tiến triển',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-402',
+        roomNumber: 'Phòng 401',
+        floor: 'Tầng 4',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường phục hồi chức năng vận động, thăng bằng và ngôn ngữ sau phẫu thuật cắt bỏ u não',
+      },
+      {
+        hospitalId: hospital._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-VIP',
+        roomNumber: 'Phòng VIP-41',
+        floor: 'Tầng 4',
+        type: 'vip',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Phòng chăm sóc giảm nhẹ u não gia đình theo yêu cầu (Phòng tiện nghi cao)',
+      }
+    ]);
+    console.log("✅ Seeded Hospital Beds for Khoa Ung Thư Não.");
+
     console.log("\n🎉 ALL SEED DATA GENERATED SUCCESSFULLY! (Exactly 3 accounts per role, bound to Bệnh viện Bạch Mai)");
     process.exit(0);
   } catch (error) {
     console.error("❌ Database seeding failed:", error);
     process.exit(1);
   }
+  });
 };
 
 seedAllData();

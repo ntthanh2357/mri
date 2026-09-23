@@ -342,7 +342,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   );
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="EMRDashboard">
+    <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         {!isDesktop && (
@@ -418,7 +418,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 )}
                 <SidebarItem
                   icon={Building2}
-                  label="Sơ đồ Giường bệnh"
+                  label="Giường Khoa U Não"
                   active={activeTab === 'beds'}
                   onPress={() => setActiveTab('beds')}
                 />
@@ -510,7 +510,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   />
                 )}
                 <MobileTab
-                  label="Giường bệnh"
+                  label="Giường U Não"
                   active={activeTab === 'beds'}
                   onPress={() => setActiveTab('beds')}
                 />
@@ -1189,7 +1189,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
                 PHIẾU CHỈ ĐỊNH DỊCH VỤ
               </Text>
-              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
 
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                 {['Thường', 'Cấp Cứu'].map(p => (
@@ -1255,7 +1255,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               {/* Common service shortcuts */}
               <Text style={{ fontSize: 12, color: '#64748B', marginTop: 12, marginBottom: 6 }}>Chọn nhanh:</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {['Khám chuyên khoa thần kinh', 'Chụp MRI sọ não', 'Phân tích AI chẩn đoán'].map(s => (
+                {['Khám chuyên khoa Ung Thư Não', 'Chụp MRI sọ não cản từ', 'Phân tích AI u não (Glioma/Meningioma)'].map(s => (
                   <TouchableOpacity
                     key={s}
                     onPress={() => { setOrderServices(prev => prev.includes(s) ? prev : [...prev, s]); }}
@@ -1276,7 +1276,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
                 PHIẾU THU VIỆN PHÍ
               </Text>
-              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 12 }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
 
               {/* Patient info summary */}
               <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -1904,7 +1904,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
     age: '',
     bhytNumber: '',
     admissionType: 'Ngoại trú',
-    department: 'Khoa Nội Thần Kinh',
+    department: 'Khoa Ung Thư Não',
     paymentMethod: 'BHYT',
     doctorInCharge: '',
     diagnosis: '',
@@ -1927,15 +1927,15 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       patientId: 'PT-' + Math.floor(1000 + Math.random() * 9000),
       patientName: 'Lê Trần Gia Huy',
       gender: 'Nam',
-      age: '29',
-      admissionType: 'Ngoại trú',
-      department: 'Khoa Ngoại Thần Kinh',
-      paymentMethod: 'Viện phí',
-      doctorInCharge: 'Bs. Văn Trung Nghĩa',
-      diagnosis: 'Chấn động não nhẹ vùng trán sau tai nạn sinh hoạt',
-      treatmentPlan: 'Nghỉ ngơi theo dõi sinh hiệu tại nhà, chụp MRI lại sau 24h nếu triệu chứng đau đầu tăng lên.',
+      age: '48',
+      admissionType: 'Nội trú',
+      department: 'Khoa Ung Thư Não',
+      paymentMethod: 'BHYT',
+      doctorInCharge: 'BS. CKII Nguyễn Thế Thành',
+      diagnosis: 'U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải',
+      treatmentPlan: 'Chỉ định phẫu thuật mở sọ cắt u vi phẫu dưới định vị Neuronavigation, sau mổ chuyển Neuro-ICU theo dõi ICP và lập phác đồ Stupp (Hóa xạ trị kết hợp Temozolomide).',
     });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin từ Phiếu khám bệnh giấy mẫu!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin bệnh án mẫu Khoa Ung Thư Não!');
   };
 
   return (
@@ -1979,7 +1979,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         {/* BHYT removed for privacy regulations */}
         <FormField
           label="Khoa khám"
-          placeholder="Khoa Nội Thần Kinh"
+          placeholder="Khoa Ung Thư Não"
           value={formData.department}
           onChangeText={(text) => setFormData({ ...formData, department: text })}
         />
@@ -2003,7 +2003,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         />
         <FormField
           label="Chẩn đoán"
-          placeholder="Chẩn đoán ban đầu..."
+          placeholder="VD: U nguyên bào thần kinh đệm (Glioblastoma)..."
           multiline
           value={formData.diagnosis}
           onChangeText={(text) => setFormData({ ...formData, diagnosis: text })}
@@ -2058,17 +2058,17 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
 
   const handleOcrFill = () => {
     setFormData({
-      careLevel: 2,
+      careLevel: 1,
       pulse: '78',
       bloodPressure: '125/80',
       temperature: '36.8',
-      respiratoryRate: '19',
-      spo2: '97',
+      respiratoryRate: '18',
+      spo2: '98',
       nurse: 'Đd. Lê Thị Hoa',
-      progressNotes: 'Bệnh nhân tỉnh táo, tiếp xúc tốt, đau đầu nhẹ vùng thái dương, ăn uống khá.',
-      careActions: 'Cho bệnh nhân uống nước ấm, hướng dẫn nằm nghỉ ngơi tại giường, theo dõi mạch & HA mỗi 4h.',
+      progressNotes: 'Bệnh nhân tỉnh táo (GCS 14đ), hậu phẫu mở sọ ngày thứ 2, đồng tử 2 bên đều 2mm, vết mổ khô, dẫn lưu EVD ra 40ml dịch não tủy hồng nhạt.',
+      careActions: 'Đầu cao 30 độ giảm phù não, sát trùng chân dẫn lưu EVD, tiêm Dexamethasone 4mg theo y lệnh, theo dõi tri giác và áp lực nội sọ mỗi 2h.',
     });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền sinh hiệu và diễn biến chăm sóc từ ghi chép giấy mẫu của điều dưỡng!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền sinh hiệu và diễn biến chăm sóc hậu phẫu u não!');
   };
 
   return (
@@ -2181,12 +2181,12 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
   const handleOcrFill = () => {
     setFormData({
       meetingDate: new Date().toISOString().split('T')[0],
-      participants: 'Bs. Nguyễn Hoàng Nam, Bs. Trần Minh Nghĩa, Bs. Văn Trung Nghĩa',
-      clinicalSummary: 'Bệnh nhân nam 29 tuổi nhập viện vì đau đầu dữ dội kèm buồn nôn sau chấn thương vùng đầu ngày thứ 2.',
-      diagnosis: 'Chấn động não nặng / Theo dõi tụ máu dưới màng cứng thùy trán',
-      treatmentConclusion: 'Chỉ định chụp MRI sọ não lát cắt mỏng khẩn cấp, hội chẩn liên chuyên khoa để quyết định phẫu thuật hay điều trị nội khoa bảo tồn.',
+      participants: 'BS. CKII Nguyễn Thế Thành (Chủ trì KUTN), BS. Lê Văn Minh (CĐHA), ThS. BS. Phan Hoàng Đức (Phẫu thuật Thần kinh U Não)',
+      clinicalSummary: 'Bệnh nhân nam 48 tuổi, hội chứng tăng áp lực nội sọ (đau đầu dữ dội, nôn vọt, phù gai thị) kèm liệt nửa người trái tiến triển 3 tuần. MRI phát hiện khối u vùng trán - đỉnh phải kích thước 4.2 x 3.8 cm, phù não quanh u diện rộng, đè đẩy đường giữa 8mm.',
+      diagnosis: 'Hội chẩn u não đa mô thức: U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải / Phù não nặng có nguy cơ thoát vị não.',
+      treatmentConclusion: '1. Điều trị cấp cứu: Truyền Mannitol 20% + Dexamethasone 8mg tiêm tĩnh mạch giảm phù não. 2. Phẫu thuật: Mổ mở sọ vi phẫu cắt u tối đa có hỗ trợ kính vi phẫu và Neuronavigation. 3. Hậu phẫu chuyển Neuro-ICU theo dõi ICP. 4. Chuyển Khoa Hóa Xạ Trị U Não thực hiện Phác đồ Stupp (Temozolomide).',
     });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền nội dung từ Biên bản hội chẩn giấy mẫu!');
+    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền nội dung từ Biên bản hội chẩn U Não đa mô thức!');
   };
 
   return (
@@ -2346,7 +2346,7 @@ const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <FormField label="Chẩn đoán" placeholder="VD: Viêm xoang cấp" value={formData.diagnosis} onChangeText={t => setFormData({...formData, diagnosis: t})} />
+        <FormField label="Chẩn đoán" placeholder="VD: U nguyên bào thần kinh đệm (Glioblastoma) / Phù não quanh u" value={formData.diagnosis} onChangeText={t => setFormData({...formData, diagnosis: t})} />
         
         <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#374151', marginVertical: 10 }}>Danh sách thuốc</Text>
         {drugs.map((d, index) => (

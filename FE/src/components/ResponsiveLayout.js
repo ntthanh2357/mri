@@ -33,6 +33,8 @@ import {
   ChevronRight,
   ShieldCheck,
   ArrowRightLeft,
+  UploadCloud,
+  Menu,
 } from 'lucide-react';
 
 const ResponsiveLayout = ({
@@ -48,6 +50,7 @@ const ResponsiveLayout = ({
   const [notifications, setNotifications] = React.useState([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [showNotifModal, setShowNotifModal] = React.useState(false);
+  const [showMobileMenu, setShowMobileMenu] = React.useState(false);
   const [activeEmergency, setActiveEmergency] = React.useState(null);
   const isPollingStoppedRef = React.useRef(false);
 
@@ -144,19 +147,15 @@ const ResponsiveLayout = ({
     }
   };
 
-  if (!isDesktop) {
-    return <>{children}</>;
-  }
-
   const isPatient = localUser?.role === 'patient';
   const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
-                    localUser?.role === 'doctor' ? 'Bác sĩ Chẩn đoán & Lâm sàng' : 
-                    localUser?.role === 'technician' ? 'Kỹ thuật viên Phim MRI' : 
+                    localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
+                    localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
                     localUser?.role === 'nurse' ? 'Điều dưỡng' : 
-                    localUser?.role === 'receptionist' ? 'Lễ tân & Thu ngân' : 'Bệnh nhân';
+                    localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 'Bệnh nhân';
 
-  // Menu items config - Tách riêng từng role hoàn chỉnh
+  // Menu items config - Tách riêng từng role hoàn chỉnh bám sát thực tế lâm sàng
   const getMenuItems = (role) => {
     switch (role) {
       case 'patient':
@@ -173,6 +172,7 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Hàng chờ Khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
           { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
@@ -184,6 +184,7 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
           { label: 'Lịch làm việc KTV', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -202,6 +203,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
+          { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Lịch làm việc Lễ tân', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -244,6 +246,257 @@ const ResponsiveLayout = ({
     if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
+
+  const isItemActive = (item) => {
+    if (item.params?.tab) {
+      if (activeRoute === `${item.route}_${item.params.tab}`) return true;
+      if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') return true;
+      if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') return true;
+      if (activeRoute === 'ReceptionistDashboard_myQueue' && item.route === 'NurseReception' && item.params?.tab === 'myQueue') return true;
+      if (activeRoute === 'EMRDashboard' && item.params.tab === 'records') return true;
+      return false;
+    }
+    if (item.route === 'DoctorWorkQueue' && activeRoute.startsWith('DoctorWorkQueue')) return false;
+    if (item.route === 'NurseReception' && (activeRoute.startsWith('NurseReception') || activeRoute.startsWith('ReceptionistDashboard'))) return false;
+    if (item.route === 'EMRDashboard' && activeRoute.startsWith('EMRDashboard')) return false;
+    return activeRoute === item.route;
+  };
+
+  // MOBILE VIEW RENDERING
+  if (!isDesktop) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        {/* Mobile Top Navigation Header */}
+        <View style={{
+          backgroundColor: '#0F172A',
+          paddingTop: 10,
+          paddingBottom: 10,
+          paddingHorizontal: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#1E293B',
+          zIndex: 40,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setShowMobileMenu(true)}
+              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              accessibilityLabel="Mở danh mục chức năng"
+            >
+              <Menu size={20} color="#38BDF8" />
+            </TouchableOpacity>
+            <View>
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15, letterSpacing: -0.2 }}>NeuroScan AI</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '500' }}>{roleLabel}</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity 
+              style={{ padding: 6, position: 'relative' }} 
+              onPress={() => setShowNotifModal(true)}
+              accessibilityLabel="Thông báo"
+            >
+              <Bell size={18} color="#94A3B8" />
+              {unreadCount > 0 && (
+                <View style={[styles.bellBadge, { top: 0, right: 0 }]}>
+                  <Text style={styles.bellBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDefaultLogout}
+              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              accessibilityLabel="Đăng xuất"
+            >
+              <LogOut size={16} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Emergency Alert Banner on Mobile */}
+        {activeEmergency && !isPatient && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
+            style={{
+              backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <AlertTriangle size={15} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 11 }} numberOfLines={1}>
+                CẤP CỨU: {activeEmergency.patientName} ({activeEmergency.medicalId})
+              </Text>
+            </View>
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', marginLeft: 6 }}>Xử lý ngay →</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Main Content Area on Mobile */}
+        <View style={{ flex: 1 }}>
+          {children}
+        </View>
+
+        {/* Mobile Navigation Drawer Modal */}
+        <Modal
+          visible={showMobileMenu}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowMobileMenu(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'row' }}>
+            <View style={{
+              width: '82%',
+              maxWidth: 320,
+              backgroundColor: '#0F172A',
+              height: '100%',
+              paddingTop: 20,
+              paddingBottom: 24,
+              paddingHorizontal: 16,
+              justifyContent: 'space-between',
+            }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
+                  <View>
+                    <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
+                    <Text style={{ color: '#0891B2', fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
+                    <X size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                  {menuItems.map(item => {
+                    const isActive = isItemActive(item);
+                    const IconComponent = item.icon;
+                    return (
+                      <TouchableOpacity
+                        key={`m_${item.route}_${item.label}`}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 8,
+                          marginBottom: 4,
+                          backgroundColor: isActive ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
+                          borderLeftWidth: isActive ? 3 : 0,
+                          borderLeftColor: '#38BDF8',
+                        }}
+                        onPress={() => {
+                          setShowMobileMenu(false);
+                          navigation.navigate(item.route, item.params);
+                        }}
+                      >
+                        <IconComponent size={18} color={isActive ? '#38BDF8' : '#94A3B8'} />
+                        <Text style={{
+                          color: isActive ? '#38BDF8' : '#E2E8F0',
+                          fontWeight: isActive ? 'bold' : '500',
+                          marginLeft: 12,
+                          fontSize: 14,
+                        }}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  backgroundColor: '#1E293B',
+                  borderRadius: 8,
+                }}
+                onPress={() => {
+                  setShowMobileMenu(false);
+                  handleDefaultLogout();
+                }}
+              >
+                <LogOut size={16} color="#EF4444" />
+                <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 14 }}>Đăng xuất phiên làm việc</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowMobileMenu(false)} />
+          </View>
+        </Modal>
+
+        {/* Notifications Modal on Mobile */}
+        {showNotifModal && (
+          <Modal
+            visible={showNotifModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowNotifModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                    <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <X size={18} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={styles.modalSub}>Lịch sử cảnh báo & cập nhật bệnh án</Text>
+                  {unreadCount > 0 && (
+                    <TouchableOpacity onPress={markAllNotifsRead}>
+                      <Text style={styles.markAllReadText}>Đánh dấu tất cả đã đọc</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <ScrollView style={styles.notifScroll} contentContainerStyle={styles.notifList}>
+                  {notifications.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <Text style={styles.emptyText}>Chưa có thông báo mới.</Text>
+                    </View>
+                  ) : (
+                    notifications.map((n) => (
+                      <TouchableOpacity
+                        key={n._id}
+                        style={[styles.notifItem, !n.isRead && styles.notifItemUnread]}
+                        onPress={() => markNotifRead(n._id)}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <Text style={[styles.notifTitle, !n.isRead && styles.textBold]}>
+                            {n.title}
+                          </Text>
+                          {!n.isRead && <View style={styles.unreadDot} />}
+                        </View>
+                        <Text style={styles.notifMessage}>{n.message}</Text>
+                        <Text style={styles.notifTime}>
+                          {new Date(n.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{' - '}
+                          {new Date(n.createdAt).toLocaleDateString('vi-VN')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.desktopWrapper}>
@@ -297,21 +550,7 @@ const ResponsiveLayout = ({
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
           {menuItems.map((item) => {
-            let isActive = false;
-            if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') {
-              isActive = true;
-            } else if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') {
-              isActive = true;
-            } else if (item.params?.tab) {
-              if (activeRoute === `${item.route}_${item.params.tab}`) {
-                isActive = true;
-              } else if (activeRoute === item.route && item.params.tab === 'records') {
-                isActive = true;
-              }
-            } else if (activeRoute === item.route && item.route !== 'NurseReception' && item.route !== 'EMRDashboard') {
-              isActive = true;
-            }
-
+            const isActive = isItemActive(item);
             const IconComponent = item.icon;
             return (
               <TouchableOpacity

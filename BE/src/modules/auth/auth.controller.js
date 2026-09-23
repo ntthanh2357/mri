@@ -33,7 +33,7 @@ const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
 // @access  Public (nhưng có guard cho hospital_admin)
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name, phone, bhytNumber, licenseUrl } = req.body;
+    const { email, password, role, name, phone, bhytNumber, licenseUrl, departmentId, specialty } = req.body;
     let { hospitalId } = req.body;
 
     // Validate inputs
@@ -62,10 +62,10 @@ export const register = async (req, res) => {
       hospitalId = req.user.hospitalId;
     }
 
-    // Nếu caller là user thường (không phải hospital_admin/admin) mà cố tạo role đặc quyền
+    // Nếu caller là user thường (không phải admin hoặc hospital_admin) mà cố tạo role nhân viên hoặc admin
     if (req.user && !["admin", "hospital_admin"].includes(req.user.role)) {
-      if (["admin", "hospital_admin"].includes(role)) {
-        res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này." });
+      if (role !== "patient") {
+        res.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này. Chỉ quản trị viên mới được tạo tài khoản nhân viên y tế." });
         return;
       }
     }
@@ -111,12 +111,14 @@ export const register = async (req, res) => {
       passwordHash,
       role,
       hospitalId: role !== "patient" ? hospitalId : undefined,
+      departmentId: departmentId || (role === "patient" ? undefined : "KUTN"),
       isVerified: isAutoVerified, // Bệnh nhân tự kích hoạt trong dev/demo
       otpCode: (isPatient && !isAutoVerified) ? otpCode : undefined,
       otpExpires: (isPatient && !isAutoVerified) ? otpExpires : undefined,
       profile: {
         name,
         photoUrl: "",
+        specialty: specialty || "",
         bhytNumber: role === "patient" ? bhytNumber || "" : "",
         licenseUrl: role === "doctor" ? licenseUrl || "" : "",
       },
@@ -158,6 +160,7 @@ export const register = async (req, res) => {
         id: newUser._id,
         email: newUser.email,
         role: newUser.role,
+        departmentId: newUser.departmentId,
         hospitalId: newUser.hospitalId,
         isVerified: newUser.isVerified,
         profile: newUser.profile,
@@ -175,7 +178,7 @@ export const register = async (req, res) => {
 // @access  Public
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, roleType } = req.body;
 
     if (!email || !password) {
       res.status(400).json({ message: "Vui lòng nhập đầy đủ email và mật khẩu." });
@@ -279,6 +282,21 @@ export const login = async (req, res) => {
       await User.findByIdAndUpdate(user._id, { failedLoginAttempts: 0, lockUntil: null });
     }
 
+    // Phân tách nghiêm ngặt phân hệ đăng nhập (Strict Role Checking)
+    if (roleType === 'patient' && user.role !== 'patient') {
+      res.status(403).json({
+        message: "Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab 'Bác sĩ / Nhân viên' để đăng nhập.",
+      });
+      return;
+    }
+
+    if (roleType === 'staff' && user.role === 'patient') {
+      res.status(403).json({
+        message: "Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab 'Dành cho Bệnh nhân' để đăng nhập.",
+      });
+      return;
+    }
+
     // Check if verification is required
     let requiresVerification = !user.isVerified && user.role === 'patient';
 
@@ -338,6 +356,17 @@ export const login = async (req, res) => {
     const accessToken = requiresVerification ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = requiresVerification ? undefined : generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
+    // Thiết lập cookie HttpOnly + Secure + SameSite cho phiên làm việc web an toàn
+    if (refreshToken && typeof res.cookie === "function") {
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/auth",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+
     if (!requiresVerification) {
       authCache.setUserAuth(user._id.toString(), {
         tokenVersion: user.tokenVersion || 0,
@@ -355,8 +384,8 @@ export const login = async (req, res) => {
       refreshToken,
       requiresActivation,
       requiresVerification,
-      otp2FA: otp2FaCode,
-      debugOtp: (process.env.NODE_ENV !== "production" && requiresVerification) ? otpCode : undefined,
+      otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+      debugOtp: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true" && requiresVerification) ? otpCode : undefined,
       user: {
         id: user._id,
         email: user.email,
@@ -368,7 +397,10 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi đăng nhập:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập.", error: error.message });
+    res.status(500).json({
+      message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập. Vui lòng thử lại sau.",
+      ...(process.env.NODE_ENV !== "production" ? { debug: error.message } : {})
+    });
   }
 };
 
@@ -433,7 +465,7 @@ export const getMe = async (req, res) => {
 // @access  Public
 export const refresh = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!refreshToken) {
       res.status(400).json({ message: "Thiếu Refresh Token." });
@@ -782,10 +814,17 @@ export const logoutAll = async (req, res) => {
     await user.save();
     authCache.invalidateUser(req.user.id);
 
+    if (typeof res.clearCookie === "function") {
+      res.clearCookie("refreshToken", { path: "/auth" });
+    }
+
     res.status(200).json({ message: "Đã đăng xuất khỏi tất cả các thiết bị thành công." });
   } catch (error) {
     console.error("Lỗi đăng xuất toàn bộ thiết bị:", error);
-    res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng xuất.", error: error.message });
+    res.status(500).json({
+      message: "Đã xảy ra lỗi trên máy chủ khi đăng xuất.",
+      ...(process.env.NODE_ENV !== "production" ? { debug: error.message } : {})
+    });
   }
 };
 
@@ -996,6 +1035,11 @@ export const phoneLoginRequest = async (req, res) => {
       return res.status(404).json({ message: "Số điện thoại chưa được đăng ký trong hệ thống." });
     }
 
+    // Chỉ cho phép bệnh nhân sử dụng OTP số điện thoại
+    if (user.role !== 'patient') {
+      return res.status(403).json({ message: "Chức năng đăng nhập OTP qua số điện thoại chỉ áp dụng cho tài khoản Bệnh nhân." });
+    }
+
     // Check if account is locked
     if (user.isLocked) {
       res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
@@ -1046,6 +1090,11 @@ export const phoneLoginVerify = async (req, res) => {
     const user = await User.findOne({ phone: hashedPhone });
     if (!user) {
       return res.status(404).json({ message: "Số điện thoại chưa được đăng ký." });
+    }
+
+    // Chỉ cho phép bệnh nhân sử dụng OTP số điện thoại
+    if (user.role !== 'patient') {
+      return res.status(403).json({ message: "Chức năng đăng nhập OTP qua số điện thoại chỉ áp dụng cho tài khoản Bệnh nhân." });
     }
 
     // Check if account is locked

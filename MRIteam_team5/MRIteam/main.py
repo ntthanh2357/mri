@@ -13,6 +13,8 @@ import re
 import hashlib
 import uuid
 from pathlib import Path
+import json
+import subprocess
 # pyrefly: ignore [missing-import]
 import uvicorn
 import numpy as np
@@ -825,6 +827,208 @@ async def get_training_stats():
         "approved_by_class": approved_by_class,
         "corrected_by_class": corrected_by_class,
     }
+
+
+# =====================================================================
+# MLOps ACTIVE LEARNING RETRAINING & HOT-RELOAD PIPELINE
+# =====================================================================
+retrain_process = None
+retrain_state = {
+    "status": "idle",  # "idle" | "running" | "completed" | "failed"
+    "started_at": None,
+    "finished_at": None,
+    "current_active_model": "models/resnet_risk_calibrated.keras",
+    "baseline_model": "models/resnet_risk_calibrated.keras",
+    "result": None,
+    "error": None
+}
+
+
+@app.post("/retrain/start")
+async def start_active_learning():
+    """Kích hoạt tiến trình Active Learning ngầm thông qua subprocess."""
+    global retrain_process, retrain_state
+
+    # 1. Kiểm tra nếu job đang chạy
+    if retrain_process is not None and retrain_process.poll() is None:
+        return {
+            "success": False,
+            "message": "Tiến trình huấn luyện lại đang chạy. Vui lòng đợi hoàn tất.",
+            "status": "running"
+        }
+
+    # 2. Kiểm tra file feedback CSV
+    csv_file = os.path.join("hard_examples", "feedback_log.csv")
+    if not os.path.exists(csv_file):
+        return {
+            "success": False,
+            "message": "Không tìm thấy file feedback_log.csv trên máy chủ.",
+            "status": "no_data"
+        }
+
+    with open(csv_file, "r", encoding="utf-8") as f:
+        lines = [l for l in f.readlines() if l.strip()]
+
+    if len(lines) <= 1:
+        return {
+            "success": False,
+            "message": "Chưa có mẫu phản hồi nào trong sổ tay học tập để huấn luyện.",
+            "status": "no_data"
+        }
+
+    # 3. Dọn dẹp kết quả cũ trước khi bắt đầu
+    res_file = os.path.join("hard_examples", "retrain_result.json")
+    if os.path.exists(res_file):
+        try:
+            os.remove(res_file)
+        except Exception:
+            pass
+
+    log_file_path = os.path.join("hard_examples", "retrain_job.log")
+    log_file = open(log_file_path, "w", encoding="utf-8")
+
+    # 4. Xác định python executable trong venv
+    venv_py = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+    py_exec = venv_py if os.path.exists(venv_py) else sys.executable
+    script_path = os.path.join(os.path.dirname(__file__), "fine_tune_active_learning.py")
+
+    retrain_state["status"] = "running"
+    retrain_state["started_at"] = datetime.now().isoformat()
+    retrain_state["finished_at"] = None
+    retrain_state["result"] = None
+    retrain_state["error"] = None
+
+    # Khởi chạy subprocess độc lập để không chiếm tài nguyên luồng chẩn đoán
+    retrain_process = subprocess.Popen(
+        [py_exec, script_path, "--epochs", "10", "--batch_size", "4"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        cwd=os.path.dirname(__file__) or "."
+    )
+
+    return {
+        "success": True,
+        "message": f"Đã kích hoạt tiến trình Active Learning (PID: {retrain_process.pid})",
+        "status": "running",
+        "started_at": retrain_state["started_at"]
+    }
+
+
+@app.get("/retrain/status")
+async def get_retrain_status():
+    """Truy vấn trạng thái, tiến độ và kết quả của tiến trình huấn luyện lại."""
+    global retrain_process, retrain_state
+
+    # Cập nhật trạng thái từ tiến trình con
+    if retrain_process is not None:
+        exit_code = retrain_process.poll()
+        if exit_code is None:
+            retrain_state["status"] = "running"
+        elif exit_code == 0:
+            retrain_state["status"] = "completed"
+            if not retrain_state.get("finished_at"):
+                retrain_state["finished_at"] = datetime.now().isoformat()
+        else:
+            retrain_state["status"] = "failed"
+            if not retrain_state.get("finished_at"):
+                retrain_state["finished_at"] = datetime.now().isoformat()
+            retrain_state["error"] = f"Tiến trình kết thúc với mã lỗi: {exit_code}"
+
+    # Đọc kết quả từ file JSON nếu đã xong
+    res_file = os.path.join("hard_examples", "retrain_result.json")
+    if os.path.exists(res_file):
+        try:
+            with open(res_file, "r", encoding="utf-8") as f:
+                retrain_state["result"] = json.load(f)
+        except Exception as e:
+            retrain_state["error"] = str(e)
+
+    # Đọc 25 dòng nhật ký gần nhất
+    recent_logs = []
+    log_file_path = os.path.join("hard_examples", "retrain_job.log")
+    if os.path.exists(log_file_path):
+        try:
+            with open(log_file_path, "r", encoding="utf-8", errors="ignore") as f:
+                recent_logs = [line.strip() for line in f.readlines()[-25:] if line.strip()]
+        except Exception:
+            pass
+
+    return {
+        "status": retrain_state["status"],
+        "started_at": retrain_state["started_at"],
+        "finished_at": retrain_state["finished_at"],
+        "current_active_model": retrain_state["current_active_model"],
+        "result": retrain_state["result"],
+        "error": retrain_state["error"],
+        "logs": recent_logs
+    }
+
+
+@app.post("/retrain/deploy")
+async def deploy_retrained_model():
+    """Hot-Reload: Nạp trực tiếp mô hình ứng viên mới vào RAM mà không tắt server (Zero Downtime)."""
+    global model, retrain_state, custom_objects
+
+    target_path = None
+    if retrain_state.get("result") and retrain_state["result"].get("candidate_model_path"):
+        cand = retrain_state["result"]["candidate_model_path"]
+        if os.path.exists(cand):
+            target_path = cand
+
+    if not target_path:
+        cand_default = "models/candidate_model.keras"
+        if os.path.exists(cand_default):
+            target_path = cand_default
+
+    if not target_path or not os.path.exists(target_path):
+        return {
+            "success": False,
+            "message": "Không tìm thấy tệp mô hình ứng viên để triển khai."
+        }
+
+    try:
+        new_m = tf.keras.models.load_model(target_path, custom_objects=custom_objects, safe_mode=False, compile=False)
+        model = new_m
+        retrain_state["current_active_model"] = target_path
+        return {
+            "success": True,
+            "message": f"Hot-Reload thành công! Mô hình mới ({os.path.basename(target_path)}) đã được nạp vào RAM phục vụ chẩn đoán.",
+            "active_model": target_path
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Lỗi nạp mô hình mới: {str(e)}"
+        }
+
+
+@app.post("/retrain/rollback")
+async def rollback_model():
+    """Hoàn tác: Nạp lại mô hình gốc ban đầu vào RAM."""
+    global model, retrain_state, custom_objects
+
+    baseline_path = retrain_state.get("baseline_model", "models/resnet_risk_calibrated.keras")
+    if not os.path.exists(baseline_path):
+        return {
+            "success": False,
+            "message": f"Không tìm thấy mô hình gốc ổn định tại: {baseline_path}"
+        }
+
+    try:
+        baseline_m = tf.keras.models.load_model(baseline_path, custom_objects=custom_objects, safe_mode=False, compile=False)
+        model = baseline_m
+        retrain_state["current_active_model"] = baseline_path
+        return {
+            "success": True,
+            "message": f"Hoàn tác (Rollback) thành công! Đã nạp lại mô hình gốc ({os.path.basename(baseline_path)}) vào RAM.",
+            "active_model": baseline_path
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Lỗi hoàn tác mô hình: {str(e)}"
+        }
+
 
 # =====================================================================
 # AGENT 1: Bác sĩ AI (Luồng Chẩn đoán Chuyên sâu)

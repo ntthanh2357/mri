@@ -68,85 +68,235 @@ async function seedRoomsAndBeds() {
     console.log(`Đã có ${existingRoomsCount} phòng MRI trong cơ sở dữ liệu.`);
   }
 
-  const existingBedsCount = await db.collection('hospitalbeds').countDocuments();
-  if (existingBedsCount === 0) {
-    console.log('Khởi tạo danh sách giường bệnh mẫu...');
-    const beds = [];
+  // Dọn dẹp giường cũ để đảm bảo 100% dữ liệu thuộc Khoa Ung Thư Não (Neuro-Oncology)
+  await db.collection('hospitalbeds').deleteMany({});
+  console.log('Đã dọn dẹp giường bệnh cũ để khởi tạo hệ thống buồng giường Khoa Ung Thư Não...');
 
-    for (const hosp of hospitals) {
-      beds.push(
-        {
-          hospitalId: hosp._id,
-          departmentId: 'KNT',
-          departmentName: 'Khoa Ngoại Thần Kinh',
-          bedNumber: 'KNT-101',
-          roomNumber: '101',
-          floor: 'Tầng 3',
-          type: 'standard',
-          status: 'available',
-          hasIcpMonitor: false,
-          hasEegMonitor: false,
-          isIsolationRoom: false,
-          notes: 'Giường nội trú tiêu chuẩn',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          hospitalId: hosp._id,
-          departmentId: 'KNT',
-          departmentName: 'Khoa Ngoại Thần Kinh',
-          bedNumber: 'KNT-102',
-          roomNumber: '101',
-          floor: 'Tầng 3',
-          type: 'post_op_recovery',
-          status: 'available',
-          hasIcpMonitor: false,
-          hasEegMonitor: false,
-          isIsolationRoom: false,
-          notes: 'Giường theo dõi hậu phẫu',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          hospitalId: hosp._id,
-          departmentId: 'ICU',
-          departmentName: 'Hồi Sức Tích Cực Thần Kinh',
-          bedNumber: 'ICU-01',
-          roomNumber: 'ICU-Special',
-          floor: 'Tầng 2',
-          type: 'icu_neuro_icp',
-          status: 'available',
-          hasIcpMonitor: true,
-          hasEegMonitor: false,
-          isIsolationRoom: false,
-          notes: 'Giường hồi sức có máy đo áp lực nội sọ liên tục (ICP Monitor)',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          hospitalId: hosp._id,
-          departmentId: 'ICU',
-          departmentName: 'Hồi Sức Tích Cực Thần Kinh',
-          bedNumber: 'ICU-02',
-          roomNumber: 'ICU-Special',
-          floor: 'Tầng 2',
-          type: 'icu_neuro_eeg',
-          status: 'available',
-          hasIcpMonitor: true,
-          hasEegMonitor: true,
-          isIsolationRoom: false,
-          notes: 'Giường ICU có Monitor ICP và máy điện não liên tục phát hiện co giật',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      );
-    }
+  console.log('Khởi tạo danh sách buồng giường chuyên khoa Ung Thư Não (Neuro-Oncology)...');
+  const beds = [];
 
-    const resBeds = await db.collection('hospitalbeds').insertMany(beds);
-    console.log(`✅ Đã tạo thành công ${resBeds.insertedCount} giường bệnh!`);
-  } else {
-    console.log(`Đã có ${existingBedsCount} giường bệnh trong cơ sở dữ liệu.`);
+  for (const hosp of hospitals) {
+    beds.push(
+      // ── 1. ĐƠN NGUYÊN HỒI SỨC CẤP CỨU U NÃO (NEURO-ICU) ─────────────
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-01',
+        roomNumber: 'ICU-Neuro-1',
+        floor: 'Tầng 2',
+        type: 'icu_neuro_icp',
+        status: 'available',
+        hasIcpMonitor: true,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức tích cực u não trang bị Monitor đo áp lực nội sọ liên tục (ICP Monitor) - Cấp cứu tụt não',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-02',
+        roomNumber: 'ICU-Neuro-1',
+        floor: 'Tầng 2',
+        type: 'icu_neuro_eeg',
+        status: 'available',
+        hasIcpMonitor: true,
+        hasEegMonitor: true,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức u não có Monitor ICP và máy đo điện não liên tục (Continuous EEG) phát hiện co giật u não',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-ICU',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hồi Sức Cấp Cứu (Neuro-ICU)',
+        bedNumber: 'ICU-03',
+        roomNumber: 'ICU-Neuro-2',
+        floor: 'Tầng 2',
+        type: 'icu_standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường hồi sức tích cực u não cấp cứu theo dõi tri giác GCS',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+
+      // ── 2. ĐƠN NGUYÊN PHẪU THUẬT U NÃO & HỒI TỈNH (SURGICAL & POST-OP) ──
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-201',
+        roomNumber: 'Phòng 201 - Hậu phẫu',
+        floor: 'Tầng 2',
+        type: 'post_op_recovery',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường hồi tỉnh sau phẫu thuật mở sọ vi phẫu cắt u não (Craniotomy for Glioma/Meningioma)',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-202',
+        roomNumber: 'Phòng 201 - Hậu phẫu',
+        floor: 'Tầng 2',
+        type: 'post_op_recovery',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường theo dõi hậu phẫu mở sọ, tri giác và dẫn lưu não thất ngoài (EVD)',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-203',
+        roomNumber: 'Phòng 202',
+        floor: 'Tầng 2',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường nội trú tiền phẫu chuẩn bị mổ u não (Chụp định vị thần kinh Neuronavigation)',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-SURG',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Phẫu Thuật & Hồi Tỉnh Mổ Mở Sọ (Post-Op Craniotomy)',
+        bedNumber: 'SURG-VIP',
+        roomNumber: 'Phòng VIP-21',
+        floor: 'Tầng 2',
+        type: 'vip',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Phòng chăm sóc u não hậu phẫu tiện nghi cao theo yêu cầu',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+
+      // ── 3. ĐƠN NGUYÊN HÓA TRỊ & XẠ TRỊ U NÃO (CHEMOTHERAPY & IMMUNO) ──
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-301',
+        roomNumber: 'Phòng 301 - Cách ly',
+        floor: 'Tầng 3',
+        type: 'isolation',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: true,
+        notes: 'Buồng cách ly áp lực phòng vô trùng bảo vệ bệnh nhân u não suy giảm miễn dịch / hạ bạch cầu nặng do hóa trị Temozolomide',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-302',
+        roomNumber: 'Phòng 302',
+        floor: 'Tầng 3',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường nội trú điều trị hóa chất đường uống Temozolomide kết hợp xạ trị gia tốc phân liều',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-CHEMO',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Hóa Trị & Xạ Trị (Phác đồ Stupp / Temozolomide)',
+        bedNumber: 'CHEMO-303',
+        roomNumber: 'Phòng 302',
+        floor: 'Tầng 3',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường theo dõi đáp ứng điều trị đích và tác dụng phụ thần kinh sau truyền hóa chất',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+
+      // ── 4. ĐƠN NGUYÊN CHĂM SÓC GIẢM NHẸ & PHỤC HỒI CHỨC NĂNG U NÃO ───
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-401',
+        roomNumber: 'Phòng 401',
+        floor: 'Tầng 4',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Kiểm soát đau trung ương, chống phù não bằng Corticosteroid và chăm sóc giảm nhẹ u não tiến triển',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-402',
+        roomNumber: 'Phòng 401',
+        floor: 'Tầng 4',
+        type: 'standard',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Giường phục hồi chức năng vận động, thăng bằng và ngôn ngữ sau phẫu thuật cắt bỏ u não',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        hospitalId: hosp._id,
+        departmentId: 'KUTN-PAL',
+        departmentName: 'Khoa Ung Thư Não - Đơn nguyên Chăm Sóc Giảm Nhẹ & Phục Hồi Chức Năng',
+        bedNumber: 'PAL-VIP',
+        roomNumber: 'Phòng VIP-41',
+        floor: 'Tầng 4',
+        type: 'vip',
+        status: 'available',
+        hasIcpMonitor: false,
+        hasEegMonitor: false,
+        isIsolationRoom: false,
+        notes: 'Phòng chăm sóc giảm nhẹ u não gia đình theo yêu cầu (Phòng tiện nghi cao)',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    );
   }
+
+  const resBeds = await db.collection('hospitalbeds').insertMany(beds);
+  console.log(`✅ Đã tạo thành công ${resBeds.insertedCount} giường bệnh chuyên khoa Ung Thư Não!`);
 
   await mongoose.disconnect();
   console.log('Hoàn tất.');

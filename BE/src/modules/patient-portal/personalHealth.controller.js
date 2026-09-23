@@ -190,7 +190,7 @@ export const getEmrSummaryForPatient = async (req, res) => {
       admissionDate: rec.admissionDate || rec.createdAt,
       dischargeDate: rec.dischargeDate || null,
       admissionType: rec.admissionType || "Ngoại trú",
-      department: rec.department || rec.departmentName || "Khoa Ngoại thần kinh",
+      department: rec.department || rec.departmentName || "Khoa Ung Thư Não",
       mainDiagnosis: rec.diagnosis || "Chưa có chẩn đoán chính",
       treatmentPlanSummary: rec.treatmentPlan || "Theo dõi điều trị ngoại trú",
       status: rec.status,

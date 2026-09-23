@@ -411,9 +411,24 @@ export default function StaffSchedulingScreen({ navigation }) {
   };
 
   const getRoleLabel = (role) => {
-    if (role === 'doctor') return 'Bác sĩ';
-    if (role === 'nurse') return 'Điều dưỡng';
-    return role;
+    switch (role) {
+      case 'doctor':
+        return 'Bác sĩ Ung Thư Não';
+      case 'nurse':
+        return 'Điều dưỡng Hồi sức & Chăm sóc';
+      case 'technician':
+        return 'KTV CĐHA & MRI 3.0T';
+      case 'receptionist':
+        return 'Nhân viên Tiếp đón';
+      case 'hospital_admin':
+        return 'Ban Lãnh đạo Khoa';
+      case 'admin':
+        return 'Quản trị viên Hệ thống';
+      case 'patient':
+        return 'Bệnh nhân';
+      default:
+        return role;
+    }
   };
 
 
@@ -508,9 +523,11 @@ export default function StaffSchedulingScreen({ navigation }) {
                       outline: 'none',
                     }}
                   >
-                    <option value="">Tất cả chức vụ</option>
-                    <option value="doctor">Bác sĩ</option>
-                    <option value="nurse">Điều dưỡng</option>
+                    <option value="">Tất cả chức vụ lâm sàng</option>
+                    <option value="doctor">Bác sĩ Ung Thư Não</option>
+                    <option value="nurse">Điều dưỡng Hồi sức & Chăm sóc</option>
+                    <option value="technician">Kỹ thuật viên CĐHA & MRI</option>
+                    <option value="receptionist">Nhân viên Tiếp đón & Phân luồng</option>
                   </select>
                 </View>
               </View>

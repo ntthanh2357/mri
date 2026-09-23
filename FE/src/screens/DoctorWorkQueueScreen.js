@@ -28,6 +28,7 @@ import {
   Flame, 
   Eye, 
   Stethoscope,
+  Brain,
   Camera,
   XCircle,
   PlusCircle,
@@ -57,12 +58,18 @@ const STATUS_CONFIG = {
 };
 
 const DoctorWorkQueueScreen = ({ navigation, route }) => {
-  const currentMode = route?.params?.tab || 'examQueue';
+  const [currentMode, setCurrentMode] = useState(route?.params?.tab || 'examQueue');
   const [user, setUser] = useState(route?.params?.user || null);
   const [visits, setVisits] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'done'
+
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setCurrentMode(route.params.tab);
+    }
+  }, [route?.params?.tab]);
 
   // MRI Order modal
   const [mriModal, setMriModal] = useState(false);
@@ -175,7 +182,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       const res = await post('/api/v1/emergency/trigger', {
         visitId: emergencyVisit._id,
         level: emergencyLevel,
-        reason: emergencyReason || 'Cấp cứu đột quỵ / tổn thương não khẩn cấp',
+        reason: emergencyReason || 'Cấp cứu tăng áp lực nội sọ / tụt kẹt não do u não cấp',
       });
       if (res && res.success) {
         Alert.alert('Thành công', `Đã kích hoạt Cảnh báo Cấp cứu [${emergencyLevel}] cho ca bệnh.`);
@@ -858,10 +865,79 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     );
   };
 
-  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : 'Hàng Đợi Khám';
+  const examActiveCount = visits.filter(v => 
+    !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
+    ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status)
+  ).length;
+
+  const mriActiveCount = visits.filter(v => 
+    !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
+    ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
+  ).length;
+
+  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng Đợi Khám & Chẩn Đoán';
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
+      {/* Top Segmented Mode Switcher: Khám Bệnh Lâm Sàng vs Hàng Đợi Chụp MRI */}
+      <View style={{
+        flexDirection: 'row',
+        backgroundColor: '#F1F5F9',
+        padding: 5,
+        borderRadius: 12,
+        marginHorizontal: 16,
+        marginTop: 14,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+      }}>
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 10,
+            borderRadius: 9,
+            backgroundColor: currentMode === 'examQueue' ? '#0891B2' : 'transparent',
+            gap: 6,
+          }}
+          onPress={() => setCurrentMode('examQueue')}
+        >
+          <Stethoscope size={16} color={currentMode === 'examQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
+          <Text style={{
+            fontSize: 13,
+            fontWeight: 'bold',
+            color: currentMode === 'examQueue' ? '#FFFFFF' : '#475569',
+          }}>
+            Khám Bệnh Lâm Sàng ({examActiveCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 10,
+            borderRadius: 9,
+            backgroundColor: currentMode === 'mriQueue' ? '#0891B2' : 'transparent',
+            gap: 6,
+          }}
+          onPress={() => setCurrentMode('mriQueue')}
+        >
+          <Brain size={16} color={currentMode === 'mriQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
+          <Text style={{
+            fontSize: 13,
+            fontWeight: 'bold',
+            color: currentMode === 'mriQueue' ? '#FFFFFF' : '#475569',
+          }}>
+            Hàng Đợi Chụp MRI ({mriActiveCount})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[
@@ -1194,7 +1270,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             <Text style={styles.fieldLabel}>Lý do cấp cứu khẩn cấp:</Text>
             <TextInput
               style={[styles.textArea, { backgroundColor: '#FFFFFF' }]}
-              placeholder="Nhập lý do kích hoạt cấp cứu (VD: nghi ngờ xuất huyết não, đột quỵ cấp, tụt huyết áp...)"
+              placeholder="Nhập lý do kích hoạt cấp cứu (VD: tăng áp lực nội sọ cấp, dọa tụt kẹt não, co giật liên tục do khối u não...)"
               multiline
               numberOfLines={3}
               value={emergencyReason}
