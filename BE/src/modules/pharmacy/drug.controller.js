@@ -4,10 +4,11 @@ import { User } from "../auth/models/user.model.js";
 import { VitalSign } from "../emr/models/vitalSign.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import { assessPrescriptionSafety } from "./services/drugSafety.service.js";
 
 // ── Helper: Lấy hospitalId từ user (Admin dùng query, hospital_admin dùng JWT) ─
 function resolveHospitalId(req) {
-  if (req.user.role === "admin" && req.query.hospitalId) {
+  if (["admin", "system_admin"].includes(req.user.role) && req.query.hospitalId) {
     return req.query.hospitalId;
   }
   return req.user.hospitalId || null;
@@ -73,7 +74,7 @@ export const getDrugById = async (req, res) => {
     }
 
     // Ownership check
-    if (req.user.role !== "admin" && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền xem thuốc này.", 403);
     }
 
@@ -156,7 +157,7 @@ export const updateDrug = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền sửa thuốc này.", 403);
     }
 
@@ -207,7 +208,7 @@ export const deleteDrug = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền xóa thuốc này.", 403);
     }
 
@@ -235,7 +236,7 @@ export const updateStock = async (req, res) => {
     if (!drug) return errorResponse(res, "Không tìm thấy thuốc.", 404);
 
     // Ownership check
-    if (drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && drug.hospitalId.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Bạn không có quyền cập nhật tồn kho thuốc này.", 403);
     }
 
@@ -349,94 +350,49 @@ export const getLowStockAlerts = async (req, res) => {
 // POST /api/drugs/check-prescription
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Danh mục thuốc mặc định phục vụ kiểm tra lâm sàng thần kinh
+// Danh mục thuốc mặc định chuyên khoa Ung Thư Não & Phẫu thuật Thần kinh
 const defaultDrugs = [
-  { name: "Keppra", category: "anticonvulsant", dosageInstructions: "500mg - 1500mg mỗi ngày, chia 2 lần", interactions: ["Depakine", "Tegretol"] },
-  { name: "Depakine", category: "anticonvulsant", dosageInstructions: "20mg - 30mg/kg/ngày", interactions: ["Keppra", "Phenobarbital", "Diazepam"] },
+  { name: "Temozolomide", category: "chemotherapy", dosageInstructions: "150mg - 200mg/m2/ngày x 5 ngày chu kỳ 28 ngày (Phác đồ Stupp)", interactions: ["Valproate"] },
+  { name: "Mannitol", category: "anti_edema", dosageInstructions: "0.25g - 1g/kg truyền tĩnh mạch trong 30-60 phút chống phù não cấp", interactions: [] },
+  { name: "Dexamethasone", category: "corticosteroid", dosageInstructions: "4mg - 16mg mỗi ngày uống sáng sau ăn chống phù não quanh u", interactions: [] },
+  { name: "Bevacizumab", category: "chemotherapy", dosageInstructions: "10mg/kg truyền tĩnh mạch mỗi 2 tuần điều trị u thần kinh đệm tái phát", interactions: [] },
+  { name: "Keppra", category: "anticonvulsant", dosageInstructions: "500mg - 1500mg mỗi ngày, chia 2 lần chống co giật do u não", interactions: ["Depakine", "Tegretol"] },
+  { name: "Depakine", category: "anticonvulsant", dosageInstructions: "20mg - 30mg/kg/ngày", interactions: ["Keppra", "Phenobarbital", "Diazepam", "Temozolomide"] },
   { name: "Tegretol", category: "anticonvulsant", dosageInstructions: "200mg - 1200mg mỗi ngày", interactions: ["Keppra"] },
   { name: "Phenobarbital", category: "psychotropic", dosageInstructions: "50mg - 200mg uống trước khi đi ngủ", interactions: ["Depakine", "Diazepam", "Donepezil"] },
   { name: "Diazepam", category: "psychotropic", dosageInstructions: "2mg - 10mg mỗi ngày", interactions: ["Phenobarbital", "Depakine"] },
-  { name: "Dexamethasone", category: "corticosteroid", dosageInstructions: "4mg - 16mg mỗi ngày uống sáng sau ăn", interactions: [] },
   { name: "Donepezil", category: "other", dosageInstructions: "5mg - 10mg uống tối trước ngủ", interactions: ["Phenobarbital"] },
 ];
 
 export const checkPrescription = async (req, res) => {
   try {
-    const { patientId, medications, orders } = req.body;
+    const { patientId, medications, orders, diagnosis, requestAi } = req.body;
 
     if (!patientId) {
       return errorResponse(res, "Thiếu thông tin bệnh nhân.", 400);
     }
 
-    let patient = null;
-    try {
-      patient = await User.findById(patientId);
-    } catch (e) {
-      // Ignore CastError
-    }
-    let allergies = ["Gadolinium"];
-    if (patient && patient.profile && Array.isArray(patient.profile.allergies)) {
-      allergies = patient.profile.allergies;
-    }
-
-    const latestVital = await VitalSign.findOne({ patient_id: patientId }).sort({ recorded_at: -1 }).lean();
-    const warnings = [];
-    const classifications = [];
-    const medNames = (medications || []).map((m) => (typeof m === "string" ? m : m.name));
-
-    // Ưu tiên tra DB bệnh viện, fallback về defaultDrugs
-    const dbDrugs = await Drug.find({ name: { $in: medNames } }).lean();
-    const activeDrugs = medNames.map((name) => {
-      const dbDrug = dbDrugs.find((d) => d.name.toLowerCase() === name.toLowerCase());
-      if (dbDrug) return dbDrug;
-      const defDrug = defaultDrugs.find((d) => d.name.toLowerCase() === name.toLowerCase());
-      return defDrug || { name, category: "other", interactions: [] };
+    const safetyResult = await assessPrescriptionSafety({
+      patientId,
+      medications: medications || [],
+      orders: orders || [],
+      diagnosis: diagnosis || "",
+      requestAi: !!requestAi
     });
 
-    // 1. Phân loại thuốc hướng tâm thần
-    activeDrugs.forEach((drug) => {
-      if (drug.category === "psychotropic") {
-        classifications.push({ name: drug.name, type: "Hướng tâm thần", warning: "Thuốc hướng tâm thần (Cần lập đơn thuốc kiểm soát đặc biệt theo quy chế)." });
-      }
-    });
-
-    // 2. Kiểm tra tương tác thuốc chéo
-    for (let i = 0; i < activeDrugs.length; i++) {
-      for (let j = i + 1; j < activeDrugs.length; j++) {
-        const drugA = activeDrugs[i];
-        const drugB = activeDrugs[j];
-        const interactsA = (drugA.interactions || []).some((n) => n.toLowerCase() === drugB.name.toLowerCase());
-        const interactsB = (drugB.interactions || []).some((n) => n.toLowerCase() === drugA.name.toLowerCase());
-        if (interactsA || interactsB) {
-          warnings.push({ type: "INTERACTION", severity: "HIGH", message: `Tương tác thuốc nguy hại giữa ${drugA.name} và ${drugB.name}.` });
-        }
-      }
-    }
-
-    // 3. Cảnh báo liều lượng Corticosteroid theo BMI
-    let bmi = null;
-    if (latestVital && latestVital.weight && latestVital.height) {
-      bmi = Number((latestVital.weight / Math.pow(latestVital.height / 100, 2)).toFixed(2));
-    }
-    if (bmi) {
-      const hasCorticosteroid = activeDrugs.some((d) => d.category === "corticosteroid");
-      if (hasCorticosteroid && (bmi < 18.5 || bmi > 25.0)) {
-        warnings.push({ type: "BMI_DOSAGE", severity: "MEDIUM", message: `BMI bệnh nhân là ${bmi} (ngoài dải 18.5-25.0). Cân nhắc điều chỉnh liều Corticosteroid.` });
-      }
-    }
-
-    // 4. Cảnh báo dị ứng thuốc cản từ
-    const hasGadoliniumOrder = (orders || []).some((o) => {
-      const oName = typeof o === "string" ? o.toLowerCase() : o.name.toLowerCase();
-      return oName.includes("cản từ") || oName.includes("gadolinium") || oName.includes("tương phản") || oName.includes("mri");
-    });
-    if (hasGadoliniumOrder && allergies.includes("Gadolinium")) {
-      warnings.push({ type: "ALLERGY_ADR", severity: "CRITICAL", message: "Cảnh báo dị ứng nghiêm trọng (ADR): Bệnh nhân có tiền sử dị ứng Gadolinium." });
-    }
-
-    return successResponse(res, { warnings, classifications, bmi, allergies }, "Kiểm tra dược lâm sàng thành công.");
+    return successResponse(res, {
+      warnings: safetyResult.warnings,
+      classifications: safetyResult.classifications,
+      safetyScore: safetyResult.safetyScore,
+      status: safetyResult.status,
+      bmi: safetyResult.patientContext?.bmi || null,
+      allergies: safetyResult.patientContext?.allergies || ["Gadolinium"],
+      patientContext: safetyResult.patientContext,
+      openFdaDetails: safetyResult.openFdaDetails,
+      aiConsultation: safetyResult.aiConsultation
+    }, "Kiểm tra dược lâm sàng thông minh thành công.");
   } catch (error) {
     console.error("Lỗi checkPrescription:", error);
     return errorResponse(res, "Lỗi kiểm tra dược lâm sàng hệ thống.", 500);
   }
-};
+};

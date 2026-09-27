@@ -78,11 +78,59 @@ const seedDrugs = async () => {
       },
       {
         hospitalId,
+        name: 'Temozolomide (Temodal) 100mg',
+        activeIngredient: 'Temozolomide',
+        category: 'chemotherapy',
+        manufacturer: 'MSD / Schering-Plough',
+        dosageInstructions: 'Uống 150mg/m2/ngày khi đói x 5 ngày chu kỳ 28 ngày (Phác đồ Stupp u thần kinh đệm)',
+        stock: { quantity: 180, unit: 'Viên', minStock: 30 },
+        price: 750000,
+        expiryDate: new Date('2028-12-31'),
+        interactions: ['Valproate'],
+      },
+      {
+        hospitalId,
+        name: 'Temozolomide (Temodal) 250mg',
+        activeIngredient: 'Temozolomide',
+        category: 'chemotherapy',
+        manufacturer: 'MSD / Schering-Plough',
+        dosageInstructions: 'Uống 200mg/m2/ngày khi đói x 5 ngày chu kỳ duy trì',
+        stock: { quantity: 90, unit: 'Viên', minStock: 20 },
+        price: 1850000,
+        expiryDate: new Date('2028-12-31'),
+        interactions: ['Valproate'],
+      },
+      {
+        hospitalId,
+        name: 'Mannitol 20% (250ml)',
+        activeIngredient: 'Mannitol',
+        category: 'anti_edema',
+        manufacturer: 'B.Braun',
+        dosageInstructions: 'Truyền tĩnh mạch nhanh 250ml trong 30-60 phút hạ áp lực nội sọ cấp cứu',
+        stock: { quantity: 240, unit: 'Chai', minStock: 50 },
+        price: 85000,
+        expiryDate: new Date('2027-06-30'),
+        interactions: [],
+      },
+      {
+        hospitalId,
+        name: 'Dexamethasone 4mg',
+        activeIngredient: 'Dexamethasone',
+        category: 'corticosteroid',
+        manufacturer: 'Dược Hậu Giang',
+        dosageInstructions: '1-2 viên/lần x 2 lần/ngày sáng chiều sau ăn chống phù não quanh u',
+        stock: { quantity: 800, unit: 'Viên', minStock: 150 },
+        price: 3500,
+        expiryDate: new Date('2027-09-30'),
+        interactions: ['NSAIDs'],
+      },
+      {
+        hospitalId,
         name: 'Keppra 500mg',
         activeIngredient: 'Levetiracetam',
         category: 'anticonvulsant',
         manufacturer: 'UCB',
-        dosageInstructions: '1 viên/lần, 2 lần/ngày',
+        dosageInstructions: '1 viên/lần, 2 lần/ngày chống động kinh do u não',
         stock: { quantity: 450, unit: 'Viên', minStock: 100 },
         price: 12000,
         expiryDate: new Date('2028-03-10'),
@@ -90,11 +138,15 @@ const seedDrugs = async () => {
       }
     ];
 
-    await Drug.deleteMany({ hospitalId });
-    console.log('Cleared old drugs for this hospital.');
+    try {
+      await Drug.collection.dropIndex("name_1");
+    } catch (_) {}
+
+    await Drug.deleteMany({});
+    console.log('Cleared old drugs across collection.');
 
     await Drug.insertMany(drugs);
-    console.log('Successfully seeded 5 drugs.');
+    console.log(`Successfully seeded ${drugs.length} specialized neuro-oncology drugs.`);
 
   } catch (error) {
     console.error('Error seeding drugs:', error);

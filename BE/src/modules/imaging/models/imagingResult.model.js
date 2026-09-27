@@ -128,6 +128,22 @@ const imagingResultSchema = new Schema(
     signedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     signedByDoctorId: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // [BUG-05 FIX] alias dùng trong scheduler
     signedAt: { type: Date, default: null },
+    // Chuẩn hóa Chữ ký số y tế PKI / Cloud HSM theo Luật Giao dịch điện tử 20/2023/QH15, NĐ 130/2018/NĐ-CP & TT 13/2025/TT-BYT
+    digitalSignatureMetadata: {
+      signatureType: {
+        type: String,
+        enum: ['electronic', 'pki_token', 'cloud_hsm', 'smartcard', 'electronic_stamp'],
+        default: 'electronic',
+      },
+      certificateSerial: { type: String, default: "" },
+      signingAlgorithm: { type: String, default: "SHA256withRSA" },
+      timestampToken: { type: String, default: "" },
+      caProvider: { type: String, default: "VNPT-CA" },
+      signedHash: { type: String, default: "" },
+      signedBy: { type: String, default: "" },
+      signedAt: { type: Date, default: null },
+      isTampered: { type: Boolean, default: false },
+    },
     // [BUG-05 FIX] - Các field thiếu khiến scheduler.js không lưu được dữ liệu
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', default: null },          // Liên kết trực tiếp đến Visit
     peerReviewId: { type: Schema.Types.ObjectId, ref: 'PeerReview', default: null }, // Đã có peer review chưa (tránh tạo lại)

@@ -30,7 +30,7 @@ const auditLogSchema = new Schema(
       type: String,
       default: "",
     },
-    // Chuỗi băm mật mã chống giả mạo (Cryptographic Tamper-Evidence - HIPAA §164.312(b) & TT 46/2018/TT-BYT)
+    // Chuỗi băm mật mã chống giả mạo (Cryptographic Tamper-Evidence - HIPAA §164.312(b), TT 13/2025/TT-BYT & Luật 86/2015/QH13)
     sequenceNumber: {
       type: Number,
       unique: true,

@@ -13,7 +13,7 @@ import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 // @access Private (Doctor, Admin)
 export const checkSurgeryCapacity = async (req, res) => {
   try {
-    const { targetHospitalId, departmentId = "KNT" } = req.body;
+    const { targetHospitalId, departmentId = "KUTN-SURG" } = req.body;
     if (!targetHospitalId) return errorResponse(res, "Thiếu ID bệnh viện đích (targetHospitalId).", 400);
 
     const targetHospital = await Hospital.findById(targetHospitalId).lean();
@@ -21,12 +21,22 @@ export const checkSurgeryCapacity = async (req, res) => {
       return errorResponse(res, "Bệnh viện đích không tồn tại hoặc ngừng hoạt động.", 404);
     }
 
-    // Đếm giường trống tại viện đích
-    const availableBeds = await HospitalBed.countDocuments({
+    // Đếm giường trống tại viện đích (Hỗ trợ chuyên khoa Ung Thư Não & tương thích ngược)
+    const bedQuery = {
       hospitalId: targetHospitalId,
-      departmentId,
       status: 'available'
-    });
+    };
+    if (departmentId && departmentId !== 'all') {
+      if (departmentId === 'KNT' || departmentId === 'KUTN-SURG') {
+        bedQuery.departmentId = { $in: ['KUTN-SURG', 'KNT'] };
+      } else if (departmentId === 'ICU' || departmentId === 'KUTN-ICU') {
+        bedQuery.departmentId = { $in: ['KUTN-ICU', 'ICU'] };
+      } else {
+        bedQuery.departmentId = departmentId;
+      }
+    }
+
+    const availableBeds = await HospitalBed.countDocuments(bedQuery);
 
     const isAvailable = availableBeds > 0;
 
@@ -37,8 +47,8 @@ export const checkSurgeryCapacity = async (req, res) => {
       availableBeds,
       canAccept: isAvailable,
       message: isAvailable
-        ? `Bệnh viện ${targetHospital.name} có ${availableBeds} giường trống tại khoa ${departmentId}. Có thể chuyển viện.`
-        : `Bệnh viện ${targetHospital.name} hiện hết giường trống tại khoa ${departmentId}. Gợi ý chuyển viện khác.`
+        ? `Bệnh viện ${targetHospital.name} có ${availableBeds} giường trống tại Khoa Ung Thư Não. Đủ năng lực tiếp nhận ca phẫu thuật / điều trị u não.`
+        : `Bệnh viện ${targetHospital.name} hiện hết giường trống chuyên khoa u não. Gợi ý chuyển tuyến khác.`
     }, "Kiểm tra khả năng tiếp nhận thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);

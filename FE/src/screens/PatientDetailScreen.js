@@ -102,6 +102,11 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [drugDurationDays, setDrugDurationDays] = useState('7');
   const [clinicalWarnings, setClinicalWarnings] = useState([]);
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
+  const [clinicalSafetyScore, setClinicalSafetyScore] = useState(100);
+  const [clinicalSafetyStatus, setClinicalSafetyStatus] = useState('SAFE');
+  const [aiConsultationData, setAiConsultationData] = useState(null);
+  const [isConsultingAi, setIsConsultingAi] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
   const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
@@ -329,25 +334,53 @@ const PatientDetailScreen = ({ route, navigation }) => {
     setCustomValidation({ isAbnormal, direction, range, biomarker });
   }, [selectedBiomarkerCode, customLisValue, biomarkerList, selectedOrder]);
 
-  // Kiểm tra an toàn thuốc lâm sàng (Real-time Clinical DSS)
-  const checkMedicationSafety = async (drugsList) => {
+  // Kiểm tra an toàn thuốc lâm sàng (Real-time Clinical DSS & AI Copilot)
+  const checkMedicationSafety = async (drugsList, requestAi = false) => {
     if (!drugsList || drugsList.length === 0 || !patient) {
       setClinicalWarnings([]);
       setClinicalClassifications([]);
+      setClinicalSafetyScore(100);
+      setClinicalSafetyStatus('SAFE');
+      setAiConsultationData(null);
       return;
     }
+    if (requestAi) setIsConsultingAi(true);
     try {
       const response = await post('/api/drugs/check-prescription', {
         patientId: patient._id,
-        medications: drugsList.map(d => ({ name: d.name }))
+        medications: drugsList.map(d => ({
+          name: d.name,
+          quantity: d.quantity,
+          unit: d.unit,
+          usage: d.usage,
+          timesPerDay: d.timesPerDay,
+          durationDays: d.durationDays
+        })),
+        diagnosis: prescriptionDiagnosis || patient?.profile?.diagnosis || "U não",
+        requestAi
       });
       if (response && response.success && response.data) {
         setClinicalWarnings(response.data.warnings || []);
         setClinicalClassifications(response.data.classifications || []);
+        setClinicalSafetyScore(response.data.safetyScore ?? 100);
+        setClinicalSafetyStatus(response.data.status || 'SAFE');
+        if (response.data.aiConsultation) {
+          setAiConsultationData(response.data.aiConsultation);
+        }
       }
     } catch (e) {
       console.warn('Lỗi kiểm tra dược lâm sàng:', e);
+    } finally {
+      if (requestAi) setIsConsultingAi(false);
     }
+  };
+
+  const handleConsultAi = () => {
+    if (prescriptionDrugs.length === 0) {
+      Alert.alert('Chưa có thuốc', 'Vui lòng thêm ít nhất một loại thuốc trước khi tham vấn Dược sĩ AI.');
+      return;
+    }
+    checkMedicationSafety(prescriptionDrugs, true);
   };
 
   const handleAddDrugToPrescription = () => {
@@ -392,6 +425,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
       return;
     }
 
+    // Kiểm tra nếu có cảnh báo nghiêm trọng mà bác sĩ chưa ghi chú lý do ghi đè
+    const hasSevereWarning = clinicalWarnings.some(w => w.severity === 'CRITICAL' || w.severity === 'HIGH');
+    if (hasSevereWarning && (!overrideReason || !overrideReason.trim())) {
+      Alert.alert(
+        'Yêu cầu Lý do Lâm sàng (Override)',
+        'Đơn thuốc có cảnh báo tương tác hoặc chống chỉ định mức độ CAO/NGUY KỊCH. Theo quy định, Bác sĩ bắt buộc phải nhập "Lý do ghi đè lâm sàng" ở khung bên dưới trước khi ký số lưu đơn.'
+      );
+      return;
+    }
+
     setIsSavingPrescription(true);
     try {
       const targetPatientId = patient?._id;
@@ -399,22 +442,31 @@ const PatientDetailScreen = ({ route, navigation }) => {
         doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
         diagnosis: prescriptionDiagnosis,
         drugs: prescriptionDrugs,
-        note: prescriptionNote
+        note: prescriptionNote,
+        overrideReason: overrideReason ? overrideReason.trim() : ""
       };
 
-      await post(`/api/patients/${targetPatientId}/prescriptions`, body);
-      Alert.alert('Thành công', 'Đã kê đơn thuốc thành công.');
-      
-      // Reset form
-      setPrescriptionDiagnosis('');
-      setPrescriptionNote('');
-      setPrescriptionDrugs([]);
-      setClinicalWarnings([]);
-      setClinicalClassifications([]);
+      const res = await post(`/api/patients/${targetPatientId}/prescriptions`, body);
+      if (res && res.success) {
+        Alert.alert('Thành công', 'Đã thẩm định an toàn và lưu đơn thuốc thành công.');
+        
+        // Reset form
+        setPrescriptionDiagnosis('');
+        setPrescriptionNote('');
+        setOverrideReason('');
+        setPrescriptionDrugs([]);
+        setClinicalWarnings([]);
+        setClinicalClassifications([]);
+        setClinicalSafetyScore(100);
+        setClinicalSafetyStatus('SAFE');
+        setAiConsultationData(null);
 
-      // Reload prescriptions list
-      const presRes = await get(`/api/patients/${targetPatientId}/prescriptions`);
-      setPrescriptions(presRes.data || []);
+        // Reload prescriptions list
+        const presRes = await get(`/api/patients/${targetPatientId}/prescriptions`);
+        setPrescriptions(presRes.data || []);
+      } else {
+        Alert.alert('Lỗi', res?.message || 'Không thể lưu đơn thuốc.');
+      }
     } catch (error) {
       console.error('Lỗi lưu đơn thuốc:', error);
       Alert.alert('Thất bại', error.message || 'Không thể kê đơn thuốc.');
@@ -422,6 +474,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       setIsSavingPrescription(false);
     }
   };
+
 
   const handleSaveDischargePaper = async () => {
     if (!dischargeDiagnosis || !dischargeTreatment) {
@@ -1137,6 +1190,13 @@ const PatientDetailScreen = ({ route, navigation }) => {
               handleRemoveDrugFromPrescription={handleRemoveDrugFromPrescription}
               clinicalWarnings={clinicalWarnings}
               clinicalClassifications={clinicalClassifications}
+              clinicalSafetyScore={clinicalSafetyScore}
+              clinicalSafetyStatus={clinicalSafetyStatus}
+              aiConsultationData={aiConsultationData}
+              isConsultingAi={isConsultingAi}
+              onConsultAi={handleConsultAi}
+              overrideReason={overrideReason}
+              setOverrideReason={setOverrideReason}
               prescriptionNote={prescriptionNote}
               setPrescriptionNote={setPrescriptionNote}
               handleSavePrescription={handleSavePrescription}

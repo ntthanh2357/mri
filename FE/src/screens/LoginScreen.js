@@ -68,7 +68,7 @@ const LoginScreen = ({ navigation }) => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+          const destination = (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.reset({
             index: 0,
             routes: [{ name: destination, params: { user: data.user } }],
@@ -191,7 +191,26 @@ const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const data = await post('/auth/login', { email, password });
+      const data = await post('/auth/login', { email, password, roleType: loginRole });
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense)
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
 
       // Bệnh nhân chưa kích hoạt OTP qua email
       if (data.requiresVerification) {
@@ -217,7 +236,7 @@ const LoginScreen = ({ navigation }) => {
         setShowTwoFactor(true);
       } else {
         await setAuthToken(data.accessToken, data.refreshToken);
-        const destination = data.user && data.user.role === 'admin'
+        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
           ? 'AdminBackoffice'
           : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
         showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
@@ -258,7 +277,7 @@ const LoginScreen = ({ navigation }) => {
 
       const data = tempLoginResponse;
       await setAuthToken(data.accessToken, data.refreshToken);
-      const destination = data.user && data.user.role === 'admin'
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
 
@@ -303,8 +322,28 @@ const LoginScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
+
+      // Phân tách nghiêm ngặt vai trò cho Google SSO
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc về Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc về Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
+
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
           index: 0,

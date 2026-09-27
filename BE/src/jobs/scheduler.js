@@ -18,7 +18,7 @@ export const runMriReminderJob = async () => {
       status: 'đang chờ',
       date: { $gte: targetStart, $lte: targetEnd },
       reminderSent: { $ne: true }
-    }).populate("patientId", "profile.name email profile.fcmToken");
+    }).setOptions({ bypassTenancy: true }).populate("patientId", "profile.name email profile.fcmToken");
 
     let count = 0;
     for (const visit of upcomingVisits) {
@@ -104,7 +104,7 @@ export const runPeerReviewSamplingJob = async () => {
       isSigned: true,
       signedAt: { $gte: oneWeekAgo },
       peerReviewId: null
-    });
+    }).setOptions({ bypassTenancy: true });
 
     if (signedResults.length === 0) {
       return { success: true, sampledCount: 0, message: "Không có ca mới cần bình duyệt." };

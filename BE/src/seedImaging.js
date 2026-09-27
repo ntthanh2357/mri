@@ -19,7 +19,7 @@ const seedData = async () => {
       address: 'Đà Nẵng',
       orderDate: new Date(),
       orderingDoctor: 'BS CKII Lê Mạnh Minh',
-      orderingDepartment: 'Khoa Nội Thần Kinh',
+      orderingDepartment: 'Khoa Ung Thư Não',
       medicalRecordNumber: 'SBA-2026-99123',
       diagnosis: 'U não thùy thái dương trái',
       procedure: 'Chụp MRI sọ não 3D',

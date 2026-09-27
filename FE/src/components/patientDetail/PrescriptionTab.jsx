@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import Colors from '../../constants/colors';
-import { Pill, PenTool, Plus, ShieldAlert, AlertTriangle, Info, Save, Printer } from 'lucide-react';
+import { Pill, PenTool, Plus, ShieldAlert, AlertTriangle, Info, Save, Printer, Sparkles, CheckCircle2, AlertOctagon, HelpCircle } from 'lucide-react';
 
 const PrescriptionTab = ({
   isDesktop,
@@ -34,8 +34,15 @@ const PrescriptionTab = ({
   handleAddDrugToPrescription,
   prescriptionDrugs,
   handleRemoveDrugFromPrescription,
-  clinicalWarnings,
-  clinicalClassifications,
+  clinicalWarnings = [],
+  clinicalClassifications = [],
+  clinicalSafetyScore = 100,
+  clinicalSafetyStatus = 'SAFE',
+  aiConsultationData = null,
+  isConsultingAi = false,
+  onConsultAi,
+  overrideReason = '',
+  setOverrideReason,
   prescriptionNote,
   setPrescriptionNote,
   handleSavePrescription,
@@ -43,6 +50,7 @@ const PrescriptionTab = ({
   calculateAge,
 }) => {
   const activePres = prescriptions.length > 0 ? prescriptions[0] : null;
+  const hasSevereWarning = clinicalWarnings.some(w => w.severity === 'CRITICAL' || w.severity === 'HIGH');
 
   return (
     <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
@@ -230,31 +238,173 @@ const PrescriptionTab = ({
               </View>
             )}
 
-            {/* Cảnh báo tương tác lâm sàng real-time */}
-            {(clinicalWarnings.length > 0 || clinicalClassifications.length > 0) && (
-              <View style={{ marginVertical: 12, padding: 12, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FCD34D' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <ShieldAlert size={16} color="#B45309" />
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#B45309' }}>CẢNH BÁO DƯỢC LÂM SÀNG (REAL-TIME DSS):</Text>
+            {/* KHỐI THẨM ĐỊNH AN TOÀN DƯỢC LÂM SÀNG & AI COPILOT */}
+            {prescriptionDrugs.length > 0 && (
+              <View style={{ marginVertical: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                {/* Header thanh điểm & Tham vấn AI */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ShieldAlert size={16} color={clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#DC2626'} />
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>THẨM ĐỊNH DƯỢC LÂM SÀNG</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      backgroundColor: clinicalSafetyScore >= 90 ? '#DCFCE7' : clinicalSafetyScore >= 70 ? '#FEF3C7' : '#FEE2E2',
+                      borderWidth: 1,
+                      borderColor: clinicalSafetyScore >= 90 ? '#86EFAC' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
+                    }}>
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C'
+                      }}>
+                        Điểm an toàn: {clinicalSafetyScore}/100 ({clinicalSafetyStatus})
+                      </Text>
+                    </View>
+
+                    {/* Nút gọi AI Dược sĩ */}
+                    {onConsultAi && (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          backgroundColor: '#7C3AED',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6
+                        }}
+                        onPress={onConsultAi}
+                        disabled={isConsultingAi}
+                      >
+                        {isConsultingAi ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <>
+                            <Sparkles size={12} color="#FFF" />
+                            <Text style={{ color: '#FFF', fontSize: 11, fontWeight: 'bold' }}>Tham vấn AI</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                
-                {clinicalWarnings.map((w, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 4 }}>
-                    <AlertTriangle size={14} color={w.severity === 'CRITICAL' ? '#DC2626' : '#D97706'} style={{ marginTop: 2, flexShrink: 0 }} />
-                    <Text style={{ fontSize: 11, color: w.severity === 'CRITICAL' ? '#DC2626' : '#D97706', fontWeight: w.severity === 'CRITICAL' ? 'bold' : 'normal', flex: 1 }}>
-                      [{w.severity}] {w.message}
+
+                {/* Kết quả nhận định từ Dược sĩ AI (Gemini) nếu có */}
+                {aiConsultationData && (
+                  <View style={{ backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#C4B5FD', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Sparkles size={14} color="#6D28D9" />
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>NHẬN ĐỊNH DƯỢC SĨ AI (GEMINI 3.1 FLASH-LITE):</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#4C1D95', lineHeight: 16, marginBottom: 4 }}>
+                      {aiConsultationData.summary || 'Đơn thuốc đã được AI đối soát với tiền sử bệnh án và phác đồ u não.'}
+                    </Text>
+                    {aiConsultationData.tumor_protocol_compatibility && (
+                      <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: '#DDD6FE' }}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
+                          🧠 Tương thích Khối u AI ({aiConsultationData.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
+                          {aiConsultationData.tumor_protocol_compatibility.clinical_rationale}
+                        </Text>
+                      </View>
+                    )}
+                    {aiConsultationData.pharmacist_recommendations ? (
+                      <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
+                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.pharmacist_recommendations}</Text>
+                      </View>
+                    ) : null}
+                    {aiConsultationData.patient_instructions ? (
+                      <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
+                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.patient_instructions}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+
+                {/* Danh sách cảnh báo tương tác / chống chỉ định */}
+                {clinicalWarnings.length > 0 ? (
+                  <View style={{ gap: 6 }}>
+                    {clinicalWarnings.map((w, i) => {
+                      const isCrit = w.severity === 'CRITICAL';
+                      const isHigh = w.severity === 'HIGH';
+                      const bg = isCrit ? '#FEF2F2' : isHigh ? '#FFF7ED' : '#FFFBEB';
+                      const borderCol = isCrit ? '#F87171' : isHigh ? '#FDBA74' : '#FCD34D';
+                      const textCol = isCrit ? '#991B1B' : isHigh ? '#C2410C' : '#92400E';
+
+                      return (
+                        <View key={i} style={{ backgroundColor: bg, borderWidth: 1, borderColor: borderCol, borderRadius: 6, padding: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                            <AlertTriangle size={14} color={textCol} style={{ marginTop: 2, flexShrink: 0 }} />
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: textCol }}>
+                                  [{w.severity}] {w.type || 'LÂM SÀNG'}
+                                </Text>
+                                {w.source && (
+                                  <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>{w.source}</Text>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: 11, color: '#1E293B', fontWeight: isCrit ? 'bold' : '500' }}>
+                                {w.message}
+                              </Text>
+                              {w.recommendation && (
+                                <Text style={{ fontSize: 10, color: textCol, marginTop: 3, fontStyle: 'italic' }}>
+                                  👉 Xử trí: {w.recommendation}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}>
+                    <CheckCircle2 size={14} color="#16A34A" />
+                    <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '500' }}>
+                      Chưa phát hiện tương tác hoặc chống chỉ định bất lợi trong danh mục thuốc đã chọn.
                     </Text>
                   </View>
-                ))}
+                )}
 
+                {/* Phân loại đặc biệt */}
                 {clinicalClassifications.map((c, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 2 }}>
-                    <Info size={14} color="#4B5563" style={{ marginTop: 2, flexShrink: 0 }} />
-                    <Text style={{ fontSize: 11, color: '#4B5563', fontStyle: 'italic', flex: 1 }}>
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
+                    <Info size={13} color="#475569" style={{ marginTop: 2, flexShrink: 0 }} />
+                    <Text style={{ fontSize: 10, color: '#475569', fontStyle: 'italic', flex: 1 }}>
                       {c.name}: {c.warning}
                     </Text>
                   </View>
                 ))}
+
+                {/* KHUNG BẮT BUỘC NHẬP LÝ DO GHI ĐÈ KHI CÓ CẢNH BÁO NẶNG */}
+                {hasSevereWarning && (
+                  <View style={{ marginTop: 10, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <AlertOctagon size={14} color="#DC2626" />
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>
+                        YÊU CẦU LÝ DO LÂM SÀNG ĐỂ GHI ĐÈ (CLINICAL OVERRIDE):
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 10, color: '#7F1D1D', marginBottom: 6 }}>
+                      Đơn thuốc có cảnh báo nguy cơ cao. Theo quy chuẩn an toàn, Bác sĩ bắt buộc phải ghi rõ giải trình chuyên môn để lưu vết thẩm định:
+                    </Text>
+                    <TextInput
+                      style={[styles.textInput, { backgroundColor: '#FFF', height: 38, borderColor: '#F87171' }]}
+                      placeholder="VD: Đã hội chẩn chuyên khoa; theo dõi sát điện giải và chức năng gan thận..."
+                      value={overrideReason}
+                      onChangeText={setOverrideReason}
+                    />
+                  </View>
+                )}
               </View>
             )}
 
@@ -283,6 +433,7 @@ const PrescriptionTab = ({
               )}
             </TouchableOpacity>
           </View>
+
         </View>
       )}
 
@@ -305,7 +456,7 @@ const PrescriptionTab = ({
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
                   <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                   <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>Hotline: 1900 571 563 - ĐT Cấp cứu: 0236 3615 115</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>

@@ -322,10 +322,13 @@ Kịch bản kiểm thử độc lập tại [test_business_logic_fixes.js](file
 
 ## 6. ĐÁNH GIÁ ĐỐI CHIẾU VỚI THỰC TIỄN BỆNH VIỆN & BỘ Y TẾ VIỆT NAM
 
-### 6.1. Đối chiếu Thông tư 46/2018/TT-BYT (Quy định về Bệnh án Điện tử)
-- **Tính pháp lý của EMR (Điều 4):** Hệ thống triển khai con dấu điện tử **✓ ĐÃ KÝ SỐ ĐIỆN TỬ** kèm tên Bác sĩ CĐHA, thời gian ký chuẩn xác và khóa quyền chỉnh sửa nội dung sau khi ký.
-- **Quản lý quyền truy cập (Điều 6):** Phân quyền 6 vai trò lâm sàng, xác thực phiên làm việc JWT Access/Refresh Token, nhật ký kiểm toán `AuditLog`.
-- **Lưu trữ và bảo mật (Điều 11):** Cơ chế lưu trữ dự phòng thảm họa kép: CSDL MongoDB Atlas + Sao lưu tự động báo cáo và file nén DICOM lên Google Drive bệnh viện.
+> 📌 **BÁO CÁO PHÁP LÝ TOÀN DIỆN:** Toàn bộ căn cứ pháp lý cập nhật đến 09/2026, ma trận rà soát rủi ro, phân loại SaMD và phương án lưu trữ S3/MinIO nội địa đã được chuẩn hóa chi tiết tại **[Chương 11: Tuân Thủ Pháp Lý & An Toàn Y Tế (docs/11_tuan_thu_phap_ly_va_an_toan_y_te.md)](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/11_tuan_thu_phap_ly_va_an_toan_y_te.md)**.
+
+### 6.1. Đối chiếu Thông tư 13/2025/TT-BYT (Thay thế Thông tư 46/2018/TT-BYT từ 21/07/2025)
+- **Tính pháp lý của EMR & Chữ ký số:** Hệ thống triển khai con dấu điện tử **✓ ĐÃ KÝ SỐ ĐIỆN TỬ** kèm tên Bác sĩ CĐHA, thời gian ký chuẩn xác và khóa quyền chỉnh sửa nội dung sau khi ký; sẵn sàng tích hợp định danh công dân VNeID Mức 2.
+- **Quản lý quyền truy cập & Bảo vệ dữ liệu:** Phân quyền 6 vai trò lâm sàng, xác thực phiên làm việc JWT Access/Refresh Token, nhật ký kiểm toán `AuditLog` băm chuỗi liên hoàn Cryptographic Tamper-Evidence.
+- **Lưu trữ hồ sơ bệnh án u não:** Áp dụng `retentionYears: 30` cho bệnh án ung thư não ác tính và cờ `legalHold` bảo vệ hồ sơ theo Luật Lưu trữ 2024.
+- **Lộ trình lưu trữ chuẩn Luật An ninh mạng:** Thiết kế sẵn module lưu trữ MinIO / S3 nội địa sẵn sàng thay thế Google Drive khi đưa vào môi trường Production.
 
 ### 6.2. Đối chiếu Thông tư 54/2017/TT-BYT (Bộ Tiêu Chí Ứng Dụng CNTT Bệnh Viện)
 - **Nhóm HIS:** Đạt **Mức 3/7** (Quản lý tiếp đón, phân buồng khám, quản lý bệnh nhân theo mã y tế duy nhất, quản lý viện phí và BHYT).

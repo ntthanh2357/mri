@@ -24,7 +24,7 @@ export const migrateLegacyEMR = async () => {
       { retentionExpiresAt: { $exists: false } },
       { retentionExpiresAt: null },
     ],
-  });
+  }).setOptions({ bypassTenancy: true });
 
   console.log(`Tìm thấy ${legacyRecords.length} hồ sơ bệnh án cũ cần chuẩn hóa.`);
 

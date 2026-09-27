@@ -55,7 +55,7 @@ const hospitalSchema = new Schema(
     },
     subscriptionExpiresAt: {
       type: Date,
-      default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      default: () => new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000), // Mặc định 3 năm để tránh lỗi hết hạn ngầm
     },
     subscriptionStatus: {
       type: String,

@@ -167,7 +167,8 @@ async function runAllTests() {
     '../services/__tests__/hospitalBed.service.test.js',
     '../services/__tests__/imaging.service.test.js',
     './tenancy_and_transaction.test.js',
-    './clinical_workflow_e2e.test.js'
+    './clinical_workflow_e2e.test.js',
+    './schedule_registration.test.js',
   ];
 
   const startTime = Date.now();

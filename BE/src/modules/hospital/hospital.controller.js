@@ -255,7 +255,7 @@ export const getHospitalStaff = async (req, res) => {
     }
 
     const staff = await User.find({ hospitalId, role: { $ne: "patient" } })
-      .select("email role profile.name isActive isLocked isVerified createdAt phone")
+      .select("email role departmentId profile.name profile.specialty isActive isLocked isVerified createdAt phone")
       .sort({ createdAt: -1 })
       .lean();
 

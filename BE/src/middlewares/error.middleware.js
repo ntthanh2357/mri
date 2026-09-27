@@ -46,11 +46,24 @@ export const errorHandler = (err, req, res, next) => {
   const statusCode = err.status || err.statusCode || 500;
   const isProduction = process.env.NODE_ENV === "production";
 
+  let clientMessage = err.message || "Internal Server Error";
+
+  // Lọc sạch các thông tin nhạy cảm của hệ thống/driver nếu có rò rỉ trong err.message
+  if (isProduction) {
+    if (statusCode >= 500) {
+      clientMessage = "Đã xảy ra sự cố nội bộ trên máy chủ y tế. Vui lòng thử lại sau.";
+    } else {
+      // Ẩn các chi tiết đường dẫn tệp tin hoặc lỗi driver cơ sở dữ liệu
+      const sensitivePatterns = [/mongo/i, /sql/i, /connect/i, /econnrefused/i, /[a-zA-Z]:\\/, /\/home\//, /\/var\//];
+      if (sensitivePatterns.some(pattern => pattern.test(clientMessage))) {
+        clientMessage = "Yêu cầu không thể xử lý do lỗi dữ liệu hoặc tham số không hợp lệ.";
+      }
+    }
+  }
+
   res.status(statusCode).json({
     success: false,
-    message: isProduction && statusCode === 500
-      ? "Đã xảy ra sự cố nội bộ trên máy chủ y tế. Vui lòng thử lại sau."
-      : (err.message || "Internal Server Error"),
+    message: clientMessage,
     ...(isProduction ? {} : { stack: err.stack })
   });
 };

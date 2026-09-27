@@ -45,14 +45,18 @@ export const createRateLimiter = ({
   skip = () => false,
 }) => {
   return (req, res, next) => {
-    // Skip if condition met (e.g. local development or demo)
-    if (process.env.NODE_ENV !== "production" || skip(req)) {
+    // Kích hoạt khi ở production hoặc khi có biến ENABLE_RATE_LIMIT=true
+    const isRateLimitActive = process.env.NODE_ENV === "production" || process.env.ENABLE_RATE_LIMIT === "true";
+    if (!isRateLimitActive || skip(req)) {
       return next();
     }
 
-    const ip = req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || req.ip || "unknown-ip";
+    const rawIp = req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || req.ip || "unknown-ip";
+    const ip = typeof rawIp === "string" ? rawIp.split(",")[0].trim() : "unknown-ip";
     const routeKey = req.baseUrl || req.path || "";
-    const key = `${ip}:${routeKey}`;
+    // Chống tấn công dò mật khẩu phân tán: kết hợp IP + Email (nếu có)
+    const accountIdentifier = req.body?.email ? `:${req.body.email.toLowerCase().trim()}` : "";
+    const key = `${ip}:${routeKey}${accountIdentifier}`;
     const now = Date.now();
 
     let record = defaultStore.getRecord(key);

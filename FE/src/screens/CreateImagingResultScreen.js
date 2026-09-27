@@ -12,7 +12,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { post } from '../services/api.service';
+import { post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
@@ -92,7 +92,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
+    input.accept = 'image/*,.zip,.rar,.7z,.dcm,.nii,.nii.gz';
     input.multiple = true;
     input.onchange = async (e) => {
       const files = Array.from(e.target.files || []);
@@ -108,12 +108,12 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 
       for (let file of files) {
         try {
-          const fileData = await readFileAsBase64(file);
-          const response = await post('/api/v1/imaging/upload', {
-            fileData,
-            fileName: file.name,
-            imagingType
-          });
+          // Gửi trực tiếp dạng Multipart FormData nhị phân (Zero Base64 overhead, nhanh gấp 5-10 lần)
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('imagingType', imagingType);
+
+          const response = await postFormData('/api/v1/imaging/upload', formData);
 
           if (response.success && response.data?.imageUrl) {
             uploadedUrls.push(response.data.imageUrl);
@@ -221,10 +221,16 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       };
 
       const response = await post('/api/v1/imaging', payload);
-      if (response.success) {
-        showAlert('Thành công', 'Đã đăng tải kết quả chẩn đoán hình ảnh mới lên hệ thống!', () => {
+      const handleGoBack = () => {
+        if (navigation.canGoBack()) {
           navigation.goBack();
-        });
+        } else {
+          navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' });
+        }
+      };
+
+      if (response.success) {
+        showAlert('Thành công', 'Đã đăng tải kết quả chẩn đoán hình ảnh mới lên hệ thống!', handleGoBack);
       } else {
         showAlert('Lỗi', response.message || 'Không thể lưu kết quả chụp.');
       }
@@ -236,12 +242,20 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleCancel = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' });
+    }
+  };
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleCancel}>
             <Text style={styles.backBtnText}>← Hủy</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Nhập Kết quả MRI / CT-Scan</Text>

@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { User } from "./models/user.model.js";
+import { Hospital } from "../hospital/models/hospital.model.js";
 import { Otp } from "./models/otp.model.js";
 import { sendOtpEmail } from "../../services/email.service.js";
 import { authCache } from "../../utils/authCache.util.js";
@@ -100,6 +101,22 @@ export const loginUserService = async ({ email, password }) => {
 
   if (user.isLocked) {
     throw { status: 403, message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." };
+  }
+
+  // Thẩm định trạng thái hoạt động và hạn thuê bao của bệnh viện
+  if (user.hospitalId) {
+    const hospital = await Hospital.findById(user.hospitalId).select("isActive subscriptionExpiresAt subscriptionStatus name").lean();
+    if (hospital) {
+      if (hospital.isActive === false) {
+        throw { status: 403, message: `Bệnh viện ${hospital.name || ''} đang bị khóa. Vui lòng liên hệ quản trị viên.` };
+      }
+      const now = new Date();
+      const hasExpired = hospital.subscriptionExpiresAt && new Date(hospital.subscriptionExpiresAt) < now;
+      const isSuspended = hospital.subscriptionStatus === "suspended" || hospital.subscriptionStatus === "expired";
+      if ((hasExpired || isSuspended) && !["admin", "system_admin"].includes(user.role)) {
+        throw { status: 403, message: "Gói đăng ký dịch vụ của bệnh viện đã hết hạn hoặc bị tạm ngưng. Vui lòng liên hệ quản trị viên để gia hạn." };
+      }
+    }
   }
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);

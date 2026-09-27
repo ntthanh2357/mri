@@ -182,6 +182,14 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
+  // Xử lý mã 403 trên các endpoint xác thực cốt lõi (/auth/me): Tài khoản bị khóa hoặc gói bệnh viện hết hạn
+  // Xóa token để giải phóng trạng thái zombie loop
+  if (response.status === 403 && endpoint === '/auth/me') {
+    await setAuthToken(null);
+    navigateTo('Welcome');
+    throw new Error(data?.message || 'Tài khoản hoặc bệnh viện của bạn đang bị khóa hoặc hết hạn dịch vụ.');
+  }
+
   if (!response.ok) throw new Error(data.message || `Request failed with status ${response.status}`);
   return data;
 };

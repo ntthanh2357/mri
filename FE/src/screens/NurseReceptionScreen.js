@@ -22,6 +22,12 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
 
+  useEffect(() => {
+    if (route.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route.params?.tab]);
+
   // createVisit Tab State
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -311,27 +317,38 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' : 
                       user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
 
+  const pendingInvoicesCount = invoices.filter(i => i.status !== 'đã thanh toán').length;
+  const currentActiveRoute = activeTab === 'billing' 
+    ? 'ReceptionistDashboard_billing' 
+    : activeTab === 'myQueue' 
+    ? 'ReceptionistDashboard_myQueue' 
+    : 'ReceptionistDashboard_createVisit';
+
   return (
-    <ResponsiveLayout navigation={navigation} title={headerTitle} user={user} activeRoute={activeTab === 'billing' ? 'ReceptionistDashboard_billing' : 'ReceptionistDashboard_createVisit'}>
+    <ResponsiveLayout navigation={navigation} title={headerTitle} user={user} activeRoute={currentActiveRoute}>
       <View style={styles.container}>
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'createVisit' && styles.activeTab]}
             onPress={() => setActiveTab('createVisit')}
           >
-            <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>Tạo Lượt Khám</Text>
+            <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>+ Tạo Lượt Khám</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'myQueue' && styles.activeTab]}
             onPress={() => setActiveTab('myQueue')}
           >
-            <Text style={[styles.tabText, activeTab === 'myQueue' && styles.activeTabText]}>Lượt Khám (Hôm Nay)</Text>
+            <Text style={[styles.tabText, activeTab === 'myQueue' && styles.activeTabText]}>
+              Lượt Khám Hôm Nay ({visits.length})
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'billing' && styles.activeTab]}
             onPress={() => setActiveTab('billing')}
           >
-            <Text style={[styles.tabText, activeTab === 'billing' && styles.activeTabText]}>Thanh Toán</Text>
+            <Text style={[styles.tabText, activeTab === 'billing' && styles.activeTabText]}>
+              Thu Ngân & BHYT {pendingInvoicesCount > 0 ? `(${pendingInvoicesCount} chờ)` : ''}
+            </Text>
           </TouchableOpacity>
         </View>
 

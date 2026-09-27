@@ -170,7 +170,7 @@ const DischargeTransferTab = ({
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
                     <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                     <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeDisc.dischargeNo}/GV</Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
@@ -510,7 +510,7 @@ const DischargeTransferTab = ({
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
                   <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                   <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeTrans.transferNo}/GCT</Text>
                 </View>
                 <View style={{ alignItems: 'center' }}>
@@ -528,7 +528,7 @@ const DischargeTransferTab = ({
               <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A', textAlign: 'center', marginBottom: 20 }}>Kính gửi: {activeTrans.transferTo}</Text>
 
               <View style={{ gap: 10, marginBottom: 20 }}>
-                <Text style={{ fontSize: 13, color: '#334155' }}>Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>Bệnh viện Đa khoa Tâm Trí Đà Nẵng</Text> trân trọng giới thiệu:</Text>
+                <Text style={{ fontSize: 13, color: '#334155' }}>Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>Bệnh viện Chuyên Khoa Ung Thư Não NeuroScan</Text> trân trọng giới thiệu:</Text>
                 <Text style={{ fontSize: 13, color: '#334155' }}>- Họ và tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
                 
                 <View style={{ flexDirection: 'row', gap: 20 }}>

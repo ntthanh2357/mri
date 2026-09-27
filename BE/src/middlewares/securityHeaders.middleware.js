@@ -16,8 +16,17 @@ export const securityHeaders = (req, res, next) => {
   // Control referrer information sent in HTTP headers
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-  // Enforce HTTPS (HTTP Strict Transport Security) in production
-  if (process.env.NODE_ENV === "production") {
+  // Content-Security-Policy (CSP) - Bảo vệ chống chèn script lạ & XSS
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: ws: wss:; object-src 'none'; frame-ancestors 'self';"
+  );
+
+  // Cross-Origin Isolation Policies
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+
+  // Enforce HTTPS (HTTP Strict Transport Security)
+  if (process.env.NODE_ENV === "production" || req.secure || req.headers?.["x-forwarded-proto"] === "https") {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
 

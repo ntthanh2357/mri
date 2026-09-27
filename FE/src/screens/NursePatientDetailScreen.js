@@ -30,7 +30,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const patientIdStr = patient.patientId   || patient._id || "";
   const gender       = patient.gender      || patient?.profile?.gender || "";
   const age          = patient.age         || "";
-  const department   = patient.department  || "Khoa Nội Thần Kinh";
+  const department   = patient.department  || "Khoa Ung Thư Não";
   const doctor       = patient.doctorInCharge || "Bác sĩ điều trị";
 
   // Navigation / Tabs state
@@ -49,7 +49,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const [examBreath, setExamBreath] = useState("");
   const [examTemp,   setExamTemp]   = useState("");
   const [examSpo2,   setExamSpo2]   = useState("");
-  const [examRequest,setExamRequest]= useState("Khám sức khỏe tổng quát");
+  const [examRequest,setExamRequest]= useState("Khám và đánh giá u não chuyên sâu");
   const [examObject, setExamObject] = useState("Thu phí");
 
   // ── Phiếu chỉ định dịch vụ (Service Order) ──
@@ -60,7 +60,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   // ── Phiếu thu viện phí (Fee Items) ──
   const [feeItems,    setFeeItems]    = useState([
-    { name: "Khám chuyên khoa thần kinh", amount: "150000" }
+    { name: "Khám chuyên khoa Ung Thư Não", amount: "150000" }
   ]);
   const [feeNewName,  setFeeNewName]  = useState("");
   const [feeNewAmt,   setFeeNewAmt]   = useState("");
@@ -520,7 +520,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.docHospitalName}>SỞ Y TẾ ĐÀ NẴNG</Text>
-                      <Text style={s.docHospitalSub}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+                      <Text style={s.docHospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                     </View>
                     <Building2 size={26} color="#0891B2" />
                   </View>
@@ -657,7 +657,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 <View style={s.docPaper}>
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.docHospitalName}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
+                      <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                       <Text style={s.docHospitalSub}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
                     </View>
                     <FileText size={26} color="#0891B2" />
@@ -802,8 +802,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 <View style={s.docPaper}>
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.docHospitalName}>BỆNH VIỆN ĐA KHOA TÂM TRÍ ĐÀ NẴNG</Text>
-                      <Text style={s.docHospitalAddress}>64, Cách Mạng Tháng 8, P. Khuê Trung, Q. Cẩm Lệ, TP Đà Nẵng</Text>
+                      <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                      <Text style={s.docHospitalAddress}>Khu Công Nghệ Cao Y Tế & Chuyên Khoa U Não Đà Nẵng</Text>
                     </View>
                     <CreditCard size={26} color="#0891B2" />
                   </View>

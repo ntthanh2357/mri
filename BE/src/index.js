@@ -43,8 +43,34 @@ app.use(cors({
 }));
 
 // 3. Body parsers
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+// Phân hệ hình ảnh MRI / DICOM: Cho phép upload dữ liệu lát cắt lớn (đến 700MB)
+app.use("/api/v1/imaging", express.json({ limit: "700mb" }));
+app.use("/api/v1/imaging", express.urlencoded({ limit: "700mb", extended: true }));
+
+// Các API thông thường (Auth, EMR, Bệnh nhân...): Giới hạn 20mb để chống tấn công cạn kiệt RAM / JSON Bomb
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
+// 3b. Zero-dependency Cookie Parser hỗ trợ HttpOnly Cookie
+app.use((req, res, next) => {
+  req.cookies = {};
+  const cookieHeader = req.headers?.cookie;
+  if (cookieHeader) {
+    cookieHeader.split(";").forEach((cookie) => {
+      const parts = cookie.split("=");
+      const name = parts[0]?.trim();
+      const val = parts.slice(1).join("=").trim();
+      if (name) {
+        try {
+          req.cookies[name] = decodeURIComponent(val);
+        } catch {
+          req.cookies[name] = val;
+        }
+      }
+    });
+  }
+  next();
+});
 
 // 4. Khử độc NoSQL Injection trên toàn bộ req.body, req.query, req.params
 app.use(sanitizeNoSql);

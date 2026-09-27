@@ -66,7 +66,7 @@ export const protect = async (req, res, next) => {
           const hasExpired = hospital.subscriptionExpiresAt && new Date(hospital.subscriptionExpiresAt) < now;
           const isSuspended = hospital.subscriptionStatus === "suspended" || hospital.subscriptionStatus === "expired";
           
-          if ((hasExpired || isSuspended) && decoded.role !== "admin") {
+          if ((hasExpired || isSuspended) && !["admin", "system_admin"].includes(decoded.role)) {
             res.status(403).json({ message: "Gói đăng ký dịch vụ của bệnh viện đã hết hạn hoặc bị tạm ngưng. Vui lòng liên hệ quản trị viên để gia hạn." });
             return;
           }

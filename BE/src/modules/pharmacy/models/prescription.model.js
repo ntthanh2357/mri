@@ -44,6 +44,22 @@ const prescriptionSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "Invoice"
   },
+  clinicalSafety: {
+    safetyScore: { type: Number, default: 100 },
+    status: { type: String, enum: ["SAFE", "CAUTION", "HIGH_RISK", "CRITICAL"], default: "SAFE" },
+    warnings: [{
+      type: { type: String },
+      severity: { type: String },
+      drugs: [{ type: String }],
+      message: { type: String },
+      recommendation: { type: String },
+      source: { type: String }
+    }],
+    aiConsultation: { type: Schema.Types.Mixed, default: null },
+    overrideReason: { type: String, default: "" },
+    overriddenBy: { type: String, default: "" },
+    overriddenAt: { type: Date, default: null }
+  },
   recorded_at: {
     type: Date,
     default: Date.now

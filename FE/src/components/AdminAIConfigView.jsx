@@ -14,6 +14,12 @@ import {
   BarChart2,
   Zap,
   RefreshCw,
+  ShieldCheck,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  ArrowRight,
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
@@ -97,9 +103,22 @@ export default function AdminAIConfigView() {
   const [loadingFeedback, setLoadingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState(null);
 
-  // ─── Retrain ───────────────────────────────────────────────────────────────
+  // ─── Retrain & MLOps State ──────────────────────────────────────────────────
   const [retraining, setRetraining] = useState(false);
   const [retrainMsg, setRetrainMsg] = useState('');
+  const [retrainStatus, setRetrainStatus] = useState({
+    status: 'idle',
+    started_at: null,
+    finished_at: null,
+    current_active_model: 'models/resnet_risk_calibrated.keras',
+    result: null,
+    error: null,
+    logs: []
+  });
+  const [deploying, setDeploying] = useState(false);
+  const [deployMsg, setDeployMsg] = useState('');
+  const [rollingBack, setRollingBack] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   // ─── Chatbot Config ────────────────────────────────────────────────────────
   const [config, setConfig] = useState({ blacklist: [], system_prompt: '' });
@@ -153,27 +172,105 @@ export default function AdminAIConfigView() {
     }
   }, []);
 
+  // ─── Fetch Retrain Status ──────────────────────────────────────────────────
+  const fetchRetrainStatus = useCallback(async () => {
+    try {
+      const data = await apiRequest('/admin/ai-retrain-status');
+      if (data && (data.success || data.status)) {
+        setRetrainStatus(data);
+        if (data.status === 'running') {
+          setRetraining(true);
+        } else if (data.status === 'completed' || data.status === 'failed' || data.status === 'idle') {
+          setRetraining(false);
+        }
+      }
+    } catch (_) { }
+  }, []);
+
   useEffect(() => {
     fetchStats();
     fetchFeedback();
     fetchConfig();
-  }, [fetchStats, fetchFeedback, fetchConfig]);
+    fetchRetrainStatus();
+  }, [fetchStats, fetchFeedback, fetchConfig, fetchRetrainStatus]);
+
+  // Polling khi đang trong quá trình huấn luyện
+  useEffect(() => {
+    let interval = null;
+    if (retrainStatus.status === 'running' || retraining) {
+      interval = setInterval(() => {
+        fetchRetrainStatus();
+        fetchStats();
+        fetchFeedback();
+      }, 3000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [retrainStatus.status, retraining, fetchRetrainStatus, fetchStats, fetchFeedback]);
 
   // ─── Retrain Handler ───────────────────────────────────────────────────────
-  const handleRetrain = async () => {
+  const handleRetrain = async (force = false) => {
     setRetraining(true);
     setRetrainMsg('');
+    setDeployMsg('');
     try {
-      const data = await apiRequest('/admin/ai-retrain', { method: 'POST' });
+      const data = await apiRequest(`/admin/ai-retrain${force ? '?force=true' : ''}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force })
+      });
       if (data.success) {
         setRetrainMsg(data.message || 'Kích hoạt tiến trình huấn luyện lại thành công!');
-        await fetchStats();
-        await fetchFeedback();
+        await fetchRetrainStatus();
+      } else {
+        setRetrainMsg(`Lỗi: ${data.message}`);
+        setRetraining(false);
       }
     } catch (err) {
       setRetrainMsg(`Lỗi: ${err.message}`);
-    } finally {
       setRetraining(false);
+    }
+  };
+
+  // ─── Deploy Model Handler (Hot-Reload) ──────────────────────────────────────
+  const handleDeployModel = async () => {
+    setDeploying(true);
+    setDeployMsg('');
+    try {
+      const data = await apiRequest('/admin/ai-retrain-deploy', { method: 'POST' });
+      if (data.success) {
+        setDeployMsg(data.message || 'Mô hình mới đã được nạp thành công vào RAM (Zero Downtime)!');
+        await fetchRetrainStatus();
+      } else {
+        setDeployMsg(`Lỗi: ${data.message}`);
+      }
+    } catch (err) {
+      setDeployMsg(`Lỗi: ${err.message}`);
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  // ─── Rollback Model Handler ─────────────────────────────────────────────────
+  const handleRollbackModel = async () => {
+    if (typeof window !== 'undefined' && !window.confirm('Bạn có chắc chắn muốn hoàn tác về mô hình chuẩn ban đầu?')) {
+      return;
+    }
+    setRollingBack(true);
+    setDeployMsg('');
+    try {
+      const data = await apiRequest('/admin/ai-retrain-rollback', { method: 'POST' });
+      if (data.success) {
+        setDeployMsg(data.message || 'Đã hoàn tác về mô hình chuẩn gốc thành công.');
+        await fetchRetrainStatus();
+      } else {
+        setDeployMsg(`Lỗi: ${data.message}`);
+      }
+    } catch (err) {
+      setDeployMsg(`Lỗi: ${err.message}`);
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -310,44 +407,107 @@ export default function AdminAIConfigView() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          SECTION 2: ACTIVE LEARNING — RETRAIN
+          SECTION 2: ACTIVE LEARNING & MLOPS RETRAINING DASHBOARD
       ══════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#e8edf5] flex items-center gap-2.5 bg-gradient-to-r from-blue-50/60 to-white">
-          <Zap className="w-4.5 h-4.5 text-blue-600" />
-          <span className="font-bold text-slate-900 text-sm">Vòng lặp học tăng cường — Kích hoạt Huấn luyện lại</span>
+        <div className="px-6 py-4 border-b border-[#e8edf5] flex items-center justify-between bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white">
+          <div className="flex items-center gap-2.5">
+            <Zap className="w-5 h-5 text-blue-600" />
+            <div>
+              <span className="font-bold text-slate-900 text-sm">Vòng lặp học tăng cường (Active Learning MLOps)</span>
+              <p className="text-[11px] text-slate-500">Huấn luyện lại mô hình từ phản hồi bác sĩ — Hot Reload & Rollback không gián đoạn</p>
+            </div>
+          </div>
+          {retraining && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold animate-pulse">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Đang huấn luyện ngầm...
+            </span>
+          )}
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-5">
+          {/* Status Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Ca cần học lại</p>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 text-center">
+              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Ca phản hồi tích lũy</p>
               <p className="text-3xl font-black text-slate-900 font-mono mt-1">{feedback.length}</p>
-              <p className="text-slate-400 text-[10px] mt-0.5">phản hồi bác sĩ sửa lại</p>
+              <p className="text-slate-400 text-[10px] mt-0.5">mẫu ca khó đã khoanh vùng</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Phiên bản mô hình</p>
-              <p className="text-xl font-black text-slate-900 font-mono mt-1">v4.2-ensemble</p>
-              <p className="text-slate-400 text-[10px] mt-0.5">YOLOv8 + ResNet-50</p>
+
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 text-center">
+              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Mô hình đang hoạt động</p>
+              <p className="text-sm font-black text-slate-900 font-mono mt-2 truncate px-2" title={retrainStatus.current_active_model}>
+                {retrainStatus.current_active_model ? retrainStatus.current_active_model.split('/').pop() : 'resnet_risk_calibrated.keras'}
+              </p>
+              <p className="text-emerald-600 font-semibold text-[10px] mt-1 flex items-center justify-center gap-1">
+                <ShieldCheck className="w-3 h-3 inline" /> Đang phục vụ lâm sàng
+              </p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Trạng thái</p>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mt-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Sẵn sàng
-              </span>
+
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 text-center">
+              <p className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Trạng thái MLOps</p>
+              {retrainStatus.status === 'running' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold mt-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  Đang Fine-Tuning
+                </span>
+              ) : retrainStatus.status === 'completed' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold mt-2">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  Đã kiểm chuẩn
+                </span>
+              ) : retrainStatus.status === 'failed' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-bold mt-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  Gặp sự cố
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold mt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Sẵn sàng
+                </span>
+              )}
             </div>
           </div>
 
-          <button
-            onClick={handleRetrain}
-            disabled={retraining || feedback.length === 0}
-            className="w-full px-4 py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-          >
-            {retraining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
-            {retraining ? 'Đang chạy huấn luyện...' : `Chạy huấn luyện lại với ${feedback.length} ca phản hồi`}
-          </button>
+          {/* Action Trigger Row */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <button
+              onClick={() => handleRetrain(feedback.length < 50)}
+              disabled={retraining || feedback.length === 0}
+              className="flex-1 w-full px-5 py-3 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            >
+              {retraining ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  <span>Đang tiến hành huấn luyện ngầm trên máy chủ...</span>
+                </>
+              ) : (
+                <>
+                  <RotateCw className="w-4 h-4 text-cyan-400" />
+                  <span>
+                    {feedback.length >= 50
+                      ? `Kích hoạt Huấn luyện lại đạt chuẩn (${feedback.length} ca)`
+                      : `Chạy thử nghiệm Huấn luyện lại với ${feedback.length} ca phản hồi`}
+                  </span>
+                </>
+              )}
+            </button>
 
+            {/* Rollback button */}
+            <button
+              onClick={handleRollbackModel}
+              disabled={rollingBack || retraining}
+              className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              title="Nạp lại mô hình gốc chuẩn trong trường hợp mô hình mới có sai lệch"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>{rollingBack ? 'Đang hoàn tác...' : 'Hoàn tác (Rollback)'}</span>
+            </button>
+          </div>
+
+          {/* Status Alert Message */}
           {retrainMsg && (
             <div className={`px-4 py-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${
               retrainMsg.startsWith('Lỗi')
@@ -358,6 +518,96 @@ export default function AdminAIConfigView() {
               <span>{retrainMsg}</span>
             </div>
           )}
+
+          {/* Deploy / Rollback Alert Message */}
+          {deployMsg && (
+            <div className={`px-4 py-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${
+              deployMsg.startsWith('Lỗi')
+                ? 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}>
+              {deployMsg.startsWith('Lỗi') ? <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" /> : <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />}
+              <span>{deployMsg}</span>
+            </div>
+          )}
+
+          {/* ── QUALITY GATE BENCHMARK CARD ──────────────────────────── */}
+          {retrainStatus.result && (
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-xl p-5 border border-indigo-800/50 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-indigo-800/40 gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <span className="font-bold text-sm">Kết quả Kiểm chuẩn tự động (Validation Gate)</span>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold self-start sm:self-auto ${
+                  retrainStatus.result.gate_passed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}>
+                  {retrainStatus.result.gate_passed ? 'ĐẠT CHUẨN LÂM SÀNG' : 'CẢNH BÁO SUY GIẢM'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 text-center">
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Mẫu huấn luyện</p>
+                  <p className="text-xl font-bold font-mono text-cyan-300">{retrainStatus.result.samples_trained} ca</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Độ chính xác gốc</p>
+                  <p className="text-xl font-bold font-mono text-slate-300">{retrainStatus.result.baseline_accuracy}%</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Độ chính xác mới</p>
+                  <p className="text-xl font-bold font-mono text-emerald-400">{retrainStatus.result.retrained_accuracy}%</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Biến thiên</p>
+                  <p className={`text-xl font-bold font-mono ${retrainStatus.result.retrained_accuracy >= retrainStatus.result.baseline_accuracy ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {retrainStatus.result.accuracy_diff}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-indigo-800/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-300">
+                  Mô hình ứng viên: <span className="font-mono text-cyan-300">{retrainStatus.result.candidate_model_path?.split('/').pop()}</span>
+                </p>
+                <button
+                  onClick={handleDeployModel}
+                  disabled={deploying || !retrainStatus.result.gate_passed}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
+                >
+                  {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                  <span>Phê duyệt & Áp dụng ngay (Hot-Reload)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── TERMINAL LOGS ACCORDION ──────────────────────────────── */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowLogs(!showLogs)}
+              className="w-full px-4 py-2.5 bg-slate-50 hover:bg-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-slate-500" />
+                <span>Nhật ký tiến trình huấn luyện ({retrainStatus.logs?.length || 0} dòng)</span>
+              </div>
+              {showLogs ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </button>
+
+            {showLogs && (
+              <div className="bg-[#0b101b] p-4 text-[11px] font-mono text-emerald-400 max-h-56 overflow-y-auto space-y-1">
+                {retrainStatus.logs && retrainStatus.logs.length > 0 ? (
+                  retrainStatus.logs.map((log, idx) => (
+                    <p key={idx} className="whitespace-pre-wrap">{log}</p>
+                  ))
+                ) : (
+                  <p className="text-slate-500 italic">Chưa có nhật ký nào được ghi nhận.</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

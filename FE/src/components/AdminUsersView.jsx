@@ -29,6 +29,8 @@ function mapApiUser(u) {
     email: u.email,
     phone: u.profile?.phone || u.phone || '',
     role: u.role,
+    departmentId: u.departmentId || '',
+    specialty: u.profile?.specialty || '',
     avatarUrl:
       u.profile?.photoUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(u.profile?.name || u.email)}&background=e2e8f0&color=475569&bold=true`,
@@ -44,6 +46,7 @@ function mapApiUserDetail(u) {
     email: u.email,
     phone: u.profile?.phone || u.phone || '',
     role: u.role,
+    departmentId: u.departmentId || '',
     isVerified: u.isVerified,
     isLocked: u.isLocked,
     profile: u.profile,
@@ -51,23 +54,93 @@ function mapApiUserDetail(u) {
   };
 }
 
-// Human-readable role label
+// Human-readable role label bám sát thực tế y tế
 function roleLabel(role) {
   switch (role) {
     case 'patient':
-      return 'Bệnh nhân';
+      return 'Bệnh nhân & Thân nhân';
     case 'doctor':
-      return 'Bác sĩ';
+      return 'Bác sĩ Ung Thư Não & Phẫu thuật';
     case 'admin':
-      return 'Quản trị viên';
+      return 'Quản trị viên Hệ thống Y tế';
     case 'hospital_admin':
-      return 'Admin Bệnh viện';
+      return 'Ban Lãnh đạo Khoa / Quản lý BV';
     case 'technician':
-      return 'Kỹ thuật viên';
+      return 'Kỹ thuật viên CĐHA & MRI 3.0T';
     case 'nurse':
-      return 'Điều dưỡng & Lễ tân';
+      return 'Điều dưỡng Hồi sức & Chăm sóc U Não';
+    case 'receptionist':
+      return 'Nhân viên Tiếp đón & Thu ngân';
     default:
       return role;
+  }
+}
+
+// Human-readable department label chuẩn lâm sàng u não
+function getDepartmentLabel(deptId) {
+  switch (deptId) {
+    case 'KUTN-SURG':
+      return 'Phẫu thuật & Hồi tỉnh Mở Sọ (KUTN-SURG)';
+    case 'KUTN-ICU':
+      return 'Hồi sức Cấp cứu U Não (Neuro-ICU)';
+    case 'KUTN-CHEMO':
+      return 'Hóa trị & Xạ trị U Não (KUTN-CHEMO)';
+    case 'KUTN-PAL':
+      return 'Chăm sóc Giảm nhẹ & Phục hồi (KUTN-PAL)';
+    case 'KUTN-CLI':
+      return 'Phòng khám U Não & Tiếp đón (KUTN-CLI)';
+    case 'KCDHA':
+      return 'Chẩn đoán Hình ảnh & Mini-PACS (KCDHA)';
+    case 'KD':
+      return 'Khoa Dược & Pha chế Hóa chất (KD)';
+    case 'KXN':
+      return 'Xét nghiệm & GPB Sinh học Phân tử (KXN)';
+    case 'KUTN':
+      return 'Khoa Ung Thư Não (Trung tâm / Văn phòng Khoa)';
+    case 'KNT':
+      return 'Khoa Ngoại Thần Kinh (KNT)';
+    case 'ICU':
+      return 'Hồi Sức Cấp Cứu (ICU)';
+    default:
+      return deptId || 'Khoa Ung Thư Não';
+  }
+}
+
+// Human-readable specialty label
+function getSpecialtyLabel(spec) {
+  switch (spec) {
+    case 'neurosurgeon':
+      return 'Phẫu thuật Thần kinh U Não';
+    case 'neuro_oncologist':
+      return 'Ung thư Thần kinh Lâm sàng (Hóa xạ trị)';
+    case 'neuroradiologist':
+      return 'Chẩn đoán Hình ảnh Thần kinh & MRI';
+    case 'neuro_icu_nurse':
+      return 'Điều dưỡng Hồi sức Cấp cứu Neuro-ICU';
+    case 'oncology_nurse':
+      return 'Điều dưỡng Hóa trị & Nội trú';
+    case 'surgical_nurse':
+      return 'Điều dưỡng Hồi tỉnh Mở Sọ';
+    case 'mri_technician':
+      return 'KTV Vận hành Máy MRI 3.0T Sọ Não';
+    case 'radiation_technician':
+      return 'KTV Mô phỏng & Xạ trị Gia tốc';
+    case 'receptionist':
+      return 'Tiếp đón, Phân luồng & Thu viện phí';
+    case 'hospital_director':
+      return 'Ban Giám đốc Khối Thần kinh & Ung bướu';
+    case 'medical_affairs':
+      return 'Kế hoạch Tổng hợp & Chỉ đạo Tuyến';
+    case 'clinical_pharmacist':
+      return 'Dược sĩ Lâm sàng & Giám sát Phác đồ';
+    case 'it_admin':
+      return 'Quản trị Hệ thống HIS/RIS/PACS';
+    case 'security_admin':
+      return 'Bảo mật An toàn Y tế & HIPAA';
+    case 'ai_engineer':
+      return 'Kỹ sư AI & Bệnh án Điện tử';
+    default:
+      return spec || '';
   }
 }
 
@@ -93,11 +166,13 @@ export default function AdminUsersView() {
   
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState('hospital_admin');
+  const [newRole, setNewRole] = useState('doctor');
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newHospitalName, setNewHospitalName] = useState('');
   const [newHospitalAddress, setNewHospitalAddress] = useState('');
+  const [newDepartmentId, setNewDepartmentId] = useState('KUTN-SURG');
+  const [newSpecialty, setNewSpecialty] = useState('');
   
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -123,11 +198,13 @@ export default function AdminUsersView() {
   const resetCreateForm = () => {
     setNewEmail('');
     setNewPassword('');
-    setNewRole('hospital_admin');
+    setNewRole('doctor');
     setNewName('');
     setNewPhone('');
     setNewHospitalName('');
     setNewHospitalAddress('');
+    setNewDepartmentId('KUTN-SURG');
+    setNewSpecialty('');
     setCreateError(null);
     setCreateSuccess(null);
   };
@@ -140,7 +217,7 @@ export default function AdminUsersView() {
       return;
     }
     
-    const isHospitalCentric = ['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole);
+    const isHospitalCentric = ['hospital_admin', 'doctor', 'nurse', 'technician', 'receptionist'].includes(newRole);
     if (isHospitalCentric && !newHospitalName.trim()) {
       setCreateError('Vui lòng nhập tên bệnh viện/cơ sở.');
       return;
@@ -155,7 +232,9 @@ export default function AdminUsersView() {
         name: newName,
         phone: newPhone || undefined,
         hospitalName: isHospitalCentric ? newHospitalName : undefined,
-        hospitalAddress: isHospitalCentric ? newHospitalAddress : undefined
+        hospitalAddress: isHospitalCentric ? newHospitalAddress : undefined,
+        departmentId: isHospitalCentric ? newDepartmentId : undefined,
+        specialty: newSpecialty || undefined,
       };
 
       const data = await apiRequest('/admin/users', {
@@ -311,15 +390,16 @@ export default function AdminUsersView() {
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
-          className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full lg:w-48"
+          className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 w-full lg:w-56"
         >
-          <option value="">Tất cả các Role</option>
-          <option value="patient">Bệnh nhân</option>
-          <option value="doctor">Bác sĩ</option>
-          <option value="hospital_admin">Quản lý Bệnh viện</option>
-          <option value="nurse">Y tá / Điều dưỡng</option>
-          <option value="technician">Kỹ thuật viên</option>
-          <option value="admin">System Admin</option>
+          <option value="">Tất cả các Chức vụ / Role</option>
+          <option value="doctor">Bác sĩ Ung Thư Não & Phẫu thuật</option>
+          <option value="nurse">Điều dưỡng Hồi sức & Chăm sóc U Não</option>
+          <option value="technician">Kỹ thuật viên CĐHA & MRI 3.0T</option>
+          <option value="receptionist">Nhân viên Tiếp đón & Thu ngân</option>
+          <option value="hospital_admin">Ban Lãnh đạo Khoa / Quản lý BV</option>
+          <option value="admin">Quản trị viên Hệ thống Y tế</option>
+          <option value="patient">Bệnh nhân & Thân nhân</option>
         </select>
 
         {/* Filter Status */}
@@ -404,17 +484,30 @@ export default function AdminUsersView() {
 
                       {/* Role Badge */}
                       <td className="py-3.5 px-3">
-                        <span className={`text-[9.5px] px-2 py-0.5 rounded-md font-bold ${
-                          user.role === 'doctor'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : user.role === 'patient'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                            : user.role === 'admin'
-                            ? 'bg-violet-50 text-violet-700 border border-violet-100'
-                            : 'bg-amber-50 text-amber-700 border border-amber-100'
-                        }`}>
-                          {roleLabel(user.role)}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`text-[9.5px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap ${
+                            user.role === 'doctor'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : user.role === 'patient'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                              : user.role === 'admin'
+                              ? 'bg-violet-50 text-violet-700 border border-violet-100'
+                              : user.role === 'technician'
+                              ? 'bg-cyan-50 text-cyan-700 border border-cyan-100'
+                              : user.role === 'nurse'
+                              ? 'bg-teal-50 text-teal-700 border border-teal-100'
+                              : user.role === 'receptionist'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                              : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                          }`}>
+                            {roleLabel(user.role)}
+                          </span>
+                          {user.departmentId && user.role !== 'patient' && (
+                            <span className="text-[8.5px] text-slate-400 font-mono font-medium px-1 bg-slate-50 rounded border border-slate-100">
+                              {user.departmentId}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Contact */}
@@ -557,6 +650,22 @@ export default function AdminUsersView() {
                     {selectedUserDetail.profile?.address || '—'}
                   </span>
                 </div>
+                {selectedUserDetail.role !== 'patient' && (
+                  <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Đơn nguyên / Khoa</span>
+                    <span className="text-slate-700 font-bold truncate max-w-[170px]" title={getDepartmentLabel(selectedUserDetail.departmentId)}>
+                      {getDepartmentLabel(selectedUserDetail.departmentId)}
+                    </span>
+                  </div>
+                )}
+                {selectedUserDetail.profile?.specialty && (
+                  <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Chuyên môn</span>
+                    <span className="text-slate-700 font-bold truncate max-w-[170px]" title={getSpecialtyLabel(selectedUserDetail.profile?.specialty)}>
+                      {getSpecialtyLabel(selectedUserDetail.profile?.specialty)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between py-1.5 border-b border-dashed border-slate-100">
                   <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Trạng thái khóa</span>
                   <span className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${
@@ -733,23 +842,46 @@ export default function AdminUsersView() {
 
               {/* Role Selection */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Vai trò (Role) *</label>
+                <label className="block font-bold text-slate-700 mb-1.5">Vai trò chức danh (Role) *</label>
                 <select 
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-750"
                 >
-                  <option value="hospital_admin">Admin Bệnh viện (Hospital Admin)</option>
-                  <option value="doctor">Bác sĩ Thần kinh / Đọc phim (Doctor)</option>
-                  <option value="nurse">Điều dưỡng & Lễ tân (Nurse)</option>
-                  <option value="technician">Kỹ thuật viên phòng chụp (Technician)</option>
-                  <option value="patient">Bệnh nhân B2C (Patient)</option>
-                  <option value="admin">Hệ thống Admin (Global Admin)</option>
+                  <option value="doctor">Bác sĩ Ung Thư Não & Phẫu thuật (Doctor)</option>
+                  <option value="nurse">Điều dưỡng Hồi sức & Chăm sóc U Não (Nurse)</option>
+                  <option value="technician">Kỹ thuật viên CĐHA & MRI 3.0T (Technician)</option>
+                  <option value="receptionist">Nhân viên Tiếp đón & Thu ngân (Receptionist)</option>
+                  <option value="hospital_admin">Ban Lãnh đạo Khoa / Quản lý Bệnh viện (Hospital Admin)</option>
+                  <option value="admin">Quản trị viên Hệ thống Y tế (Global Admin)</option>
+                  <option value="patient">Bệnh nhân B2C & Thân nhân (Patient)</option>
                 </select>
               </div>
 
+              {/* Department Selection for Hospital Roles */}
+              {['hospital_admin', 'doctor', 'nurse', 'technician', 'receptionist'].includes(newRole) && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Đơn nguyên / Khoa phòng lâm sàng *</label>
+                  <select 
+                    value={newDepartmentId}
+                    onChange={(e) => setNewDepartmentId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-750"
+                  >
+                    <option value="KUTN-SURG">Đơn nguyên Phẫu thuật & Hồi tỉnh Mở Sọ (KUTN-SURG)</option>
+                    <option value="KUTN-ICU">Đơn nguyên Hồi sức Cấp cứu U Não - Neuro-ICU (KUTN-ICU)</option>
+                    <option value="KUTN-CHEMO">Đơn nguyên Hóa trị & Xạ trị U Não - Phác đồ Stupp (KUTN-CHEMO)</option>
+                    <option value="KUTN-PAL">Đơn nguyên Chăm sóc Giảm nhẹ & Phục hồi Thần kinh (KUTN-PAL)</option>
+                    <option value="KUTN-CLI">Phòng khám Chuyên khoa U Não & Tiếp đón (KUTN-CLI)</option>
+                    <option value="KCDHA">Khoa Chẩn đoán Hình ảnh Thần kinh & Mini-PACS (KCDHA)</option>
+                    <option value="KD">Khoa Dược Lâm sàng & Pha chế Hóa chất (KD)</option>
+                    <option value="KXN">Khoa Xét nghiệm & GPB Sinh học Phân tử (KXN)</option>
+                    <option value="KUTN">Khoa Ung Thư Não - Văn phòng Khoa & Lãnh đạo (KUTN)</option>
+                  </select>
+                </div>
+              )}
+
               {/* Hospital Inputs - Conditionally displayed */}
-              {['hospital_admin', 'doctor', 'nurse', 'technician'].includes(newRole) && (
+              {['hospital_admin', 'doctor', 'nurse', 'technician', 'receptionist'].includes(newRole) && (
                 <>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1.5">Tên bệnh viện / cơ sở *</label>

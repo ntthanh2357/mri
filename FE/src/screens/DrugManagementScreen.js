@@ -17,21 +17,25 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
 
 const CATEGORY_LABELS = {
-  anticonvulsant: 'Động kinh',
-  corticosteroid: 'Kháng viêm (Corticoid)',
-  psychotropic: 'Hướng thần',
-  pain_reliever: 'Giảm đau',
-  antibiotic: 'Kháng sinh',
+  chemotherapy: 'Hóa trị & Điều trị đích U Não',
+  anti_edema: 'Chống phù não (Mannitol)',
+  corticosteroid: 'Kháng viêm & Chống phù (Dexamethasone)',
+  anticonvulsant: 'Chống động kinh / Co giật u não',
+  pain_reliever: 'Giảm đau sau mổ u não',
+  antibiotic: 'Kháng sinh ngoại thần kinh',
+  psychotropic: 'Hướng thần / An thần',
   cardiovascular: 'Tim mạch',
   other: 'Khác',
 };
 
 const CATEGORY_COLORS = {
-  anticonvulsant: { bg: '#EEF2FF', text: '#4F46E5', border: '#E0E7FF' },
+  chemotherapy: { bg: '#FDF2F8', text: '#BE185D', border: '#FBCFE8' },
+  anti_edema: { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
   corticosteroid: { bg: '#ECFDF5', text: '#059669', border: '#D1FAE5' },
-  psychotropic: { bg: '#FDF2F8', text: '#DB2777', border: '#FCE7F3' },
+  anticonvulsant: { bg: '#EEF2FF', text: '#4F46E5', border: '#E0E7FF' },
   pain_reliever: { bg: '#FFF7ED', text: '#EA580C', border: '#FFEDD5' },
   antibiotic: { bg: '#F0FDFA', text: '#0D9488', border: '#CCFBF1' },
+  psychotropic: { bg: '#FAF5FF', text: '#7E22CE', border: '#E9D5FF' },
   cardiovascular: { bg: '#FEF2F2', text: '#DC2626', border: '#FEE2E2' },
   other: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0' },
 };
