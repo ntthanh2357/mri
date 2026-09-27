@@ -4,9 +4,9 @@ import { CheckCircle2, Clock } from 'lucide-react';
 
 /**
  * Component: Con dấu Chữ ký số Điện tử Bác sĩ Chẩn đoán Hình ảnh
- * Tuân thủ Thông tư 46/2018/TT-BYT về EMR và bệnh án điện tử không in phim
+ * Tuân thủ Thông tư 13/2025/TT-BYT (thay TT 46/2018) & Luật Giao dịch điện tử 20/2023/QH15
  */
-const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn }) => {
+const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn, digitalSignatureMetadata }) => {
   if (isSigned) {
     const formattedDate = signedAt 
       ? new Date(signedAt).toLocaleString('vi-VN', {
@@ -15,11 +15,13 @@ const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn }) 
         })
       : 'Vừa ký';
 
+    const pki = digitalSignatureMetadata || {};
+
     return (
       <View style={styles.signedContainer}>
         <View style={styles.stampHeader}>
           <CheckCircle2 size={16} color="#059669" />
-          <Text style={styles.stampTitle}>ĐÃ KÝ SỐ ĐIỆN TỬ BỞI BÁC SĨ CĐHA</Text>
+          <Text style={styles.stampTitle}>✓ ĐÃ KÝ SỐ ĐIỆN TỬ BỞI BÁC SĨ CĐHA</Text>
         </View>
         <Text style={styles.stampText}>
           Bác sĩ ký duyệt: <Text style={styles.stampBold}>{radiologist || 'Bác sĩ CĐHA'}</Text>
@@ -27,6 +29,16 @@ const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn }) 
         {Boolean(doctorCchn) && (
           <Text style={styles.stampText}>
             Chứng chỉ hành nghề: <Text style={styles.stampBold}>{doctorCchn}</Text>
+          </Text>
+        )}
+        {Boolean(pki.certificateSerial) && (
+          <Text style={styles.stampText}>
+            Chứng thư số: <Text style={styles.stampBold}>{pki.caProvider || 'VNPT-CA'} ({pki.certificateSerial})</Text>
+          </Text>
+        )}
+        {Boolean(pki.signedHash) && (
+          <Text style={styles.stampHash}>
+            Mã băm toàn vẹn: {pki.signedHash.slice(0, 16)}...{pki.signedHash.slice(-8)} (SHA-256)
           </Text>
         )}
         <Text style={styles.stampTimestamp}>Thời điểm ký số: {formattedDate}</Text>
@@ -81,6 +93,16 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic',
     marginTop: 4,
+  },
+  stampHash: {
+    fontSize: 10,
+    color: '#047857',
+    marginTop: 3,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
   },
   pendingContainer: {
     backgroundColor: '#FEF3C7',

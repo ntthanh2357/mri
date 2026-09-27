@@ -86,7 +86,7 @@ const medicalRecordSchema = new Schema(
       default: 1,
     },
 
-    // [TT46/2018/TT-BYT & NEURO-ONCOLOGY]: Động cơ thời hạn lưu trữ hồ sơ bệnh án
+    // [TT 13/2025/TT-BYT (thay TT46/2018) & LUẬT LƯU TRỮ 2024 & NEURO-ONCOLOGY]: Động cơ thời hạn lưu trữ hồ sơ bệnh án
     retentionCategory: {
       type: String,
       enum: [
@@ -175,7 +175,7 @@ const medicalRecordSchema = new Schema(
       default: "", // Tư vấn di truyền / NGS ghi chú bảo mật
     },
 
-    // [LUẬT GDĐT 20/2023/QH15 & TT46/2018/TT-BYT]: Chữ ký số y tế pháp lý
+    // [LUẬT GDĐT 20/2023/QH15 & TT 13/2025/TT-BYT (thay TT46/2018)]: Chữ ký số y tế pháp lý
     digitalSignatureMetadata: {
       signatureType: {
         type: String,
@@ -191,7 +191,7 @@ const medicalRecordSchema = new Schema(
       signedAt: { type: Date, default: null },
     },
 
-    // [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: Phụ lục bệnh án Append-Only sau khi đã ký số
+    // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: Phụ lục bệnh án Append-Only sau khi đã ký số
     addendums: [
       {
         content: { type: String, required: true },

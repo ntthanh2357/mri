@@ -18,6 +18,7 @@ import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, Copy, AlertTriangle, Brain } from 'lucide-react';
 import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
+import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
 import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 import styles from './ImagingResultScreen.styles';
@@ -576,7 +577,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
                 {aiResult && (
                   <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <ClinicalDisclaimerBanner isDoctor={localUser?.role === 'doctor'} compact={true} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, marginTop: 6 }}>
                       <Brain size={16} color="#1E3A8A" />
                       <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A' }}>Dự đoán của AI (Dành cho Bác sĩ đánh giá)</Text>
                     </View>
@@ -867,6 +869,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 radiologist={result.radiologist}
                 signedAt={result.signedAt || result.reportDate}
                 doctorCchn={result.radiologistCchn || '004128/BYT-CCHN'}
+                digitalSignatureMetadata={result.digitalSignatureMetadata}
               />
 
               <Text style={styles.signDoctorName}>{result.radiologist}</Text>

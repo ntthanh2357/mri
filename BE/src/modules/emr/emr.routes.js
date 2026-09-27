@@ -14,6 +14,9 @@ import {
   getRecordVersions,
   createRecordAddendum,
   signMedicalRecord,
+  getPrivacyConsents,
+  createPrivacyConsent,
+  revokePrivacyConsent,
 } from "./emr.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 
@@ -53,5 +56,13 @@ router.route("/records/:id/addendum")
 
 router.route("/records/:id/sign")
   .put(checkRole(["doctor", "admin", "hospital_admin"]), signMedicalRecord);
+
+// Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 & NĐ 13/2023: Thu thập và thu hồi sự đồng thuận
+router.route("/privacy-consents")
+  .get(getPrivacyConsents)
+  .post(createPrivacyConsent);
+
+router.route("/privacy-consents/:id/revoke")
+  .post(revokePrivacyConsent);
 
 export default router;

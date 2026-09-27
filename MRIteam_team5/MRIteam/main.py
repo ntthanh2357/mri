@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 import json
 import subprocess
+import sys
 # pyrefly: ignore [missing-import]
 import uvicorn
 import numpy as np
@@ -84,20 +85,36 @@ app = FastAPI(title="Brain Tumor Diagnosis API")
 # Cấu hình Gemini API (SDK mới google.genai)
 from gemini_rotator import GeminiProxy
 gemini_client = GeminiProxy()
-GEMINI_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 def call_gemini(system_prompt: str, user_prompt: str, temperature: float = 0.2) -> str:
-    """Helper duy nhất để gọi Gemini API cho tất cả Agents."""
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=user_prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=temperature,
-            max_output_tokens=2048,
-        )
-    )
-    return response.text or ""
+    """Helper duy nhất để gọi Gemini API cho tất cả Agents (Gemini 3.1)."""
+    models_to_try = [GEMINI_MODEL, "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite"]
+    seen = set()
+    last_err = None
+    for m in models_to_try:
+        if m in seen:
+            continue
+        seen.add(m)
+        try:
+            response = gemini_client.models.generate_content(
+                model=m,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=temperature,
+                    max_output_tokens=2048,
+                )
+            )
+            return response.text or ""
+        except Exception as e:
+            last_err = e
+            if "404" in str(e) or "not found" in str(e).lower():
+                continue
+            raise e
+    if last_err:
+        raise last_err
+    return ""
 
 def apply_temperature_scaling(probs, T=1.3):
     """Áp dụng Temperature Scaling cho xác suất đầu ra để giảm lỗi quá tự tin (overconfidence)"""
@@ -120,6 +137,12 @@ class ChatRequest(BaseModel):
 
 class MeetingRequest(BaseModel):
     chat_logs: str
+
+class MedicationSafetyRequest(BaseModel):
+    patient_info: Dict[str, Any]
+    medications: List[Any]
+    diagnosis: Optional[str] = "Bệnh lý thần kinh / U não"
+    tumor_ai_result: Optional[Dict[str, Any]] = None  # Kết quả phân loại khối u từ AI Vision (Gemini 3.1 Flash-Lite & ResNet)
 
 # Cho phép cấu hình qua AUDIT_DB_PATH hoặc lưu trữ bền vững trong thư mục data/ (Docker volume)
 _base_data_dir = os.path.join(os.path.dirname(__file__), "data")
@@ -833,7 +856,7 @@ async def get_training_stats():
 # MLOps ACTIVE LEARNING RETRAINING & HOT-RELOAD PIPELINE
 # =====================================================================
 retrain_process = None
-retrain_state = {
+retrain_state: Dict[str, Any] = {
     "status": "idle",  # "idle" | "running" | "completed" | "failed"
     "started_at": None,
     "finished_at": None,
@@ -1142,6 +1165,144 @@ async def summarize_meeting(request: MeetingRequest):
         import traceback; traceback.print_exc()
         print(f"Agent 4 error: {e}")
         return {"error": f"Không thể tổng hợp hội chẩn: {str(e)}", "details": str(e)}
+
+# =====================================================================
+# AGENT 5: Dược sĩ Lâm sàng Thần kinh AI (Gemini 3.1 Flash-Lite)
+# Sử dụng chung mô hình và kết nối đồng bộ với AI Nhận diện Khối u Não
+# =====================================================================
+@app.post("/check_medication_ai")
+async def check_medication_ai(request: MedicationSafetyRequest):
+    try:
+        system_prompt = """<system_role>
+Bạn là Chuyên gia Dược lâm sàng Chuyên khoa Thần kinh & Ung thư Não (Senior Neuro-Oncology Clinical Pharmacist) thuộc Hội đồng Đa chuyên khoa (Tumor Board) Bệnh viện Thần kinh NeuroScan.
+Bạn sử dụng chung nền tảng trí tuệ nhân tạo Gemini 3.1 Flash-Lite và phối hợp trực tiếp với Mô hình AI Nhận diện Khối u Não (ResNet/YOLO/Gemini VLM Vision) để thẩm định tính an toàn lâm sàng, độ tương thích phác đồ khối u và tối ưu hóa điều trị cho người bệnh.
+</system_role>
+
+<clinical_expertise_domains>
+1. TƯƠNG THÍCH PHÁC ĐỒ THEO LOẠI U NÃO ĐƯỢC AI XÁC ĐỊNH:
+   - GLIOMA (U thần kinh đệm / U nguyên bào đệm Glioblastoma - GBM):
+     * Phác đồ hóa trị chuẩn Stupp (Temozolomide). Kiểm tra chỉ định, chu kỳ, độc tính tủy xương (yêu cầu ANC >= 1.5, PLT >= 100).
+     * Thuốc chống động kinh: BẮT BUỘC ƯU TIÊN nhóm không cảm ứng enzyme (Non-EIAEDs: Levetiracetam / Keppra, Lacosamide). TRÁNH các thuốc cảm ứng enzyme CYP3A4 (EIAEDs: Carbamazepine, Phenytoin, Phenobarbital) vì làm giảm nồng độ Temozolomide và Corticosteroid.
+     * Lưu ý Valproate làm giảm độ thanh thải Temozolomide, tăng nguy cơ suy tủy.
+   - MENINGIOMA (U màng não):
+     * U màng não ngoài trục dural-based, giàu thụ thể Progesterone. TRÁNH dùng Progestin liều cao / Cyproterone acetate vì kích thích khối u phát triển.
+     * Kiểm soát phù não và giảm đau chu phẫu.
+   - PITUITARY ADENOMA (U tuyến yên):
+     * Prolactinoma: Chỉ định chuẩn là Đồng vận Dopamine (Cabergoline, Bromocriptine).
+     * CHỐNG CHỈ ĐỊNH thuốc chẹn Dopamine (Metoclopramide, Haloperidol, Sulpiride, Domperidone) vì gây tăng vọt Prolactin máu.
+     * Lưu ý suy tuyến yên sau mổ (thay thế Hormone Hydrocortisone/Levothyroxine).
+   - NOTUMOR (Không phát hiện u não):
+     * BÁO ĐỘNG ĐỎ nếu đơn thuốc chứa hóa trị độc tế bào (Temozolomide, Bevacizumab) hoặc chống phù não liều cao vô căn cứ.
+
+2. KIỂM SOÁT PHÙ NÃO QUANH U (VASOGENIC EDEMA) & HÀNG RÀO MÁU NÃO (BBB):
+   - Dexamethasone: Thuốc đầu tay giảm phù mạch do u não. Phải đánh giá nguy cơ tăng đường huyết, loét dạ dày (cần PPI kèm theo) và nhiễm trùng cơ hội (PJP khi dùng kéo dài kết hợp Temozolomide).
+   - Mannitol 20%: Hạ áp lực nội sọ cấp cứu. Chống chỉ định khi eGFR < 30 hoặc vô niệu do nguy cơ hoại tử ống thận cấp.
+
+3. TƯƠNG TÁC THUỐC NGUY HIỂM & CẢNH BÁO HỘP ĐEN (FDA BLACK BOX WARNINGS):
+   - Benzodiazepine (Diazepam/Seduxen) + Opioid (Morphine/Tramadol): Nguy cơ suy hô hấp tử vong.
+   - Kháng đông/kháng tiểu cầu + Bevacizumab: Tăng vọt nguy cơ xuất huyết nội sọ trong khối u.
+
+4. ĐỐI SOÁT CHỨC NĂNG CƠ QUAN & THỂ TRẠNG:
+   - Thận (eGFR, Creatinine): Hiệu chỉnh liều Keppra, Mannitol, Gabapentin.
+   - Gan (ALT, AST): Độc tính gan của Valproate, Temozolomide.
+   - Tiền sử dị ứng: Cảnh báo sốc phản vệ với Gadolinium hoặc kháng sinh.
+</clinical_expertise_domains>
+
+<scoring_criteria>
+Thang điểm an toàn (Safety Score 0 - 100):
+- 90 - 100 (SAFE): Đơn thuốc an toàn, đúng phác đồ u não của AI.
+- 70 - 89 (CAUTION): Cần theo dõi sinh hóa, dặn dò hoặc có tương tác nhẹ/trung bình.
+- 40 - 69 (HIGH_RISK): Tương tác thuốc nặng, liều chưa hiệu chỉnh chức năng gan/thận.
+- 0 - 39 (CRITICAL): Chống chỉ định tuyệt đối, nguy cơ đe dọa tính mạng hoặc sai lệch chỉ định nghiêm trọng với kết quả chẩn đoán hình ảnh u não của AI.
+</scoring_criteria>
+
+BẮT BUỘC TRẢ VỀ JSON HỢP LỆ THEO ĐỊNH DẠNG:
+{
+  "safety_score": 85,
+  "overall_status": "SAFE" | "CAUTION" | "HIGH_RISK" | "CRITICAL",
+  "summary": "Tóm tắt ngắn gọn nhận định dược lâm sàng thần kinh và độ phù hợp với chẩn đoán u não của AI (2-3 câu)",
+  "tumor_protocol_compatibility": {
+    "detected_tumor": "GLIOMA" | "MENINGIOMA" | "PITUITARY" | "NOTUMOR" | "UNKNOWN",
+    "compatibility_status": "COMPATIBLE" | "INCOMPATIBLE" | "NEEDS_REVIEW",
+    "clinical_rationale": "Phân tích tính tương thích giữa loại u AI phát hiện và đơn thuốc"
+  },
+  "interaction_analysis": [
+    {
+      "drugs": ["Thuốc A", "Thuốc B"],
+      "severity": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+      "clinical_mechanism": "Giải thích cơ chế dược lý (CYP, BBB, thụ thể)",
+      "action": "Khuyến cáo xử trí cụ thể cho Bác sĩ"
+    }
+  ],
+  "organ_toxicity_notes": "Nhận xét cụ thể về chức năng Thận, Gan, Tủy xương theo chỉ số xét nghiệm",
+  "pharmacist_recommendations": "Khuyến cáo chuyên môn dành riêng cho Bác sĩ điều trị",
+  "patient_instructions": "Lời dặn dò dễ hiểu, ân cần dành cho người bệnh và người nhà khi dùng thuốc"
+}
+KHÔNG viết thêm bất kỳ text nào ngoài định dạng JSON."""
+
+        tumor_sec = ""
+        if request.tumor_ai_result:
+            p_class = request.tumor_ai_result.get("predicted_class") or request.tumor_ai_result.get("tumor_type", "Chưa xác định")
+            p_conf = request.tumor_ai_result.get("confidence", "N/A")
+            p_find = request.tumor_ai_result.get("findings", "")
+            p_conc = request.tumor_ai_result.get("conclusion", "")
+            p_img = request.tumor_ai_result.get("imagingType", "MRI")
+            tumor_sec = f"""
+KẾT QUẢ AI NHẬN DIỆN KHỐI U NÃO (GEMINI 3.1 FLASH-LITE VISION & RESNET):
+- Loại hình ảnh: {p_img} Não
+- AI Chẩn đoán: {str(p_class).upper()} (Độ tin cậy: {p_conf}%)
+- Mô tả tổn thương & vị trí: {p_find or 'N/A'}
+- Kết luận chẩn đoán hình ảnh: {p_conc or 'N/A'}
+"""
+        else:
+            tumor_sec = f"""
+CHẨN ĐOÁN LÂM SÀNG BAN ĐẦU: {request.diagnosis}
+(Chưa có kết quả AI chẩn đoán hình ảnh đính kèm, thẩm định dựa trên chẩn đoán lâm sàng).
+"""
+
+        user_content = f"""BỆNH ÁN NGƯỜI BỆNH NGOẠI THẦN KINH:
+- Tuổi: {request.patient_info.get('age', 'N/A')}, Giới tính: {request.patient_info.get('gender', 'N/A')}
+- Tiền sử dị ứng: {request.patient_info.get('allergies', [])}
+- Chỉ số BMI: {request.patient_info.get('bmi', 'N/A')}
+- Chức năng thận: eGFR = {request.patient_info.get('egfr', 'N/A')} ml/min, Creatinine = {request.patient_info.get('creatinine', 'N/A')} umol/L
+- Men gan: ALT = {request.patient_info.get('alt', 'N/A')} U/L, AST = {request.patient_info.get('ast', 'N/A')} U/L
+{tumor_sec}
+DANH SÁCH THUỐC ĐANG KÊ TRONG ĐƠN:
+{json.dumps(request.medications, ensure_ascii=False, indent=2)}
+
+Hãy thẩm định dược lâm sàng chuyên sâu bằng chuyên môn Dược Thần kinh & Ung thư Não, đối chiếu trực tiếp với kết quả nhận diện khối u của AI."""
+
+        ai_response = call_gemini(system_prompt, user_content, temperature=0.1)
+        
+        # Parse JSON
+        clean_text = ai_response.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.startswith("```"):
+            clean_text = clean_text[3:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        clean_text = clean_text.strip()
+        
+        parsed = json.loads(clean_text)
+        return parsed
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {
+            "safety_score": 80,
+            "overall_status": "CAUTION",
+            "summary": "Phân tích AI dự phòng: Hệ thống ghi nhận đơn thuốc cần kiểm tra tương tác theo phác đồ chuẩn u não.",
+            "tumor_protocol_compatibility": {
+                "detected_tumor": "UNKNOWN",
+                "compatibility_status": "NEEDS_REVIEW",
+                "clinical_rationale": "Cần đối chiếu thêm với hồ sơ hình ảnh học MRI gốc."
+            },
+            "interaction_analysis": [],
+            "organ_toxicity_notes": "Vui lòng đối chiếu thêm kết quả sinh hóa máu (eGFR, ALT/AST).",
+            "pharmacist_recommendations": "Theo dõi đáp ứng lâm sàng của người bệnh theo phác đồ.",
+            "patient_instructions": "Uống thuốc đúng giờ theo chỉ định của bác sĩ.",
+            "error_note": str(e)
+        }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

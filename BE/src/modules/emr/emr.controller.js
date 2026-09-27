@@ -766,7 +766,7 @@ export const signMedicalRecord = async (req, res) => {
         entityId: record._id.toString(),
         performedBy: (req.user?.id || req.user?._id || "system").toString(),
         hospitalId: record.hospitalId || req.user?.hospitalId,
-        details: `Ký số thành công hồ sơ bệnh án EMR (Chuẩn Luật GDĐT 20/2023 & TT 46/2018/TT-BYT). Kích hoạt Khóa Bất Biến.`,
+        details: `Ký số thành công hồ sơ bệnh án EMR (Chuẩn Luật GDĐT 20/2023 & TT 13/2025/TT-BYT). Kích hoạt Khóa Bất Biến.`,
         payload: { signedHash, certificateSerial: record.digitalSignatureMetadata.certificateSerial },
       });
     } catch (auditErr) {
@@ -777,5 +777,125 @@ export const signMedicalRecord = async (req, res) => {
   } catch (error) {
     console.error("Lỗi ký số bệnh án:", error);
     res.status(500).json({ message: "Không thể thực hiện ký số bệnh án." });
+  }
+};
+
+// --- [LUẬT BVDLCN 91/2025/QH15 & NĐ 13/2023]: QUẢN LÝ ĐỒNG THUẬN DỮ LIỆU CÁ NHÂN (DATA PRIVACY CONSENT) ---
+
+// @desc    Lấy danh sách bản cam kết bảo vệ dữ liệu cá nhân của bệnh nhân
+// @route   GET /api/v1/emr/privacy-consents
+export const getPrivacyConsents = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.user.role === 'patient') {
+      filter.patientId = req.user.id || req.user._id;
+    } else if (req.query.patientId) {
+      filter.patientId = req.query.patientId;
+    }
+    if (req.user.hospitalId) {
+      filter.hospitalId = req.user.hospitalId;
+    }
+
+    const { DataPrivacyConsent } = await import("./models/dataPrivacyConsent.model.js");
+    const consents = await DataPrivacyConsent.find(filter).sort({ createdAt: -1 });
+    res.status(200).json({ status: "success", data: consents });
+  } catch (error) {
+    console.error("Lỗi lấy danh sách cam kết bảo vệ dữ liệu:", error);
+    res.status(500).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
+  }
+};
+
+// @desc    Ký bản cam kết bảo vệ dữ liệu cá nhân (Điều 9 & 11 Luật 91/2025/QH15)
+// @route   POST /api/v1/emr/privacy-consents
+export const createPrivacyConsent = async (req, res) => {
+  try {
+    const { purposes, signerName, signerNationalId, signerRelationship, medicalId } = req.body;
+    const patientId = req.user.role === 'patient' ? (req.user.id || req.user._id) : req.body.patientId;
+    const hospitalId = req.user.hospitalId || req.body.hospitalId;
+
+    if (!patientId || !signerName) {
+      return res.status(400).json({ message: "Thiếu thông tin người bệnh hoặc người ký cam kết." });
+    }
+
+    const { DataPrivacyConsent } = await import("./models/dataPrivacyConsent.model.js");
+    const consent = await DataPrivacyConsent.create({
+      hospitalId,
+      patientId,
+      medicalId: medicalId || req.user.profile?.medicalId || "",
+      purposes: purposes || {
+        medicalCareAndEmr: true,
+        aiAssistedAnalysis: true,
+        scientificResearchAnonymized: false,
+        cloudStorageBackup: true,
+      },
+      consentStatus: "granted",
+      signerName,
+      signerNationalId: signerNationalId || "",
+      signerRelationship: signerRelationship || "Bản thân",
+      signedAt: new Date(),
+      ipAddress: req.ip || "",
+    });
+
+    try {
+      await recordAuditLog({
+        action: "GRANT_DATA_PRIVACY_CONSENT",
+        entity: "DataPrivacyConsent",
+        entityId: consent._id.toString(),
+        performedBy: (req.user.id || req.user._id).toString(),
+        hospitalId,
+        details: `Cấp quyền xử lý dữ liệu cá nhân y tế theo Luật 91/2025/QH15 cho bệnh nhân: ${signerName}.`,
+      });
+    } catch (auditErr) {
+      console.warn("Lỗi ghi audit log DataPrivacyConsent:", auditErr.message);
+    }
+
+    res.status(201).json({ status: "success", data: consent });
+  } catch (error) {
+    console.error("Lỗi tạo cam kết bảo vệ dữ liệu:", error);
+    res.status(500).json({ message: "Không thể tạo bản cam kết bảo vệ dữ liệu cá nhân." });
+  }
+};
+
+// @desc    Thu hồi quyền xử lý dữ liệu cá nhân (Điều 9 Luật 91/2025/QH15)
+// @route   POST /api/v1/emr/privacy-consents/:id/revoke
+export const revokePrivacyConsent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, revokeType } = req.body;
+
+    const { DataPrivacyConsent } = await import("./models/dataPrivacyConsent.model.js");
+    const consent = await DataPrivacyConsent.findById(id);
+
+    if (!consent) {
+      return res.status(404).json({ message: "Không tìm thấy bản cam kết bảo vệ dữ liệu." });
+    }
+
+    // Kiểm tra quyền: chỉ chính bệnh nhân hoặc admin viện mới được thu hồi
+    if (req.user.role === 'patient' && consent.patientId.toString() !== (req.user.id || req.user._id).toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết này." });
+    }
+
+    consent.consentStatus = revokeType === 'partially' ? 'partially_revoked' : 'fully_revoked';
+    consent.revokedAt = new Date();
+    consent.revocationReason = reason || "Chủ thể dữ liệu yêu cầu thu hồi theo quyền Điều 9 Luật 91/2025/QH15";
+    await consent.save();
+
+    try {
+      await recordAuditLog({
+        action: "REVOKE_DATA_PRIVACY_CONSENT",
+        entity: "DataPrivacyConsent",
+        entityId: consent._id.toString(),
+        performedBy: (req.user.id || req.user._id).toString(),
+        hospitalId: consent.hospitalId,
+        details: `Thu hồi quyền xử lý dữ liệu cá nhân (${consent.consentStatus}) theo Điều 9 Luật 91/2025/QH15. Lý do: ${consent.revocationReason}.`,
+      });
+    } catch (auditErr) {
+      console.warn("Lỗi ghi audit log thu hồi consent:", auditErr.message);
+    }
+
+    res.status(200).json({ status: "success", message: "Đã thu hồi quyền xử lý dữ liệu thành công.", data: consent });
+  } catch (error) {
+    console.error("Lỗi thu hồi cam kết bảo vệ dữ liệu:", error);
+    res.status(500).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
   }
 };

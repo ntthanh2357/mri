@@ -10,6 +10,7 @@ import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import { assessPrescriptionSafety } from "../modules/pharmacy/services/drugSafety.service.js";
 export { checkPatientTenancy };
 
 // Khung giờ nhắc uống thuốc cố định theo số lần/ngày
@@ -342,7 +343,7 @@ export const getPatientPrescriptions = async (req, res) => {
 export const addPatientPrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { doctor_name, diagnosis, drugs, note } = req.body;
+    const { doctor_name, diagnosis, drugs, note, overrideReason, requestAi } = req.body;
 
     if (!diagnosis || !drugs || !Array.isArray(drugs) || drugs.length === 0) {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
@@ -353,12 +354,48 @@ export const addPatientPrescription = async (req, res) => {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
 
+    // ── Kiểm tra an toàn dược lâm sàng tự động tại Backend (Enforce Safety Check) ──
+    const safetyCheck = await assessPrescriptionSafety({
+      patientId,
+      medications: drugs,
+      diagnosis,
+      requestAi: !!requestAi
+    });
+
+    // Nếu có cảnh báo mức CRITICAL hoặc HIGH mà bác sĩ không nhập lý do ghi đè
+    const hasSevereWarning = safetyCheck.warnings && safetyCheck.warnings.some(
+      w => w.severity === "CRITICAL" || w.severity === "HIGH"
+    );
+
+    if (hasSevereWarning && (!overrideReason || !overrideReason.trim())) {
+      return res.status(422).json({
+        success: false,
+        requiresOverride: true,
+        message: "Đơn thuốc có tương tác hoặc chống chỉ định lâm sàng nghiêm trọng. Bác sĩ bắt buộc phải cung cấp lý do lâm sàng (overrideReason) để lưu đơn và ký số.",
+        safetyCheck: {
+          safetyScore: safetyCheck.safetyScore,
+          status: safetyCheck.status,
+          warnings: safetyCheck.warnings,
+          aiConsultation: safetyCheck.aiConsultation
+        }
+      });
+    }
+
     const newItem = new Prescription({
       patient_id: patientId,
       doctor_name: doctor_name || "Bác sĩ điều trị",
       diagnosis,
       drugs,
-      note: note || ""
+      note: note || "",
+      clinicalSafety: {
+        safetyScore: safetyCheck.safetyScore,
+        status: safetyCheck.status,
+        warnings: safetyCheck.warnings,
+        aiConsultation: safetyCheck.aiConsultation,
+        overrideReason: overrideReason ? overrideReason.trim() : "",
+        overriddenBy: overrideReason ? (doctor_name || req.user?.profile?.name || "Bác sĩ điều trị") : "",
+        overriddenAt: overrideReason ? new Date() : null
+      }
     });
 
     await newItem.save();
