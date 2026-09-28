@@ -169,6 +169,7 @@ async function runAllTests() {
     './tenancy_and_transaction.test.js',
     './clinical_workflow_e2e.test.js',
     './schedule_registration.test.js',
+    './emergency_protocol.test.js',
   ];
 
   const startTime = Date.now();

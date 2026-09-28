@@ -16,6 +16,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { get, post, put } from '../services/api.service';
+import InpatientEmergencyModal from './InpatientEmergencyModal';
+import EdHandoffModal from './EdHandoffModal';
 
 const STATUS_MAP = {
   available: { label: 'Trống', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
@@ -57,6 +59,9 @@ export default function HospitalBedManagementView({ currentUser }) {
   const [selectedBed, setSelectedBed] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [patients, setPatients] = useState([]);
+  const [inpatientEmergencyModalOpen, setInpatientEmergencyModalOpen] = useState(false);
+  const [edHandoffModalOpen, setEdHandoffModalOpen] = useState(false);
+  const [selectedEmergencyBed, setSelectedEmergencyBed] = useState(null);
 
   // Form states
   const [formPatientId, setFormPatientId] = useState('');
@@ -330,6 +335,13 @@ export default function HospitalBedManagementView({ currentUser }) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEdHandoffModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs md:text-sm font-semibold rounded-xl shadow-xs transition-all"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Tiếp Nhận Từ Cấp Cứu (ISBAR)
+          </button>
           {isHospitalAdmin && (
             <button
               onClick={() => handleOpenModal('create', null)}
@@ -623,6 +635,15 @@ export default function HospitalBedManagementView({ currentUser }) {
 
                                 {bed.status === 'occupied' && (
                                   <>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedEmergencyBed(bed);
+                                        setInpatientEmergencyModalOpen(true);
+                                      }}
+                                      className="w-full py-1.5 mb-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all"
+                                    >
+                                      <AlertTriangle className="w-3.5 h-3.5" /> Báo Động Cấp Cứu Tại Giường
+                                    </button>
                                     <button
                                       onClick={() => handleOpenModal('transfer', bed)}
                                       className="flex-1 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 rounded-lg text-xs font-bold border border-cyan-200 flex items-center justify-center gap-1"
@@ -1000,6 +1021,25 @@ export default function HospitalBedManagementView({ currentUser }) {
           </div>
         </div>
       )}
+
+      {/* Modal Cấp Cứu Nội Viện 1-Chạm */}
+      <InpatientEmergencyModal
+        isOpen={inpatientEmergencyModalOpen}
+        onClose={() => {
+          setInpatientEmergencyModalOpen(false);
+          setSelectedEmergencyBed(null);
+        }}
+        bed={selectedEmergencyBed}
+        patient={selectedEmergencyBed?.currentPatientId}
+        onSuccess={() => fetchBedData()}
+      />
+
+      {/* Modal Bàn Giao ISBAR từ Khoa Cấp Cứu */}
+      <EdHandoffModal
+        isOpen={edHandoffModalOpen}
+        onClose={() => setEdHandoffModalOpen(false)}
+        onSuccess={() => fetchBedData()}
+      />
     </div>
   );
 }
