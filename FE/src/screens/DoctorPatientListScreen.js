@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
 
 // [BUG-03 FIX] Tính tuổi thật từ ngày sinh hoặc năm sinh

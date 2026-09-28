@@ -42,8 +42,17 @@ const workScheduleSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["confirmed", "pending", "off"],
+      enum: ["confirmed", "pending", "off", "rejected"],
       default: "confirmed",
+    },
+    reviewNotes: {
+      type: String,
+      default: "",
+    },
+    reviewedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   {

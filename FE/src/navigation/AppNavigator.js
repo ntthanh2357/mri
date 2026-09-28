@@ -37,6 +37,8 @@ import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 
+import linkingConfig from './linking';
+
 const Stack = createNativeStackNavigator();
 
 // Trên web, ResponsiveLayout tự vẽ sidebar/back nav cho desktop nên ẩn header mặc định.
@@ -62,7 +64,7 @@ const AppNavigator = () => {
       alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
     };
 
-    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'popstate'];
     events.forEach(event => {
       window.addEventListener(event, resetTimer);
     });
@@ -78,11 +80,11 @@ const AppNavigator = () => {
   }, []);
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linkingConfig}>
       <Stack.Navigator
         initialRouteName="Welcome"
         screenOptions={{
-          headerStyle: { backgroundColor: '#15803D' },
+          headerStyle: { backgroundColor: '#0891B2' },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: { fontWeight: 'bold' },
         }}

@@ -17,6 +17,7 @@ import Config from '../constants/config';
 import { post, setAuthToken, get } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
 import styles from './LoginScreen.styles';
+import { Eye, EyeOff, Check, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 const LoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -67,7 +68,7 @@ const LoginScreen = ({ navigation }) => {
       try {
         const data = await get('/auth/me');
         if (data && data.user) {
-          const destination = data.user.role === 'admin' ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+          const destination = (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.reset({
             index: 0,
             routes: [{ name: destination, params: { user: data.user } }],
@@ -190,7 +191,37 @@ const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const data = await post('/auth/login', { email, password });
+      const data = await post('/auth/login', { email, password, roleType: loginRole });
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense)
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
+
+      // Bệnh nhân chưa kích hoạt OTP qua email
+      if (data.requiresVerification) {
+        showAlert(
+          'info',
+          'Tài khoản chưa kích hoạt',
+          'Tài khoản bệnh nhân chưa được kích hoạt qua mã OTP. Mã xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra email hoặc đăng nhập qua OTP.' +
+          (data.debugOtp ? ` (Mã OTP: ${data.debugOtp})` : '')
+        );
+        return;
+      }
 
       // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
       if (data.requiresActivation) {
@@ -204,8 +235,8 @@ const LoginScreen = ({ navigation }) => {
         setTempLoginResponse(data);
         setShowTwoFactor(true);
       } else {
-        await setAuthToken(data.accessToken);
-        const destination = data.user && data.user.role === 'admin'
+        await setAuthToken(data.accessToken, data.refreshToken);
+        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
           ? 'AdminBackoffice'
           : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
         showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
@@ -221,7 +252,7 @@ const LoginScreen = ({ navigation }) => {
       if (errMsg.toLowerCase().includes('không chính xác') || errMsg.toLowerCase().includes('không tồn tại')) {
         setPasswordError('Thông tin đăng nhập chưa chính xác, bạn vui lòng kiểm tra lại nhé.');
       } else {
-        setPasswordError(errMsg);
+        showAlert('error', 'Đăng nhập thất bại', errMsg);
       }
     } finally {
       setLoading(false);
@@ -245,8 +276,8 @@ const LoginScreen = ({ navigation }) => {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const data = tempLoginResponse;
-      await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin'
+      await setAuthToken(data.accessToken, data.refreshToken);
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
 
@@ -291,8 +322,28 @@ const LoginScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
+
+      // Phân tách nghiêm ngặt vai trò cho Google SSO
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc về Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc về Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
+
       await setAuthToken(data.accessToken);
-      const destination = data.user && data.user.role === 'admin' ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
           index: 0,
@@ -622,7 +673,7 @@ const LoginScreen = ({ navigation }) => {
                               onSubmitEditing={handleLogin}
                             />
                             <TouchableOpacity style={[styles.eyeButton, styles.desktopEyeButton]} onPress={() => setShowPassword(!showPassword)}>
-                              <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                              {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                             </TouchableOpacity>
                           </View>
                           {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
@@ -670,9 +721,19 @@ const LoginScreen = ({ navigation }) => {
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 4 }}
                         onPress={() => setRememberMe(!rememberMe)}
                       >
-                        <Text style={{ fontSize: 16, color: rememberMe ? '#15803D' : '#94A3B8', marginRight: 8, fontWeight: 'bold' }}>
-                          {rememberMe ? '☑' : '☐'}
-                        </Text>
+                        <View style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 4,
+                          borderWidth: 1.5,
+                          borderColor: rememberMe ? '#0891B2' : '#94A3B8',
+                          backgroundColor: rememberMe ? '#0891B2' : 'transparent',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 8
+                        }}>
+                          {rememberMe && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                        </View>
                         <Text style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
                           Lưu thông tin đăng nhập <Text style={{ color: '#C2410C', fontWeight: '600' }}>(Không khuyến nghị trên thiết bị công cộng)</Text>
                         </Text>
@@ -927,7 +988,7 @@ const LoginScreen = ({ navigation }) => {
                         onSubmitEditing={handleLogin}
                       />
                       <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
-                        <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                        {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                       </TouchableOpacity>
                     </View>
                     {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
@@ -974,9 +1035,19 @@ const LoginScreen = ({ navigation }) => {
                   style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 4 }}
                   onPress={() => setRememberMe(!rememberMe)}
                 >
-                  <Text style={{ fontSize: 16, color: rememberMe ? '#15803D' : '#94A3B8', marginRight: 8, fontWeight: 'bold' }}>
-                    {rememberMe ? '☑' : '☐'}
-                  </Text>
+                  <View style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    borderWidth: 1.5,
+                    borderColor: rememberMe ? '#0891B2' : '#94A3B8',
+                    backgroundColor: rememberMe ? '#0891B2' : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 8
+                  }}>
+                    {rememberMe && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
                   <Text style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
                     Lưu thông tin đăng nhập <Text style={{ color: '#C2410C', fontWeight: '600' }}>(Không khuyến nghị trên thiết bị công cộng)</Text>
                   </Text>
@@ -1045,7 +1116,7 @@ const LoginScreen = ({ navigation }) => {
                 setShowForgotModal(false);
                 setForgotStep(1);
               }}>
-                <Text style={styles.closeButton}>✕</Text>
+                <X size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
@@ -1150,9 +1221,9 @@ const LoginScreen = ({ navigation }) => {
               customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
               customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
             ]}>
-              {customAlert.type === 'success' && <Text style={[styles.alertIconText, { color: '#16A34A' }]}>✓</Text>}
-              {customAlert.type === 'error' && <Text style={[styles.alertIconText, { color: '#DC2626' }]}>✕</Text>}
-              {customAlert.type === 'info' && <Text style={[styles.alertIconText, { color: '#2563EB' }]}>ℹ</Text>}
+              {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" />}
+              {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" />}
+              {customAlert.type === 'info' && <Info size={28} color="#0891B2" />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>

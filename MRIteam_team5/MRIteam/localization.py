@@ -3,6 +3,13 @@ localization.py — Pipeline 3 tầng định vị khối u não:
   Tầng 1: Grad-CAM  → heatmap hiển thị (XAI, không dùng để định box)
   Tầng 2: OpenCV    → blob detection trong vùng não (box sơ bộ)
   Tầng 3: Gemini Vision → nhìn ảnh MRI gốc, căn chỉnh box cuối cùng
+
+Privacy Guard (Hướng A):
+  - Sagittal/Coronal planes carry facial-reconstruction risk on 2-D JPEG slices.
+  - Plane is detected from the file path (sequence folder prefix: Sag/COR/COR/SAG)
+    or, as fallback, from image aspect ratio heuristic.
+  - If the plane is classified FACIAL_RISK, Gemini Vision is NOT called for
+    localization; the system falls back to YOLO/OpenCV and logs the reason.
 """
 
 import cv2
@@ -16,13 +23,128 @@ import time
 
 try:
     from ultralytics import YOLO # type: ignore
-    YOLO_MODEL_PATH = "runs/detect/mri_tumor_det/weights/best.pt"
+    YOLO_MODEL_PATH = "runs/detect/mri_tumor_det_v3/weights/best.pt"
     if os.path.exists(YOLO_MODEL_PATH):
         yolo_tumor_model = YOLO(YOLO_MODEL_PATH)
     else:
         yolo_tumor_model = None
 except ImportError:
     yolo_tumor_model = None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PLANE DETECTION — Privacy guard (Hướng A)
+# ═══════════════════════════════════════════════════════════════════
+
+# Prefixes/substrings found in DICOM-derived sequence folder names
+# (case-insensitive).  Order matters: checked top-to-bottom.
+_SAGITTAL_TOKENS  = ["sag_", "sag ", "sagittal", "_sag"]
+_CORONAL_TOKENS   = ["cor_", "cor ", "coronal",  "_cor"]
+_AXIAL_TOKENS     = ["ax_",  "ax ",  "axial",    "_ax", "axi"]
+
+PLANE_AXIAL        = "axial"
+PLANE_SAGITTAL     = "sagittal"
+PLANE_CORONAL      = "coronal"
+PLANE_UNKNOWN      = "unknown"
+
+# Planes for which Gemini Vision should NOT be called (facial-risk).
+# PLANE_UNKNOWN is intentionally included as a FAIL-SAFE:
+#   When a user uploads an image from the frontend, the filename rarely
+#   contains DICOM sequence tokens (e.g. "sag", "ax").  In that case
+#   plane detection returns UNKNOWN.  Treating UNKNOWN as safe would
+#   create a silent bypass of the privacy guard for real-world uploads.
+#   → Default: UNKNOWN = facial-risk.  Override only if you have an
+#     out-of-band metadata source that positively confirms axial plane.
+FACIAL_RISK_PLANES = {PLANE_SAGITTAL, PLANE_CORONAL, PLANE_UNKNOWN}
+
+
+
+
+def infer_plane_from_path(file_path: str) -> str:
+    """
+    Determine the MRI acquisition plane from the file path.
+
+    Design principle — "permit only when provenance is confirmed":
+      Gemini Vision is called ONLY when we have RELIABLE evidence the image
+      is axial.  Two trusted sources are recognised:
+        1. Plane manifest (plane_manifest.json) — highest trust.  Built from
+           dataset provenance with confirmed DICOM sequence tags (TT hospital
+           data only).  If a filename is listed here, return immediately.
+        2. Path/filename DICOM tokens — sequence-folder names embedded in
+           the file path (e.g. 'Sag_T1_FLAIR_7', 'COR_T2_6', 'Ax_DWI_5').
+
+    Why pixel heuristics (symmetry / aspect-ratio) are NOT used to grant
+    PLANE_AXIAL:
+      The Kaggle "Brain Tumor MRI Dataset" (Nickparvar) pre-processes all
+      images to 512x512 squares.  Black background padding is symmetric and
+      dominates the L-R symmetry score (measured ~0.93-0.99 for EVERY image
+      regardless of acquisition plane).  The signal is therefore unreliable
+      and cannot distinguish axial from sagittal in this specific dataset.
+      [Experimented in experiments/symmetry_heuristic_experiment.py —
+       kept for Discussion reference.]
+
+    Default: PLANE_UNKNOWN in FACIAL_RISK_PLANES -> Gemini blocked (fail-safe).
+
+    Returns one of: PLANE_AXIAL | PLANE_SAGITTAL | PLANE_CORONAL | PLANE_UNKNOWN
+    """
+    import json as _json
+
+    # ── Step 1: Manifest lookup ─────────────────────────────────────────────
+    _MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "plane_manifest.json")
+    try:
+        if os.path.exists(_MANIFEST_PATH):
+            with open(_MANIFEST_PATH, "r", encoding="utf-8") as _f:
+                _manifest: dict = _json.load(_f)
+            _basename = os.path.basename(file_path)
+            if _basename in _manifest:
+                _plane = _manifest[_basename]
+                print(f"[Plane Detect] manifest hit: '{_basename}' → '{_plane}'")
+                return _plane
+    except Exception as _e:
+        print(f"[Plane Detect] manifest read error (ignored): {_e}")
+
+    # ── Step 2: Path/filename token scan ────────────────────────────────────
+    path_lower = file_path.replace("\\", "/").lower()
+
+    for token in _SAGITTAL_TOKENS:
+        if token in path_lower:
+            return PLANE_SAGITTAL
+    for token in _CORONAL_TOKENS:
+        if token in path_lower:
+            return PLANE_CORONAL
+    for token in _AXIAL_TOKENS:
+        if token in path_lower:
+            return PLANE_AXIAL
+
+    # ── Step 3: Fail-safe default ────────────────────────────────────────────
+    # No provenance, no token → cannot confirm axial → block (do NOT guess).
+    return PLANE_UNKNOWN
+
+
+def should_call_gemini(file_path: str) -> tuple[bool, str]:
+    """
+    Convenience wrapper around infer_plane_from_path().
+
+    Returns:
+        (allowed: bool, plane: str)
+          - allowed=True  → plane is confirmed axial → Gemini may be called.
+          - allowed=False → plane is facial-risk (sagittal / coronal / unknown)
+                           → Gemini MUST be skipped; fallback to YOLO/OpenCV.
+
+    Design: single point of truth for the Privacy Guard decision.
+    Use this function at every call-site instead of inlining the plane check.
+
+    Example:
+        allowed, plane = should_call_gemini(file_path)
+        if not allowed:
+            log.info(f"[Privacy Guard] Skipping Gemini for {file_path}: plane={plane}")
+            return fallback_result
+        # ... call Gemini
+    """
+    plane = infer_plane_from_path(file_path)
+    if plane in FACIAL_RISK_PLANES:
+        return False, plane
+    return True, plane
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -174,7 +296,8 @@ def _get_img_wh(file_path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════
 def _gemini_locate_tumor(file_path: str, predicted_class: str,
                           confidence: float, opencv_box,
-                          gemini_client, gemini_model: str):
+                          gemini_client, gemini_model: str,
+                          plane: str = PLANE_UNKNOWN):
     """
     Gửi ảnh MRI gốc cho Gemini Vision để xác định vị trí khối u.
     Dùng gemini-2.0-flash-lite (quota riêng) để không tốn quota chat.
@@ -182,6 +305,17 @@ def _gemini_locate_tumor(file_path: str, predicted_class: str,
     Trả về dict {x, y, width, height, note} hoặc None.
     """
     VISION_MODEL = "gemini-2.5-flash-lite"
+
+    # ── Privacy Guard: block Gemini for facial-risk planes ──────────
+    if plane in FACIAL_RISK_PLANES:
+        print(
+            f"[Gemini Localize] ⚠ PRIVACY GUARD: plane='{plane}' is classified as "
+            f"facial-risk ({', '.join(sorted(FACIAL_RISK_PLANES))}). "
+            f"VLM localization skipped — falling back to YOLO/OpenCV. "
+            f"[audit: file={os.path.basename(file_path)}, class={predicted_class}]"
+        )
+        return None
+    # ────────────────────────────────────────────────────────────────
 
     try:
         with open(file_path, "rb") as f:
@@ -360,10 +494,15 @@ def generate_gradcam_localization(model, img_array, file_path,
       Tầng 1: Grad-CAM  → heatmap màu JET (XAI display)
       Tầng 2: OpenCV    → phát hiện blob sáng trong não (box sơ bộ)
       Tầng 3: Gemini Vision → căn chỉnh box cuối cùng dựa trên ảnh MRI gốc
+                              [PRIVACY GUARD: skipped for sagittal/coronal]
     """
     img_cv = cv2.imread(file_path)
     if img_cv is None or predicted_class == "notumor":
         return None, img_cv
+
+    # ── Detect acquisition plane — used by privacy guard ──
+    scan_plane = infer_plane_from_path(file_path)
+    print(f"[Plane Detect] file='{os.path.basename(file_path)}' → plane='{scan_plane}'")
 
     gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
 
@@ -395,10 +534,12 @@ def generate_gradcam_localization(model, img_array, file_path,
             box_source = "yolo"
 
     # Tầng Gemini Vision: Nếu YOLO không tìm thấy, dùng Gemini
+    # (Privacy Guard sẽ tự động bị qua bên trong nếu plane là facial-risk)
     if final_box is None and gemini_client is not None:
         gemini_result = _gemini_locate_tumor(
             file_path, predicted_class, confidence,
-            opencv_box, gemini_client, gemini_model
+            opencv_box, gemini_client, gemini_model,
+            plane=scan_plane
         )
         if gemini_result:
             h_img, w_img = img_cv.shape[:2]

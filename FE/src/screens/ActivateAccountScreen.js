@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { put, setAuthToken, get } from '../services/api.service';
+import { Lock, Shield, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ chuyên khoa',
@@ -110,7 +111,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         destination = 'AdminBackoffice';
       }
 
-      showAlert('success', 'Kích hoạt thành công! 🎉', 'Tài khoản của bạn đã được kích hoạt. Đang chuyển tiếp bạn vào hệ thống...', () => {
+      showAlert('success', 'Kích hoạt thành công!', 'Tài khoản của bạn đã được kích hoạt. Đang chuyển tiếp bạn vào hệ thống...', () => {
         navigation.replace(destination, destParams);
       });
     } catch (err) {
@@ -143,7 +144,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.lockBadge}>
-              <Text style={styles.lockEmoji}>🔐</Text>
+              <Lock size={28} color="#0891B2" />
             </View>
             <Text style={styles.title}>Kích hoạt tài khoản</Text>
             <Text style={styles.subtitle}>
@@ -211,7 +212,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowCurrent(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showCurrent ? '🔒' : '👁️'}</Text>
+                {showCurrent ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
               </TouchableOpacity>
             </View>
           </View>
@@ -236,7 +237,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowNew(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showNew ? '🔒' : '👁️'}</Text>
+                {showNew ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
               </TouchableOpacity>
             </View>
           </View>
@@ -260,7 +261,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 onBlur={() => setFocusedInput(null)}
               />
               <TouchableOpacity onPress={() => setShowConfirm(v => !v)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showConfirm ? '🔒' : '👁️'}</Text>
+                {showConfirm ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
               </TouchableOpacity>
             </View>
           </View>
@@ -294,7 +295,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
 
         {/* Security note */}
         <View style={styles.securityNote}>
-          <Text style={styles.securityIcon}>🛡️</Text>
+          <Shield size={18} color="#0891B2" style={{ marginRight: 8, marginTop: 2 }} />
           <Text style={styles.securityText}>
             Hệ thống sử dụng cơ chế mã hóa một chiều an toàn (bcrypt) cho mật khẩu. Thông tin tài khoản được bảo mật tuyệt đối theo tiêu chuẩn HIPAA.
           </Text>
@@ -311,9 +312,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
               alert.type === 'success' && { backgroundColor: '#F0FDF4' },
               alert.type === 'error' && { backgroundColor: '#FEF2F2' },
             ]}>
-              <Text style={[styles.alertIconText, { color: alert.type === 'success' ? '#16A34A' : '#DC2626' }]}>
-                {alert.type === 'success' ? '✓' : '✕'}
-              </Text>
+              {alert.type === 'success' ? (
+                <CheckCircle2 size={32} color="#16A34A" />
+              ) : (
+                <AlertCircle size={32} color="#DC2626" />
+              )}
             </View>
             <Text style={styles.alertTitle}>{alert.title}</Text>
             <Text style={styles.alertMessage}>{alert.message}</Text>

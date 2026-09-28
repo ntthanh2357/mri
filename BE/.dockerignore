@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+.git
+uploads
+scratch
+.env
+.env.*
+*.json.key
+credentials.json
+firebase-service-account.json
+*-service-account.json

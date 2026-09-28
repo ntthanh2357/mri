@@ -16,6 +16,7 @@ import {
 import Config from '../constants/config';
 import { post } from '../services/api.service';
 import styles from './RegisterScreen.styles';
+import { Building2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 
 const RegisterScreen = ({ navigation }) => {
@@ -271,7 +272,7 @@ const RegisterScreen = ({ navigation }) => {
 
                   {/* Info banner for staff */}
                   <View style={styles.staffNotice}>
-                    <Text style={styles.staffNoticeIcon}>🏥</Text>
+                    <Building2 size={20} color="#0891B2" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
                       <Text style={styles.staffNoticeText}>
@@ -405,7 +406,7 @@ const RegisterScreen = ({ navigation }) => {
 
             {/* Info banner for staff */}
             <View style={styles.staffNotice}>
-              <Text style={styles.staffNoticeIcon}>🏥</Text>
+              <Building2 size={20} color="#0891B2" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
                 <Text style={styles.staffNoticeText}>
@@ -448,9 +449,9 @@ const RegisterScreen = ({ navigation }) => {
               customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
               customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
             ]}>
-              {customAlert.type === 'success' && <Text style={[styles.alertIconText, { color: '#16A34A' }]}>✓</Text>}
-              {customAlert.type === 'error' && <Text style={[styles.alertIconText, { color: '#DC2626' }]}>✕</Text>}
-              {customAlert.type === 'info' && <Text style={[styles.alertIconText, { color: '#2563EB' }]}>ℹ</Text>}
+              {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" />}
+              {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" />}
+              {customAlert.type === 'info' && <Info size={28} color="#0891B2" />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>

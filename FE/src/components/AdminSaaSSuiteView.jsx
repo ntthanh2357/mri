@@ -11,7 +11,12 @@ import {
   CheckCircle2, 
   Loader2, 
   Download, 
-  Upload 
+  Upload,
+  CreditCard,
+  Zap,
+  Cpu,
+  Bell,
+  X
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
@@ -160,7 +165,7 @@ export default function AdminSaaSSuiteView() {
         body: JSON.stringify({ fileName })
       });
       const { restoredStats, warnings } = data;
-      let msg = `✅ Khôi phục thành công!`;
+      let msg = 'Khôi phục thành công!';
       if (restoredStats) {
         msg += ` ${restoredStats.visits} lượt khám · ${restoredStats.users} tài khoản · ${restoredStats.invoices} hóa đơn`;
       }
@@ -168,7 +173,7 @@ export default function AdminSaaSSuiteView() {
       // Nếu có user bị tạo lại với mật khẩu tạm, cảnh báo riêng
       if (warnings && warnings.length > 0) {
         setTimeout(() => {
-          showToast(`⚠️ ${warnings.length} tài khoản được tạo mới với mật khẩu tạm — yêu cầu đặt lại mật khẩu.`, true);
+          showToast(`${warnings.length} tài khoản được tạo mới với mật khẩu tạm — yêu cầu đặt lại mật khẩu.`, true);
         }, 1200);
       }
     } catch (err) {
@@ -248,43 +253,43 @@ export default function AdminSaaSSuiteView() {
       <div className="border-b border-slate-200 flex flex-wrap gap-1">
         <button
           onClick={() => setSubTab('subscriptions')}
-          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'subscriptions' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          💳 Gói Dịch Vụ & Subscription
+          <CreditCard className="w-3.5 h-3.5" /> Gói Dịch Vụ & Subscription
         </button>
         <button
           onClick={() => setSubTab('sla')}
-          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'sla' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          ⚡ Giám Sát SLA & Isolation
+          <Zap className="w-3.5 h-3.5" /> Giám Sát SLA & Isolation
         </button>
         <button
           onClick={() => setSubTab('backup')}
-          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'backup' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          📂 Backup & Restore Data
+          <Database className="w-3.5 h-3.5" /> Backup & Restore Data
         </button>
         <button
           onClick={() => setSubTab('ai-models')}
-          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'ai-models' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          🤖 Phiên Bản AI Models
+          <Cpu className="w-3.5 h-3.5" /> Phiên Bản AI Models
         </button>
         <button
           onClick={() => setSubTab('announcements')}
-          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 border-b-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'announcements' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          📢 Thông Báo Hệ Thống
+          <Bell className="w-3.5 h-3.5" /> Thông Báo Hệ Thống
         </button>
       </div>
 
@@ -361,7 +366,9 @@ export default function AdminSaaSSuiteView() {
               <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
                 <div className="flex justify-between items-center border-b pb-2">
                   <h4 className="text-sm font-bold text-slate-900">Thay đổi gói: {selectedHospital.name}</h4>
-                  <button onClick={() => setSelectedHospital(null)} className="text-slate-400">✕</button>
+                  <button onClick={() => setSelectedHospital(null)} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
                 <form onSubmit={handleUpdateSubscription} className="space-y-4 text-xs font-medium text-slate-700">
                   <div className="space-y-1">

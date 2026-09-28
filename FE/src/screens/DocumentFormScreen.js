@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useDocumentVault } from '../controllers/useDocumentVault';
 import { DOC_TYPE_INFO, VAULT_KEY, createEmptyFormData } from '../models/documentVault.model';
+import { Check, X } from 'lucide-react';
+import DocTypeIcon from '../components/DocTypeIcon';
 
 /* ─── Shared UI components ─── */
 
@@ -33,7 +35,7 @@ const SectionTitle = ({ children }) => <Text style={s.sectionTitle}>{children}</
 const Checkbox = ({ label, checked, onToggle, indent }) => (
   <TouchableOpacity style={[s.cbRow, indent && s.cbIndent]} onPress={onToggle} activeOpacity={0.7}>
     <View style={[s.cb, checked && s.cbChecked]}>
-      {checked && <Text style={s.cbTick}>✓</Text>}
+      {checked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
     </View>
     <Text style={[s.cbLabel, checked && s.cbLabelActive]}>{label}</Text>
   </TouchableOpacity>
@@ -82,7 +84,7 @@ const DynamicRows = ({ rows, onChange, columns, addLabel }) => {
           ))}
           {rows.length > 1 && (
             <TouchableOpacity style={s.dynRemove} onPress={() => removeRow(idx)}>
-              <Text style={s.dynRemoveText}>✕</Text>
+              <X size={14} color="#EF4444" />
             </TouchableOpacity>
           )}
         </View>
@@ -756,7 +758,10 @@ const DocumentFormScreen = ({ route, navigation }) => {
           <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
             <Text style={s.backBtnText}>← Quay lại</Text>
           </TouchableOpacity>
-          <Text style={s.headerTitle} numberOfLines={1}>{info.icon} {info.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <DocTypeIcon type={type} size={20} color="#0891B2" />
+            <Text style={s.headerTitle} numberOfLines={1}>{info.label}</Text>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">

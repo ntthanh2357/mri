@@ -1,50 +1,6 @@
-import { Router } from "express";
-import {
-  register,
-  login,
-  getMe,
-  refresh,
-  firebaseLogin,
-  ssoLogin,
-  logoutAll,
-  changePassword,
-  forgotPassword,
-  verifyOtp,
-  phoneLoginRequest,
-  phoneLoginVerify,
-  downgradeToBasic,
-  cancelPremiumRenew,
-  updateProfile,
-  verifyActivation,
-  resendActivation,
-} from "../controllers/auth.controller.js";
-import { protect, optionalProtect } from "../middlewares/auth.middleware.js";
-
-const router = Router();
-
-router.post("/register", optionalProtect, register);
-router.post("/login", login);
-router.post("/refresh", refresh);
-router.post("/firebase-login", firebaseLogin);
-router.post("/sso/:provider", ssoLogin);
-router.get("/me", protect, getMe);
-router.put("/profile", protect, updateProfile);
-
-// Endpoints
-router.post("/logout/all", protect, logoutAll);
-router.put("/password", protect, changePassword);
-router.post("/forgot-password", forgotPassword);
-router.post("/verify-otp", verifyOtp);
-router.post("/verify-activation", verifyActivation);
-router.post("/resend-activation", resendActivation);
-
-// Phone login endpoints
-router.post("/phone-login-request", phoneLoginRequest);
-router.post("/phone-login-verify", phoneLoginVerify);
-
-// Premium endpoints
-router.post("/premium/downgrade", protect, downgradeToBasic);
-router.post("/premium/cancel-renew", protect, cancelPremiumRenew);
-
-export default router;
-
+/**
+ * Facade Re-export for Backward Compatibility (Strangler Fig Pattern)
+ * Đảm bảo routes/index.js hoặc bất kỳ file cũ nào import từ './auth.routes.js' vẫn hoạt động 100%.
+ */
+export * from "../modules/auth/auth.routes.js";
+export { default } from "../modules/auth/auth.routes.js";
