@@ -368,7 +368,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* Patients Metric */}
                 <View style={styles.statCard}>
                   <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
-                    <Text style={{ fontSize: 20 }}>👥</Text>
+                    <Users size={20} color="#1D4ED8" />
                   </View>
                   <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
                   {loadingStats ? (
@@ -384,7 +384,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* AI Scans Metric */}
                 <View style={styles.statCard}>
                   <View style={[styles.statIconContainer, { backgroundColor: '#F5F3FF' }]}>
-                    <Text style={{ fontSize: 20 }}>🧠</Text>
+                    <Brain size={20} color="#6D28D9" />
                   </View>
                   <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
                   {loadingStats ? (
@@ -402,7 +402,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* Revenue Card */}
                 <View style={styles.statCard}>
                   <View style={[styles.statIconContainer, { backgroundColor: '#ECFDF5' }]}>
-                    <Text style={{ fontSize: 20 }}>💰</Text>
+                    <DollarSign size={20} color="#047857" />
                   </View>
                   <Text style={styles.statLabel}>Doanh thu hôm nay</Text>
                   {loadingStats ? (
@@ -422,7 +422,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* Daily Activity Card */}
                 <View style={styles.statCard}>
                   <View style={[styles.statIconContainer, { backgroundColor: '#FFF7ED' }]}>
-                    <Text style={{ fontSize: 20 }}>📈</Text>
+                    <Activity size={20} color="#C2410C" />
                   </View>
                   <Text style={styles.statLabel}>Tiếp nhận hôm nay</Text>
                   {loadingStats ? (

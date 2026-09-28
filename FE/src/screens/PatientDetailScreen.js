@@ -999,18 +999,29 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
 
+  const isStaffRole = currentUser?.role === 'doctor' || currentUser?.role === 'technician' || currentUser?.role === 'nurse' || currentUser?.role === 'receptionist';
+  const targetActiveRoute = route.params?.activeRoute || (isStaffRole ? 'DoctorPatientList' : 'PatientRecords');
+
+  const handleBackNavigation = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(targetActiveRoute);
+    }
+  };
+
   return (
     <ResponsiveLayout
       navigation={navigation}
-      activeRoute="PatientRecords"
+      activeRoute={targetActiveRoute}
     >
       <SafeAreaView style={styles.container}>
         {/* Header điều hướng back */}
         {!isDesktop && (
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')} style={styles.backButton}>
+            <TouchableOpacity onPress={handleBackNavigation} style={styles.backButton}>
               <ChevronLeft size={18} color="#0891B2" />
-              <Text style={styles.backButtonText}>Danh sách BN</Text>
+              <Text style={styles.backButtonText}>Quay lại</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
           </View>

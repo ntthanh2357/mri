@@ -813,7 +813,7 @@ const NurseQueueTab = ({ navigation }) => {
           <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
-          <Text style={{ fontSize: 14 }}>🔄</Text>
+          <RefreshCw size={14} color="#64748B" />
         </TouchableOpacity>
       </View>
 
