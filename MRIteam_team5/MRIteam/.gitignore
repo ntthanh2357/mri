@@ -1,66 +1,42 @@
-# ============================================================
-# MAICS Project .gitignore (MICAD 2026 / NCKH)
-# ============================================================
-
-# 1. Environment & Credentials (CRITICAL PRIVACY)
+# Environments
 .env
-.env.local
-*.env
 
-# 2. Virtual Environments & Python Cache
+# Virtual environments
 .venv/
 venv/
 env/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.pytest_cache/
 
-# 3. OS & IDE Temp Files
+# Mac
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/
-~$*
 
-# 4. Large Datasets & Clinical Patient Scans (Local Storage Only)
+# Data and Models
 archive/
-archive_label/
-archive_v2/
-combined_dataset/
-dataTAMTRI/
-patient_test_data/
 archive.zip
-*.zip
-*.tar.gz
-
-# 5. Heavy Model Weights & Local Prediction Cache
-models/
-runs/
+models/*
+!models/README.md
 *.h5
 *.keras
-*.pt
-*.onnx
-*.engine
-*.pkl
 
-# 6. Database & Local Logs
+# Database and logs
 audit_logs.db
 *.db
 *.log
 feedback_log.csv
-block_analysis.txt
 
-# 7. Temporary Test Directories & Outputs
+# Uploads and temporary files
 uploads/
 hard_examples/
 gradcam_tests/
-extracted_images/
 
-# 8. Temporary Images (Allow source code images if any)
+# Test output images
 *.png
 *.jpg
 *.jpeg
-!models/confusion_matrix_comparison.png
-!models/maics_fig4_interpretability.png
+!Figure_1.png
+!confusion_matrix.png
+
+# Office temporary files
+~$*
+
