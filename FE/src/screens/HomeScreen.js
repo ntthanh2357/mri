@@ -359,15 +359,6 @@ const HomeScreen = ({ route, navigation }) => {
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
             {/* Left Column (flex: 2) */}
             <View style={isDesktop ? styles.patientMainColumn : styles.fullWidth}>
-              {isDesktop && (
-                <View style={styles.desktopGreeting}>
-                  <Text style={styles.greetingTitle}>Chào buổi sáng, {user.profile?.name || 'Người dùng'}</Text>
-                  <Text style={styles.greetingSubtitle}>
-                    Hôm nay là {(() => { const d = new Date(); const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']; return days[d.getDay()]; })()}, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}. Sức khỏe của bạn đang rất tốt.
-                  </Text>
-                </View>
-              )}
-
               {/* MRI Result Card */}
               {loadingMri ? (
                 <View style={styles.emptyMriCard}>
@@ -483,15 +474,6 @@ const HomeScreen = ({ route, navigation }) => {
                       <UserCheck size={24} color="#0891B2" style={{ marginBottom: 8 }} />
                       <Text style={styles.gridLabel}>Tư vấn Bác sĩ</Text>
                       <Text style={styles.gridSub}>Đặt lịch trực tiếp</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => navigation.navigate('RecordVault')}
-                    >
-                      <ClipboardList size={24} color="#0891B2" style={{ marginBottom: 8 }} />
-                      <Text style={styles.gridLabel}>Khai báo bệnh án</Text>
-                      <Text style={styles.gridSub}>Bệnh sử, tiền sử</Text>
                     </TouchableOpacity>
 
                      <TouchableOpacity

@@ -27,14 +27,15 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
+import Colors from '../constants/colors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GROUP_META = {
-  nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', Icon: FolderArchive, color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
-  nhom2: { label: 'Nhóm 2 — Lâm sàng', Icon: Stethoscope, color: '#F0FDF4', border: '#BBF7D0', text: '#059669' },
-  nhom3: { label: 'Nhóm 3 — Cận lâm sàng', Icon: Microscope, color: '#FFF7ED', border: '#FED7AA', text: '#D97706' },
-  nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', Icon: ShieldCheck, color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
+  nhom1: { label: 'Hành chính & Tài chính', Icon: FolderArchive, accent: '#1D4ED8' },
+  nhom2: { label: 'Lâm sàng', Icon: Stethoscope, accent: '#059669' },
+  nhom3: { label: 'Cận lâm sàng', Icon: Microscope, accent: '#D97706' },
+  nhom5: { label: 'Pháp lý / Có chữ ký', Icon: ShieldCheck, accent: '#7C3AED' },
 };
 
 
@@ -174,19 +175,19 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
             const groupSaved = slots.filter((s) => savedMap[s.docKey]).length;
             const isGroupExpanded = expandedGroups[groupKey];
             return (
-              <View key={groupKey} style={[styles.groupCard, { borderColor: meta.border, backgroundColor: meta.color }]}>
+              <View key={groupKey} style={[styles.groupCard, { borderLeftColor: meta.accent }]}>
                 <TouchableOpacity
                   style={styles.groupHeader}
                   onPress={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
                   activeOpacity={0.7}
                 >
-                  <GroupIcon size={16} color={meta.text} />
-                  <Text style={[styles.groupLabel, { color: meta.text }]}>{meta.label}</Text>
-                  <Text style={[styles.groupCount, { color: meta.text }]}>{groupSaved}/{slots.length}</Text>
+                  <GroupIcon size={15} color={meta.accent} />
+                  <Text style={styles.groupLabel}>{meta.label}</Text>
+                  <Text style={styles.groupCount}>{groupSaved}/{slots.length}</Text>
                   {isGroupExpanded ? (
-                    <ChevronUp size={16} color={meta.text} />
+                    <ChevronUp size={16} color={Colors.secondary} />
                   ) : (
-                    <ChevronDown size={16} color={meta.text} />
+                    <ChevronDown size={16} color={Colors.secondary} />
                   )}
                 </TouchableOpacity>
                 {isGroupExpanded && (
@@ -285,41 +286,27 @@ const PatientRecordsScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{visits.length}</Text>
-              <Text style={styles.statLabel}>Lượt khám</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#0891B2' }]}>{savedCount}</Text>
-              <Text style={styles.statLabel}>Tài liệu đã lưu</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#D97706' }]}>{Math.max(0, totalSlots - savedCount)}</Text>
-              <Text style={styles.statLabel}>Còn thiếu</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#2563EB' }]}>
+          <TouchableOpacity style={styles.passportCard} onPress={() => navigation.navigate('PatientIdentity')} activeOpacity={0.9}>
+            <View style={styles.passportSpine} />
+            <Text style={styles.passportEyebrow}>Sổ sức khỏe cá nhân</Text>
+            <Text style={styles.passportName}>{identity?.name || 'Chưa cập nhật họ tên'}</Text>
+            <Text style={styles.passportDob}>
+              Sinh ngày {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
+            </Text>
+            <View style={styles.passportDivider} />
+            <View style={styles.passportSummaryRow}>
+              <Text style={styles.passportSummaryStrong}>{visits.length}</Text>
+              <Text style={styles.passportSummaryText}>lượt khám</Text>
+              <Text style={styles.passportSummaryDot}>·</Text>
+              <Text style={styles.passportSummaryStrong}>{savedCount}</Text>
+              <Text style={styles.passportSummaryText}>tài liệu đã lưu</Text>
+              <Text style={styles.passportSummaryDot}>·</Text>
+              <Text style={styles.passportSummaryStrong}>
                 {totalSlots > 0 ? Math.round((savedCount / totalSlots) * 100) : 0}%
               </Text>
-              <Text style={styles.statLabel}>Hoàn thiện</Text>
+              <Text style={styles.passportSummaryText}>đầy đủ</Text>
             </View>
-          </View>
-
-          <TouchableOpacity style={styles.identityCard} onPress={() => navigation.navigate('PatientIdentity')} activeOpacity={0.85}>
-            <View style={styles.identityRow}>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>Họ và tên</Text>
-                <Text style={styles.identityValue}>{identity?.name || '—'}</Text>
-              </View>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>Ngày sinh</Text>
-                <Text style={styles.identityValue}>
-                  {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.identityEditHint}>Nhấn để chỉnh sửa thông tin →</Text>
+            <Text style={styles.passportEditHint}>Chỉnh sửa thông tin cá nhân →</Text>
           </TouchableOpacity>
 
           <View style={styles.searchContainer}>
@@ -333,7 +320,8 @@ const PatientRecordsScreen = ({ navigation }) => {
             />
           </View>
 
-          <Text style={styles.sectionTitle}>Lịch sử khám & Tài liệu ({filtered.length} lượt)</Text>
+          <Text style={styles.sectionTitle}>Lịch sử khám</Text>
+          <Text style={styles.sectionSub}>{filtered.length} lượt khám, theo thứ tự gần nhất trước</Text>
 
           {filtered.length === 0 && (
             <View style={styles.emptyState}>

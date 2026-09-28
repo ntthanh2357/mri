@@ -52,13 +52,6 @@ const DOC_SCHEMAS = {
       { key: 'maSo', label: 'Mã bệnh nhân / ID' },
       { key: 'doiTuong', label: 'Đối tượng', type: 'radio', options: ['Thu phí', 'BHYT', 'Miễn phí', 'Khác'] },
       { key: 'lyDoKham', label: 'Yêu cầu / Lý do khám', multiline: true },
-      { key: 'mach', label: 'Mạch (lần/phút)' },
-      { key: 'huyetAp', label: 'Huyết áp (mmHg)' },
-      { key: 'chieuCao', label: 'Chiều cao (cm)' },
-      { key: 'canNang', label: 'Cân nặng (kg)' },
-      { key: 'nhietDo', label: 'Nhiệt độ (°C)' },
-      { key: 'nhipTho', label: 'Nhịp thở (lần/phút)' },
-      { key: 'spo2', label: 'SpO₂ (%)' },
     ],
   },
 

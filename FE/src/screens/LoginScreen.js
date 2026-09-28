@@ -415,7 +415,7 @@ const LoginScreen = ({ navigation }) => {
           {/* Logo & Brand */}
           <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
             <Image
-              source={require('../../assets/logo.jpg')}
+              source={require('../../assets/logo1.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
