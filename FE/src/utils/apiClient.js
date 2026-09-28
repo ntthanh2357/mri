@@ -1,20 +1,29 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../constants/config.js';
 import { navigateTo } from './navigationRef.js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function getToken() {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('token');
+  try {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const webToken = localStorage.getItem('token');
+      if (webToken) return webToken;
+    }
+    return await AsyncStorage.getItem('token');
+  } catch (err) {
+    console.warn('[apiClient] Lỗi đọc token từ storage:', err);
+    return null;
   }
-  return AsyncStorage.getItem('token');
 }
 
 async function clearToken() {
-  if (Platform.OS === 'web') {
-    localStorage.removeItem('token');
-  } else {
+  try {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem('token');
+    }
     await AsyncStorage.removeItem('token');
+  } catch (err) {
+    console.warn('[apiClient] Lỗi xóa token khỏi storage:', err);
   }
 }
 

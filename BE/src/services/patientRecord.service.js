@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
-import { uploadToGCS, deleteFromGCS } from "../config/gcs.js";
+import { uploadToGCS } from "../config/gcs.js";
 import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
 
@@ -44,7 +44,8 @@ export const listVisits = async (userId) => {
     $or: [
       { userId: userId },
       { patientId: userId }
-    ]
+    ],
+    isDeleted: { $ne: true }
   })
   .populate("hospitalId", "name")
   .populate("doctorId", "profile.name")
@@ -72,7 +73,7 @@ export const listVisits = async (userId) => {
     }
 
     // It's a system visit (created by receptionist/hospital)
-    const docList = [...(visit.documents || [])];
+    const docList = [...(visit.documents || []).filter(d => !d.isDeleted)];
 
     // Check Vitals
     if (visit.vitals && (visit.vitals.pulse || visit.vitals.bloodPressure || visit.vitals.temperature || visit.vitals.spo2)) {
@@ -321,33 +322,26 @@ export const getVisit = async (userId, visitId) => {
 };
 
 export const updateVisit = async (userId, visitId, data) => {
-  const allowed = ["date", "facility", "visitType", "diagnosis", "medicalId", "doctor"];
-  const update = {};
-  allowed.forEach((key) => {
-    if (data[key] !== undefined) {
-      update[key] = key === "date" ? new Date(data[key]) : data[key];
-    }
-  });
-
-  const visit = await Visit.findOneAndUpdate(
-    { _id: visitId, $or: [{ userId }, { patientId: userId }] },
-    { $set: update },
-    { new: true }
-  );
-  if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
-  return visit;
-};
-
-export const deleteVisit = async (userId, visitId) => {
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  // Delete all uploaded files from GCS
-  for (const doc of visit.documents) {
-    if (doc.fileUrl) await deleteFromGCS(doc.fileUrl);
+  // [TT 46/2018/TT-BYT & LUẬT 15/2023/QH15]: BẢO VỆ TÍNH BẤT BIẾN CA KHÁM ĐÃ HOÀN TẤT
+  if (["hoàn tất", "đã đóng"].includes(visit.status)) {
+    throw Object.assign(
+      new Error("Không thể cập nhật lượt khám đã hoàn tất hoặc đã đóng viện phí theo quy chuẩn hồ sơ bệnh án."),
+      { status: 400 }
+    );
   }
 
-  await visit.deleteOne();
+  const allowed = ["date", "facility", "visitType", "diagnosis", "medicalId", "doctor"];
+  allowed.forEach((key) => {
+    if (data[key] !== undefined) {
+      visit[key] = key === "date" ? new Date(data[key]) : data[key];
+    }
+  });
+
+  await visit.save();
+  return visit;
 };
 
 // ── Documents ─────────────────────────────────────────────────────────────────
@@ -447,27 +441,73 @@ export const addDocumentManual = async (userId, visitId, { docKey, groupKey, lab
   return visit;
 };
 
-export const deleteDocument = async (userId, visitId, docId) => {
+export const deleteVisit = async (userId, visitId, currentUser) => {
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
+
+  // Theo Luật Khám bệnh, chữa bệnh: Không được xóa lượt khám đã hoàn tất điều trị hoặc đã thanh toán viện phí
+  if (['hoàn tất', 'đã đóng'].includes(visit.status)) {
+    throw Object.assign(new Error("Không thể hủy lượt khám đã hoàn tất hoặc đã đóng viện phí theo quy chế hồ sơ bệnh án."), { status: 400 });
+  }
+
+  const oldStatus = visit.status;
+  visit.isDeleted = true;
+  visit.deletedAt = new Date();
+  visit.deletedBy = currentUser?.id || currentUser?._id;
+  visit.status = "đã hủy";
+  await visit.save();
+
+  // Ghi vết kiểm toán (Audit Trail) tuân thủ Thông tư 46/2018/TT-BYT & HIPAA
+  try {
+    const { recordAuditLog } = await import("./auditLog.service.js");
+    await recordAuditLog({
+      action: "SOFT_DELETE_VISIT",
+      entity: "Visit",
+      entityId: visitId.toString(),
+      performedBy: (currentUser?.id || currentUser?._id || userId || "system").toString(),
+      hospitalId: visit.hospitalId || currentUser?.hospitalId || null,
+      details: `Hủy lượt khám (Soft Delete) tuân thủ TT 46/2018/TT-BYT. Trạng thái ca khám cũ: ${oldStatus}`,
+    });
+  } catch (auditErr) {
+    console.warn("Lỗi ghi audit log khi hủy lượt khám:", auditErr.message);
+  }
+
+  return visit;
+};
+
+export const deleteDocument = async (userId, visitId, docId, currentUser) => {
+  const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
+  if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
+
+  // Theo Thông tư 46/2018/TT-BYT: Không được xóa tài liệu y tế thuộc ca khám đã hoàn tất hoặc đã đóng viện phí
+  if (['hoàn tất', 'đã đóng'].includes(visit.status)) {
+    throw Object.assign(new Error("Không thể xóa tài liệu thuộc lượt khám đã hoàn tất hoặc đã đóng viện phí theo quy chế hồ sơ bệnh án."), { status: 400 });
+  }
 
   const doc = visit.documents.id(docId);
   if (!doc) throw Object.assign(new Error("Không tìm thấy tài liệu."), { status: 404 });
 
-  if (doc.fileUrl) {
-    if (doc.fileUrl.includes("googleusercontent.com/u/0/d/")) {
-      const parts = doc.fileUrl.split("/");
-      const fileId = parts[parts.length - 1] || parts[parts.length - 2];
-      if (fileId) {
-        const { deleteFromDrive } = await import("../config/googleDrive.js");
-        await deleteFromDrive(fileId).catch(() => {});
-      }
-    } else {
-      await deleteFromGCS(doc.fileUrl);
-    }
-  }
-  visit.documents.pull({ _id: docId });
+  // [EHR IMMUTABILITY]: Soft Delete tài liệu, không xóa vật lý khỏi hệ thống
+  doc.isDeleted = true;
+  doc.deletedAt = new Date();
+  doc.deletedBy = currentUser?.id || currentUser?._id;
 
   await visit.save();
+
+  // Ghi vết kiểm toán (Audit Trail)
+  try {
+    const { recordAuditLog } = await import("./auditLog.service.js");
+    await recordAuditLog({
+      action: "SOFT_DELETE_DOCUMENT",
+      entity: "Document",
+      entityId: docId.toString(),
+      performedBy: (currentUser?.id || currentUser?._id || userId || "system").toString(),
+      hospitalId: visit.hospitalId || currentUser?.hospitalId || null,
+      details: `Xóa mềm tài liệu y khoa '${doc.label || doc.docKey}' thuộc ca khám ${visitId} theo TT 46/2018/TT-BYT.`,
+    });
+  } catch (auditErr) {
+    console.warn("Lỗi ghi audit log khi xóa tài liệu:", auditErr.message);
+  }
+
   return visit;
 };

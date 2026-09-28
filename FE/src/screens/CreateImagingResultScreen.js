@@ -12,10 +12,11 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { post } from '../services/api.service';
+import { post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
+import { Zap, Brain, Edit3, CheckCircle2, RotateCw, X, Upload } from 'lucide-react';
 
 const CreateImagingResultScreen = ({ route, navigation }) => {
   const { patientInfo, visit } = route.params || {};
@@ -91,7 +92,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
+    input.accept = 'image/*,.zip,.rar,.7z,.dcm,.nii,.nii.gz';
     input.multiple = true;
     input.onchange = async (e) => {
       const files = Array.from(e.target.files || []);
@@ -107,12 +108,12 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 
       for (let file of files) {
         try {
-          const fileData = await readFileAsBase64(file);
-          const response = await post('/api/v1/imaging/upload', {
-            fileData,
-            fileName: file.name,
-            imagingType
-          });
+          // Gửi trực tiếp dạng Multipart FormData nhị phân (Zero Base64 overhead, nhanh gấp 5-10 lần)
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('imagingType', imagingType);
+
+          const response = await postFormData('/api/v1/imaging/upload', formData);
 
           if (response.success && response.data?.imageUrl) {
             uploadedUrls.push(response.data.imageUrl);
@@ -220,10 +221,16 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       };
 
       const response = await post('/api/v1/imaging', payload);
-      if (response.success) {
-        showAlert('Thành công', 'Đã đăng tải kết quả chẩn đoán hình ảnh mới lên hệ thống!', () => {
+      const handleGoBack = () => {
+        if (navigation.canGoBack()) {
           navigation.goBack();
-        });
+        } else {
+          navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' });
+        }
+      };
+
+      if (response.success) {
+        showAlert('Thành công', 'Đã đăng tải kết quả chẩn đoán hình ảnh mới lên hệ thống!', handleGoBack);
       } else {
         showAlert('Lỗi', response.message || 'Không thể lưu kết quả chụp.');
       }
@@ -235,12 +242,20 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleCancel = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' });
+    }
+  };
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleCancel}>
             <Text style={styles.backBtnText}>← Hủy</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Nhập Kết quả MRI / CT-Scan</Text>
@@ -263,7 +278,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
             {/* Auto Fill Buttons */}
             <View style={[styles.helperRow, { gap: 10 }]}>
               <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#0F172A', borderColor: '#1E293B', flex: 1 }]} onPress={handleOcrFill}>
-                <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>⚡ Giả lập Quét tự động (Simulated OCR)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Zap size={14} color="#4ADE80" />
+                  <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>Giả lập Quét tự động (Simulated OCR)</Text>
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -279,9 +297,12 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 onPress={handleAiAnalysis}
                 disabled={images.length === 0}
               >
-                <Text style={[styles.helperBtnText, { color: '#A5B4FC', fontWeight: 'bold' }]}>
-                  🤖 {images.length === 0 ? 'Phân tích AI (Chưa nạp ảnh)' : 'Mở màn hình Phân tích AI →'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Brain size={14} color="#A5B4FC" />
+                  <Text style={[styles.helperBtnText, { color: '#A5B4FC', fontWeight: 'bold' }]}>
+                    {images.length === 0 ? 'Phân tích AI (Chưa nạp ảnh)' : 'Mở màn hình Phân tích AI →'}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
 
@@ -296,8 +317,9 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
               }}>
                 {/* Header badge */}
                 <View style={{ backgroundColor: aiResult.isWrong ? '#DC2626' : '#059669', paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {aiResult.isWrong ? <Edit3 size={15} color="#fff" /> : <CheckCircle2 size={15} color="#fff" />}
                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-                    {aiResult.isWrong ? '✍️ AI đã được điều chỉnh bởi bác sĩ' : '✅ Kết quả AI đã được bác sĩ xác nhận'}
+                    {aiResult.isWrong ? 'AI đã được điều chỉnh bởi bác sĩ' : 'Kết quả AI đã được bác sĩ xác nhận'}
                   </Text>
                 </View>
                 <View style={{ backgroundColor: aiResult.isWrong ? '#FEF2F2' : '#ECFDF5', padding: 14 }}>
@@ -314,10 +336,11 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                     </View>
                   )}
                   <TouchableOpacity
-                    style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#6366F1', borderRadius: 6, alignSelf: 'flex-start' }}
+                    style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#6366F1', borderRadius: 6, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6 }}
                     onPress={handleAiAnalysis}
                   >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>🔄 Quét AI lại</Text>
+                    <RotateCw size={13} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Quét AI lại</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -520,7 +543,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                           style={styles.removeBadge}
                           onPress={() => handleRemoveImage(idx)}
                         >
-                          <Text style={styles.removeBadgeText}>✕</Text>
+                          <X size={12} color="#DC2626" />
                         </TouchableOpacity>
                       </View>
                     );
@@ -529,14 +552,17 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
               )}
 
               <TouchableOpacity
-                style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                style={[styles.uploadButton, uploading && styles.uploadButtonDisabled, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                 onPress={handlePickImages}
                 disabled={uploading}
               >
                 {uploading ? (
                   <ActivityIndicator size="small" color="#15803D" />
                 ) : (
-                  <Text style={styles.uploadButtonText}>➕ Tải ảnh lên từ thiết bị</Text>
+                  <>
+                    <Upload size={15} color="#15803D" />
+                    <Text style={styles.uploadButtonText}>Tải ảnh lên từ thiết bị</Text>
+                  </>
                 )}
               </TouchableOpacity>
               <Text style={styles.uploadTipText}>Hỗ trợ các định dạng PNG, JPG, JPEG (tối đa 10 ảnh).</Text>

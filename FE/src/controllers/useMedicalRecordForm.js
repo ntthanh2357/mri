@@ -117,9 +117,9 @@ export const useMedicalRecordForm = (patientId = null) => {
               serverRecordId.current = res.data._id;
             }
           }
-          console.log('[useMedicalRecordForm] ✅ Đã đồng bộ bệnh án lên server.');
+          console.log('[useMedicalRecordForm] [SUCCESS] Đã đồng bộ bệnh án lên server.');
         } catch (serverErr) {
-          console.warn('[useMedicalRecordForm] ⚠️ Không thể lưu lên server:', serverErr.message);
+          console.warn('[useMedicalRecordForm] [WARNING] Không thể lưu lên server:', serverErr.message);
           // Không throw — vẫn lưu local bên dưới
         }
       }

@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './ImagingHistoryScreen.styles';
+import { RotateCw, AlertTriangle, FolderOpen } from 'lucide-react';
 
 const ImagingHistoryScreen = ({ route, navigation }) => {
   const { patientMedicalId, patientName } = route.params || {};
@@ -116,8 +117,9 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
               {patientName ? `Lịch sử phim: ${patientName}` : 'Lịch sử Chẩn đoán Hình ảnh'}
             </Text>
           </View>
-          <TouchableOpacity style={styles.refreshBtn} onPress={fetchHistory}>
-            <Text style={styles.refreshBtnText}>🔄 Làm mới</Text>
+          <TouchableOpacity style={[styles.refreshBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={fetchHistory}>
+            <RotateCw size={14} color="#15803D" />
+            <Text style={styles.refreshBtnText}>Làm mới</Text>
           </TouchableOpacity>
         </View>
 
@@ -128,7 +130,7 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
           </View>
         ) : error ? (
           <View style={styles.centerContainer}>
-            <Text style={styles.errorIcon}>⚠️</Text>
+            <AlertTriangle size={36} color="#D97706" style={{ marginBottom: 8 }} />
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={fetchHistory}>
               <Text style={styles.retryButtonText}>Thử lại</Text>
@@ -136,7 +138,7 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
           </View>
         ) : results.length === 0 ? (
           <View style={styles.centerContainer}>
-            <Text style={styles.emptyIcon}>📂</Text>
+            <FolderOpen size={40} color="#94A3B8" style={{ marginBottom: 8 }} />
             <Text style={styles.emptyText}>Chưa có kết quả chẩn đoán hình ảnh nào được lưu trữ cho bệnh án này.</Text>
           </View>
         ) : (

@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+google-genai
+numpy
+tensorflow
+pillow
+opencv-python
+ultralytics

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { get, post, put, del } from '../services/api.service';
 import Config from '../constants/config';
+import { Building2, Lock, Unlock, Key, CheckCircle2, Trash2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 const STATUS_LABEL = {
   provisioned: { text: 'Chờ điền thông tin', color: 'bg-yellow-100 text-yellow-700' },
@@ -200,7 +201,7 @@ export default function AdminHospitalsView() {
           <option value="submitted">Chờ duyệt</option>
           <option value="active">Đã kích hoạt</option>
           <option value="rejected">Từ chối</option>
-          <option value="locked">🔒 Đang bị khoá</option>
+          <option value="locked">Đang bị khoá</option>
         </select>
       </div>
 
@@ -217,7 +218,7 @@ export default function AdminHospitalsView() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
-              <span className="text-2xl">🏥</span>
+              <Building2 className="w-8 h-8 text-slate-300" />
               <span>Chưa có bệnh viện nào</span>
             </div>
           ) : (
@@ -240,7 +241,9 @@ export default function AdminHospitalsView() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {h.isActive === false && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">🔒 Khoá</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Khoá
+                        </span>
                       )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${s.color}`}>{s.text}</span>
                     </div>
@@ -258,7 +261,7 @@ export default function AdminHospitalsView() {
           </div>
           {!selected ? (
             <div className="flex flex-col items-center justify-center h-56 text-slate-400 text-sm gap-2">
-              <span className="text-3xl">🏥</span>
+              <Building2 className="w-10 h-10 text-slate-300" />
               <span>Chọn một bệnh viện để xem chi tiết</span>
             </div>
           ) : (
@@ -270,8 +273,8 @@ export default function AdminHospitalsView() {
                     {(STATUS_LABEL[selected.status] || STATUS_LABEL.provisioned).text}
                   </span>
                   {selected.isActive === false && (
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700">
-                      🔒 Đang bị khoá
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Đang bị khoá
                     </span>
                   )}
                 </div>
@@ -355,9 +358,9 @@ export default function AdminHospitalsView() {
                   <button
                     onClick={handleResetPassword}
                     disabled={resetting}
-                    className="w-full border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 text-amber-700 rounded-xl text-xs font-bold py-2 transition-all cursor-pointer"
+                    className="w-full border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 text-amber-700 rounded-xl text-xs font-bold py-2 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    {resetting ? 'Đang reset...' : '🔑 Reset mật khẩu tạm'}
+                    {resetting ? 'Đang reset...' : <><Key className="w-3.5 h-3.5" /> Reset mật khẩu tạm</>}
                   </button>
                 </div>
               )}
@@ -366,16 +369,18 @@ export default function AdminHospitalsView() {
               {selected.status === 'submitted' && (
                 <div className="border-t border-slate-100 pt-4">
                   {activateMsg === 'success' ? (
-                    <div className="text-center text-green-600 font-semibold text-sm py-2">✓ Đã kích hoạt thành công!</div>
+                    <div className="text-center text-green-600 font-semibold text-sm py-2 flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" /> Đã kích hoạt thành công!
+                    </div>
                   ) : (
                     <>
                       {activateMsg && <p className="text-red-500 text-xs mb-2">{activateMsg}</p>}
                       <button
                         onClick={handleActivate}
                         disabled={activating}
-                        className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold py-2.5 transition-all active:scale-95 cursor-pointer"
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold py-2.5 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        {activating ? 'Đang xác thực...' : '✓ Xác thực tài khoản'}
+                        {activating ? 'Đang xác thực...' : <><ShieldCheck className="w-4 h-4" /> Xác thực tài khoản</>}
                       </button>
                     </>
                   )}
@@ -389,13 +394,13 @@ export default function AdminHospitalsView() {
                   <button
                     onClick={handleToggleLock}
                     disabled={locking}
-                    className={`flex-1 text-xs font-bold py-2.5 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex-1 text-xs font-bold py-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       selected.isActive === false
                         ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
                         : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
                     }`}
                   >
-                    {locking ? 'Đang xử lý...' : (selected.isActive === false ? '🔓 Mở khoá' : '🔒 Khoá')}
+                    {locking ? 'Đang xử lý...' : (selected.isActive === false ? <><Unlock className="w-3.5 h-3.5" /> Mở khoá</> : <><Lock className="w-3.5 h-3.5" /> Khoá</>)}
                   </button>
                   <button
                     onClick={() => {
@@ -403,9 +408,9 @@ export default function AdminHospitalsView() {
                       setShowDeleteConfirm(true);
                       setDeleteError('');
                     }}
-                    className="flex-1 border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold py-2.5 transition-all cursor-pointer"
+                    className="flex-1 border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold py-2.5 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    ❌ Xoá bệnh viện
+                    <Trash2 className="w-3.5 h-3.5" /> Xoá bệnh viện
                   </button>
                 </div>
               </div>
@@ -424,7 +429,9 @@ export default function AdminHospitalsView() {
             {provResult ? (
               <div className="space-y-4">
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-                  <p className="text-xs font-bold text-green-700">✓ Tạo thành công! Lưu lại thông tin sau:</p>
+                  <p className="text-xs font-bold text-green-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" /> Tạo thành công! Lưu lại thông tin sau:
+                  </p>
                   <div className="bg-white rounded-lg p-3 space-y-1.5 text-sm">
                     <p><span className="text-slate-400 text-xs">Tên đăng nhập:</span><br />
                       <strong className="font-mono text-slate-800">{provResult.tempUsername}</strong></p>
@@ -482,7 +489,7 @@ export default function AdminHospitalsView() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-slate-100 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center gap-3 text-red-600 mb-3">
-              <span className="text-2xl">⚠️</span>
+              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
               <h3 className="text-base font-extrabold">Xác nhận xoá Bệnh viện vĩnh viễn</h3>
             </div>
             

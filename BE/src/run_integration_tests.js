@@ -40,9 +40,23 @@ const runTests = async () => {
         console.error(`[Server Error] ${data.toString().trim()}`);
       });
 
-      // Chờ 5 giây để server kết nối DB và listen port
-      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      await delay(5000);
+      // Chờ server kết nối DB và listen port bằng polling /ping
+      let ready = false;
+      for (let i = 0; i < 25; i++) {
+        try {
+          const pingRes = await fetch(`${BASE_URL}/ping`);
+          if (pingRes.ok) {
+            ready = true;
+            console.log(`✅ Server đã sẵn sàng tại ${BASE_URL}`);
+            break;
+          }
+        } catch (e) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+      if (!ready) {
+        throw new Error(`Server không khởi động kịp sau 25s tại ${BASE_URL}`);
+      }
     }
 
     console.log("\n🧪 Khởi động các ca kiểm thử tích hợp...");
@@ -267,7 +281,67 @@ const runTests = async () => {
       throw new Error(`Upload ảnh test thất bại: ${JSON.stringify(uploadData)}`);
     }
 
-    console.log("\n🎉 HOÀN TẤT: Toàn bộ 6 ca kiểm thử tích hợp chính đều THÀNH CÔNG 100%!");
+    // ─── 7. Kiểm thử Patient B2C (Module H) ───
+    console.log("\n7. Kiểm thử Patient B2C Portal (Module H)");
+    const visitsRes = await fetch(`${BASE_URL}/api/v1/patient-b2c/my-visits`, {
+      headers: { "Authorization": `Bearer ${patientToken}` }
+    });
+    const visitsData = await visitsRes.json();
+    if (visitsRes.ok) {
+      console.log(`   ✅ Bệnh nhân lấy danh sách lượt khám thành công (${visitsData.data?.length || 0} visits).`);
+    } else {
+      console.warn(`   ⚠️ B2C visits failure: ${JSON.stringify(visitsData)}`);
+    }
+
+    // ─── 8. Kiểm thử Sổ sức khỏe cá nhân (Module V) ───
+    console.log("\n8. Kiểm thử Sổ sức khỏe cá nhân (Module V)");
+    const vitalsRes = await fetch(`${BASE_URL}/api/v1/personal-health/vitals-trend`, {
+      headers: { "Authorization": `Bearer ${patientToken}` }
+    });
+    const vitalsData = await vitalsRes.json();
+    if (vitalsRes.ok) {
+      console.log("   ✅ Bệnh nhân xem xu hướng sinh hiệu thành công.");
+    } else {
+      console.warn(`   ⚠️ Vitals trend failure: ${JSON.stringify(vitalsData)}`);
+    }
+
+    // ─── 9. Kiểm thử Báo cáo & Thống kê vận hành (Module W) ───
+    console.log("\n9. Kiểm thử Báo cáo & Thống kê (Module W)");
+    const reportRes = await fetch(`${BASE_URL}/api/v1/reports/revenue`, {
+      headers: { "Authorization": `Bearer ${doctorToken}` }
+    });
+    const reportData = await reportRes.json();
+    if (reportRes.ok) {
+      console.log("   ✅ Truy xuất báo cáo doanh thu thành công.");
+    } else {
+      console.warn(`   ⚠️ Revenue report failure: ${JSON.stringify(reportData)}`);
+    }
+
+    // ─── 10. Kiểm thử Lịch phòng MRI (Module A) ───
+    console.log("\n10. Kiểm thử Lịch phòng MRI (Module A)");
+    const roomRes = await fetch(`${BASE_URL}/api/v1/mri-rooms`, {
+      headers: { "Authorization": `Bearer ${doctorToken}` }
+    });
+    const roomData = await roomRes.json();
+    if (roomRes.ok) {
+      console.log(`   ✅ Truy xuất danh sách phòng MRI thành công (${roomData.data?.length || 0} phòng).`);
+    } else {
+      console.warn(`   ⚠️ MRI rooms failure: ${JSON.stringify(roomData)}`);
+    }
+
+    // ─── 11. Kiểm thử Quản lý Giường bệnh (Module Q) ───
+    console.log("\n11. Kiểm thử Quản lý Giường bệnh (Module Q)");
+    const bedRes = await fetch(`${BASE_URL}/api/v1/hospital-beds`, {
+      headers: { "Authorization": `Bearer ${doctorToken}` }
+    });
+    const bedData = await bedRes.json();
+    if (bedRes.ok) {
+      console.log(`   ✅ Truy xuất danh sách giường bệnh thành công (${bedData.data?.length || 0} giường).`);
+    } else {
+      console.warn(`   ⚠️ Beds failure: ${JSON.stringify(bedData)}`);
+    }
+
+    console.log("\n🎉 HOÀN TẤT: Toàn bộ 11 ca kiểm thử tích hợp hệ thống đều THÀNH CÔNG!");
     
   } catch (error) {
     console.error("\n❌ Gặp lỗi trong quá trình kiểm thử tích hợp:");

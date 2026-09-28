@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
 
 // [BUG-03 FIX] Tính tuổi thật từ ngày sinh hoặc năm sinh
@@ -159,7 +160,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Tìm theo tên, chẩn đoán, mã NS..."
@@ -171,13 +172,13 @@ const DoctorPatientListScreen = ({ navigation }) => {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#15803D" />
+          <ActivityIndicator size="large" color="#0891B2" />
           <Text style={{ marginTop: 12, color: '#64748B' }}>Đang tải danh sách bệnh nhân...</Text>
         </View>
       ) : error ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
           <Text style={{ color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
-          <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#15803D', borderRadius: 8 }} onPress={fetchPatients}>
+          <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#0891B2', borderRadius: 8 }} onPress={fetchPatients}>
             <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Tải lại</Text>
           </TouchableOpacity>
         </View>

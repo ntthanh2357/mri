@@ -1,10 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: 'Figtree', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-clinical: 'Noto Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /* Medical Clinical Color Tokens */
+  --color-clinical-cyan: #0891b2;
+  --color-clinical-cyan-light: #22d3ee;
+  --color-clinical-emerald: #059669;
+  --color-clinical-slate: #0f172a;
+  --color-clinical-radiology: #0b0f17;
 }
 
 /* Đảm bảo html & body chiếm đầy màn hình — tương thích với expo-reset */
@@ -17,7 +25,7 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  background-color: #f4f6f8;
+  background-color: #f8fafc;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -31,10 +39,20 @@ body {
   flex-direction: column;
 }
 
-/* Scrollbar đẹp cho vùng cuộn bên trong (sidebar nav, workspace section) */
+/* Typography Helpers */
+.font-clinical {
+  font-family: var(--font-clinical);
+}
+
+.font-mono-numbers {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar y khoa tinh tế */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -47,28 +65,40 @@ body {
   background: #94a3b8;
 }
 
-/* Sidebar nav scrollbar - không hiển thị thumb khi không hover vào sidebar */
+/* Sidebar nav scrollbar */
 .custom-sidebar-nav::-webkit-scrollbar {
-  width: 3px;
+  width: 4px;
 }
 .custom-sidebar-nav::-webkit-scrollbar-thumb {
   background: #334155;
-  border-radius: 3px;
+  border-radius: 4px;
+}
+
+/* Buồng đọc phim MRI - Radiology Dark Suite */
+.radiology-dark-room {
+  background-color: #0b0f17;
+  color: #f1f5f9;
+}
+
+.radiology-viewer-canvas {
+  background: radial-gradient(circle at center, #131d2e 0%, #070a10 100%);
+  border: 1px solid #1e293b;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
 }
 
 /* Pulse emerald animation */
 @keyframes pulse-ring {
   0% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5);
   }
   70% {
     transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 8px rgba(5, 150, 105, 0);
   }
   100% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0);
   }
 }
 
@@ -78,11 +108,18 @@ body {
 
 /* Scanner line effect */
 @keyframes scan-down {
-  0% { top: 0%; }
-  50% { top: 100%; }
-  100% { top: 0%; }
+  0% { top: 0%; opacity: 0.8; }
+  50% { top: 96%; opacity: 1; }
+  100% { top: 0%; opacity: 0.8; }
 }
 
 .scanner-line {
-  animation: scan-down 4s linear infinite;
+  animation: scan-down 3.5s ease-in-out infinite;
 }
+
+/* Focus rings chuẩn WCAG AAA */
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid #0891b2;
+  outline-offset: 2px;
+}
+
