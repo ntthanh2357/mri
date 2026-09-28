@@ -10,6 +10,8 @@ import {
   Image,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
+import { portalLoginRoute } from '../utils/navigationRef';
+import performLogout from '../utils/logout';
 import { 
   LayoutDashboard, 
   FolderOpen, 
@@ -146,13 +148,13 @@ const ResponsiveLayout = ({
   }, []);
 
   const handleDefaultLogout = async () => {
-    await setAuthToken('');
     if (onLogout) {
       onLogout();
     } else {
+      await performLogout();
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Welcome' }],
+        routes: [{ name: portalLoginRoute() }],
       });
     }
   };

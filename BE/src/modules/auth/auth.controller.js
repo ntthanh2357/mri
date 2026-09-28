@@ -799,6 +799,28 @@ export const ssoLogin = async (req, res) => {
   res.status(400).json({ message: `Provider '${provider}' không được hỗ trợ.` });
 };
 
+// @desc    Logout from current device — hủy phiên phía server
+// @route   POST /auth/logout
+// @access  Public (hoạt động cả khi access token đã hết hạn — logout phải luôn thành công)
+export const logout = async (req, res) => {
+  try {
+    // Xóa cookie HttpOnly refreshToken trên trình duyệt hiện tại.
+    // Clear ở cả 2 biến thể path để chắc chắn khớp với mọi cách BE từng set
+    // (path "/auth" theo login; "/" cho các triển khai sau reverse-proxy).
+    if (typeof res.clearCookie === "function") {
+      res.clearCookie("refreshToken", { path: "/auth" });
+      res.clearCookie("refreshToken", { path: "/" });
+    }
+
+    res.status(200).json({ message: "Đăng xuất thành công. Phiên làm việc đã được hủy." });
+  } catch (error) {
+    // Không bao giờ để logout thất bại vì lỗi server — vẫn trả OK để FE
+    // tiếp tục dọn dẹp trạng thái local theo đúng quy trình.
+    console.error("Lỗi đăng xuất:", error);
+    res.status(200).json({ message: "Đăng xuất thành công." });
+  }
+};
+
 // @desc    Logout from all devices by invalidating all active sessions
 // @route   POST /auth/logout/all
 // @access  Private

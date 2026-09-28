@@ -30,6 +30,9 @@ const servicesData = [
 const WelcomeScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  // Cổng bệnh nhân (B2C): trên Web chỉ dành cho đăng nhập Bệnh nhân —
+  // nhân viên y tế dùng Cổng nội bộ riêng tại /staff (tách luồng bảo mật).
+  const isWeb = Platform.OS === 'web';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const scrollViewRef = useRef(null);
@@ -158,7 +161,9 @@ const WelcomeScreen = ({ navigation }) => {
         showAlert(
           'error',
           'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+          Platform.OS === 'web'
+            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
+            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
         );
         return;
       }
@@ -186,7 +191,8 @@ const WelcomeScreen = ({ navigation }) => {
 
       // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
       if (data.requiresActivation) {
-        await setAuthToken(data.accessToken);
+        // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
         navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
         return;
       }
@@ -205,7 +211,8 @@ const WelcomeScreen = ({ navigation }) => {
           (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
         );
       } else {
-        await setAuthToken(data.accessToken);
+        // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
         const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
           ? 'AdminBackoffice'
           : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
@@ -220,7 +227,14 @@ const WelcomeScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
+      let errMsg = error.message || 'Không thể kết nối đến máy chủ.';
+      // BE trả message chung theo kiểu "tab" (cho app di động) — trên web cổng /
+      // dành riêng Bệnh nhân, diễn đạt lại thành chỉ dẫn tới Cổng nội bộ /staff.
+      if (Platform.OS === 'web' && errMsg.includes('thuộc phân hệ Bác sĩ')) {
+        errMsg = 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ (liên kết "Cổng nội bộ" phía cuối trang).';
+        showAlert('error', 'Sai phân hệ đăng nhập', errMsg);
+        return;
+      }
       if (showVerification && (errMsg.includes('OTP') || errMsg.includes('xác thực') || errMsg.includes('Kích hoạt'))) {
         setVerificationError(errMsg);
       } else if (errMsg.toLowerCase().includes('không chính xác') || errMsg.toLowerCase().includes('không tồn tại')) {
@@ -394,7 +408,8 @@ const WelcomeScreen = ({ navigation }) => {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const data = tempLoginResponse;
-      await setAuthToken(data.accessToken);
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
@@ -441,7 +456,8 @@ const WelcomeScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
-      await setAuthToken(data.accessToken);
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
@@ -571,7 +587,9 @@ const WelcomeScreen = ({ navigation }) => {
                   <Text style={styles.authCardTitle}>Chào mừng quay trở lại</Text>
                   <Text style={styles.authCardSub}>Đăng nhập để truy cập hệ thống NeuroScan AI</Text>
 
-                  {/* Role Tabs */}
+                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
+                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
+                  {!isWeb && (
                   <View style={styles.roleTabsContainer}>
                     <TouchableOpacity
                       style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
@@ -598,6 +616,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                  )}
 
                   <Text style={styles.formLabel}>
                     {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
@@ -877,6 +896,14 @@ const WelcomeScreen = ({ navigation }) => {
                 <Text style={styles.supportTextInline}>
                   Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
                 </Text>
+                {isWeb ? (
+                  <Text
+                    style={{ fontSize: 11, color: '#94A3B8', marginTop: 6, textAlign: 'center' }}
+                    onPress={() => { if (typeof window !== 'undefined') window.location.href = '/staff'; }}
+                  >
+                    Nhân viên Y tế? Truy cập Cổng nội bộ →
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>
@@ -964,7 +991,9 @@ const WelcomeScreen = ({ navigation }) => {
                   <Text style={styles.authCardTitle}>Đăng nhập</Text>
                   <Text style={styles.authCardSub}>Truy cập hệ thống NeuroScan AI</Text>
 
-                  {/* Role Tabs */}
+                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
+                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
+                  {!isWeb && (
                   <View style={styles.roleTabsContainer}>
                     <TouchableOpacity
                       style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
@@ -991,6 +1020,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                  )}
 
                   <Text style={styles.formLabel}>
                     {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
@@ -1270,6 +1300,14 @@ const WelcomeScreen = ({ navigation }) => {
                 <Text style={styles.supportTextInline}>
                   Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
                 </Text>
+                {isWeb ? (
+                  <Text
+                    style={{ fontSize: 11, color: '#94A3B8', marginTop: 6, textAlign: 'center' }}
+                    onPress={() => { if (typeof window !== 'undefined') window.location.href = '/staff'; }}
+                  >
+                    Nhân viên Y tế? Truy cập Cổng nội bộ →
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>

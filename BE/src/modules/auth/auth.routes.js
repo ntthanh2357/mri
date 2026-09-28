@@ -6,6 +6,7 @@ import {
   refresh,
   firebaseLogin,
   ssoLogin,
+  logout,
   logoutAll,
   changePassword,
   forgotPassword,
@@ -24,6 +25,7 @@ const router = Router();
 
 router.post("/register", optionalProtect, register);
 router.post("/login", login);
+router.post("/logout", logout);
 router.post("/refresh", refresh);
 router.post("/firebase-login", firebaseLogin);
 router.post("/sso/:provider", ssoLogin);

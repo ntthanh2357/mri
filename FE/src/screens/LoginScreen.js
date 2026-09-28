@@ -134,7 +134,7 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const data = await post('/auth/phone-login-verify', { phone: email.trim(), otp: otpCode.trim() });
-      setAuthToken(data.accessToken);
+      setAuthToken(data.accessToken, data.refreshToken);
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
         navigation.reset({
           index: 0,
@@ -225,7 +225,7 @@ const LoginScreen = ({ navigation }) => {
 
       // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
       if (data.requiresActivation) {
-        await setAuthToken(data.accessToken);
+        await setAuthToken(data.accessToken, data.refreshToken);
         navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
         return;
       }
@@ -342,7 +342,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      await setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
