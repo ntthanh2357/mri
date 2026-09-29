@@ -27,10 +27,11 @@ export default StyleSheet.create({
     marginRight: 8,
   },
   logoImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    marginRight: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
   logoInner: {
     width: 16,
@@ -378,31 +379,6 @@ export default StyleSheet.create({
   leftPanelContent: {
     zIndex: 10,
   },
-  statsBadgeContainer: {
-    flexDirection: 'row',
-    gap: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
-  },
-  statMiniCard: {
-    // mini status
-  },
-  statMiniLabel: {
-    color: '#94A3B8',
-    fontSize: 9,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  statMiniValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   leftPanelTextTitle: {
     color: '#FFFFFF',
     fontSize: 22,
@@ -612,8 +588,9 @@ export default StyleSheet.create({
   logoImage: {
     width: 34,
     height: 34,
-    borderRadius: 8,
+    borderRadius: 10,
     marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
   logoInner: {
     width: 16,

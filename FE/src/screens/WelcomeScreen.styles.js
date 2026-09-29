@@ -197,10 +197,16 @@ export default StyleSheet.create({
     borderColor: '#047857',
   },
   logoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    marginRight: 14,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)',
+      }
+    }),
   },
   brandNameWhite: {
     fontSize: 18,
@@ -212,17 +218,24 @@ export default StyleSheet.create({
     textShadowRadius: 6,
   },
   brandSubWhite: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 'bold',
-    color: '#E6F4EA',
-    letterSpacing: 1,
+    color: '#D1FAE5',
+    letterSpacing: 1.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   sloganContainer: {
-    marginVertical: 40,
+    marginVertical: 36,
     maxWidth: 480,
+  },
+  sloganAccent: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#6EE7B7',
+    marginBottom: 20,
   },
   sloganTitle: {
     fontSize: 32,
@@ -242,27 +255,30 @@ export default StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  leftStatsContainer: {
+  featureList: {
+    gap: 14,
+  },
+  featureRow: {
     flexDirection: 'row',
-    gap: 24,
+    alignItems: 'center',
+    gap: 14,
   },
-  statBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  featureIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statVal: {
-    fontSize: 22,
-    fontWeight: '900',
+  featureText: {
+    fontSize: 14.5,
+    fontWeight: '600',
     color: '#FFFFFF',
-  },
-  statLbl: {
-    fontSize: 11,
-    color: '#F1F5F9',
-    marginTop: 2,
+    lineHeight: 20,
+    flex: 1,
   },
   rightColumn: {
     flex: 0.9,
@@ -294,10 +310,12 @@ export default StyleSheet.create({
   authCardContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 36,
+    padding: 40,
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 440,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...Platform.select({
       ios: {
         shadowColor: '#0F172A',
@@ -309,7 +327,7 @@ export default StyleSheet.create({
         elevation: 8,
       },
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.04), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
+        boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 4px 12px -4px rgba(15, 23, 42, 0.04)',
       }
     }),
   },
@@ -345,7 +363,7 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#0891B2',
+    color: '#047857',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'none',
@@ -460,8 +478,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: '#047857',
+    borderColor: '#047857',
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -475,9 +493,9 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#0891B2',
-    height: 48,
-    borderRadius: 10,
+    backgroundColor: '#047857',
+    height: 50,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -485,6 +503,7 @@ export default StyleSheet.create({
       web: {
         transition: 'background-color 0.2s ease',
         cursor: 'pointer',
+        boxShadow: '0 8px 16px -6px rgba(4, 120, 87, 0.4)',
       }
     }),
   },
@@ -562,7 +581,7 @@ export default StyleSheet.create({
   formSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginVertical: 20,
+    marginVertical: 28,
     width: '100%',
   },
   supportContainerInline: {

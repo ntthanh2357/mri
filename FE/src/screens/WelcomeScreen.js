@@ -17,7 +17,7 @@ import {
 import Config from '../constants/config';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
-import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope } from 'lucide-react';
 import styles from './WelcomeScreen.styles';
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
@@ -490,35 +490,52 @@ const WelcomeScreen = ({ navigation }) => {
               {/* Logo in white */}
               <View style={styles.brandContainerWhite}>
                 <Image
-                  source={require('../../assets/icon.png')}
+                  source={require('../../assets/logo.jpg')}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
                 <View>
                   <Text style={styles.brandNameWhite}>NeuroScan AI</Text>
-                  <Text style={styles.brandSubWhite}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+                  <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
                 </View>
               </View>
 
               {/* Slogan */}
               <View style={styles.sloganContainer}>
+                <View style={styles.sloganAccent} />
                 <Text style={styles.sloganTitle}>
                   Hệ thống Y tế số thông minh ứng dụng Trí tuệ nhân tạo
                 </Text>
                 <Text style={styles.sloganSub}>
-                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu với độ chính xác tuyệt đối.
+                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu cùng đội ngũ bác sĩ thần kinh.
                 </Text>
               </View>
 
-              {/* Stats badges */}
-              <View style={styles.leftStatsContainer}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>99.8%</Text>
-                  <Text style={styles.statLbl}>Độ chính xác chẩn đoán</Text>
+              {/* Feature pills — dịch vụ thực tế của hệ thống (thay cho badge số liệu) */}
+              <View style={styles.featureList}>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Brain size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Chụp cộng hưởng từ MRI não bộ chuẩn hóa</Text>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>&lt; 2 Giây</Text>
-                  <Text style={styles.statLbl}>Thời gian phân tích</Text>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Sparkles size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Tầm soát & phát hiện tổn thương bởi AI đa mô hình</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Microscope size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Báo cáo chẩn đoán hình ảnh hội chẩn chuyên khoa</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Stethoscope size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Theo dõi hồ sơ bệnh án điện tử xuyên suốt</Text>
                 </View>
               </View>
             </View>
@@ -917,13 +934,13 @@ const WelcomeScreen = ({ navigation }) => {
           <View style={styles.mobileHeader}>
             <View style={styles.brandContainer}>
               <Image
-                source={require('../../assets/icon.png')}
+                source={require('../../assets/logo.jpg')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
               <View>
                 <Text style={styles.brandName}>NeuroScan AI</Text>
-                <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+                <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
               </View>
             </View>
           </View>
