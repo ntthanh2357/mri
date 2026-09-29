@@ -363,31 +363,6 @@ export default StyleSheet.create({
   leftPanelContent: {
     zIndex: 10,
   },
-  statsBadgeContainer: {
-    flexDirection: 'row',
-    gap: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
-  },
-  statMiniCard: {
-    // mini status
-  },
-  statMiniLabel: {
-    color: '#94A3B8',
-    fontSize: 9,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  statMiniValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   leftPanelTextTitle: {
     color: '#FFFFFF',
     fontSize: 22,

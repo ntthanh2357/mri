@@ -415,7 +415,7 @@ const LoginScreen = ({ navigation }) => {
           {/* Logo & Brand */}
           <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
             <Image
-              source={require('../../assets/icon.png')}
+              source={require('../../assets/logo.jpg')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -450,22 +450,12 @@ const LoginScreen = ({ navigation }) => {
               />
               <View style={styles.leftPanelOverlay} />
               <View style={styles.leftPanelContent}>
-                <View style={styles.statsBadgeContainer}>
-                  <View style={styles.statMiniCard}>
-                    <Text style={styles.statMiniLabel}>ĐỘ CHÍNH XÁC</Text>
-                    <Text style={styles.statMiniValue}>99.8%</Text>
-                  </View>
-                  <View style={styles.statMiniCard}>
-                    <Text style={styles.statMiniLabel}>THỜI GIAN XỬ LÝ</Text>
-                    <Text style={styles.statMiniValue}>&lt; 2 Giây</Text>
-                  </View>
-                </View>
                 <Text style={styles.leftPanelTextTitle}>
                   Chẩn đoán thông minh hơn với{' '}
                   <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
                 </Text>
                 <Text style={styles.leftPanelTextDesc}>
-                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng với độ chính xác tuyệt đối.
+                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng đưa ra quyết định chẩn đoán chính xác.
                 </Text>
               </View>
             </View>
