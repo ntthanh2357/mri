@@ -41,7 +41,8 @@ const LoginScreen = ({ navigation }) => {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [resendingOtp, setResendingOtp] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Forgot password states
@@ -230,22 +231,33 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      // If logging in as staff/doctor, trigger 2FA OTP simulation
-      if (loginRole === 'staff' || (data.user && data.user.role !== 'patient')) {
-        setTempLoginResponse(data);
+      // [2FA] Xác thực 2 lớp bắt buộc với MỌI tài khoản (bệnh nhân + nhân viên).
+      // Server KHÔNG trả token ở bước này — token chỉ được cấp sau khi nhập
+      // đúng mã OTP qua /auth/verify-2fa (kiểm định phía server).
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || email).trim());
         setShowTwoFactor(true);
-      } else {
-        await setAuthToken(data.accessToken, data.refreshToken);
-        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
-          ? 'AdminBackoffice'
-          : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-        showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: destination, params: { user: data.user } }],
-          });
-        });
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
       }
+
+      // Trường hợp còn lại (vd: bệnh nhân vừa kích hoạt tài khoản bằng OTP
+      // ngay ở bước đăng nhập) — server xác nhận email nên cấp token luôn.
+      await setAuthToken(data.accessToken, data.refreshToken);
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
+        ? 'AdminBackoffice'
+        : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
+      });
     } catch (error) {
       console.error('Login error:', error);
       const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
@@ -272,10 +284,11 @@ const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // Simulate network request duration
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const data = tempLoginResponse;
+      // Xác thực OTP phía SERVER — token chỉ được cấp khi mã đúng
+      const data = await post('/auth/verify-2fa', {
+        email: twoFactorEmail,
+        otp: twoFactorCode.trim(),
+      });
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
@@ -284,15 +297,35 @@ const LoginScreen = ({ navigation }) => {
       showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công!', () => {
         setShowTwoFactor(false);
         setTwoFactorCode('');
+        setTwoFactorEmail('');
         navigation.reset({
           index: 0,
           routes: [{ name: destination, params: { user: data.user } }],
         });
       });
     } catch (error) {
-      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
+      setTwoFactorError(error.message || 'Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP xác thực 2 lớp (mã cũ bị vô hiệu hoá, mã mới hiệu lực 5 phút)
+  const handleResend2FA = async () => {
+    setTwoFactorError('');
+    setResendingOtp(true);
+    try {
+      const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
+      showAlert(
+        'info',
+        'Đã gửi lại mã',
+        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
+        (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+      );
+    } catch (error) {
+      setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
+    } finally {
+      setResendingOtp(false);
     }
   };
 
@@ -415,7 +448,7 @@ const LoginScreen = ({ navigation }) => {
           {/* Logo & Brand */}
           <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
             <Image
-              source={require('../../assets/logo.jpg')}
+              source={require('../../assets/logo.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -472,7 +505,7 @@ const LoginScreen = ({ navigation }) => {
                   <View style={styles.desktopForm}>
                     <View style={styles.desktopTitleContainer}>
                       <Text style={styles.desktopTitle}>Xác thực 2 lớp (2FA)</Text>
-                      <Text style={styles.desktopSubtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
+                      <Text style={styles.desktopSubtitle}>Mã OTP 6 chữ số đã được gửi tới email của bạn. Vui lòng nhập để hoàn tất đăng nhập.</Text>
                     </View>
 
                     <Text style={styles.desktopLabel}>Mã xác thực OTP (6 chữ số)</Text>
@@ -513,6 +546,15 @@ const LoginScreen = ({ navigation }) => {
                       ) : (
                         <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
                       )}
+                    </TouchableOpacity>
+
+                    <Text style={styles.twoFactorEmailHint}>
+                      Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                    </Text>
+                    <TouchableOpacity style={styles.resendOtpRow} onPress={handleResend2FA} disabled={resendingOtp || loading}>
+                      <Text style={styles.resendOtpText}>
+                        {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -792,7 +834,7 @@ const LoginScreen = ({ navigation }) => {
           {showTwoFactor ? (
             <View style={styles.form}>
               <Text style={styles.title}>Xác thực 2 lớp (2FA)</Text>
-              <Text style={styles.subtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
+              <Text style={styles.subtitle}>Mã OTP 6 chữ số đã được gửi tới email của bạn. Vui lòng nhập để hoàn tất đăng nhập.</Text>
 
               <Text style={styles.label}>Mã xác thực OTP (6 chữ số)</Text>
               <TextInput
@@ -831,6 +873,15 @@ const LoginScreen = ({ navigation }) => {
                 ) : (
                   <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
                 )}
+              </TouchableOpacity>
+
+              <Text style={styles.twoFactorEmailHint}>
+                Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+              </Text>
+              <TouchableOpacity style={styles.resendOtpRow} onPress={handleResend2FA} disabled={resendingOtp || loading}>
+                <Text style={styles.resendOtpText}>
+                  {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity

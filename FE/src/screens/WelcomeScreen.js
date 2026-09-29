@@ -17,7 +17,8 @@ import {
 import Config from '../constants/config';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
-import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw } from 'lucide-react';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import styles from './WelcomeScreen.styles';
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
@@ -58,18 +59,21 @@ const WelcomeScreen = ({ navigation }) => {
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
-  // 2FA states
+  // 2FA states — xác thực 2 lớp phía SERVER qua /auth/verify-2fa
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorError, setTwoFactorError] = useState('');
-  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [resendingOtp, setResendingOtp] = useState(false);
+
+  // Quên mật khẩu — modal luồng đầy đủ (email → OTP + mật khẩu mới)
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Patient activation states
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [verificationEmail, setVerificationEmail] = useState('');
-  const [correct2FaCode, setCorrect2FaCode] = useState('');
 
   // Custom Alert state
   const [customAlert, setCustomAlert] = useState({
@@ -91,11 +95,9 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   const handleForgotPassword = () => {
-    showAlert(
-      'info',
-      'Quên mật khẩu',
-      'Vui lòng liên hệ với Quản trị viên của Bệnh viện hoặc gọi Hotline hỗ trợ kỹ thuật để được xác thực danh tính và cấp lại mật khẩu mới.'
-    );
+    // Mở modal luồng quên mật khẩu đầy đủ:
+    // Bước 1 nhập email → server gửi OTP; Bước 2 nhập OTP + mật khẩu mới.
+    setShowForgotPassword(true);
   };
 
   useEffect(() => {
@@ -197,34 +199,36 @@ const WelcomeScreen = ({ navigation }) => {
         return;
       }
 
-      // If logging in as staff/doctor, trigger 2FA OTP simulation
-      if (loginRole === 'staff' || (data.user && data.user.role !== 'patient')) {
-        setTempLoginResponse(data);
-        if (data.otp2FA) {
-          setCorrect2FaCode(data.otp2FA);
-        }
+      // [2FA] Xác thực 2 lớp bắt buộc với MỌI tài khoản (bệnh nhân + nhân viên).
+      // Server KHÔNG trả token ở bước này — token chỉ được cấp sau khi nhập
+      // đúng mã OTP qua /auth/verify-2fa (kiểm định phía server).
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || email).trim());
         setShowTwoFactor(true);
         showAlert(
           'info',
           'Xác thực 2 lớp',
-          'Mã xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng kiểm tra và nhập mã để tiếp tục.' +
+          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
           (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
         );
-      } else {
-        // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
-      await setAuthToken(data.accessToken, data.refreshToken);
-        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
-          ? 'AdminBackoffice'
-          : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-        showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-          setShowVerification(false);
-          setVerificationCode('');
-          navigation.reset({
-            index: 0,
-            routes: [{ name: destination, params: { user: data.user } }],
-          });
-        });
+        return;
       }
+
+      // Trường hợp còn lại (vd: bệnh nhân vừa kích hoạt tài khoản bằng OTP
+      // ngay ở bước đăng nhập) — server xác nhận email nên cấp token luôn.
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
+        ? 'AdminBackoffice'
+        : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+        setShowVerification(false);
+        setVerificationCode('');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
+      });
     } catch (error) {
       console.error('Login error:', error);
       let errMsg = error.message || 'Không thể kết nối đến máy chủ.';
@@ -398,16 +402,13 @@ const WelcomeScreen = ({ navigation }) => {
       return;
     }
 
-    if (correct2FaCode && twoFactorCode !== correct2FaCode) {
-      setTwoFactorError('Mã xác thực 2 lớp không chính xác.');
-      return;
-    }
-
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const data = tempLoginResponse;
+      // Xác thực OTP phía SERVER — token chỉ được cấp khi mã đúng
+      const data = await post('/auth/verify-2fa', {
+        email: twoFactorEmail,
+        otp: twoFactorCode.trim(),
+      });
       // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
@@ -417,16 +418,35 @@ const WelcomeScreen = ({ navigation }) => {
       showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công!', () => {
         setShowTwoFactor(false);
         setTwoFactorCode('');
-        setCorrect2FaCode('');
+        setTwoFactorEmail('');
         navigation.reset({
           index: 0,
           routes: [{ name: destination, params: { user: data.user } }],
         });
       });
     } catch (error) {
-      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
+      setTwoFactorError(error.message || 'Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP xác thực 2 lớp (mã cũ bị vô hiệu, mã mới có hiệu lực 5 phút)
+  const handleResend2FA = async () => {
+    setTwoFactorError('');
+    setResendingOtp(true);
+    try {
+      const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
+      showAlert(
+        'info',
+        'Đã gửi lại mã',
+        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
+        (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+      );
+    } catch (error) {
+      setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
+    } finally {
+      setResendingOtp(false);
     }
   };
 
@@ -490,7 +510,7 @@ const WelcomeScreen = ({ navigation }) => {
               {/* Logo in white */}
               <View style={styles.brandContainerWhite}>
                 <Image
-                  source={require('../../assets/logo.jpg')}
+                  source={require('../../assets/logo.png')}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
@@ -585,8 +605,26 @@ const WelcomeScreen = ({ navigation }) => {
                         <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
                       </View>
                     ) : (
-                      <Text style={styles.formButtonText}>Xác nhận kết nối</Text>
+                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
+                  </TouchableOpacity>
+
+                  <Text style={styles.twoFactorEmailHint}>
+                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.resendOtpRow}
+                    onPress={handleResend2FA}
+                    disabled={resendingOtp || loading}
+                  >
+                    {resendingOtp ? (
+                      <ActivityIndicator size="small" color="#047857" />
+                    ) : (
+                      <RefreshCw size={13} color="#047857" />
+                    )}
+                    <Text style={styles.resendOtpText}>
+                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -934,7 +972,7 @@ const WelcomeScreen = ({ navigation }) => {
           <View style={styles.mobileHeader}>
             <View style={styles.brandContainer}>
               <Image
-                source={require('../../assets/logo.jpg')}
+                source={require('../../assets/logo.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -989,8 +1027,26 @@ const WelcomeScreen = ({ navigation }) => {
                         <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
                       </View>
                     ) : (
-                      <Text style={styles.formButtonText}>Xác nhận kết nối</Text>
+                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
+                  </TouchableOpacity>
+
+                  <Text style={styles.twoFactorEmailHint}>
+                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.resendOtpRow}
+                    onPress={handleResend2FA}
+                    disabled={resendingOtp || loading}
+                  >
+                    {resendingOtp ? (
+                      <ActivityIndicator size="small" color="#047857" />
+                    ) : (
+                      <RefreshCw size={13} color="#047857" />
+                    )}
+                    <Text style={styles.resendOtpText}>
+                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1330,6 +1386,24 @@ const WelcomeScreen = ({ navigation }) => {
           </View>
         </ScrollView>
       )}
+
+      {/* Forgot Password Modal — luồng quên mật khẩu đầy đủ (email → OTP → mật khẩu mới) */}
+      <ForgotPasswordModal
+        visible={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+        defaultEmail={email}
+        theme="light"
+        onSuccess={(resetEmail) => {
+          setShowForgotPassword(false);
+          setActiveForm('login');
+          setEmail(resetEmail);
+          showAlert(
+            'success',
+            'Đặt lại mật khẩu thành công',
+            'Mật khẩu mới đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới của bạn.'
+          );
+        }}
+      />
 
       {/* Custom Alert Modal */}
       <Modal visible={customAlert.visible} transparent animationType="fade">

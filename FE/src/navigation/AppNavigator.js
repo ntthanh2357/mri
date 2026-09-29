@@ -90,9 +90,9 @@ const isNativeMobile = Platform.OS !== 'web';
           headerTitleStyle: { fontWeight: 'bold' },
         }}
       >
-        <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false, title: 'NeuroScan AI — Cổng Bệnh nhân' }} />
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng nhập' }} />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng ký' }} />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI' }} />
         <Stack.Screen name="ClinicDashboard" component={ClinicDashboardScreen} options={{ title: 'Phòng khám', headerShown: false }} />
         <Stack.Screen name="EMRDashboard" component={EMRDashboardScreen} options={{ title: 'EMR Management', headerShown: false }} />

@@ -26,9 +26,11 @@ import {
   Alert,
   useWindowDimensions,
   ScrollView,
+  Image,
 } from 'react-native';
-import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, Hospital } from 'lucide-react';
+import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
 import { get, post, setAuthToken } from '../services/api.service';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 
 const StaffLoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -43,11 +45,15 @@ const StaffLoginScreen = ({ navigation }) => {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // 2FA
+  // 2FA — xác thực phía SERVER qua /auth/verify-2fa
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorError, setTwoFactorError] = useState('');
-  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [resendingOtp, setResendingOtp] = useState(false);
+
+  // Quên mật khẩu — modal luồng đầy đủ (email → OTP + mật khẩu mới)
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Tự động nhận diện phiên nhân viên còn hợp lệ (accessToken trong storage)
   useEffect(() => {
@@ -111,12 +117,20 @@ const StaffLoginScreen = ({ navigation }) => {
         return;
       }
 
-      // Xác thực 2 lớp bắt buộc với nhân viên nội bộ
-      setTempLoginResponse(data);
-      setShowTwoFactor(true);
-      showAlert('info', 'Xác thực 2 lớp',
-        'Mã xác thực 2 lớp đã được gửi tới email cơ quan của bạn. Vui lòng kiểm tra và nhập mã để tiếp tục.' +
-        (data.otp2FA ? `\n(Mã debug: ${data.otp2FA})` : ''));
+      // Xác thực 2 lớp bắt buộc với nhân viên nội bộ — server chỉ trả token
+      // sau khi nhập đúng OTP qua /auth/verify-2fa
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || email).trim());
+        setShowTwoFactor(true);
+        showAlert('info', 'Xác thực 2 lớp',
+          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email cơ quan của bạn. Vui lòng kiểm tra và nhập mã để tiếp tục.' +
+          (data.otp2FA ? `\n(Mã debug: ${data.otp2FA})` : ''));
+      } else {
+        // Dự phòng: server không yêu cầu 2FA (đã kích hoạt qua luồng khác)
+        await setAuthToken(data.accessToken, data.refreshToken);
+        const role = data.user ? data.user.role : 'doctor';
+        navigation.reset({ index: 0, routes: [{ name: getDestinationByRole(role) }] });
+      }
     } catch (error) {
       let errMsg = error.message || 'Không thể kết nối đến máy chủ.';
       // BE trả message chung theo kiểu "tab" (cho app di động) — diễn đạt lại
@@ -143,20 +157,42 @@ const StaffLoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const data = tempLoginResponse;
+      // Xác thực OTP phía SERVER — token chỉ được cấp khi mã đúng
+      const data = await post('/auth/verify-2fa', {
+        email: twoFactorEmail,
+        otp: twoFactorCode.trim(),
+      });
       await setAuthToken(data.accessToken, data.refreshToken);
       const role = data.user ? data.user.role : 'doctor';
-      showAlert('success', 'Đăng nhập thành công', 'Chào mừng trở lại hệ thống nội bộ NeuroScan AI!', () => {
+      showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công! Chào mừng trở lại hệ thống nội bộ NeuroScan AI!', () => {
         setShowTwoFactor(false);
         setTwoFactorCode('');
+        setTwoFactorEmail('');
         // Điều hướng KHÔNG kèm params: HomeScreen sẽ tự fetch /auth/me —
         // tránh lỗi serialize "user=[object Object]" trên URL web.
         navigation.reset({ index: 0, routes: [{ name: getDestinationByRole(role) }] });
       });
     } catch (error) {
-      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
+      setTwoFactorError(error.message || 'Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP xác thực 2 lớp (mã cũ bị vô hiệu hoá, mã mới hiệu lực 5 phút)
+  const handleResend2FA = async () => {
+    setTwoFactorError('');
+    setResendingOtp(true);
+    try {
+      const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
+      setTwoFactorError('');
+      showAlert('info', 'Đã gửi lại mã',
+        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
+        (data.otp2FA ? `\n(Mã debug: ${data.otp2FA})` : ''));
+    } catch (error) {
+      setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
+    } finally {
+      setResendingOtp(false);
     }
   };
 
@@ -176,9 +212,11 @@ const StaffLoginScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={[styles.container, !isDesktop && styles.containerMobile]} bounces={false}>
         {/* ===== Branding nội bộ ===== */}
         <View style={styles.brandRow}>
-          <View style={styles.brandBadge}>
-            <Hospital color="#22D3EE" size={20} />
-          </View>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.brandLogo}
+            resizeMode="cover"
+          />
           <View>
             <Text style={styles.brandText}>NEUROSCAN AI</Text>
             <Text style={styles.brandSub}>Hệ thống Quản lý Bệnh án & Chẩn đoán Hình ảnh</Text>
@@ -220,8 +258,21 @@ const StaffLoginScreen = ({ navigation }) => {
                 onChangeText={setTwoFactorCode}
               />
               {renderFieldError(twoFactorError)}
+              <Text style={styles.otpEmailHint}>
+                Mã được gửi tới: <Text style={{ fontWeight: '700', color: '#CBD5E1' }}>{twoFactorEmail}</Text>
+              </Text>
               <TouchableOpacity style={styles.primaryBtn} onPress={handleVerify2Factor} disabled={loading}>
                 {loading ? <ActivityIndicator color="#0B0F17" /> : <Text style={styles.primaryBtnText}>Xác nhận & Vào hệ thống</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.resendBtn} onPress={handleResend2FA} disabled={resendingOtp || loading}>
+                {resendingOtp ? (
+                  <ActivityIndicator size="small" color="#22D3EE" />
+                ) : (
+                  <RefreshCw size={13} color="#22D3EE" />
+                )}
+                <Text style={styles.resendBtnText}>
+                  {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.ghostBtn} onPress={() => { setShowTwoFactor(false); setTwoFactorCode(''); setTwoFactorError(''); }}>
                 <Text style={styles.ghostBtnText}>← Quay lại đăng nhập</Text>
@@ -271,8 +322,12 @@ const StaffLoginScreen = ({ navigation }) => {
                 {loading ? <ActivityIndicator color="#0B0F17" /> : <Text style={styles.primaryBtnText}>Đăng nhập Nội bộ →</Text>}
               </TouchableOpacity>
 
+              <TouchableOpacity style={styles.forgotLinkBtn} onPress={() => setShowForgotPassword(true)}>
+                <Text style={styles.forgotLinkText}>Quên mật khẩu? Đặt lại qua mã OTP email</Text>
+              </TouchableOpacity>
+
               <Text style={styles.noteText}>
-                Quên mật khẩu nội bộ? Liên hệ Quản trị viên Bệnh viện hoặc Hotline kỹ thuật 0236 3650 676.
+                Hỗ trợ kỹ thuật nội bộ: Hotline 0236 3650 676 (8:00–17:00 các ngày làm việc).
               </Text>
             </View>
           )}
@@ -285,6 +340,20 @@ const StaffLoginScreen = ({ navigation }) => {
         </TouchableOpacity>
         <Text style={styles.footerText}>© 2026 NeuroScan AI · Khu vực truy cập hạn chế — chỉ dành cho nhân viên được ủy quyền</Text>
       </ScrollView>
+
+      {/* Quên mật khẩu — luồng đầy đủ (email → OTP → mật khẩu mới), giao diện tối */}
+      <ForgotPasswordModal
+        visible={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+        defaultEmail={email}
+        theme="dark"
+        onSuccess={(resetEmail) => {
+          setShowForgotPassword(false);
+          setEmail(resetEmail);
+          setPassword('');
+          showAlert('success', 'Đặt lại mật khẩu thành công', 'Mật khẩu mới đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới của bạn.');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -301,9 +370,8 @@ const styles = StyleSheet.create({
   },
   containerMobile: { justifyContent: 'flex-start', paddingTop: 60 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 22 },
-  brandBadge: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#111827',
-    borderWidth: 1, borderColor: '#1E293B', alignItems: 'center', justifyContent: 'center',
+  brandLogo: {
+    width: 42, height: 42, borderRadius: 12, borderWidth: 1, borderColor: '#1E293B',
   },
   brandText: { color: '#F1F5F9', fontSize: 15, fontWeight: '800', letterSpacing: 1.2 },
   brandSub: { color: '#94A3B8', fontSize: 11 },
@@ -344,6 +412,14 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#0B0F17', fontSize: 14, fontWeight: '800' },
   ghostBtn: { alignItems: 'center', paddingVertical: 8 },
   ghostBtnText: { color: '#94A3B8', fontSize: 12 },
+  otpEmailHint: { color: '#64748B', fontSize: 10.5, textAlign: 'center', marginTop: 6 },
+  resendBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 6, marginBottom: 4,
+  },
+  resendBtnText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
+  forgotLinkBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2, marginBottom: 8 },
+  forgotLinkText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
   noteText: { color: '#64748B', fontSize: 10.5, textAlign: 'center', marginTop: 4, lineHeight: 15 },
   backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20, padding: 6 },
   backLinkText: { color: '#64748B', fontSize: 12 },

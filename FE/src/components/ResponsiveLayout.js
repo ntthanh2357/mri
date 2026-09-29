@@ -517,7 +517,7 @@ const ResponsiveLayout = ({
         {/* Brand Logo */}
         <View style={styles.brandContainer}>
           <Image
-            source={require('../../assets/logo.jpg')}
+            source={require('../../assets/logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />

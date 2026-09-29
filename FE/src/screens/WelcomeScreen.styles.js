@@ -578,6 +578,25 @@ export default StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  twoFactorEmailHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  resendOtpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  resendOtpText: {
+    color: '#047857',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
   formSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',
