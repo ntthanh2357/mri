@@ -128,6 +128,23 @@ export default StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  twoFactorEmailHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  resendOtpRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  resendOtpText: {
+    color: '#15803D',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',

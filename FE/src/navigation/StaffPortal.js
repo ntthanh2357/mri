@@ -162,7 +162,7 @@ const StaffPortalNavigator = () => {
           headerBackTitle: 'Quay lại',
         }}
       >
-        <Stack.Screen name="StaffLogin" component={StaffLoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="StaffLogin" component={StaffLoginScreen} options={{ headerShown: false, title: 'NeuroScan AI — Cổng Nội Bộ' }} />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI — Nội bộ', headerShown: false }} />
         <Stack.Screen name="ClinicDashboard" component={ClinicDashboardScreen} options={{ title: 'Phòng khám', headerShown: false }} />
         <Stack.Screen name="EMRDashboard" component={EMRDashboardScreen} options={{ title: 'EMR Management', headerShown: false }} />
