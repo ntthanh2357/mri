@@ -6,6 +6,7 @@ import {
   refresh,
   firebaseLogin,
   ssoLogin,
+  logout,
   logoutAll,
   changePassword,
   forgotPassword,
@@ -17,6 +18,8 @@ import {
   updateProfile,
   verifyActivation,
   resendActivation,
+  verify2FA,
+  resend2FA,
 } from "./auth.controller.js";
 import { protect, optionalProtect } from "../../middlewares/auth.middleware.js";
 
@@ -24,6 +27,9 @@ const router = Router();
 
 router.post("/register", optionalProtect, register);
 router.post("/login", login);
+router.post("/verify-2fa", verify2FA);
+router.post("/resend-2fa", resend2FA);
+router.post("/logout", logout);
 router.post("/refresh", refresh);
 router.post("/firebase-login", firebaseLogin);
 router.post("/sso/:provider", ssoLogin);
