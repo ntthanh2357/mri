@@ -194,25 +194,6 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/login', { email, password, roleType: loginRole });
 
-      // Phân tách nghiêm ngặt vai trò (Client-side defense)
-      const isStaffUser = data.user && data.user.role !== 'patient';
-      if (loginRole === 'patient' && isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
-        );
-        return;
-      }
-      if (loginRole === 'staff' && !isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
-        );
-        return;
-      }
-
       // Bệnh nhân chưa kích hoạt OTP qua email
       if (data.requiresVerification) {
         showAlert(
@@ -242,6 +223,27 @@ const LoginScreen = ({ navigation }) => {
           'Xác thực 2 lớp',
           'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
           (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense) — đặt SAU các bước
+      // chờ OTP vì response requires2FA / requiresVerification KHÔNG kèm user;
+      // tới đây thì response chắc chắn đã có user (đăng nhập hoàn tất).
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Dành cho Bệnh nhân" để đăng nhập.'
         );
         return;
       }
@@ -289,6 +291,27 @@ const LoginScreen = ({ navigation }) => {
         email: twoFactorEmail,
         otp: twoFactorCode.trim(),
       });
+
+      // [Tách luồng] Nếu tài khoản là nhân viên lâm sàng → KHÔNG lưu token vào
+      // ứng dụng bệnh nhân (đề phòng xác thực OTP cho phiên đăng nhập sai phân hệ).
+      const verifiedRole = data.user ? data.user.role : null;
+      const clinicalStaff =
+        verifiedRole &&
+        !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(verifiedRole);
+      if (clinicalStaff) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Ứng dụng này dành cho Bệnh nhân — vui lòng sử dụng Cổng nội bộ của bệnh viện.',
+          () => {
+            setShowTwoFactor(false);
+            setTwoFactorCode('');
+            setTwoFactorEmail('');
+          }
+        );
+        return;
+      }
+
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
@@ -355,6 +378,19 @@ const LoginScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
+
+      // [2FA] SSO Google giờ cũng yêu cầu OTP email — response KHÔNG có token/user.
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || '').trim());
+        setShowTwoFactor(true);
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
 
       // Phân tách nghiêm ngặt vai trò cho Google SSO
       const isStaffUser = data.user && data.user.role !== 'patient';

@@ -162,6 +162,14 @@ const StaffLoginScreen = ({ navigation }) => {
         email: twoFactorEmail,
         otp: twoFactorCode.trim(),
       });
+      // [Tách luồng] Chặn tài khoản Bệnh nhân — đề phòng mã OTP được sinh từ
+      // phiên đăng nhập ở cổng khác nhưng lại được xác thực tại Cổng nội bộ.
+      if (data.user && data.user.role === 'patient') {
+        showAlert('error', 'Truy cập bị từ chối',
+          'Tài khoản Bệnh nhân không thể đăng nhập Cổng nội bộ. Vui lòng sử dụng Cổng bệnh nhân.');
+        return;
+      }
+
       await setAuthToken(data.accessToken, data.refreshToken);
       const role = data.user ? data.user.role : 'doctor';
       showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công! Chào mừng trở lại hệ thống nội bộ NeuroScan AI!', () => {
