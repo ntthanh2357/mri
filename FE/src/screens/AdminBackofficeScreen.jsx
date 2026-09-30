@@ -28,6 +28,8 @@ import AdminAIConfigView from '../components/AdminAIConfigView';
 import AdminHospitalsView from '../components/AdminHospitalsView';
 import AdminSaaSSuiteView from '../components/AdminSaaSSuiteView';
 import { setAuthToken } from '../services/api.service';
+import { portalLoginRoute } from '../utils/navigationRef';
+import performLogout from '../utils/logout';
 import { apiRequest } from '../utils/apiClient';
 
 const AdminBackofficeScreen = ({ navigation }) => {
@@ -66,10 +68,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
 
   // Logout function
   const handleLogout = async () => {
-    await setAuthToken('');
+    await performLogout();
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Welcome' }],
+      routes: [{ name: portalLoginRoute() }],
     });
   };
 

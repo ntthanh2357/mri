@@ -46,7 +46,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#004080',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -64,10 +64,13 @@ export default StyleSheet.create({
     color: '#0F172A',
     lineHeight: 18,
   },
+  brandNameAccentDark: {
+    color: '#0090D0', // "Scan" hai tông như wordmark logo
+  },
   brandSub: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   navLinks: {
     flexDirection: 'row',
@@ -96,7 +99,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   loginBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#004080',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -169,7 +172,7 @@ export default StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(4, 120, 87, 0.88)', // Deep medical green overlay
+    backgroundColor: 'rgba(0, 45, 95, 0.90)', // Deep medical navy overlay (logo NeuroScan)
   },
   leftColumnContent: {
     flex: 1,
@@ -194,13 +197,19 @@ export default StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#047857',
+    borderColor: '#004080',
   },
   logoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    marginRight: 14,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)',
+      }
+    }),
   },
   brandNameWhite: {
     fontSize: 18,
@@ -211,18 +220,28 @@ export default StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
   },
+  brandNameAccentCyan: {
+    color: '#00AEEF', // "Scan" — khớp wordmark logo (Neuro navy + Scan cyan)
+  },
   brandSubWhite: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 'bold',
-    color: '#E6F4EA',
-    letterSpacing: 1,
+    color: '#CFF2FF',
+    letterSpacing: 1.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   sloganContainer: {
-    marginVertical: 40,
+    marginVertical: 36,
     maxWidth: 480,
+  },
+  sloganAccent: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#00AEEF',
+    marginBottom: 20,
   },
   sloganTitle: {
     fontSize: 32,
@@ -242,27 +261,30 @@ export default StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  leftStatsContainer: {
+  featureList: {
+    gap: 14,
+  },
+  featureRow: {
     flexDirection: 'row',
-    gap: 24,
+    alignItems: 'center',
+    gap: 14,
   },
-  statBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  featureIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statVal: {
-    fontSize: 22,
-    fontWeight: '900',
+  featureText: {
+    fontSize: 14.5,
+    fontWeight: '600',
     color: '#FFFFFF',
-  },
-  statLbl: {
-    fontSize: 11,
-    color: '#F1F5F9',
-    marginTop: 2,
+    lineHeight: 20,
+    flex: 1,
   },
   rightColumn: {
     flex: 0.9,
@@ -294,10 +316,12 @@ export default StyleSheet.create({
   authCardContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 36,
+    padding: 40,
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 440,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...Platform.select({
       ios: {
         shadowColor: '#0F172A',
@@ -309,7 +333,7 @@ export default StyleSheet.create({
         elevation: 8,
       },
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.04), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
+        boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 4px 12px -4px rgba(15, 23, 42, 0.04)',
       }
     }),
   },
@@ -345,7 +369,7 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#0891B2',
+    color: '#004080',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'none',
@@ -367,12 +391,12 @@ export default StyleSheet.create({
     }),
   },
   formInputFocused: {
-    borderColor: '#047857',
+    borderColor: '#004080',
     borderWidth: 2,
     ...Platform.select({
       web: {
         outline: 'none',
-        boxShadow: '0 0 0 3px rgba(4, 120, 87, 0.15)',
+        boxShadow: '0 0 0 3px rgba(0, 64, 128, 0.15)',
       }
     }),
   },
@@ -439,7 +463,7 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   roleTabTextActive: {
-    color: '#047857',
+    color: '#004080',
   },
   rememberRow: {
     marginBottom: 20,
@@ -460,8 +484,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: '#004080',
+    borderColor: '#004080',
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -475,9 +499,9 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#0891B2',
-    height: 48,
-    borderRadius: 10,
+    backgroundColor: '#004080',
+    height: 50,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -485,6 +509,7 @@ export default StyleSheet.create({
       web: {
         transition: 'background-color 0.2s ease',
         cursor: 'pointer',
+        boxShadow: '0 8px 16px -6px rgba(0, 64, 128, 0.45)',
       }
     }),
   },
@@ -532,7 +557,7 @@ export default StyleSheet.create({
   formFooterLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   resendRow: {
     flexDirection: 'row',
@@ -548,7 +573,7 @@ export default StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   backButtonInline: {
     alignItems: 'center',
@@ -559,10 +584,29 @@ export default StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  twoFactorEmailHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  resendOtpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  resendOtpText: {
+    color: '#004080',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
   formSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginVertical: 20,
+    marginVertical: 28,
     width: '100%',
   },
   supportContainerInline: {
