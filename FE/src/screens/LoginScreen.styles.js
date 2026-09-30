@@ -746,10 +746,10 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   activeMethodTabText: {
-    color: '#15803D',
+    color: '#004080',
   },
   inputFocused: {
-    borderColor: '#047857',
+    borderColor: '#004080',
     borderWidth: 2,
   },
   roleTabsContainer: {

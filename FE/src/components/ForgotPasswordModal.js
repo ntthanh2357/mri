@@ -164,12 +164,12 @@ const ForgotPasswordModal = ({
         inputBg: '#F8FAFC',
         inputBorder: '#E2E8F0',
         inputText: '#0F172A',
-        accent: '#047857',
+        accent: '#004080',
         accentText: '#FFFFFF',
         error: '#DC2626',
-        noticeBg: '#ECFDF5',
-        noticeBorder: '#A7F3D0',
-        noticeText: '#047857',
+        noticeBg: '#F0F7FF',
+        noticeBorder: '#BFE3FF',
+        noticeText: '#004080',
         link: '#64748B',
       };
 
