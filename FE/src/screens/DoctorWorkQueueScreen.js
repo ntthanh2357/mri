@@ -3,7 +3,6 @@ import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, Alert, Image, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -972,7 +971,6 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           )}
         </ScrollView>
       )}
-      </SafeAreaView>
 
       {/* MRI Order Modal */}
       <Modal visible={mriModal} transparent animationType="slide">
@@ -1348,17 +1346,6 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  headerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4,
-  },
-  backArrowBtn: {
-    marginRight: 14, paddingVertical: 4, paddingHorizontal: 8,
-    borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC',
-  },
-  backArrowText: { fontSize: 16, color: '#64748B', fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, margin: 16, padding: 4, gap: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
   tabActive: { backgroundColor: '#15803D' },

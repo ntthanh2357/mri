@@ -15,6 +15,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
+import { get, post, put, del } from '../services/api.service';
 
 const CATEGORY_LABELS = {
   chemotherapy: 'Hóa trị & Điều trị đích U Não',

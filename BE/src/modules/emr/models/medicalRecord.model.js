@@ -203,6 +203,31 @@ const medicalRecordSchema = new Schema(
         signedAt: { type: Date, default: Date.now },
       },
     ],
+
+    // [Y LỆNH MIỆNG CẤP CỨU & KÝ BỔ SUNG 24H]: Quy chế quản lý hồ sơ bệnh án
+    verbalOrders: [
+      {
+        emergencyEventId: { type: Schema.Types.ObjectId, ref: "EmergencyAlert" },
+        orderText: { type: String, required: true },
+        isControlledSubstance: { type: Boolean, default: false }, // Thuốc hướng thần / gây nghiện (TT 20/2017)
+        prescribedAt: { type: Date, default: Date.now },
+        prescribedByDoctorId: { type: Schema.Types.ObjectId, ref: "User" },
+        prescribedByDoctorName: { type: String, default: "" },
+        nurseReceivedId: { type: Schema.Types.ObjectId, ref: "User" },
+        nurseReceivedName: { type: String, default: "" },
+        isReadBackConfirmed: { type: Boolean, default: true },
+        countersignDeadline: { type: Date }, // Mặc định 24h từ lúc ra lệnh
+        countersignedBy: { type: Schema.Types.ObjectId, ref: "User" },
+        countersignedByName: { type: String, default: "" },
+        countersignedAt: { type: Date, default: null },
+        status: {
+          type: String,
+          enum: ["pending_countersign", "countersigned", "rejected"],
+          default: "pending_countersign",
+        },
+        rejectionReason: { type: String, default: "" },
+      },
+    ],
   },
   {
     timestamps: true,

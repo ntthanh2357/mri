@@ -152,72 +152,70 @@ const DoctorPatientListScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
       <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Quay lại</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Danh sách bệnh nhân</Text>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm theo tên, chẩn đoán, mã NS..."
-          placeholderTextColor="#94A3B8"
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#0891B2" />
-          <Text style={{ marginTop: 12, color: '#64748B' }}>Đang tải danh sách bệnh nhân...</Text>
-        </View>
-      ) : error ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Text style={{ color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
-          <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#0891B2', borderRadius: 8 }} onPress={fetchPatients}>
-            <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Tải lại</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Quay lại</Text>
           </TouchableOpacity>
         </View>
-      ) : filtered.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#64748B' }}>Không tìm thấy bệnh nhân nào.</Text>
+        <View style={styles.searchContainer}>
+          <Search size={16} color="#64748B" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm theo tên, mã bệnh nhân hoặc chẩn đoán..."
+            placeholderTextColor="#94A3B8"
+            value={search}
+            onChangeText={setSearch}
+          />
         </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {filtered.map(patient => (
-            <TouchableOpacity key={patient.id} style={styles.card} onPress={() => handlePatientPress(patient)} activeOpacity={0.75}>
-              <View style={styles.cardTop}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{patient.name.charAt(0)}</Text>
-                </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.patientName}>{patient.name}</Text>
-                  <Text style={styles.patientMeta}>{patient.id} · {patient.gender}, {patient.age} tuổi</Text>
-                  <Text style={styles.patientPhone}>SĐT: {patient.phone}</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
-                  <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
-                </View>
-              </View>
-              <View style={styles.cardBottom}>
-                <Text style={styles.diagnosisLabel}>Chẩn đoán: </Text>
-                <Text style={styles.diagnosisValue} numberOfLines={1}>{patient.diagnosis}</Text>
-                <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
-              </View>
-              <TouchableOpacity 
-                onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })} 
-                style={{marginTop: 8, padding: 8, backgroundColor: '#16A34A', borderRadius: 4}}
-              >
-                <Text style={{color: 'white', textAlign: 'center', fontWeight: 'bold'}}>Xem hồ sơ bệnh án</Text>
-              </TouchableOpacity>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#15803D" />
+            <Text style={{ color: '#64748B', marginTop: 10 }}>Đang tải danh sách bệnh nhân...</Text>
+          </View>
+        ) : error ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 }}>
+            <Text style={{ color: '#DC2626' }}>{error}</Text>
+            <TouchableOpacity onPress={fetchPatients} style={styles.actionBtnPrimary}>
+              <Text style={styles.actionBtnPrimaryText}>Thử lại</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: '#64748B' }}>Không tìm thấy bệnh nhân nào.</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.list}>
+            {filtered.map(patient => (
+              <TouchableOpacity key={patient.id} style={styles.card} onPress={() => handlePatientPress(patient)} activeOpacity={0.75}>
+                <View style={styles.cardTop}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{patient.name.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.patientName}>{patient.name}</Text>
+                    <Text style={styles.patientMeta}>{patient.id} · {patient.gender}, {patient.age} tuổi</Text>
+                    <Text style={styles.patientPhone}>SĐT: {patient.phone}</Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
+                    <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
+                  </View>
+                </View>
+                <View style={styles.cardBottom}>
+                  <Text style={styles.diagnosisLabel}>Chẩn đoán: </Text>
+                  <Text style={styles.diagnosisValue} numberOfLines={1}>{patient.diagnosis}</Text>
+                  <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })}
+                  style={{ marginTop: 8, padding: 8, backgroundColor: '#16A34A', borderRadius: 4 }}
+                >
+                  <Text style={{ color: 'white', textAlign: 'center', fontWeight: 'bold' }}>Xem hồ sơ bệnh án</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </SafeAreaView>
     </ResponsiveLayout>
   );

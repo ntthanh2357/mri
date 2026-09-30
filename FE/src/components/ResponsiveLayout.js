@@ -60,7 +60,17 @@ const ResponsiveLayout = ({
       const { get } = require('../services/api.service');
       const res = await get('/api/v1/emergency/alerts');
       if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setActiveEmergency(res.data[0]);
+        const first = res.data[0];
+        const pName = first.patientId?.profile?.name || first.patientId?.profile?.fullName || first.patientName || 'Bệnh nhân cấp cứu';
+        const locStr = first.location?.roomNumber ? `[${first.location.roomNumber} - ${first.location.bedNumber}]` : '';
+        const mId = first.patientId?.profile?.patientId || first.isbarHandoff?.hisPatientCode || locStr || 'Cấp cứu';
+        const reasonStr = first.clinicalSeverity?.reasonNotes || first.isbarHandoff?.situation || first.triggerReason || first.reason || 'Cần ưu tiên xử trí khẩn cấp!';
+        setActiveEmergency({
+          ...first,
+          patientName: pName,
+          medicalId: mId,
+          reason: reasonStr
+        });
       } else {
         setActiveEmergency(null);
       }
