@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
-  Alert,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -34,6 +34,8 @@ const calculateAge = (dob, birthYear) => {
 };
 
 const DoctorPatientListScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const columns = width >= 1200 ? 3 : width >= 760 ? 2 : 1;
   const [search, setSearch] = useState('');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,32 +116,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
   }, []);
 
   const handlePatientPress = (patient) => {
-    Alert.alert(
-      'Tùy chọn Bệnh án',
-      `Chọn tác vụ cho bệnh nhân ${patient.name}:`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Xem Lịch sử Phim MRI/CT', 
-          onPress: () => navigation.navigate('ImagingHistory', { 
-            patientMedicalId: patient.id, 
-            patientName: patient.name 
-          }) 
-        },
-        { 
-          text: 'Nhập phim MRI/CT mới', 
-          onPress: () => navigation.navigate('CreateImagingResult', { 
-            patientInfo: { id: patient.id, name: patient.name, gender: patient.gender } 
-          }) 
-        },
-        { 
-          text: 'Xem EMR & Xét nghiệm LIS', 
-          onPress: () => navigation.navigate('PatientDetail', { 
-            patientId: patient.dbId 
-          }) 
-        },
-      ]
-    );
+    navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' });
   };
 
   const filtered = patients.filter(
@@ -152,70 +129,97 @@ const DoctorPatientListScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Quay lại</Text>
-          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Danh sách bệnh nhân</Text>
+            <Text style={styles.headerSubtitle}>Theo dõi hồ sơ và hoạt động khám chữa bệnh</Text>
+          </View>
+          <View style={styles.patientCount}>
+            <Text style={styles.patientCountValue}>{filtered.length}</Text>
+            <Text style={styles.patientCountLabel}>bệnh nhân</Text>
+          </View>
         </View>
-        <View style={styles.searchContainer}>
-          <Search size={16} color="#64748B" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm theo tên, mã bệnh nhân hoặc chẩn đoán..."
-            placeholderTextColor="#94A3B8"
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-        {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#15803D" />
-            <Text style={{ color: '#64748B', marginTop: 10 }}>Đang tải danh sách bệnh nhân...</Text>
+        <View style={styles.content}>
+          <View style={styles.searchContainer}>
+            <Search size={16} color="#64748B" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên, mã bệnh nhân hoặc chẩn đoán..."
+              placeholderTextColor="#94A3B8"
+              value={search}
+              onChangeText={setSearch}
+            />
           </View>
-        ) : error ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 }}>
-            <Text style={{ color: '#DC2626' }}>{error}</Text>
-            <TouchableOpacity onPress={fetchPatients} style={styles.actionBtnPrimary}>
-              <Text style={styles.actionBtnPrimaryText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: '#64748B' }}>Không tìm thấy bệnh nhân nào.</Text>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.list}>
-            {filtered.map(patient => (
-              <TouchableOpacity key={patient.id} style={styles.card} onPress={() => handlePatientPress(patient)} activeOpacity={0.75}>
-                <View style={styles.cardTop}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{patient.name.charAt(0)}</Text>
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.patientName}>{patient.name}</Text>
-                    <Text style={styles.patientMeta}>{patient.id} · {patient.gender}, {patient.age} tuổi</Text>
-                    <Text style={styles.patientPhone}>SĐT: {patient.phone}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
-                    <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
-                  </View>
-                </View>
-                <View style={styles.cardBottom}>
-                  <Text style={styles.diagnosisLabel}>Chẩn đoán: </Text>
-                  <Text style={styles.diagnosisValue} numberOfLines={1}>{patient.diagnosis}</Text>
-                  <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })}
-                  style={{ marginTop: 8, padding: 8, backgroundColor: '#16A34A', borderRadius: 4 }}
-                >
-                  <Text style={{ color: 'white', textAlign: 'center', fontWeight: 'bold' }}>Xem hồ sơ bệnh án</Text>
-                </TouchableOpacity>
+          {loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#15803D" />
+              <Text style={{ color: '#64748B', marginTop: 10 }}>Đang tải danh sách bệnh nhân...</Text>
+            </View>
+          ) : error ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 }}>
+              <Text style={{ color: '#DC2626' }}>{error}</Text>
+              <TouchableOpacity onPress={fetchPatients} style={styles.actionBtnPrimary}>
+                <Text style={styles.actionBtnPrimaryText}>Thử lại</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+            </View>
+          ) : filtered.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ color: '#64748B' }}>Không tìm thấy bệnh nhân nào.</Text>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.list}>
+              <View style={styles.grid}>
+                {filtered.map(patient => (
+                  <View
+                    key={patient.id}
+                    style={[
+                      styles.card,
+                      styles.gridCard,
+                      columns === 3 ? styles.threeColumnCard : columns === 2 ? styles.twoColumnCard : styles.oneColumnCard,
+                    ]}
+                  >
+                    <TouchableOpacity onPress={() => handlePatientPress(patient)} activeOpacity={0.85} style={styles.thumbnail}>
+                      <View style={styles.thumbnailTop}>
+                        <Text style={styles.thumbnailLabel}>HỒ SƠ BỆNH ÁN</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
+                          <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.thumbnailAvatar}>
+                        <Text style={styles.thumbnailAvatarText}>{patient.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <Text style={styles.thumbnailId}>{patient.id}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardTitleRow}>
+                        <TouchableOpacity onPress={() => handlePatientPress(patient)} style={styles.titleHit}>
+                          <Text style={styles.patientName} numberOfLines={2}>{patient.name}</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.patientMeta} numberOfLines={1}>
+                        {patient.gender} · {patient.age} tuổi · {patient.phone}
+                      </Text>
+                      <View style={styles.detailsBlock}>
+                        <Text style={styles.infoLabel}>HOẠT ĐỘNG GẦN ĐÂY</Text>
+                        <Text style={styles.infoValue} numberOfLines={2}>{patient.diagnosis}</Text>
+                      </View>
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.lastScan}>Cập nhật {patient.lastScan}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })}
+                        style={styles.recordButton}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.recordButtonText}>Xem hồ sơ bệnh án</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+        </View>
       </SafeAreaView>
     </ResponsiveLayout>
   );

@@ -190,6 +190,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const hideDoctorSidebar = localUser?.role === 'doctor' && (activeTab === 'beds' || activeTab === 'transfers');
 
   // Fetch medical records
   const fetchRecords = async () => {
@@ -355,7 +356,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
         <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
           {/* Sidebar for desktop */}
-          {isDesktop && (
+          {isDesktop && !hideDoctorSidebar && (
             <View style={styles.desktopSidebar}>
               <Text style={styles.sidebarTitle}>EMR Management</Text>
               <Text style={styles.sidebarSubtitle}>Quản lý Hồ sơ Bệnh Án</Text>

@@ -324,30 +324,46 @@ export default function InterHospitalTransferView({ currentUser }) {
 
                 {/* Cross-hospital capability token status */}
                 {item.crossHospitalToken && (
-                  <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 text-indigo-900">
-                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>
-                        Token xem chéo bệnh án liên viện đang hoạt động (Hết hạn: {new Date(item.crossHospitalTokenExpiresAt).toLocaleDateString('vi-VN')})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                  <div className="rounded-xl border border-emerald-200/80 bg-linear-to-r from-emerald-50/80 via-white to-blue-50/70 p-4 shadow-xs">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-white text-emerald-700 shadow-xs">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm font-bold text-slate-800">Chia sẻ hồ sơ liên viện</h4>
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Đang hiệu lực
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                            Quyền xem hồ sơ EMR đã được cấp cho <span className="font-semibold text-slate-800">{targetHospName}</span>.
+                          </p>
+                          <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <Clock className="h-3.5 w-3.5" />
+                            Hiệu lực đến <span className="font-semibold text-slate-700">{new Date(item.crossHospitalTokenExpiresAt).toLocaleDateString('vi-VN')}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 lg:pl-4">
                       <button
                         onClick={() => {
                           const url = `${window.location.origin}/api/v1/transfers/cross-view/${item.crossHospitalToken}`;
                           navigator.clipboard.writeText(url);
                           alert('Đã sao chép link truy cập bệnh án liên viện an toàn vào bộ nhớ tạm!');
                         }}
-                        className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg font-semibold flex items-center gap-1 shadow-2xs"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 shadow-xs transition-colors hover:bg-blue-50"
                       >
-                        <Copy className="w-3 h-3" /> Sao chép link EMR
+                        <Copy className="h-3.5 w-3.5" /> Sao chép liên kết
                       </button>
                       <button
                         onClick={() => handleRevokeCrossView(item._id)}
-                        className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg font-semibold"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
                       >
-                        Thu hồi quyền
+                        <Lock className="h-3.5 w-3.5" /> Thu hồi quyền
                       </button>
+                      </div>
                     </div>
                   </div>
                 )}
