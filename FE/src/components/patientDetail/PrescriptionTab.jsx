@@ -9,13 +9,13 @@ import {
   Platform,
 } from 'react-native';
 import Colors from '../../constants/colors';
-import { Pill, PenTool, Plus, ShieldAlert, AlertTriangle, Info, Save, Printer, Sparkles, CheckCircle2, AlertOctagon, HelpCircle } from 'lucide-react';
+import { Pill, PenTool, Plus, ShieldAlert, ShieldCheck, AlertTriangle, Info, Save, Printer, Sparkles, CheckCircle2, AlertOctagon, HelpCircle } from 'lucide-react';
 
 const PrescriptionTab = ({
   isDesktop,
   currentUser,
   patient,
-  prescriptions,
+  prescriptions = [],
   prescriptionDiagnosis,
   setPrescriptionDiagnosis,
   selectedPredefinedDrug,
@@ -38,18 +38,23 @@ const PrescriptionTab = ({
   clinicalClassifications = [],
   clinicalSafetyScore = 100,
   clinicalSafetyStatus = 'SAFE',
+  clinicalEvaluationCoverage = null,
+  clinicalSources = null,
   aiConsultationData = null,
   isConsultingAi = false,
   onConsultAi,
   overrideReason = '',
   setOverrideReason,
+  overrideCategory = 'BENEFIT_EXCEEDS_RISK',
+  setOverrideCategory,
   prescriptionNote,
   setPrescriptionNote,
   handleSavePrescription,
   isSavingPrescription,
   calculateAge,
 }) => {
-  const activePres = prescriptions.length > 0 ? prescriptions[0] : null;
+  const [selectedPresId, setSelectedPresId] = React.useState(null);
+  const activePres = (selectedPresId ? prescriptions.find(p => p._id === selectedPresId) : null) || (prescriptions.length > 0 ? prescriptions[0] : null);
   const hasSevereWarning = clinicalWarnings.some(w => w.severity === 'CRITICAL' || w.severity === 'HIGH');
 
   return (
@@ -248,23 +253,52 @@ const PrescriptionTab = ({
                     <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>THẨM ĐỊNH DƯỢC LÂM SÀNG</Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {/* Badge 1: Điểm an toàn */}
                     <View style={{
                       paddingHorizontal: 8,
                       paddingVertical: 3,
                       borderRadius: 12,
-                      backgroundColor: clinicalSafetyScore >= 90 ? '#DCFCE7' : clinicalSafetyScore >= 70 ? '#FEF3C7' : '#FEE2E2',
+                      backgroundColor: clinicalSafetyStatus === 'UNEVALUATED'
+                        ? '#F1F5F9'
+                        : (clinicalSafetyScore >= 90 ? '#DCFCE7' : clinicalSafetyScore >= 70 ? '#FEF3C7' : '#FEE2E2'),
                       borderWidth: 1,
-                      borderColor: clinicalSafetyScore >= 90 ? '#86EFAC' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
+                      borderColor: clinicalSafetyStatus === 'UNEVALUATED'
+                        ? '#CBD5E1'
+                        : (clinicalSafetyScore >= 90 ? '#86EFAC' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5')
                     }}>
                       <Text style={{
                         fontSize: 11,
                         fontWeight: 'bold',
-                        color: clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C'
+                        color: clinicalSafetyStatus === 'UNEVALUATED'
+                          ? '#64748B'
+                          : (clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C')
                       }}>
-                        Điểm an toàn: {clinicalSafetyScore}/100 ({clinicalSafetyStatus})
+                        {clinicalSafetyStatus === 'UNEVALUATED'
+                          ? 'Trạng thái: Chưa đánh giá'
+                          : `Điểm an toàn: ${clinicalSafetyScore}/100 (${clinicalSafetyStatus})`}
                       </Text>
                     </View>
+
+                    {/* Badge 2: Độ phủ đánh giá */}
+                    {clinicalEvaluationCoverage && (
+                      <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 12,
+                        backgroundColor: clinicalEvaluationCoverage.percentage === 100 ? '#F0FDF4' : '#FFFBEB',
+                        borderWidth: 1,
+                        borderColor: clinicalEvaluationCoverage.percentage === 100 ? '#BBF7D0' : '#FDE68A'
+                      }}>
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: clinicalEvaluationCoverage.percentage === 100 ? '#166534' : '#92400E'
+                        }}>
+                          Độ phủ: {clinicalEvaluationCoverage.percentage}% ({clinicalEvaluationCoverage.evaluated}/{clinicalEvaluationCoverage.total} thuốc)
+                        </Text>
+                      </View>
+                    )}
 
                     {/* Nút gọi AI Dược sĩ */}
                     {onConsultAi && (
@@ -293,6 +327,53 @@ const PrescriptionTab = ({
                     )}
                   </View>
                 </View>
+
+                {/* Thanh trạng thái nguồn đối soát (Fail-open transparency) */}
+                {clinicalSources && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, padding: 6, backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0', flexWrap: 'wrap' }}>
+                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B' }}>Nguồn dữ liệu:</Text>
+                    
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: '#ECFDF5' }}>
+                      <Text style={{ fontSize: 10, color: '#065F46', fontWeight: '500' }}>● Dược thư & KB: Đầy đủ</Text>
+                    </View>
+
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      backgroundColor: clinicalSources.fda === 'ok' ? '#ECFDF5' : clinicalSources.fda === 'timeout' ? '#FEF2F2' : '#F8FAFC'
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        color: clinicalSources.fda === 'ok' ? '#065F46' : clinicalSources.fda === 'timeout' ? '#991B1B' : '#64748B',
+                        fontWeight: '500'
+                      }}>
+                        ● FDA Label: {clinicalSources.fda === 'ok' ? 'Đã kết nối' : clinicalSources.fda === 'timeout' ? 'Timeout (Mất mạng)' : clinicalSources.fda === 'skipped' ? 'Ngoại tuyến' : 'Không phản hồi'}
+                      </Text>
+                    </View>
+
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      backgroundColor: clinicalSources.ai === 'ok' ? '#F5F3FF' : clinicalSources.ai === 'timeout' ? '#FEF2F2' : '#F8FAFC'
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        color: clinicalSources.ai === 'ok' ? '#5B21B6' : clinicalSources.ai === 'timeout' ? '#991B1B' : '#64748B',
+                        fontWeight: '500'
+                      }}>
+                        ● AI Copilot: {clinicalSources.ai === 'ok' ? 'Đã phân tích' : clinicalSources.ai === 'timeout' ? 'Timeout (>8s)' : clinicalSources.ai === 'skipped' ? 'Chưa gọi' : 'Không khả dụng'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
                 {/* Kết quả nhận định từ Dược sĩ AI (Gemini) nếu có */}
                 {aiConsultationData && (
@@ -335,14 +416,33 @@ const PrescriptionTab = ({
                     {clinicalWarnings.map((w, i) => {
                       const isCrit = w.severity === 'CRITICAL';
                       const isHigh = w.severity === 'HIGH';
-                      const bg = isCrit ? '#FEF2F2' : isHigh ? '#FFF7ED' : '#FFFBEB';
-                      const borderCol = isCrit ? '#F87171' : isHigh ? '#FDBA74' : '#FCD34D';
-                      const textCol = isCrit ? '#991B1B' : isHigh ? '#C2410C' : '#92400E';
+                      const isInfo = w.severity === 'INFO';
+                      const isAiTumorNote = w.type === 'AI_TUMOR_NOTE';
+
+                      let bg = isCrit ? '#FEF2F2' : isHigh ? '#FFF7ED' : '#FFFBEB';
+                      let borderCol = isCrit ? '#F87171' : isHigh ? '#FDBA74' : '#FCD34D';
+                      let textCol = isCrit ? '#991B1B' : isHigh ? '#C2410C' : '#92400E';
+
+                      if (isInfo) {
+                        if (isAiTumorNote) {
+                          bg = '#F0FDF4';
+                          borderCol = '#86EFAC';
+                          textCol = '#15803D';
+                        } else {
+                          bg = '#F8FAFC';
+                          borderCol = '#CBD5E1';
+                          textCol = '#475569';
+                        }
+                      }
 
                       return (
                         <View key={i} style={{ backgroundColor: bg, borderWidth: 1, borderColor: borderCol, borderRadius: 6, padding: 8 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
-                            <AlertTriangle size={14} color={textCol} style={{ marginTop: 2, flexShrink: 0 }} />
+                            {isInfo ? (
+                              <Info size={14} color={textCol} style={{ marginTop: 2, flexShrink: 0 }} />
+                            ) : (
+                              <AlertTriangle size={14} color={textCol} style={{ marginTop: 2, flexShrink: 0 }} />
+                            )}
                             <View style={{ flex: 1 }}>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                 <Text style={{ fontSize: 10, fontWeight: 'bold', color: textCol }}>
@@ -386,25 +486,108 @@ const PrescriptionTab = ({
                 ))}
 
                 {/* KHUNG BẮT BUỘC NHẬP LÝ DO GHI ĐÈ KHI CÓ CẢNH BÁO NẶNG */}
-                {hasSevereWarning && (
-                  <View style={{ marginTop: 10, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <AlertOctagon size={14} color="#DC2626" />
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>
-                        YÊU CẦU LÝ DO LÂM SÀNG ĐỂ GHI ĐÈ (CLINICAL OVERRIDE):
+                {hasSevereWarning && (() => {
+                  const cleanOver = (overrideReason || '').trim();
+                  const isRep = /(.)\1{4,}/.test(cleanOver);
+                  const words = cleanOver.split(/\s+/).filter(w => w.length > 1);
+                  const isMeaningful = cleanOver.length >= 15 && !isRep && words.length >= 3;
+
+                  return (
+                    <View style={{ marginTop: 10, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <AlertOctagon size={14} color="#DC2626" />
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>
+                          YÊU CẦU LÝ DO LÂM SÀNG CÓ CẤU TRÚC (STRUCTURED CLINICAL OVERRIDE):
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 10, color: '#7F1D1D', marginBottom: 6 }}>
+                        Đơn thuốc có cảnh báo nguy cơ cao. Bác sĩ bắt buộc phải chọn nhóm lý do và giải trình chuyên môn rõ ràng (tối thiểu 15 ký tự, từ 3 từ có nghĩa trở lên, không lặp ký tự vô nghĩa) để lưu vết pháp lý:
+                      </Text>
+
+                      {/* Dropdown nhóm lý do */}
+                      <View style={{ marginBottom: 6 }}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#334155', marginBottom: 3 }}>Nhóm lý do lâm sàng *</Text>
+                        {Platform.OS === 'web' ? (
+                          <select
+                            value={overrideCategory}
+                            onChange={(e) => setOverrideCategory && setOverrideCategory(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #CBD5E1',
+                              fontSize: '11px',
+                              backgroundColor: '#FFF',
+                              color: '#1E293B',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="BENEFIT_EXCEEDS_RISK">Lợi ích điều trị vượt trội nguy cơ lâm sàng</option>
+                            <option value="SPECIALIST_CONSULTED">Đã hội chẩn chuyên khoa Thần kinh / Dược lâm sàng</option>
+                            <option value="CLOSE_MONITORING_PLANNED">Đã lập kế hoạch theo dõi sát (xét nghiệm lại sau 48h)</option>
+                            <option value="PATIENT_INFORMED_CONSENT">Bệnh nhân và gia đình đã ký cam kết đồng ý</option>
+                            <option value="OTHER">Lý do chuyên môn đặc biệt khác</option>
+                          </select>
+                        ) : (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                            {[
+                              { id: 'BENEFIT_EXCEEDS_RISK', label: 'Lợi ích > Nguy cơ' },
+                              { id: 'SPECIALIST_CONSULTED', label: 'Đã hội chẩn' },
+                              { id: 'CLOSE_MONITORING_PLANNED', label: 'Theo dõi sát' }
+                            ].map(cat => (
+                              <TouchableOpacity
+                                key={cat.id}
+                                onPress={() => setOverrideCategory && setOverrideCategory(cat.id)}
+                                style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 4,
+                                  backgroundColor: overrideCategory === cat.id ? '#DC2626' : '#FFF',
+                                  borderWidth: 1,
+                                  borderColor: '#DC2626'
+                                }}
+                              >
+                                <Text style={{ fontSize: 9, color: overrideCategory === cat.id ? '#FFF' : '#DC2626', fontWeight: 'bold' }}>
+                                  {cat.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          {
+                            backgroundColor: '#FFF',
+                            height: 38,
+                            borderColor: isMeaningful ? '#22C55E' : '#F87171'
+                          }
+                        ]}
+                        placeholder="VD: Đã hội chẩn Dược lâm sàng, bệnh nhân dung nạp tốt, theo dõi CTM mỗi 3 ngày..."
+                        value={overrideReason}
+                        onChangeText={setOverrideReason}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: isMeaningful ? '#15803D' : '#B91C1C',
+                          marginTop: 4,
+                          fontWeight: '500'
+                        }}
+                      >
+                        {isMeaningful
+                          ? `✓ Đã đạt yêu cầu giải trình chuyên môn (${cleanOver.length} ký tự, ${words.length} từ).`
+                          : isRep
+                            ? `⚠️ Không được lặp ký tự vô nghĩa liên tiếp.`
+                            : words.length < 3
+                              ? `⚠️ Cần tối thiểu 3 từ ngữ có ý nghĩa y khoa (hiện có ${words.length}/3 từ).`
+                              : `⚠️ Cần thêm ít nhất ${Math.max(0, 15 - cleanOver.length)} ký tự giải trình (${cleanOver.length}/15).`}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 10, color: '#7F1D1D', marginBottom: 6 }}>
-                      Đơn thuốc có cảnh báo nguy cơ cao. Theo quy chuẩn an toàn, Bác sĩ bắt buộc phải ghi rõ giải trình chuyên môn để lưu vết thẩm định:
-                    </Text>
-                    <TextInput
-                      style={[styles.textInput, { backgroundColor: '#FFF', height: 38, borderColor: '#F87171' }]}
-                      placeholder="VD: Đã hội chẩn chuyên khoa; theo dõi sát điện giải và chức năng gan thận..."
-                      value={overrideReason}
-                      onChangeText={setOverrideReason}
-                    />
-                  </View>
-                )}
+                  );
+                })()}
               </View>
             )}
 
@@ -441,15 +624,44 @@ const PrescriptionTab = ({
       <View style={isDesktop ? styles.mainCol : styles.fullWidth}>
         {activePres ? (
           <View style={{ gap: 16 }}>
-            {Platform.OS === 'web' && (
-              <TouchableOpacity
-                style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#475569', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                onPress={() => window.print()}
-              >
-                <Printer size={15} color="#FFF" />
-                <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>In đơn thuốc (PDF)</Text>
-              </TouchableOpacity>
-            )}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              {prescriptions.length > 1 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Lịch sử đơn thuốc:</Text>
+                  {prescriptions.map((p, idx) => {
+                    const isSel = (p._id && activePres?._id === p._id) || (!p._id && activePres === p);
+                    return (
+                      <TouchableOpacity
+                        key={p._id || idx}
+                        onPress={() => setSelectedPresId(p._id || null)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 6,
+                          backgroundColor: isSel ? '#0284C7' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: isSel ? '#0284C7' : '#CBD5E1'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: isSel ? '#FFF' : '#334155' }}>
+                          Đơn #{idx + 1} ({new Date(p.recorded_at || p.createdAt || Date.now()).toLocaleDateString('vi-VN')})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : <View />}
+
+              {Platform.OS === 'web' && (
+                <TouchableOpacity
+                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#475569', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  onPress={() => window.print()}
+                >
+                  <Printer size={15} color="#FFF" />
+                  <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>In đơn thuốc (PDF)</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
               {/* Header bệnh viện */}
@@ -505,7 +717,7 @@ const PrescriptionTab = ({
               </View>
 
               {/* Cộng khoản và lời dặn */}
-              <View style={{ marginBottom: 20 }}>
+              <View style={{ marginBottom: 16 }}>
                 <Text style={{ fontSize: 12, color: '#475569', fontWeight: '500', marginBottom: 8 }}>Cộng khoản: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{activePres.drugs.length} loại thuốc.</Text></Text>
                 {activePres.note ? (
                   <View style={{ padding: 10, backgroundColor: '#FFFBEB', borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
@@ -514,6 +726,102 @@ const PrescriptionTab = ({
                   </View>
                 ) : null}
               </View>
+
+              {/* Hồ sơ Thẩm định An toàn Dược Lâm sàng & Dược sĩ AI nếu có */}
+              {activePres.clinicalSafety && (
+                <View style={{
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#86EFAC' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5',
+                  padding: 12,
+                  marginBottom: 16
+                }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <ShieldCheck size={16} color={activePres.clinicalSafety.safetyScore >= 90 ? '#16A34A' : activePres.clinicalSafety.safetyScore >= 70 ? '#D97706' : '#DC2626'} />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>
+                        HỒ SƠ THẨM ĐỊNH DƯỢC LÂM SÀNG & DƯỢC SĨ AI COPILOT
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: activePres.clinicalSafety.safetyScore >= 90 ? '#DCFCE7' : activePres.clinicalSafety.safetyScore >= 70 ? '#FEF3C7' : '#FEE2E2',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#86EFAC' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        color: activePres.clinicalSafety.safetyScore >= 90 ? '#15803D' : activePres.clinicalSafety.safetyScore >= 70 ? '#B45309' : '#B91C1C'
+                      }}>
+                        Điểm an toàn: {activePres.clinicalSafety.safetyScore}/100 ({activePres.clinicalSafety.status || 'SAFE'})
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* AI Consultation nếu có */}
+                  {activePres.clinicalSafety.aiConsultation && (
+                    <View style={{ backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Sparkles size={14} color="#7C3AED" />
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>
+                          NHẬN ĐỊNH DƯỢC SĨ AI (GEMINI 3.1 FLASH-LITE):
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#4C1D95', lineHeight: 16 }}>
+                        {activePres.clinicalSafety.aiConsultation.summary || 'Đơn thuốc đã được AI đối soát chuyên sâu với tiền sử bệnh án và phác đồ u não.'}
+                      </Text>
+
+                      {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility && (
+                        <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
+                            🧠 Tương thích Khối u AI ({activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.compatibility_status}):
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
+                            {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.clinical_rationale}
+                          </Text>
+                        </View>
+                      )}
+
+                      {activePres.clinicalSafety.aiConsultation.pharmacist_recommendations ? (
+                        <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
+                          <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
+                            {activePres.clinicalSafety.aiConsultation.pharmacist_recommendations}
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {activePres.clinicalSafety.aiConsultation.patient_instructions ? (
+                        <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
+                          <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
+                            {activePres.clinicalSafety.aiConsultation.patient_instructions}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {/* Lý do ghi đè lâm sàng nếu có */}
+                  {activePres.clinicalSafety.overrideReason ? (
+                    <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 8, padding: 8, marginTop: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#991B1B' }}>
+                        ⚠️ Giải trình ghi đè lâm sàng (Clinical Override):
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#7F1D1D', marginTop: 2 }}>
+                        {activePres.clinicalSafety.overrideReason}
+                      </Text>
+                      <Text style={{ fontSize: 9, color: '#991B1B', fontStyle: 'italic', marginTop: 2 }}>
+                        Người duyệt: {activePres.clinicalSafety.overriddenBy || activePres.doctor_name} • {activePres.clinicalSafety.overriddenAt ? new Date(activePres.clinicalSafety.overriddenAt).toLocaleString('vi-VN') : ''}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
 
               {/* Phần ký tên */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
