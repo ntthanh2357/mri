@@ -157,27 +157,6 @@ const WelcomeScreen = ({ navigation }) => {
         otp: showVerification ? verificationCode : undefined
       });
 
-      // Phân tách nghiêm ngặt vai trò (Client-side defense)
-      const isStaffUser = data.user && data.user.role !== 'patient';
-      if (loginRole === 'patient' && isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          Platform.OS === 'web'
-            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
-            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
-        );
-        return;
-      }
-      if (loginRole === 'staff' && !isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Bệnh nhân" để đăng nhập.'
-        );
-        return;
-      }
-
       // Bệnh nhân chưa kích hoạt/xác thực email
       if (data.requiresVerification) {
         setVerificationEmail(email.trim());
@@ -210,6 +189,29 @@ const WelcomeScreen = ({ navigation }) => {
           'Xác thực 2 lớp',
           'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
           (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense) — đặt SAU các bước
+      // chờ OTP vì response requires2FA / requiresVerification KHÔNG kèm user;
+      // tới đây thì response chắc chắn đã có user (đăng nhập hoàn tất).
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          Platform.OS === 'web'
+            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
+            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Bệnh nhân" để đăng nhập.'
         );
         return;
       }
@@ -409,6 +411,28 @@ const WelcomeScreen = ({ navigation }) => {
         email: twoFactorEmail,
         otp: twoFactorCode.trim(),
       });
+
+      // [Tách luồng] Nếu tài khoản là nhân viên lâm sàng → KHÔNG lưu token vào
+      // Cổng bệnh nhân (đề phòng xác thực OTP cho phiên đăng nhập sai cổng).
+      const verifiedRole = data.user ? data.user.role : null;
+      const clinicalStaff =
+        verifiedRole && !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(verifiedRole);
+      if (clinicalStaff) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          Platform.OS === 'web'
+            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
+            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng sử dụng Cổng nội bộ của bệnh viện.',
+          () => {
+            setShowTwoFactor(false);
+            setTwoFactorCode('');
+            setTwoFactorEmail('');
+          }
+        );
+        return;
+      }
+
       // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
@@ -476,6 +500,33 @@ const WelcomeScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
+
+      // [2FA] SSO Google giờ cũng yêu cầu OTP email — response KHÔNG có token/user.
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || '').trim());
+        setShowTwoFactor(true);
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
+      // Phòng thủ doubly-safe: nếu server cấp token trực tiếp (trường hợp miễn
+      // 2FA đặc biệt), chặn nghiêm ngặt tài khoản nhân viên lâm sàng khỏi
+      // Cổng bệnh nhân (tách luồng bảo mật).
+      const staffRoleViaSso = data.user && !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(data.user.role);
+      if (staffRoleViaSso) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ của bệnh viện.'
+        );
+        return;
+      }
+
       // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');

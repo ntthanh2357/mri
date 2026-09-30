@@ -675,6 +675,35 @@ export const refresh = async (req, res) => {
   }
 };
 
+// Sinh mã OTP 2 lớp cho user và trả phản hồi yêu cầu xác thực (KHÔNG cấp token)
+// — dùng chung cho login mật khẩu và SSO Google để mọi luồng đều qua đúng chính sách 2FA.
+const issue2FAChallenge = async (user, res, message) => {
+  const otp2FaCode = generateSecureOtp();
+  user.otp2FACode = otp2FaCode;
+  user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+  user.otp2FAAttempts = 0;
+  await user.save({ validateBeforeSave: false });
+  try {
+    await sendOtpEmail(user.email, otp2FaCode);
+  } catch (emailErr) {
+    console.error("Lỗi gửi email OTP xác thực 2 lớp:", emailErr);
+  }
+  res.status(200).json({
+    message,
+    requires2FA: true,
+    twoFactorEmail: user.email,
+    otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+  });
+};
+
+// [Tách luồng bảo mật] Tài khoản nhân viên KHÔNG được đăng nhập Cổng bệnh nhân
+// qua Google/SSO — không cấp token, chỉ dẫn sang Cổng nội bộ.
+const rejectStaffSso = (res) => {
+  res.status(403).json({
+    message: "Tài khoản Google này thuộc phân hệ Bác sĩ / Nhân viên y tế. Tài khoản nhân viên không thể đăng nhập qua Cổng bệnh nhân — vui lòng sử dụng Cổng nội bộ của bệnh viện.",
+  });
+};
+
 // @desc    Firebase/Google SSO Login
 // @route   POST /auth/firebase-login
 // @access  Public
@@ -734,22 +763,17 @@ export const firebaseLogin = async (req, res) => {
       await user.save();
     }
 
-    // Generate tokens
-    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+    // [Tách luồng + 2FA] Nhân viên bị chặn khỏi Cổng bệnh nhân; bệnh nhân phải
+    // hoàn tất OTP email qua /auth/verify-2fa trước khi được cấp token.
+    if (user.role !== "patient") {
+      return rejectStaffSso(res);
+    }
 
-    res.status(200).json({
-      message: "Đăng nhập Google thành công!",
-      accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        profile: user.profile,
-      },
-    });
+    return await issue2FAChallenge(
+      user,
+      res,
+      "Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập."
+    );
   } catch (error) {
     console.error("Lỗi đăng nhập Google:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
@@ -788,21 +812,15 @@ export const ssoLogin = async (req, res) => {
           });
           await user.save();
         }
-        const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Google thành công! (MOCK)",
-          accessToken,
-          refreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
+        // [2FA] Mock cũng tuân thủ chính sách 2FA — không cấp token trực tiếp
+        if (user.role !== "patient") {
+          return rejectStaffSso(res);
+        }
+        return await issue2FAChallenge(
+          user,
+          res,
+          "Đăng nhập Google thành công! (MOCK) Mã OTP xác thực 2 lớp đã được gửi tới email của bạn."
+        );
       }
 
       const apiKey = process.env.FIREBASE_API_KEY || "AIzaSyAaKP0Q5HpkLlVGfMo9Bz2TmIU2wOVSyoM";
@@ -862,22 +880,17 @@ export const ssoLogin = async (req, res) => {
         }
       }
 
-      // Generate tokens (include hospitalId so hospital staff have proper access)
-      const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
-      const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+      // [Tách luồng + 2FA] Nhân viên bị chặn khỏi Cổng bệnh nhân; bệnh nhân phải
+      // hoàn tất OTP email qua /auth/verify-2fa trước khi được cấp token.
+      if (user.role !== "patient") {
+        return rejectStaffSso(res);
+      }
 
-      res.status(200).json({
-        message: "Đăng nhập Google thành công!",
-        accessToken,
-        refreshToken,
-        user: {
-          id: user._id,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-          profile: user.profile,
-        },
-      });
+      return await issue2FAChallenge(
+        user,
+        res,
+        "Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập."
+      );
     } catch (error) {
       console.error("Lỗi đăng nhập Google:", error);
       res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
