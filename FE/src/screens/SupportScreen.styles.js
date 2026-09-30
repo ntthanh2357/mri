@@ -143,6 +143,14 @@ export default StyleSheet.create({
     gap: 10,
     marginBottom: 24,
   },
+  faqCategory: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0891B2',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+  },
   faqCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

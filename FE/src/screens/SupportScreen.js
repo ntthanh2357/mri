@@ -15,8 +15,10 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SupportScreen.styles';
 import { get, post } from '../services/api.service';
+import { getFaqsForRole } from '../constants/supportFaqs';
 
 const SupportScreen = ({ navigation }) => {
+  const [user, setUser] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState('Chưa chọn chủ đề...');
   const [message, setMessage] = useState('');
@@ -36,12 +38,7 @@ const SupportScreen = ({ navigation }) => {
     { icon: '✉️', title: 'Gửi email', desc: 'support@neuroscan.ai', action: 'Soạn email', color: '#7C3AED', url: 'mailto:support@neuroscan.ai?subject=Yêu cầu hỗ trợ kỹ thuật' },
   ];
 
-  const faqs = [
-    { q: 'Làm thế nào để thêm bác sĩ mới vào hệ thống?', a: 'Vào Bảng điều khiển phòng khám → nhấn nút "Thêm bác sĩ" góc trên bên phải. Điền đầy đủ thông tin để cấp quyền tài khoản.' },
-    { q: 'Dữ liệu hình ảnh được lưu trữ ở đâu và có an toàn không?', a: 'Toàn bộ dữ liệu được mã hóa AES-256 và lưu trên máy chủ đám mây riêng tư đạt tiêu chuẩn bảo mật y tế HIPAA.' },
-    { q: 'Làm sao để xuất toàn bộ hồ sơ bệnh nhân?', a: 'Vào Hồ sơ bệnh nhân → chọn bệnh nhân cụ thể → nhấn "Xuất sao kê". Hệ thống hỗ trợ tải file PDF chẩn đoán chi tiết.' },
-    { q: 'Tôi có thể tích hợp NeuroScan AI với phần mềm HIS hiện tại không?', a: 'Có, hệ thống hỗ trợ tích hợp API RESTful và chuẩn HL7 FHIR. Vui lòng liên hệ đội ngũ kỹ thuật để nhận tài liệu tích hợp.' },
-  ];
+  const faqGroups = getFaqsForRole(user?.role);
 
   const topics = [
     'Lỗi kỹ thuật phần mềm',
@@ -68,6 +65,13 @@ const SupportScreen = ({ navigation }) => {
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  // ── Lấy thông tin người dùng để hiển thị FAQ theo vai trò ──────────────────
+  useEffect(() => {
+    get('/auth/me')
+      .then((res) => setUser(res.user))
+      .catch((err) => console.warn('Không thể tải thông tin người dùng:', err.message));
+  }, []);
 
   // ── Gửi ticket mới ─────────────────────────────────────────────────────────
   const handleSendTicket = async () => {
@@ -133,6 +137,7 @@ const SupportScreen = ({ navigation }) => {
     <ResponsiveLayout
       navigation={navigation}
       activeRoute="Support"
+      user={user}
     >
       <SafeAreaView style={styles.container}>
         {/* Header */}
@@ -211,22 +216,28 @@ const SupportScreen = ({ navigation }) => {
           <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>Câu hỏi thường gặp</Text>
         </View>
         <View style={styles.faqList}>
-          {faqs.map((faq, i) => {
-            const isOpened = openFaq === i;
-            return (
-              <View key={i} style={styles.faqCard}>
-                <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setOpenFaq(isOpened ? null : i)}>
-                  <Text style={styles.faqQuestion}>{faq.q}</Text>
-                  <Text style={{ fontSize: 14, color: '#64748B' }}>{isOpened ? '▲' : '▼'}</Text>
-                </TouchableOpacity>
-                {isOpened && (
-                  <View style={styles.faqAnswerContainer}>
-                    <Text style={styles.faqAnswer}>{faq.a}</Text>
+          {faqGroups.map((group, gi) => (
+            <React.Fragment key={group.category}>
+              <Text style={styles.faqCategory}>{group.category}</Text>
+              {group.items.map((faq, i) => {
+                const faqKey = `${gi}-${i}`;
+                const isOpened = openFaq === faqKey;
+                return (
+                  <View key={faqKey} style={styles.faqCard}>
+                    <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setOpenFaq(isOpened ? null : faqKey)}>
+                      <Text style={styles.faqQuestion}>{faq.q}</Text>
+                      <Text style={{ fontSize: 14, color: '#64748B' }}>{isOpened ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {isOpened && (
+                      <View style={styles.faqAnswerContainer}>
+                        <Text style={styles.faqAnswer}>{faq.a}</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            );
-          })}
+                );
+              })}
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Quick Message Form */}
