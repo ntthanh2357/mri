@@ -14,7 +14,8 @@ import {
   UploadCloud,
   Sparkles,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
@@ -426,7 +427,7 @@ export default function AdminDatasetsView() {
                 Tạo Dataset mới
               </h3>
               <button onClick={() => setShowModal(null)} className="text-slate-400 hover:text-slate-600">
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

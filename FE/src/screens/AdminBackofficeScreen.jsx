@@ -15,7 +15,8 @@ ChevronRight,
   ShieldAlert,
   Brain,
   TrendingUp,
-  Sliders
+  Sliders,
+  Building2
 } from 'lucide-react';
 import '../tailwind-built.css';
 
@@ -189,7 +190,7 @@ const AdminBackofficeScreen = ({ navigation }) => {
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Bệnh viện" : undefined}
               >
-                <span className="w-[18px] h-[18px] shrink-0 flex items-center justify-center text-base leading-none">🏥</span>
+                <Building2 className="w-[18px] h-[18px] shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Bệnh viện</span>}
               </button>
 

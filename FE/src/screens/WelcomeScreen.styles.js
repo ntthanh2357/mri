@@ -46,7 +46,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -67,7 +67,7 @@ export default StyleSheet.create({
   brandSub: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0891B2',
   },
   navLinks: {
     flexDirection: 'row',
@@ -96,7 +96,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   loginBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -345,7 +345,7 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#15803D',
+    color: '#0891B2',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'none',
@@ -460,8 +460,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: '#0891B2',
+    borderColor: '#0891B2',
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -475,7 +475,7 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0891B2',
     height: 48,
     borderRadius: 10,
     justifyContent: 'center',
@@ -532,7 +532,7 @@ export default StyleSheet.create({
   formFooterLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0891B2',
   },
   resendRow: {
     flexDirection: 'row',
@@ -548,7 +548,7 @@ export default StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0891B2',
   },
   backButtonInline: {
     alignItems: 'center',

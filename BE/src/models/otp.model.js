@@ -1,27 +1,6 @@
-import { Schema, model } from "mongoose";
-
-const otpSchema = new Schema(
-  {
-    phone: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    otpCode: {
-      type: String,
-      required: true,
-    },
-    otpExpires: {
-      type: Date,
-      required: true,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-// TTL index to automatically delete expired OTP documents
-otpSchema.index({ otpExpires: 1 }, { expireAfterSeconds: 0 });
-
-export const Otp = model("Otp", otpSchema);
+/**
+ * Facade Re-export for Backward Compatibility (Strangler Fig Pattern)
+ * Đảm bảo mọi module cũ import từ '../models/otp.model.js' vẫn hoạt động 100%.
+ */
+export * from "../modules/auth/models/otp.model.js";
+export { Otp } from "../modules/auth/models/otp.model.js";

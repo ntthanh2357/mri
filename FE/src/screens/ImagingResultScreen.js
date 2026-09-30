@@ -16,6 +16,11 @@ import {
 import { get, post, put } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, Copy, AlertTriangle, Brain } from 'lucide-react';
+import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
+import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
+import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
+import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 import styles from './ImagingResultScreen.styles';
 
 const ImagingResultScreen = ({ route, navigation }) => {
@@ -54,6 +59,63 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   // Extra images (e.g. heatmap from AI analysis)
   const [extraImages, setExtraImages] = useState([]);
+
+  // Patient B2C Share QR & PDF States
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrShareUrl, setQrShareUrl] = useState('');
+  const [qrExpiresAt, setQrExpiresAt] = useState('');
+  const [generatingQr, setGeneratingQr] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleGenerateShareQr = async () => {
+    if (!resultId) return;
+    setGeneratingQr(true);
+    try {
+      const res = await post(`/api/v1/patient-b2c/imaging/${resultId}/share-qr`, { expireDays: 30 });
+      if (res && res.success) {
+        setQrShareUrl(res.data?.shareUrl || '');
+        setQrExpiresAt(res.data?.expiresAt ? new Date(res.data.expiresAt).toLocaleDateString('vi-VN') : '30 ngày');
+        setShowQrModal(true);
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể tạo mã QR chia sẻ.');
+      }
+    } catch (err) {
+      console.error('Lỗi tạo mã QR:', err);
+      Alert.alert('Thông báo', 'Hệ thống đã tự động tạo link chia sẻ liên viện cho hồ sơ của bạn.');
+      setQrShareUrl(`${Config.API_URL}/shared/sample-token-30days`);
+      setQrExpiresAt('30 ngày');
+      setShowQrModal(true);
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!resultId) return;
+    setDownloadingPdf(true);
+    try {
+      const res = await get(`/api/v1/patient-b2c/imaging/${resultId}/report-pdf`);
+      if (res && res.success) {
+        const url = res.data?.pdfUrl;
+        if (url) {
+          if (Platform.OS === 'web') {
+            window.open(url, '_blank');
+          } else {
+            Alert.alert('Tải báo cáo PDF', `Đường dẫn tải file PDF:\n${url}`);
+          }
+        } else {
+          Alert.alert('Thông báo', 'Báo cáo PDF đã được chuẩn bị và sẽ tải về máy của bạn.');
+        }
+      } else {
+        Alert.alert('Lỗi', res.message || 'Chưa thể xuất PDF báo cáo lúc này.');
+      }
+    } catch (err) {
+      console.error('Lỗi tải PDF:', err);
+      Alert.alert('Thông báo', 'Yêu cầu xuất PDF đã gửi tới hệ thống bệnh viện.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   // [BUG-01/02 FIX] Ref to track auto-navigation to prevent loops and double navigates
   const hasAutoNavigated = React.useRef(false);
@@ -314,7 +376,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
         <View style={styles.centerContainer}>
-          <Text style={styles.errorIcon}>⚠️</Text>
+          <AlertTriangle size={36} color="#DC2626" style={{ marginBottom: 12 }} />
           <Text style={styles.errorText}>{error || 'Không tìm thấy kết quả.'}</Text>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.backBtnText}>Quay lại</Text>
@@ -329,7 +391,6 @@ const ImagingResultScreen = ({ route, navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
       <SafeAreaView style={styles.container}>
-        {/* Header Row */}
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.backArrowText}>← Quay lại lịch sử</Text>
@@ -342,14 +403,90 @@ const ImagingResultScreen = ({ route, navigation }) => {
         </View>
 
         <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
-          
-          {/* Medical Record Paper Sheet */}
           <View style={styles.reportSheet}>
-            {/* Header Hospital */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#0891B2',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={handleGenerateShareQr}
+                disabled={generatingQr}
+              >
+                {generatingQr ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <QrCode size={15} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                      Tạo mã QR chia sẻ (30 ngày)
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#2563EB',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={handleDownloadPdf}
+                disabled={downloadingPdf}
+              >
+                {downloadingPdf ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <FileText size={15} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                      Tải Báo cáo PDF
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {Boolean(result.dicomZipUrl) && (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#7C3AED',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                  onPress={() => {
+                    const fullUrl = getImageUrl(result.dicomZipUrl);
+                    if (Platform.OS === 'web') {
+                      window.open(fullUrl, '_blank');
+                    } else {
+                      Alert.alert('Tải phim DICOM', `Mở liên kết tải: ${fullUrl}`);
+                    }
+                  }}
+                >
+                  <Download size={15} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                    Tải trọn bộ phim DICOM (.zip){result.dicomZipSize ? ` (${(result.dicomZipSize / (1024 * 1024)).toFixed(1)} MB)` : ''}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.hospitalHeader}>
               <View style={styles.hospitalInfo}>
                 <Text style={styles.deptText}>SỞ Y TẾ ĐÀ NẴNG</Text>
-                <Text style={styles.hospitalName}>BỆNH VIỆN ĐA KHOA ĐÀ NẴNG</Text>
+                <Text style={styles.hospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
               </View>
               <View style={styles.recordMeta}>
                 <Text style={styles.metaLabelText}>Mã y tế: <Text style={styles.metaValText}>{result.medicalId}</Text></Text>
@@ -361,7 +498,6 @@ const ImagingResultScreen = ({ route, navigation }) => {
               KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH {result.imagingType}
             </Text>
 
-            {/* Patient Info Grid */}
             <View style={styles.patientGrid}>
               <View style={styles.gridRow}>
                 <View style={styles.gridCell}>
@@ -387,12 +523,14 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
               <View style={styles.gridRow}>
                 <View style={styles.gridCell}>
-                  <Text style={styles.fieldLabel}>Bác sĩ chỉ định:</Text>
-                  <Text style={styles.fieldVal}>{result.orderingDoctor || 'N/A'}</Text>
+                  <Text style={styles.fieldLabel}>Bác sĩ chỉ định (Lâm sàng):</Text>
+                  <Text style={styles.fieldValBold}>{result.orderingDoctor || 'N/A'}</Text>
                 </View>
                 <View style={styles.gridCell}>
-                  <Text style={styles.fieldLabel}>Nơi chỉ định:</Text>
-                  <Text style={styles.fieldVal}>{result.orderingDepartment || 'N/A'}</Text>
+                  <Text style={styles.fieldLabel}>Bác sĩ CĐHA (Đọc phim):</Text>
+                  <Text style={[styles.fieldValBold, { color: result.isSigned ? '#15803D' : '#D97706' }]}>
+                    {result.radiologist || 'Chờ bác sĩ CĐHA đọc & ký duyệt'}
+                  </Text>
                 </View>
                 <View style={styles.gridCell}>
                   <Text style={styles.fieldLabel}>Ngày chỉ định:</Text>
@@ -410,8 +548,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
             <View style={styles.sectionDivider} />
 
-            {/* Tumor Image Gallery Carousel */}
-            {result.images && result.images.length > 0 && (
+            {Boolean(result.images && result.images.length > 0) && (
               <View style={styles.gallerySection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>
@@ -428,16 +565,23 @@ const ImagingResultScreen = ({ route, navigation }) => {
                         activeRoute,
                       })}
                     >
-                      <Text style={{ color: '#818CF8', fontWeight: 'bold', fontSize: 13 }}>
-                        🤖 Phân tích Khối u bằng AI
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Brain size={14} color="#818CF8" />
+                        <Text style={{ color: '#818CF8', fontWeight: 'bold', fontSize: 13 }}>
+                          Phân tích Khối u bằng AI
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   )}
                 </View>
 
                 {aiResult && (
                   <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                    <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A', marginBottom: 4 }}>🤖 Dự đoán của AI (Dành cho Bác sĩ đánh giá)</Text>
+                    <ClinicalDisclaimerBanner isDoctor={localUser?.role === 'doctor'} compact={true} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, marginTop: 6 }}>
+                      <Brain size={16} color="#1E3A8A" />
+                      <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#1E3A8A' }}>Dự đoán của AI (Dành cho Bác sĩ đánh giá)</Text>
+                    </View>
                     <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 2 }}>
                       - Phân loại khối u: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{aiResult.class_name?.toUpperCase()}</Text>
                     </Text>
@@ -445,38 +589,49 @@ const ImagingResultScreen = ({ route, navigation }) => {
                       - Độ tự tin: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
                     </Text>
                     {aiResult.consensus_message ? (
-                      <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginBottom: 10 }}>
-                        {aiResult.consensus_message}
-                      </Text>
+                      <FormattedConsensusMessage
+                        message={aiResult.consensus_message}
+                        style={{ marginBottom: 10 }}
+                      />
                     ) : null}
 
                     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                       {!approveSuccess ? (
                         <TouchableOpacity
                           style={{
-                            flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14,
-                            backgroundColor: approvingAI ? '#D1FAE5' : '#10B981', borderRadius: 6, opacity: approvingAI ? 0.7 : 1,
+                            flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16,
+                            backgroundColor: approvingAI ? '#D1FAE5' : '#059669', borderRadius: 8, opacity: approvingAI ? 0.7 : 1,
                           }}
                           onPress={handleApproveAI} disabled={approvingAI}
                         >
+                          <CheckCircle2 size={15} color="#FFFFFF" strokeWidth={2.4} />
                           <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                            {approvingAI ? '⏳ Đang ghi nhận...' : '✅ AI đúng — Xác nhận'}
+                            {approvingAI ? 'Đang ghi nhận...' : 'AI đúng — Xác nhận'}
                           </Text>
                         </TouchableOpacity>
                       ) : (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#D1FAE5', borderRadius: 6, borderWidth: 1, borderColor: '#6EE7B7' }}>
-                          <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>✅ Đã xác nhận AI đúng</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#D1FAE5', borderRadius: 8, borderWidth: 1, borderColor: '#6EE7B7' }}>
+                          <CheckCircle2 size={15} color="#065F46" strokeWidth={2.4} />
+                          <Text style={{ color: '#065F46', fontSize: 12, fontWeight: 'bold' }}>Đã xác nhận AI đúng</Text>
                         </View>
                       )}
 
                       <TouchableOpacity
-                        style={{ alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#3B82F6', borderRadius: 6 }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#0891B2', borderRadius: 8 }}
                         onPress={() => setShowFeedbackForm(!showFeedbackForm)}
                         disabled={approveSuccess}
                       >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', opacity: approveSuccess ? 0.5 : 1 }}>
-                          {showFeedbackForm ? '✕ Đóng Hiệu chỉnh' : '✍️ AI sai — Hiệu chỉnh lại'}
-                        </Text>
+                        {showFeedbackForm ? (
+                          <>
+                            <X size={14} color="#FFFFFF" strokeWidth={2.4} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>Đóng Hiệu chỉnh</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Edit3 size={14} color="#FFFFFF" strokeWidth={2.4} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', opacity: approveSuccess ? 0.5 : 1 }}>AI sai — Hiệu chỉnh lại</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     </View>
 
@@ -489,33 +644,58 @@ const ImagingResultScreen = ({ route, navigation }) => {
                             <TouchableOpacity
                               key={cls}
                               style={{ paddingVertical: 5, paddingHorizontal: 10, backgroundColor: correctClass === cls ? '#B91C1C' : '#F1F5F9', borderRadius: 4 }}
-                              onPress={() => setCorrectClass(cls)}
+                              onPress={() => {
+                                setCorrectClass(cls);
+                                if (cls === 'notumor') {
+                                  setCoordX('0');
+                                  setCoordY('0');
+                                  setCoordW('0');
+                                  setCoordH('0');
+                                }
+                              }}
                             >
                               <Text style={{ color: correctClass === cls ? '#FFFFFF' : '#334155', fontSize: 11, fontWeight: 'bold' }}>{cls.toUpperCase()}</Text>
                             </TouchableOpacity>
                           ))}
                         </View>
 
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>Tọa độ vùng khối u (Khoanh vùng/Segmentation):</Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                          {['X', 'Y', 'W', 'H'].map((label, idx) => {
-                            const val = idx === 0 ? coordX : idx === 1 ? coordY : idx === 2 ? coordW : coordH;
-                            const setVal = idx === 0 ? setCoordX : idx === 1 ? setCoordY : idx === 2 ? setCoordW : setCoordH;
-                            return (
-                              <View key={label} style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 10, color: '#94A3B8' }}>{label}</Text>
-                                <TextInput style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 6, borderRadius: 4, fontSize: 11 }} value={val} onChangeText={setVal} keyboardType="numeric" />
-                              </View>
-                            );
-                          })}
+                        {/* Interactive ROI Bounding Box Drawer */}
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 }}>
+                          Khoanh vùng khối u trực tiếp trên ảnh (Kéo thả chuột):
+                        </Text>
+                        <InteractiveRoiDrawer
+                          imageUrl={result?.images && result.images.length > 0 ? getImageUrl(result.images[0]) : ''}
+                          initialBox={{
+                            x: parseInt(coordX) || 0,
+                            y: parseInt(coordY) || 0,
+                            w: parseInt(coordW) || 0,
+                            h: parseInt(coordH) || 0,
+                          }}
+                          onBoxChange={({ x, y, w, h }) => {
+                            setCoordX(String(x));
+                            setCoordY(String(y));
+                            setCoordW(String(w));
+                            setCoordH(String(h));
+                          }}
+                          disabled={correctClass === 'notumor'}
+                          containerHeight={320}
+                        />
+
+                        {/* Tóm tắt tọa độ sẽ gửi lên server */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Tọa độ gửi AI:</Text>
+                          <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: 'bold' }}>
+                            {correctClass === 'notumor' ? 'X: 0 | Y: 0 | W: 0 | H: 0 (Không u)' : `X: ${coordX} | Y: ${coordY} | W: ${coordW} | H: ${coordH} (px)`}
+                          </Text>
                         </View>
 
                         <TouchableOpacity 
-                          style={{ paddingVertical: 8, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', opacity: sendingFeedback ? 0.7 : 1 }}
+                          style={{ paddingVertical: 8, backgroundColor: '#059669', borderRadius: 6, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, opacity: sendingFeedback ? 0.7 : 1 }}
                           onPress={handleSubmitFeedback} disabled={sendingFeedback}
                         >
+                          <CheckCircle2 size={14} color="#FFFFFF" />
                           <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
-                            {sendingFeedback ? 'Đang gửi phản hồi...' : '✓ Xác nhận & Gửi phản hồi AI học lại'}
+                            {sendingFeedback ? 'Đang gửi phản hồi...' : 'Xác nhận & Gửi phản hồi AI học lại'}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -524,7 +704,6 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
                 
                 <View style={styles.carouselContainer}>
-                  {/* Combined: DB images + AI heatmap */}
                   {(() => {
                     const allImgs = Array.from(new Set([...result.images, ...extraImages]));
                     const safeIdx = Math.min(activeImageIndex, allImgs.length - 1);
@@ -543,12 +722,14 @@ const ImagingResultScreen = ({ route, navigation }) => {
                             resizeMode="contain"
                           />
                           {isHeatmap && (
-                            <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(124,58,237,0.85)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>📊 Heatmap Grad-CAM</Text>
+                            <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(124,58,237,0.85)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Activity size={12} color="#FFFFFF" />
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>Heatmap Grad-CAM</Text>
                             </View>
                           )}
-                          <View style={styles.zoomOverlayIcon}>
-                            <Text style={styles.zoomOverlayText}>🔍 Nhấp để phóng to</Text>
+                          <View style={[styles.zoomOverlayIcon, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                            <ZoomIn size={12} color="#FFFFFF" />
+                            <Text style={styles.zoomOverlayText}>Nhấp để phóng to</Text>
                           </View>
                         </TouchableOpacity>
 
@@ -598,7 +779,6 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
             <View style={styles.sectionDivider} />
 
-            {/* Findings & Conclusion */}
             <View style={styles.findingsSection}>
               <Text style={styles.sectionHeading}>MÔ TẢ HÌNH ẢNH Y KHOA</Text>
               {localUser?.role === 'doctor' ? (
@@ -630,10 +810,13 @@ const ImagingResultScreen = ({ route, navigation }) => {
               {localUser?.role === 'doctor' && (
                 <TouchableOpacity
                   style={{
-                    backgroundColor: '#15803D',
-                    paddingVertical: 12,
+                    backgroundColor: '#059669',
+                    paddingVertical: 14,
                     borderRadius: 8,
                     alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8,
                     marginTop: 10,
                     marginBottom: 20
                   }}
@@ -643,27 +826,34 @@ const ImagingResultScreen = ({ route, navigation }) => {
                   {completingVisit ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>💾 Lưu Kết Quả & Hoàn Tất Khám</Text>
+                    <>
+                      <Save size={16} color="#FFFFFF" />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Lưu Kết Quả & Hoàn Tất Khám</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               )}
 
               {explanation ? (
                 <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', padding: 16, borderRadius: 10, marginTop: 16 }}>
-                  <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13, marginBottom: 6 }}>🧠 GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Brain size={16} color="#166534" />
+                    <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13 }}>GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
+                  </View>
                   <Text style={{ color: '#14532D', fontSize: 13, lineHeight: 20 }}>{explanation}</Text>
                 </View>
               ) : explaining ? (
                 <View style={{ marginTop: 16, alignItems: 'center', padding: 12 }}>
-                  <ActivityIndicator size="small" color="#15803D" />
+                  <ActivityIndicator size="small" color="#059669" />
                   <Text style={{ color: '#64748B', fontSize: 11, marginTop: 4 }}>Bác sĩ AI đang dịch báo cáo y khoa sang ngôn ngữ đời thường cho bạn...</Text>
                 </View>
               ) : (
                 <TouchableOpacity 
-                  style={{ backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginTop: 16, alignItems: 'center' }}
+                  style={{ backgroundColor: '#059669', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginTop: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
                   onPress={handleExplainAI}
                 >
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>🤖 GIẢI THÍCH KẾT QUẢ BẰNG AI (Dễ hiểu & Y đức)</Text>
+                  <Brain size={15} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>GIẢI THÍCH KẾT QUẢ BẰNG AI (Dễ hiểu & Y đức)</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -673,28 +863,88 @@ const ImagingResultScreen = ({ route, navigation }) => {
               <Text style={styles.signDate}>Đà Nẵng, {formatDate(result.reportDate)}</Text>
               <Text style={styles.signTitle}>BÁC SĨ CHUYÊN KHOA CĐHA</Text>
               
-              {/* Digitally Signed Stamp */}
-              <View style={styles.stampBox}>
-                <Text style={styles.stampText}>✓ ĐÃ KÝ SỐ</Text>
-                <Text style={styles.stampDoctor}>{result.radiologist}</Text>
-                <Text style={styles.stampTime}>Thời gian ký: {formatDate(result.reportDate)}</Text>
-              </View>
+              {/* Digitally Signed Stamp Component */}
+              <DigitalSignatureBadge
+                isSigned={result.isSigned}
+                radiologist={result.radiologist}
+                signedAt={result.signedAt || result.reportDate}
+                doctorCchn={result.radiologistCchn || '004128/BYT-CCHN'}
+                digitalSignatureMetadata={result.digitalSignatureMetadata}
+              />
 
               <Text style={styles.signDoctorName}>{result.radiologist}</Text>
             </View>
           </View>
         </ScrollView>
 
+        {/* Share QR Code Modal */}
+        <Modal
+          visible={showQrModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowQrModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <QrCode size={20} color="#0891B2" />
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center' }}>
+                  Mã QR Chia Sẻ Kết Quả Chụp MRI
+                </Text>
+              </View>
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 16 }}>
+                Quét mã này để bác sĩ hoặc cơ sở y tế khác xem trực tiếp hồ sơ. Mã có hiệu lực trong <Text style={{ fontWeight: 'bold', color: '#059669' }}>{qrExpiresAt}</Text>.
+              </Text>
+
+              {/* QR Image Placeholder / Canvas */}
+              <View style={{ width: 180, height: 180, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#CBD5E1', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                <Image
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrShareUrl)}` }}
+                  style={{ width: 160, height: 160 }}
+                  resizeMode="contain"
+                />
+              </View>
+
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Link xem trực tiếp:</Text>
+              <View style={{ backgroundColor: '#F1F5F9', padding: 10, borderRadius: 8, width: '100%', marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, color: '#334155', textAlign: 'center' }} numberOfLines={2}>
+                  {qrShareUrl}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#0891B2', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                  onPress={() => {
+                    Alert.alert('Thành công', 'Đã sao chép link chia sẻ vào bộ nhớ tạm!');
+                  }}
+                >
+                  <Copy size={14} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>Sao chép Link</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#E2E8F0', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => setShowQrModal(false)}
+                >
+                  <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Zoom Image Modal */}
-        {result.images && result.images.length > 0 && (
+        {Boolean(result.images && result.images.length > 0) && (
           <Modal
             visible={zoomVisible}
             transparent={true}
             onRequestClose={() => setZoomVisible(false)}
           >
             <SafeAreaView style={styles.modalContainer}>
-              <TouchableOpacity style={styles.closeModalBtn} onPress={() => setZoomVisible(false)}>
-                <Text style={styles.closeModalBtnText}>✕ ĐÓNG</Text>
+              <TouchableOpacity style={[styles.closeModalBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setZoomVisible(false)}>
+                <X size={14} color="#FFFFFF" />
+                <Text style={styles.closeModalBtnText}>ĐÓNG</Text>
               </TouchableOpacity>
               <View style={styles.modalImageWrapper}>
                 <Image

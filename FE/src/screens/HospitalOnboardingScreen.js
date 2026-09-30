@@ -7,6 +7,7 @@ import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '../constants/colors';
+import { FileText, Upload, CheckCircle2, Clock } from 'lucide-react';
 
 const FIELD = (label, key, opts = {}) => ({ label, key, ...opts });
 
@@ -317,12 +318,16 @@ export default function HospitalOnboardingScreen({ navigation }) {
               styles.statusBanner,
               hospital?.status === 'active' ? styles.statusBannerActive : styles.statusBannerPending
             ]}>
-              <Text style={[
-                styles.statusBannerTitle,
-                hospital?.status === 'active' ? styles.statusBannerTitleActive : styles.statusBannerTitlePending
-              ]}>
-                {hospital?.status === 'active' ? '✓ Tài khoản đã hoạt động' : '⏳ Hồ sơ đang chờ phê duyệt'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                {hospital?.status === 'active' ? <CheckCircle2 size={18} color="#059669" /> : <Clock size={18} color="#D97706" />}
+                <Text style={[
+                  styles.statusBannerTitle,
+                  hospital?.status === 'active' ? styles.statusBannerTitleActive : styles.statusBannerTitlePending,
+                  { marginBottom: 0 }
+                ]}>
+                  {hospital?.status === 'active' ? 'Tài khoản đã hoạt động' : 'Hồ sơ đang chờ phê duyệt'}
+                </Text>
+              </View>
               <Text style={styles.statusBannerText}>
                 {hospital?.status === 'active'
                   ? 'Thông tin bệnh viện đã được xác thực chính thức. Bạn vẫn có thể cập nhật thông tin khi cần thiết.'
@@ -368,7 +373,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
             <Text style={styles.sectionNote}>Tải lên tài liệu PDF hoặc hình ảnh giấy phép kinh doanh/hoạt động.</Text>
             {licenseFile ? (
               <View style={styles.uploadedFileRow}>
-                <Text style={styles.uploadedFileIcon}>📄</Text>
+                <FileText size={18} color="#0891B2" style={{ marginRight: 6 }} />
                 <Text style={styles.uploadedFileName} numberOfLines={1}>
                   {licenseFile.split('/').pop() || 'Giấy phép hoạt động'}
                 </Text>
@@ -382,7 +387,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
                   <ActivityIndicator color="#15803D" size="small" />
                 ) : (
                   <View style={styles.uploadBtnContent}>
-                    <Text style={styles.uploadBtnIcon}>📤</Text>
+                    <Upload size={18} color="#64748B" style={{ marginRight: 8 }} />
                     <Text style={styles.uploadBtnText}>Nhấp để tải lên (PDF/Ảnh)</Text>
                   </View>
                 )}
@@ -417,10 +422,10 @@ export default function HospitalOnboardingScreen({ navigation }) {
         <Modal visible={showSuccessModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.successCard}>
-              <View style={styles.successIconCircle}>
-                <Text style={styles.successIconText}>✓</Text>
+              <View style={[styles.successIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                <CheckCircle2 size={36} color="#059669" />
               </View>
-              <Text style={styles.successModalTitle}>Gửi hồ sơ thành công! 🎉</Text>
+              <Text style={styles.successModalTitle}>Gửi hồ sơ thành công!</Text>
               <Text style={styles.successModalMessage}>
                 Thông tin đăng ký của bệnh viện đã được ghi nhận và đang chờ ban quản trị hệ thống phê duyệt chính thức. Bạn hiện có thể truy cập ngay vào Dashboard quản trị phòng khám.
               </Text>

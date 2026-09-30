@@ -22,14 +22,23 @@ const visitSchema = new Schema(
         fileName: { type: String },
         fileType: { type: String },
         manualData: { type: Schema.Types.Mixed },
-        uploadedAt: { type: Date, default: Date.now }
+        uploadedAt: { type: Date, default: Date.now },
+        isDeleted: { type: Boolean, default: false },
+        deletedAt: { type: Date, default: null },
+        deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
       }
     ],
     status: {
       type: String,
-      enum: ['đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'hoàn tất', 'đã đóng'],
+      enum: [
+        'đang chờ', 'đang khám', 'chờ chụp', 'đang chụp', 'chờ chụp lại', 
+        'chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 
+        'chờ hội chẩn', 'chờ nhập viện', 'chờ chụp sau phẫu thuật', 'tái khám định kỳ', 'no_show',
+        'hoàn tất', 'đã đóng', 'đã hủy'
+      ],
       default: 'đang chờ'
     },
+    priority: { type: String, enum: ['thấp', 'trung bình', 'cao', 'khẩn cấp'], default: 'trung bình' },
     reason: { type: String, default: "" },
     vitals: {
       pulse: { type: Number, default: null },
@@ -41,18 +50,50 @@ const visitSchema = new Schema(
     },
     mriOrder: {
       region: { type: String, default: "" },
+      brain_region: { type: String, default: null },
       instructions: { type: String, default: "" },
       requestAiAnalysis: { type: Boolean, default: false },
       imagingResultId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
       orderedAt: { type: Date, default: null }
     },
+    // Bảng kiểm An toàn MRI (MRI Safety Screening Checklist) trước buồng máy
+    mriSafetyChecklist: {
+      hasPacemakerOrMetal: { type: Boolean, default: false }, // Chống chỉ định tuyệt đối
+      hasClaustrophobia: { type: Boolean, default: false },   // Hội chứng sợ buồng kín
+      hasKidneyDisease: { type: Boolean, default: false },    // Tiền sử suy thận mạn / eGFR < 30
+      isPregnant: { type: Boolean, default: false },          // Đang mang thai
+      metalDetails: { type: String, default: "" },            // Chi tiết dị vật kim loại
+      isScreened: { type: Boolean, default: false },          // Đã hoàn thành bảng kiểm
+      screenedBy: { type: String, default: "" },              // Họ tên người kiểm tra
+      screenedAt: { type: Date, default: null },              // Thời gian kiểm tra
+      passed: { type: Boolean, default: false },              // Đủ điều kiện vào buồng
+      notes: { type: String, default: "" }
+    },
+    mriCancelReason: { type: String, default: "" },
+    mriRescanReason: { type: String, default: "" },
+    mriCancelledAt: { type: Date, default: null },
+    mriCancelledBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    mriRescanRequestedAt: { type: Date, default: null },
+    mriRescanRequestedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     aiResultRef: { type: String, default: null },
-    invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', default: null }
+    invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', default: null },
+    // [BUG-06 FIX] Flag để tránh gửi nhắc lịch MRI lặp vô hạn
+    reminderSent: { type: Boolean, default: false },
+    // Soft Delete tuân thủ Luật Khám bệnh, chữa bệnh 2023 & Thông tư 46/2018/TT-BYT
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
 
 visitSchema.plugin(tenancyPlugin);
 
+// Compound indexes tối ưu hiệu năng truy vấn hàng đợi bác sĩ và lượt khám trong ngày
+visitSchema.index({ hospitalId: 1, status: 1, createdAt: -1 });
+visitSchema.index({ hospitalId: 1, doctorId: 1, status: 1 });
+visitSchema.index({ hospitalId: 1, patientId: 1, createdAt: -1 });
+
 export const Visit = model("Visit", visitSchema);
 export default Visit;
+
