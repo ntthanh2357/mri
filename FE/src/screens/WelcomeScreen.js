@@ -235,7 +235,7 @@ const WelcomeScreen = ({ navigation }) => {
       // BE trả message chung theo kiểu "tab" (cho app di động) — trên web cổng /
       // dành riêng Bệnh nhân, diễn đạt lại thành chỉ dẫn tới Cổng nội bộ /staff.
       if (Platform.OS === 'web' && errMsg.includes('thuộc phân hệ Bác sĩ')) {
-        errMsg = 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ (liên kết "Cổng nội bộ" phía cuối trang).';
+        errMsg = 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.';
         showAlert('error', 'Sai phân hệ đăng nhập', errMsg);
         return;
       }
@@ -948,19 +948,13 @@ const WelcomeScreen = ({ navigation }) => {
               )}
 
               {/* Support Info below Form Card on Desktop */}
+              {/* Lưu ý tách luồng: KHÔNG hiển thị liên kết tới Cổng nội bộ /staff
+                  trên trang công khai — nhân viên dùng địa chỉ nội bộ riêng. */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
                   Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
                 </Text>
-                {isWeb ? (
-                  <Text
-                    style={{ fontSize: 11, color: '#94A3B8', marginTop: 6, textAlign: 'center' }}
-                    onPress={() => { if (typeof window !== 'undefined') window.location.href = '/staff'; }}
-                  >
-                    Nhân viên Y tế? Truy cập Cổng nội bộ →
-                  </Text>
-                ) : null}
               </View>
             </View>
           </View>
@@ -1377,14 +1371,6 @@ const WelcomeScreen = ({ navigation }) => {
                 <Text style={styles.supportTextInline}>
                   Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
                 </Text>
-                {isWeb ? (
-                  <Text
-                    style={{ fontSize: 11, color: '#94A3B8', marginTop: 6, textAlign: 'center' }}
-                    onPress={() => { if (typeof window !== 'undefined') window.location.href = '/staff'; }}
-                  >
-                    Nhân viên Y tế? Truy cập Cổng nội bộ →
-                  </Text>
-                ) : null}
               </View>
             </View>
           </View>
