@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
 import { navigationRef, navigateTo, resetTo } from '../utils/navigationRef';
 import { setAuthToken } from '../services/api.service';
+import performLogout from '../utils/logout';
+import StaffPortalNavigator from './StaffPortal';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -41,11 +43,10 @@ import linkingConfig from './linking';
 
 const Stack = createNativeStackNavigator();
 
+const PatientAppNavigator = () => {
 // Trên web, ResponsiveLayout tự vẽ sidebar/back nav cho desktop nên ẩn header mặc định.
 // Trên mobile (Expo), không có nav chrome nào khác nên bật header gốc để có nút quay lại.
 const isNativeMobile = Platform.OS !== 'web';
-
-const AppNavigator = () => {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
@@ -59,7 +60,7 @@ const AppNavigator = () => {
 
     const handleSessionTimeout = async () => {
       console.log('Session timed out due to inactivity.');
-      await setAuthToken('');
+      await performLogout();
       resetTo('Welcome');
       alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
     };
@@ -89,9 +90,9 @@ const AppNavigator = () => {
           headerTitleStyle: { fontWeight: 'bold' },
         }}
       >
-        <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false, title: 'NeuroScan AI — Cổng Bệnh nhân' }} />
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng nhập' }} />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng ký' }} />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI', headerShown: false }} />
         <Stack.Screen name="ClinicDashboard" component={ClinicDashboardScreen} options={{ title: 'Phòng khám', headerShown: false }} />
         <Stack.Screen name="EMRDashboard" component={EMRDashboardScreen} options={{ title: 'EMR Management', headerShown: false }} />
@@ -122,6 +123,31 @@ const AppNavigator = () => {
       </Stack.Navigator>
     </NavigationContainer>
   );
+};
+
+/**
+ * ============================================================================
+ * PORTAL GATE — Điều phối 2 cổng theo đường dẫn (chỉ áp dụng trên Web)
+ * ============================================================================
+ *  /        → Cổng Bệnh nhân (B2C, phổ thông): AppNavigator gốc
+ *  /staff/* → Cổng Nội bộ (B2B, riêng tư): StaffPortalNavigator
+ *
+ * Trên app di động (native) vẫn dùng một ứng dụng duy nhất (không khái niệm URL)
+ * nên giữ nguyên navigator hợp nhất của AppNavigator.
+ * Lưu ý: chỉ đọc pathname MỘT lần khi mount (reload trang để đổi cổng — chuẩn
+ * với mô hình 2 portal độc lập, tránh lẫn state giữa hai vùng tên URL).
+ * ============================================================================
+ */
+const AppNavigator = () => {
+  const isStaffPortal =
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    window.location.pathname.indexOf('/staff') === 0;
+
+  if (isStaffPortal) {
+    return <StaffPortalNavigator />;
+  }
+  return <PatientAppNavigator />;
 };
 
 export default AppNavigator;

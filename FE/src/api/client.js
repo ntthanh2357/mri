@@ -1,7 +1,7 @@
 import Config from '../constants/config.js';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { navigateTo } from '../utils/navigationRef.js';
+import { goToPortalLogin } from '../utils/navigationRef.js';
 
 // Helper functions for cross-platform token persistence (Web & Native Mobile)
 export const getToken = async () => {
@@ -159,7 +159,7 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
       } else {
         // Refresh token cũng đã hết hạn → bắt buộc đăng xuất
         await setAuthToken(null);
-        navigateTo('Welcome');
+        goToPortalLogin();
         throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
       }
     } else {
@@ -178,7 +178,7 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
 
   if (response.status === 401) {
     await setAuthToken(null);
-    navigateTo('Welcome');
+    goToPortalLogin();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
@@ -186,7 +186,7 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   // Xóa token để giải phóng trạng thái zombie loop
   if (response.status === 403 && endpoint === '/auth/me') {
     await setAuthToken(null);
-    navigateTo('Welcome');
+    goToPortalLogin();
     throw new Error(data?.message || 'Tài khoản hoặc bệnh viện của bạn đang bị khóa hoặc hết hạn dịch vụ.');
   }
 
@@ -223,13 +223,13 @@ export const postFormData = async (endpoint, formData, isRetry = false) => {
       return postFormData(endpoint, formData, true);
     }
     await setAuthToken(null);
-    navigateTo('Welcome');
+    goToPortalLogin();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
   if (response.status === 401) {
     await setAuthToken(null);
-    navigateTo('Welcome');
+    goToPortalLogin();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 

@@ -31,6 +31,7 @@ export default StyleSheet.create({
     height: 48,
     borderRadius: 12,
     marginRight: 8,
+    backgroundColor: '#FFFFFF',
   },
   logoInner: {
     width: 16,
@@ -126,6 +127,23 @@ export default StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  twoFactorEmailHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  resendOtpRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  resendOtpText: {
+    color: '#15803D',
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -378,31 +396,6 @@ export default StyleSheet.create({
   leftPanelContent: {
     zIndex: 10,
   },
-  statsBadgeContainer: {
-    flexDirection: 'row',
-    gap: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
-  },
-  statMiniCard: {
-    // mini status
-  },
-  statMiniLabel: {
-    color: '#94A3B8',
-    fontSize: 9,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  statMiniValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   leftPanelTextTitle: {
     color: '#FFFFFF',
     fontSize: 22,
@@ -614,6 +607,7 @@ export default StyleSheet.create({
     height: 51,
     borderRadius: 12,
     marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
   logoInner: {
     width: 16,
@@ -752,10 +746,10 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   activeMethodTabText: {
-    color: '#15803D',
+    color: '#004080',
   },
   inputFocused: {
-    borderColor: '#047857',
+    borderColor: '#004080',
     borderWidth: 2,
   },
   roleTabsContainer: {
