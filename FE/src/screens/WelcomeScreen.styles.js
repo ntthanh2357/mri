@@ -46,7 +46,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#004080',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -64,10 +64,13 @@ export default StyleSheet.create({
     color: '#0F172A',
     lineHeight: 18,
   },
+  brandNameAccentDark: {
+    color: '#0090D0', // "Scan" hai tông như wordmark logo
+  },
   brandSub: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   navLinks: {
     flexDirection: 'row',
@@ -96,7 +99,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   loginBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#004080',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -169,7 +172,7 @@ export default StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(4, 120, 87, 0.88)', // Deep medical green overlay
+    backgroundColor: 'rgba(0, 45, 95, 0.90)', // Deep medical navy overlay (logo NeuroScan)
   },
   leftColumnContent: {
     flex: 1,
@@ -194,7 +197,7 @@ export default StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#047857',
+    borderColor: '#004080',
   },
   logoImage: {
     width: 46,
@@ -217,10 +220,13 @@ export default StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
   },
+  brandNameAccentCyan: {
+    color: '#00AEEF', // "Scan" — khớp wordmark logo (Neuro navy + Scan cyan)
+  },
   brandSubWhite: {
     fontSize: 8.5,
     fontWeight: 'bold',
-    color: '#D1FAE5',
+    color: '#CFF2FF',
     letterSpacing: 1.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
@@ -234,7 +240,7 @@ export default StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#6EE7B7',
+    backgroundColor: '#00AEEF',
     marginBottom: 20,
   },
   sloganTitle: {
@@ -363,7 +369,7 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#047857',
+    color: '#004080',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'none',
@@ -385,12 +391,12 @@ export default StyleSheet.create({
     }),
   },
   formInputFocused: {
-    borderColor: '#047857',
+    borderColor: '#004080',
     borderWidth: 2,
     ...Platform.select({
       web: {
         outline: 'none',
-        boxShadow: '0 0 0 3px rgba(4, 120, 87, 0.15)',
+        boxShadow: '0 0 0 3px rgba(0, 64, 128, 0.15)',
       }
     }),
   },
@@ -457,7 +463,7 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   roleTabTextActive: {
-    color: '#047857',
+    color: '#004080',
   },
   rememberRow: {
     marginBottom: 20,
@@ -478,8 +484,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#047857',
-    borderColor: '#047857',
+    backgroundColor: '#004080',
+    borderColor: '#004080',
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -493,7 +499,7 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#047857',
+    backgroundColor: '#004080',
     height: 50,
     borderRadius: 12,
     justifyContent: 'center',
@@ -503,7 +509,7 @@ export default StyleSheet.create({
       web: {
         transition: 'background-color 0.2s ease',
         cursor: 'pointer',
-        boxShadow: '0 8px 16px -6px rgba(4, 120, 87, 0.4)',
+        boxShadow: '0 8px 16px -6px rgba(0, 64, 128, 0.45)',
       }
     }),
   },
@@ -551,7 +557,7 @@ export default StyleSheet.create({
   formFooterLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   resendRow: {
     flexDirection: 'row',
@@ -567,7 +573,7 @@ export default StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#0090D0',
   },
   backButtonInline: {
     alignItems: 'center',
@@ -593,7 +599,7 @@ export default StyleSheet.create({
     marginTop: 4,
   },
   resendOtpText: {
-    color: '#047857',
+    color: '#004080',
     fontSize: 12.5,
     fontWeight: '600',
   },

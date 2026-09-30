@@ -515,7 +515,9 @@ const WelcomeScreen = ({ navigation }) => {
                   resizeMode="contain"
                 />
                 <View>
-                  <Text style={styles.brandNameWhite}>NeuroScan AI</Text>
+                  <Text style={styles.brandNameWhite}>
+                    Neuro<Text style={styles.brandNameAccentCyan}>Scan</Text> AI
+                  </Text>
                   <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
                 </View>
               </View>
@@ -618,9 +620,9 @@ const WelcomeScreen = ({ navigation }) => {
                     disabled={resendingOtp || loading}
                   >
                     {resendingOtp ? (
-                      <ActivityIndicator size="small" color="#047857" />
+                      <ActivityIndicator size="small" color="#004080" />
                     ) : (
-                      <RefreshCw size={13} color="#047857" />
+                      <RefreshCw size={13} color="#004080" />
                     )}
                     <Text style={styles.resendOtpText}>
                       {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -977,7 +979,9 @@ const WelcomeScreen = ({ navigation }) => {
                 resizeMode="contain"
               />
               <View>
-                <Text style={styles.brandName}>NeuroScan AI</Text>
+                <Text style={styles.brandName}>
+                  Neuro<Text style={styles.brandNameAccentDark}>Scan</Text> AI
+                </Text>
                 <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
               </View>
             </View>
@@ -1040,9 +1044,9 @@ const WelcomeScreen = ({ navigation }) => {
                     disabled={resendingOtp || loading}
                   >
                     {resendingOtp ? (
-                      <ActivityIndicator size="small" color="#047857" />
+                      <ActivityIndicator size="small" color="#004080" />
                     ) : (
-                      <RefreshCw size={13} color="#047857" />
+                      <RefreshCw size={13} color="#004080" />
                     )}
                     <Text style={styles.resendOtpText}>
                       {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -1417,7 +1421,7 @@ const WelcomeScreen = ({ navigation }) => {
             ]}>
               {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" strokeWidth={2.5} />}
               {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" strokeWidth={2.5} />}
-              {customAlert.type === 'info' && <Info size={28} color="#0891B2" strokeWidth={2.5} />}
+              {customAlert.type === 'info' && <Info size={28} color="#0090D0" strokeWidth={2.5} />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
@@ -1426,7 +1430,7 @@ const WelcomeScreen = ({ navigation }) => {
                 styles.alertButton,
                 customAlert.type === 'success' && { backgroundColor: '#059669' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
-                customAlert.type === 'info' && { backgroundColor: '#0891B2' },
+                customAlert.type === 'info' && { backgroundColor: '#0090D0' },
               ]}
               onPress={() => {
                 setCustomAlert(prev => ({ ...prev, visible: false }));

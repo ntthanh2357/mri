@@ -310,7 +310,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   inputFocused: {
-    borderColor: '#047857',
+    borderColor: '#004080',
     borderWidth: 2,
   },
   desktopMainBody: {
