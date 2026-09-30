@@ -347,9 +347,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   logoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 57,
+    height: 57,
+    borderRadius: 29,
     marginRight: 10,
   },
   brandName: {

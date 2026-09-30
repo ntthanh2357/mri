@@ -197,9 +197,9 @@ export default StyleSheet.create({
     borderColor: '#047857',
   },
   logoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 57,
+    height: 57,
+    borderRadius: 29,
     marginRight: 12,
   },
   brandNameWhite: {
@@ -567,12 +567,21 @@ export default StyleSheet.create({
   },
   supportContainerInline: {
     alignItems: 'center',
+    gap: 6,
   },
   supportTextInline: {
     fontSize: 11,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  supportLink: {
+    fontWeight: 'bold',
+    color: '#0891B2',
+  },
+  footerCopyrightInline: {
+    fontSize: 10,
+    color: '#94A3B8',
   },
 
   // ALERT MODAL STYLES

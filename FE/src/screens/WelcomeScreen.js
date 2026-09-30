@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Linking,
 } from 'react-native';
 import Config from '../constants/config';
 import { get, post, setAuthToken } from '../services/api.service';
@@ -871,12 +872,20 @@ const WelcomeScreen = ({ navigation }) => {
                 </View>
               )}
 
-              {/* Support Info below Form Card on Desktop */}
+              {/* Footer: Support Info below Form Card on Desktop */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
+                  Hotline hỗ trợ:{' '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
+                    0236 3650 676
+                  </Text>
+                  {'  |  Email: '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
+                    support@neuroscan.com
+                  </Text>
                 </Text>
+                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
               </View>
             </View>
           </View>
@@ -1264,12 +1273,20 @@ const WelcomeScreen = ({ navigation }) => {
                 </View>
               )}
 
-              {/* Support Info below Form Card on Mobile */}
+              {/* Footer: Support Info below Form Card on Mobile */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
+                  Hotline hỗ trợ:{' '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
+                    0236 3650 676
+                  </Text>
+                  {'  |  Email: '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
+                    support@neuroscan.com
+                  </Text>
                 </Text>
+                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
               </View>
             </View>
           </View>

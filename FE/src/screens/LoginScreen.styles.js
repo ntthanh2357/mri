@@ -27,9 +27,9 @@ export default StyleSheet.create({
     marginRight: 8,
   },
   logoImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     marginRight: 8,
   },
   logoInner: {
@@ -610,9 +610,9 @@ export default StyleSheet.create({
     marginRight: 10,
   },
   logoImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 51,
+    height: 51,
+    borderRadius: 12,
     marginRight: 10,
   },
   logoInner: {
@@ -801,11 +801,37 @@ export default StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 24,
     lineHeight: 18,
   },
   hotlineLink: {
     color: '#15803D',
     fontWeight: 'bold',
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerLink: {
+    fontSize: 12,
+    color: '#0891B2',
+    fontWeight: '600',
+  },
+  footerDot: {
+    fontSize: 12,
+    color: '#CBD5E1',
+  },
+  footerCopyright: {
+    fontSize: 11,
+    color: '#94A3B8',
   },
 });
