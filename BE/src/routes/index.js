@@ -40,6 +40,7 @@ import reportRoutes from "./report.routes.js";
 import patientB2cRoutes from "./patientB2c.routes.js";
 import clinicalViewRoutes from "./clinicalView.routes.js";
 import bhytRoutes from "./bhyt.routes.js";
+import storageRoutes from "../modules/storage/storage.routes.js";
 
 const router = Router();
 
@@ -93,6 +94,7 @@ router.use("/api/v1/reports", reportRoutes);
 router.use("/api/v1/patient-b2c", patientB2cRoutes);
 router.use("/api/v1/clinical-view", clinicalViewRoutes);
 router.use("/api/v1/bhyt", bhytRoutes);
+router.use("/api/v1/storage", storageRoutes);
 
 // Health check endpoint under /api/v1
 

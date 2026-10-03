@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import { bucket } from "../../config/firebase.js";
 import { uploadMetadataBackup, uploadToDrive } from "../../config/googleDrive.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import storageService from "../../services/storage/storageService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -297,7 +298,26 @@ export const uploadImagingImage = async (req, res) => {
       }
     }
 
-    // ── 3. Backup scan image / DICOM archive to hospital's Google Drive (01_Original_Scans folder) ──
+    // ── 3. Lưu trữ vào Hệ thống Hybrid PACS (Local-First + Encrypted Drive Mirror) ──
+    let savedStorageFile = null;
+    try {
+      const bufferToSave = req.file ? await fs.promises.readFile(req.file.path) : streamOrBuffer;
+      if (bufferToSave && Buffer.isBuffer(bufferToSave)) {
+        savedStorageFile = await storageService.put({
+          category: "pacs",
+          studyId: req.body.studyId || req.body.medicalId || null,
+          fileName: originalName,
+          buffer: bufferToSave,
+          mimeType,
+          uploadedBy: req.user?.id,
+          patientId: req.body.patientId || null,
+        });
+      }
+    } catch (storageErr) {
+      console.warn("⚠️ [Storage Service] Không thể lưu vào Hybrid PACS:", storageErr.message);
+    }
+
+    // ── 4. Backup scan image / DICOM archive to hospital's Google Drive (Legacy compatibility) ──
     let driveViewLink = null;
     try {
       // Resolve hospitalId: from JWT, or from User DB (in case JWT is old)
@@ -312,30 +332,24 @@ export const uploadImagingImage = async (req, res) => {
       }
 
       if (!resolvedHospitalId) {
-        console.warn(`⚠️ [Drive] Bỏ qua backup: user ${req.user?.id} (role=${req.user?.role}) không có hospitalId.`);
+        console.warn(`⚠️ [Drive] Bỏ qua backup legacy: user ${req.user?.id} không có hospitalId.`);
       } else {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hospital = await Hospital.findById(resolvedHospitalId).lean();
         const scansFolderId = hospital?.subFolders?.originalScansId;
-        if (!scansFolderId) {
-          console.warn(`⚠️ [Drive] Bệnh viện "${hospital?.name}" chưa cấu hình thư mục 01_Original_Scans.`);
-        } else {
-          // Sao lưu ngầm lên Google Drive (Asynchronous Background Job) — Không bắt bác sĩ/client phải chờ upload 500MB
+        if (scansFolderId) {
           const bgStream = (req.file && req.file.path) ? fs.createReadStream(req.file.path) : streamOrBuffer;
           if (bgStream) {
             uploadToDrive(bgStream, originalName, mimeType, scansFolderId)
               .then((driveResult) => {
-                console.log(`✅ [Drive Background] Tệp ${originalName} đã sao lưu ngầm thành công vào 01_Original_Scans: ${driveResult.webViewLink}`);
+                console.log(`✅ [Legacy Drive] Tệp ${originalName} đã sao lưu vào 01_Original_Scans`);
               })
-              .catch((driveErr) => {
-                console.warn("⚠️ [Drive Background] Lỗi sao lưu ngầm lên Google Drive:", driveErr.message);
-              });
+              .catch(() => {});
           }
         }
       }
     } catch (driveErr) {
-      console.warn("⚠️ [Drive] Không thể backup lên Google Drive:", driveErr.message);
-      // Non-blocking: don't fail the upload if Drive is unavailable
+      // Non-blocking
     }
 
     return successResponse(
@@ -343,6 +357,9 @@ export const uploadImagingImage = async (req, res) => {
       {
         imageUrl: publicUrl,
         fileUrl: publicUrl,
+        streamUrl: savedStorageFile ? `/api/v1/storage/files/${savedStorageFile.fileId}` : publicUrl,
+        fileId: savedStorageFile ? savedStorageFile.fileId : null,
+        sha256: savedStorageFile ? savedStorageFile.sha256 : null,
         filename: originalName,
         size: fileSize,
         isArchive,
@@ -429,6 +446,24 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
           fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
           aiData.annotated_image = `/uploads/${localName}`;
           console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
+        }
+
+        // [HYBRID STORAGE] Lưu ảnh AI Heatmap vào hệ thống Hybrid PACS Local-First
+        try {
+          const heatmapName = `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`;
+          const savedHeatmap = await storageService.put({
+            category: "pacs",
+            studyId: visitId || `ai_${Date.now()}`,
+            fileName: heatmapName,
+            buffer: imageBuffer,
+            mimeType: "image/jpeg",
+            uploadedBy: user?.id,
+          });
+          aiData.storageHeatmapFileId = savedHeatmap.fileId;
+          aiData.heatmapStreamUrl = `/api/v1/storage/files/${savedHeatmap.fileId}`;
+          console.log(`✅ [Hybrid PACS] AI Heatmap đã lưu an toàn: ${savedHeatmap.logicalPath}`);
+        } catch (storageErr) {
+          console.warn("⚠️ [Storage Service] Không thể lưu heatmap vào Hybrid PACS:", storageErr.message);
         }
 
         // [DRIVE] Lưu ảnh AI heatmap vào thư mục 02_AI_Predictions
@@ -597,6 +632,23 @@ export const feedbackImagingResultAI = async (req, res) => {
     }
 
     const aiData = await aiResponse.json();
+
+    // [HYBRID STORAGE] Lưu ảnh hiệu chỉnh của bác sĩ vào Local-First Hybrid Storage
+    try {
+      const corrExt = ext || ".jpg";
+      const corrMime = corrExt === ".png" ? "image/png" : "image/jpeg";
+      await storageService.put({
+        category: "pacs",
+        studyId: req.body.studyId || req.body.medicalId || `correction_${Date.now()}`,
+        fileName: `doctor_correction_${correct_class}_${Date.now()}${corrExt}`,
+        buffer: fileBuffer,
+        mimeType: corrMime,
+        uploadedBy: req.user?.id,
+      });
+      console.log(`✅ [Hybrid PACS] Doctor correction saved locally for class: ${correct_class}`);
+    } catch (storageErr) {
+      console.warn("⚠️ [Storage Service] Không thể lưu doctor correction vào Hybrid PACS:", storageErr.message);
+    }
 
     // [DRIVE] Lưu ảnh hiệu chỉnh của bác sĩ vào thư mục 03_Doctor_Revisions
     try {
@@ -984,7 +1036,26 @@ export const updateImagingResult = async (req, res) => {
       };
       const targetHospitalId = req.user.hospitalId || result.hospitalId;
 
-      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports
+      // [HYBRID STORAGE] Lưu báo cáo chẩn đoán vào Local-First Hybrid Storage
+      try {
+        const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), "utf-8");
+        const savedReport = await storageService.put({
+          category: "report",
+          studyId: result.medicalId || result._id.toString(),
+          fileName: `report_${result.medicalId}_${Date.now()}.json`,
+          buffer: reportJson,
+          mimeType: "application/json",
+          patientId: result.patientId || null,
+          uploadedBy: req.user?.id,
+        });
+        result.storageReportFileId = savedReport.fileId;
+        await result.save();
+        console.log(`✅ [Hybrid PACS] Báo cáo chẩn đoán đã lưu local: ${savedReport.logicalPath}`);
+      } catch (storageErr) {
+        console.warn("⚠️ [Storage Service] Không thể lưu báo cáo vào Hybrid PACS:", storageErr.message);
+      }
+
+      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports (Drive Legacy)
       try {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hosp = await Hospital.findById(targetHospitalId).lean();

@@ -139,11 +139,16 @@ export const runPeerReviewSamplingJob = async () => {
   }
 };
 
+import { startDriveSyncCron } from "./driveSyncWorker.js";
+
 /**
  * Khởi tạo định kỳ chạy background jobs
  */
 export const startBackgroundJobs = () => {
   console.log("⏱️  Background Scheduler đã được kích hoạt.");
+
+  // Kích hoạt đồng bộ sao lưu ngầm lên Google Drive mỗi 3 phút
+  startDriveSyncCron(3 * 60 * 1000);
 
   // Chạy nhắc lịch MRI mỗi 1 giờ
   setInterval(() => {

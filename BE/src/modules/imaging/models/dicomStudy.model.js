@@ -22,6 +22,10 @@ const dicomStudySchema = new Schema(
     // Google Drive folder
     driveStudyFolderId: { type: String, default: "" }, // ID thư mục Study trên Drive
     driveStudyFolderUrl: { type: String, default: "" },
+    // Local-First PACS storage
+    pacsFolderPath: { type: String, default: "" },
+    rawZipFileId: { type: String, default: null },
+    keySliceFileId: { type: String, default: null },
     // Trạng thái xử lý (B.5 validation, B.3 upload, C pipeline)
     status: {
       type: String,
