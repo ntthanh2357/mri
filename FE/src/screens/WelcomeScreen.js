@@ -17,7 +17,8 @@ import {
 import Config from '../constants/config';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
-import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw } from 'lucide-react';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import styles from './WelcomeScreen.styles';
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
@@ -30,6 +31,9 @@ const servicesData = [
 const WelcomeScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  // Cổng bệnh nhân (B2C): trên Web chỉ dành cho đăng nhập Bệnh nhân —
+  // nhân viên y tế dùng Cổng nội bộ riêng tại /staff (tách luồng bảo mật).
+  const isWeb = Platform.OS === 'web';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const scrollViewRef = useRef(null);
@@ -55,18 +59,21 @@ const WelcomeScreen = ({ navigation }) => {
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
-  // 2FA states
+  // 2FA states — xác thực 2 lớp phía SERVER qua /auth/verify-2fa
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorError, setTwoFactorError] = useState('');
-  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [resendingOtp, setResendingOtp] = useState(false);
+
+  // Quên mật khẩu — modal luồng đầy đủ (email → OTP + mật khẩu mới)
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Patient activation states
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [verificationEmail, setVerificationEmail] = useState('');
-  const [correct2FaCode, setCorrect2FaCode] = useState('');
 
   // Custom Alert state
   const [customAlert, setCustomAlert] = useState({
@@ -88,11 +95,9 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   const handleForgotPassword = () => {
-    showAlert(
-      'info',
-      'Quên mật khẩu',
-      'Vui lòng liên hệ với Quản trị viên của Bệnh viện hoặc gọi Hotline hỗ trợ kỹ thuật để được xác thực danh tính và cấp lại mật khẩu mới.'
-    );
+    // Mở modal luồng quên mật khẩu đầy đủ:
+    // Bước 1 nhập email → server gửi OTP; Bước 2 nhập OTP + mật khẩu mới.
+    setShowForgotPassword(true);
   };
 
   useEffect(() => {
@@ -152,25 +157,6 @@ const WelcomeScreen = ({ navigation }) => {
         otp: showVerification ? verificationCode : undefined
       });
 
-      // Phân tách nghiêm ngặt vai trò (Client-side defense)
-      const isStaffUser = data.user && data.user.role !== 'patient';
-      if (loginRole === 'patient' && isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
-        );
-        return;
-      }
-      if (loginRole === 'staff' && !isStaffUser) {
-        showAlert(
-          'error',
-          'Sai phân hệ đăng nhập',
-          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Bệnh nhân" để đăng nhập.'
-        );
-        return;
-      }
-
       // Bệnh nhân chưa kích hoạt/xác thực email
       if (data.requiresVerification) {
         setVerificationEmail(email.trim());
@@ -186,41 +172,75 @@ const WelcomeScreen = ({ navigation }) => {
 
       // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
       if (data.requiresActivation) {
-        await setAuthToken(data.accessToken);
+        // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
         navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
         return;
       }
 
-      // If logging in as staff/doctor, trigger 2FA OTP simulation
-      if (loginRole === 'staff' || (data.user && data.user.role !== 'patient')) {
-        setTempLoginResponse(data);
-        if (data.otp2FA) {
-          setCorrect2FaCode(data.otp2FA);
-        }
+      // [2FA] Xác thực 2 lớp bắt buộc với MỌI tài khoản (bệnh nhân + nhân viên).
+      // Server KHÔNG trả token ở bước này — token chỉ được cấp sau khi nhập
+      // đúng mã OTP qua /auth/verify-2fa (kiểm định phía server).
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || email).trim());
         setShowTwoFactor(true);
         showAlert(
           'info',
           'Xác thực 2 lớp',
-          'Mã xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng kiểm tra và nhập mã để tiếp tục.' +
+          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
           (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
         );
-      } else {
-        await setAuthToken(data.accessToken);
-        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
-          ? 'AdminBackoffice'
-          : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-        showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-          setShowVerification(false);
-          setVerificationCode('');
-          navigation.reset({
-            index: 0,
-            routes: [{ name: destination, params: { user: data.user } }],
-          });
-        });
+        return;
       }
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense) — đặt SAU các bước
+      // chờ OTP vì response requires2FA / requiresVerification KHÔNG kèm user;
+      // tới đây thì response chắc chắn đã có user (đăng nhập hoàn tất).
+      const isStaffUser = data.user && data.user.role !== 'patient';
+      if (loginRole === 'patient' && isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          Platform.OS === 'web'
+            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
+            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng chuyển sang tab "Bác sĩ / Nhân viên" để đăng nhập.'
+        );
+        return;
+      }
+      if (loginRole === 'staff' && !isStaffUser) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bệnh nhân. Vui lòng chuyển sang tab "Bệnh nhân" để đăng nhập.'
+        );
+        return;
+      }
+
+      // Trường hợp còn lại (vd: bệnh nhân vừa kích hoạt tài khoản bằng OTP
+      // ngay ở bước đăng nhập) — server xác nhận email nên cấp token luôn.
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
+        ? 'AdminBackoffice'
+        : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+        setShowVerification(false);
+        setVerificationCode('');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
+        });
+      });
     } catch (error) {
       console.error('Login error:', error);
-      const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
+      let errMsg = error.message || 'Không thể kết nối đến máy chủ.';
+      // BE trả message chung theo kiểu "tab" (cho app di động) — trên web cổng /
+      // dành riêng Bệnh nhân, diễn đạt lại thành chỉ dẫn tới Cổng nội bộ /staff.
+      if (Platform.OS === 'web' && errMsg.includes('thuộc phân hệ Bác sĩ')) {
+        errMsg = 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.';
+        showAlert('error', 'Sai phân hệ đăng nhập', errMsg);
+        return;
+      }
       if (showVerification && (errMsg.includes('OTP') || errMsg.includes('xác thực') || errMsg.includes('Kích hoạt'))) {
         setVerificationError(errMsg);
       } else if (errMsg.toLowerCase().includes('không chính xác') || errMsg.toLowerCase().includes('không tồn tại')) {
@@ -384,17 +404,37 @@ const WelcomeScreen = ({ navigation }) => {
       return;
     }
 
-    if (correct2FaCode && twoFactorCode !== correct2FaCode) {
-      setTwoFactorError('Mã xác thực 2 lớp không chính xác.');
-      return;
-    }
-
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Xác thực OTP phía SERVER — token chỉ được cấp khi mã đúng
+      const data = await post('/auth/verify-2fa', {
+        email: twoFactorEmail,
+        otp: twoFactorCode.trim(),
+      });
 
-      const data = tempLoginResponse;
-      await setAuthToken(data.accessToken);
+      // [Tách luồng] Nếu tài khoản là nhân viên lâm sàng → KHÔNG lưu token vào
+      // Cổng bệnh nhân (đề phòng xác thực OTP cho phiên đăng nhập sai cổng).
+      const verifiedRole = data.user ? data.user.role : null;
+      const clinicalStaff =
+        verifiedRole && !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(verifiedRole);
+      if (clinicalStaff) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          Platform.OS === 'web'
+            ? 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ tại địa chỉ /staff.'
+            : 'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng sử dụng Cổng nội bộ của bệnh viện.',
+          () => {
+            setShowTwoFactor(false);
+            setTwoFactorCode('');
+            setTwoFactorEmail('');
+          }
+        );
+        return;
+      }
+
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
         : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
@@ -402,16 +442,35 @@ const WelcomeScreen = ({ navigation }) => {
       showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công!', () => {
         setShowTwoFactor(false);
         setTwoFactorCode('');
-        setCorrect2FaCode('');
+        setTwoFactorEmail('');
         navigation.reset({
           index: 0,
           routes: [{ name: destination, params: { user: data.user } }],
         });
       });
     } catch (error) {
-      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
+      setTwoFactorError(error.message || 'Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP xác thực 2 lớp (mã cũ bị vô hiệu, mã mới có hiệu lực 5 phút)
+  const handleResend2FA = async () => {
+    setTwoFactorError('');
+    setResendingOtp(true);
+    try {
+      const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
+      showAlert(
+        'info',
+        'Đã gửi lại mã',
+        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
+        (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+      );
+    } catch (error) {
+      setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
+    } finally {
+      setResendingOtp(false);
     }
   };
 
@@ -441,7 +500,35 @@ const WelcomeScreen = ({ navigation }) => {
       }
 
       const data = await post('/auth/sso/google', { idToken });
-      await setAuthToken(data.accessToken);
+
+      // [2FA] SSO Google giờ cũng yêu cầu OTP email — response KHÔNG có token/user.
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || '').trim());
+        setShowTwoFactor(true);
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
+      // Phòng thủ doubly-safe: nếu server cấp token trực tiếp (trường hợp miễn
+      // 2FA đặc biệt), chặn nghiêm ngặt tài khoản nhân viên lâm sàng khỏi
+      // Cổng bệnh nhân (tách luồng bảo mật).
+      const staffRoleViaSso = data.user && !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(data.user.role);
+      if (staffRoleViaSso) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản Google này thuộc phân hệ Bác sĩ / Nhân viên y tế. Vui lòng đăng nhập qua Cổng nội bộ của bệnh viện.'
+        );
+        return;
+      }
+
+      // Lưu kèm refreshToken để gia hạn phiên ngầm (silent refresh)
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
@@ -474,35 +561,54 @@ const WelcomeScreen = ({ navigation }) => {
               {/* Logo in white */}
               <View style={styles.brandContainerWhite}>
                 <Image
-                  source={require('../../assets/icon.png')}
+                  source={require('../../assets/logo.png')}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
                 <View>
-                  <Text style={styles.brandNameWhite}>NeuroScan AI</Text>
-                  <Text style={styles.brandSubWhite}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+                  <Text style={styles.brandNameWhite}>
+                    Neuro<Text style={styles.brandNameAccentCyan}>Scan</Text> AI
+                  </Text>
+                  <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
                 </View>
               </View>
 
               {/* Slogan */}
               <View style={styles.sloganContainer}>
+                <View style={styles.sloganAccent} />
                 <Text style={styles.sloganTitle}>
                   Hệ thống Y tế số thông minh ứng dụng Trí tuệ nhân tạo
                 </Text>
                 <Text style={styles.sloganSub}>
-                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu với độ chính xác tuyệt đối.
+                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu cùng đội ngũ bác sĩ thần kinh.
                 </Text>
               </View>
 
-              {/* Stats badges */}
-              <View style={styles.leftStatsContainer}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>99.8%</Text>
-                  <Text style={styles.statLbl}>Độ chính xác chẩn đoán</Text>
+              {/* Feature pills — dịch vụ thực tế của hệ thống (thay cho badge số liệu) */}
+              <View style={styles.featureList}>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Brain size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Chụp cộng hưởng từ MRI não bộ chuẩn hóa</Text>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>&lt; 2 Giây</Text>
-                  <Text style={styles.statLbl}>Thời gian phân tích</Text>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Sparkles size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Tầm soát & phát hiện tổn thương bởi AI đa mô hình</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Microscope size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Báo cáo chẩn đoán hình ảnh hội chẩn chuyên khoa</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <View style={styles.featureIcon}>
+                    <Stethoscope size={20} color="#FFFFFF" strokeWidth={2} />
+                  </View>
+                  <Text style={styles.featureText}>Theo dõi hồ sơ bệnh án điện tử xuyên suốt</Text>
                 </View>
               </View>
             </View>
@@ -552,8 +658,26 @@ const WelcomeScreen = ({ navigation }) => {
                         <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
                       </View>
                     ) : (
-                      <Text style={styles.formButtonText}>Xác nhận kết nối</Text>
+                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
+                  </TouchableOpacity>
+
+                  <Text style={styles.twoFactorEmailHint}>
+                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.resendOtpRow}
+                    onPress={handleResend2FA}
+                    disabled={resendingOtp || loading}
+                  >
+                    {resendingOtp ? (
+                      <ActivityIndicator size="small" color="#004080" />
+                    ) : (
+                      <RefreshCw size={13} color="#004080" />
+                    )}
+                    <Text style={styles.resendOtpText}>
+                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -571,7 +695,9 @@ const WelcomeScreen = ({ navigation }) => {
                   <Text style={styles.authCardTitle}>Chào mừng quay trở lại</Text>
                   <Text style={styles.authCardSub}>Đăng nhập để truy cập hệ thống NeuroScan AI</Text>
 
-                  {/* Role Tabs */}
+                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
+                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
+                  {!isWeb && (
                   <View style={styles.roleTabsContainer}>
                     <TouchableOpacity
                       style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
@@ -598,6 +724,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                  )}
 
                   <Text style={styles.formLabel}>
                     {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
@@ -872,6 +999,8 @@ const WelcomeScreen = ({ navigation }) => {
               )}
 
               {/* Support Info below Form Card on Desktop */}
+              {/* Lưu ý tách luồng: KHÔNG hiển thị liên kết tới Cổng nội bộ /staff
+                  trên trang công khai — nhân viên dùng địa chỉ nội bộ riêng. */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
@@ -890,13 +1019,15 @@ const WelcomeScreen = ({ navigation }) => {
           <View style={styles.mobileHeader}>
             <View style={styles.brandContainer}>
               <Image
-                source={require('../../assets/icon.png')}
+                source={require('../../assets/logo.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
               <View>
-                <Text style={styles.brandName}>NeuroScan AI</Text>
-                <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+                <Text style={styles.brandName}>
+                  Neuro<Text style={styles.brandNameAccentDark}>Scan</Text> AI
+                </Text>
+                <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
               </View>
             </View>
           </View>
@@ -945,8 +1076,26 @@ const WelcomeScreen = ({ navigation }) => {
                         <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
                       </View>
                     ) : (
-                      <Text style={styles.formButtonText}>Xác nhận kết nối</Text>
+                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
+                  </TouchableOpacity>
+
+                  <Text style={styles.twoFactorEmailHint}>
+                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.resendOtpRow}
+                    onPress={handleResend2FA}
+                    disabled={resendingOtp || loading}
+                  >
+                    {resendingOtp ? (
+                      <ActivityIndicator size="small" color="#004080" />
+                    ) : (
+                      <RefreshCw size={13} color="#004080" />
+                    )}
+                    <Text style={styles.resendOtpText}>
+                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -964,7 +1113,9 @@ const WelcomeScreen = ({ navigation }) => {
                   <Text style={styles.authCardTitle}>Đăng nhập</Text>
                   <Text style={styles.authCardSub}>Truy cập hệ thống NeuroScan AI</Text>
 
-                  {/* Role Tabs */}
+                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
+                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
+                  {!isWeb && (
                   <View style={styles.roleTabsContainer}>
                     <TouchableOpacity
                       style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
@@ -991,6 +1142,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                  )}
 
                   <Text style={styles.formLabel}>
                     {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
@@ -1276,6 +1428,24 @@ const WelcomeScreen = ({ navigation }) => {
         </ScrollView>
       )}
 
+      {/* Forgot Password Modal — luồng quên mật khẩu đầy đủ (email → OTP → mật khẩu mới) */}
+      <ForgotPasswordModal
+        visible={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+        defaultEmail={email}
+        theme="light"
+        onSuccess={(resetEmail) => {
+          setShowForgotPassword(false);
+          setActiveForm('login');
+          setEmail(resetEmail);
+          showAlert(
+            'success',
+            'Đặt lại mật khẩu thành công',
+            'Mật khẩu mới đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới của bạn.'
+          );
+        }}
+      />
+
       {/* Custom Alert Modal */}
       <Modal visible={customAlert.visible} transparent animationType="fade">
         <View style={styles.alertOverlay}>
@@ -1288,7 +1458,7 @@ const WelcomeScreen = ({ navigation }) => {
             ]}>
               {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" strokeWidth={2.5} />}
               {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" strokeWidth={2.5} />}
-              {customAlert.type === 'info' && <Info size={28} color="#0891B2" strokeWidth={2.5} />}
+              {customAlert.type === 'info' && <Info size={28} color="#0090D0" strokeWidth={2.5} />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
@@ -1297,7 +1467,7 @@ const WelcomeScreen = ({ navigation }) => {
                 styles.alertButton,
                 customAlert.type === 'success' && { backgroundColor: '#059669' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
-                customAlert.type === 'info' && { backgroundColor: '#0891B2' },
+                customAlert.type === 'info' && { backgroundColor: '#0090D0' },
               ]}
               onPress={() => {
                 setCustomAlert(prev => ({ ...prev, visible: false }));

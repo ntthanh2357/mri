@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../constants/config.js';
-import { navigateTo } from './navigationRef.js';
+import { goToPortalLogin } from './navigationRef.js';
 
 async function getToken() {
   try {
@@ -57,7 +57,7 @@ export async function apiRequest(path, options) {
 
   if (response.status === 401) {
     await clearToken();
-    navigateTo('Welcome');
+    goToPortalLogin();
     // Resolve silently — caller does not need to handle this case
     return undefined;
   }

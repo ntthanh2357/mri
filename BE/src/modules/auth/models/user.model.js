@@ -78,6 +78,20 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
+    // [2FA] Mã OTP xác thực 2 lớp khi đăng nhập (riêng biệt với otpCode dùng
+    // cho kích hoạt tài khoản / quên mật khẩu để tránh xung đột luồng)
+    otp2FACode: {
+      type: String,
+      default: null,
+    },
+    otp2FAExpires: {
+      type: Date,
+      default: null,
+    },
+    otp2FAAttempts: {
+      type: Number,
+      default: 0,
+    },
     wardId: {
       type: String,
       default: "",

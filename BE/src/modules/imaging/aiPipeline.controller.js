@@ -309,14 +309,16 @@ async function processAiJobAsync(jobId, hospitalId) {
     if (aiResult && imagingResult) {
       imagingResult.aiReport = {
         predictedClass: aiResult.class_name || "notumor",
-        confidence: aiResult.confidence !== undefined ? aiResult.confidence : 0,
-        probabilities: aiResult.probabilities || {},
+        // [FIX] FastAPI /predict trả confidence dạng % (VD 94.37) — không nhân thêm 100
+        confidence: aiResult.confidence !== undefined ? aiResult.confidence : 0, // giữ nguyên giá trị % từ AI service
+        // [FIX] Service thật trả về `all_probabilities`; một số client dùng `probabilities`
+        probabilities: aiResult.probabilities || aiResult.all_probabilities || {},
         annotatedImage: aiResult.annotated_image || null,
         analyzedAt: new Date()
       };
       if (aiResult.class_name && aiResult.class_name !== "notumor") {
         imagingResult.findings = (imagingResult.findings ? imagingResult.findings + "\n\n" : "") +
-          `[AI Gợi ý]: Phát hiện tổn thương nghi ngờ (${aiResult.class_name}) với độ tin cậy ${(aiResult.confidence * 100).toFixed(1)}%.`;
+          `[AI Gợi ý]: Phát hiện tổn thương nghi ngờ (${aiResult.class_name}) với độ tin cậy ${Number(aiResult.confidence || 0).toFixed(1)}%.`;
       }
       await imagingResult.save();
     }

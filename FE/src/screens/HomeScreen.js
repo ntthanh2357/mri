@@ -12,7 +12,9 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { get, put, setAuthToken } from '../services/api.service';
+import { get, put } from '../services/api.service';
+import { portalLoginRoute } from '../utils/navigationRef';
+import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './HomeScreen.styles';
 import Colors from '../constants/colors';
@@ -55,8 +57,14 @@ const SHIFT_LABELS = {
 const HomeScreen = ({ route, navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
-  const [user, setUser] = useState(route.params?.user || null);
-  const [loading, setLoading] = useState(!route.params?.user);
+  // [FIX] Guard: params từ URL có thể là chuỗi rác ("[object Object]") do
+  // serialize params khi điều hướng web — chỉ chấp nhận object hợp lệ có role,
+  // ngược lại coi như không có user để effect tự fetch /auth/me (đúng role).
+  const paramUser = route.params?.user;
+  const validParamUser =
+    paramUser && typeof paramUser === 'object' && paramUser.role ? paramUser : null;
+  const [user, setUser] = useState(validParamUser);
+  const [loading, setLoading] = useState(!validParamUser);
   const [error, setError] = useState(null);
 
   // Profile edit states
@@ -257,10 +265,14 @@ const HomeScreen = ({ route, navigation }) => {
   };
 
   const handleLogout = async () => {
-    await setAuthToken('');
+    // Quy trình logout chuẩn: hủy phiên phía BE (xóa cookie HttpOnly refresh
+    // token) + xóa token local, rồi reset về màn đăng nhập của CỔNG HIỆN TẠI
+    // ('/' → Welcome, '/staff' → StaffLogin). Reset cứng về 'Welcome' trên
+    // Cổng nội bộ sẽ bị React Navigation từ chối → kẹt màn hình.
+    await performLogout();
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Welcome' }],
+      routes: [{ name: portalLoginRoute() }],
     });
   };
 
