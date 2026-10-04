@@ -1,3 +1,4 @@
+import Colors from '../constants/colors';
 import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
@@ -30,44 +31,20 @@ export default StyleSheet.create({
   },
   scrollContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 24,
+    maxWidth: 980,
+    width: '100%',
+    alignSelf: 'center',
   },
-  bannerContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  badge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 12,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#475569',
-    letterSpacing: 1,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    textAlign: 'center',
-    lineHeight: 28,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 18,
-    paddingHorizontal: 12,
-  },
+  bannerContainer: { marginBottom: 24 },
+
   plansContainer: {
     gap: 16,
-    marginBottom: 24,
+    marginBottom: 28,
   },
+  plansContainerDesktop: { flexDirection: 'row', alignItems: 'stretch', gap: 20 },
+  planCardDesktop: { flex: 1, padding: 28 },
+  featuresGrow: { flexGrow: 1 }, // đẩy nút xuống đáy để nút 2 gói thẳng hàng
   planCardFree: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -81,7 +58,7 @@ export default StyleSheet.create({
     color: '#1E293B',
   },
   planDescFree: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#64748B',
     marginTop: 2,
     marginBottom: 12,
@@ -110,11 +87,11 @@ export default StyleSheet.create({
     color: '#CBD5E1',
   },
   featureText: {
-    fontSize: 13,
+    fontSize: 15,
     color: '#334155',
   },
   featureTextDisabled: {
-    color: '#94A3B8',
+    color: Colors.secondary,
     textDecorationLine: 'line-through',
   },
   freeBtn: {
@@ -132,34 +109,44 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
   planCardPremium: {
-    backgroundColor: '#166534',
+    backgroundColor: Colors.brandNavy,
+    boxShadow: '0 20px 40px -20px rgba(11, 42, 85, 0.55)',
     borderRadius: 16,
     padding: 20,
     position: 'relative',
     overflow: 'hidden',
   },
+  premiumGlow: {
+    position: 'absolute', right: -70, top: -110, width: 260, height: 260, borderRadius: 130,
+    backgroundColor: 'rgba(8, 168, 128, 0.35)', filter: 'blur(40px)',
+  },
+  premiumShine: {
+    position: 'absolute', top: -60, bottom: -60, width: 90,
+    backgroundColor: 'rgba(164, 251, 229, 0.10)',
+  },
   popularBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: '#22C55E',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    top: 14,
+    right: 14,
+    backgroundColor: Colors.brandMint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   popularBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
+    color: Colors.brandNavy,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   planNamePremium: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   planDescPremium: {
-    fontSize: 11,
-    color: '#BBF7D0',
+    fontSize: 13,
+    color: '#B9C9E0',
+    paddingRight: 100,
     marginTop: 2,
     marginBottom: 12,
   },
@@ -169,13 +156,14 @@ export default StyleSheet.create({
     marginBottom: 16,
   },
   planPricePremium: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: '900',
     color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
   },
   planPeriodPremium: {
-    fontSize: 13,
-    color: '#BBF7D0',
+    fontSize: 15,
+    color: Colors.brandMint,
     marginLeft: 4,
   },
   featureIconPremium: {
@@ -184,19 +172,20 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   featureTextPremium: {
-    fontSize: 13,
-    color: '#F0FDF4',
+    fontSize: 15,
+    color: '#F1F5F9',
   },
   premiumBtn: {
-    height: 44,
-    backgroundColor: '#FFFFFF',
+    height: 48,
+    backgroundColor: Colors.brandMint,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  premiumBtnHover: { backgroundColor: '#C6FFF0' },
   premiumBtnText: {
-    color: '#166534',
-    fontSize: 13,
+    color: Colors.brandNavy,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   cancelRenewBtn: {
@@ -318,9 +307,9 @@ export default StyleSheet.create({
     fontSize: 16,
   },
   trustText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
     textAlign: 'center',
   },
   sectionTitle: {

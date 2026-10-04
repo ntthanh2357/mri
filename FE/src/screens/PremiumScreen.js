@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Animated,
   StyleSheet,
   View,
   Text,
@@ -14,6 +15,11 @@ import {
   Modal,
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PressableScale from '../components/PressableScale';
+import FadeIn from '../components/FadeIn';
+import PageHeroBanner from '../components/PageHeroBanner';
+import Colors from '../constants/colors';
+import { useLoop } from '../controllers/useMotion';
 import styles from './PremiumScreen.styles';
 import { get, post } from '../services/api.service';
 import { Check, X, Shield, FileCheck, Zap, ChevronUp, ChevronDown, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
@@ -191,6 +197,7 @@ const PremiumScreen = ({ navigation }) => {
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const shine = useLoop(1600, { pause: 3200 });
 
   return (
     <ResponsiveLayout
@@ -210,37 +217,34 @@ const PremiumScreen = ({ navigation }) => {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-            <ActivityIndicator size="large" color="#166534" />
+            <ActivityIndicator size="large" color={Colors.brandGreen} />
             <Text style={{ marginTop: 12, color: '#64748B', fontSize: 14 }}>Đang tải thông tin gói...</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContainer}>
             {/* Banner Section */}
-            <View style={styles.bannerContainer}>
-              <View style={[styles.badge, user?.isPremium && { backgroundColor: '#BBF7D0' }]}>
-                <Text style={[styles.badgeText, user?.isPremium && { color: '#166534' }]}>
-                  {user?.isPremium ? 'GÓI PREMIUM' : 'GÓI HỘI VIÊN'}
-                </Text>
-              </View>
-              <Text style={styles.title}>Nâng cấp trải nghiệm chăm sóc sức khỏe với Premium</Text>
-              <Text style={styles.subtitle}>
-                Tiếp cận các công cụ phân tích não bộ tiên tiến nhất, lưu trữ không giới hạn và sự hỗ trợ ưu tiên từ các chuyên gia hàng đầu.
-              </Text>
-            </View>
+            <PageHeroBanner
+              source={require('../../assets/images/patient-premium-hero.jpg')}
+              title={user?.isPremium ? 'Bạn đang dùng gói Premium' : 'Chăm sóc sức khỏe trọn vẹn hơn với Premium'}
+              subtitle="Lưu trữ vĩnh viễn, phân tích AI chuyên sâu và được bác sĩ ưu tiên hỗ trợ."
+              textSide="right"
+              wide={width > 980}
+              style={styles.bannerContainer}
+            />
 
             {/* Pricing Cards */}
-            <View style={styles.plansContainer}>
+            <View style={[styles.plansContainer, isDesktop && styles.plansContainerDesktop]}>
               {/* Free Plan Card */}
-              <View style={styles.planCardFree}>
+              <FadeIn delay={120} style={[styles.planCardFree, isDesktop && styles.planCardDesktop]}>
                 <Text style={styles.planNameFree}>Gói Cơ bản</Text>
                 <Text style={styles.planDescFree}>Dành cho theo dõi sức khỏe cơ bản</Text>
                 <Text style={styles.planPriceFree}>Miễn phí</Text>
 
-                <View style={styles.featuresList}>
+                <View style={[styles.featuresList, isDesktop && styles.featuresGrow]}>
                   {freeFeatures.map((f, i) => (
                     <View key={i} style={styles.featureItem}>
                       <View style={{ width: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-                        {f.included ? <Check size={14} color="#059669" /> : <X size={14} color="#94A3B8" />}
+                        {f.included ? <Check size={16} color={Colors.brandGreen} strokeWidth={2.5} /> : <X size={16} color={Colors.secondary} />}
                       </View>
                       <Text style={[styles.featureText, !f.included && styles.featureTextDisabled]}>
                         {f.text}
@@ -257,10 +261,22 @@ const PremiumScreen = ({ navigation }) => {
                     {user?.isPremium ? 'Sử dụng Gói Cơ bản' : 'Đang sử dụng'}
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </FadeIn>
 
               {/* Premium Plan Card */}
-              <View style={styles.planCardPremium}>
+              <FadeIn delay={220} style={[styles.planCardPremium, isDesktop && styles.planCardDesktop]}>
+                <View style={styles.premiumGlow} />
+                {!shine.reduce && (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[styles.premiumShine, {
+                      transform: [
+                        { translateX: shine.value.interpolate({ inputRange: [0, 1], outputRange: [-220, 720] }) },
+                        { rotate: '18deg' },
+                      ],
+                    }]}
+                  />
+                )}
                 <View style={styles.popularBadge}>
                   <Text style={styles.popularBadgeText}>PHỔ BIẾN NHẤT</Text>
                 </View>
@@ -271,29 +287,30 @@ const PremiumScreen = ({ navigation }) => {
                   <Text style={styles.planPeriodPremium}>/năm</Text>
                 </View>
 
-                <View style={styles.featuresList}>
+                <View style={[styles.featuresList, isDesktop && styles.featuresGrow]}>
                   {premiumFeatures.map((f, i) => (
                     <View key={i} style={styles.featureItem}>
                       <View style={{ width: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-                        <Check size={14} color="#059669" />
+                        <Check size={16} color={Colors.brandMint} strokeWidth={2.5} />
                       </View>
                       <Text style={styles.featureTextPremium}>{f.text}</Text>
                     </View>
                   ))}
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.premiumBtn, user?.isPremium && { backgroundColor: '#22C55E' }]}
+                <PressableScale
+                  style={[styles.premiumBtn, user?.isPremium && { backgroundColor: Colors.brandGreen }]}
+                  hoverStyle={styles.premiumBtnHover}
                   onPress={user?.isPremium ? null : handleUpgrade}
                   disabled={user?.isPremium || processing}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     {user?.isPremium && <Check size={16} color="#FFFFFF" strokeWidth={2.5} />}
                     <Text style={[styles.premiumBtnText, user?.isPremium && { color: '#FFFFFF' }]}>
-                      {processing ? 'Đang xử lý...' : user?.isPremium ? 'Đang sử dụng' : 'Nâng cấp ngay'}
+                      {processing ? 'Đang xử lý…' : user?.isPremium ? 'Đang sử dụng' : 'Nâng cấp ngay'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </PressableScale>
 
                 {user?.isPremium && user?.autoRenew && (
                   <TouchableOpacity
@@ -310,22 +327,22 @@ const PremiumScreen = ({ navigation }) => {
                     Gói sẽ hết hiệu lực lúc: {formatTime(user?.premiumUntil)} (Đã hủy gia hạn)
                   </Text>
                 )}
-              </View>
+              </FadeIn>
             </View>
 
             {/* Trust Badges */}
             <View style={styles.trustContainer}>
               <View style={styles.trustItem}>
-                <Shield size={20} color="#0891B2" style={{ marginBottom: 4 }} />
-                <Text style={styles.trustText}>BẢO MẬT DỮ LIỆU</Text>
+                <Shield size={20} color={Colors.brandGreen} style={{ marginBottom: 4 }} />
+                <Text style={styles.trustText}>Bảo mật dữ liệu</Text>
               </View>
               <View style={styles.trustItem}>
-                <FileCheck size={20} color="#0891B2" style={{ marginBottom: 4 }} />
-                <Text style={styles.trustText}>CHỨNG NHẬN Y KHOA</Text>
+                <FileCheck size={20} color={Colors.brandGreen} style={{ marginBottom: 4 }} />
+                <Text style={styles.trustText}>Chứng nhận y khoa</Text>
               </View>
               <View style={styles.trustItem}>
-                <Zap size={20} color="#0891B2" style={{ marginBottom: 4 }} />
-                <Text style={styles.trustText}>KẾT QUẢ TỨC THÌ</Text>
+                <Zap size={20} color={Colors.brandGreen} style={{ marginBottom: 4 }} />
+                <Text style={styles.trustText}>Kết quả tức thì</Text>
               </View>
             </View>
 
@@ -382,7 +399,7 @@ const PremiumScreen = ({ navigation }) => {
                   <TouchableOpacity
                     style={[
                       styles.popupButton,
-                      popup.severity === 'warning' ? { backgroundColor: '#D97706' } : { backgroundColor: '#15803D' }
+                      popup.severity === 'warning' ? { backgroundColor: '#D97706' } : { backgroundColor: Colors.brandGreen }
                     ]}
                     onPress={() => {
                       setPopup(prev => ({ ...prev, visible: false }));
@@ -396,7 +413,7 @@ const PremiumScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={[
                     styles.popupSingleButton,
-                    popup.severity === 'success' && { backgroundColor: '#15803D' },
+                    popup.severity === 'success' && { backgroundColor: Colors.brandGreen },
                     popup.severity === 'error' && { backgroundColor: '#DC2626' },
                     popup.severity === 'info' && { backgroundColor: '#2563EB' },
                   ]}

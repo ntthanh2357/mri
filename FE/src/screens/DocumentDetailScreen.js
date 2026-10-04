@@ -14,28 +14,7 @@ import Config from '../constants/config';
 import { apiRequest } from '../utils/apiClient';
 import { FileText, Image as ImageIcon, Paperclip, AlertTriangle } from 'lucide-react';
 import DocTypeIcon from '../components/DocTypeIcon';
-
-const extractMedications = (text) => {
-  if (!text) return [];
-  const words = text.toLowerCase().split(/[\s,;\n\-\+•·]+/);
-  const found = [];
-  const candidates = ['keppra', 'depakine', 'dexamethasone', 'donepezil', 'diazepam', 'phenobarbital', 'tegretol'];
-  candidates.forEach(cand => {
-    if (words.includes(cand) || text.toLowerCase().includes(cand)) {
-      found.push(cand);
-    }
-  });
-  return found;
-};
-
-const extractOrders = (formData) => {
-  const text = Object.values(formData).join(' ').toLowerCase();
-  const found = [];
-  if (text.includes('mri') || text.includes('cản từ') || text.includes('gadolinium') || text.includes('tương phản')) {
-    found.push('MRI sọ não có cản quang');
-  }
-  return found;
-};
+import { extractMedications, extractOrders } from '../utils/clinicalText';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 // field types:

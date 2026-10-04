@@ -15,6 +15,7 @@ import {
 import { post } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import AiFilmPicker from '../components/patient/AiFilmPicker';
 import { 
   Scan, 
   RotateCcw, 
@@ -143,11 +144,8 @@ const AIAnalysisScreen = ({ route, navigation }) => {
 
   // Auto-start analysis when screen mounts
   useEffect(() => {
-    if (!imageUrl) {
-      setError('Không có ảnh MRI để phân tích.');
-      setPhase('result');
-      return;
-    }
+    // Mở từ menu (chưa chọn phim) → hiện AiFilmPicker, không báo lỗi
+    if (!imageUrl) return;
     runAnalysis();
   }, []);
 
@@ -297,7 +295,17 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     outputRange: [-190, 190],
   });
 
-  const targetActiveRoute = route.params?.activeRoute || 'DoctorWorkQueue_examQueue';
+  const targetActiveRoute = route.params?.activeRoute || (imageUrl ? 'DoctorWorkQueue_examQueue' : 'AIAnalysis');
+
+  if (!imageUrl) {
+    return (
+      <ResponsiveLayout navigation={navigation} activeRoute={targetActiveRoute}>
+        <SafeAreaView style={styles.container}>
+          <AiFilmPicker navigation={navigation} isDesktop={isDesktop} />
+        </SafeAreaView>
+      </ResponsiveLayout>
+    );
+  }
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={targetActiveRoute}>

@@ -8,7 +8,6 @@ import {
   Alert,
   SafeAreaView,
   useWindowDimensions,
-  Image,
   Modal,
   TextInput,
 } from 'react-native';
@@ -16,16 +15,12 @@ import { get, put } from '../services/api.service';
 import { portalLoginRoute } from '../utils/navigationRef';
 import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PatientHome from '../components/patient/PatientHome';
 import styles from './HomeScreen.styles';
-import Colors from '../constants/colors';
-import Config from '../constants/config';
 import {
   UploadCloud,
-  Scan,
-  UserCheck,
   ClipboardList,
   PhoneCall,
-  MessageSquare,
   Clock,
   Stethoscope,
   Microscope,
@@ -37,8 +32,6 @@ import {
   Edit3,
   LogOut,
   AlertCircle,
-  Folder,
-  Sparkles,
   Save,
   Building2,
   ArrowRightLeft,
@@ -116,10 +109,6 @@ const HomeScreen = ({ route, navigation }) => {
   const [queueVisits, setQueueVisits] = useState([]);
   const [todaySchedule, setTodaySchedule] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [todayReminders, setTodayReminders] = useState([]);
-  const [loadingReminders, setLoadingReminders] = useState(false);
-  const [latestMri, setLatestMri] = useState(null);
-  const [loadingMri, setLoadingMri] = useState(false);
 
   useEffect(() => {
     // If user is already provided via navigation params (quick login), skip fetching
@@ -207,63 +196,6 @@ const HomeScreen = ({ route, navigation }) => {
     fetchStats();
   }, [user]);
 
-  const fetchTodayReminders = async () => {
-    setLoadingReminders(true);
-    try {
-      const res = await get('/api/v1/patient/reminders/today');
-      if (res && res.success) {
-        setTodayReminders(res.data || []);
-      }
-    } catch (err) {
-      console.error('Lỗi khi tải lịch trình uống thuốc:', err);
-    } finally {
-      setLoadingReminders(false);
-    }
-  };
-
-  const formatMriDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} lúc ${hours}:${minutes}`;
-  };
-
-  const fetchLatestMri = async () => {
-    setLoadingMri(true);
-    try {
-      const res = await get('/api/v1/imaging/my-results');
-      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setLatestMri(res.data[0]);
-      } else {
-        setLatestMri(null);
-      }
-    } catch (err) {
-      console.error('Lỗi khi tải kết quả phim chụp mới nhất:', err);
-      setLatestMri(null);
-    } finally {
-      setLoadingMri(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!user || user.role !== 'patient') return;
-    fetchTodayReminders();
-    fetchLatestMri();
-  }, [user]);
-
-  const handleMarkReminderDone = async (id) => {
-    try {
-      await put(`/api/v1/patient/reminders/${id}/done`, {});
-    } catch (err) {
-      console.error('Lỗi khi đánh dấu đã uống thuốc:', err);
-    }
-    fetchTodayReminders();
-  };
-
   const handleLogout = async () => {
     // Quy trình logout chuẩn: hủy phiên phía BE (xóa cookie HttpOnly refresh
     // token) + xóa token local, rồi reset về màn đăng nhập của CỔNG HIỆN TẠI
@@ -326,7 +258,7 @@ const HomeScreen = ({ route, navigation }) => {
     >
       <SafeAreaView style={styles.container}>
         {/* Header Banner */}
-        {!isDesktop && (
+        {!isDesktop && !isPatient && (
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.avatarCircle}>
@@ -347,8 +279,9 @@ const HomeScreen = ({ route, navigation }) => {
           </View>
         )}
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView contentContainerStyle={isPatient ? null : styles.scrollContainer}>
         {/* User Role Badge */}
+        {!isPatient && (
         <View style={styles.badgeRow}>
           <View style={[styles.badge, isPatient ? styles.patientBadge : styles.doctorBadge]}>
             <Text style={[styles.badgeText, isPatient ? styles.patientBadgeText : styles.doctorBadgeText]}>
@@ -365,223 +298,10 @@ const HomeScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
+        )}
 
         {isPatient ? (
-          /* PATIENT PORTAL */
-          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-            {/* Left Column (flex: 2) */}
-            <View style={isDesktop ? styles.patientMainColumn : styles.fullWidth}>
-              {/* MRI Result Card */}
-              {loadingMri ? (
-                <View style={styles.emptyMriCard}>
-                  <ActivityIndicator size="small" color="#0891B2" />
-                  <Text style={[styles.emptyMriText, { marginTop: 12 }]}>Đang tải kết quả bệnh án...</Text>
-                </View>
-              ) : latestMri ? (
-                <View style={styles.mriCard}>
-                  <View style={isDesktop ? styles.mriRowLayout : styles.mriColumnLayout}>
-                    <View style={isDesktop ? styles.mriImageContainerDesktop : styles.mriImageContainerMobile}>
-                      <Image
-                        source={
-                          latestMri.images && latestMri.images.length > 0
-                            ? { uri: latestMri.images[0].startsWith('http') ? latestMri.images[0] : `${Config.API_URL}${latestMri.images[0]}` }
-                            : require('../../assets/nero3.png')
-                        }
-                        style={styles.mriImage}
-                        resizeMode="cover"
-                      />
-                      <View style={styles.aiOverlayBadge}>
-                        <View style={styles.aiDot} />
-                        <Text style={styles.aiOverlayText}>PHÁT HIỆN BỞI AI</Text>
-                      </View>
-                    </View>
-                    <View style={styles.mriInfoContainer}>
-                      <View style={styles.mriHeaderRow}>
-                        <Text style={styles.mriIdText}>
-                          ID: {latestMri.medicalRecordNumber || `NS-${latestMri._id.toString().slice(-8).toUpperCase()}`}
-                        </Text>
-                        <Text style={styles.mriTimeText}>
-                          Cập nhật {formatMriDate(latestMri.reportDate)}
-                        </Text>
-                      </View>
-                      <Text style={styles.mriTitle}>{latestMri.procedure || 'Kết quả phân tích MRI Não'}</Text>
-                      <Text style={styles.mriDesc} numberOfLines={3}>
-                        {latestMri.findings || 'Chưa có mô tả chi tiết hình ảnh lâm sàng.'}
-                      </Text>
-                      <View style={styles.mriSpecsGrid}>
-                        <View style={styles.mriSpecBox}>
-                          <Text style={styles.mriSpecLabel}>KẾT LUẬN</Text>
-                          <Text style={styles.mriSpecValue} numberOfLines={2}>
-                            {latestMri.conclusion || 'Bình thường'}
-                          </Text>
-                        </View>
-                        <View style={styles.mriSpecBox}>
-                          <Text style={styles.mriSpecLabel}>BÁC SĨ ĐỌC PHIM</Text>
-                          <Text style={styles.mriSpecValue} numberOfLines={1}>
-                            {latestMri.radiologist || 'BS. Chẩn đoán hình ảnh'}
-                          </Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.mriReportBtn}
-                        onPress={() => navigation.navigate('ImagingHistory')}
-                      >
-                        <Text style={styles.mriReportBtnText}>Xem báo cáo chi tiết →</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.emptyMriCard}>
-                  <Folder size={36} color="#94A3B8" style={{ marginBottom: 8 }} />
-                  <Text style={styles.emptyMriText}>Chưa có hồ sơ lưu trữ</Text>
-                </View>
-              )}
-
-              {/* Mobile Only: Premium and Actions grid */}
-              {!isDesktop && (
-                <>
-                  {/* Premium Promo */}
-                  <View style={styles.promoCard}>
-                    <View style={styles.promoLeft}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <Sparkles size={16} color="#F59E0B" />
-                        <Text style={styles.promoTitle}>Nâng cấp Premium</Text>
-                      </View>
-                      <Text style={styles.promoDesc}>Chẩn đoán MRI không giới hạn, xem kết quả dạng 3D.</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.promoButton}
-                      onPress={() => navigation.navigate('Premium')}
-                    >
-                      <Text style={styles.promoButtonText}>Mua</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Quick Actions Grid */}
-                  <Text style={styles.sectionTitle}>Chức năng chính</Text>
-                  <View style={styles.grid}>
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => navigation.navigate('AIAnalysis')}
-                    >
-                      <UploadCloud size={24} color="#0891B2" style={{ marginBottom: 8 }} />
-                      <Text style={styles.gridLabel}>Tải ảnh MRI</Text>
-                      <Text style={styles.gridSub}>Phân tích bằng AI</Text>
-                    </TouchableOpacity>
-
-                     <TouchableOpacity
-                       style={styles.gridCard}
-                       onPress={() => navigation.navigate('ImagingHistory')}
-                     >
-                       <Scan size={24} color="#0891B2" style={{ marginBottom: 8 }} />
-                       <Text style={styles.gridLabel}>Phim MRI & CT</Text>
-                       <Text style={styles.gridSub}>Xem phim & kết quả</Text>
-                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.gridCard}
-                      onPress={() => navigation.navigate('Support')}
-                    >
-                      <UserCheck size={24} color="#0891B2" style={{ marginBottom: 8 }} />
-                      <Text style={styles.gridLabel}>Tư vấn Bác sĩ</Text>
-                      <Text style={styles.gridSub}>Đặt lịch trực tiếp</Text>
-                    </TouchableOpacity>
-
-                     <TouchableOpacity
-                       style={styles.gridCard}
-                       onPress={() => Alert.alert('Thông tin liên hệ', 'Email: ' + user.email + '\nSố điện thoại: ' + (user.phone || 'Chưa cập nhật'))}
-                     >
-                       <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
-                       <Text style={styles.gridLabel}>Thông tin liên hệ</Text>
-                       <Text style={styles.gridSub}>Xem thông tin</Text>
-                     </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-
-            {/* Right Column (flex: 1.2) */}
-            <View style={isDesktop ? styles.patientSideColumn : styles.fullWidth}>
-              {/* Lịch trình (Schedule) */}
-              <View style={styles.sideCard}>
-                <View style={styles.sideCardHeader}>
-                  <Text style={styles.sideCardTitle}>Lịch trình</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
-                    <Text style={styles.sideCardLink}>Xem tất cả</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.scheduleList}>
-                  {loadingReminders ? (
-                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 16 }} />
-                  ) : todayReminders.length === 0 ? (
-                    <Text style={styles.scheduleDesc}>Không có lịch uống thuốc nào hôm nay.</Text>
-                  ) : (
-                    todayReminders.map((item, idx) => {
-                      const isDone = item.status === 'done';
-                      const isSkipped = item.status === 'skipped';
-                      const dotColor = isDone ? '#22C55E' : isSkipped ? '#94A3B8' : '#3B82F6';
-                      return (
-                        <View key={item._id} style={styles.scheduleItem}>
-                          <View style={styles.scheduleTimeline}>
-                            <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
-                            {idx < todayReminders.length - 1 && <View style={styles.timelineLine} />}
-                          </View>
-                          <View style={styles.scheduleContent}>
-                            <Text style={styles.scheduleTime}>{item.time}</Text>
-                            <Text style={styles.scheduleTitle}>Uống thuốc: {item.drugName}</Text>
-                            <Text style={styles.scheduleDesc}>{item.dosageText}</Text>
-                            <View style={styles.scheduleTags}>
-                              {isDone ? (
-                                <View style={[styles.scheduleTag, styles.tagSuccess]}>
-                                  <Text style={[styles.scheduleTagText, styles.tagSuccessText]}>Đã uống</Text>
-                                </View>
-                              ) : isSkipped ? (
-                                <View style={styles.scheduleTag}>
-                                  <Text style={styles.scheduleTagText}>Đã bỏ qua</Text>
-                                </View>
-                              ) : (
-                                <TouchableOpacity
-                                  style={[styles.scheduleTag, styles.tagInfo]}
-                                  onPress={() => handleMarkReminderDone(item._id)}
-                                >
-                                  <Text style={[styles.scheduleTagText, styles.tagInfoText]}>Đánh dấu đã uống</Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </View>
-              </View>
-
-              {/* NeuroAI Chat Box */}
-              <View style={styles.aiChatCard}>
-                <View style={styles.aiChatHeader}>
-                  <View style={styles.aiChatStatusDot} />
-                  <Text style={styles.aiChatTitle}>NEUROAI TRỰC TUYẾN</Text>
-                </View>
-                <Text style={styles.aiChatQuestion}>Bạn cần hỗ trợ gì ngay bây giờ không?</Text>
-                <View style={styles.aiChatQuote}>
-                  <Text style={styles.aiChatQuoteText}>
-                    "Hôm nay tôi thấy hơi đau đầu nhẹ ở vùng thái dương, đây có phải là tác dụng phụ của thuốc không?"
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.aiChatBtn}
-                  onPress={() => navigation.navigate('Support')}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <MessageSquare size={14} color="#fff" />
-                    <Text style={styles.aiChatBtnText}>Hỏi AI ngay</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          <PatientHome user={user} isDesktop={isDesktop} navigation={navigation} onEditProfile={handleOpenEditProfile} />
         ) : (
           /* ALL STAFF CONSOLE: TECHNICIAN, NURSE, RECEPTIONIST, DOCTOR & ADMIN */
           /* NURSE, RECEPTIONIST, DOCTOR & ADMIN CONSOLE */

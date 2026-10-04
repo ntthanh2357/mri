@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   ScrollView,
@@ -11,286 +10,254 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Linking,
+  Image,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PressableScale from '../components/PressableScale';
+import FadeIn from '../components/FadeIn';
+import PageHeroBanner from '../components/PageHeroBanner';
+import Colors from '../constants/colors';
+import { useSupport } from '../controllers/useSupport';
 import styles from './SupportScreen.styles';
-import { get, post } from '../services/api.service';
+
+// Liên hệ thống nhất với trang Welcome/Login.
+const HOTLINE = { label: '0236 3650 676', url: 'tel:02363650676' };
+const EMAIL = { label: 'support@neuroscan.com', url: 'mailto:support@neuroscan.com?subject=Yêu cầu hỗ trợ' };
+
+// Câu trả lời về bảo mật giữ nguyên văn bản gốc — là cam kết thực tế, chỉ đổi khi chủ dự án xác nhận.
+const SECURITY_FAQ = {
+  q: 'Dữ liệu hình ảnh được lưu trữ ở đâu và có an toàn không?',
+  a: 'Toàn bộ dữ liệu được mã hóa AES-256 và lưu trên máy chủ đám mây riêng tư đạt tiêu chuẩn bảo mật y tế HIPAA.',
+};
+
+const PATIENT_FAQS = [
+  { q: 'Làm sao để xem kết quả phim MRI/CT của tôi?', a: 'Vào mục “Phim MRI & CT”, chọn phim cần xem. Trong trang kết quả, bấm “Giải thích kết quả” để đọc bản giải thích dễ hiểu do AI tạo.' },
+  { q: 'Kết quả AI có thay thế chẩn đoán của bác sĩ không?', a: 'Không. AI chỉ hỗ trợ tham khảo. Kết luận cuối cùng là của bác sĩ chuyên khoa đã đọc và ký kết quả — hãy trao đổi với bác sĩ điều trị trước khi quyết định.' },
+  { q: 'Thanh toán gói Premium như thế nào?', a: 'Vào “Mua Premium”, bấm “Nâng cấp ngay” rồi quét mã VietQR bằng ứng dụng ngân hàng. Nếu đã trừ tiền mà gói chưa kích hoạt sau vài phút, hãy gửi yêu cầu hỗ trợ kèm thời gian thanh toán.' },
+  SECURITY_FAQ,
+];
+
+const STAFF_FAQS = [
+  { q: 'Làm thế nào để thêm bác sĩ mới vào hệ thống?', a: 'Vào Bảng điều khiển phòng khám → nhấn nút "Thêm bác sĩ" góc trên bên phải. Điền đầy đủ thông tin để cấp quyền tài khoản.' },
+  SECURITY_FAQ,
+  { q: 'Làm sao để xuất toàn bộ hồ sơ bệnh nhân?', a: 'Vào Hồ sơ bệnh nhân → chọn bệnh nhân cụ thể → nhấn "Xuất sao kê". Hệ thống hỗ trợ tải file PDF chẩn đoán chi tiết.' },
+  { q: 'Tôi có thể tích hợp NeuroScan AI với phần mềm HIS hiện tại không?', a: 'Có, hệ thống hỗ trợ tích hợp API RESTful và chuẩn HL7 FHIR. Vui lòng liên hệ đội ngũ kỹ thuật để nhận tài liệu tích hợp.' },
+];
+
+const TOPICS = ['Lỗi kỹ thuật phần mềm', 'Câu hỏi về thuật toán AI', 'Thanh toán & Nâng cấp Premium', 'Yêu cầu tính năng mới'];
+
+const STATUS = {
+  open: { bg: Colors.brandGreenSoft, text: Colors.brandGreen, label: 'Đang mở', icon: 'circle' },
+  in_progress: { bg: Colors.infoBg, text: '#0369A1', label: 'Đang xử lý', icon: 'loader' },
+  resolved: { bg: '#F1F5F9', text: Colors.slateMuted, label: 'Đã giải quyết', icon: 'check' },
+  closed: { bg: '#F1F5F9', text: Colors.slateMuted, label: 'Đã đóng', icon: 'x' },
+};
 
 const SupportScreen = ({ navigation }) => {
-  const [openFaq, setOpenFaq] = useState(null);
-  const [selectedTopic, setSelectedTopic] = useState('Chưa chọn chủ đề...');
-  const [message, setMessage] = useState('');
-  const [showTopicDropdown, setShowTopicDropdown] = useState(false);
-
-  // Ticket state
-  const [tickets, setTickets] = useState([]);
-  const [loadingTickets, setLoadingTickets] = useState(false);
-  const [sendingTicket, setSendingTicket] = useState(false);
-
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const { role, tickets, loadingTickets, sending, fetchTickets, sendTicket } = useSupport();
+  const isPatient = role === 'patient';
+  const faqs = isPatient ? PATIENT_FAQS : STAFF_FAQS;
 
-  const contactOptions = [
-    { icon: '💬', title: 'Chat trực tiếp', desc: 'Phản hồi trong 2 phút', action: 'Bắt đầu chat', color: '#166534', url: null },
-    { icon: '📞', title: 'Hotline', desc: '1800 1234 — 24/7', action: 'Gọi ngay', color: '#2563EB', url: 'tel:18001234' },
-    { icon: '✉️', title: 'Gửi email', desc: 'support@neuroscan.ai', action: 'Soạn email', color: '#7C3AED', url: 'mailto:support@neuroscan.ai?subject=Yêu cầu hỗ trợ kỹ thuật' },
-  ];
+  const [openFaq, setOpenFaq] = useState(null);
+  const [topic, setTopic] = useState(null);
+  const [message, setMessage] = useState('');
+  const [showTopics, setShowTopics] = useState(false);
+  const [formError, setFormError] = useState('');
+  const scrollRef = useRef(null);
+  const formY = useRef(0);
 
-  const faqs = [
-    { q: 'Làm thế nào để thêm bác sĩ mới vào hệ thống?', a: 'Vào Bảng điều khiển phòng khám → nhấn nút "Thêm bác sĩ" góc trên bên phải. Điền đầy đủ thông tin để cấp quyền tài khoản.' },
-    { q: 'Dữ liệu hình ảnh được lưu trữ ở đâu và có an toàn không?', a: 'Toàn bộ dữ liệu được mã hóa AES-256 và lưu trên máy chủ đám mây riêng tư đạt tiêu chuẩn bảo mật y tế HIPAA.' },
-    { q: 'Làm sao để xuất toàn bộ hồ sơ bệnh nhân?', a: 'Vào Hồ sơ bệnh nhân → chọn bệnh nhân cụ thể → nhấn "Xuất sao kê". Hệ thống hỗ trợ tải file PDF chẩn đoán chi tiết.' },
-    { q: 'Tôi có thể tích hợp NeuroScan AI với phần mềm HIS hiện tại không?', a: 'Có, hệ thống hỗ trợ tích hợp API RESTful và chuẩn HL7 FHIR. Vui lòng liên hệ đội ngũ kỹ thuật để nhận tài liệu tích hợp.' },
-  ];
-
-  const topics = [
-    'Lỗi kỹ thuật phần mềm',
-    'Câu hỏi về thuật toán AI',
-    'Thanh toán & Nâng cấp Premium',
-    'Yêu cầu tính năng mới',
-  ];
-
-  // ── Lấy danh sách ticket từ API ────────────────────────────────────────────
-  const fetchTickets = useCallback(async () => {
-    setLoadingTickets(true);
+  const openLink = async (url) => {
     try {
-      const res = await get('/api/v1/support/tickets');
-      if (res && res.success) {
-        setTickets(res.tickets || []);
-      }
-    } catch (err) {
-      console.warn('Không thể tải danh sách ticket:', err.message);
-    } finally {
-      setLoadingTickets(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
-
-  // ── Gửi ticket mới ─────────────────────────────────────────────────────────
-  const handleSendTicket = async () => {
-    if (!message || selectedTopic === 'Chưa chọn chủ đề...') {
-      Alert.alert('Lỗi', 'Vui lòng chọn chủ đề và nhập nội dung mô tả vấn đề.');
-      return;
-    }
-    setSendingTicket(true);
-    try {
-      const res = await post('/api/v1/support/tickets', {
-        topic: selectedTopic,
-        message: message.trim(),
-        priority: 'medium',
-      });
-      if (res && res.success) {
-        Alert.alert('Thành công', res.message || 'Yêu cầu hỗ trợ đã được ghi nhận!');
-        setMessage('');
-        setSelectedTopic('Chưa chọn chủ đề...');
-        // Refresh danh sách ticket
-        fetchTickets();
-      } else {
-        Alert.alert('Lỗi', res?.message || 'Không thể gửi yêu cầu. Vui lòng thử lại.');
-      }
-    } catch (err) {
-      console.error('Lỗi gửi ticket:', err);
-      Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.');
-    } finally {
-      setSendingTicket(false);
-    }
-  };
-
-  // ── Xử lý nút liên hệ ──────────────────────────────────────────────────────
-  const handleContactAction = async (option) => {
-    if (!option.url) {
-      Alert.alert(option.title, 'Tính năng đang được phát triển. Vui lòng sử dụng email hoặc hotline.');
-      return;
-    }
-    try {
-      const canOpen = await Linking.canOpenURL(option.url);
-      if (canOpen) {
-        await Linking.openURL(option.url);
-      } else {
-        Alert.alert('Không thể mở', `Thiết bị không hỗ trợ mở liên kết: ${option.url}`);
-      }
+      await Linking.openURL(url);
     } catch (err) {
       console.error('Linking error:', err);
-      Alert.alert('Lỗi', 'Không thể mở liên kết. Vui lòng thử lại.');
+      Alert.alert('Không mở được liên kết', 'Hãy gọi hoặc gửi email thủ công theo thông tin trên màn hình.');
     }
   };
 
-  // ── Chuyển màu badge theo trạng thái ticket ─────────────────────────────────
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'open': return { bg: '#DCFCE7', text: '#166534', label: 'Đang mở' };
-      case 'in_progress': return { bg: '#DBEAFE', text: '#1D4ED8', label: 'Đang xử lý' };
-      case 'resolved': return { bg: '#F1F5F9', text: '#475569', label: 'Đã giải quyết' };
-      case 'closed': return { bg: '#FEE2E2', text: '#991B1B', label: 'Đã đóng' };
-      default: return { bg: '#F1F5F9', text: '#475569', label: status };
+  const contacts = [
+    { icon: 'phone', title: 'Gọi hotline', desc: HOTLINE.label, onPress: () => openLink(HOTLINE.url) },
+    { icon: 'mail', title: 'Gửi email', desc: EMAIL.label, onPress: () => openLink(EMAIL.url) },
+    { icon: 'edit-3', title: 'Gửi yêu cầu', desc: 'Phản hồi trong 2 giờ', onPress: () => scrollRef.current?.scrollTo({ y: formY.current - 16, animated: true }) },
+  ];
+
+  const handleSend = async () => {
+    if (!topic) return setFormError('Chọn chủ đề cho yêu cầu.');
+    if (!message.trim()) return setFormError('Nhập nội dung mô tả vấn đề.');
+    setFormError('');
+    const res = await sendTicket(topic, message);
+    if (res.ok) {
+      setMessage('');
+      setTopic(null);
     }
+    Alert.alert(res.ok ? 'Đã gửi yêu cầu' : 'Chưa gửi được', res.message);
   };
 
   return (
-    <ResponsiveLayout
-      navigation={navigation}
-      activeRoute="Support"
-    >
+    <ResponsiveLayout navigation={navigation} activeRoute="Support">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
         {!isDesktop && (
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Quay lại</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton} accessibilityRole="button">
+              <Feather name="arrow-left" size={16} color={Colors.slateMuted} />
+              <Text style={styles.backButtonText}>Quay lại</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Hỗ trợ Kỹ thuật</Text>
+            <Text style={styles.headerTitle}>Hỗ trợ</Text>
           </View>
         )}
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Trung tâm Hỗ trợ & Vận hành</Text>
-        </View>
-
-        {/* Contact Grid */}
-        <View style={styles.contactRow}>
-          {contactOptions.map((opt, i) => {
-            return (
-              <TouchableOpacity key={i} style={styles.contactCard} onPress={() => handleContactAction(opt)}>
-                <View style={[styles.contactIconBg, { backgroundColor: opt.color, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ fontSize: 20 }}>{opt.icon}</Text>
-                </View>
-                <Text style={styles.contactTitle}>{opt.title}</Text>
-                <Text style={styles.contactDesc}>{opt.desc}</Text>
-                <Text style={[styles.contactLink, { color: opt.color }]}>{opt.action} →</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Support Tickets */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 16 }}>🛟</Text>
-            <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Yêu cầu hỗ trợ của tôi (Ticket)</Text>
-          </View>
-          <TouchableOpacity onPress={fetchTickets} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 }}>
-            <Text style={{ fontSize: 12 }}>🔄</Text>
-            <Text style={{ fontSize: 12, color: '#15803D', fontWeight: '600' }}>Làm mới</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.ticketsCard}>
-          {loadingTickets ? (
-            <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
-          ) : tickets.length === 0 ? (
-            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-              <Text style={{ color: '#94A3B8', fontSize: 13 }}>Hiện tại bạn chưa gửi yêu cầu hỗ trợ nào.</Text>
-            </View>
-          ) : (
-            tickets.map((tk, idx) => {
-              const badge = getStatusBadge(tk.status);
-              const createdDate = new Date(tk.createdAt).toLocaleDateString('vi-VN');
-              return (
-                <View key={tk._id} style={[styles.ticketRow, idx === tickets.length - 1 && styles.lastTicketRow]}>
-                  <View style={styles.ticketLeft}>
-                    <Text style={styles.ticketId}>#{tk._id?.toString().slice(-6).toUpperCase()} — {tk.topic}</Text>
-                    <Text style={styles.ticketSubject} numberOfLines={1}>{tk.message}</Text>
-                    <Text style={styles.ticketPriority}>Ngày gửi: {createdDate}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusText, { color: badge.text }]}>{badge.label}</Text>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
-
-        {/* FAQs */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 24, marginBottom: 12 }}>
-          <Text style={{ fontSize: 16 }}>❓</Text>
-          <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>Câu hỏi thường gặp</Text>
-        </View>
-        <View style={styles.faqList}>
-          {faqs.map((faq, i) => {
-            const isOpened = openFaq === i;
-            return (
-              <View key={i} style={styles.faqCard}>
-                <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setOpenFaq(isOpened ? null : i)}>
-                  <Text style={styles.faqQuestion}>{faq.q}</Text>
-                  <Text style={{ fontSize: 14, color: '#64748B' }}>{isOpened ? '▲' : '▼'}</Text>
-                </TouchableOpacity>
-                {isOpened && (
-                  <View style={styles.faqAnswerContainer}>
-                    <Text style={styles.faqAnswer}>{faq.a}</Text>
-                  </View>
-                )}
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Quick Message Form */}
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>Gửi tin nhắn hỗ trợ nhanh</Text>
-          <Text style={styles.formDesc}>Nhận phản hồi từ đội kỹ thuật trong vòng 2 giờ</Text>
-
-          {/* Custom Dropdown Selector */}
-          <Text style={styles.label}>Chủ đề hỗ trợ</Text>
-          <TouchableOpacity
-            style={styles.dropdownTrigger}
-            onPress={() => setShowTopicDropdown(!showTopicDropdown)}
-          >
-            <Text style={styles.dropdownTriggerText}>{selectedTopic}</Text>
-            <Text style={{ fontSize: 14, color: '#64748B' }}>{showTopicDropdown ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-
-          {showTopicDropdown && (
-            <View style={styles.dropdownMenu}>
-              {topics.map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setSelectedTopic(t);
-                    setShowTopicDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownOptionText}>{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Description Message area */}
-          <Text style={styles.label}>Mô tả chi tiết sự cố</Text>
-          <TextInput
-            style={styles.textarea}
-            placeholder="Nhập mô tả lỗi hiển thị, lỗi thanh toán hoặc góp ý tính năng..."
-            placeholderTextColor="#94A3B8"
-            multiline
-            numberOfLines={4}
-            value={message}
-            onChangeText={setMessage}
+        <ScrollView ref={scrollRef} contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]} keyboardShouldPersistTaps="handled">
+          <PageHeroBanner
+            source={require('../../assets/images/support-hero.jpg')}
+            tone="light"
+            title={isPatient ? 'Chúng tôi có thể giúp gì cho bạn?' : 'Trung tâm hỗ trợ & vận hành'}
+            subtitle="Gọi hotline, gửi email hoặc gửi yêu cầu. Đội ngũ hỗ trợ sẽ phản hồi sớm nhất."
+            wide={width > 980}
+            style={styles.titleContainer}
           />
 
-          <TouchableOpacity
-            style={[styles.sendBtn, sendingTicket && { opacity: 0.6 }]}
-            onPress={handleSendTicket}
-            disabled={sendingTicket}
-          >
-            {sendingTicket ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+          <View style={[styles.contactRow, !isDesktop && styles.contactColumn]}>
+            {contacts.map((c, i) => (
+              <FadeIn key={c.title} delay={80 + i * 80} style={styles.contactCell}>
+                <PressableScale containerStyle={styles.contactCellInner} style={styles.contactCard} hoverStyle={styles.contactCardHover} onPress={c.onPress} accessibilityLabel={`${c.title}: ${c.desc}`}>
+                  <View style={styles.contactIconBg}>
+                    <Feather name={c.icon} size={18} color={Colors.brandGreen} />
+                  </View>
+                  <View style={styles.contactText}>
+                    <Text style={styles.contactTitle}>{c.title}</Text>
+                    <Text style={styles.contactDesc}>{c.desc}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={Colors.secondary} />
+                </PressableScale>
+              </FadeIn>
+            ))}
+          </View>
+
+          {/* Ticket */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Yêu cầu hỗ trợ của tôi</Text>
+            <PressableScale style={styles.linkBtn} hoverStyle={styles.linkBtnHover} onPress={fetchTickets} accessibilityLabel="Tải lại danh sách yêu cầu">
+              <Feather name="rotate-cw" size={13} color={Colors.brandGreen} />
+              <Text style={styles.linkBtnText}>Tải lại</Text>
+            </PressableScale>
+          </View>
+          <View style={styles.ticketsCard}>
+            {loadingTickets ? (
+              <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 20 }} />
+            ) : tickets.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Image source={require('../../assets/images/illus-support.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
+                <Text style={styles.emptyText}>Bạn chưa gửi yêu cầu hỗ trợ nào.</Text>
+              </View>
             ) : (
-              <Text style={styles.sendBtnText}>Gửi yêu cầu hỗ trợ</Text>
+              tickets.map((tk, idx) => {
+                const st = STATUS[tk.status] || { bg: '#F1F5F9', text: Colors.slateMuted, label: tk.status, icon: 'circle' };
+                return (
+                  <FadeIn key={tk._id} delay={idx * 60} style={[styles.ticketRow, idx === tickets.length - 1 && styles.lastTicketRow]}>
+                    <View style={styles.ticketLeft}>
+                      <Text style={styles.ticketTopic}>{tk.topic}</Text>
+                      <Text style={styles.ticketSubject}>{tk.message}</Text>
+                      <Text style={styles.ticketMeta}>
+                        #{tk._id?.toString().slice(-6).toUpperCase()} · gửi ngày {new Date(tk.createdAt).toLocaleDateString('vi-VN')}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                      <Feather name={st.icon} size={11} color={st.text} />
+                      <Text style={[styles.statusText, { color: st.text }]}>{st.label}</Text>
+                    </View>
+                  </FadeIn>
+                );
+              })
             )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          </View>
+
+          {/* FAQ */}
+          <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Câu hỏi thường gặp</Text>
+          <View style={styles.faqList}>
+            {faqs.map((faq, i) => {
+              const opened = openFaq === i;
+              return (
+                <View key={faq.q} style={[styles.faqCard, opened && styles.faqCardOpen]}>
+                  <PressableScale
+                    style={styles.faqQuestionRow}
+                    hoverStyle={styles.faqQuestionRowHover}
+                    onPress={() => setOpenFaq(opened ? null : i)}
+                    accessibilityState={{ expanded: opened }}
+                  >
+                    <Text style={styles.faqQuestion}>{faq.q}</Text>
+                    <Feather name={opened ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.secondary} />
+                  </PressableScale>
+                  {opened && (
+                    <FadeIn distance={6} style={styles.faqAnswerContainer}>
+                      <Text style={styles.faqAnswer}>{faq.a}</Text>
+                    </FadeIn>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Form */}
+          <View style={styles.formCard} onLayout={(e) => { formY.current = e.nativeEvent.layout.y; }}>
+            <Text style={styles.formTitle}>Gửi yêu cầu hỗ trợ</Text>
+            <Text style={styles.formDesc}>Đội ngũ hỗ trợ phản hồi trong vòng 2 giờ làm việc.</Text>
+
+            <Text style={styles.label}>Chủ đề</Text>
+            <PressableScale
+              style={[styles.dropdownTrigger, showTopics && styles.dropdownTriggerOpen]}
+              hoverStyle={styles.dropdownTriggerHover}
+              onPress={() => setShowTopics(!showTopics)}
+              accessibilityLabel={`Chủ đề: ${topic || 'chưa chọn'}`}
+              accessibilityState={{ expanded: showTopics }}
+            >
+              <Text style={[styles.dropdownTriggerText, !topic && styles.dropdownPlaceholder]}>{topic || 'Chọn chủ đề…'}</Text>
+              <Feather name={showTopics ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.secondary} />
+            </PressableScale>
+            {showTopics && (
+              <FadeIn distance={6} style={styles.dropdownMenu}>
+                {TOPICS.map((t) => (
+                  <PressableScale
+                    key={t}
+                    style={[styles.dropdownOption, t === topic && styles.dropdownOptionActive]}
+                    hoverStyle={styles.dropdownOptionHover}
+                    onPress={() => { setTopic(t); setShowTopics(false); setFormError(''); }}
+                    accessibilityState={{ selected: t === topic }}
+                  >
+                    <Text style={[styles.dropdownOptionText, t === topic && styles.dropdownOptionTextActive]}>{t}</Text>
+                    {t === topic && <Feather name="check" size={16} color={Colors.brandGreen} />}
+                  </PressableScale>
+                ))}
+              </FadeIn>
+            )}
+
+            <Text style={styles.label}>Mô tả vấn đề</Text>
+            <TextInput
+              style={styles.textarea}
+              placeholder="Ví dụ: Đã thanh toán Premium lúc 9:30 nhưng tài khoản chưa nâng cấp…"
+              placeholderTextColor={Colors.secondary}
+              accessibilityLabel="Mô tả vấn đề"
+              multiline
+              numberOfLines={4}
+              value={message}
+              onChangeText={(t) => { setMessage(t); if (formError) setFormError(''); }}
+            />
+            {formError ? (
+              <Text style={styles.formError} accessibilityLiveRegion="polite">
+                <Feather name="alert-circle" size={13} color={Colors.error} /> {formError}
+              </Text>
+            ) : null}
+
+            <PressableScale style={styles.sendBtn} hoverStyle={styles.sendBtnHover} onPress={handleSend} disabled={sending}>
+              {sending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.sendBtnText}>Gửi yêu cầu</Text>}
+            </PressableScale>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </ResponsiveLayout>
   );
 };
-
-;
 
 export default SupportScreen;

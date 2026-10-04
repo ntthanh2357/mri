@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { useMedicalRecordForm } from '../controllers/useMedicalRecordForm';
+import { apiRequest } from '../utils/apiClient';
+import { extractMedications, extractOrders } from '../utils/clinicalText';
 import { Check, ChevronUp, ChevronDown } from 'lucide-react';
 
 const FormField = ({ label, value, onChangeText, placeholder, multiline, keyboardType, half }) => (
@@ -75,6 +77,20 @@ const MedicalRecordFormScreen = ({ navigation, route }) => {
   });
 
   const toggleSection = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Khôi phục từ dac5018 — bị mất khi merge nhánh Huyle_MRI/CT (4a3d43b)
+  const togglePhanBiet = (field) => {
+    const current = formData.chanDoan?.phanBiet || {};
+    updateField('chanDoan', 'phanBiet', { ...current, [field]: !current[field] });
+  };
+
+  const toggleChuyenKhoa = (field) => {
+    const current = formData.huongDieuTri?.chuyenKhoa || {};
+    updateField('huongDieuTri', 'chuyenKhoa', { ...current, [field]: !current[field] });
+  };
+
+  const phanBiet = formData.chanDoan?.phanBiet || {};
+  const chuyenKhoa = formData.huongDieuTri?.chuyenKhoa || {};
 
   const [warnings, setWarnings] = useState([]);
   const [checking, setChecking] = useState(false);

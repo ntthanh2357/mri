@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- NeuroScan "Clinical Calm" — bìa hồ sơ + ống nghe. Render: 512 512 2 --transparent -->
+<style>html,body{margin:0;background:transparent}</style></head>
+<body><svg id="art" width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14407A"/><stop offset="1" stop-color="#0B2A55"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#A4FBE5" stop-opacity="0.5"/><stop offset="1" stop-color="#A4FBE5" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="256" cy="440" rx="168" ry="16" fill="#0B2A55" opacity="0.10"/>
+  <circle cx="256" cy="262" r="196" fill="url(#glow)"/>
+
+  <!-- bìa sau + tab -->
+  <rect x="104" y="128" width="120" height="48" rx="14" fill="#0B2A55"/>
+  <rect x="104" y="150" width="304" height="262" rx="22" fill="#0B2A55"/>
+
+  <!-- giấy tờ -->
+  <g transform="rotate(-5 236 230)">
+    <rect x="140" y="126" width="196" height="232" rx="12" fill="#FFFFFF"/>
+    <rect x="162" y="154" width="92" height="10" rx="5" fill="#08A880"/>
+    <rect x="162" y="180" width="150" height="8" rx="4" fill="#DCE4EE"/>
+    <rect x="162" y="198" width="132" height="8" rx="4" fill="#DCE4EE"/>
+    <rect x="162" y="216" width="144" height="8" rx="4" fill="#DCE4EE"/>
+  </g>
+  <g transform="rotate(4 286 240)">
+    <rect x="196" y="140" width="190" height="226" rx="12" fill="#F3FFFB"/>
+    <rect x="216" y="166" width="70" height="10" rx="5" fill="#3DDBA6"/>
+    <rect x="216" y="192" width="140" height="8" rx="4" fill="#CFEDE3"/>
+    <rect x="216" y="210" width="118" height="8" rx="4" fill="#CFEDE3"/>
+  </g>
+
+  <!-- bìa trước -->
+  <path d="M92,236 C92,224 101,216 113,216 L399,216 C411,216 420,224 420,236 L420,402 C420,414 411,424 399,424 L113,424 C101,424 92,414 92,402 Z" fill="url(#front)"/>
+  <rect x="124" y="250" width="72" height="8" rx="4" fill="#A4FBE5" opacity="0.6"/>
+
+  <!-- ống nghe -->
+  <path d="M168,300 C168,372 248,384 278,340 C300,308 330,300 352,316" stroke="#A4FBE5" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M168,300 L158,276 M168,300 L186,280" stroke="#A4FBE5" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <circle cx="366" cy="330" r="26" fill="#3DDBA6"/>
+  <circle cx="366" cy="330" r="13" fill="#FFFFFF" opacity="0.85"/>
+
+  <!-- huy hiệu chữ thập -->
+  <circle cx="398" cy="150" r="38" fill="#FFFFFF"/>
+  <circle cx="398" cy="150" r="31" fill="#08A880"/>
+  <path d="M398,134 L398,166 M382,150 L414,150" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+</svg><script>window.__ART_DONE__ = true;</script></body></html>

@@ -10,6 +10,8 @@ import {
   Image,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
+import Colors from '../constants/colors';
+import PressableScale from './PressableScale';
 import { portalLoginRoute } from '../utils/navigationRef';
 import performLogout from '../utils/logout';
 import { 
@@ -38,6 +40,20 @@ import {
   UploadCloud,
   Menu,
 } from 'lucide-react';
+
+// Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
+const SHELL_THEMES = {
+  staff: {
+    accent: '#0891B2', accentSoft: '#ECFEFF', accentBorder: '#CFFAFE',
+    dark: '#0F172A', darkRaised: '#1E293B', onDarkAccent: '#38BDF8', onDarkSub: '#0891B2',
+    onDarkActiveBg: 'rgba(8, 145, 178, 0.2)', avatar: '#0891B2',
+  },
+  patient: {
+    accent: Colors.brandGreen, accentSoft: Colors.brandGreenSoft, accentBorder: '#CDEBDF',
+    dark: Colors.brandNavy, darkRaised: '#16386B', onDarkAccent: Colors.brandGreenOnDark, onDarkSub: Colors.brandGreenOnDark,
+    onDarkActiveBg: 'rgba(61, 219, 166, 0.15)', avatar: Colors.brandNavy,
+  },
+};
 
 const ResponsiveLayout = ({
   children,
@@ -160,6 +176,7 @@ const ResponsiveLayout = ({
   };
 
   const isPatient = localUser?.role === 'patient';
+  const theme = isPatient ? SHELL_THEMES.patient : SHELL_THEMES.staff;
   const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
@@ -176,7 +193,6 @@ const ResponsiveLayout = ({
           { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: Brain },
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
-          { label: 'Khai báo bệnh án', route: 'RecordVault', icon: ClipboardList },
           { label: 'Mua Premium', route: 'Premium', icon: Star },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -280,7 +296,7 @@ const ResponsiveLayout = ({
       <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
         {/* Mobile Top Navigation Header */}
         <View style={{
-          backgroundColor: '#0F172A',
+          backgroundColor: theme.dark,
           paddingTop: 10,
           paddingBottom: 10,
           paddingHorizontal: 14,
@@ -288,16 +304,16 @@ const ResponsiveLayout = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottomWidth: 1,
-          borderBottomColor: '#1E293B',
+          borderBottomColor: theme.darkRaised,
           zIndex: 40,
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
               onPress={() => setShowMobileMenu(true)}
-              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              style={{ padding: 6, backgroundColor: theme.darkRaised, borderRadius: 8 }}
               accessibilityLabel="Mở danh mục chức năng"
             >
-              <Menu size={20} color="#38BDF8" />
+              <Menu size={20} color={theme.onDarkAccent} />
             </TouchableOpacity>
             <View>
               <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15, letterSpacing: -0.2 }}>NeuroScan AI</Text>
@@ -320,7 +336,7 @@ const ResponsiveLayout = ({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDefaultLogout}
-              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              style={{ padding: 6, backgroundColor: theme.darkRaised, borderRadius: 8 }}
               accessibilityLabel="Đăng xuất"
             >
               <LogOut size={16} color="#EF4444" />
@@ -367,7 +383,7 @@ const ResponsiveLayout = ({
             <View style={{
               width: '82%',
               maxWidth: 320,
-              backgroundColor: '#0F172A',
+              backgroundColor: theme.dark,
               height: '100%',
               paddingTop: 20,
               paddingBottom: 24,
@@ -375,10 +391,10 @@ const ResponsiveLayout = ({
               justifyContent: 'space-between',
             }}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.darkRaised }}>
                   <View>
                     <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
-                    <Text style={{ color: '#0891B2', fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
+                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
                     <X size={20} color="#94A3B8" />
@@ -399,18 +415,18 @@ const ResponsiveLayout = ({
                           paddingHorizontal: 14,
                           borderRadius: 8,
                           marginBottom: 4,
-                          backgroundColor: isActive ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
+                          backgroundColor: isActive ? theme.onDarkActiveBg : 'transparent',
                           borderLeftWidth: isActive ? 3 : 0,
-                          borderLeftColor: '#38BDF8',
+                          borderLeftColor: theme.onDarkAccent,
                         }}
                         onPress={() => {
                           setShowMobileMenu(false);
                           navigation.navigate(item.route, item.params);
                         }}
                       >
-                        <IconComponent size={18} color={isActive ? '#38BDF8' : '#94A3B8'} />
+                        <IconComponent size={18} color={isActive ? theme.onDarkAccent : '#94A3B8'} />
                         <Text style={{
-                          color: isActive ? '#38BDF8' : '#E2E8F0',
+                          color: isActive ? theme.onDarkAccent : '#E2E8F0',
                           fontWeight: isActive ? 'bold' : '500',
                           marginLeft: 12,
                           fontSize: 14,
@@ -430,7 +446,7 @@ const ResponsiveLayout = ({
                   gap: 10,
                   paddingVertical: 12,
                   paddingHorizontal: 14,
-                  backgroundColor: '#1E293B',
+                  backgroundColor: theme.darkRaised,
                   borderRadius: 8,
                 }}
                 onPress={() => {
@@ -458,7 +474,7 @@ const ResponsiveLayout = ({
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                    <Bell size={18} color={theme.accent} strokeWidth={2.3} />
                     <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -523,13 +539,13 @@ const ResponsiveLayout = ({
           />
           <View>
             <Text style={styles.brandName}>NeuroScan AI</Text>
-            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
+            <Text style={[styles.brandSub, { color: theme.accent }]}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
           </View>
         </View>
 
         {/* User Card */}
         <View style={styles.userCard}>
-          <View style={styles.avatarCircle}>
+          <View style={[styles.avatarCircle, { backgroundColor: theme.avatar }]}>
             <Text style={styles.avatarText}>
               {localUser ? getInitials(localUser.profile?.name) : 'U'}
             </Text>
@@ -549,7 +565,7 @@ const ResponsiveLayout = ({
               activeOpacity={0.7}
               accessibilityLabel="Thông báo"
             >
-              <Bell size={17} color="#0891B2" strokeWidth={2.2} />
+              <Bell size={17} color={theme.accent} strokeWidth={2.2} />
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>{unreadCount}</Text>
@@ -565,19 +581,21 @@ const ResponsiveLayout = ({
             const isActive = isItemActive(item);
             const IconComponent = item.icon;
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={`${item.route}_${item.label}`}
-                style={[styles.navItem, isActive && styles.navItemActive]}
+                style={[styles.navItem, isActive && { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}
+                hoverStyle={!isActive && styles.navItemHover}
                 onPress={() => navigation.navigate(item.route, item.params)}
-                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityState={{ selected: isActive }}
               >
                 <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
-                  <IconComponent size={17} color={isActive ? '#0891B2' : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
+                  <IconComponent size={17} color={isActive ? theme.accent : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
                 </View>
-                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                <Text style={[styles.navLabel, isActive && styles.navLabelActive, isActive && { color: theme.accent }]}>
                   {item.label}
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
         </ScrollView>
@@ -587,7 +605,7 @@ const ResponsiveLayout = ({
           {isPatient && (
             <View style={styles.upgradeCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Sparkles size={14} color="#FDE047" strokeWidth={2.4} />
+                <Sparkles size={14} color={Colors.brandMint} strokeWidth={2.4} />
                 <Text style={styles.upgradeTitle}>Nâng cấp Premium VIP</Text>
               </View>
               <Text style={styles.upgradeDesc}>
@@ -680,7 +698,7 @@ const ResponsiveLayout = ({
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                  <Bell size={18} color={theme.accent} strokeWidth={2.3} />
                   <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -787,8 +805,7 @@ const styles = StyleSheet.create({
   brandSub: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#0891B2',
-    letterSpacing: 0.6,
+    letterSpacing: 0.6, // giữ cỡ cũ: chữ in hoa dài, sidebar 250px không đủ chỗ cho cỡ lớn hơn
   },
   userCard: {
     flexDirection: 'row',
@@ -821,7 +838,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   userRole: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
   },
@@ -872,9 +889,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  navItemActive: {
-    backgroundColor: '#ECFEFF',
-    borderColor: '#CFFAFE',
+  navItemHover: {
+    backgroundColor: '#F1F5F9',
   },
   navIconContainer: {
     marginRight: 12,
@@ -886,12 +902,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   navLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: '#475569',
   },
   navLabelActive: {
-    color: '#0891B2',
     fontWeight: '700',
   },
   sidebarFooter: {
@@ -901,13 +916,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   upgradeCard: {
-    backgroundColor: '#0891B2',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#0891B2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    backgroundColor: Colors.brandNavy,
+    borderRadius: 14,
+    padding: 14,
+    boxShadow: '0 6px 16px -6px rgba(11, 42, 85, 0.45)',
   },
   upgradeTitle: {
     color: '#FFFFFF',
@@ -915,9 +927,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   upgradeDesc: {
-    color: '#ECFEFF',
-    fontSize: 10,
-    lineHeight: 14,
+    color: '#D7E3F4',
+    fontSize: 12,
+    lineHeight: 17,
     marginBottom: 10,
   },
   upgradeBtn: {
@@ -927,8 +939,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeBtnText: {
-    color: '#0891B2',
-    fontSize: 11,
+    color: Colors.brandNavy,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   logoutBtn: {

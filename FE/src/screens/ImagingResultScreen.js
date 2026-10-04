@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Animated,
   View,
   Text,
   ScrollView,
@@ -22,11 +23,16 @@ import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
 import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 import styles from './ImagingResultScreen.styles';
+import PressableScale from '../components/PressableScale';
+import FadeIn from '../components/FadeIn';
+import SimpleMarkdownText from '../components/SimpleMarkdownText';
+import Colors from '../constants/colors';
+import { useLoop } from '../controllers/useMotion';
 
 const ImagingResultScreen = ({ route, navigation }) => {
   const resultId = route.params?.resultId || route.params?.imagingResultId;
   const visitId = route.params?.visitId;
-  const activeRoute = route.params?.activeRoute || 'PatientRecords';
+  const activeRoute = route.params?.activeRoute || 'ImagingHistory';
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
@@ -37,6 +43,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [explanation, setExplanation] = useState('');
   const [explaining, setExplaining] = useState(false);
+  const dots = useLoop(1200);
 
   // Doctor Report Editing States
   const [localUser, setLocalUser] = useState(null);
@@ -392,9 +399,10 @@ const ImagingResultScreen = ({ route, navigation }) => {
     <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
       <SafeAreaView style={styles.container}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.backArrowText}>← Quay lại lịch sử</Text>
-          </TouchableOpacity>
+          <PressableScale style={styles.backArrowBtn} hoverStyle={styles.backArrowBtnHover} onPress={() => navigation.goBack()} accessibilityLabel="Quay lại">
+            <ArrowLeft size={16} color={Colors.brandNavy} />
+            <Text style={styles.backArrowText}>Quay lại</Text>
+          </PressableScale>
           <View style={[styles.badge, isMRI ? styles.mriBadge : styles.ctBadge]}>
             <Text style={[styles.badgeText, isMRI ? styles.mriBadgeText : styles.ctBadgeText]}>
               PHIM {result.imagingType}
@@ -403,69 +411,34 @@ const ImagingResultScreen = ({ route, navigation }) => {
         </View>
 
         <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
-          <View style={styles.reportSheet}>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#0891B2',
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-                onPress={handleGenerateShareQr}
-                disabled={generatingQr}
-              >
-                {generatingQr ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <QrCode size={15} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
-                      Tạo mã QR chia sẻ (30 ngày)
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#2563EB',
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-                onPress={handleDownloadPdf}
-                disabled={downloadingPdf}
-              >
+          <FadeIn style={styles.reportSheet}>
+            <View style={styles.actionBar}>
+              <PressableScale style={styles.actionPrimary} hoverStyle={styles.actionPrimaryHover} onPress={handleDownloadPdf} disabled={downloadingPdf}>
                 {downloadingPdf ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <>
                     <FileText size={15} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
-                      Tải Báo cáo PDF
-                    </Text>
+                    <Text style={styles.actionPrimaryText}>Tải báo cáo PDF</Text>
                   </>
                 )}
-              </TouchableOpacity>
+              </PressableScale>
+
+              <PressableScale style={styles.actionSecondary} hoverStyle={styles.actionSecondaryHover} onPress={handleGenerateShareQr} disabled={generatingQr}>
+                {generatingQr ? (
+                  <ActivityIndicator color={Colors.brandGreen} size="small" />
+                ) : (
+                  <>
+                    <QrCode size={15} color={Colors.brandGreen} />
+                    <Text style={styles.actionSecondaryText}>Tạo mã QR chia sẻ (30 ngày)</Text>
+                  </>
+                )}
+              </PressableScale>
 
               {Boolean(result.dicomZipUrl) && (
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#7C3AED',
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
+                <PressableScale
+                  style={styles.actionSecondary}
+                  hoverStyle={styles.actionSecondaryHover}
                   onPress={() => {
                     const fullUrl = getImageUrl(result.dicomZipUrl);
                     if (Platform.OS === 'web') {
@@ -475,11 +448,11 @@ const ImagingResultScreen = ({ route, navigation }) => {
                     }
                   }}
                 >
-                  <Download size={15} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                  <Download size={15} color={Colors.brandGreen} />
+                  <Text style={styles.actionSecondaryText}>
                     Tải trọn bộ phim DICOM (.zip){result.dicomZipSize ? ` (${(result.dicomZipSize / (1024 * 1024)).toFixed(1)} MB)` : ''}
                   </Text>
-                </TouchableOpacity>
+                </PressableScale>
               )}
             </View>
 
@@ -528,7 +501,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 </View>
                 <View style={styles.gridCell}>
                   <Text style={styles.fieldLabel}>Bác sĩ CĐHA (Đọc phim):</Text>
-                  <Text style={[styles.fieldValBold, { color: result.isSigned ? '#15803D' : '#D97706' }]}>
+                  <Text style={[styles.fieldValBold, { color: result.isSigned ? Colors.brandGreen : '#B45309' }]}>
                     {result.radiologist || 'Chờ bác sĩ CĐHA đọc & ký duyệt'}
                   </Text>
                 </View>
@@ -834,28 +807,45 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               )}
 
-              {explanation ? (
-                <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', padding: 16, borderRadius: 10, marginTop: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Brain size={16} color="#166534" />
-                    <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13 }}>GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
+              <View style={styles.explainCard}>
+                <View style={styles.explainHeader}>
+                  <View style={styles.explainIcon}>
+                    <Brain size={18} color={Colors.brandMint} />
                   </View>
-                  <Text style={{ color: '#14532D', fontSize: 13, lineHeight: 20 }}>{explanation}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.explainTitle}>Giải thích dễ hiểu bằng AI</Text>
+                    <Text style={styles.explainSub}>Chuyển báo cáo y khoa sang ngôn ngữ đời thường.</Text>
+                  </View>
                 </View>
-              ) : explaining ? (
-                <View style={{ marginTop: 16, alignItems: 'center', padding: 12 }}>
-                  <ActivityIndicator size="small" color="#059669" />
-                  <Text style={{ color: '#64748B', fontSize: 11, marginTop: 4 }}>Bác sĩ AI đang dịch báo cáo y khoa sang ngôn ngữ đời thường cho bạn...</Text>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={{ backgroundColor: '#059669', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginTop: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
-                  onPress={handleExplainAI}
-                >
-                  <Brain size={15} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>GIẢI THÍCH KẾT QUẢ BẰNG AI (Dễ hiểu & Y đức)</Text>
-                </TouchableOpacity>
-              )}
+
+                {explanation ? (
+                  <FadeIn>
+                    <SimpleMarkdownText text={explanation} tone="dark" style={styles.explainBody} />
+                    <Text style={styles.explainNote}>Bản giải thích do AI tạo, chỉ để tham khảo — hãy trao đổi với bác sĩ điều trị trước khi quyết định.</Text>
+                  </FadeIn>
+                ) : explaining ? (
+                  <View style={styles.explainLoading} accessibilityLiveRegion="polite">
+                    {[0, 1, 2].map((i) => (
+                      <Animated.View
+                        key={i}
+                        style={[styles.explainDot, {
+                          opacity: dots.value.interpolate({
+                            inputRange: [0, (i + 0.5) / 4, (i + 1.5) / 4, 1],
+                            outputRange: [0.3, 1, 0.3, 0.3],
+                            extrapolate: 'clamp',
+                          }),
+                        }]}
+                      />
+                    ))}
+                    <Text style={styles.explainLoadingText}>AI đang đọc báo cáo của bạn…</Text>
+                  </View>
+                ) : (
+                  <PressableScale style={styles.explainBtn} hoverStyle={styles.explainBtnHover} onPress={handleExplainAI}>
+                    <Brain size={16} color={Colors.brandNavy} />
+                    <Text style={styles.explainBtnText}>Giải thích kết quả</Text>
+                  </PressableScale>
+                )}
+              </View>
             </View>
 
             {/* Doctor Signature */}
@@ -874,7 +864,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
               <Text style={styles.signDoctorName}>{result.radiologist}</Text>
             </View>
-          </View>
+          </FadeIn>
         </ScrollView>
 
         {/* Share QR Code Modal */}
@@ -954,7 +944,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 />
               </View>
               <Text style={styles.modalCounter}>
-                Ảnh {activeImageIndex + 1} trên {result.images.length} - Khối u não sắc nét
+                Ảnh {activeImageIndex + 1} / {result.images.length}
               </Text>
             </SafeAreaView>
           </Modal>

@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import {
   FolderArchive,
@@ -25,6 +26,7 @@ import {
   Info,
 } from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import FadeIn from '../components/FadeIn';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
 import Colors from '../constants/colors';
@@ -79,7 +81,7 @@ const DocCard = ({ slot, savedDocs = [], onPress }) => {
   };
 
   const DocIcon = !hasSaved ? UploadCloud : uploadCount > 0 ? Paperclip : ClipboardList;
-  const docIconColor = !hasSaved ? '#94A3B8' : uploadCount > 0 ? '#0891B2' : '#059669';
+  const docIconColor = !hasSaved ? Colors.secondary : Colors.brandGreen;
 
   return (
     <TouchableOpacity
@@ -244,7 +246,7 @@ const PatientRecordsScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#0891B2" />
+          <ActivityIndicator size="large" color={Colors.brandGreen} />
           <Text style={styles.centerText}>Đang tải hồ sơ...</Text>
         </View>
       </ResponsiveLayout>
@@ -278,7 +280,7 @@ const PatientRecordsScreen = ({ navigation }) => {
           </View>
         )}
 
-        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]} keyboardShouldPersistTaps="handled">
           <View style={styles.pageTitleBlock}>
             <Text style={styles.pageTitle}>Kho Hồ Sơ Sức Khỏe Cá Nhân</Text>
             <Text style={styles.pageSubtitle}>
@@ -286,8 +288,11 @@ const PatientRecordsScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.passportCard} onPress={() => navigation.navigate('PatientIdentity')} activeOpacity={0.9}>
+          <FadeIn style={styles.passportCard}>
+            <View style={styles.passportGlow} />
             <View style={styles.passportSpine} />
+            <View style={styles.passportRow}>
+            <View style={styles.passportMain}>
             <Text style={styles.passportEyebrow}>Sổ sức khỏe cá nhân</Text>
             <Text style={styles.passportName}>{identity?.name || 'Chưa cập nhật họ tên'}</Text>
             <Text style={styles.passportDob}>
@@ -306,15 +311,22 @@ const PatientRecordsScreen = ({ navigation }) => {
               </Text>
               <Text style={styles.passportSummaryText}>đầy đủ</Text>
             </View>
-            <Text style={styles.passportEditHint}>Chỉnh sửa thông tin cá nhân →</Text>
-          </TouchableOpacity>
+            </View>
+            <Image
+              source={require('../../assets/images/illus-health-passport.png')}
+              style={[styles.passportIllus, !isDesktop && styles.passportIllusMobile]}
+              resizeMode="contain"
+              accessible={false}
+            />
+            </View>
+          </FadeIn>
 
           <View style={styles.searchContainer}>
             <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={Colors.secondary}
               value={search}
               onChangeText={setSearch}
             />
@@ -325,7 +337,7 @@ const PatientRecordsScreen = ({ navigation }) => {
 
           {filtered.length === 0 && (
             <View style={styles.emptyState}>
-              <FolderArchive size={40} color="#CBD5E1" style={{ marginBottom: 12 }} />
+              <Image source={require('../../assets/images/illus-records.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
               <Text style={styles.emptyText}>
                 {visits.length === 0
                   ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
@@ -336,7 +348,7 @@ const PatientRecordsScreen = ({ navigation }) => {
 
           <View style={styles.timelineContainer}>
             {filtered.map((visit, index) => (
-              <View key={visit._id} style={styles.timelineItem}>
+              <FadeIn key={visit._id} delay={120 + index * 90} style={styles.timelineItem}>
                 <View style={styles.timelineBar}>
                   <View style={[styles.timelineDot, (visit.visitType === 'noi_tru' || visit.visitType === 'Nội trú') ? styles.dotInpatient : styles.dotOutpatient]} />
                   {index < filtered.length - 1 && <View style={styles.timelineLine} />}
@@ -349,12 +361,12 @@ const PatientRecordsScreen = ({ navigation }) => {
                     onDocPress={handleDocPress}
                   />
                 </View>
-              </View>
+              </FadeIn>
             ))}
           </View>
 
           <View style={styles.infoNote}>
-            <Info size={16} color="#0891B2" style={{ marginTop: 2, marginRight: 8 }} />
+            <Info size={16} color={Colors.brandGreen} style={{ marginTop: 2, marginRight: 8 }} />
             <Text style={styles.infoNoteText}>
               Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>

@@ -130,7 +130,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         {/* Brand Header */}
         <View style={styles.brandHeader}>
           <Image
-            source={require('../../assets/logo1.png')}
+            source={require('../../assets/logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />

@@ -12,6 +12,8 @@ import {
 } from '../models/documentVault.model.js';
 import { createEmptyMedicalRecord, MEDICAL_RECORD_STORAGE_KEY } from '../models/medicalRecord.model.js';
 import { formatDate, formatCurrency } from '../utils/format.js';
+import { extractMedications, extractOrders } from '../utils/clinicalText.js';
+import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -212,6 +214,40 @@ it('findSchedules algorithm safely matches staff ID across string, ObjectId, and
   assert.strictEqual(found.length, 2);
   assert.strictEqual(found[0]._id, 's1');
   assert.strictEqual(found[1]._id, 's2');
+});
+
+// ── clinicalText: trích thuốc / chỉ định từ form (dùng chung DocumentDetail + MedicalRecordForm) ──
+it('extractMedications finds known drugs case-insensitively and ignores empty input', () => {
+  assert.deepStrictEqual(extractMedications(''), []);
+  assert.deepStrictEqual(extractMedications(undefined), []);
+  assert.deepStrictEqual(extractMedications('Depakine 500mg x2, Keppra 1000mg'), ['keppra', 'depakine']);
+});
+
+it('extractOrders detects MRI order in a flat document form', () => {
+  assert.deepStrictEqual(extractOrders({ chiDinh: 'Chụp MRI sọ não' }), ['MRI sọ não có cản quang']);
+  assert.deepStrictEqual(extractOrders({ chiDinh: 'Xét nghiệm máu' }), []);
+});
+
+it('extractOrders detects MRI order nested inside a medical-record form (regression: [object Object])', () => {
+  const nested = { hanhChinh: { hoTen: 'A' }, canLamSang: { hinhAnh: 'MRI có tiêm Gadolinium' } };
+  assert.deepStrictEqual(extractOrders(nested), ['MRI sọ não có cản quang']);
+});
+
+// ── simpleMarkdown: hiển thị câu trả lời AI (Gemini trả markdown) ──
+it('parseSimpleMarkdown turns bold-only lines into headings and bullets into list items', () => {
+  const blocks = parseSimpleMarkdown('Chào bạn,\n\n**Kết quả cho thấy gì?**\n\n*   **Vị trí:** thùy thái dương\n- Kích thước nhỏ\n1. Tái khám');
+  assert.deepStrictEqual(blocks.map((b) => b.type), ['paragraph', 'heading', 'bullet', 'bullet', 'numbered']);
+  assert.strictEqual(blocks[1].segments[0].text, 'Kết quả cho thấy gì?');
+  assert.deepStrictEqual(blocks[2].segments, [{ text: 'Vị trí:', bold: true }, { text: ' thùy thái dương', bold: false }]);
+  assert.strictEqual(blocks[4].marker, '1.');
+});
+
+it('parseSimpleMarkdown keeps unmatched ** as plain text and handles empty input', () => {
+  assert.deepStrictEqual(parseSimpleMarkdown(''), []);
+  assert.deepStrictEqual(parseSimpleMarkdown(null), []);
+  const [b] = parseSimpleMarkdown('Chỉ số 5 ** chưa đóng');
+  assert.strictEqual(b.type, 'paragraph');
+  assert.strictEqual(b.segments.map((s) => s.text).join(''), 'Chỉ số 5 ** chưa đóng');
 });
 
 console.log(`\n======================================================================`);
