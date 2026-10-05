@@ -14,30 +14,11 @@ export default StyleSheet.create({
     fontWeight: '500',
   },
   headerTitle: { flex: 1, minWidth: 200, fontSize: 18, fontWeight: '800', color: Colors.brandNavy },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: Colors.brandGreen,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
+  tabContainer: { flexDirection: 'row', gap: 4 },
+  tabButton: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  activeTab: { borderBottomColor: Colors.brandGreen },
+  tabText: { fontSize: 14, fontWeight: '600', color: Colors.slateMuted },
+  activeTabText: { color: Colors.brandGreen, fontWeight: '700' },
   scrollContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,

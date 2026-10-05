@@ -22,6 +22,7 @@ import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
 import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
 import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
+import AiResultPatientCard from '../components/patient/AiResultPatientCard';
 import styles from './ImagingResultScreen.styles';
 import PressableScale from '../components/PressableScale';
 import FadeIn from '../components/FadeIn';
@@ -47,6 +48,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   // Doctor Report Editing States
   const [localUser, setLocalUser] = useState(null);
+  // Duyệt/hiệu chỉnh AI chỉ cho bác sĩ/KTV/admin — khớp kiểm tra quyền ở BE approve-ai/feedback-ai
+  const canReviewAI = ['doctor', 'technician', 'admin'].includes(localUser?.role);
   const [findingsText, setFindingsText] = useState('');
   const [conclusionText, setConclusionText] = useState('');
   const [completingVisit, setCompletingVisit] = useState(false);
@@ -548,7 +551,13 @@ const ImagingResultScreen = ({ route, navigation }) => {
                   )}
                 </View>
 
-                {aiResult && (
+                {aiResult && localUser?.role === 'patient' && (
+                  <View style={{ marginBottom: 16 }}>
+                    <AiResultPatientCard result={aiResult} navigation={navigation} />
+                  </View>
+                )}
+
+                {aiResult && canReviewAI && (
                   <View style={{ backgroundColor: '#EEF2F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6', padding: 16, borderRadius: 8, marginBottom: 16 }}>
                     <ClinicalDisclaimerBanner isDoctor={localUser?.role === 'doctor'} compact={true} />
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, marginTop: 6 }}>

@@ -18,6 +18,9 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 import styles from './FinancialsScreen.styles';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
+import PageTabs from '../components/layout/PageTabs';
 import Config from '../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -454,56 +457,36 @@ const FinancialsScreen = ({ navigation }) => {
       activeRoute="ClinicDashboard"
     >
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          {!isDesktop && (
-            <TouchableOpacity onPress={() => navigation.navigate('ClinicDashboard')} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Bảng điều khiển</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Báo cáo & Tài chính Bệnh viện</Text>
-
-          <TouchableOpacity
-            style={{ backgroundColor: Colors.brandGreen, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-            onPress={handleExportBhytXml}
-            disabled={exportingBhyt}
-          >
-            {exportingBhyt ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <FileText size={15} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>Xuất BHYT XML 4210</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Tab Buttons */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'overview' && styles.activeTab]}
-            onPress={() => setActiveTab('overview')}
-          >
-            <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Tổng quan chung</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'revenue' && styles.activeTab]}
-            onPress={() => setActiveTab('revenue')}
-          >
-            <Text style={[styles.tabText, activeTab === 'revenue' && styles.activeTabText]}>Báo cáo doanh thu</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'drugs' && styles.activeTab]}
-            onPress={() => setActiveTab('drugs')}
-          >
-            <Text style={[styles.tabText, activeTab === 'drugs' && styles.activeTabText]}>Báo cáo thuốc</Text>
-          </TouchableOpacity>
-        </View>
+        <PageHeader
+          bar
+          title="Báo cáo tài chính"
+          subtitle="Doanh thu, giao dịch và báo cáo thuốc của bệnh viện."
+          actions={
+            <HeaderAction
+              variant="primary"
+              icon="file-text"
+              label={exportingBhyt ? 'Đang xuất…' : 'Xuất BHYT XML 4210'}
+              onPress={handleExportBhytXml}
+              disabled={exportingBhyt}
+            />
+          }
+          below={
+            <PageTabs
+              value={activeTab}
+              onChange={setActiveTab}
+              tabs={[
+                { key: 'overview', label: 'Tổng quan chung' },
+                { key: 'revenue', label: 'Báo cáo doanh thu' },
+                { key: 'drugs', label: 'Báo cáo thuốc' },
+              ]}
+            />
+          }
+        />
 
         {loading && <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginVertical: 30 }} />}
 
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView>
+          <PageContainer>
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <View>
@@ -1013,6 +996,7 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
             </View>
           )}
+          </PageContainer>
         </ScrollView>
 
         {/* DETAILS MODAL */}

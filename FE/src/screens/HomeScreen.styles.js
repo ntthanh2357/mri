@@ -46,54 +46,6 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  headerNameBox: { flex: 1, minWidth: 0 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.brandNavy, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  avatarText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  welcomeText: { fontSize: 12, color: Colors.secondary },
-  userName: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
-  logoutButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  logoutButtonText: { fontSize: 13, color: Colors.slateMuted, fontWeight: '500' },
-  scrollContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  patientBadge: {
-    backgroundColor: '#DCFCE7',
-  },
-  doctorBadge: { backgroundColor: Colors.brandGreenSoft },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  patientBadgeText: {
-    color: '#059669',
-  },
-  doctorBadgeText: { color: Colors.brandGreen },
-  emailText: { fontSize: 13, color: Colors.secondary },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.brandNavy, marginBottom: 12 },
   gridIcon: {
     fontSize: 24,
     marginBottom: 8,
@@ -201,26 +153,14 @@ export default StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusWarn: {
-    backgroundColor: '#FEF3C7',
-  },
   statusOk: {
     backgroundColor: '#D1FAE5',
-  },
-  statusDanger: {
-    backgroundColor: '#FEE2E2',
   },
   statusText: {
     fontSize: 11,
     fontWeight: 'bold',
     color: '#374151',
   },
-  statusBadgeText: { fontSize: 12, fontWeight: '700', color: '#374151' },
   clinicLinkRow: {
     marginBottom: 10,
     alignSelf: 'flex-start',
@@ -230,29 +170,6 @@ export default StyleSheet.create({
     color: '#0891B2',
     fontWeight: 'bold',
   },
-  desktopRow: {
-    flexDirection: 'row',
-    gap: 20,
-    width: '100%',
-  },
-  mobileColumn: {
-    flexDirection: 'column',
-    width: '100%',
-  },
-  doctorMainColumn: {
-    flex: 2,
-  },
-  doctorSideColumn: {
-    flex: 1,
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  desktopGreeting: {
-    marginBottom: 20,
-  },
-  greetingTitle: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, letterSpacing: -0.3 },
-  greetingSubtitle: { fontSize: 14, color: Colors.slateMuted, marginTop: 4, lineHeight: 20 },
   metricsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -340,53 +257,10 @@ export default StyleSheet.create({
     fontSize: 36,
     marginBottom: 12,
   },
-  doctorStatsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
-  doctorStatCard: { flex: 1, minWidth: 120, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 16, boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05)' },
-  doctorStatVal: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, marginBottom: 2, fontVariant: ['tabular-nums'] },
-  doctorStatLabel: { fontSize: 13, color: Colors.slateMuted, fontWeight: '500' },
-  queueCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, paddingHorizontal: 16, marginBottom: 20 },
-  queueItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  lastQueueItemRow: {
-    borderBottomWidth: 0,
-  },
-  queueLeftInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  queuePatientName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  queueDetailsText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  doctorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  doctorGridCard: { width: '47%', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14 },
   doctorGridIcon: {
     fontSize: 20,
     marginBottom: 6,
   },
-  doctorGridLabel: { fontSize: 14, fontWeight: '700', color: Colors.brandNavy },
-  doctorGridSub: { fontSize: 12, color: Colors.secondary, marginTop: 2, lineHeight: 17 },
-  researchCard: { backgroundColor: Colors.brandNavy, borderRadius: 16, padding: 18, marginBottom: 20 },
-  researchCategory: { fontSize: 12, fontWeight: '700', color: Colors.brandMint, letterSpacing: 0.4, marginBottom: 6 },
-  researchTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 12 },
-  researchLink: { fontSize: 13, color: Colors.brandMint, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
@@ -465,6 +339,4 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  editProfileTrigger: { marginTop: 4, paddingVertical: 2, alignSelf: 'flex-start' },
-  editProfileTriggerText: { fontSize: 13, color: Colors.brandGreen, fontWeight: '600' },
 });

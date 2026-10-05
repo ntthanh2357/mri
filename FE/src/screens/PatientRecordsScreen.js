@@ -20,12 +20,13 @@ import {
   ClipboardList,
   ChevronUp,
   ChevronDown,
-  ChevronLeft,
   Search,
   AlertTriangle,
   Info,
 } from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
 import FadeIn from '../components/FadeIn';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
@@ -270,23 +271,13 @@ const PatientRecordsScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
       <SafeAreaView style={styles.container}>
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-              <ChevronLeft size={18} color="#64748B" />
-              <Text style={styles.backButtonText}>Quay lại</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Kho hồ sơ sức khỏe</Text>
-          </View>
-        )}
-
-        <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]} keyboardShouldPersistTaps="handled">
-          <View style={styles.pageTitleBlock}>
-            <Text style={styles.pageTitle}>Kho Hồ Sơ Sức Khỏe Cá Nhân</Text>
-            <Text style={styles.pageSubtitle}>
-              Lưu trữ tài liệu nhận từ bệnh viện — tra cứu khi tái khám, chuyển viện hoặc làm thủ tục BHYT.
-            </Text>
-          </View>
+        <ScrollView keyboardShouldPersistTaps="handled">
+          <PageContainer width="reading">
+          <PageHeader
+            title="Lịch sử khám"
+            subtitle="Giấy tờ bệnh viện gửi cho bạn sau mỗi lượt khám. Dùng khi tái khám, chuyển viện hoặc làm thủ tục BHYT."
+            style={styles.pageHeader}
+          />
 
           <FadeIn style={styles.passportCard}>
             <View style={styles.passportGlow} />
@@ -371,6 +362,7 @@ const PatientRecordsScreen = ({ navigation }) => {
               Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>
           </View>
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>

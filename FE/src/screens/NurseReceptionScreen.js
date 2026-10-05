@@ -12,16 +12,47 @@ import {
   FlatList,
   Linking,
   Modal,
+  Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
-import { PlusCircle, ClipboardList, CreditCard, ShieldCheck, Search, Sparkles } from 'lucide-react';
+import { PlusCircle, ClipboardList, CreditCard, ShieldCheck, Search, Sparkles, CheckCircle2, ChevronRight, Clock } from 'lucide-react';
+import PageHeader from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
+import Layout from '../constants/layout';
+
+// "TS.BS Nguyễn A (Trưởng khoa X)" → { name, title } để hiện 2 dòng gọn
+const splitStaffName = (full = '') => {
+  const m = String(full).match(/^(.*?)\s*\((.+)\)\s*$/);
+  return m ? { name: m[1], title: m[2] } : { name: String(full), title: '' };
+};
+const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
+const fmtTime = (d) => new Date(d).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+
+const INVOICE_STATUS = {
+  'chờ thanh toán': { label: 'Chờ thanh toán', icon: Clock, bg: Colors.warningBg, fg: Colors.warningText },
+  'đã thanh toán': { label: 'Đã thanh toán', icon: CheckCircle2, bg: Colors.successBg, fg: Colors.successText },
+};
+const InvoiceStatus = ({ status }) => {
+  const s = INVOICE_STATUS[status] || { label: status, icon: Clock, bg: Colors.background, fg: Colors.slateMuted };
+  const Icon = s.icon;
+  return (
+    <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
+      <Icon size={12} color={s.fg} strokeWidth={2.4} />
+      <Text style={[styles.statusPillText, { color: s.fg }]}>{s.label}</Text>
+    </View>
+  );
+};
 
 const NurseReceptionScreen = ({ route, navigation }) => {
   const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'myQueue' | 'billing'
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
+  const { width } = useWindowDimensions();
+  const wide = width >= Layout.wide;
 
   useEffect(() => {
     if (route.params?.tab) {
@@ -315,10 +346,13 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     p.profile?.medicalId?.toLowerCase().includes(searchPatient.toLowerCase())
   );
 
-  const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' : 
-                      user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
+  const headerTitle = user?.role === 'nurse' ? 'Tiếp nhận bệnh nhân' : 'Tiếp nhận & thu ngân';
 
   const pendingInvoicesCount = invoices.filter(i => i.status !== 'đã thanh toán').length;
+  const pendingDue = invoices
+    .filter(i => i.status === 'chờ thanh toán')
+    .reduce((sum, inv) => sum + (inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0))), 0);
+  const openVisit = (v) => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } });
   const currentActiveRoute = activeTab === 'billing' 
     ? 'ReceptionistDashboard_billing' 
     : activeTab === 'myQueue' 
@@ -328,247 +362,294 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} title={headerTitle} user={user} activeRoute={currentActiveRoute}>
       <View style={styles.container}>
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'createVisit' && styles.activeTab]}
-            onPress={() => setActiveTab('createVisit')}
-          >
-            <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>Tạo lượt khám</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'myQueue' && styles.activeTab]}
-            onPress={() => setActiveTab('myQueue')}
-          >
-            <Text style={[styles.tabText, activeTab === 'myQueue' && styles.activeTabText]}>
-              Hôm nay ({visits.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'billing' && styles.activeTab]}
-            onPress={() => setActiveTab('billing')}
-          >
-            <Text style={[styles.tabText, activeTab === 'billing' && styles.activeTabText]}>
-              Thu ngân {pendingInvoicesCount > 0 ? `(${pendingInvoicesCount} chờ)` : ''}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <PageHeader
+          bar
+          title={headerTitle}
+          subtitle="Tạo lượt khám, theo dõi lượt khám trong ngày và thu viện phí."
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'createVisit', label: 'Tạo lượt khám' },
+                { key: 'myQueue', label: 'Hôm nay', count: visits.length || null },
+                { key: 'billing', label: 'Thu ngân', count: pendingInvoicesCount || null },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+          }
+        />
 
         {loading ? (
-          <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginTop: 50 }} />
+          <View style={styles.emptyBox}>
+            <ActivityIndicator size="large" color={Colors.brandGreen} />
+            <Text style={styles.emptyTitle}>Đang tải…</Text>
+          </View>
         ) : (
           <ScrollView style={styles.contentContainer}>
+            <PageContainer style={styles.page}>
             {activeTab === 'createVisit' && (
-              <View style={styles.section}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.sectionTitle}>1. Chọn bệnh nhân</Text>
-                  <TouchableOpacity
-                    style={{ backgroundColor: Colors.brandNavy, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                    onPress={() => {
-                      if (!selectedPatientId) {
-                        Alert.alert('Thông báo', 'Vui lòng bấm chọn 1 bệnh nhân trong danh sách trước khi khai báo thẻ BHYT.');
-                        return;
-                      }
-                      setShowBhytModal(true);
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>+ Khai báo thẻ BHYT</Text>
+              <View style={[styles.formGrid, wide && styles.formGridWide]}>
+                <View style={[styles.panel, wide && styles.panelLeft]}>
+                  <View style={styles.panelHead}>
+                    <Text style={[styles.panelTitle, styles.panelTitleInline]}>1. Chọn bệnh nhân</Text>
+                    <TouchableOpacity
+                      style={styles.btnSecondary}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        if (!selectedPatientId) {
+                          Alert.alert('Thông báo', 'Vui lòng bấm chọn 1 bệnh nhân trong danh sách trước khi khai báo thẻ BHYT.');
+                          return;
+                        }
+                        setShowBhytModal(true);
+                      }}
+                    >
+                      <ShieldCheck size={14} color={Colors.brandGreen} strokeWidth={2.2} />
+                      <Text style={styles.btnSecondaryText}>Khai báo thẻ BHYT</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.searchBox}>
+                    <Search size={16} color={Colors.secondary} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Tìm theo tên, email hoặc mã y tế…"
+                      placeholderTextColor={Colors.secondary}
+                      value={searchPatient}
+                      onChangeText={setSearchPatient}
+                    />
+                  </View>
+                  <View style={styles.optionList}>
+                    {filteredPatients.slice(0, 20).map(p => {
+                      const sel = selectedPatientId === p._id;
+                      return (
+                        <Pressable
+                          key={p._id}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: sel }}
+                          onPress={() => setSelectedPatientId(p._id)}
+                          style={({ hovered }) => [styles.option, hovered && !sel && styles.optionHover, sel && styles.optionSelected]}
+                        >
+                          <View style={styles.optionBody}>
+                            <Text style={styles.optionTitle} numberOfLines={1}>{p.profile?.name || p.profile?.fullName || p.email}</Text>
+                            <Text style={styles.optionSub}>Mã y tế: {p.profile?.medicalId || 'chưa có'}</Text>
+                          </View>
+                          {sel ? <CheckCircle2 size={18} color={Colors.brandGreen} strokeWidth={2.4} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                    {filteredPatients.length === 0 ? <Text style={styles.emptyText}>Không tìm thấy bệnh nhân phù hợp.</Text> : null}
+                  </View>
+                </View>
+
+                <View style={[styles.panel, wide && styles.panelRight]}>
+                  <Text style={styles.panelTitle}>2. Bác sĩ khám</Text>
+                  <View style={styles.optionList}>
+                    {doctors.map(d => {
+                      const qSize = d.queueSize || 0;
+                      const sel = selectedDoctorId === d._id;
+                      const n = splitStaffName(d.profile?.name || d.profile?.fullName || d.email);
+                      return (
+                        <Pressable
+                          key={d._id}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: sel }}
+                          onPress={() => setSelectedDoctorId(d._id)}
+                          style={({ hovered }) => [styles.option, hovered && !sel && styles.optionHover, sel && styles.optionSelected]}
+                        >
+                          <View style={styles.optionBody}>
+                            <Text style={styles.optionTitle} numberOfLines={1}>{n.name}</Text>
+                            {n.title ? <Text style={styles.optionSub} numberOfLines={1}>{n.title}</Text> : null}
+                          </View>
+                          {d._id === leastBusyDoctorId ? (
+                            <View style={styles.suggest}>
+                              <Sparkles size={12} color={Colors.successText} />
+                              <Text style={styles.suggestLabel}>Gợi ý</Text>
+                            </View>
+                          ) : null}
+                          <View style={[styles.queueBadge, qSize === 0 ? styles.queueBadgeGreen : (qSize >= 5 ? styles.queueBadgeRed : styles.queueBadgeOrange)]}>
+                            <Text style={styles.queueBadgeText}>{qSize} ca chờ</Text>
+                          </View>
+                          {sel ? <CheckCircle2 size={18} color={Colors.brandGreen} strokeWidth={2.4} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.panelTitle, styles.panelTitleGap]}>3. Điều dưỡng phụ trách</Text>
+                  <View style={styles.optionList}>
+                    {nurses.map(nu => {
+                      const sel = selectedNurseId === nu._id;
+                      const n = splitStaffName(nu.profile?.name || nu.profile?.fullName || nu.email);
+                      return (
+                        <Pressable
+                          key={nu._id}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: sel }}
+                          onPress={() => setSelectedNurseId(nu._id)}
+                          style={({ hovered }) => [styles.option, hovered && !sel && styles.optionHover, sel && styles.optionSelected]}
+                        >
+                          <View style={styles.optionBody}>
+                            <Text style={styles.optionTitle} numberOfLines={1}>{n.name}</Text>
+                            {n.title ? <Text style={styles.optionSub} numberOfLines={1}>{n.title}</Text> : null}
+                          </View>
+                          {sel ? <CheckCircle2 size={18} color={Colors.brandGreen} strokeWidth={2.4} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.panelTitle, styles.panelTitleGap]}>4. Lý do khám</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Triệu chứng, yêu cầu khám…"
+                    placeholderTextColor={Colors.secondary}
+                    value={reason}
+                    onChangeText={setReason}
+                    multiline
+                  />
+
+                  <TouchableOpacity style={styles.submitBtn} onPress={handleCreateVisit} accessibilityRole="button">
+                    <PlusCircle size={18} color="#FFFFFF" strokeWidth={2.2} />
+                    <Text style={styles.submitBtnText}>Tạo lượt khám</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Tìm theo tên, email, hoặc mã y tế..."
-                  value={searchPatient}
-                  onChangeText={setSearchPatient}
-                />
-                <View style={styles.listWrapper}>
-                  {filteredPatients.slice(0, 20).map(p => (
-                    <TouchableOpacity
-                      key={p._id}
-                      style={[styles.listItem, selectedPatientId === p._id && styles.selectedListItem]}
-                      onPress={() => setSelectedPatientId(p._id)}
-                    >
-                      <Text style={styles.listItemTitle}>{p.profile?.name || p.profile?.fullName || p.email}</Text>
-                      <Text style={styles.listItemSub}>Mã: {p.profile?.medicalId || 'N/A'}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.sectionTitle}>2. Phân công bác sĩ</Text>
-                <View style={styles.rowWrapper}>
-                  {doctors.map(d => {
-                    const qSize = d.queueSize || 0;
-                    const isLeastBusy = d._id === leastBusyDoctorId;
-                    return (
-                      <TouchableOpacity
-                        key={d._id}
-                        style={[
-                          styles.cardItem,
-                          selectedDoctorId === d._id && styles.selectedCardItem,
-                          isLeastBusy && selectedDoctorId !== d._id && styles.suggestedCardItem
-                        ]}
-                        onPress={() => setSelectedDoctorId(d._id)}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[
-                            styles.cardItemText,
-                            selectedDoctorId === d._id && { color: '#fff' }
-                          ]}>
-                            {d.profile?.name || d.profile?.fullName || d.email}
-                          </Text>
-                          <View style={[
-                            styles.queueBadge,
-                            qSize === 0 ? styles.queueBadgeGreen : (qSize >= 5 ? styles.queueBadgeRed : styles.queueBadgeOrange),
-                            selectedDoctorId === d._id && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }
-                          ]}>
-                            <Text style={[
-                              styles.queueBadgeText,
-                              selectedDoctorId === d._id && { color: '#fff' }
-                            ]}>
-                              {qSize}
-                            </Text>
-                          </View>
-                          {isLeastBusy && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                              <Sparkles size={12} color={selectedDoctorId === d._id ? '#fff' : '#047857'} />
-                              <Text style={[
-                                styles.suggestLabel,
-                                selectedDoctorId === d._id && { color: '#fff' }
-                              ]}>
-                                Gợi ý
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <Text style={styles.sectionTitle}>3. Phân công điều dưỡng</Text>
-                <View style={styles.rowWrapper}>
-                  {nurses.map(n => (
-                    <TouchableOpacity
-                      key={n._id}
-                      style={[styles.cardItem, selectedNurseId === n._id && styles.selectedCardItem]}
-                      onPress={() => setSelectedNurseId(n._id)}
-                    >
-                      <Text style={styles.cardItemText}>{n.profile?.name || n.profile?.fullName || n.email}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.sectionTitle}>4. Lý do khám</Text>
-                <TextInput
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                  placeholder="Triệu chứng, yêu cầu khám..."
-                  value={reason}
-                  onChangeText={setReason}
-                  multiline
-                />
-
-                <TouchableOpacity style={styles.submitBtn} onPress={handleCreateVisit}>
-                  <Text style={styles.submitBtnText}>Xác Nhận Tạo Lượt Khám</Text>
-                </TouchableOpacity>
               </View>
             )}
 
             {activeTab === 'myQueue' && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Danh sách lượt khám</Text>
-                {visits.length === 0 ? <Text style={styles.emptyText}>Không có lượt khám nào.</Text> : null}
-                {visits.map(v => (
-                  <TouchableOpacity 
-                    key={v._id} 
-                    style={styles.visitCard}
-                    onPress={() => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } })}
-                  >
-                    <View style={styles.visitHeader}>
-                      <Text style={styles.visitPatientName}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
-                      <ClinicalStatusBadge status={v.status} size="sm" />
-                    </View>
-                    <Text style={styles.visitDetail}>Lý do: {v.reason}</Text>
-                    <Text style={styles.visitDetail}>Phân loại: {v.visitType || 'Ngoại trú'}</Text>
-                    <Text style={styles.visitDetail}>Bác sĩ: {v.doctorId?.profile?.name || 'Đã phân công'}</Text>
-                    <Text style={styles.visitDetail}>Điều dưỡng: {v.nurseId?.profile?.name || 'Đã phân công'}</Text>
-                    <Text style={styles.visitTime}>Tạo lúc: {new Date(v.createdAt).toLocaleString()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              visits.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <ClipboardList size={26} color={Colors.brandGreen} />
+                  <Text style={styles.emptyTitle}>Hôm nay chưa có lượt khám nào</Text>
+                  <Text style={styles.emptyHint}>Lượt khám tạo ở tab "Tạo lượt khám" sẽ hiện ở đây.</Text>
+                </View>
+              ) : wide ? (
+                <View style={styles.table}>
+                  <View style={[styles.tr, styles.thead]}>
+                    <Text style={[styles.th, styles.cPatient]}>Bệnh nhân</Text>
+                    <Text style={[styles.th, styles.cReason]}>Lý do khám</Text>
+                    <Text style={[styles.th, styles.cStatus]}>Trạng thái</Text>
+                    <Text style={[styles.th, styles.cStaff]}>Bác sĩ · điều dưỡng</Text>
+                    <Text style={[styles.th, styles.cTime]}>Giờ tạo</Text>
+                    <View style={styles.cChevron} />
+                  </View>
+                  {visits.map(v => (
+                    <Pressable
+                      key={v._id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Mở lượt khám của ${v.patientId?.profile?.name || 'bệnh nhân'}`}
+                      onPress={() => openVisit(v)}
+                      style={({ hovered }) => [styles.tr, styles.trBody, hovered && styles.trHover]}
+                    >
+                      <Text style={[styles.cellName, styles.cPatient]} numberOfLines={1}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
+                      <View style={styles.cReason}>
+                        <Text style={styles.cellText} numberOfLines={1}>{v.reason || 'Khám tổng quát'}</Text>
+                        <Text style={styles.cellSub}>{v.visitType || 'Ngoại trú'}</Text>
+                      </View>
+                      <View style={styles.cStatus}><ClinicalStatusBadge status={v.status} size="sm" /></View>
+                      <View style={styles.cStaff}>
+                        <Text style={styles.cellText} numberOfLines={1}>{v.doctorId?.profile?.name || 'Đã phân công'}</Text>
+                        <Text style={styles.cellSub} numberOfLines={1}>{v.nurseId?.profile?.name || 'Đã phân công'}</Text>
+                      </View>
+                      <Text style={[styles.cellNum, styles.cTime]}>{fmtTime(v.createdAt)}</Text>
+                      <View style={styles.cChevron}><ChevronRight size={18} color={Colors.secondary} /></View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.cardList}>
+                  {visits.map(v => (
+                    <TouchableOpacity key={v._id} style={styles.visitCard} onPress={() => openVisit(v)}>
+                      <View style={styles.visitHeader}>
+                        <Text style={styles.visitPatientName}>{v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email}</Text>
+                        <ClinicalStatusBadge status={v.status} size="sm" />
+                      </View>
+                      <Text style={styles.visitDetail}>Lý do: {v.reason}</Text>
+                      <Text style={styles.visitDetail}>Phân loại: {v.visitType || 'Ngoại trú'}</Text>
+                      <Text style={styles.visitDetail}>Bác sĩ: {v.doctorId?.profile?.name || 'Đã phân công'}</Text>
+                      <Text style={styles.visitDetail}>Điều dưỡng: {v.nurseId?.profile?.name || 'Đã phân công'}</Text>
+                      <Text style={styles.visitTime}>Tạo lúc {fmtTime(v.createdAt)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )
             )}
 
             {activeTab === 'billing' && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Chờ thanh toán (viện phí và đồng chi trả BHYT)</Text>
-                {invoices.length === 0 ? <Text style={styles.emptyText}>Không có hóa đơn chờ thanh toán.</Text> : null}
+              <View style={styles.cardList}>
+                {invoices.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <CreditCard size={26} color={Colors.brandGreen} />
+                    <Text style={styles.emptyTitle}>Không có hóa đơn chờ thanh toán</Text>
+                    <Text style={styles.emptyHint}>Hóa đơn được tạo tự động khi bác sĩ kết thúc ca khám.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.billingBar}>
+                    <Text style={styles.billingBarText}>
+                      {pendingInvoicesCount} hóa đơn chờ thu · cần thu <Text style={styles.billingBarStrong}>{fmtVnd(pendingDue)}</Text>
+                    </Text>
+                  </View>
+                )}
                 {invoices.map(inv => {
                   const bhytCovered = inv.bhytInfo?.bhytAmount > 0;
                   const patientMustPay = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
-
+                  const pending = inv.status === 'chờ thanh toán';
                   return (
-                    <View key={inv._id} style={styles.invoiceCard}>
-                      <View style={styles.invoiceHeader}>
-                        <View>
-                          <Text style={styles.invoiceTitle}>{inv.visitId?.reason || 'Lượt khám'}</Text>
-                          <Text style={{ fontSize: 12, color: Colors.secondary, marginTop: 2 }}>
-                            Mã lượt khám #{String(inv.visitId?._id || inv.visitId || '').slice(-6).toUpperCase()}
-                          </Text>
-                          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                            BN: {inv.patientId?.profile?.name || inv.patientId?.profile?.fullName || inv.patientId?.email || 'N/A'}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.invoiceTotal}>Tổng: {inv.totalAmount.toLocaleString()} VNĐ</Text>
-                          {bhytCovered ? (
-                            <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
-                              <Text style={{ fontSize: 12, color: '#047857', fontWeight: 'bold' }}>
-                                BHYT chi trả ({inv.bhytInfo.coverageRate}%): -{inv.bhytInfo.bhytAmount.toLocaleString()} VNĐ
-                              </Text>
-                              <Text style={{ fontSize: 13, color: '#B91C1C', fontWeight: 'bold', marginTop: 1 }}>
-                                BN đồng chi trả: {patientMustPay.toLocaleString()} VNĐ
-                              </Text>
+                    <View key={inv._id} style={[styles.invoiceCard, wide && styles.invoiceCardWide]}>
+                      <View style={styles.invoiceMain}>
+                        <Text style={styles.invoicePatient}>{inv.patientId?.profile?.name || inv.patientId?.profile?.fullName || inv.patientId?.email || 'Bệnh nhân'}</Text>
+                        <Text style={styles.invoiceTitle}>{inv.visitId?.reason || 'Lượt khám'}</Text>
+                        <Text style={styles.invoiceCode}>Mã lượt khám #{String(inv.visitId?._id || inv.visitId || '').slice(-6).toUpperCase()}</Text>
+                        <View style={styles.invoiceItems}>
+                          {inv.items.map((item, idx) => (
+                            <View key={idx} style={styles.invoiceItemRow}>
+                              <Text style={styles.invoiceItemDesc}>{item.description}</Text>
+                              <Text style={styles.invoiceItemAmount}>{fmtVnd(item.amount)}</Text>
                             </View>
-                          ) : (
-                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Chưa khấu trừ BHYT</Text>
-                          )}
+                          ))}
                         </View>
                       </View>
 
-                      {inv.items.map((item, idx) => (
-                        <View key={idx} style={styles.invoiceItemRow}>
-                          <Text style={styles.invoiceItemDesc}>{item.description}</Text>
-                          <Text style={styles.invoiceItemAmount}>{item.amount.toLocaleString()} VNĐ</Text>
+                      <View style={[styles.invoiceSide, wide && styles.invoiceSideWide]}>
+                        <InvoiceStatus status={inv.status} />
+                        <View style={styles.sumRow}>
+                          <Text style={styles.sumLabel}>Tổng cộng</Text>
+                          <Text style={styles.sumValue}>{fmtVnd(inv.totalAmount)}</Text>
                         </View>
-                      ))}
-
-                      <View style={styles.invoiceFooter}>
-                        <Text style={styles.statusBadge(inv.status)}>{inv.status.toUpperCase()}</Text>
-                        {inv.status === 'chờ thanh toán' && (
-                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        <View style={styles.sumRow}>
+                          <Text style={styles.sumLabel}>{bhytCovered ? `BHYT chi trả (${inv.bhytInfo.coverageRate}%)` : 'BHYT'}</Text>
+                          <Text style={[styles.sumValue, bhytCovered && styles.sumValueGood]}>{bhytCovered ? `−${fmtVnd(inv.bhytInfo.bhytAmount)}` : 'Chưa áp dụng'}</Text>
+                        </View>
+                        <View style={[styles.sumRow, styles.sumTotalRow]}>
+                          <Text style={styles.sumTotalLabel}>Bệnh nhân trả</Text>
+                          <Text style={styles.sumTotal}>{fmtVnd(patientMustPay)}</Text>
+                        </View>
+                        {pending ? (
+                          <View style={[styles.payActions, wide && styles.payActionsWide]}>
+                            <TouchableOpacity style={[styles.payBtn, wide && styles.payBtnWide]} onPress={() => handlePayInvoice(inv._id)} accessibilityRole="button">
+                              <Text style={styles.payBtnText}>Thu tiền mặt</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.payBtnSecondary, wide && styles.payBtnWide]} onPress={() => handlePayOSPayment(inv._id)} accessibilityRole="button">
+                              <Text style={styles.payBtnSecondaryText}>Thanh toán PayOS QR</Text>
+                            </TouchableOpacity>
                             {!bhytCovered && (
                               <TouchableOpacity
-                                style={[styles.payBtn, { backgroundColor: Colors.brandNavy }]}
+                                style={[styles.payBtnSecondary, wide && styles.payBtnWide]}
                                 onPress={() => handleApplyBhyt(inv)}
                                 disabled={applyingBhytId === inv._id}
+                                accessibilityRole="button"
                               >
-                                <Text style={styles.payBtnText}>
-                                  {applyingBhytId === inv._id ? 'Đang tính...' : 'Áp dụng BHYT'}
-                                </Text>
+                                <Text style={styles.payBtnSecondaryText}>{applyingBhytId === inv._id ? 'Đang tính…' : 'Áp dụng BHYT'}</Text>
                               </TouchableOpacity>
                             )}
-                            <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                              <Text style={styles.payBtnText}>Tiền mặt ({patientMustPay.toLocaleString()}đ)</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.payBtn]} onPress={() => handlePayOSPayment(inv._id)}>
-                              <Text style={styles.payBtnText}>PayOS QR</Text>
-                            </TouchableOpacity>
                           </View>
-                        )}
+                        ) : null}
                       </View>
                     </View>
                   );
                 })}
               </View>
             )}
+            </PageContainer>
           </ScrollView>
         )}
 
@@ -662,60 +743,9 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    padding: 16,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  activeTab: {
-    backgroundColor: Colors.brandGreen,
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  activeTabText: {
-    color: '#fff',
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   contentContainer: {
     flex: 1,
-  },
-  section: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 12,
-    marginTop: 10,
   },
   input: {
     borderWidth: 1,
@@ -726,57 +756,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     marginBottom: 10,
   },
-  listWrapper: {
-    marginBottom: 10,
-  },
-  listItem: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  selectedListItem: {
-    borderColor: Colors.brandGreen,
-    backgroundColor: '#ECFEFF',
-  },
-  listItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  listItemSub: {
-    fontSize: 14,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  rowWrapper: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  cardItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 20,
-    backgroundColor: '#fff',
-  },
-  selectedCardItem: {
-    backgroundColor: Colors.brandGreen,
-    borderColor: Colors.brandGreen,
-  },
-  suggestedCardItem: {
-    borderColor: '#047857',
-    backgroundColor: '#ECFDF5',
-  },
-  queueBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
+  queueBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   queueBadgeGreen: {
     backgroundColor: '#DCFCE7',
   },
@@ -786,33 +766,14 @@ const styles = StyleSheet.create({
   queueBadgeRed: {
     backgroundColor: '#FEE2E2',
   },
-  queueBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
+  queueBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.slateDark, fontVariant: ['tabular-nums'] },
   suggestLabel: {
     fontSize: 12,
     color: '#047857',
     fontWeight: 'bold',
   },
-  cardItemText: {
-    fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '500',
-  },
-  submitBtn: {
-    backgroundColor: '#047857',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  submitBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  submitBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, height: 48, borderRadius: 10, backgroundColor: Colors.brandGreen, marginTop: 20 },
+  submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   emptyText: {
     color: '#64748B',
     fontStyle: 'italic',
@@ -839,13 +800,7 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#fff',
   },
-  visitCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-  },
+  visitCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 16 },
   visitHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -862,81 +817,14 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 4,
   },
-  visitTime: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 8,
-  },
-  statusBadge: (status) => ({
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: 'bold',
-    overflow: 'hidden',
-    backgroundColor:
-      status === 'đang chờ' ? '#FEF3C7' :
-        status === 'đã đóng' ? '#E2E8F0' :
-          status === 'chờ thanh toán' ? '#FEE2E2' :
-            '#DCFCE7',
-    color:
-      status === 'đang chờ' ? '#D97706' :
-        status === 'đã đóng' ? '#475569' :
-          status === 'chờ thanh toán' ? '#B91C1C' :
-            '#047857',
-  }),
-  invoiceCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-  },
-  invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 },
-  invoiceTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
-  invoiceTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#B91C1C',
-  },
-  invoiceItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  invoiceItemDesc: {
-    fontSize: 14,
-    color: '#475569',
-  },
-  invoiceItemAmount: {
-    fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '500',
-  },
-  invoiceFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  payBtn: {
-    backgroundColor: '#047857',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  payBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+  visitTime: { fontSize: 12, color: Colors.secondary, marginTop: 8 },
+  invoiceCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 20, gap: 16 },
+  invoiceTitle: { fontSize: 14, color: Colors.slateDark, marginTop: 4 },
+  invoiceItemRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  invoiceItemDesc: { flex: 1, fontSize: 14, color: Colors.slateMuted },
+  invoiceItemAmount: { fontSize: 14, color: Colors.slateDark, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  payBtn: { backgroundColor: Colors.brandGreen, height: 40, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  payBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   // Modal BHYT Styles
   modalOverlay: {
     flex: 1,
@@ -1049,6 +937,73 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  page: { paddingTop: 20, paddingBottom: 32 },
+  formGrid: { gap: 16 },
+  formGridWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
+  panel: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 20 },
+  panelLeft: { flex: 1, minWidth: 0 },
+  panelRight: { flex: 1.15, minWidth: 0 },
+  panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+  panelTitle: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy, marginBottom: 10 },
+  panelTitleInline: { marginBottom: 0 },
+  panelTitleGap: { marginTop: 24 },
+  btnSecondary: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface },
+  btnSecondaryText: { fontSize: 13, fontWeight: '600', color: Colors.brandGreen },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.borderStrong, borderRadius: 10, backgroundColor: Colors.surface, marginBottom: 12 },
+  searchInput: { flex: 1, height: 42, fontSize: 15, color: Colors.slateDark },
+  optionList: { gap: 8 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, backgroundColor: Colors.surface },
+  optionHover: { borderColor: Colors.borderStrong, backgroundColor: Colors.background },
+  optionSelected: { borderColor: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft },
+  optionBody: { flex: 1, minWidth: 0 },
+  optionTitle: { fontSize: 15, fontWeight: '600', color: Colors.slateDark },
+  optionSub: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  suggest: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  textArea: { height: 88, textAlignVertical: 'top', marginBottom: 0 },
+  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 56, paddingHorizontal: 24 },
+  emptyTitle: { fontSize: 15, fontWeight: '600', color: Colors.slateMuted },
+  emptyHint: { fontSize: 14, color: Colors.secondary, textAlign: 'center', maxWidth: 420, lineHeight: 20 },
+  table: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  tr: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16 },
+  thead: { backgroundColor: Colors.background, paddingVertical: 10 },
+  th: { fontSize: 12, fontWeight: '600', color: Colors.slateMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  trBody: { paddingVertical: 14, borderTopWidth: 1, borderTopColor: Colors.border },
+  trHover: { backgroundColor: Colors.background },
+  cPatient: { flex: 2, minWidth: 0 },
+  cReason: { flex: 2.2, minWidth: 0 },
+  cStatus: { flex: 1.3, minWidth: 0, alignItems: 'flex-start' },
+  cStaff: { flex: 1.8, minWidth: 0 },
+  cTime: { width: 110 },
+  cChevron: { width: 20, alignItems: 'flex-end' },
+  cellName: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  cellText: { fontSize: 14, color: Colors.slateDark },
+  cellSub: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  cellNum: { fontSize: 14, color: Colors.slateDark, fontVariant: ['tabular-nums'] },
+  cardList: { gap: 12 },
+  billingBar: { flexDirection: 'row', alignItems: 'center' },
+  billingBarText: { fontSize: 14, color: Colors.slateMuted },
+  billingBarStrong: { fontWeight: '700', color: Colors.brandNavy, fontVariant: ['tabular-nums'] },
+  invoiceCardWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 24 },
+  invoiceMain: { flex: 1, minWidth: 0 },
+  invoicePatient: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy },
+  invoiceCode: { fontSize: 13, color: Colors.secondary, marginTop: 2, fontVariant: ['tabular-nums'] },
+  invoiceItems: { marginTop: 14, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10, gap: 6 },
+  invoiceSide: { gap: 8, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 14 },
+  invoiceSideWide: { width: 300, borderTopWidth: 0, paddingTop: 0, borderLeftWidth: 1, borderLeftColor: Colors.border, paddingLeft: 24 },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+  sumLabel: { fontSize: 14, color: Colors.slateMuted },
+  sumValue: { fontSize: 14, color: Colors.slateDark, fontVariant: ['tabular-nums'] },
+  sumValueGood: { color: Colors.successText, fontWeight: '600' },
+  sumTotalRow: { marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  sumTotalLabel: { fontSize: 14, fontWeight: '700', color: Colors.brandNavy },
+  sumTotal: { fontSize: 20, fontWeight: '700', color: Colors.brandNavy, fontVariant: ['tabular-nums'] },
+  payActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  payActionsWide: { flexDirection: 'column', flexWrap: 'nowrap', alignItems: 'stretch' },
+  payBtnWide: { alignSelf: 'stretch' },
+  payBtnSecondary: { backgroundColor: Colors.surface, height: 40, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  payBtnSecondaryText: { color: Colors.brandGreen, fontWeight: '600', fontSize: 14 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusPillText: { fontSize: 12, fontWeight: '600' },
 });
 
 export default NurseReceptionScreen;

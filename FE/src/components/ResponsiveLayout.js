@@ -39,6 +39,8 @@ import {
   ArrowRightLeft,
   UploadCloud,
   Menu,
+  Database,
+  Sliders,
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
@@ -171,7 +173,7 @@ const ResponsiveLayout = ({
 
   const isPatient = localUser?.role === 'patient';
   const theme = SHELL_THEME;
-  const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
+  const roleLabel = !localUser ? 'Đang tải…' : (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
                     localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
@@ -246,7 +248,13 @@ const ResponsiveLayout = ({
       case 'admin':
       case 'system_admin':
         return [
-          { label: 'Tổng quan', route: 'AdminBackoffice', icon: LayoutDashboard },
+          { label: 'Tổng quan', route: 'AdminBackoffice', params: { tab: 'metrics' }, icon: LayoutDashboard },
+          { label: 'Người dùng', route: 'AdminBackoffice', params: { tab: 'users' }, icon: Users },
+          { label: 'Bệnh viện', route: 'AdminBackoffice', params: { tab: 'hospitals' }, icon: Building2 },
+          { label: 'Dataset', route: 'AdminBackoffice', params: { tab: 'datasets' }, icon: Database },
+          { label: 'Nhật ký hệ thống', route: 'AdminBackoffice', params: { tab: 'audit-logs' }, icon: ClipboardList },
+          { label: 'SaaS Suite (nâng cao)', route: 'AdminBackoffice', params: { tab: 'saas-suite' }, icon: Sliders },
+          { label: 'Huấn luyện & Chatbot AI', route: 'AdminBackoffice', params: { tab: 'ai-config' }, icon: Brain },
           { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
@@ -260,7 +268,7 @@ const ResponsiveLayout = ({
     }
   };
 
-  const menuItems = getMenuItems(localUser?.role);
+  const menuItems = localUser ? getMenuItems(localUser.role) : [];
 
   const getInitials = (name) => {
     if (!name) return 'U';

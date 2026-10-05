@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
-  useWindowDimensions,
   TextInput,
   Modal,
   KeyboardAvoidingView,
@@ -16,16 +15,17 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
 import Config from '../constants/config';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
-// Lucide icons render raw <svg>/<path> — only safe inside the isDesktop-gated
-// sidebar below (web-only render path). Never use them outside that gate.
+// Lucide icons render raw <svg>/<path> (web-only) — crash trên native thật.
 import {
   Stethoscope,
   FileText,
   ClipboardList,
-  Activity,
   PenTool,
   Pill,
   History,
@@ -42,8 +42,6 @@ import {
   Calendar,
   FolderArchive,
   Inbox,
-  ArrowLeft,
-  ArrowRightLeft,
 } from 'lucide-react';
 import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
@@ -190,8 +188,6 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   // Loading states
   const [loading, setLoading] = useState(false);
 
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
 
   // Fetch medical records
   const fetchRecords = async () => {
@@ -343,186 +339,47 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     (r.patientId || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const isDoctorLike = localUser?.role === 'doctor' || localUser?.role === 'admin';
+  const emrTabs = [
+    localUser?.role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
+    { key: 'records', label: 'Hồ sơ bệnh án' },
+    { key: 'care', label: 'Phiếu chăm sóc' },
+    isDoctorLike && { key: 'consult', label: 'Hội chẩn' },
+    isDoctorLike && { key: 'consent', label: 'Giấy cam đoan' },
+    isDoctorLike && { key: 'prescriptions', label: 'Kê đơn thuốc' },
+    { key: 'versions', label: 'Lịch sử sửa đổi' },
+    isDoctorLike && { key: 'imaging', label: 'Phim MRI & CT' },
+    { key: 'beds', label: 'Giường bệnh' },
+    { key: 'transfers', label: 'Chuyển viện' },
+  ].filter(Boolean);
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Quay lại</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <PageHeader
+          bar
+          title="Bệnh án điện tử"
+          subtitle="Hồ sơ nội trú, chăm sóc, hội chẩn và điều phối giường bệnh."
+          below={<PageTabs tabs={emrTabs} value={activeTab} onChange={setActiveTab} />}
+        />
 
-        <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
-          {/* Sidebar for desktop */}
-          {isDesktop && (
-            <View style={styles.desktopSidebar}>
-              <Text style={styles.sidebarTitle}>EMR Management</Text>
-              <Text style={styles.sidebarSubtitle}>Quản lý Hồ sơ Bệnh Án</Text>
-              <View style={styles.sidebarNav}>
-                {localUser?.role === 'nurse' && (
-                  <SidebarItem
-                    icon={Stethoscope}
-                    label="Đo sinh hiệu"
-                    active={activeTab === 'nurseQueue'}
-                    onPress={() => setActiveTab('nurseQueue')}
-                  />
-                )}
-                <SidebarItem
-                  icon={FileText}
-                  label="Hồ sơ bệnh án"
-                  active={activeTab === 'records'}
-                  onPress={() => setActiveTab('records')}
-                />
-                <SidebarItem
-                  icon={ClipboardList}
-                  label="Phiếu chăm sóc"
-                  active={activeTab === 'care'}
-                  onPress={() => setActiveTab('care')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <>
-                    <SidebarItem
-                      icon={Activity}
-                      label="Hội chẩn"
-                      active={activeTab === 'consult'}
-                      onPress={() => setActiveTab('consult')}
-                    />
-                    <SidebarItem
-                      icon={PenTool}
-                      label="Giấy cam đoan"
-                      active={activeTab === 'consent'}
-                      onPress={() => setActiveTab('consent')}
-                    />
-                    <SidebarItem
-                      icon={Pill}
-                      label="Kê đơn thuốc"
-                      active={activeTab === 'prescriptions'}
-                      onPress={() => setActiveTab('prescriptions')}
-                    />
-                  </>
-                )}
-                <SidebarItem
-                  icon={History}
-                  label="Lịch sử sửa đổi"
-                  active={activeTab === 'versions'}
-                  onPress={() => setActiveTab('versions')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <SidebarItem
-                    icon={Brain}
-                    label="Phim MRI & CT"
-                    active={activeTab === 'imaging'}
-                    onPress={() => setActiveTab('imaging')}
-                  />
-                )}
-                <SidebarItem
-                  icon={Building2}
-                  label="Giường Khoa U Não"
-                  active={activeTab === 'beds'}
-                  onPress={() => setActiveTab('beds')}
-                />
-                <SidebarItem
-                  icon={ArrowRightLeft}
-                  label="Chuyển viện Liên viện"
-                  active={activeTab === 'transfers'}
-                  onPress={() => setActiveTab('transfers')}
-                />
-              </View>
-              {selectedRecord && localUser?.role !== 'nurse' && (
-                <View style={styles.selectedRecordBox}>
-                  <Text style={styles.selectedRecordLabel}>Đang xem:</Text>
-                  <Text style={styles.selectedRecordName}>{selectedRecord.patientName}</Text>
-                  <TouchableOpacity
-                    style={styles.clearSelectionBtn}
-                    onPress={() => setSelectedRecord(null)}
-                  >
-                    <Text style={styles.clearSelectionText}>Xóa chọn</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {nurseSelectedPatient && localUser?.role === 'nurse' && (
-                <View style={[styles.selectedRecordBox, { borderColor: '#6EE7B7' }]}>
-                  <Text style={styles.selectedRecordLabel}>Bệnh nhân:</Text>
-                  <Text style={styles.selectedRecordName}>{nurseSelectedPatient.patientName}</Text>
-                  <TouchableOpacity
-                    style={styles.clearSelectionBtn}
-                    onPress={() => setNurseSelectedPatient(null)}
-                  >
-                    <Text style={styles.clearSelectionText}>← Quay lại</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Main Content */}
           <View style={styles.mainContent}>
-            {/* Mobile tab bar */}
-            {!isDesktop && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileTabBar} contentContainerStyle={styles.mobileTabBarContent}>
-                {localUser?.role === 'nurse' && (
-                  <MobileTab
-                    label="Sinh hiệu"
-                    active={activeTab === 'nurseQueue'}
-                    onPress={() => setActiveTab('nurseQueue')}
-                  />
-                )}
-                <MobileTab
-                  label="Hồ sơ"
-                  active={activeTab === 'records'}
-                  onPress={() => setActiveTab('records')}
-                />
-                <MobileTab
-                  label="Chăm sóc"
-                  active={activeTab === 'care'}
-                  onPress={() => setActiveTab('care')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <>
-                    <MobileTab
-                      label="Hội chẩn"
-                      active={activeTab === 'consult'}
-                      onPress={() => setActiveTab('consult')}
-                    />
-                    <MobileTab
-                      label="Cam đoan"
-                      active={activeTab === 'consent'}
-                      onPress={() => setActiveTab('consent')}
-                    />
-                    <MobileTab
-                      label="Đơn thuốc"
-                      active={activeTab === 'prescriptions'}
-                      onPress={() => setActiveTab('prescriptions')}
-                    />
-                  </>
-                )}
-                <MobileTab
-                  label="Lịch sử"
-                  active={activeTab === 'versions'}
-                  onPress={() => setActiveTab('versions')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <MobileTab
-                    label="Phim MRI"
-                    active={activeTab === 'imaging'}
-                    onPress={() => setActiveTab('imaging')}
-                  />
-                )}
-                <MobileTab
-                  label="Giường U Não"
-                  active={activeTab === 'beds'}
-                  onPress={() => setActiveTab('beds')}
-                />
-                <MobileTab
-                  label="Chuyển viện"
-                  active={activeTab === 'transfers'}
-                  onPress={() => setActiveTab('transfers')}
-                />
-              </ScrollView>
-            )}
+            {(selectedRecord && localUser?.role !== 'nurse') || (nurseSelectedPatient && localUser?.role === 'nurse') ? (
+              <View style={styles.contextBar}>
+                <PageContainer style={styles.contextInner}>
+                  <Text style={styles.contextText} numberOfLines={1}>
+                    {localUser?.role === 'nurse' ? 'Bệnh nhân: ' : 'Đang xem bệnh án: '}
+                    <Text style={styles.contextName}>{localUser?.role === 'nurse' ? nurseSelectedPatient.patientName : selectedRecord.patientName}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => (localUser?.role === 'nurse' ? setNurseSelectedPatient(null) : setSelectedRecord(null))}
+                  >
+                    <Text style={styles.contextAction}>{localUser?.role === 'nurse' ? 'Quay lại danh sách' : 'Bỏ chọn'}</Text>
+                  </TouchableOpacity>
+                </PageContainer>
+              </View>
+            ) : null}
 
             {loading ? (
               <View style={styles.loadingContainer}>
@@ -531,6 +388,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
               </View>
             ) : (
               <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <PageContainer>
                 {activeTab === 'nurseQueue' && (
                   <NurseQueueTab navigation={navigation} />
                 )}
@@ -625,10 +483,10 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 {activeTab === 'transfers' && (
                   <InterHospitalTransferView currentUser={localUser} />
                 )}
+                </PageContainer>
               </ScrollView>
             )}
           </View>
-        </View>
 
         <EMRModal
           isVisible={isModalVisible}
@@ -709,33 +567,6 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     </ResponsiveLayout>
   );
 };
-
-// Sidebar Item Component
-const SidebarItem = ({ icon: IconComponent, label, active, onPress }) => (
-  <TouchableOpacity
-    style={[styles.sidebarItem, active && styles.sidebarItemActive]}
-    onPress={onPress}
-  >
-    <View style={styles.sidebarIconContainer}>
-      <IconComponent size={16} color={active ? Colors.brandGreen : '#64748B'} />
-    </View>
-    <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-// Mobile Tab Component
-const MobileTab = ({ label, active, onPress }) => (
-  <TouchableOpacity
-    style={[styles.mobileTabItem, active && styles.mobileTabItemActive]}
-    onPress={onPress}
-  >
-    <Text style={[styles.mobileTabText, active && styles.mobileTabTextActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
 
 // Tab Components
 const NurseQueueTab = ({ navigation }) => {
@@ -1517,8 +1348,8 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -1565,8 +1396,8 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -1609,8 +1440,8 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -1655,8 +1486,8 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -1696,8 +1527,8 @@ const VersionTab = ({ versions, selectedRecord }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -1793,8 +1624,8 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
 
       {!selectedRecord ? (
         <View style={styles.emptyState}>
-          <ArrowLeft size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-          <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
+          <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+          <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
         </View>
       ) : imagingResults.length === 0 ? (
         <View style={styles.emptyState}>
@@ -2412,143 +2243,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  backButton: {
-    paddingVertical: 4,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  desktopSidebar: {
-    width: 280,
-    backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
-    padding: 24,
-  },
-  sidebarTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.brandNavy,
-    marginBottom: 4,
-  },
-  sidebarSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  sidebarNav: {
-    gap: 8,
-  },
-  sidebarItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: 'transparent',
-  },
-  sidebarItemActive: {
-    backgroundColor: Colors.brandGreenSoft,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.brandGreen,
-    paddingLeft: 11,
-  },
-  sidebarIconContainer: {
-    width: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
-  sidebarItemText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  sidebarItemTextActive: {
-    color: Colors.brandGreen,
-    fontWeight: '700',
-  },
-  selectedRecordBox: {
-    marginTop: 30,
-    padding: 16,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#047857',
-  },
-  selectedRecordLabel: {
-    fontSize: 12,
-    color: '#166534',
-    marginBottom: 4,
-  },
-  selectedRecordName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.brandNavy,
-    marginBottom: 8,
-  },
-  clearSelectionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#047857',
-  },
-  clearSelectionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#166534',
-    textAlign: 'center',
-  },
-  mainContent: {
-    flex: 1,
-  },
-  mobileTabBar: {
-    flexGrow: 0,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  mobileTabBarContent: { paddingHorizontal: 8 },
-  mobileTabItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  mobileTabItemActive: {
-    borderBottomColor: Colors.brandGreen,
-  },
-  mobileTabText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  mobileTabTextActive: {
-    color: Colors.brandGreen,
-    fontWeight: '700',
-  },
-  scrollContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-  },
+  mainContent: { flex: 1 },
+  contextBar: { backgroundColor: Colors.brandGreenSoft, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  contextInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10 },
+  contextText: { flex: 1, fontSize: 14, color: Colors.slateMuted },
+  contextName: { fontWeight: '700', color: Colors.brandNavy },
+  contextAction: { fontSize: 14, fontWeight: '600', color: Colors.brandGreen },
+  scrollContainer: { paddingTop: 20, paddingBottom: 32 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

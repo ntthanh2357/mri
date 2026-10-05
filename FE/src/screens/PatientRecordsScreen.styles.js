@@ -18,6 +18,7 @@ export default StyleSheet.create({
   scrollContainer: { paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 40, maxWidth: 720, width: '100%', alignSelf: 'center' },
   scrollContainerDesktop: { paddingHorizontal: 28, paddingVertical: 28, maxWidth: 1040 },
 
+  pageHeader: { marginBottom: 20 },
   pageTitleBlock: { marginBottom: 20 },
   pageTitle: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, marginBottom: 6, letterSpacing: -0.3 },
   pageSubtitle: { fontSize: 14, color: Colors.secondary, lineHeight: 20 },

@@ -21,6 +21,12 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 
+// "KS. Huy Hoàng (Quản trị Hệ thống)" → { name: "KS. Huy Hoàng", title: "Quản trị Hệ thống" }
+const splitTitle = (full = '') => {
+  const m = String(full).match(/^(.*?)\s*\((.+)\)\s*$/);
+  return m ? { name: m[1], title: m[2] } : { name: String(full), title: '' };
+};
+
 // Map an API user to the BackofficeUser list row shape
 function mapApiUser(u) {
   return {
@@ -415,20 +421,20 @@ export default function AdminUsersView() {
       </div>
 
       {/* Main table and details flex */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${selectedUserId ? 'xl:grid-cols-3' : ''}`}>
 
         {/* Users Roster List Table (Covers ADM-01) */}
-        <div className="xl:col-span-2 bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
-          <h3 className="text-sm font-bold text-slate-850 mb-4 font-sans">Danh sách Người dùng Hệ thống</h3>
+        <div className={`${selectedUserId ? 'xl:col-span-2' : ''} bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs`}>
+          <h3 className="text-base font-bold text-slate-850 mb-4 font-sans">Danh sách người dùng</h3>
 
           <div className="overflow-x-auto border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold text-[10px] uppercase">
-                  <th className="py-2.5 px-3">Mã số tài khoản</th>
+                <tr className="bg-slate-50 border-b border-slate-250 text-slate-500 font-bold text-xs uppercase">
+                  <th className="py-2.5 px-3">Mã</th>
                   <th className="py-2.5 px-3">Họ và tên</th>
-                  <th className="py-2.5 px-3">Vai trò (Role)</th>
-                  <th className="py-2.5 px-3">Thông tin liên lạc</th>
+                  <th className="py-2.5 px-3">Vai trò</th>
+                  <th className="py-2.5 px-3">Liên hệ</th>
                   <th className="py-2.5 px-3 text-center">Trạng thái</th>
                   <th className="py-2.5 px-3 text-right">Tương tác</th>
                 </tr>
@@ -460,13 +466,13 @@ export default function AdminUsersView() {
                     <tr
                       key={user.id}
                       onClick={() => handleSelectUser(user.id)}
-                      className={`hover:bg-blue-50/20 cursor-pointer transition-colors ${
-                        selectedUserId === user.id ? 'bg-blue-50/50' : ''
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${
+                        selectedUserId === user.id ? 'bg-emerald-50' : ''
                       } ${user.status === 'Locked' ? 'bg-red-50/20 opacity-80' : ''}`}
                     >
                       {/* ID */}
-                      <td className="py-3.5 px-3 font-mono font-bold text-slate-700">
-                        <span className="truncate max-w-[100px] block" title={user.id}>{user.id}</span>
+                      <td className="py-3.5 px-3 font-mono font-bold text-slate-700 whitespace-nowrap">
+                        <span title={user.id}>#{String(user.id).slice(-6).toUpperCase()}</span>
                       </td>
 
                       {/* Avatar & Name */}
@@ -478,14 +484,19 @@ export default function AdminUsersView() {
                             referrerPolicy="no-referrer"
                             className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
                           />
-                          <span className="font-extrabold text-slate-800 hover:text-blue-600 transition-colors block">{user.name}</span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-800 block">{splitTitle(user.name).name}</span>
+                            {splitTitle(user.name).title ? (
+                              <span className="text-xs text-slate-500 block">{splitTitle(user.name).title}</span>
+                            ) : null}
+                          </div>
                         </div>
                       </td>
 
                       {/* Role Badge */}
                       <td className="py-3.5 px-3">
                         <div className="flex flex-col gap-1 items-start">
-                          <span className={`text-[9.5px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap ${
+                          <span className={`text-xs px-2 py-0.5 rounded-md font-bold whitespace-nowrap ${
                             user.role === 'doctor'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                               : user.role === 'patient'
@@ -503,7 +514,7 @@ export default function AdminUsersView() {
                             {roleLabel(user.role)}
                           </span>
                           {user.departmentId && user.role !== 'patient' && (
-                            <span className="text-[8.5px] text-slate-400 font-mono font-medium px-1 bg-slate-50 rounded border border-slate-100">
+                            <span className="text-xs text-slate-500 font-mono font-medium px-1 bg-slate-50 rounded border border-slate-100">
                               {user.departmentId}
                             </span>
                           )}
@@ -512,12 +523,12 @@ export default function AdminUsersView() {
 
                       {/* Contact */}
                       <td className="py-3.5 px-3 text-slate-500 font-sans">
-                        <div className="flex flex-col text-[11px] leading-tight">
+                        <div className="flex flex-col text-xs leading-tight">
                           <span className="flex items-center gap-1 font-semibold text-slate-700">
                             <Mail className="w-3 h-3 text-slate-400" />
                             {user.email}
                           </span>
-                          <span className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                          <span className="flex items-center gap-1 text-xs text-slate-500 mt-1">
                             <Phone className="w-3 h-3 text-slate-400" />
                             {user.phone || '—'}
                           </span>
@@ -526,13 +537,13 @@ export default function AdminUsersView() {
 
                       {/* Status */}
                       <td className="py-3.5 px-3 text-center">
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 whitespace-nowrap ${
                           user.status === 'Active'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
                             : 'bg-rose-50 text-rose-800 border border-rose-100'
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                          {user.status}
+                          {user.status === 'Active' ? 'Hoạt động' : user.status === 'Locked' ? 'Đã khóa' : user.status}
                         </span>
                       </td>
 
@@ -567,14 +578,18 @@ export default function AdminUsersView() {
         </div>
 
         {/* Detailed User Panel / Information (Covers ADM-02) */}
+        {selectedUserId && (
         <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs">
           <div className="flex justify-between items-center pb-2.5 border-b border-slate-100 mb-4">
             <h3 className="text-sm font-bold text-slate-800 font-sans">Chi tiết Hồ sơ Quản trị</h3>
-            {selectedUserId && (
-              <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold text-[9.5px] truncate max-w-[120px]" title={selectedUserId}>
-                {selectedUserId}
-              </span>
-            )}
+            <button
+              onClick={() => { setSelectedUserId(null); setSelectedUserDetail(null); }}
+              title="Đóng chi tiết"
+              aria-label="Đóng chi tiết"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Loading state for detail panel */}
@@ -749,6 +764,7 @@ export default function AdminUsersView() {
             </div>
           )}
         </div>
+        )}
 
       </div>
 

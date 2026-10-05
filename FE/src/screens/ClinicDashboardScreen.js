@@ -16,27 +16,14 @@ import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
-import {
-  Users,
-  FolderOpen,
-  Calendar,
-  TrendingUp,
-  Brain,
-  DollarSign,
-  Activity,
-  Stethoscope,
-  HeartPulse,
-  Microscope,
-  Briefcase,
-  UserPlus,
-  List,
-  Save,
-  X,
-  Building2,
-  ArrowRightLeft,
-  Package,
-  FileText,
-} from 'lucide-react';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
+import Layout from '../constants/layout';
+
+// "PGS.TS Vũ Đình Hoàng (Giám đốc …)" → "PGS.TS Vũ Đình Hoàng"
+const shortName = (name = '') => String(name).replace(/\s*\(.*\)\s*$/, '').trim();
+const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
+import { Stethoscope, HeartPulse, Microscope, Briefcase, UserPlus, List, Save, X } from 'lucide-react';
 
 const getRoleBadgeStyle = (role) => {
   switch (role) {
@@ -185,6 +172,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const isWide = width >= Layout.wide;
 
 
   return (
@@ -193,259 +181,50 @@ const ClinicDashboardScreen = ({ navigation }) => {
       activeRoute="ClinicDashboard"
     >
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Bảng điều khiển chính</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <ScrollView>
+          <PageContainer style={styles.page}>
+            <PageHeader
+              title="Tổng quan bệnh viện"
+              subtitle={`Chào ${shortName(currentUser?.profile?.name) || 'bạn'} · tình hình vận hành hôm nay.`}
+              actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => { fetchDashboardData(); fetchHospitalStaff(); }} />}
+            />
 
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* Title */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Bảng điều khiển Bệnh viện / Phòng khám</Text>
-            <Text style={styles.subtitle}>
-              Chào mừng trở lại, {currentUser?.profile?.name || currentUser?.email || 'Quản lý'}. Đây là tổng quan điều hành lâm sàng Khoa Ung Thư Não.
-            </Text>
-          </View>
-
-          {/* Management Quick Hub */}
-          <View style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            padding: 16,
-            marginBottom: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 12 }}>
-              Điều Hành Lâm Sàng & Nghiệp Vụ Khoa Ung Thư Não
-            </Text>
-            <View style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 10,
-            }}>
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
-              >
-                <Building2 size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Sơ đồ Giường</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Khoa & Neuro-ICU</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('EMRDashboard', { tab: 'transfers' })}
-              >
-                <ArrowRightLeft size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Chuyển Viện</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Liên viện Bạch Mai</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('EMRDashboard', { tab: 'records' })}
-              >
-                <FileText size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Quản lý EMR</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Hồ sơ & Ký số</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('StaffManagement')}
-              >
-                <Users size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Quản lý Nhân sự</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Bác sĩ & Điều dưỡng</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('StaffScheduling')}
-              >
-                <Calendar size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Lịch Phân Ca</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Sắp xếp ca trực</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('DrugManagement')}
-              >
-                <Package size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Kho Thuốc</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Thuốc ung bướu</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: isDesktop ? 1 : 0,
-                  minWidth: isDesktop ? 130 : '47%',
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => navigation.navigate('Financials')}
-              >
-                <DollarSign size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Báo Cáo Viện Phí</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Doanh thu & BHYT</Text>
-              </TouchableOpacity>
+            {/* Chỉ số chính: 1 số nổi bật (tiếp nhận hôm nay), còn lại nhỏ hơn kèm ngữ cảnh */}
+            <View style={[styles.kpiStrip, !isWide && styles.kpiStripWrap]}>
+              {[
+                { key: 'today', label: 'Tiếp nhận hôm nay', value: totalPatientsToday || 0, sub: `${aiProcessedCount || 0} ca có phân tích AI`, main: true },
+                { key: 'revenue', label: 'Doanh thu hôm nay', value: fmtVnd(revenue.totalRevenue), sub: `Từ AI: ${fmtVnd(revenue.aiRevenue)}` },
+                { key: 'patients', label: 'Tổng bệnh nhân', value: totalPatients, sub: 'Đã có hồ sơ tại viện' },
+                { key: 'scans', label: 'Lượt quét AI', value: totalScans, sub: 'Tính từ khi triển khai' },
+              ].map((k, i) => (
+                <View
+                  key={k.key}
+                  style={[
+                    styles.kpi,
+                    isWide ? styles.kpiFill : styles.kpiHalf,
+                    k.main && styles.kpiMain,
+                    isWide ? i > 0 && styles.kpiBorderLeft : [i % 2 === 1 && styles.kpiBorderLeft, i > 1 && styles.kpiBorderTop],
+                  ]}
+                >
+                  <Text style={styles.kpiLabel}>{k.label}</Text>
+                  {loadingStats ? (
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={styles.kpiLoading} />
+                  ) : (
+                    <Text style={[styles.kpiValue, k.main && styles.kpiValueMain]} numberOfLines={1}>{k.value}</Text>
+                  )}
+                  <Text style={styles.kpiSub}>{k.sub}</Text>
+                </View>
+              ))}
             </View>
-          </View>
 
-          <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
-            {/* Left Column (flex: 2) */}
-            <View style={isDesktop ? styles.leftColumn : styles.fullWidth}>
-              {/* Stats Section */}
-              <View style={styles.statsContainer}>
-                {/* Patients Metric */}
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
-                    <Users size={20} color="#1D4ED8" />
-                  </View>
-                  <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
-                  {loadingStats ? (
-                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
-                  ) : (
-                    <Text style={styles.statValue}>{totalPatients}</Text>
-                  )}
-                  <View style={styles.badgeGreen}>
-                    <Text style={styles.badgeGreenText}>Hoạt động thực tế</Text>
-                  </View>
+            <View style={[styles.columns, isWide && styles.columnsWide]}>
+              <View style={isWide ? styles.colMain : null}>
+                <View style={styles.recentSectionHeader}>
+                  <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('EMRDashboard', { tab: 'records' })} accessibilityRole="link">
+                    <Text style={styles.viewAllText}>Xem bệnh án</Text>
+                  </TouchableOpacity>
                 </View>
-
-                {/* AI Scans Metric */}
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#F5F3FF' }]}>
-                    <Brain size={20} color="#6D28D9" />
-                  </View>
-                  <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
-                  {loadingStats ? (
-                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
-                  ) : (
-                    <Text style={styles.statValue}>{totalScans}</Text>
-                  )}
-                  <View style={styles.badgeGreen}>
-                    <Text style={styles.badgeGreenText}>Từ dữ liệu quét thật</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.statsContainer}>
-                {/* Revenue Card */}
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: Colors.brandGreenSoft }]}>
-                    <DollarSign size={20} color="#047857" />
-                  </View>
-                  <Text style={styles.statLabel}>Doanh thu hôm nay</Text>
-                  {loadingStats ? (
-                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
-                  ) : (
-                    <Text style={[styles.statValue, { color: Colors.brandGreenPressed }]}>
-                      {revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ'}
-                    </Text>
-                  )}
-                  <View style={styles.badgeGreen}>
-                    <Text style={styles.badgeGreenText}>
-                      Doanh thu AI: {revenue.aiRevenue ? revenue.aiRevenue.toLocaleString('vi-VN') + 'đ' : '0đ'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Daily Activity Card */}
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#FFF7ED' }]}>
-                    <Activity size={20} color="#C2410C" />
-                  </View>
-                  <Text style={styles.statLabel}>Tiếp nhận hôm nay</Text>
-                  {loadingStats ? (
-                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
-                  ) : (
-                    <Text style={styles.statValue}>{totalPatientsToday || 0}</Text>
-                  )}
-                  <View style={styles.badgeBlue}>
-                    <Text style={styles.badgeBlueText}>
-                      Ca phân tích AI: {aiProcessedCount || 0}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Recent Activity Section */}
-              <View style={styles.recentSectionHeader}>
-                <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('PatientRecords')}>
-                  <Text style={styles.viewAllText}>Xem tất cả</Text>
-                </TouchableOpacity>
-              </View>
-
               <View style={styles.activityCard}>
                 {/* Table Header for Desktop */}
                 <View style={styles.tableHeaderRow}>
@@ -484,12 +263,44 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   ))
                 )}
               </View>
-            </View>
+              </View>
 
-            {/* Right Column (flex: 1) */}
-            <View style={isDesktop ? styles.rightColumn : styles.fullWidth}>
-              {/* Demographic Section */}
-              <Text style={styles.sectionTitle}>Nhân khẩu học bệnh nhân</Text>
+              <View style={isWide ? styles.colSide : null}>
+                <View style={styles.recentSectionHeader}>
+                  <Text style={styles.sectionTitle}>Nhân sự</Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('StaffManagement')} accessibilityRole="link">
+                    <Text style={styles.viewAllText}>Quản lý nhân sự</Text>
+                  </TouchableOpacity>
+                </View>
+              <View style={styles.doctorsCard}>
+                {loadingStaff ? (
+                  <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 20 }} />
+                ) : hospitalStaff.length === 0 ? (
+                  <Text style={{ color: Colors.secondary, fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
+                    Chưa có nhân sự hoạt động.
+                  </Text>
+                ) : (
+                  hospitalStaff.slice(0, 5).map((staff, idx) => {
+                    const badgeConfig = getRoleBadgeStyle(staff.role);
+                    return (
+                      <View key={staff.email} style={[styles.doctorItemRow, idx === Math.min(hospitalStaff.length, 5) - 1 && { borderBottomWidth: 0 }]}>
+                        <View style={styles.doctorItemLeft}>
+                          <Text style={styles.doctorItemName}>{staff.profile?.name || 'Nhân sự'}</Text>
+                          <Text style={styles.doctorItemEmail}>{staff.email}</Text>
+                        </View>
+                        <View style={[styles.roleBadgeStyle, { backgroundColor: badgeConfig.bg }]}>
+                          <Text style={[styles.roleBadgeText, { color: badgeConfig.text }]}>
+                            {badgeConfig.label}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+
+
+                <Text style={[styles.sectionTitle, styles.sectionGap]}>Nhân khẩu học bệnh nhân</Text>
               <View style={styles.demographicCard}>
                 <View style={styles.totalRow}>
                   <Text style={styles.totalVal}>{totalPatients}</Text>
@@ -523,50 +334,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 )}
               </View>
 
-              {/* Bác sĩ & Nhân sự đang hoạt động */}
-              <Text style={styles.sectionTitle}>Bác sĩ & Nhân sự đang hoạt động</Text>
-              <View style={styles.doctorsCard}>
-                {loadingStaff ? (
-                  <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 20 }} />
-                ) : hospitalStaff.length === 0 ? (
-                  <Text style={{ color: Colors.secondary, fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
-                    Chưa có nhân sự hoạt động.
-                  </Text>
-                ) : (
-                  hospitalStaff.slice(0, 5).map((staff, idx) => {
-                    const badgeConfig = getRoleBadgeStyle(staff.role);
-                    return (
-                      <View key={staff.email} style={[styles.doctorItemRow, idx === Math.min(hospitalStaff.length, 5) - 1 && { borderBottomWidth: 0 }]}>
-                        <View style={styles.doctorItemLeft}>
-                          <Text style={styles.doctorItemName}>{staff.profile?.name || 'Nhân sự'}</Text>
-                          <Text style={styles.doctorItemEmail}>{staff.email}</Text>
-                        </View>
-                        <View style={[styles.roleBadgeStyle, { backgroundColor: badgeConfig.bg }]}>
-                          <Text style={[styles.roleBadgeText, { color: badgeConfig.text }]}>
-                            {badgeConfig.label}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-
-              {/* Info Banner */}
-              <View style={styles.bannerCard}>
-                <Text style={styles.bannerCategory}>NGHIÊN CỨU TIÊN TIẾN</Text>
-                <Text style={styles.bannerTitle}>Sách trắng kết nối thần kinh 2024</Text>
-                <TouchableOpacity onPress={() => {
-                  const Linking = require('react-native').Linking;
-                  Linking.openURL('https://www.nejm.org/doi/full/10.1056/NEJMoa2118542').catch(() =>
-                    Alert.alert('Không thể mở', 'Vui lòng kiểm tra kết nối internet.')
-                  );
-                }}>
-                  <Text style={styles.bannerLink}>Đọc thêm →</Text>
-                </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </PageContainer>
         </ScrollView>
         <Modal
           visible={showAddUserModal}

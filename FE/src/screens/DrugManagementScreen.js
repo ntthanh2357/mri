@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
 
@@ -44,6 +45,9 @@ const CATEGORY_COLORS = {
 export default function DrugManagementScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  // Màn rộng: cột co giãn theo chiều ngang (trước đây cột cố định → bảng chỉ dùng ~650px, chip phân nhóm xuống 3 dòng)
+  const fluidTable = width >= Layout.wide;
+  const col = (w, flex) => (fluidTable ? { flex, minWidth: w } : { width: w });
 
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'alerts'
   const [currentUser, setCurrentUser] = useState(null);
@@ -59,6 +63,7 @@ export default function DrugManagementScreen({ navigation }) {
 
   // Form State for Add / Edit
   const [isEditing, setIsEditing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [selectedDrug, setSelectedDrug] = useState(null);
   const [drugName, setDrugName] = useState('');
   const [activeIngredient, setActiveIngredient] = useState('');
@@ -264,6 +269,7 @@ export default function DrugManagementScreen({ navigation }) {
   // Reset Form
   const resetForm = () => {
     setIsEditing(false);
+    setShowForm(false);
     setSelectedDrug(null);
     setDrugName('');
     setActiveIngredient('');
@@ -299,12 +305,24 @@ export default function DrugManagementScreen({ navigation }) {
                   Quản lý danh mục thuốc sử dụng tại bệnh viện, theo dõi tồn kho, hạn sử dụng và cấu hình tương tác lâm sàng.
                 </Text>
               </View>
-                {alerts.length > 0 && (
-                  <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-                    <Text style={{ fontSize: 12 }}>⚠️</Text>
-                    <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
-                  </View>
-                )}
+                <View style={styles.headerActions}>
+                  {alerts.length > 0 && (
+                    <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                      <Text style={{ fontSize: 12 }}>⚠️</Text>
+                      <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
+                    </View>
+                  )}
+                  {isHospitalAdmin && !showForm && !isEditing && (
+                    <TouchableOpacity
+                      style={styles.addDrugBtn}
+                      onPress={() => { setActiveTab('list'); setShowForm(true); }}
+                      accessibilityRole="button"
+                    >
+                      <Plus size={16} color="#FFFFFF" />
+                      <Text style={styles.addDrugBtnText}>Thêm thuốc</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
             </View>
           </View>
 
@@ -337,7 +355,7 @@ export default function DrugManagementScreen({ navigation }) {
           {activeTab === 'list' ? (
             <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
               {/* Form / Edit Column (Only for hospital_admin) */}
-              {isHospitalAdmin && (
+              {isHospitalAdmin && (showForm || isEditing) && (
                 <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
                   <View style={styles.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -495,14 +513,12 @@ export default function DrugManagementScreen({ navigation }) {
                     )}
 
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                      {isEditing && (
-                        <TouchableOpacity
-                          style={[styles.cancelBtn, { flex: 1 }]}
-                          onPress={resetForm}
-                        >
-                          <Text style={styles.cancelBtnText}>Hủy chỉnh sửa</Text>
-                        </TouchableOpacity>
-                      )}
+                      <TouchableOpacity
+                        style={[styles.cancelBtn, { flex: 1 }]}
+                        onPress={resetForm}
+                      >
+                        <Text style={styles.cancelBtnText}>{isEditing ? 'Hủy chỉnh sửa' : 'Đóng'}</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.submitButton, submitting && styles.buttonDisabled, { flex: 2 }]}
                         onPress={handleSaveDrug}
@@ -584,23 +600,23 @@ export default function DrugManagementScreen({ navigation }) {
                     </View>
                   ) : (
                     <View style={styles.tableCard}>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                        <View style={styles.table}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={!fluidTable} contentContainerStyle={fluidTable ? styles.tableFluid : null}>
+                        <View style={[styles.table, fluidTable && styles.tableFluid]}>
                           {/* Header Row */}
                           <View style={styles.tableHeaderRow}>
-                            <View style={[styles.tableHead, { width: 180 }]}>
+                            <View style={[styles.tableHead, col(180, 2.2)]}>
                               <Text style={styles.tableHeadText}>Tên thuốc / Hoạt chất</Text>
                             </View>
-                            <View style={[styles.tableHead, { width: 130 }]}>
+                            <View style={[styles.tableHead, col(130, 1.7)]}>
                               <Text style={styles.tableHeadText}>Phân nhóm</Text>
                             </View>
-                            <View style={[styles.tableHead, { width: 100 }]}>
+                            <View style={[styles.tableHead, col(150, 1.3)]}>
                               <Text style={styles.tableHeadText}>Tồn kho</Text>
                             </View>
-                            <View style={[styles.tableHead, { width: 110 }]}>
-                              <Text style={styles.tableHeadText}>Đơn giá (VND)</Text>
+                            <View style={[styles.tableHead, col(110, 0.9), styles.alignEnd]}>
+                              <Text style={styles.tableHeadText}>Đơn giá</Text>
                             </View>
-                            <View style={[styles.tableHead, { width: 110 }]}>
+                            <View style={[styles.tableHead, col(110, 0.9)]}>
                               <Text style={styles.tableHeadText}>Hạn dùng</Text>
                             </View>
                             {isHospitalAdmin && (
@@ -620,13 +636,13 @@ export default function DrugManagementScreen({ navigation }) {
                               : 'Không thời hạn';
                             return (
                               <View key={item._id} style={styles.tableTr}>
-                                <View style={[styles.tableCell, { width: 180 }]}>
+                                <View style={[styles.tableCell, col(180, 2.2)]}>
                                   <Text style={styles.drugNameText}>{item.name}</Text>
                                   {item.activeIngredient ? (
                                     <Text style={styles.ingredientText}>({item.activeIngredient})</Text>
                                   ) : null}
                                 </View>
-                                <View style={[styles.tableCell, { width: 130 }]}>
+                                <View style={[styles.tableCell, col(130, 1.7)]}>
                                   <View style={{
                                     backgroundColor: catStyle.bg,
                                     borderColor: catStyle.border,
@@ -645,7 +661,7 @@ export default function DrugManagementScreen({ navigation }) {
                                     </Text>
                                   </View>
                                 </View>
-                                <View style={[styles.tableCell, { width: 100 }]}>
+                                <View style={[styles.tableCell, col(150, 1.3)]}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                     <Text style={[styles.qtyText, isLow && styles.qtyTextLow]}>
                                       {item.stock?.quantity} {item.stock?.unit}
@@ -657,10 +673,10 @@ export default function DrugManagementScreen({ navigation }) {
                                     )}
                                   </View>
                                 </View>
-                                <View style={[styles.tableCell, { width: 110 }]}>
+                                <View style={[styles.tableCell, col(110, 0.9), styles.alignEnd]}>
                                   <Text style={styles.priceText}>{priceStr}đ</Text>
                                 </View>
-                                <View style={[styles.tableCell, { width: 110 }]}>
+                                <View style={[styles.tableCell, col(110, 0.9)]}>
                                   <Text style={styles.expiryText}>{dateStr}</Text>
                                 </View>
                                 {isHospitalAdmin && (
@@ -864,6 +880,9 @@ const styles = StyleSheet.create({
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  addDrugBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 16, borderRadius: 10, backgroundColor: Colors.brandGreen },
+  addDrugBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   listColumn: { flex: 1.8 },
   fullWidth: { width: '100%' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
@@ -931,6 +950,8 @@ const styles = StyleSheet.create({
   emptyText: { color: Colors.secondary, fontSize: 12 },
   tableCard: { width: '100%' },
   table: { flexDirection: 'column' },
+  tableFluid: { flexGrow: 1, width: '100%' },
+  alignEnd: { alignItems: 'flex-end' },
   tableHeaderRow: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
   tableHead: { paddingVertical: 12, paddingHorizontal: 10, justifyContent: 'center' },
   tableHeadText: { fontSize: 12, fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' },

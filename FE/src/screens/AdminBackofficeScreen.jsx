@@ -1,25 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Platform, View, Text, StyleSheet } from 'react-native';
-import {
-  LayoutDashboard, 
-  Users, 
-ChevronRight, 
-  ChevronDown, 
-  Search, 
-  Moon, 
-  Maximize2, 
-  Bell,
-  ClipboardList,
-  LogOut,
-  Database,
-  ShieldAlert,
-  Brain,
-  TrendingUp,
-  Sliders,
-  Building2
-} from 'lucide-react';
+import { Platform, View, Text, ScrollView, StyleSheet } from 'react-native';
 import '../tailwind-built.css';
 
+import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageContainer from '../components/layout/PageContainer';
 import AdminMetricsView from '../components/AdminMetricsView';
 import AdminUsersView from '../components/AdminUsersView';
 import AdminDatasetsView from '../components/AdminDatasetsView';
@@ -27,53 +11,23 @@ import AdminAuditLogsView from '../components/AdminAuditLogsView';
 import AdminAIConfigView from '../components/AdminAIConfigView';
 import AdminHospitalsView from '../components/AdminHospitalsView';
 import AdminSaaSSuiteView from '../components/AdminSaaSSuiteView';
-import { setAuthToken } from '../services/api.service';
-import { portalLoginRoute } from '../utils/navigationRef';
-import performLogout from '../utils/logout';
-import { apiRequest } from '../utils/apiClient';
 
-const AdminBackofficeScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('metrics');
-  // Điện thoại: sidebar 240px chiếm gần nửa màn hình → mặc định thu gọn thành thanh icon 72px.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [adminUser, setAdminUser] = useState(null);
+// Các mục quản trị nằm trong menu chung (ResponsiveLayout) dưới dạng AdminBackoffice?tab=…
+const ADMIN_TABS = ['metrics', 'users', 'hospitals', 'datasets', 'audit-logs', 'saas-suite', 'ai-config'];
 
+const AdminBackofficeScreen = ({ navigation, route }) => {
+  const paramTab = route?.params?.tab;
+  const [activeTab, setActiveTab] = useState(ADMIN_TABS.includes(paramTab) ? paramTab : 'metrics');
+
+  // Bấm mục trong menu chung → params đổi → đổi view
   useEffect(() => {
-    apiRequest('/auth/me')
-      .then((data) => {
-        if (data && data.user) {
-          setAdminUser(data.user);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch admin profile:', err);
-      });
-  }, []);
+    if (ADMIN_TABS.includes(paramTab)) setActiveTab(paramTab);
+  }, [paramTab]);
 
-
-  // Fullscreen support matching F11 request
-  const toggleFullscreen = () => {
-    if (typeof document !== 'undefined' && !document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.log(`Failed to enable fullscreen: ${err.message}`);
-      });
-    } else if (typeof document !== 'undefined') {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => {
-          console.log(`Failed to exit fullscreen: ${err.message}`);
-        });
-      }
-    }
-  };
-
-  // Logout function
-  const handleLogout = async () => {
-    await performLogout();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: portalLoginRoute() }],
-    });
+  // Lối tắt từ Dashboard sang mục khác: giữ URL khớp mục đang xem
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    navigation.setParams({ tab });
   };
 
   if (Platform.OS !== 'web') {
@@ -85,365 +39,25 @@ const AdminBackofficeScreen = ({ navigation }) => {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#f7f9fb] flex flex-row text-slate-700 font-sans antialiased overflow-hidden">
-      
-      {/* 1. NEUROSCAN ADMIN SIDEBAR - Pure Flexbox, no fixed positioning */}
-      <aside className={`bg-white text-slate-600 flex flex-col shrink-0 border-r border-slate-200 select-none z-30 transition-all duration-300 ease-in-out h-screen overflow-hidden ${
-        sidebarCollapsed 
-          ? 'w-[72px]' 
-          : 'w-[240px]'
-      }`}>
-        
-        {/* Sidebar Header: Logo, Space & Collapse control */}
-        <div className={`border-b border-slate-200 flex items-center justify-between transition-all duration-300 ${
-          sidebarCollapsed ? 'p-4 flex-col gap-4' : 'p-6'
-        }`}>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-[#0B2A55] rounded-xl flex items-center justify-center shrink-0">
-              <ShieldAlert className="w-4.5 h-4.5 text-white" />
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex flex-col min-w-0 transition-all">
-                <span className="font-sans font-extrabold text-[#0B2A55] text-[16px] leading-tight tracking-tight truncate">
-                  NeuroScan AI
-                </span>
-                <span className="text-[12px] text-[#067A5E] font-semibold leading-none mt-0.5 truncate">
-                  Admin Console
-                </span>
-              </div>
-            )}
-          </div>
-          
-          {/* Collapse icon action inside Header */}
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"}
-            className="p-1.5 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-all cursor-pointer text-slate-500 hover:scale-105 active:scale-95"
-          >
-            <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${!sidebarCollapsed ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        {/* Sidebar Scrollable Nav Navigation */}
-        <nav className="flex-1 overflow-y-auto p-4 space-y-6 custom-sidebar-nav">
-          
-          {/* CATEGORY: TỔNG QUAN */}
-          <div>
-            {sidebarCollapsed ? (
-              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
-            ) : (
-              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-                TỔNG QUAN
-              </span>
-            )}
-            <div className="space-y-1.5">
-              <button 
-                onClick={() => setActiveTab('metrics')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'metrics'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Dashboard" : undefined}
-              >
-                <LayoutDashboard className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Dashboard</span>}
-              </button>
-            </div>
-          </div>
-
-          {/* CATEGORY: QUẢN LÝ */}
-          <div>
-            {sidebarCollapsed ? (
-              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
-            ) : (
-              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-                QUẢN LÝ
-              </span>
-            )}
-            <div className="space-y-1.5">
-              <button 
-                onClick={() => setActiveTab('users')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'users'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Người dùng" : undefined}
-              >
-                <Users className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Người dùng</span>}
-              </button>
-
-<button
-                onClick={() => setActiveTab('hospitals')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'hospitals'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Bệnh viện" : undefined}
-              >
-                <Building2 className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Bệnh viện</span>}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('datasets')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'datasets'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Dataset" : undefined}
-              >
-                <Database className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Dataset</span>}
-              </button>
-            </div>
-          </div>
-
-          {/* CATEGORY: TUÂN THỦ */}
-          <div>
-            {sidebarCollapsed ? (
-              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
-            ) : (
-              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-                TUÂN THỦ
-              </span>
-            )}
-            <div className="space-y-1.5">
-              <button 
-                onClick={() => setActiveTab('audit-logs')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'audit-logs'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "Audit Logs" : undefined}
-              >
-                <ClipboardList className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Audit Logs</span>}
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('saas-suite')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'saas-suite'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? "SaaS Suite" : undefined}
-              >
-                <Sliders className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">SaaS Suite (Nâng cao)</span>}
-              </button>
-            </div>
-          </div>
-
-          {/* CATEGORY: HỆ THỐNG AI */}
-          <div>
-            {sidebarCollapsed ? (
-              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
-            ) : (
-              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-                HỆ THỐNG AI
-              </span>
-            )}
-            <div className="space-y-1.5">
-              <button 
-                onClick={() => setActiveTab('ai-config')}
-                className={`flex items-center gap-3 rounded-[12px] text-xs transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer ${
-                  sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-                } ${
-                  activeTab === 'ai-config'
-                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
-                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
-                }`}
-                style={{ height: '44px', transition: 'all 0.25s ease' }}
-                title={sidebarCollapsed ? 'Huấn luyện & Chatbot AI' : undefined}
-              >
-                <Brain className="w-[18px] h-[18px] shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Huấn luyện & Chatbot</span>}
-              </button>
-            </div>
-          </div>
-
-        </nav>
-
-        {/* 9. KIỂM LOGOUT AREA */}
-        <div className="mt-auto pt-4 border-t border-slate-200 px-4 pb-6 shrink-0">
-          <button 
-            onClick={handleLogout}
-            className={`flex items-center gap-3 rounded-[12px] text-xs font-bold cursor-pointer text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-all duration-250 ease-out hover:translate-x-[2px] ${
-              sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
-            }`}
-            style={{ height: '44px', transition: 'all 0.25s ease' }}
-            title={sidebarCollapsed ? "Đăng xuất" : undefined}
-          >
-            <LogOut className="w-[18px] h-[18px] shrink-0 text-rose-500" />
-            {!sidebarCollapsed && <span>Đăng xuất</span>}
-          </button>
-        </div>
-
-      </aside>
-
-
-      {/* 2. MAIN APP CONTENT CANVAS WITH MATCHING TOPBAR HEADER */}
-      <main className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        
-        {/* Redesigned Top Header Bar - fixed in flex column, always visible */}
-        <header className="shrink-0 bg-white border-b border-[#e8edf5] z-30 py-3 px-6 flex items-center justify-between gap-4">
-          
-          {/* Left search & Sidebar toggle container */}
-          <div className="flex items-center gap-4 flex-1 max-w-md">
-
-            {/* Keyword Search Input with Integrated Blue Action Button matching Screenshot */}
-            <div className="relative w-80 max-w-full flex items-center">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input 
-                type="text"
-                placeholder="Search Keyword"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-10 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 transition-all font-sans font-medium"
-              />
-            </div>
-          </div>
-
-          {/* Right action controls */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5">
-
-            {/* Maximize / Fullscreen action toggle (Matches F11 screen capture theme) */}
-            <button 
-              onClick={toggleFullscreen}
-              className="w-9 h-9 flex items-center justify-center text-slate-500 border border-[#e8edf5] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-              title="Toggle Fullscreen (F11)"
-            >
-              <Maximize2 className="w-4 h-4 text-slate-500" />
-            </button>
-
-            {/* Notification Bell with red dot */}
-            <button 
-              onClick={() => setActiveTab('audit-logs')}
-              className="relative w-9 h-9 flex items-center justify-center text-slate-500 border border-[#e8edf5] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
-
-            {/* Crescent Moon Dark Mode dummy button */}
-            <button 
-              onClick={() => {}}
-              className="w-9 h-9 flex items-center justify-center text-slate-500 border border-[#e8edf5] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-              title="Toggle theme (Light/Dark)"
-            >
-              <Moon className="w-4 h-4" />
-            </button>
-
-            {/* Separator */}
-            <span className="w-px h-6 bg-[#e8edf5]" />
-
-            {/* User Profile Avatar with dropdown visual */}
-            <div className="flex items-center gap-3 pl-1 cursor-pointer group">
-              <div className="flex flex-col items-end hidden md:flex">
-                <span className="text-xs font-bold text-slate-800 leading-none">
-                  {adminUser?.profile?.name || adminUser?.email || 'Admin'}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wider leading-none">
-                  {adminUser?.role === 'admin' ? 'Hệ thống Admin' : adminUser?.role || 'Admin'}
-                </span>
-              </div>
-              <div className="relative">
-                {adminUser?.profile?.photoUrl ? (
-                  <img 
-                    src={adminUser.profile.photoUrl} 
-                    alt={adminUser?.profile?.name || 'Admin'} 
-                    className="w-10 h-10 rounded-full object-cover border border-[#e8edf5]" 
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border border-[#e8edf5] flex items-center justify-center text-white font-extrabold text-xs shadow-3xs">
-                    {adminUser?.profile?.name
-                      ? adminUser.profile.name
-                          .split(' ')
-                          .filter(Boolean)
-                          .map(w => w[0])
-                          .join('')
-                          .substring(0, 2)
-                          .toUpperCase()
-                      : adminUser?.email
-                        ? adminUser.email.substring(0, 2).toUpperCase()
-                        : 'AD'}
-                  </div>
-                )}
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
-              </div>
-            </div>
-
-          </div>
-
-        </header>
-
-        {/* 3. CORE APP MARK WORKSPACE MOUNT POINT */}
-        <section className="flex-1 overflow-y-auto">
-          <div className="w-full px-6 py-6">
-            {activeTab === 'metrics' && (
-              <AdminMetricsView
-                onSelectTab={(tab) => setActiveTab(tab)}
-              />
-            )}
-
-            {activeTab === 'users' && (
-              <AdminUsersView />
-            )}
-
-{activeTab === 'hospitals' && (
-              <AdminHospitalsView />
-            )}
-
-            {activeTab === 'datasets' && (
-              <AdminDatasetsView />
-            )}
-
-            {activeTab === 'audit-logs' && (
-              <AdminAuditLogsView />
-            )}
-
-            {activeTab === 'saas-suite' && (
-              <AdminSaaSSuiteView />
-            )}
-
-            {activeTab === 'ai-config' && (
-              <AdminAIConfigView />
-            )}
-          </div>
-        </section>
-
-      </main>
-
-    </div>
+    <ResponsiveLayout navigation={navigation} activeRoute={`AdminBackoffice_${activeTab}`}>
+      <ScrollView style={styles.scroll}>
+        <PageContainer style={styles.page}>
+          {activeTab === 'metrics' && <AdminMetricsView onSelectTab={selectTab} />}
+          {activeTab === 'users' && <AdminUsersView />}
+          {activeTab === 'hospitals' && <AdminHospitalsView />}
+          {activeTab === 'datasets' && <AdminDatasetsView />}
+          {activeTab === 'audit-logs' && <AdminAuditLogsView />}
+          {activeTab === 'saas-suite' && <AdminSaaSSuiteView />}
+          {activeTab === 'ai-config' && <AdminAIConfigView />}
+        </PageContainer>
+      </ScrollView>
+    </ResponsiveLayout>
   );
 };
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
+  page: { paddingTop: 24, paddingBottom: 40 },
   nativeContainer: {
     flex: 1,
     justifyContent: 'center',

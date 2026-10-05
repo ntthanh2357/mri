@@ -16,6 +16,7 @@ import { extractMedications, extractOrders } from '../utils/clinicalText.js';
 import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
+import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -277,6 +278,38 @@ it('isStaffPortalPath ignores main-app routes that merely start with "staff"', (
   assert.strictEqual(isStaffPortalPath('/staff-scheduling'), false);
   assert.strictEqual(isStaffPortalPath('/'), false);
   assert.strictEqual(isStaffPortalPath(''), false);
+});
+
+// ── buildStaffTasks / nextUpVisits: trang chủ nhân viên "Việc cần làm hôm nay" ──
+it('buildStaffTasks counts doctor work by status and puts pending tasks first', () => {
+  const visits = [
+    { status: 'đang chờ' }, { status: 'chờ khám bệnh' }, { status: 'chờ bác sĩ đọc' }, { status: 'hoàn tất' },
+  ];
+  const emr = [{ signStatus: 'Chưa duyệt' }, { signStatus: 'Đã ký' }];
+  const tasks = buildStaffTasks('doctor', { visits, emr });
+  const byKey = Object.fromEntries(tasks.map(t => [t.key, t.count]));
+  assert.deepStrictEqual(byKey, { exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
+  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'examining', 'scan']);
+  // bác sĩ kiêm chụp MRI (BE my-queue trả cả ca chụp cho bác sĩ)
+  const withScan = buildStaffTasks('doctor', { visits: [{ status: 'chờ chụp' }, { status: 'đang chụp' }] });
+  assert.strictEqual(withScan.find(t => t.key === 'scan').count, 2);
+  assert.deepStrictEqual(tasks[0].params, { tab: 'examQueue' });
+});
+
+it('buildStaffTasks handles unknown role and missing data', () => {
+  assert.deepStrictEqual(buildStaffTasks('patient', {}), []);
+  assert.deepStrictEqual(buildStaffTasks('receptionist').map(t => t.count), [0, 0]);
+});
+
+it('nextUpVisits keeps only the role\'s active statuses, emergencies first', () => {
+  const visits = [
+    { _id: 'a', status: 'chờ chụp' },
+    { _id: 'b', status: 'đang khám' },
+    { _id: 'c', status: 'đang chụp', priority: 'khẩn cấp' },
+    { _id: 'd', status: 'hoàn tất' },
+  ];
+  assert.deepStrictEqual(nextUpVisits('technician', visits).map(v => v._id), ['c', 'a']);
+  assert.deepStrictEqual(nextUpVisits('receptionist', visits, 2).map(v => v._id), ['c', 'a']);
 });
 
 console.log(`\n======================================================================`);

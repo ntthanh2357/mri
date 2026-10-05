@@ -53,6 +53,11 @@ const Colors = {
   successBg: '#ECFDF5',
   info: '#0284C7',
   infoBg: '#F0F9FF',
+  // Chữ/icon trạng thái đạt AA trên nền nhạt tương ứng (code mới dùng nhóm này cho chữ)
+  errorText: '#B91C1C',
+  warningText: '#B45309',
+  successText: '#047857',
+  infoText: '#0369A1',
 
   white: '#FFFFFF',
   black: '#0F172A',
