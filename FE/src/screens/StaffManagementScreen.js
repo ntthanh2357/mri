@@ -190,7 +190,7 @@ export default function StaffManagementScreen({ navigation }) {
                         ? 'Điều dưỡng Nguyễn Thị Hà'
                         : 'KTV Trần Văn Hùng'
                     }`}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={newUserName}
                     onChangeText={setNewUserName}
                   />
@@ -201,7 +201,7 @@ export default function StaffManagementScreen({ navigation }) {
                   <TextInput
                     style={styles.input}
                     placeholder="email@benhvien.vn"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={newUserEmail}
                     onChangeText={setNewUserEmail}
                     keyboardType="email-address"
@@ -214,7 +214,7 @@ export default function StaffManagementScreen({ navigation }) {
                   <TextInput
                     style={styles.input}
                     placeholder="Nhập từ 6 ký tự trở lên"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     secureTextEntry
                     value={newUserPassword}
                     onChangeText={setNewUserPassword}
@@ -234,9 +234,9 @@ export default function StaffManagementScreen({ navigation }) {
                         paddingLeft: 12,
                         paddingRight: 12,
                         fontSize: 13,
-                        color: '#0F172A',
+                        color: Colors.brandNavy,
                         border: 'none',
-                        outline: 'none',
+                        outlineStyle: 'none',
                         backgroundColor: 'transparent',
                         cursor: 'pointer',
                       }}
@@ -283,7 +283,7 @@ export default function StaffManagementScreen({ navigation }) {
                     <TextInput
                       style={[styles.searchInput, { paddingLeft: 34 }]}
                       placeholder="Tìm kiếm theo tên, email..."
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={Colors.secondary}
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                     />
@@ -295,7 +295,7 @@ export default function StaffManagementScreen({ navigation }) {
 
                 {loadingStaff ? (
                   <View style={styles.loadingBox}>
-                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} />
                   </View>
                 ) : filteredStaff.length === 0 ? (
                   <View style={styles.emptyBox}>
@@ -313,7 +313,7 @@ export default function StaffManagementScreen({ navigation }) {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                               {item.departmentId ? (
                                 <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#334155' }}>
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
                                     {item.departmentId}
                                   </Text>
                                 </View>
@@ -340,8 +340,8 @@ export default function StaffManagementScreen({ navigation }) {
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ fontSize: 12, color: item.isLocked ? '#166534' : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
-                                <Text style={[styles.lockButtonText, item.isLocked && { color: '#166534' }]}>
+                                <Text style={{ fontSize: 12, color: item.isLocked ? Colors.brandGreenPressed : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
+                                <Text style={[styles.lockButtonText, item.isLocked && { color: Colors.brandGreenPressed }]}>
                                   {item.isLocked ? 'Mở khóa' : 'Khóa'}
                                 </Text>
                               </View>
@@ -365,13 +365,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   scroll: { padding: 24, gap: 20 },
   titleContainer: { marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#0F172A' },
+  title: { fontSize: 22, fontWeight: 'bold', color: Colors.brandNavy },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
   tabBar: { flexDirection: 'row', flexWrap: 'wrap', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 0, marginBottom: 16 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#15803D' },
+  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: Colors.brandGreen },
   tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#15803D', fontWeight: 'bold' },
+  tabTextActive: { color: Colors.brandGreen, fontWeight: 'bold' },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
@@ -379,34 +379,34 @@ const styles = StyleSheet.create({
   fullWidth: { width: '100%' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderHeight: 1, borderWidth: 1, borderColor: '#E2E8F0', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#334155', marginBottom: 6 },
-  cardSub: { fontSize: 11, color: '#64748B', marginBottom: 16, lineHeight: 16 },
+  cardSub: { fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 16 },
   field: { marginBottom: 14 },
-  label: { fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
-  input: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC', color: '#0F172A' },
-  submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  label: { fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
+  input: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC', color: Colors.brandNavy },
+  submitButton: { height: 40, backgroundColor: Colors.brandGreen, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.7 },
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   listHeader: { flexDirection: 'column', gap: 10, marginBottom: 16 },
-  searchInput: { height: 38, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 12, backgroundColor: '#F8FAFC', color: '#0F172A' },
+  searchInput: { height: 38, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 12, backgroundColor: '#F8FAFC', color: Colors.brandNavy },
   loadingBox: { paddingVertical: 40, alignItems: 'center' },
   emptyBox: { paddingVertical: 40, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 },
-  emptyText: { color: '#94A3B8', fontSize: 12 },
+  emptyText: { color: Colors.secondary, fontSize: 12 },
   staffList: { gap: 8 },
   staffItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 },
   staffInfo: { flex: 1, marginRight: 10 },
-  staffName: { fontSize: 13, fontWeight: 'bold', color: '#0F172A' },
-  staffEmail: { fontSize: 11, color: '#64748B', marginTop: 1 },
-  staffDate: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
+  staffName: { fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy },
+  staffEmail: { fontSize: 12, color: '#64748B', marginTop: 1 },
+  staffDate: { fontSize: 12, color: Colors.secondary, marginTop: 2 },
   staffActions: { alignItems: 'flex-end', gap: 6 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeLocked: { backgroundColor: '#FEE2E2' },
-  badgeActive: { backgroundColor: '#DCFCE7' },
+  badgeActive: { backgroundColor: Colors.brandGreenSoft },
   badgePending: { backgroundColor: '#FEF3C7' },
-  statusBadgeText: { fontSize: 10, fontWeight: '600' },
+  statusBadgeText: { fontSize: 12, fontWeight: '600' },
   textLocked: { color: '#991B1B' },
-  textActive: { color: '#166534' },
+  textActive: { color: Colors.brandGreenPressed },
   textPending: { color: '#B45309' },
   lockButton: { paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, backgroundColor: '#FFFFFF' },
   unlockButton: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
-  lockButtonText: { fontSize: 10, fontWeight: '600', color: '#475569' },
+  lockButtonText: { fontSize: 12, fontWeight: '600', color: '#475569' },
 });

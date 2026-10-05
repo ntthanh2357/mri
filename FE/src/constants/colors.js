@@ -9,6 +9,14 @@ const Colors = {
   brandGreenOnDark: '#3DDBA6',   // chữ xanh trên nền navy (8.05:1)
   brandMint: '#A4FBE5',          // chữ nhấn trên nền navy (11.86:1)
 
+  // Bề mặt tối theo thương hiệu (cổng nội bộ /staff, hero, thẻ navy)
+  brandNavyDeep: '#061A36',      // nền trang tối
+  brandNavyInput: '#071F40',     // ô nhập trên thẻ navy
+  onDarkText: '#F1F5F9',         // chữ chính trên navy
+  onDarkMuted: '#B9C9E0',        // chữ phụ trên navy (≈8.6:1 trên brandNavy)
+  onDarkSubtle: '#8FA3C0',       // placeholder / ghi chú trên navy (≈5.6:1)
+  onDarkBorder: 'rgba(164, 251, 229, 0.16)', // viền mảnh màu mint
+
   // Clinical Teal / Cyan (Primary Brand)
   primary: '#0891B2',
   primaryFocus: '#0E7490',

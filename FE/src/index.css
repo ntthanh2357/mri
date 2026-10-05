@@ -13,6 +13,47 @@
   --color-clinical-emerald: #059669;
   --color-clinical-slate: #0f172a;
   --color-clinical-radiology: #0b0f17;
+
+  /* Thương hiệu 2026 (quyết định 2026-10-04): các view Tailwind (EMR, giường bệnh, chuyển viện,
+     AdminBackoffice) dùng cyan/emerald làm màu nhấn → ánh xạ cả 2 dải sang thang xanh lá thương hiệu.
+     600 = brandGreen #067A5E (chữ trắng 5.31:1), 50 = brandGreenSoft. blue/indigo/purple giữ nguyên (màu phân loại). */
+  --color-emerald-50: #e7f6f0;
+  --color-emerald-100: #cdebdf;
+  --color-emerald-200: #9ed9c4;
+  --color-emerald-300: #6bc3a6;
+  --color-emerald-400: #2bae86;
+  --color-emerald-500: #08a880;
+  --color-emerald-600: #067a5e;
+  --color-emerald-700: #05634d;
+  --color-emerald-800: #044d3c;
+  --color-emerald-900: #033a2e;
+  --color-emerald-950: #022a21;
+  --color-cyan-50: #e7f6f0;
+  --color-cyan-100: #cdebdf;
+  --color-cyan-200: #9ed9c4;
+  --color-cyan-300: #6bc3a6;
+  --color-cyan-400: #2bae86;
+  --color-cyan-500: #08a880;
+  --color-cyan-600: #067a5e;
+  --color-cyan-700: #05634d;
+  --color-cyan-800: #044d3c;
+  --color-cyan-900: #033a2e;
+  --color-cyan-950: #022a21;
+  --color-clinical-cyan: #067a5e;
+  --color-clinical-cyan-light: #3ddba6;
+  --color-clinical-emerald: #067a5e;
+  --color-clinical-slate: #0b2a55;
+  --color-orange-600: #c2410c;
+  --color-orange-700: #9a3412;
+  --color-amber-600: #b45309; /* = warning của design system, chữ trắng 5.0:1 */
+  --color-amber-700: #92400e;
+  /* Admin dùng blue-600/700 cho nút chính & link, indigo-600/700 cho nút phụ → xanh lá / navy thương hiệu.
+     slate-400 (2.6:1 trên nền trắng, dùng ~126 lần cho chữ) → #64748B (4.76:1). */
+  --color-blue-600: #067a5e;
+  --color-blue-700: #05634d;
+  --color-indigo-600: #0b2a55;
+  --color-indigo-700: #08203f;
+  --color-slate-400: #64748b;
 }
 
 /* Đảm bảo html & body chiếm đầy màn hình — tương thích với expo-reset */

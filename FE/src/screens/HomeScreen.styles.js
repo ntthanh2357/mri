@@ -1,4 +1,5 @@
 import { StyleSheet, Platform, Dimensions } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
@@ -45,44 +46,17 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#0891B2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  headerNameBox: { flex: 1, minWidth: 0 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
+  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.brandNavy, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   avatarText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  welcomeText: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
+  welcomeText: { fontSize: 12, color: Colors.secondary },
+  userName: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
   logoutButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -90,11 +64,7 @@ export default StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  logoutButtonText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
+  logoutButtonText: { fontSize: 13, color: Colors.slateMuted, fontWeight: '500' },
   scrollContainer: {
     paddingHorizontal: 24,
     paddingVertical: 20,
@@ -113,9 +83,7 @@ export default StyleSheet.create({
   patientBadge: {
     backgroundColor: '#DCFCE7',
   },
-  doctorBadge: {
-    backgroundColor: '#DBEAFE',
-  },
+  doctorBadge: { backgroundColor: Colors.brandGreenSoft },
   badgeText: {
     fontSize: 12,
     fontWeight: 'bold',
@@ -123,19 +91,9 @@ export default StyleSheet.create({
   patientBadgeText: {
     color: '#059669',
   },
-  doctorBadgeText: {
-    color: '#1D4ED8',
-  },
-  emailText: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 16,
-  },
+  doctorBadgeText: { color: Colors.brandGreen },
+  emailText: { fontSize: 13, color: Colors.secondary },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.brandNavy, marginBottom: 12 },
   gridIcon: {
     fontSize: 24,
     marginBottom: 8,
@@ -262,11 +220,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     color: '#374151',
   },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
+  statusBadgeText: { fontSize: 12, fontWeight: '700', color: '#374151' },
   clinicLinkRow: {
     marginBottom: 10,
     alignSelf: 'flex-start',
@@ -297,16 +251,8 @@ export default StyleSheet.create({
   desktopGreeting: {
     marginBottom: 20,
   },
-  greetingTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  greetingSubtitle: {
-    fontSize: 13,
-    color: '#166534',
-    marginTop: 4,
-  },
+  greetingTitle: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, letterSpacing: -0.3 },
+  greetingSubtitle: { fontSize: 14, color: Colors.slateMuted, marginTop: 4, lineHeight: 20 },
   metricsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -394,39 +340,11 @@ export default StyleSheet.create({
     fontSize: 36,
     marginBottom: 12,
   },
-  doctorStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  doctorStatCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  doctorStatVal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0891B2',
-    marginBottom: 4,
-  },
-  doctorStatLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  queueCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
+  doctorStatsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+  doctorStatCard: { flex: 1, minWidth: 120, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 16, boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05)' },
+  doctorStatVal: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, marginBottom: 2, fontVariant: ['tabular-nums'] },
+  doctorStatLabel: { fontSize: 13, color: Colors.slateMuted, fontWeight: '500' },
+  queueCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, paddingHorizontal: 16, marginBottom: 20 },
   queueItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -458,52 +376,17 @@ export default StyleSheet.create({
     gap: 12,
     marginBottom: 20,
   },
-  doctorGridCard: {
-    width: '47%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-  },
+  doctorGridCard: { width: '47%', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14 },
   doctorGridIcon: {
     fontSize: 20,
     marginBottom: 6,
   },
-  doctorGridLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  doctorGridSub: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  researchCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  researchCategory: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#4ADE80',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  researchTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  researchLink: {
-    fontSize: 12,
-    color: '#4ADE80',
-    fontWeight: '600',
-  },
+  doctorGridLabel: { fontSize: 14, fontWeight: '700', color: Colors.brandNavy },
+  doctorGridSub: { fontSize: 12, color: Colors.secondary, marginTop: 2, lineHeight: 17 },
+  researchCard: { backgroundColor: Colors.brandNavy, borderRadius: 16, padding: 18, marginBottom: 20 },
+  researchCategory: { fontSize: 12, fontWeight: '700', color: Colors.brandMint, letterSpacing: 0.4, marginBottom: 6 },
+  researchTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 12 },
+  researchLink: { fontSize: 13, color: Colors.brandMint, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
@@ -582,17 +465,6 @@ export default StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  editProfileTrigger: {
-    marginTop: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  editProfileTriggerText: {
-    fontSize: 11,
-    color: '#1D4ED8',
-    fontWeight: 'bold',
-  },
+  editProfileTrigger: { marginTop: 4, paddingVertical: 2, alignSelf: 'flex-start' },
+  editProfileTriggerText: { fontSize: 13, color: Colors.brandGreen, fontWeight: '600' },
 });

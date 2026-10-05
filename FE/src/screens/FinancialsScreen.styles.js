@@ -1,33 +1,19 @@
 import { StyleSheet } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    paddingVertical: 4,
-    marginRight: 16,
-  },
+  header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  backButton: { paddingVertical: 4 },
   backButtonText: {
     fontSize: 14,
     color: '#64748B',
     fontWeight: '500',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
+  headerTitle: { flex: 1, minWidth: 200, fontSize: 18, fontWeight: '800', color: Colors.brandNavy },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -42,7 +28,7 @@ export default StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
   },
   tabText: {
     fontSize: 14,
@@ -83,30 +69,30 @@ export default StyleSheet.create({
     fontSize: 18,
   },
   badgeGreen: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Colors.brandGreenSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgeGreenText: {
-    fontSize: 9,
-    color: '#166534',
+    fontSize: 12,
+    color: Colors.brandGreenPressed,
     fontWeight: 'bold',
   },
   metricLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 4,
   },
   metricVal: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 12,
   },
   recentHeaderRow: {
@@ -118,7 +104,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#15803D',
+    color: Colors.brandGreen,
     fontWeight: '600',
   },
   transactionsCard: {
@@ -146,12 +132,12 @@ export default StyleSheet.create({
   txId: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 2,
   },
   txDate: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: Colors.secondary,
   },
   txRight: {
     alignItems: 'flex-end',
@@ -159,7 +145,7 @@ export default StyleSheet.create({
   txAmount: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 4,
   },
   statusBadge: {
@@ -168,23 +154,23 @@ export default StyleSheet.create({
     borderRadius: 6,
   },
   statusSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Colors.brandGreenSoft,
   },
   statusPending: {
     backgroundColor: '#FEF3C7',
   },
   statusText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   statusSuccessText: {
-    color: '#166534',
+    color: Colors.brandGreenPressed,
   },
   statusPendingText: {
     color: '#B45309',
   },
   btnCreate: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -215,7 +201,7 @@ export default StyleSheet.create({
   reportTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 4,
   },
   reportSub: {
@@ -224,8 +210,8 @@ export default StyleSheet.create({
     marginBottom: 2,
   },
   reportDate: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: Colors.secondary,
   },
   reportRight: {
     flex: 1,
@@ -234,11 +220,11 @@ export default StyleSheet.create({
   reportValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: Colors.brandGreen,
     marginBottom: 4,
   },
   reportDetailLink: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
   },
   formCard: {
@@ -260,11 +246,11 @@ export default StyleSheet.create({
   formTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   formCloseText: {
     fontSize: 13,
-    color: '#EF4444',
+    color: '#B91C1C',
     fontWeight: '600',
   },
   formInputsRow: {
@@ -288,7 +274,7 @@ export default StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: Colors.brandNavy,
     backgroundColor: '#F8FAFC',
   },
   formSectionHeader: {
@@ -305,14 +291,14 @@ export default StyleSheet.create({
     marginBottom: 10,
   },
   btnAddRow: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
   },
   btnAddRowText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   gridTable: {
@@ -345,7 +331,7 @@ export default StyleSheet.create({
   },
   gridTd: {
     fontSize: 12,
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   gridTdInput: {
     borderWidth: 1,
@@ -354,7 +340,7 @@ export default StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
     fontSize: 12,
-    color: '#0F172A',
+    color: Colors.brandNavy,
     backgroundColor: '#F8FAFC',
     marginRight: 4,
     textAlign: 'center',
@@ -365,7 +351,7 @@ export default StyleSheet.create({
     paddingVertical: 6,
   },
   btnDeleteRowText: {
-    color: '#EF4444',
+    color: '#B91C1C',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -376,7 +362,7 @@ export default StyleSheet.create({
     marginTop: 10,
   },
   btnPrimary: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -390,14 +376,14 @@ export default StyleSheet.create({
   btnSecondary: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: Colors.brandGreen,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
   },
   btnSecondaryText: {
-    color: '#15803D',
+    color: Colors.brandGreen,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -432,13 +418,13 @@ export default StyleSheet.create({
   modalTitle: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     flex: 1,
   },
   modalCloseBtn: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#94A3B8',
+    color: Colors.secondary,
     marginLeft: 10,
   },
   modalBody: {
@@ -452,7 +438,7 @@ export default StyleSheet.create({
   modalSummaryText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: Colors.brandGreen,
     marginVertical: 10,
   },
   detailTable: {
@@ -472,7 +458,7 @@ export default StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   detailTh: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#475569',
   },
@@ -484,13 +470,13 @@ export default StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   detailTd: {
-    fontSize: 11,
-    color: '#0F172A',
+    fontSize: 12,
+    color: Colors.brandNavy,
   },
   btnExport: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: Colors.brandGreen,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -498,8 +484,8 @@ export default StyleSheet.create({
     justifyContent: 'center',
   },
   btnExportText: {
-    color: '#15803D',
-    fontSize: 11,
+    color: Colors.brandGreen,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   chartCard: {
@@ -513,10 +499,10 @@ export default StyleSheet.create({
   chartTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   chartSub: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 10,
   },
@@ -548,7 +534,7 @@ export default StyleSheet.create({
     marginRight: 6,
   },
   legendText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#334155',
   },
 });

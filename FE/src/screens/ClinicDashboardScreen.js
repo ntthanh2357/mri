@@ -43,7 +43,7 @@ const getRoleBadgeStyle = (role) => {
     case 'doctor':
       return { bg: '#EFF6FF', text: '#1E40AF', label: 'Bác sĩ' };
     case 'nurse':
-      return { bg: '#F0FDF4', text: '#166534', label: 'Điều dưỡng' };
+      return { bg: Colors.brandGreenSoft, text: Colors.brandGreenPressed, label: 'Điều dưỡng' };
     case 'technician':
       return { bg: '#F5F3FF', text: '#5B21B6', label: 'Kỹ thuật viên' };
     case 'receptionist':
@@ -96,7 +96,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [totalScans, setTotalScans] = useState(0);
   const [recentActivity, setRecentActivity] = useState([]);
   const [demographics, setDemographics] = useState([
-    { name: 'Người lớn (18–60)', value: 0, color: '#15803D' },
+    { name: 'Người lớn (18–60)', value: 0, color: Colors.brandGreen },
     { name: 'Người cao tuổi (60+)', value: 0, color: '#475569' },
     { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
   ]);
@@ -224,7 +224,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
             shadowOpacity: 0.04,
             shadowRadius: 6,
           }}>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A', marginBottom: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 12 }}>
               Điều Hành Lâm Sàng & Nghiệp Vụ Khoa Ung Thư Não
             </Text>
             <View style={{
@@ -245,9 +245,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
               >
-                <Building2 size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Sơ đồ Giường</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Khoa & Neuro-ICU</Text>
+                <Building2 size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Sơ đồ Giường</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Khoa & Neuro-ICU</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -263,9 +263,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('EMRDashboard', { tab: 'transfers' })}
               >
-                <ArrowRightLeft size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Chuyển Viện</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Liên viện Bạch Mai</Text>
+                <ArrowRightLeft size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Chuyển Viện</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Liên viện Bạch Mai</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -281,9 +281,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('EMRDashboard', { tab: 'records' })}
               >
-                <FileText size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Quản lý EMR</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Hồ sơ & Ký số</Text>
+                <FileText size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Quản lý EMR</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Hồ sơ & Ký số</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -299,9 +299,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('StaffManagement')}
               >
-                <Users size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Quản lý Nhân sự</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Bác sĩ & Điều dưỡng</Text>
+                <Users size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Quản lý Nhân sự</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Bác sĩ & Điều dưỡng</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -317,9 +317,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('StaffScheduling')}
               >
-                <Calendar size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Lịch Phân Ca</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Sắp xếp ca trực</Text>
+                <Calendar size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Lịch Phân Ca</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Sắp xếp ca trực</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -335,9 +335,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('DrugManagement')}
               >
-                <Package size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Kho Thuốc</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Thuốc ung bướu</Text>
+                <Package size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Kho Thuốc</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Thuốc ung bướu</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -353,9 +353,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 }}
                 onPress={() => navigation.navigate('Financials')}
               >
-                <DollarSign size={22} color="#0891B2" style={{ marginBottom: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>Báo Cáo Viện Phí</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>Doanh thu & BHYT</Text>
+                <DollarSign size={22} color={Colors.brandGreen} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center' }}>Báo Cáo Viện Phí</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>Doanh thu & BHYT</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -372,7 +372,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.statLabel}>Tổng số bệnh nhân</Text>
                   {loadingStats ? (
-                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
                   ) : (
                     <Text style={styles.statValue}>{totalPatients}</Text>
                   )}
@@ -388,7 +388,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.statLabel}>Tổng số lượt quét AI</Text>
                   {loadingStats ? (
-                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
                   ) : (
                     <Text style={styles.statValue}>{totalScans}</Text>
                   )}
@@ -401,14 +401,14 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <View style={styles.statsContainer}>
                 {/* Revenue Card */}
                 <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#ECFDF5' }]}>
+                  <View style={[styles.statIconContainer, { backgroundColor: Colors.brandGreenSoft }]}>
                     <DollarSign size={20} color="#047857" />
                   </View>
                   <Text style={styles.statLabel}>Doanh thu hôm nay</Text>
                   {loadingStats ? (
-                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
                   ) : (
-                    <Text style={[styles.statValue, { color: '#166534' }]}>
+                    <Text style={[styles.statValue, { color: Colors.brandGreenPressed }]}>
                       {revenue.totalRevenue ? revenue.totalRevenue.toLocaleString('vi-VN') + 'đ' : '0đ'}
                     </Text>
                   )}
@@ -426,7 +426,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.statLabel}>Tiếp nhận hôm nay</Text>
                   {loadingStats ? (
-                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 6 }} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 6 }} />
                   ) : (
                     <Text style={styles.statValue}>{totalPatientsToday || 0}</Text>
                   )}
@@ -457,11 +457,11 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                 {loadingStats ? (
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                    <ActivityIndicator size="small" color="#15803D" />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} />
                   </View>
                 ) : recentActivity.length === 0 ? (
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                    <Text style={{ color: '#94A3B8', fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
+                    <Text style={{ color: Colors.secondary, fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
                   </View>
                 ) : (
                   recentActivity.map((activity, index) => (
@@ -527,9 +527,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
               <Text style={styles.sectionTitle}>Bác sĩ & Nhân sự đang hoạt động</Text>
               <View style={styles.doctorsCard}>
                 {loadingStaff ? (
-                  <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+                  <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 20 }} />
                 ) : hospitalStaff.length === 0 ? (
-                  <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
+                  <Text style={{ color: Colors.secondary, fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
                     Chưa có nhân sự hoạt động.
                   </Text>
                 ) : (
@@ -580,11 +580,11 @@ const ClinicDashboardScreen = ({ navigation }) => {
               {/* Modal Header */}
               <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View>
-                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Quản lý & Cấp tài khoản nhân sự</Text>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.brandNavy }}>Quản lý & Cấp tài khoản nhân sự</Text>
                   <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Phân quyền và cấp tài khoản làm việc cho từng chức vụ.</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowAddUserModal(false)} style={{ padding: 6 }}>
-                  <X size={20} color="#94A3B8" />
+                  <X size={20} color={Colors.secondary} />
                 </TouchableOpacity>
               </View>
 
@@ -597,22 +597,22 @@ const ClinicDashboardScreen = ({ navigation }) => {
                       paddingHorizontal: 16,
                       paddingBottom: 10,
                       borderBottomWidth: 2,
-                      borderBottomColor: activeRoleTab === role ? '#0891B2' : 'transparent',
+                      borderBottomColor: activeRoleTab === role ? Colors.brandGreen : 'transparent',
                       marginRight: 8,
                     }}
                     onPress={() => setActiveRoleTab(role)}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {role === 'doctor' ? (
-                        <Stethoscope size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                        <Stethoscope size={14} color={activeRoleTab === role ? Colors.brandGreen : '#64748B'} />
                       ) : role === 'nurse' ? (
-                        <HeartPulse size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                        <HeartPulse size={14} color={activeRoleTab === role ? Colors.brandGreen : '#64748B'} />
                       ) : role === 'technician' ? (
-                        <Microscope size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                        <Microscope size={14} color={activeRoleTab === role ? Colors.brandGreen : '#64748B'} />
                       ) : (
-                        <Briefcase size={14} color={activeRoleTab === role ? '#0891B2' : '#64748B'} />
+                        <Briefcase size={14} color={activeRoleTab === role ? Colors.brandGreen : '#64748B'} />
                       )}
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? '#0891B2' : '#64748B' }}>
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? Colors.brandGreen : '#64748B' }}>
                         {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Điều dưỡng' : role === 'technician' ? 'Kỹ thuật viên' : 'Lễ tân'}
                       </Text>
                     </View>
@@ -625,7 +625,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* Form Section */}
                 <View style={{ marginBottom: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-                    <UserPlus size={16} color="#0891B2" />
+                    <UserPlus size={16} color={Colors.brandGreen} />
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155' }}>
                       Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới
                     </Text>
@@ -633,7 +633,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                   <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 14 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Họ và tên *</Text>
                       <TextInput
                         style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
                         placeholder={`Ví dụ: ${activeRoleTab === 'doctor' ? 'Bác sĩ Lê Mạnh Minh' : activeRoleTab === 'nurse' ? 'Y tá Nguyễn Thị Hà' : activeRoleTab === 'technician' ? 'KTV Trần Văn Hùng' : 'Lễ tân Vũ Hoài An'}`}
@@ -643,7 +643,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                     </View>
 
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Địa chỉ Email *</Text>
                       <TextInput
                         style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
                         placeholder="email@benhvien.vn"
@@ -657,7 +657,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
 
                   <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 4 }}>Mật khẩu ban đầu *</Text>
                       <TextInput
                         style={{ height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
                         placeholder="Nhập từ 6 ký tự"
@@ -669,7 +669,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                     </View>
                     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
                       <TouchableOpacity
-                        style={{ height: 40, backgroundColor: '#0891B2', borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
+                        style={{ height: 40, backgroundColor: Colors.brandGreen, borderRadius: 8, justifyContent: 'center', alignItems: 'center', opacity: creatingUser ? 0.7 : 1 }}
                         onPress={handleCreateUser}
                         disabled={creatingUser}
                       >
@@ -689,17 +689,17 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 {/* List Section */}
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                    <List size={16} color="#0891B2" />
+                    <List size={16} color={Colors.brandGreen} />
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#334155' }}>
                       Danh sách {ROLE_LABELS[activeRoleTab]} hiện tại ({hospitalStaff.filter(s => s.role === activeRoleTab).length})
                     </Text>
                   </View>
 
                   {loadingStaff ? (
-                    <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginVertical: 20 }} />
                   ) : hospitalStaff.filter(s => s.role === activeRoleTab).length === 0 ? (
                     <View style={{ padding: 24, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 }}>
-                      <Text style={{ color: '#94A3B8', fontSize: 13 }}>Chưa có tài khoản {ROLE_LABELS[activeRoleTab]} nào được cấp.</Text>
+                      <Text style={{ color: Colors.secondary, fontSize: 13 }}>Chưa có tài khoản {ROLE_LABELS[activeRoleTab]} nào được cấp.</Text>
                     </View>
                   ) : (
                     <View style={{ gap: 8 }}>
@@ -710,21 +710,21 @@ const ClinicDashboardScreen = ({ navigation }) => {
                           return (
                             <View key={s.email} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 }}>
                               <View>
-                                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{s.profile?.name || 'Nhân viên'}</Text>
-                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{s.email}</Text>
-                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Ngày tạo: {dateStr}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy }}>{s.profile?.name || 'Nhân viên'}</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 1 }}>{s.email}</Text>
+                                <Text style={{ fontSize: 12, color: Colors.secondary, marginTop: 2 }}>Ngày tạo: {dateStr}</Text>
                               </View>
                               <View style={{ alignItems: 'flex-end' }}>
                                 <View style={{
                                   paddingHorizontal: 8,
                                   paddingVertical: 3,
                                   borderRadius: 6,
-                                  backgroundColor: s.isLocked ? '#FEE2E2' : s.isVerified ? '#DCFCE7' : '#FEF3C7'
+                                  backgroundColor: s.isLocked ? '#FEE2E2' : s.isVerified ? Colors.brandGreenSoft : '#FEF3C7'
                                 }}>
                                   <Text style={{
-                                    fontSize: 10,
+                                    fontSize: 12,
                                     fontWeight: '600',
-                                    color: s.isLocked ? '#991B1B' : s.isVerified ? '#166534' : '#B45309'
+                                    color: s.isLocked ? '#991B1B' : s.isVerified ? Colors.brandGreenPressed : '#B45309'
                                   }}>
                                     {s.isLocked ? 'Đã khóa' : s.isVerified ? 'Hoạt động' : 'Chờ kích hoạt'}
                                   </Text>

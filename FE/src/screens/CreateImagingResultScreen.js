@@ -16,6 +16,7 @@ import { post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
+import Colors from '../constants/colors';
 import { Zap, Brain, Edit3, CheckCircle2, RotateCw, X, Upload } from 'lucide-react';
 
 const CreateImagingResultScreen = ({ route, navigation }) => {
@@ -277,10 +278,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
             
             {/* Auto Fill Buttons */}
             <View style={[styles.helperRow, { gap: 10 }]}>
-              <TouchableOpacity style={[styles.helperBtn, { backgroundColor: '#0F172A', borderColor: '#1E293B', flex: 1 }]} onPress={handleOcrFill}>
+              <TouchableOpacity style={[styles.helperBtn, { backgroundColor: Colors.surface, borderColor: Colors.borderStrong, flex: 1 }]} onPress={handleOcrFill}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <Zap size={14} color="#4ADE80" />
-                  <Text style={[styles.helperBtnText, { color: '#4ADE80', fontWeight: 'bold' }]}>Giả lập Quét tự động (Simulated OCR)</Text>
+                  <Zap size={14} color={Colors.brandGreen} />
+                  <Text style={[styles.helperBtnText, { color: Colors.slateDark }]}>Điền thử bằng OCR (giả lập)</Text>
                 </View>
               </TouchableOpacity>
 
@@ -288,19 +289,18 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 style={[
                   styles.helperBtn, 
                   { 
-                    backgroundColor: images.length === 0 ? '#1E1B4B' : '#312E81', 
-                    borderColor: '#4338CA', 
+                    backgroundColor: images.length === 0 ? '#EEF2F7' : Colors.brandNavy,
+                    borderColor: images.length === 0 ? Colors.border : Colors.brandNavy,
                     flex: 1,
-                    opacity: images.length === 0 ? 0.5 : 1 
                   }
                 ]} 
                 onPress={handleAiAnalysis}
                 disabled={images.length === 0}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <Brain size={14} color="#A5B4FC" />
-                  <Text style={[styles.helperBtnText, { color: '#A5B4FC', fontWeight: 'bold' }]}>
-                    {images.length === 0 ? 'Phân tích AI (Chưa nạp ảnh)' : 'Mở màn hình Phân tích AI →'}
+                  <Brain size={14} color={images.length === 0 ? Colors.secondary : Colors.brandMint} />
+                  <Text style={[styles.helperBtnText, { color: images.length === 0 ? Colors.slateMuted : '#FFFFFF' }]}>
+                    {images.length === 0 ? 'Phân tích AI (cần tải ảnh trước)' : 'Mở phân tích AI'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -316,7 +316,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 borderColor: aiResult.isWrong ? '#FCA5A5' : '#6EE7B7',
               }}>
                 {/* Header badge */}
-                <View style={{ backgroundColor: aiResult.isWrong ? '#DC2626' : '#059669', paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ backgroundColor: aiResult.isWrong ? '#B91C1C' : Colors.brandGreen, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {aiResult.isWrong ? <Edit3 size={15} color="#fff" /> : <CheckCircle2 size={15} color="#fff" />}
                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
                     {aiResult.isWrong ? 'AI đã được điều chỉnh bởi bác sĩ' : 'Kết quả AI đã được bác sĩ xác nhận'}
@@ -324,14 +324,14 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 </View>
                 <View style={{ backgroundColor: aiResult.isWrong ? '#FEF2F2' : '#ECFDF5', padding: 14 }}>
                   <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 4 }}>
-                    Loại khối u: <Text style={{ fontWeight: 'bold', color: aiResult.isWrong ? '#DC2626' : '#059669' }}>{aiResult.class_name?.toUpperCase()}</Text>
+                    Loại khối u: <Text style={{ fontWeight: 'bold', color: aiResult.isWrong ? '#B91C1C' : Colors.brandGreen }}>{aiResult.class_name?.toUpperCase()}</Text>
                     {aiResult.isWrong && aiResult.originalClass && (
                       <Text style={{ color: '#9CA3AF', fontSize: 12 }}> (AI gốc: {aiResult.originalClass?.toUpperCase()})</Text>
                     )}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#1E293B' }}>Độ tự tin AI: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text></Text>
                   {aiResult.isWrong && (
-                    <View style={{ marginTop: 10, backgroundColor: '#FEE2E2', borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: '#DC2626' }}>
+                    <View style={{ marginTop: 10, backgroundColor: '#FEE2E2', borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: '#B91C1C' }}>
                       <Text style={{ fontSize: 11, color: '#991B1B', lineHeight: 17 }}>{aiResult.warningNote}</Text>
                     </View>
                   )}
@@ -543,7 +543,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                           style={styles.removeBadge}
                           onPress={() => handleRemoveImage(idx)}
                         >
-                          <X size={12} color="#DC2626" />
+                          <X size={12} color="#B91C1C" />
                         </TouchableOpacity>
                       </View>
                     );
@@ -557,10 +557,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 disabled={uploading}
               >
                 {uploading ? (
-                  <ActivityIndicator size="small" color="#15803D" />
+                  <ActivityIndicator size="small" color={Colors.brandGreen} />
                 ) : (
                   <>
-                    <Upload size={15} color="#15803D" />
+                    <Upload size={15} color={Colors.brandGreen} />
                     <Text style={styles.uploadButtonText}>Tải ảnh lên từ thiết bị</Text>
                   </>
                 )}

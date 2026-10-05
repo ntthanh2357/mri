@@ -13,6 +13,9 @@ import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
+import Colors from '../constants/colors';
+import { initialsOf } from '../utils/initials';
+
 
 // [BUG-03 FIX] Tính tuổi thật từ ngày sinh hoặc năm sinh
 const calculateAge = (dob, birthYear) => {
@@ -76,13 +79,13 @@ const DoctorPatientListScreen = ({ navigation }) => {
             status = 'Đang theo dõi';
             statusCode = 'TRACKING';
             badgeColor = '#EFF6FF';
-            textColor = '#2563EB';
+            textColor = '#0369A1';
           }
           if (completedOrders > 0) {
             status = 'Có kết quả XN';
             statusCode = 'XN';
-            badgeColor = '#DCFCE7';
-            textColor = '#15803D';
+            badgeColor = Colors.brandGreenSoft;
+            textColor = Colors.brandGreen;
           }
 
           return {
@@ -181,11 +184,11 @@ const DoctorPatientListScreen = ({ navigation }) => {
             <Text style={styles.summaryLbl}>Tổng bệnh nhân</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={[styles.summaryVal, { color: '#15803D' }]}>{xnCount}</Text>
+            <Text style={[styles.summaryVal, { color: Colors.brandGreen }]}>{xnCount}</Text>
             <Text style={styles.summaryLbl}>Có kết quả XN</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={[styles.summaryVal, { color: '#2563EB' }]}>{trackingCount}</Text>
+            <Text style={[styles.summaryVal, { color: '#0369A1' }]}>{trackingCount}</Text>
             <Text style={styles.summaryLbl}>Đang theo dõi</Text>
           </View>
         </View>
@@ -197,7 +200,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
             <TextInput
               style={styles.searchInput}
               placeholder="Tìm theo tên, chẩn đoán, mã y tế..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={Colors.secondary}
               value={search}
               onChangeText={setSearch}
             />
@@ -228,13 +231,13 @@ const DoctorPatientListScreen = ({ navigation }) => {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#15803D" />
+            <ActivityIndicator size="large" color={Colors.brandGreen} />
             <Text style={{ marginTop: 12, color: '#64748B' }}>Đang tải danh sách bệnh nhân...</Text>
           </View>
         ) : error ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <Text style={{ color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
-            <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#15803D', borderRadius: 8 }} onPress={fetchPatients}>
+            <Text style={{ color: '#B91C1C', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
+            <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: Colors.brandGreen, borderRadius: 8 }} onPress={fetchPatients}>
               <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Tải lại</Text>
             </TouchableOpacity>
           </View>
@@ -249,7 +252,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
               <View key={patient.id} style={styles.card}>
                 <TouchableOpacity onPress={() => handlePatientPress(patient)} activeOpacity={0.8} style={styles.cardTop}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{patient.name.charAt(0)}</Text>
+                    <Text style={styles.avatarText}>{initialsOf(patient.name)}</Text>
                   </View>
                   <View style={styles.cardInfo}>
                     <Text style={styles.patientName}>{patient.name}</Text>

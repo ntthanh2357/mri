@@ -465,7 +465,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>
                     {t.label}
                   </Text>
-                  {isDone && <CheckCircle2 size={13} color={isActive ? "#FFFFFF" : "#059669"} />}
+                  {isDone && <CheckCircle2 size={13} color={isActive ? "#FFFFFF" : "#047857"} />}
                 </TouchableOpacity>
               );
             })}
@@ -522,7 +522,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>SỞ Y TẾ ĐÀ NẴNG</Text>
                       <Text style={s.docHospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                     </View>
-                    <Building2 size={26} color="#0891B2" />
+                    <Building2 size={26} color={Colors.brandGreen} />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THÔNG TIN KHÁM BỆNH</Text>
@@ -561,7 +561,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     ].map(([name, val, unit], idx) => (
                       <View key={idx} style={[s.docTableRow, idx % 2 === 1 && { backgroundColor: '#F8FAFC' }]}>
                         <Text style={[s.docTableCell, { flex: 2 }]}>{name}</Text>
-                        <Text style={[s.docTableCell, { flex: 1, textAlign: 'center', fontWeight: 'bold', color: '#0F172A' }]}>{val || '—'}</Text>
+                        <Text style={[s.docTableCell, { flex: 1, textAlign: 'center', fontWeight: 'bold', color: Colors.brandNavy }]}>{val || '—'}</Text>
                         <Text style={[s.docTableCell, { flex: 1, textAlign: 'center', color: '#64748B' }]}>{unit}</Text>
                       </View>
                     ))}
@@ -580,7 +580,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   
                   <View style={s.docActionRow}>
                     <TouchableOpacity onPress={() => setExamDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
-                      <Edit2 size={13} color="#0891B2" />
+                      <Edit2 size={13} color={Colors.brandGreen} />
                       <Text style={s.docEditBtnText}>Sửa lại phiếu</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
@@ -660,13 +660,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                       <Text style={s.docHospitalSub}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
                     </View>
-                    <FileText size={26} color="#0891B2" />
+                    <FileText size={26} color={Colors.brandGreen} />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU CHỈ ĐỊNH DỊCH VỤ</Text>
                   <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
                     <Text style={{ fontSize: 13, color: '#374151', fontWeight: '500' }}>
-                      Mức độ ưu tiên: <Text style={{ color: orderPriority === 'Cấp Cứu' ? '#DC2626' : '#0D9488', fontWeight: 'bold' }}>
+                      Mức độ ưu tiên: <Text style={{ color: orderPriority === 'Cấp Cứu' ? '#B91C1C' : '#0D9488', fontWeight: 'bold' }}>
                         {orderPriority.toUpperCase()}
                       </Text>
                     </Text>
@@ -717,7 +717,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   
                   <View style={s.docActionRow}>
                     <TouchableOpacity onPress={() => setOrderDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
-                      <Edit2 size={13} color="#0891B2" />
+                      <Edit2 size={13} color={Colors.brandGreen} />
                       <Text style={s.docEditBtnText}>Sửa lại chỉ định</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
@@ -749,7 +749,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     {orderServices.length === 0 && <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", paddingVertical: 12 }}>Chưa chọn dịch vụ chỉ định nào.</Text>}
                     {orderServices.map((svc, idx) => (
                       <View key={idx} style={s.serviceRow}>
-                        <FileText size={14} color="#059669" />
+                        <FileText size={14} color="#047857" />
                         <Text style={{ flex: 1, color: "#065F46", fontSize: 13, marginLeft: 8 }}>{svc}</Text>
                         <TouchableOpacity onPress={() => setOrderServices(p => p.filter((_, i) => i !== idx))} style={{ padding: 4 }}>
                           <Trash2 size={15} color="#EF4444" />
@@ -805,7 +805,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                       <Text style={s.docHospitalAddress}>Khu Công Nghệ Cao Y Tế & Chuyên Khoa U Não Đà Nẵng</Text>
                     </View>
-                    <CreditCard size={26} color="#0891B2" />
+                    <CreditCard size={26} color={Colors.brandGreen} />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THU VIỆN PHÍ</Text>
@@ -848,8 +848,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       Số tiền bằng chữ: <Text style={{ fontWeight: 'bold', fontStyle: 'normal' }}>{numberToVietnameseWords(totalFee)} đồng.</Text>
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 8, borderTopWidth: 1, borderColor: '#E2E8F0', paddingTop: 8 }}>
-                      <Text style={{ fontSize: 14, color: '#475569' }}>Tổng chi phí: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{totalFee.toLocaleString('vi-VN')} VNĐ</Text></Text>
-                      <Text style={{ fontSize: 14, color: '#475569' }}>Tổng thu (VNĐ): <Text style={{ fontWeight: 'bold', color: '#059669', fontSize: 16 }}>{totalFee.toLocaleString('vi-VN')} VNĐ</Text></Text>
+                      <Text style={{ fontSize: 14, color: '#475569' }}>Tổng chi phí: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{totalFee.toLocaleString('vi-VN')} VNĐ</Text></Text>
+                      <Text style={{ fontSize: 14, color: '#475569' }}>Tổng thu (VNĐ): <Text style={{ fontWeight: 'bold', color: '#047857', fontSize: 16 }}>{totalFee.toLocaleString('vi-VN')} VNĐ</Text></Text>
                     </View>
                   </View>
                   
@@ -869,7 +869,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
                   </View>
                   
-                  <Text style={{ fontSize: 10, color: '#94A3B8', textAlign: 'center', marginTop: 16, fontStyle: 'italic' }}>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 16, fontStyle: 'italic' }}>
                     (Đây không phải là hóa đơn GTGT, quý khách có nhu cầu lấy hóa đơn GTGT vui lòng liên hệ Quầy thu ngân để nhận ngay trong ngày)
                   </Text>
                   
@@ -948,7 +948,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 };
 
 const s = StyleSheet.create({
-  topHeader: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 16, flexDirection: "row", alignItems: "center", gap: 14 },
+  topHeader: { backgroundColor: Colors.brandGreen, paddingHorizontal: 20, paddingVertical: 16, flexDirection: "row", alignItems: "center", gap: 14 },
   backBtn: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   backBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
@@ -956,12 +956,12 @@ const s = StyleSheet.create({
   tabBarContainer: { backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
   tabBar: { flexGrow: 0 },
   tabPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#CBD5E1" },
-  tabPillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tabPillActive: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   tabPillText: { color: "#475569", fontWeight: "600", fontSize: 13 },
   tabPillTextActive: { color: "#fff" },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: "#0F172A", marginBottom: 4 },
   sectionSubtitle: { fontSize: 12, color: "#64748B", marginBottom: 14, lineHeight: 18 },
-  groupLabel: { fontSize: 13, fontWeight: "700", color: Colors.primary, marginBottom: 10 },
+  groupLabel: { fontSize: 13, fontWeight: "700", color: Colors.brandGreen, marginBottom: 10 },
   fieldLabel: { fontSize: 13, color: "#374151", marginBottom: 4, fontWeight: "600" },
   card: { backgroundColor: "#fff", borderRadius: 14, padding: 18, borderWidth: 1, borderColor: "#E2E8F0", elevation: 2, marginBottom: 16 },
   infoRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#F1F5F9", paddingVertical: 9 },
@@ -977,7 +977,7 @@ const s = StyleSheet.create({
   toggleBtnText: { color: "#64748B", fontWeight: "600", fontSize: 13 },
   toggleBtnTextActive: { color: "#065F46" },
   serviceRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: "#BBF7D0" },
-  addBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 14, justifyContent: "center", alignItems: "center", minHeight: 44 },
+  addBtn: { backgroundColor: Colors.brandGreen, borderRadius: 8, paddingHorizontal: 14, justifyContent: "center", alignItems: "center", minHeight: 44 },
   addBtnText: { color: "#fff", fontWeight: "800", fontSize: 20 },
   quickChip: { backgroundColor: "#EFF6FF", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#BFDBFE" },
   quickChipText: { color: Colors.info, fontSize: 12, fontWeight: "500" },
@@ -985,14 +985,14 @@ const s = StyleSheet.create({
   tableHeader: { flexDirection: "row", backgroundColor: "#F1F5F9", padding: 10, borderRadius: 6, marginBottom: 2 },
   tableHeaderText: { fontWeight: "700", color: "#374151", fontSize: 13 },
   tableRow: { flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: "#F1F5F9" },
-  totalBox: { backgroundColor: Colors.primary, borderRadius: 10, padding: 14, marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalBox: { backgroundColor: Colors.brandGreen, borderRadius: 10, padding: 14, marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { color: "#fff", fontWeight: "700", fontSize: 15 },
   totalValue: { color: "#fff", fontWeight: "800", fontSize: 18 },
-  confirmBtn: { backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: "center", marginTop: 20, width: "100%" },
+  confirmBtn: { backgroundColor: Colors.brandGreen, borderRadius: 10, padding: 14, alignItems: "center", marginTop: 20, width: "100%" },
   confirmBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   successBox: { backgroundColor: "#ECFDF5", borderRadius: 10, padding: 14, borderWidth: 1, borderColor: "#6EE7B7", marginTop: 14, alignItems: "center" },
   successText: { color: "#065F46", fontWeight: "700", fontSize: 14 },
-  hintText: { color: "#94A3B8", fontSize: 11, textAlign: "center", marginTop: 10, lineHeight: 16 },
+  hintText: { color: "#94A3B8", fontSize: 12, textAlign: "center", marginTop: 10, lineHeight: 16 },
 
   // ── CLINICAL DOCUMENTS PREVIEWS STYLES (A4 Paper Aesthetic) ──
   docPaper: {
@@ -1024,12 +1024,12 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
   docHospitalAddress: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#475569",
     marginTop: 2,
   },
   docHospitalSub: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#475569",
     marginTop: 2,
     fontWeight: "500",
@@ -1045,7 +1045,7 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
   },
   docSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#64748B",
     textAlign: "center",
     marginTop: 2,
@@ -1103,7 +1103,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
   },
   docTableCellHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
     color: "#334155",
   },
@@ -1130,7 +1130,7 @@ const s = StyleSheet.create({
     width: 200,
   },
   docSignatureDate: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#475569",
     fontStyle: "italic",
     marginBottom: 4,
@@ -1142,7 +1142,7 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   docSignatureSub: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#64748B",
     fontStyle: "italic",
     textAlign: "center",
@@ -1181,7 +1181,7 @@ const s = StyleSheet.create({
     flex: 1.5,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     alignItems: "center",
   },
   docPrintBtnText: {

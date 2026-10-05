@@ -1,4 +1,5 @@
 import React from 'react';
+import Colors from '../constants/colors';
 import {
   Modal, View, Text, TouchableOpacity,
   TextInput, ActivityIndicator, StyleSheet
@@ -29,8 +30,8 @@ const MriCancelModal = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalBox}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-            <XCircle size={22} color="#DC2626" style={{ marginRight: 8 }} />
-            <Text style={[styles.modalTitle, { color: '#B91C1C', marginBottom: 0 }]}>Hủy Ca Chụp MRI</Text>
+            <XCircle size={22} color="#B91C1C" style={{ marginRight: 8 }} />
+            <Text style={[styles.modalTitle, { color: '#B91C1C', marginBottom: 0 }]}>Hủy ca chụp MRI</Text>
           </View>
           <Text style={styles.modalSub}>
             Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patientName || 'Bệnh nhân'}</Text>
@@ -43,7 +44,7 @@ const MriCancelModal = ({
                 key={reasonText}
                 style={[
                   styles.chip,
-                  cancelReason === reasonText && { backgroundColor: '#DC2626', borderColor: '#DC2626' }
+                  cancelReason === reasonText && { backgroundColor: '#B91C1C', borderColor: '#B91C1C' }
                 ]}
                 onPress={() => setCancelReason(reasonText)}
               >
@@ -69,7 +70,7 @@ const MriCancelModal = ({
               <Text style={styles.btnCancelText}>Đóng</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.btnConfirm, { backgroundColor: '#DC2626' }]}
+              style={[styles.btnConfirm, { backgroundColor: '#B91C1C' }]}
               onPress={onConfirm}
               disabled={submitting}
             >
@@ -78,7 +79,7 @@ const MriCancelModal = ({
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <X size={16} color="#fff" strokeWidth={2.5} />
-                  <Text style={styles.btnConfirmText}>Xác Nhận Hủy Ca</Text>
+                  <Text style={styles.btnConfirmText}>Xác nhận hủy ca</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
   chipText: { fontSize: 13, color: '#475569', fontWeight: '500' },
-  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#FFFFFF' },
+  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: Colors.brandNavy, minHeight: 70, textAlignVertical: 'top', backgroundColor: '#FFFFFF' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   btnCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },

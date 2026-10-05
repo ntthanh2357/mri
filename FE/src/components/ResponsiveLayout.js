@@ -42,17 +42,11 @@ import {
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
-const SHELL_THEMES = {
-  staff: {
-    accent: '#0891B2', accentSoft: '#ECFEFF', accentBorder: '#CFFAFE',
-    dark: '#0F172A', darkRaised: '#1E293B', onDarkAccent: '#38BDF8', onDarkSub: '#0891B2',
-    onDarkActiveBg: 'rgba(8, 145, 178, 0.2)', avatar: '#0891B2',
-  },
-  patient: {
-    accent: Colors.brandGreen, accentSoft: Colors.brandGreenSoft, accentBorder: '#CDEBDF',
-    dark: Colors.brandNavy, darkRaised: '#16386B', onDarkAccent: Colors.brandGreenOnDark, onDarkSub: Colors.brandGreenOnDark,
-    onDarkActiveBg: 'rgba(61, 219, 166, 0.15)', avatar: Colors.brandNavy,
-  },
+// Khung giao diện dùng chung 1 bộ màu thương hiệu cho mọi role (quyết định 2026-10-04 — bỏ teal của nhân viên).
+const SHELL_THEME = {
+  accent: Colors.brandGreen, accentSoft: Colors.brandGreenSoft, accentBorder: '#CDEBDF',
+  dark: Colors.brandNavy, darkRaised: '#16386B', onDarkAccent: Colors.brandGreenOnDark, onDarkSub: Colors.brandGreenOnDark,
+  onDarkActiveBg: 'rgba(61, 219, 166, 0.15)', avatar: Colors.brandNavy,
 };
 
 const ResponsiveLayout = ({
@@ -176,7 +170,7 @@ const ResponsiveLayout = ({
   };
 
   const isPatient = localUser?.role === 'patient';
-  const theme = isPatient ? SHELL_THEMES.patient : SHELL_THEMES.staff;
+  const theme = SHELL_THEME;
   const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
@@ -349,7 +343,7 @@ const ResponsiveLayout = ({
           <TouchableOpacity
             onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
             style={{
-              backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+              backgroundColor: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C',
               paddingVertical: 8,
               paddingHorizontal: 12,
               flexDirection: 'row',
@@ -635,14 +629,14 @@ const ResponsiveLayout = ({
         {/* Emergency Protocol Red/Orange Alert Banner */}
         {activeEmergency && !isPatient && (
           <View style={{
-            backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+            backgroundColor: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C',
             paddingVertical: 10,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             borderBottomWidth: 2,
-            borderBottomColor: activeEmergency.level === 'RED' ? '#991B1B' : '#C2410C',
+            borderBottomColor: activeEmergency.level === 'RED' ? '#7F1D1D' : '#9A3412',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{
@@ -675,10 +669,10 @@ const ResponsiveLayout = ({
               onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
               activeOpacity={0.85}
             >
-              <Text style={{ color: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C', fontWeight: 'bold', fontSize: 12 }}>
+              <Text style={{ color: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C', fontWeight: 'bold', fontSize: 12 }}>
                 Xử lý ngay
               </Text>
-              <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C'} strokeWidth={2.5} />
+              <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C'} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         )}
@@ -777,7 +771,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandNavy,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -818,7 +812,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandNavy,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -846,9 +840,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ECFEFF',
+    backgroundColor: Colors.brandGreenSoft,
     borderWidth: 1,
-    borderColor: '#CFFAFE',
+    borderColor: '#CDEBDF',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',

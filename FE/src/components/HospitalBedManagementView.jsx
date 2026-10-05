@@ -89,7 +89,20 @@ export default function HospitalBedManagementView({ currentUser }) {
         setBedMapData(mapRes.data || { summary: {}, departments: [] });
       }
       if (icuRes && icuRes.success) {
-        setIcuAlert(icuRes.data);
+        const d = icuRes.data || {};
+        const total = d.totalBeds ?? d.total ?? 0;
+        const occupied = d.occupiedBeds ?? d.occupied ?? 0;
+        setIcuAlert({
+          ...d,
+          totalBeds: total,
+          occupiedBeds: occupied,
+          availableBeds: d.availableBeds ?? d.available ?? 0,
+          reservedBeds: d.reservedBeds ?? d.reserved ?? 0,
+          occupancyRate: d.occupancyRate ?? (total ? Math.round((occupied / total) * 100) : 0),
+          alertMessage: d.alertMessage ?? d.message,
+          isWarning: d.isWarning ?? d.alertLevel === 'WARNING',
+          isCritical: d.isCritical ?? d.alertLevel === 'CRITICAL',
+        });
       }
     } catch (err) {
       console.error('Lỗi tải dữ liệu buồng giường:', err);

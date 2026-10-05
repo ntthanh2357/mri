@@ -1,4 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
@@ -30,7 +31,7 @@ export default StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   subtitle: {
     fontSize: 13,
@@ -61,7 +62,7 @@ export default StyleSheet.create({
   actionButtonSolid: {
     flex: 1,
     height: 44,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -89,7 +90,7 @@ export default StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: Colors.brandGreenSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -105,22 +106,22 @@ export default StyleSheet.create({
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginVertical: 4,
   },
   badgeGreen: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Colors.brandGreenSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgeGreenText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#14532D',
     fontWeight: '600',
   },
   walletCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     borderRadius: 16,
     padding: 18,
     marginBottom: 24,
@@ -135,7 +136,7 @@ export default StyleSheet.create({
     marginBottom: 12,
   },
   walletTitle: {
-    color: '#94A3B8',
+    color: Colors.secondary,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -145,7 +146,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   walletDepositBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -170,13 +171,13 @@ export default StyleSheet.create({
     borderRadius: 3,
   },
   walletFooterText: {
-    color: '#94A3B8',
-    fontSize: 11,
+    color: Colors.secondary,
+    fontSize: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 12,
   },
   demographicCard: {
@@ -197,11 +198,11 @@ export default StyleSheet.create({
   totalVal: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   totalLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: Colors.secondary,
     fontWeight: '600',
     marginTop: 2,
   },
@@ -234,7 +235,7 @@ export default StyleSheet.create({
   demographicPct: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   barBackground: {
     height: 6,
@@ -254,7 +255,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#0891B2',
+    color: Colors.brandGreen,
     fontWeight: '500',
   },
   activityCard: {
@@ -282,11 +283,11 @@ export default StyleSheet.create({
   patientId: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 2,
   },
   activitySub: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
   },
   activityRight: {
@@ -299,27 +300,27 @@ export default StyleSheet.create({
     marginBottom: 4,
   },
   statusSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Colors.brandGreenSoft,
   },
   statusPending: {
     backgroundColor: '#FEF3C7',
   },
   statusSuccessText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#166534',
+    color: Colors.brandGreenPressed,
   },
   statusPendingText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#B45309',
   },
   activityTime: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: Colors.secondary,
   },
   bannerCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     borderRadius: 16,
     padding: 20,
     marginTop: 24,
@@ -328,7 +329,7 @@ export default StyleSheet.create({
     overflow: 'hidden',
   },
   bannerCategory: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#4ADE80',
     letterSpacing: 1,
@@ -373,7 +374,7 @@ export default StyleSheet.create({
     marginBottom: 24,
   },
   pricingDesc: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     lineHeight: 16,
     marginBottom: 16,
@@ -382,7 +383,7 @@ export default StyleSheet.create({
     marginBottom: 12,
   },
   pricingInputLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#475569',
     marginBottom: 4,
@@ -394,11 +395,11 @@ export default StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
+    color: Colors.brandNavy,
     backgroundColor: '#F8FAFC',
   },
   pricingSubmitBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     height: 38,
     justifyContent: 'center',
@@ -435,7 +436,7 @@ export default StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: Colors.brandGreenSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -471,10 +472,10 @@ export default StyleSheet.create({
   doctorItemName: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   doctorItemEmail: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
@@ -484,7 +485,7 @@ export default StyleSheet.create({
     borderRadius: 6,
   },
   roleBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   emptyChartContainer: {
@@ -506,11 +507,11 @@ export default StyleSheet.create({
   emptyChartPercent: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#94A3B8',
+    color: Colors.secondary,
   },
   emptyChartText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: Colors.secondary,
   },
   badgeBlue: {
     backgroundColor: '#EFF6FF',
@@ -519,7 +520,7 @@ export default StyleSheet.create({
     borderRadius: 6,
   },
   badgeBlueText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#1E3A8A',
     fontWeight: '600',
   },
@@ -534,7 +535,7 @@ export default StyleSheet.create({
     borderTopRightRadius: 16,
   },
   tableHeaderCell: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#64748B',
     textTransform: 'uppercase',

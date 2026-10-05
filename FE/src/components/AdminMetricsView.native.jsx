@@ -86,12 +86,12 @@ export default function AdminMetricsView({ onSelectTab }) {
       return { icon: '⚠️', bg: '#fef2f2', color: '#e11d48' };
     }
     if (type && type.includes('verify')) {
-      return { icon: '✅', bg: '#eff6ff', color: '#2563eb' };
+      return { icon: '✅', bg: Colors.brandGreenSoft, color: Colors.brandGreen };
     }
     if (type && type.includes('dataset')) {
       return { icon: '🗄️', bg: '#f0fdfa', color: '#0d9488' };
     }
-    return { icon: '✨', bg: '#eef2ff', color: '#4f46e5' };
+    return { icon: '✨', bg: '#EEF3FA', color: Colors.brandNavy };
   };
 
   const kpiCards = [
@@ -114,7 +114,7 @@ export default function AdminMetricsView({ onSelectTab }) {
       value: loading ? '...' : formatScans(totalAiScans),
       growth: scanGrowth,
       icon: '⚡',
-      color: '#6366f1',
+      color: Colors.brandNavy,
     },
     {
       label: 'Doanh thu tích lũy',
@@ -149,7 +149,7 @@ export default function AdminMetricsView({ onSelectTab }) {
                     { backgroundColor: c.growth >= 0 ? '#ecfdf5' : '#fef2f2' },
                   ]}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: c.growth >= 0 ? '#059669' : '#e11d48' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: c.growth >= 0 ? '#047857' : '#e11d48' }}>
                     {c.growth >= 0 ? '+' : ''}
                     {c.growth.toFixed(1)}%
                   </Text>
@@ -157,7 +157,7 @@ export default function AdminMetricsView({ onSelectTab }) {
               )}
               {c.badge && (
                 <View style={[styles.growthBadge, { backgroundColor: '#fef2f2' }]}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#e11d48' }}>{c.badge}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#e11d48' }}>{c.badge}</Text>
                 </View>
               )}
             </View>
@@ -360,12 +360,12 @@ const styles = StyleSheet.create({
     color: Colors.black,
   },
   cardSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.secondary,
     marginTop: 1,
   },
   linkText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0ea5e9',
   },
@@ -395,13 +395,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   barLabel: {
-    fontSize: 9,
+    fontSize: 12,
     color: Colors.secondary,
     marginTop: 6,
     fontWeight: '600',
   },
   barValueLabel: {
-    fontSize: 9,
+    fontSize: 12,
     color: Colors.secondary,
     fontWeight: '700',
     marginBottom: 4,
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     color: Colors.black,
   },
   activityTime: {
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.secondary,
     marginTop: 2,
   },
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     color: Colors.black,
   },
   quickSub: {
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.secondary,
     marginTop: 1,
   },

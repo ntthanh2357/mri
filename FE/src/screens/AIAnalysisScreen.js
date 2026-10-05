@@ -14,8 +14,11 @@ import {
 } from 'react-native';
 import { post } from '../services/api.service';
 import Config from '../constants/config';
+import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import AiFilmPicker from '../components/patient/AiFilmPicker';
+import AiResultPatientCard from '../components/patient/AiResultPatientCard';
+import { useCurrentRole } from '../controllers/useCurrentRole';
 import { 
   Scan, 
   RotateCcw, 
@@ -35,7 +38,7 @@ import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 const CLASS_META = {
   glioma: {
     label: 'GLIOMA',
-    color: '#DC2626',
+    color: '#B91C1C',
     bg: '#FEF2F2',
     border: '#FECACA',
     icon: AlertTriangle,
@@ -43,7 +46,7 @@ const CLASS_META = {
   },
   meningioma: {
     label: 'MENINGIOMA',
-    color: '#D97706',
+    color: '#B45309',
     bg: '#FFFBEB',
     border: '#FDE68A',
     icon: AlertCircle,
@@ -51,15 +54,15 @@ const CLASS_META = {
   },
   pituitary: {
     label: 'PITUITARY',
-    color: '#7C3AED',
-    bg: '#F5F3FF',
-    border: '#DDD6FE',
+    color: '#0369A1',
+    bg: '#F0F9FF',
+    border: '#BAE6FD',
     icon: Activity,
     desc: 'U tuyến yên — cần kiểm tra nội tiết và hội chẩn chuyên khoa.',
   },
   notumor: {
     label: 'BÌNH THƯỜNG',
-    color: '#059669',
+    color: '#047857',
     bg: '#ECFDF5',
     border: '#A7F3D0',
     icon: ShieldCheck,
@@ -94,6 +97,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   const { imageUrl, visitId, patientInfo } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  // Bệnh nhân xem bản dễ hiểu; chỉ bác sĩ/KTV/admin được duyệt hoặc hiệu chỉnh (khớp quyền ở BE approve-ai/feedback-ai).
+  const role = useCurrentRole();
+  const isPatient = role === 'patient';
+  const canReview = ['doctor', 'technician', 'admin'].includes(role);
 
   const [phase, setPhase] = useState('analyzing'); // 'analyzing' | 'result'
   const [aiResult, setAiResult] = useState(null);
@@ -316,10 +323,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
             <ArrowLeft size={16} color="#64748B" strokeWidth={2.2} />
             <Text style={styles.backBtnText}>Hủy</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Chẩn Đoán Hình Ảnh AI</Text>
+          <Text style={styles.headerTitle}>{isPatient ? 'Phân tích AI' : 'Chẩn Đoán Hình Ảnh AI'}</Text>
           {phase === 'result' ? (
             <TouchableOpacity onPress={runAnalysis} style={[styles.retryBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-              <RotateCcw size={13} color="#2563EB" strokeWidth={2.2} />
+              <RotateCcw size={13} color={Colors.brandNavy} strokeWidth={2.2} />
               <Text style={styles.retryBtnText}>Quét lại</Text>
             </TouchableOpacity>
           ) : (
@@ -335,7 +342,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
               <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
                 <View style={styles.imgCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                    <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                    <Scan size={16} color={Colors.brandGreen} strokeWidth={2.2} />
                     <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Phim chụp MRI đang phân tích</Text>
                   </View>
                   <View style={styles.scanPreviewBox}>
@@ -362,13 +369,15 @@ const AIAnalysisScreen = ({ route, navigation }) => {
               <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
                 <View style={styles.actionCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <ActivityIndicator size="small" color="#15803D" />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} />
                     <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>
                       Đang xử lý phim chụp...
                     </Text>
                   </View>
                   <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 20, marginBottom: 20 }}>
-                    Hệ thống AI tích hợp (Ensemble ResNet + EfficientNet + DenseNet + YOLOv8 + Gemini VLM) đang chạy phân tích song song và sinh bản đồ kích hoạt nhiệt Grad-CAM.
+                    {isPatient
+                      ? 'AI đang đọc ảnh MRI của bạn, thường mất dưới 1 phút. Vui lòng không đóng trang.'
+                      : 'Hệ thống AI tích hợp (Ensemble ResNet + EfficientNet + DenseNet + YOLOv8 + Gemini VLM) đang chạy phân tích song song và sinh bản đồ kích hoạt nhiệt Grad-CAM.'}
                   </Text>
 
                   <View style={{ gap: 6 }}>
@@ -388,7 +397,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         >
                           <View style={styles.stepStatusIcon}>
                             {isCompleted && <CheckCircle2 size={16} color="#059669" />}
-                            {isCurrent && <ActivityIndicator size="small" color="#0891B2" />}
+                            {isCurrent && <ActivityIndicator size="small" color={Colors.brandGreen} />}
                             {isPending && <View style={styles.pendingDot} />}
                           </View>
                           <View style={{ flex: 1 }}>
@@ -428,13 +437,13 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
             ) : (
-              <Animated.View style={[isDesktop && styles.desktopRow, { opacity: fadeAnim, flex: 1, width: '100%' }]}>
+              <Animated.View style={[isDesktop && styles.desktopRow, !isDesktop && isPatient && styles.resultFirst, { opacity: fadeAnim, flex: 1, width: '100%' }]}>
                 {/* ── LEFT: Images ─────────────────────────────────────────── */}
                 <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
                   {/* Original image */}
                   <View style={styles.imgCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                      <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                      <Scan size={16} color={Colors.brandGreen} strokeWidth={2.2} />
                       <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Ảnh gốc MRI</Text>
                     </View>
                     <View style={styles.imgViewer}>
@@ -450,8 +459,8 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                   {annotatedUri && (
                     <View style={styles.imgCard}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                        <Layers size={16} color="#0891B2" strokeWidth={2.2} />
-                        <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Bản đồ nhiệt kích hoạt (Grad-CAM + YOLO)</Text>
+                        <Layers size={16} color={Colors.brandGreen} strokeWidth={2.2} />
+                        <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>{isPatient ? 'Vùng AI chú ý trên ảnh' : 'Bản đồ nhiệt kích hoạt (Grad-CAM + YOLO)'}</Text>
                       </View>
                       <View style={styles.imgViewer}>
                         <Image source={{ uri: annotatedUri }} style={styles.imgFull} resizeMode="contain" />
@@ -462,6 +471,10 @@ const AIAnalysisScreen = ({ route, navigation }) => {
 
                 {/* ── RIGHT: Result + Actions ───────────────────────────────── */}
                 <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
+                  {isPatient && aiResult ? (
+                    <AiResultPatientCard result={aiResult} navigation={navigation} />
+                  ) : (
+                  <>
                   {/* Main result card */}
                   {meta && (() => {
                     const MetaIcon = meta.icon;
@@ -538,6 +551,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                   })()}
 
                   {/* ── CONFIRM CORRECT ──────────────────────────────────────── */}
+                  {canReview && (
                   <View style={styles.actionCard}>
                     <Text style={styles.actionTitle}>Bác sĩ xác nhận kết quả:</Text>
 
@@ -649,6 +663,9 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                       )}
                     </TouchableOpacity>
                   </View>
+                  )}
+                  </>
+                  )}
                 </View>
               </Animated.View>
             )}

@@ -14,6 +14,10 @@ import {
 } from 'react-native';
 import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
+import { initialsOf } from '../utils/initials';
+
+// Tab hợp lệ — defaultTab lạ (vd. 'emr' từ nút "Bệnh án EMR") trước đây làm trang trống.
+const VALID_TABS = ['lab', 'vitals', 'prescription', 'discharge', 'transfer', 'imaging'];
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import {
   FlaskConical,
@@ -66,7 +70,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [labOrders, setLabOrders] = useState([]);
   const [imagingResults, setImagingResults] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [activeTab, setActiveTab] = useState(route.params?.defaultTab || 'lab'); // 'vitals', 'lab', 'imaging', 'prescription', 'discharge', 'transfer'
+  const [activeTab, setActiveTab] = useState(VALID_TABS.includes(route.params?.defaultTab) ? route.params.defaultTab : 'lab'); // 'vitals', 'lab', 'imaging', 'prescription', 'discharge', 'transfer'
 
   // State cho form ghi nhận sinh hiệu mới
   const [pulseInput, setPulseInput] = useState('');
@@ -900,7 +904,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       <View style={styles.manualLabFormContainer}>
         <View style={styles.manualFormHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Edit2 size={15} color="#0891B2" />
+            <Edit2 size={15} color={Colors.brandGreen} />
             <Text style={styles.manualFormTitle}>
               {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
@@ -910,7 +914,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
             onPress={handleAutoFillNormalLab}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={13} color="#0891B2" />
+              <Sparkles size={13} color={Colors.brandGreen} />
               <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
             </View>
           </TouchableOpacity>
@@ -991,7 +995,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.brandGreen} />
         <Text style={styles.loadingText}>Đang tải hồ sơ bệnh án...</Text>
       </View>
     );
@@ -1020,7 +1024,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         {!isDesktop && (
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackNavigation} style={styles.backButton}>
-              <ChevronLeft size={18} color="#0891B2" />
+              <ChevronLeft size={18} color={Colors.brandGreen} />
               <Text style={styles.backButtonText}>Quay lại</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
@@ -1031,7 +1035,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
           {/* 1. Thẻ thông tin cá nhân bệnh nhân */}
           <View style={styles.patientProfileCard}>
             <View style={styles.avatarBig}>
-              <Text style={styles.avatarBigText}>{patient?.profile?.name?.charAt(0) || 'BN'}</Text>
+              <Text style={styles.avatarBigText}>{initialsOf(patient?.profile?.name)}</Text>
             </View>
             
             <View style={styles.patientProfileDetails}>
@@ -1322,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 14,
-    color: '#0891B2',
+    color: Colors.brandGreen,
     fontWeight: '600',
   },
   headerTitle: {
@@ -1355,7 +1359,7 @@ const styles = StyleSheet.create({
     borderColor: '#CFFAFE',
   },
   avatarBigText: {
-    color: '#0891B2',
+    color: Colors.brandGreen,
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -1380,8 +1384,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   genderBadgeText: {
-    fontSize: 11,
-    color: '#0891B2',
+    fontSize: 12,
+    color: Colors.brandGreen,
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -1400,7 +1404,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metaLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#94A3B8',
     marginBottom: 4,
@@ -1433,8 +1437,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   activeTabButton: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
   tabButtonText: {
     fontSize: 14,
@@ -1484,7 +1488,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   metricLabelText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 2,
   },
@@ -1494,7 +1498,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   metricUnitText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
     fontWeight: 'normal',
   },
@@ -1554,7 +1558,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   legendText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
   },
   mobileChartFallback: {
@@ -1581,7 +1585,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderCol: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#64748B',
   },
@@ -1593,7 +1597,7 @@ const styles = StyleSheet.create({
   },
   tableRowCol: {
     flex: 1,
-    fontSize: 10,
+    fontSize: 12,
     color: '#334155',
   },
   formGroup: {
@@ -1621,7 +1625,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1644,7 +1648,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectedOrderItem: {
-    borderColor: Colors.primary,
+    borderColor: Colors.brandGreen,
     backgroundColor: '#F0FDF4',
   },
   orderItemHeader: {
@@ -1662,12 +1666,12 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   orderBarcodeText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     fontFamily: 'monospace',
   },
   orderDateText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 2,
   },
@@ -1683,7 +1687,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   badgeTextSmall: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#166534',
   },
@@ -1705,7 +1709,7 @@ const styles = StyleSheet.create({
   actionBtnOutline: {
     height: 38,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1713,7 +1717,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    color: Colors.primary,
+    color: Colors.brandGreen,
     fontWeight: 'bold',
   },
   labReportSheet: {
@@ -1742,7 +1746,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   hospitalName: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#475569',
   },
   hospitalSub: {
@@ -1751,12 +1755,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   departmentName: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: 'bold',
   },
   barcodeLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#000000',
     fontFamily: 'monospace',
     fontWeight: 'bold',
@@ -1789,12 +1793,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   demoLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     width: '28%',
   },
   demoVal: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#0F172A',
     width: '22%',
@@ -1815,7 +1819,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   colHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#0F172A',
   },
@@ -1834,7 +1838,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   colCell: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#334155',
   },
   textAbnormalBold: {
@@ -1854,7 +1858,7 @@ const styles = StyleSheet.create({
   },
   alertIndicatorText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   pendingReportBox: {
@@ -1875,7 +1879,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pendingReportSubText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
     marginTop: 6,
@@ -1886,14 +1890,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   signatureTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#334155',
     textAlign: 'center',
     width: 180,
   },
   signatureSigned: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#10B981',
     fontWeight: 'bold',
     fontStyle: 'italic',
@@ -1935,9 +1939,9 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   badgeSimText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
-    color: Colors.primary,
+    color: Colors.brandGreen,
   },
   simActionsRow: {
     flexDirection: 'row',
@@ -1969,7 +1973,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   customSimHint: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 10,
     lineHeight: 16,
@@ -1981,7 +1985,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   validationText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   customSimRow: {
@@ -1989,7 +1993,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   smallLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 4,
   },
@@ -2005,7 +2009,7 @@ const styles = StyleSheet.create({
   },
   customSendBtn: {
     height: 34,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2054,7 +2058,7 @@ const styles = StyleSheet.create({
   },
   autofillBtnText: {
     fontSize: 12,
-    color: Colors.primary,
+    color: Colors.brandGreen,
     fontWeight: '600',
   },
   manualLabGrid: {
@@ -2084,7 +2088,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   manualLabRangeHint: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 4,
   },
@@ -2116,7 +2120,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#047857',
     justifyContent: 'center',
     alignItems: 'center',
   },

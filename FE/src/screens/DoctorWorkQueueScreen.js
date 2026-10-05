@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
+import Colors from '../constants/colors';
 import MriSafetyCheckModal from '../components/MriSafetyCheckModal';
 import MriRescanModal from '../components/MriRescanModal';
 import MriCancelModal from '../components/MriCancelModal';
@@ -52,7 +53,7 @@ const STATUS_CONFIG = {
   'đang chụp':      { color: '#E0F2FE', text: '#0284C7', label: 'Đang chụp' },
   'đã hủy':         { color: '#FEE2E2', text: '#DC2626', label: 'Đã hủy' },
   'chờ kết quả AI': { color: '#FEF9C3', text: '#CA8A04', label: 'Chờ AI' },
-  'chờ bác sĩ đọc': { color: '#ECFEFF', text: '#0891B2', label: 'Chờ đọc phim' },
+  'chờ bác sĩ đọc': { color: Colors.brandGreenSoft, text: Colors.brandGreen, label: 'Chờ đọc phim' },
   'hoàn tất':       { color: '#F0FDF4', text: '#059669', label: 'Hoàn tất' },
   'đã đóng':        { color: '#F1F5F9', text: '#64748B', label: 'Đã đóng' },
 };
@@ -680,7 +681,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* Vitals */}
         {Boolean(v.vitals?.bloodPressure) && (
           <View style={styles.vitalsRow}>
-            <Activity size={13} color="#0891B2" strokeWidth={2.2} />
+            <Activity size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.vitalsLabel}>Sinh hiệu:</Text>
             <Text style={styles.vitalsValue}>
               HA {v.vitals.bloodPressure} | Mạch {v.vitals.pulse} | SpO₂ {v.vitals.spo2}%
@@ -691,7 +692,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* MRI Order info */}
         {Boolean(v.mriOrder?.region) && (
           <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-            <Scan size={13} color="#0891B2" strokeWidth={2.2} />
+            <Scan size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.mriInfoText}>
               Y lệnh MRI: <Text style={{ fontWeight: 'bold' }}>{v.mriOrder.region}</Text>
               {v.mriOrder.requestAiAnalysis ? ' · Yêu cầu AI phân tích' : ''}
@@ -717,58 +718,58 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={styles.actions}>
           {isDoctor && (
             <TouchableOpacity
-              style={{ backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              style={[styles.btnBase, styles.btnDangerOutline]}
               onPress={() => openEmergencyModal(v)}
             >
-              <Flame size={14} color="#FFFFFF" strokeWidth={2.4} />
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>Cấp cứu</Text>
+              <Flame size={14} color="#B91C1C" strokeWidth={2.4} />
+              <Text style={styles.btnDangerOutlineText}>Cấp cứu</Text>
             </TouchableOpacity>
           )}
 
           {isDoctor && canOrderMri && (
-            <TouchableOpacity style={[styles.btnMri, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openMriModal(v)}>
+            <TouchableOpacity style={[styles.btnBase, styles.btnPrimary]} onPress={() => openMriModal(v)}>
               <Scan size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnMriText}>Ra Y Lệnh MRI</Text>
+              <Text style={styles.btnPrimaryText}>Ra y lệnh MRI</Text>
             </TouchableOpacity>
           )}
           {(isTechnician || isDoctor) && canStartMri && (
             <TouchableOpacity
-              style={[styles.btnStart, { backgroundColor: v.mriSafetyChecklist?.passed ? '#059669' : '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+              style={[styles.btnBase, styles.btnPrimary]}
               onPress={() => handleStartScan(v)}
             >
               <Camera size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>
-                {v.mriSafetyChecklist?.passed ? 'Vào Buồng Chụp' : 'Kiểm tra An toàn & Chụp'}
+              <Text style={styles.btnPrimaryText}>
+                {v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp'}
               </Text>
             </TouchableOpacity>
           )}
           {(isTechnician || isDoctor) && canUploadMri && (
-            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openUploadModal(v)}>
+            <TouchableOpacity style={[styles.btnBase, styles.btnPrimary]} onPress={() => openUploadModal(v)}>
               <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>Nộp Ảnh Phim</Text>
+              <Text style={styles.btnPrimaryText}>Nộp ảnh phim</Text>
             </TouchableOpacity>
           )}
           {(isTechnician || isDoctor) && (canStartMri || canUploadMri) && (
             <>
               <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#EA580C', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                style={[styles.btnBase, styles.btnSecondary]}
                 onPress={() => openRescanModal(v)}
               >
-                <RotateCcw size={14} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.btnStartText}>Chụp lại</Text>
+                <RotateCcw size={14} color={Colors.slateMuted} strokeWidth={2.2} />
+                <Text style={styles.btnSecondaryText}>Chụp lại</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#DC2626', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                style={[styles.btnBase, styles.btnGhostDanger]}
                 onPress={() => openCancelModal(v)}
               >
-                <XCircle size={14} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.btnStartText}>Hủy ca</Text>
+                <XCircle size={14} color="#B91C1C" strokeWidth={2.2} />
+                <Text style={styles.btnGhostDangerText}>Hủy ca</Text>
               </TouchableOpacity>
             </>
           )}
           {!isNurse && hasReadResult && (
             <TouchableOpacity
-              style={[styles.btnRead, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+              style={[styles.btnBase, styles.btnRead]}
               onPress={() => {
                 const rid = v.mriOrder?.imagingResultId;
                 const ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
@@ -806,7 +807,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           {!isNurse && v.status === 'đang khám' && (
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
               <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                style={[styles.btnStart, { backgroundColor: Colors.brandGreen, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                 onPress={() => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id })}
               >
                 <Pill size={14} color="#FFFFFF" strokeWidth={2.2} />
@@ -875,7 +876,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
 
-  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng Đợi Khám & Chẩn Đoán';
+  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng đợi khám & chẩn đoán';
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
@@ -899,18 +900,19 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
-            backgroundColor: currentMode === 'examQueue' ? '#0891B2' : 'transparent',
+            backgroundColor: currentMode === 'examQueue' ? '#FFFFFF' : 'transparent',
+            boxShadow: currentMode === 'examQueue' ? '0 1px 3px rgba(11, 42, 85, 0.15)' : 'none',
             gap: 6,
           }}
           onPress={() => setCurrentMode('examQueue')}
         >
-          <Stethoscope size={16} color={currentMode === 'examQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
+          <Stethoscope size={16} color={currentMode === 'examQueue' ? Colors.brandGreen : '#475569'} strokeWidth={2.3} />
           <Text style={{
             fontSize: 13,
             fontWeight: 'bold',
-            color: currentMode === 'examQueue' ? '#FFFFFF' : '#475569',
+            color: currentMode === 'examQueue' ? Colors.brandNavy : '#475569',
           }}>
-            Khám Bệnh Lâm Sàng ({examActiveCount})
+            Khám lâm sàng ({examActiveCount})
           </Text>
         </TouchableOpacity>
 
@@ -922,18 +924,19 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
-            backgroundColor: currentMode === 'mriQueue' ? '#0891B2' : 'transparent',
+            backgroundColor: currentMode === 'mriQueue' ? '#FFFFFF' : 'transparent',
+            boxShadow: currentMode === 'mriQueue' ? '0 1px 3px rgba(11, 42, 85, 0.15)' : 'none',
             gap: 6,
           }}
           onPress={() => setCurrentMode('mriQueue')}
         >
-          <Brain size={16} color={currentMode === 'mriQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
+          <Brain size={16} color={currentMode === 'mriQueue' ? Colors.brandGreen : '#475569'} strokeWidth={2.3} />
           <Text style={{
             fontSize: 13,
             fontWeight: 'bold',
-            color: currentMode === 'mriQueue' ? '#FFFFFF' : '#475569',
+            color: currentMode === 'mriQueue' ? Colors.brandNavy : '#475569',
           }}>
-            Hàng Đợi Chụp MRI ({mriActiveCount})
+            Hàng đợi chụp MRI ({mriActiveCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -941,8 +944,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       {/* Tabs */}
       <View style={styles.tabRow}>
         {[
-          { key: 'queue', label: `Đang Xử Lý (${activeVisits.length})` },
-          { key: 'done',  label: `Đã Hoàn Tất (${doneVisits.length})` },
+          { key: 'queue', label: `Đang xử lý (${activeVisits.length})` },
+          { key: 'done',  label: `Đã hoàn tất (${doneVisits.length})` },
         ].map(t => (
           <TouchableOpacity
             key={t.key}
@@ -955,14 +958,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginTop: 60 }} />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {(activeTab === 'queue' ? activeVisits : doneVisits).map(renderVisitCard)}
           {(activeTab === 'queue' ? activeVisits : doneVisits).length === 0 && (
             <View style={styles.empty}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#ECFEFF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                {activeTab === 'queue' ? <Inbox size={26} color="#0891B2" strokeWidth={2} /> : <CheckCircle2 size={26} color="#059669" strokeWidth={2} />}
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.brandGreenSoft, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                {activeTab === 'queue' ? <Inbox size={26} color={Colors.brandGreen} strokeWidth={2} /> : <CheckCircle2 size={26} color="#059669" strokeWidth={2} />}
               </View>
               <Text style={styles.emptyText}>
                 {activeTab === 'queue' ? 'Không có ca khám đang chờ xử lý' : 'Chưa có ca hoàn tất'}
@@ -977,7 +980,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <Scan size={20} color="#0891B2" strokeWidth={2.4} />
+              <Scan size={20} color={Colors.brandGreen} strokeWidth={2.4} />
               <Text style={styles.modalTitle}>Ra Y Lệnh Chụp MRI</Text>
             </View>
             <Text style={styles.modalSub}>
@@ -1015,7 +1018,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 {requestAi && <CheckCircle2 size={13} color="#FFFFFF" />}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Cpu size={14} color="#0891B2" strokeWidth={2.2} />
+                <Cpu size={14} color={Colors.brandGreen} strokeWidth={2.2} />
                 <Text style={styles.aiToggleText}>Yêu cầu AI phân tích kết quả sau khi chụp</Text>
               </View>
             </TouchableOpacity>
@@ -1043,11 +1046,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <UploadCloud size={20} color="#0891B2" />
+                  <UploadCloud size={20} color={Colors.brandGreen} />
                   <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Nộp Phim Chụp & Lưu Trữ Mini-PACS</Text>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                  Ca chụp: <Text style={{ fontWeight: '600', color: '#7C3AED' }}>MRI vùng {activeVisit?.mriOrder?.region || 'Não bộ'}</Text> — {activeVisit?.patientId?.profile?.name || 'Bệnh nhân'}
+                  Ca chụp: <Text style={{ fontWeight: '600', color: Colors.brandNavy }}>MRI vùng {activeVisit?.mriOrder?.region || 'Não bộ'}</Text> — {activeVisit?.patientId?.profile?.name || 'Bệnh nhân'}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setUploadModal(false)} style={{ padding: 4 }}>
@@ -1099,13 +1102,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                   >
                     {uploading ? (
                       <View style={{ alignItems: 'center' }}>
-                        <ActivityIndicator color="#7C3AED" />
-                        <Text style={{ color: '#7C3AED', marginTop: 8, fontSize: 12, fontWeight: '600' }}>Đang tải ảnh cắt lớp lên...</Text>
+                        <ActivityIndicator color={Colors.brandGreen} />
+                        <Text style={{ color: Colors.brandGreen, marginTop: 8, fontSize: 13, fontWeight: '600' }}>Đang tải ảnh cắt lớp lên...</Text>
                       </View>
                     ) : (
                       <View style={{ alignItems: 'center' }}>
-                        <ImageIcon size={26} color="#7C3AED" />
-                        <Text style={{ color: '#7C3AED', fontWeight: 'bold', marginTop: 6, fontSize: 13 }}>
+                        <ImageIcon size={26} color={Colors.brandGreen} />
+                        <Text style={{ color: Colors.brandGreen, fontWeight: 'bold', marginTop: 6, fontSize: 13 }}>
                           + Chọn ảnh cắt lớp tiêu biểu (.jpg, .png)
                         </Text>
                         <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>
@@ -1346,60 +1349,69 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, margin: 16, padding: 4, gap: 4 },
+  tabRow: { flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: 10, marginHorizontal: 16, marginTop: 4, marginBottom: 4, padding: 4, gap: 4, borderWidth: 1, borderColor: Colors.border },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: '#15803D' },
+  tabActive: { backgroundColor: Colors.brandGreenSoft },
   tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#fff' },
+  tabTextActive: { color: Colors.brandGreen, fontWeight: '700' },
   list: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: '#E2E8F0',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    backgroundColor: Colors.surface, borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: Colors.border,
+    boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05)',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
-  patientName: { fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 },
-  reason: { fontSize: 12, color: '#64748B' },
+  patientName: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy, marginBottom: 2 },
+  reason: { fontSize: 13, color: Colors.slateMuted, lineHeight: 18 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  badgeText: { fontSize: 11, fontWeight: 'bold' },
+  badgeText: { fontSize: 12, fontWeight: '700' },
   vitalsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   vitalsLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   vitalsValue: { fontSize: 12, color: '#0F172A' },
-  mriInfo: { backgroundColor: '#F5F3FF', padding: 8, borderRadius: 8, marginBottom: 6 },
-  mriInfoText: { fontSize: 12, color: '#7C3AED' },
-  subInfo: { fontSize: 12, color: '#94A3B8', marginTop: 3 },
+  mriInfo: { backgroundColor: '#EEF3FA', padding: 8, borderRadius: 8, marginBottom: 6 },
+  mriInfoText: { fontSize: 13, color: Colors.brandNavy },
+  subInfo: { fontSize: 12, color: Colors.secondary, marginTop: 3 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  btnBase: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 8 },
+  btnPrimary: { backgroundColor: Colors.brandGreen },
+  btnPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  btnSecondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderStrong },
+  btnSecondaryText: { color: Colors.slateDark, fontSize: 13, fontWeight: '600' },
+  btnDangerOutline: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: '#FCA5A5' },
+  btnDangerOutlineText: { color: '#B91C1C', fontSize: 13, fontWeight: '700' },
+  btnGhostDanger: { backgroundColor: 'transparent', paddingHorizontal: 8 },
+  btnGhostDangerText: { color: '#B91C1C', fontSize: 13, fontWeight: '600' },
   btnMri: { backgroundColor: '#7C3AED', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   btnMriText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  btnRead: { backgroundColor: '#0284C7', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  btnRead: { backgroundColor: Colors.brandNavy },
   btnReadText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   btnStart: { backgroundColor: '#15803D', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   btnStartText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
   emptyIcon: { fontSize: 48 },
-  emptyText: { fontSize: 15, color: '#94A3B8', fontWeight: '500' },
+  emptyText: { fontSize: 15, color: Colors.secondary, fontWeight: '500' },
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(11, 42, 85, 0.45)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.brandNavy, marginBottom: 4 },
   modalSub: { fontSize: 13, color: '#64748B', marginBottom: 16 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-  chipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  chipActive: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   chipText: { fontSize: 13, color: '#475569', fontWeight: '500' },
   chipTextActive: { color: '#fff' },
   noTechText: { fontSize: 12, color: '#EF4444', fontStyle: 'italic' },
   textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
   aiToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  checkboxChecked: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   checkmark: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   aiToggleText: { fontSize: 13, color: '#334155', flex: 1 },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   btnCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },
-  btnConfirm: { flex: 2, height: 48, borderRadius: 12, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' },
+  btnConfirm: { flex: 2, height: 48, borderRadius: 12, backgroundColor: Colors.brandGreen, justifyContent: 'center', alignItems: 'center' },
   btnConfirmText: { fontSize: 15, color: '#fff', fontWeight: 'bold' },
 });
 

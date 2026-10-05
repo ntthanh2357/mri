@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Colors from '../constants/colors';
 import {
   StyleSheet,
   View,
@@ -103,7 +104,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     try {
       const bhytRes = await get(`/api/v1/bhyt/${ptId}`);
       if (!bhytRes || !bhytRes.success || !bhytRes.data) {
-        Alert.alert('Thông báo', 'Bệnh nhân chưa có thông tin thẻ BHYT trong hệ thống. Vui lòng bấm "+ Khai Báo Thẻ BHYT" ở bước 1 để lưu thẻ trước.');
+        Alert.alert('Thông báo', 'Bệnh nhân chưa có thông tin thẻ BHYT trong hệ thống. Vui lòng bấm "+ Khai báo thẻ BHYT" ở bước 1 để lưu thẻ trước.');
         return;
       }
       const bhyt = bhytRes.data;
@@ -332,14 +333,14 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             style={[styles.tabButton, activeTab === 'createVisit' && styles.activeTab]}
             onPress={() => setActiveTab('createVisit')}
           >
-            <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>+ Tạo Lượt Khám</Text>
+            <Text style={[styles.tabText, activeTab === 'createVisit' && styles.activeTabText]}>Tạo lượt khám</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'myQueue' && styles.activeTab]}
             onPress={() => setActiveTab('myQueue')}
           >
             <Text style={[styles.tabText, activeTab === 'myQueue' && styles.activeTabText]}>
-              Lượt Khám Hôm Nay ({visits.length})
+              Hôm nay ({visits.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -347,21 +348,21 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             onPress={() => setActiveTab('billing')}
           >
             <Text style={[styles.tabText, activeTab === 'billing' && styles.activeTabText]}>
-              Thu Ngân & BHYT {pendingInvoicesCount > 0 ? `(${pendingInvoicesCount} chờ)` : ''}
+              Thu ngân {pendingInvoicesCount > 0 ? `(${pendingInvoicesCount} chờ)` : ''}
             </Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginTop: 50 }} />
         ) : (
           <ScrollView style={styles.contentContainer}>
             {activeTab === 'createVisit' && (
               <View style={styles.section}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.sectionTitle}>1. Chọn Bệnh Nhân</Text>
+                  <Text style={styles.sectionTitle}>1. Chọn bệnh nhân</Text>
                   <TouchableOpacity
-                    style={{ backgroundColor: '#0284C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    style={{ backgroundColor: Colors.brandNavy, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     onPress={() => {
                       if (!selectedPatientId) {
                         Alert.alert('Thông báo', 'Vui lòng bấm chọn 1 bệnh nhân trong danh sách trước khi khai báo thẻ BHYT.');
@@ -370,7 +371,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                       setShowBhytModal(true);
                     }}
                   >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>+ Khai Báo Thẻ BHYT</Text>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>+ Khai báo thẻ BHYT</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
@@ -392,7 +393,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   ))}
                 </View>
 
-                <Text style={styles.sectionTitle}>2. Phân Công Bác Sĩ</Text>
+                <Text style={styles.sectionTitle}>2. Phân công bác sĩ</Text>
                 <View style={styles.rowWrapper}>
                   {doctors.map(d => {
                     const qSize = d.queueSize || 0;
@@ -428,7 +429,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                           </View>
                           {isLeastBusy && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                              <Sparkles size={12} color={selectedDoctorId === d._id ? '#fff' : '#059669'} />
+                              <Sparkles size={12} color={selectedDoctorId === d._id ? '#fff' : '#047857'} />
                               <Text style={[
                                 styles.suggestLabel,
                                 selectedDoctorId === d._id && { color: '#fff' }
@@ -443,7 +444,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   })}
                 </View>
 
-                <Text style={styles.sectionTitle}>3. Phân Công Điều Dưỡng</Text>
+                <Text style={styles.sectionTitle}>3. Phân công điều dưỡng</Text>
                 <View style={styles.rowWrapper}>
                   {nurses.map(n => (
                     <TouchableOpacity
@@ -456,7 +457,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   ))}
                 </View>
 
-                <Text style={styles.sectionTitle}>4. Lý Do Khám</Text>
+                <Text style={styles.sectionTitle}>4. Lý do khám</Text>
                 <TextInput
                   style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
                   placeholder="Triệu chứng, yêu cầu khám..."
@@ -473,7 +474,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
             {activeTab === 'myQueue' && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Danh Sách Lượt Khám</Text>
+                <Text style={styles.sectionTitle}>Danh sách lượt khám</Text>
                 {visits.length === 0 ? <Text style={styles.emptyText}>Không có lượt khám nào.</Text> : null}
                 {visits.map(v => (
                   <TouchableOpacity 
@@ -497,7 +498,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
             {activeTab === 'billing' && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Chờ Thanh Toán (Viện Phí & Đồng Chi Trả BHYT)</Text>
+                <Text style={styles.sectionTitle}>Chờ thanh toán (viện phí và đồng chi trả BHYT)</Text>
                 {invoices.length === 0 ? <Text style={styles.emptyText}>Không có hóa đơn chờ thanh toán.</Text> : null}
                 {invoices.map(inv => {
                   const bhytCovered = inv.bhytInfo?.bhytAmount > 0;
@@ -507,7 +508,10 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     <View key={inv._id} style={styles.invoiceCard}>
                       <View style={styles.invoiceHeader}>
                         <View>
-                          <Text style={styles.invoiceTitle}>Mã Visit: {inv.visitId}</Text>
+                          <Text style={styles.invoiceTitle}>{inv.visitId?.reason || 'Lượt khám'}</Text>
+                          <Text style={{ fontSize: 12, color: Colors.secondary, marginTop: 2 }}>
+                            Mã lượt khám #{String(inv.visitId?._id || inv.visitId || '').slice(-6).toUpperCase()}
+                          </Text>
                           <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                             BN: {inv.patientId?.profile?.name || inv.patientId?.profile?.fullName || inv.patientId?.email || 'N/A'}
                           </Text>
@@ -516,15 +520,15 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                           <Text style={styles.invoiceTotal}>Tổng: {inv.totalAmount.toLocaleString()} VNĐ</Text>
                           {bhytCovered ? (
                             <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
-                              <Text style={{ fontSize: 11, color: '#059669', fontWeight: 'bold' }}>
+                              <Text style={{ fontSize: 12, color: '#047857', fontWeight: 'bold' }}>
                                 BHYT chi trả ({inv.bhytInfo.coverageRate}%): -{inv.bhytInfo.bhytAmount.toLocaleString()} VNĐ
                               </Text>
-                              <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: 'bold', marginTop: 1 }}>
+                              <Text style={{ fontSize: 13, color: '#B91C1C', fontWeight: 'bold', marginTop: 1 }}>
                                 BN đồng chi trả: {patientMustPay.toLocaleString()} VNĐ
                               </Text>
                             </View>
                           ) : (
-                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Chưa khấu trừ BHYT</Text>
+                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Chưa khấu trừ BHYT</Text>
                           )}
                         </View>
                       </View>
@@ -542,17 +546,17 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                             {!bhytCovered && (
                               <TouchableOpacity
-                                style={[styles.payBtn, { backgroundColor: '#0284C7' }]}
+                                style={[styles.payBtn, { backgroundColor: Colors.brandNavy }]}
                                 onPress={() => handleApplyBhyt(inv)}
                                 disabled={applyingBhytId === inv._id}
                               >
                                 <Text style={styles.payBtnText}>
-                                  {applyingBhytId === inv._id ? 'Đang tính...' : 'Áp Dụng BHYT'}
+                                  {applyingBhytId === inv._id ? 'Đang tính...' : 'Áp dụng BHYT'}
                                 </Text>
                               </TouchableOpacity>
                             )}
                             <TouchableOpacity style={styles.payBtn} onPress={() => handlePayInvoice(inv._id)}>
-                              <Text style={styles.payBtnText}>Tiền Mặt ({patientMustPay.toLocaleString()}đ)</Text>
+                              <Text style={styles.payBtnText}>Tiền mặt ({patientMustPay.toLocaleString()}đ)</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.payBtn]} onPress={() => handlePayOSPayment(inv._id)}>
                               <Text style={styles.payBtnText}>PayOS QR</Text>
@@ -573,7 +577,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalBox}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={styles.modalTitle}>Khai Báo Thẻ Bảo Hiểm Y Tế (BHYT)</Text>
+                <Text style={styles.modalTitle}>Khai báo thẻ bảo hiểm y tế (BHYT)</Text>
                 <TouchableOpacity onPress={() => setShowBhytModal(false)}>
                   <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
                 </TouchableOpacity>
@@ -682,7 +686,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   activeTab: {
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
   },
   tabText: {
     fontSize: 15,
@@ -733,7 +737,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectedListItem: {
-    borderColor: '#0891B2',
+    borderColor: Colors.brandGreen,
     backgroundColor: '#ECFEFF',
   },
   listItemTitle: {
@@ -761,11 +765,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   selectedCardItem: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
   suggestedCardItem: {
-    borderColor: '#059669',
+    borderColor: '#047857',
     backgroundColor: '#ECFDF5',
   },
   queueBadge: {
@@ -783,13 +787,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
   },
   queueBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1E293B',
   },
   suggestLabel: {
-    fontSize: 11,
-    color: '#059669',
+    fontSize: 12,
+    color: '#047857',
     fontWeight: 'bold',
   },
   cardItemText: {
@@ -798,7 +802,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   submitBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: '#047857',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -824,8 +828,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   chipActive: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
   chipText: {
     fontSize: 14,
@@ -878,8 +882,8 @@ const styles = StyleSheet.create({
     color:
       status === 'đang chờ' ? '#D97706' :
         status === 'đã đóng' ? '#475569' :
-          status === 'chờ thanh toán' ? '#DC2626' :
-            '#059669',
+          status === 'chờ thanh toán' ? '#B91C1C' :
+            '#047857',
   }),
   invoiceCard: {
     borderWidth: 1,
@@ -888,14 +892,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  invoiceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingBottom: 8,
-  },
+  invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 },
   invoiceTitle: {
     fontSize: 14,
     fontWeight: 'bold',
@@ -904,7 +901,7 @@ const styles = StyleSheet.create({
   invoiceTotal: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#DC2626',
+    color: '#B91C1C',
   },
   invoiceItemRow: {
     flexDirection: 'row',
@@ -930,7 +927,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   payBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: '#047857',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -963,7 +960,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   modalSub: {
     fontSize: 13,
@@ -996,8 +993,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   rateBtnActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
+    backgroundColor: Colors.brandNavy,
+    borderColor: Colors.brandNavy,
   },
   rateBtnText: {
     fontSize: 12,
@@ -1045,7 +1042,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: '#0284C7',
+    backgroundColor: Colors.brandNavy,
   },
   btnConfirmText: {
     fontSize: 13,

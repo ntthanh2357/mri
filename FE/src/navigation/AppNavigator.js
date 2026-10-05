@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
 import { navigationRef, navigateTo, resetTo } from '../utils/navigationRef';
+import { isStaffPortalPath } from '../utils/portalPath';
 import { setAuthToken } from '../services/api.service';
 import performLogout from '../utils/logout';
 import StaffPortalNavigator from './StaffPortal';
@@ -142,7 +143,7 @@ const AppNavigator = () => {
   const isStaffPortal =
     Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
-    window.location.pathname.indexOf('/staff') === 0;
+    isStaffPortalPath(window.location.pathname);
 
   if (isStaffPortal) {
     return <StaffPortalNavigator />;

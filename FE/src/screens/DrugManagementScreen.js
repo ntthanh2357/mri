@@ -37,7 +37,7 @@ const CATEGORY_COLORS = {
   pain_reliever: { bg: '#FFF7ED', text: '#EA580C', border: '#FFEDD5' },
   antibiotic: { bg: '#F0FDFA', text: '#0D9488', border: '#CCFBF1' },
   psychotropic: { bg: '#FAF5FF', text: '#7E22CE', border: '#E9D5FF' },
-  cardiovascular: { bg: '#FEF2F2', text: '#DC2626', border: '#FEE2E2' },
+  cardiovascular: { bg: '#FEF2F2', text: '#B91C1C', border: '#FEE2E2' },
   other: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0' },
 };
 
@@ -356,7 +356,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <TextInput
                           style={styles.input}
                           placeholder="Ví dụ: Keppra"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={drugName}
                           onChangeText={setDrugName}
                         />
@@ -366,7 +366,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <TextInput
                           style={styles.input}
                           placeholder="Ví dụ: Levetiracetam"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={activeIngredient}
                           onChangeText={setActiveIngredient}
                         />
@@ -380,7 +380,7 @@ export default function DrugManagementScreen({ navigation }) {
                           style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
                           onPress={() => setShowCategoryFormDropdown(!showCategoryFormDropdown)}
                         >
-                          <Text style={{ fontSize: 13, color: '#0F172A' }}>{CATEGORY_LABELS[category]}</Text>
+                          <Text style={{ fontSize: 13, color: Colors.brandNavy }}>{CATEGORY_LABELS[category]}</Text>
                         </TouchableOpacity>
                         {showCategoryFormDropdown && (
                           <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]}>
@@ -401,7 +401,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <TextInput
                           style={styles.input}
                           placeholder="Ví dụ: GlaxoSmithKline"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={manufacturer}
                           onChangeText={setManufacturer}
                         />
@@ -415,7 +415,7 @@ export default function DrugManagementScreen({ navigation }) {
                         multiline
                         numberOfLines={3}
                         placeholder="Ví dụ: 500mg uống 2 lần mỗi ngày sau ăn..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={Colors.secondary}
                         value={dosageInstructions}
                         onChangeText={setDosageInstructions}
                       />
@@ -428,7 +428,7 @@ export default function DrugManagementScreen({ navigation }) {
                           style={styles.input}
                           keyboardType="numeric"
                           placeholder="Ví dụ: 12000"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={price}
                           onChangeText={setPrice}
                         />
@@ -438,7 +438,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <TextInput
                           style={styles.input}
                           placeholder="Ví dụ: 2027-12-31"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={expiryDate}
                           onChangeText={setExpiryDate}
                         />
@@ -450,7 +450,7 @@ export default function DrugManagementScreen({ navigation }) {
                       <TextInput
                         style={styles.input}
                         placeholder="Ví dụ: Depakine, Tegretol"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={Colors.secondary}
                         value={interactions}
                         onChangeText={setInteractions}
                       />
@@ -465,7 +465,7 @@ export default function DrugManagementScreen({ navigation }) {
                             style={styles.input}
                             keyboardType="numeric"
                             placeholder="0"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={Colors.secondary}
                             value={quantity}
                             onChangeText={setQuantity}
                           />
@@ -475,7 +475,7 @@ export default function DrugManagementScreen({ navigation }) {
                           <TextInput
                             style={styles.input}
                             placeholder="Viên"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={Colors.secondary}
                             value={unit}
                             onChangeText={setUnit}
                           />
@@ -486,7 +486,7 @@ export default function DrugManagementScreen({ navigation }) {
                             style={styles.input}
                             keyboardType="numeric"
                             placeholder="10"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={Colors.secondary}
                             value={minStock}
                             onChangeText={setMinStock}
                           />
@@ -533,7 +533,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <TextInput
                           style={[styles.searchInput, { width: '100%', paddingLeft: 34 }]}
                           placeholder="Tìm kiếm theo tên thuốc, hoạt chất, hãng sản xuất..."
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor={Colors.secondary}
                           value={searchQuery}
                           onChangeText={setSearchQuery}
                         />
@@ -546,7 +546,7 @@ export default function DrugManagementScreen({ navigation }) {
                           style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
                           onPress={() => setShowCategoryFilterDropdown(!showCategoryFilterDropdown)}
                         >
-                          <Text style={{ fontSize: 13, color: '#0F172A' }}>
+                          <Text style={{ fontSize: 13, color: Colors.brandNavy }}>
                             {selectedCategory === 'all' ? 'Tất cả phân nhóm' : CATEGORY_LABELS[selectedCategory]}
                           </Text>
                         </TouchableOpacity>
@@ -575,7 +575,7 @@ export default function DrugManagementScreen({ navigation }) {
 
                   {loading ? (
                     <View style={styles.loadingBox}>
-                      <ActivityIndicator size="large" color={Colors.primary} />
+                      <ActivityIndicator size="large" color={Colors.brandGreen} />
                       <Text style={{ color: '#64748B', marginTop: 10, fontSize: 13 }}>Đang tải dữ liệu thuốc...</Text>
                     </View>
                   ) : drugs.length === 0 ? (
@@ -638,7 +638,7 @@ export default function DrugManagementScreen({ navigation }) {
                                   }}>
                                     <Text style={{
                                       color: catStyle.text,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: 'bold',
                                     }}>
                                       {CATEGORY_LABELS[item.category]}
@@ -669,7 +669,7 @@ export default function DrugManagementScreen({ navigation }) {
                                       onPress={() => openStockModal(item)}
                                       style={[styles.tblBtnStock, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     >
-                                      <Text style={{ fontSize: 10 }}>➕</Text>
+                                      <Text style={{ fontSize: 12 }}>➕</Text>
                                       <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -722,7 +722,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <Text style={styles.alertDrugName}>{item.name}</Text>
                         <Text style={styles.alertDetails}>
                           Nhóm: {CATEGORY_LABELS[item.category]} | Thiếu hụt:{' '}
-                          <Text style={{ fontWeight: 'bold', color: '#DC2626' }}>
+                          <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>
                             {item.shortage} {item.stock?.unit}
                           </Text>
                         </Text>
@@ -761,11 +761,11 @@ export default function DrugManagementScreen({ navigation }) {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Package size={18} color="#0891B2" />
+                <Package size={18} color={Colors.brandGreen} />
                 <Text style={styles.modalTitle}>Cập nhật tồn kho dược phẩm</Text>
               </View>
               <Text style={styles.modalSub}>
-                Thuốc: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{stockDrug.name}</Text> | Đơn vị: {stockDrug.stock?.unit}
+                Thuốc: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{stockDrug.name}</Text> | Đơn vị: {stockDrug.stock?.unit}
               </Text>
 
               <View style={styles.modalActionRow}>
@@ -801,7 +801,7 @@ export default function DrugManagementScreen({ navigation }) {
                   style={styles.input}
                   keyboardType="numeric"
                   placeholder="Nhập số lượng, ví dụ: 100"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={Colors.secondary}
                   value={stockQty}
                   onChangeText={setStockQty}
                 />
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   scroll: { padding: 24, gap: 20 },
   titleContainer: { marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#0F172A' },
+  title: { fontSize: 22, fontWeight: 'bold', color: Colors.brandNavy },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
   alertHeaderBadge: {
     backgroundColor: '#FEF2F2',
@@ -852,15 +852,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   alertHeaderBadgeText: {
-    color: '#DC2626',
+    color: '#B91C1C',
     fontWeight: 'bold',
     fontSize: 12,
   },
   tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#15803D' },
+  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: Colors.brandGreen },
   tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#15803D', fontWeight: 'bold' },
+  tabTextActive: { color: Colors.brandGreen, fontWeight: 'bold' },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
@@ -868,11 +868,11 @@ const styles = StyleSheet.create({
   fullWidth: { width: '100%' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#334155', marginBottom: 6 },
-  cardSub: { fontSize: 11, color: '#64748B', marginBottom: 16, lineHeight: 16 },
+  cardSub: { fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 16 },
   field: { marginBottom: 14 },
   fieldRow: { flexDirection: 'row', marginBottom: 14 },
-  label: { fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
-  input: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC', color: '#0F172A', outlineStyle: 'none' },
+  label: { fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
+  input: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC', color: Colors.brandNavy, outlineStyle: 'none' },
   selectWrapper: {
     height: 40,
     borderWidth: 1,
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     paddingHorizontal: 10,
     fontSize: '13px',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     outlineStyle: 'none',
     cursor: 'pointer',
   },
@@ -917,60 +917,60 @@ const styles = StyleSheet.create({
   },
   dropdownOptionText: {
     fontSize: 13,
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
-  submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  submitButton: { height: 40, backgroundColor: Colors.brandGreen, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   buttonDisabled: { opacity: 0.7 },
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   cancelBtn: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
   cancelBtnText: { fontSize: 13, fontWeight: 'bold', color: '#64748B' },
   listHeader: { marginBottom: 16 },
-  searchInput: { height: 38, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 12, backgroundColor: '#F8FAFC', color: '#0F172A', outlineStyle: 'none' },
+  searchInput: { height: 38, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 12, backgroundColor: '#F8FAFC', color: Colors.brandNavy, outlineStyle: 'none' },
   loadingBox: { paddingVertical: 60, alignItems: 'center' },
   emptyBox: { paddingVertical: 60, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 },
-  emptyText: { color: '#94A3B8', fontSize: 12 },
+  emptyText: { color: Colors.secondary, fontSize: 12 },
   tableCard: { width: '100%' },
   table: { flexDirection: 'column' },
   tableHeaderRow: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
   tableHead: { paddingVertical: 12, paddingHorizontal: 10, justifyContent: 'center' },
-  tableHeadText: { fontSize: 11, fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' },
+  tableHeadText: { fontSize: 12, fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' },
   tableTr: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', alignItems: 'center' },
   tableCell: { paddingVertical: 12, paddingHorizontal: 10, justifyContent: 'center' },
-  drugNameText: { fontSize: 13, fontWeight: 'bold', color: '#0F172A' },
-  ingredientText: { fontSize: 11, color: '#64748B', marginTop: 1 },
+  drugNameText: { fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy },
+  ingredientText: { fontSize: 12, color: '#64748B', marginTop: 1 },
   qtyText: { fontSize: 13, fontWeight: 'bold', color: '#334155' },
-  qtyTextLow: { color: '#DC2626' },
+  qtyTextLow: { color: '#B91C1C' },
   miniAlertTag: { backgroundColor: '#FEE2E2', paddingVertical: 1, paddingHorizontal: 5, borderRadius: 4 },
-  miniAlertTagText: { color: '#991B1B', fontSize: 9, fontWeight: 'bold' },
-  priceText: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+  miniAlertTagText: { color: '#991B1B', fontSize: 12, fontWeight: 'bold' },
+  priceText: { fontSize: 13, fontWeight: '600', color: Colors.brandNavy },
   expiryText: { fontSize: 12, color: '#64748B' },
-  tblBtnStock: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#DCFCE7', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
-  tblBtnStockText: { color: '#166534', fontSize: 11, fontWeight: 'bold' },
+  tblBtnStock: { backgroundColor: Colors.brandGreenSoft, borderWidth: 1, borderColor: Colors.brandGreenSoft, borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
+  tblBtnStockText: { color: Colors.brandGreenPressed, fontSize: 12, fontWeight: 'bold' },
   tblBtnEdit: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
-  tblBtnEditText: { color: '#475569', fontSize: 11 },
+  tblBtnEditText: { color: '#475569', fontSize: 12 },
   tblBtnDel: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FEE2E2', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
-  tblBtnDelText: { color: '#991B1B', fontSize: 11 },
+  tblBtnDelText: { color: '#991B1B', fontSize: 12 },
   alertsList: { gap: 10 },
   alertItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FEE2E2', borderRadius: 12 },
   alertDrugName: { fontSize: 14, fontWeight: 'bold', color: '#991B1B' },
   alertDetails: { fontSize: 12, color: '#7F1D1D', marginTop: 2 },
   alertStockText: { fontSize: 12, color: '#7F1D1D' },
-  alertActionBtn: { backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  alertActionBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
+  alertActionBtn: { backgroundColor: '#B91C1C', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  alertActionBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
   
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, borderHeight: 1, borderWidth: 1, borderColor: '#E2E8F0', padding: 24, width: '100%', maxWidth: 450, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
-  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 4 },
   modalSub: { fontSize: 12, color: '#64748B', marginBottom: 20 },
   modalActionRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   modalActionBtn: { flex: 1, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, alignItems: 'center', backgroundColor: '#F8FAFC' },
-  modalActionBtnActive: { borderColor: '#15803D', backgroundColor: '#DCFCE7' },
-  modalActionText: { fontSize: 11, fontWeight: 'bold', color: '#64748B' },
-  modalActionTextActive: { color: '#15803D' },
+  modalActionBtnActive: { borderColor: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft },
+  modalActionText: { fontSize: 12, fontWeight: 'bold', color: '#64748B' },
+  modalActionTextActive: { color: Colors.brandGreen },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 },
   modalCancelBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   modalCancelText: { fontSize: 12, fontWeight: 'bold', color: '#64748B' },
-  modalSubmitBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#15803D', justifyContent: 'center', alignItems: 'center' },
+  modalSubmitBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: Colors.brandGreen, justifyContent: 'center', alignItems: 'center' },
   modalSubmitText: { fontSize: 12, fontWeight: 'bold', color: '#FFFFFF' },
 });

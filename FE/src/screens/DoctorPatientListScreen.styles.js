@@ -1,14 +1,15 @@
 import { StyleSheet, Platform } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
     backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
   },
   backBtn: { paddingRight: 12 },
-  backBtnText: { fontSize: 14, color: '#64748B' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
+  backBtnText: { fontSize: 14, color: Colors.slateMuted },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.brandNavy },
   
   statsSummaryRow: {
     flexDirection: 'row',
@@ -27,12 +28,12 @@ export default StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: 'center',
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: '0 1px 3px rgba(11, 42, 85, 0.06)' },
       default: { elevation: 1 },
     }),
   },
-  summaryVal: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
-  summaryLbl: { fontSize: 10, color: '#64748B', marginTop: 2, fontWeight: '500', textAlign: 'center' },
+  summaryVal: { fontSize: 18, fontWeight: 'bold', color: Colors.brandNavy },
+  summaryLbl: { fontSize: 12, color: Colors.slateMuted, marginTop: 2, fontWeight: '500', textAlign: 'center' },
 
   searchContainer: {
     flexDirection: 'row', alignItems: 'center',
@@ -41,7 +42,7 @@ export default StyleSheet.create({
     marginTop: 8,
   },
   searchIcon: { fontSize: 14, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.brandNavy },
 
   filterChip: {
     paddingHorizontal: 14,
@@ -52,8 +53,8 @@ export default StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   filterChipActive: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
   filterChipText: { fontSize: 12, fontWeight: '600', color: '#475569' },
   filterChipTextActive: { color: '#FFFFFF' },
@@ -73,26 +74,26 @@ export default StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: '#0F172A',
+    width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.brandNavy,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 20, color: '#FFF', fontWeight: 'bold' },
+  avatarText: { fontSize: 16, color: '#FFF', fontWeight: '700', letterSpacing: 0.5 },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
-  patientMeta: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  patientPhone: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  patientName: { fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy },
+  patientMeta: { fontSize: 12, color: Colors.slateMuted, marginTop: 2 },
+  patientPhone: { fontSize: 12, color: Colors.slateMuted, marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 11, fontWeight: 'bold' },
+  statusText: { fontSize: 12, fontWeight: 'bold' },
   cardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.background,
     padding: 10,
     borderRadius: 10,
   },
-  diagnosisLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  diagnosisLabel: { fontSize: 12, color: Colors.slateMuted, fontWeight: '600' },
   diagnosisValue: { fontSize: 12, color: '#1E293B', fontWeight: '500', flex: 1 },
-  lastScan: { fontSize: 11, color: '#64748B', marginLeft: 8, fontWeight: '500' },
+  lastScan: { fontSize: 12, color: Colors.slateMuted, marginLeft: 8, fontWeight: '500' },
   
   cardActionsRow: {
     flexDirection: 'row',
@@ -107,7 +108,7 @@ export default StyleSheet.create({
     justify: 'center',
   },
   actionBtnPrimary: {
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
   },
   actionBtnPrimaryText: {
     color: '#FFFFFF',

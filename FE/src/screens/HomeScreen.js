@@ -16,6 +16,7 @@ import { portalLoginRoute } from '../utils/navigationRef';
 import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PatientHome from '../components/patient/PatientHome';
+import Colors from '../constants/colors';
 import styles from './HomeScreen.styles';
 import {
   UploadCloud,
@@ -218,7 +219,7 @@ const HomeScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0891B2" />
+        <ActivityIndicator size="large" color={Colors.brandGreen} />
         <Text style={styles.loadingText}>Đang tải thông tin cá nhân...</Text>
       </View>
     );
@@ -227,7 +228,7 @@ const HomeScreen = ({ route, navigation }) => {
   if (error || !user) {
     return (
       <View style={styles.errorContainer}>
-        <AlertCircle size={48} color="#EF4444" style={{ marginBottom: 16 }} />
+        <AlertCircle size={48} color="#B91C1C" style={{ marginBottom: 16 }} />
         <Text style={styles.errorText}>{error || 'Không tìm thấy thông tin người dùng.'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={handleLogout}>
           <Text style={styles.retryButtonText}>Quay lại trang chủ</Text>
@@ -264,9 +265,9 @@ const HomeScreen = ({ route, navigation }) => {
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{getInitials(user.profile?.name)}</Text>
               </View>
-              <View>
+              <View style={styles.headerNameBox}>
                 <Text style={styles.welcomeText}>Xin chào,</Text>
-                <Text style={styles.userName}>{user.profile?.name || 'Người dùng'}</Text>
+                <Text style={styles.userName} numberOfLines={1}>{user.profile?.name || 'Người dùng'}</Text>
               </View>
             </View>
 
@@ -285,14 +286,14 @@ const HomeScreen = ({ route, navigation }) => {
         <View style={styles.badgeRow}>
           <View style={[styles.badge, isPatient ? styles.patientBadge : styles.doctorBadge]}>
             <Text style={[styles.badgeText, isPatient ? styles.patientBadgeText : styles.doctorBadgeText]}>
-              ● {roleLabel}
+              {roleLabel}
             </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.emailText}>{user.email}</Text>
             <TouchableOpacity style={styles.editProfileTrigger} onPress={handleOpenEditProfile}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Edit3 size={11} color="#1D4ED8" />
+                <Edit3 size={12} color={Colors.brandGreen} />
                 <Text style={styles.editProfileTriggerText}>Chỉnh sửa thông tin</Text>
               </View>
             </TouchableOpacity>
@@ -335,9 +336,9 @@ const HomeScreen = ({ route, navigation }) => {
                   <>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0891B2' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
                         </Text>
                       )}
@@ -347,9 +348,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#D97706" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {queueVisits.filter(v => v.status === 'đang chờ').length} ca
                         </Text>
                       )}
@@ -357,9 +358,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {emrRecords.filter(r => r.admissionType === 'Nội trú').length} ca
                         </Text>
                       )}
@@ -370,9 +371,9 @@ const HomeScreen = ({ route, navigation }) => {
                   <>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0891B2' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
                         </Text>
                       )}
@@ -382,9 +383,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#D97706" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {queueVisits.length} lượt
                         </Text>
                       )}
@@ -392,9 +393,9 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {totalPatients} người
                         </Text>
                       )}
@@ -405,9 +406,9 @@ const HomeScreen = ({ route, navigation }) => {
                   <>
                     <View style={styles.doctorStatCard}>
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0891B2' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {todaySchedule ? (SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift) : 'Nghỉ'}
                         </Text>
                       )}
@@ -420,16 +421,16 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#7C3AED" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {queueVisits.filter(v => !!v.mriOrder?.region || ['chờ chụp', 'chờ chụp lại', 'đang chụp'].includes(v.status)).length} ca
                         </Text>
                       )}
                       <Text style={styles.doctorStatLabel}>Hàng đợi chụp MRI</Text>
                     </TouchableOpacity>
                     <View style={styles.doctorStatCard}>
-                      <Text style={[styles.doctorStatVal, { color: '#059669' }]}>3.0 Tesla</Text>
+                      <Text style={styles.doctorStatVal}>3.0 Tesla</Text>
                       <Text style={styles.doctorStatLabel}>Máy quét MRI</Text>
                     </View>
                   </>
@@ -440,7 +441,7 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
                         <Text style={styles.doctorStatVal}>
                           {queueVisits.filter(v => ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status)).length}
@@ -452,7 +453,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorStatCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
                     >
-                      <Text style={[styles.doctorStatVal, { color: '#7C3AED' }]}>
+                      <Text style={styles.doctorStatVal}>
                         {queueVisits.filter(v => ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)).length}
                       </Text>
                       <Text style={styles.doctorStatLabel}>Hàng đợi MRI</Text>
@@ -462,9 +463,9 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#0284C7' }]}>
+                        <Text style={styles.doctorStatVal}>
                           {emrRecords.filter(r => r.admissionType === 'Nội trú').length}
                         </Text>
                       )}
@@ -475,9 +476,9 @@ const HomeScreen = ({ route, navigation }) => {
                       onPress={() => navigation.navigate('DoctorPatientList')}
                     >
                       {loadingStats ? (
-                        <ActivityIndicator size="small" color="#0891B2" />
+                        <ActivityIndicator size="small" color={Colors.brandGreen} />
                       ) : (
-                        <Text style={[styles.doctorStatVal, { color: '#D97706' }]}>{totalPatients}</Text>
+                        <Text style={styles.doctorStatVal}>{totalPatients}</Text>
                       )}
                       <Text style={styles.doctorStatLabel}>Bệnh nhân</Text>
                     </TouchableOpacity>
@@ -488,11 +489,11 @@ const HomeScreen = ({ route, navigation }) => {
               {/* Today's Schedule Section */}
               {(user.role === 'doctor' || user.role === 'nurse' || user.role === 'technician' || user.role === 'receptionist') && (
                 <>
-                  <Text style={styles.sectionTitle}>Lịch Trực & Ca Làm Việc Hôm Nay</Text>
+                  <Text style={styles.sectionTitle}>Lịch trực hôm nay</Text>
                   <View style={[styles.queueCard, { marginBottom: 20 }]}>
                     {todaySchedule ? (
                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                         <Clock size={24} color="#0891B2" style={{ marginRight: 12 }} />
+                         <Clock size={24} color={Colors.brandGreen} style={{ marginRight: 12 }} />
                          <View>
                            <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0F172A' }}>Ca: {SHIFT_LABELS[todaySchedule.shift] || todaySchedule.shift}</Text>
                            {todaySchedule.startTime ? (
@@ -512,14 +513,14 @@ const HomeScreen = ({ route, navigation }) => {
                 {isNurse
                   ? 'Bệnh nhân nội trú cần theo dõi sinh hiệu'
                   : isTechnician
-                  ? 'Danh sách ca chỉ định chụp MRI cần thực hiện'
-                  : 'Danh sách ca bệnh & Chỉ định chờ xử lý'
+                  ? 'Ca chụp MRI cần thực hiện'
+                  : 'Ca bệnh và chỉ định chờ xử lý'
                 }
               </Text>
               <View style={styles.queueCard}>
                 {loadingStats ? (
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                    <ActivityIndicator size="small" color="#0891B2" />
+                    <ActivityIndicator size="small" color={Colors.brandGreen} />
                   </View>
                 ) : isNurse ? (
                     /* Nurse: inpatient list */
@@ -538,7 +539,7 @@ const HomeScreen = ({ route, navigation }) => {
                               <Text style={styles.queueDetailsText}>{record.diagnosis} · {record.department || 'Khoa Ung Thư Não'}</Text>
                             </View>
                             <View style={[styles.statusBadge, { backgroundColor: record.signStatus === 'Chưa duyệt' ? '#FEE2E2' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
-                              <Text style={[styles.statusBadgeText, { color: record.signStatus === 'Chưa duyệt' ? '#EF4444' : '#D97706', fontSize: 10, fontWeight: 'bold' }]}>
+                              <Text style={[styles.statusBadgeText, { color: record.signStatus === 'Chưa duyệt' ? '#B91C1C' : '#B45309', fontSize: 12, fontWeight: 'bold' }]}>
                                 {record.signStatus === 'Chưa duyệt' ? 'Theo dõi sát' : 'Cần theo dõi'}
                               </Text>
                             </View>
@@ -564,7 +565,7 @@ const HomeScreen = ({ route, navigation }) => {
                           >
                             <View style={styles.queueLeftInfo}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                <Stethoscope size={14} color="#0891B2" />
+                                <Stethoscope size={14} color={Colors.brandGreen} />
                                 <Text style={styles.queuePatientName}>{v.patientId?.profile?.name || v.patientId?.email}</Text>
                               </View>
                               <Text style={styles.queueDetailsText}>{v.reason}</Text>
@@ -587,7 +588,7 @@ const HomeScreen = ({ route, navigation }) => {
             <View style={isDesktop ? styles.doctorSideColumn : styles.fullWidth}>
               {/* Quick Actions Grid - differs by role */}
               <Text style={styles.sectionTitle}>
-                {isNurse ? 'Công cụ Điều dưỡng & Chăm sóc' : isTechnician ? 'Công cụ Kỹ thuật viên MRI' : isReceptionist ? 'Công cụ Tiếp đón & Viện phí' : 'Công cụ Lâm sàng Bác sĩ'}
+                {isNurse ? 'Công cụ điều dưỡng' : isTechnician ? 'Công cụ kỹ thuật viên MRI' : isReceptionist ? 'Công cụ tiếp đón và viện phí' : 'Công cụ lâm sàng'}
               </Text>
               <View style={styles.doctorGrid}>
                 {isTechnician ? (
@@ -596,7 +597,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
                     >
-                      <Brain size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Brain size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
                       <Text style={styles.doctorGridSub}>Tiếp nhận & thực hiện chụp</Text>
                     </TouchableOpacity>
@@ -605,7 +606,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('CreateImagingResult')}
                     >
-                      <UploadCloud size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <UploadCloud size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Tải phim MRI/PACS</Text>
                       <Text style={styles.doctorGridSub}>Nộp ảnh & kích hoạt AI</Text>
                     </TouchableOpacity>
@@ -614,7 +615,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('StaffScheduling')}
                     >
-                      <Calendar size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Calendar size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Lịch làm việc KTV</Text>
                       <Text style={styles.doctorGridSub}>Xem ca trực phòng chụp</Text>
                     </TouchableOpacity>
@@ -623,7 +624,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorPatientList')}
                     >
-                      <FolderArchive size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <FolderArchive size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Tra cứu Bệnh án</Text>
                       <Text style={styles.doctorGridSub}>Xem lịch sử bệnh nhân</Text>
                     </TouchableOpacity>
@@ -634,7 +635,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('NurseReception', { tab: 'myQueue' })}
                     >
-                      <ClipboardList size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <ClipboardList size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Nhập & Theo dõi Sinh hiệu</Text>
                       <Text style={styles.doctorGridSub}>Đo HA, SpO2, Mạch, Nhiệt</Text>
                     </TouchableOpacity>
@@ -643,7 +644,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
                     >
-                      <Building2 size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Building2 size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Sơ đồ Giường bệnh</Text>
                       <Text style={styles.doctorGridSub}>Khoa Ung Thư Não & ICU</Text>
                     </TouchableOpacity>
@@ -652,7 +653,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
                     >
-                      <Stethoscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Stethoscope size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hàng đợi ca khám</Text>
                       <Text style={styles.doctorGridSub}>Theo dõi luồng khám bệnh</Text>
                     </TouchableOpacity>
@@ -661,7 +662,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'care' })}
                     >
-                      <FileText size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <FileText size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Phiếu chăm sóc EMR</Text>
                       <Text style={styles.doctorGridSub}>Ghi nhận y lệnh điều dưỡng</Text>
                     </TouchableOpacity>
@@ -670,7 +671,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('StaffScheduling')}
                     >
-                      <Calendar size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Calendar size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Lịch trực Điều dưỡng</Text>
                       <Text style={styles.doctorGridSub}>Phân ca buồng bệnh</Text>
                     </TouchableOpacity>
@@ -679,7 +680,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('Support')}
                     >
-                      <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <PhoneCall size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
                       <Text style={styles.doctorGridSub}>Liên hệ nhanh</Text>
                     </TouchableOpacity>
@@ -690,7 +691,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('NurseReception', { tab: 'createVisit' })}
                     >
-                      <UserPlus size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <UserPlus size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Tiếp nhận Bệnh nhân mới</Text>
                       <Text style={styles.doctorGridSub}>Tạo Visit & phân phòng khám</Text>
                     </TouchableOpacity>
@@ -699,7 +700,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('NurseReception', { tab: 'billing' })}
                     >
-                      <CreditCard size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <CreditCard size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Thu ngân & BHYT VietQR</Text>
                       <Text style={styles.doctorGridSub}>Thanh toán & xuất hóa đơn</Text>
                     </TouchableOpacity>
@@ -708,7 +709,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('NurseReception', { tab: 'myQueue' })}
                     >
-                      <ClipboardList size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <ClipboardList size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Lượt tiếp đón hôm nay</Text>
                       <Text style={styles.doctorGridSub}>Danh sách bệnh nhân đến khám</Text>
                     </TouchableOpacity>
@@ -717,7 +718,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
                     >
-                      <Stethoscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Stethoscope size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hàng chờ khám bệnh</Text>
                       <Text style={styles.doctorGridSub}>Theo dõi tiến độ phòng khám</Text>
                     </TouchableOpacity>
@@ -726,7 +727,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('StaffScheduling')}
                     >
-                      <Calendar size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Calendar size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Lịch làm việc Lễ tân</Text>
                       <Text style={styles.doctorGridSub}>Xem ca trực quầy tiếp đón</Text>
                     </TouchableOpacity>
@@ -735,7 +736,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('Support')}
                     >
-                      <PhoneCall size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <PhoneCall size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hỗ trợ kỹ thuật</Text>
                       <Text style={styles.doctorGridSub}>Liên hệ IT viện</Text>
                     </TouchableOpacity>
@@ -746,7 +747,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'examQueue' })}
                     >
-                      <Stethoscope size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Stethoscope size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hàng chờ Khám bệnh</Text>
                       <Text style={styles.doctorGridSub}>Khám bệnh, chẩn đoán & ra toa</Text>
                     </TouchableOpacity>
@@ -755,7 +756,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
                     >
-                      <Brain size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Brain size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Hàng đợi chụp MRI</Text>
                       <Text style={styles.doctorGridSub}>Chỉ định & Đọc kết quả MRI</Text>
                     </TouchableOpacity>
@@ -764,7 +765,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'beds' })}
                     >
-                      <Building2 size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Building2 size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Sơ đồ Giường U Não</Text>
                       <Text style={styles.doctorGridSub}>Giữ chỗ & điều phối giường</Text>
                     </TouchableOpacity>
@@ -773,7 +774,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'records' })}
                     >
-                      <FileText size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <FileText size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Bệnh án EMR & Ký số</Text>
                       <Text style={styles.doctorGridSub}>Hồ sơ TT46 & Ký số xác thực</Text>
                     </TouchableOpacity>
@@ -782,7 +783,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('EMRDashboard', { tab: 'transfers' })}
                     >
-                      <ArrowRightLeft size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <ArrowRightLeft size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Chuyển viện Liên viện</Text>
                       <Text style={styles.doctorGridSub}>Phiếu chuyển tuyến bảo mật</Text>
                     </TouchableOpacity>
@@ -791,7 +792,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DrugManagement')}
                     >
-                      <Package size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Package size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Kho Thuốc Ung Bướu</Text>
                       <Text style={styles.doctorGridSub}>Danh mục & tồn kho lâm sàng</Text>
                     </TouchableOpacity>
@@ -800,7 +801,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('StaffScheduling')}
                     >
-                      <Calendar size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <Calendar size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Lịch trực Bác sĩ</Text>
                       <Text style={styles.doctorGridSub}>Phân ca trực lâm sàng</Text>
                     </TouchableOpacity>
@@ -809,7 +810,7 @@ const HomeScreen = ({ route, navigation }) => {
                       style={styles.doctorGridCard}
                       onPress={() => navigation.navigate('DoctorPatientList')}
                     >
-                      <FolderArchive size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                      <FolderArchive size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                       <Text style={styles.doctorGridLabel}>Danh sách Bệnh nhân</Text>
                       <Text style={styles.doctorGridSub}>Tra cứu lịch sử điều trị</Text>
                     </TouchableOpacity>
@@ -819,7 +820,7 @@ const HomeScreen = ({ route, navigation }) => {
                         style={styles.doctorGridCard}
                         onPress={() => navigation.navigate('AdminBackoffice')}
                       >
-                        <Settings size={24} color="#0891B2" style={{ marginBottom: 8 }} />
+                        <Settings size={24} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
                         <Text style={styles.doctorGridLabel}>Admin Backoffice</Text>
                         <Text style={styles.doctorGridSub}>Dashboard quản trị hệ thống</Text>
                       </TouchableOpacity>
@@ -860,7 +861,7 @@ const HomeScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <Edit3 size={18} color="#0891B2" />
+              <Edit3 size={18} color={Colors.brandGreen} />
               <Text style={styles.modalTitle}>Chỉnh sửa thông tin cá nhân</Text>
             </View>
             <Text style={styles.modalSub}>Cập nhật họ tên, số điện thoại và địa chỉ liên hệ của bạn.</Text>

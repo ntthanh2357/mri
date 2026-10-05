@@ -59,7 +59,7 @@ const PrescriptionTab = ({
         <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <PenTool size={18} color="#0891B2" />
+              <PenTool size={18} color={Colors.brandGreen} />
               <Text style={styles.cardTitleText}>Kê đơn thuốc mới</Text>
             </View>
             <Text style={styles.cardSubtitleText}>Thiết lập danh mục và kiểm tra tương tác chéo</Text>
@@ -97,7 +97,7 @@ const PrescriptionTab = ({
                         padding: '10px 14px',
                         borderRadius: '8px',
                         border: '1px solid #CBD5E1',
-                        outline: 'none',
+                        outlineStyle: 'none',
                         fontSize: '14px',
                         color: '#0F172A',
                         backgroundColor: '#FFFFFF',
@@ -139,7 +139,7 @@ const PrescriptionTab = ({
                                 }}
                               >
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                  <Pill size={14} color="#0891B2" />
+                                  <Pill size={14} color={Colors.brandGreen} />
                                   <Text style={styles.suggestionText}>
                                     {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
                                   </Text>
@@ -211,7 +211,7 @@ const PrescriptionTab = ({
               </View>
 
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: Colors.primary, height: 36, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                style={[styles.submitButton, { backgroundColor: Colors.brandGreen, height: 36, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                 onPress={handleAddDrugToPrescription}
               >
                 <Plus size={15} color="#FFF" />
@@ -226,12 +226,12 @@ const PrescriptionTab = ({
                 {prescriptionDrugs.map((d, index) => (
                   <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EFF6FF', padding: 8, borderRadius: 6, marginBottom: 6 }}>
                     <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A' }}>{index + 1}. {d.name} ({d.quantity} {d.unit})</Text>
-                      <Text style={{ fontSize: 11, color: '#1E40AF' }}>HD: {d.usage}</Text>
-                      <Text style={{ fontSize: 11, color: '#1E40AF' }}>Nhắc uống: {d.timesPerDay} lần/ngày × {d.durationDays} ngày</Text>
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy }}>{index + 1}. {d.name} ({d.quantity} {d.unit})</Text>
+                      <Text style={{ fontSize: 12, color: '#1E40AF' }}>HD: {d.usage}</Text>
+                      <Text style={{ fontSize: 12, color: '#1E40AF' }}>Nhắc uống: {d.timesPerDay} lần/ngày × {d.durationDays} ngày</Text>
                     </View>
                     <TouchableOpacity onPress={() => handleRemoveDrugFromPrescription(index)} style={{ padding: 4, backgroundColor: '#FECACA', borderRadius: 4 }}>
-                      <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Xóa</Text>
+                      <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: 'bold' }}>Xóa</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -244,7 +244,7 @@ const PrescriptionTab = ({
                 {/* Header thanh điểm & Tham vấn AI */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <ShieldAlert size={16} color={clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#DC2626'} />
+                    <ShieldAlert size={16} color={clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C'} />
                     <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>THẨM ĐỊNH DƯỢC LÂM SÀNG</Text>
                   </View>
 
@@ -258,7 +258,7 @@ const PrescriptionTab = ({
                       borderColor: clinicalSafetyScore >= 90 ? '#86EFAC' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
                     }}>
                       <Text style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 'bold',
                         color: clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C'
                       }}>
@@ -286,7 +286,7 @@ const PrescriptionTab = ({
                         ) : (
                           <>
                             <Sparkles size={12} color="#FFF" />
-                            <Text style={{ color: '#FFF', fontSize: 11, fontWeight: 'bold' }}>Tham vấn AI</Text>
+                            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>Tham vấn AI</Text>
                           </>
                         )}
                       </TouchableOpacity>
@@ -299,31 +299,31 @@ const PrescriptionTab = ({
                   <View style={{ backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#C4B5FD', borderRadius: 8, padding: 10, marginBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                       <Sparkles size={14} color="#6D28D9" />
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>NHẬN ĐỊNH DƯỢC SĨ AI (GEMINI 3.1 FLASH-LITE):</Text>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#6D28D9' }}>NHẬN ĐỊNH DƯỢC SĨ AI (GEMINI 3.1 FLASH-LITE):</Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: '#4C1D95', lineHeight: 16, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: Colors.brandNavy, lineHeight: 16, marginBottom: 4 }}>
                       {aiConsultationData.summary || 'Đơn thuốc đã được AI đối soát với tiền sử bệnh án và phác đồ u não.'}
                     </Text>
                     {aiConsultationData.tumor_protocol_compatibility && (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: '#DDD6FE' }}>
-                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#5B21B6' }}>
                           🧠 Tương thích Khối u AI ({aiConsultationData.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
                         </Text>
-                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: Colors.brandNavy, marginTop: 2 }}>
                           {aiConsultationData.tumor_protocol_compatibility.clinical_rationale}
                         </Text>
                       </View>
                     )}
                     {aiConsultationData.pharmacist_recommendations ? (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
-                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.pharmacist_recommendations}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
+                        <Text style={{ fontSize: 12, color: Colors.brandNavy, marginTop: 2 }}>{aiConsultationData.pharmacist_recommendations}</Text>
                       </View>
                     ) : null}
                     {aiConsultationData.patient_instructions ? (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
-                        <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.patient_instructions}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
+                        <Text style={{ fontSize: 12, color: Colors.brandNavy, marginTop: 2 }}>{aiConsultationData.patient_instructions}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -345,18 +345,18 @@ const PrescriptionTab = ({
                             <AlertTriangle size={14} color={textCol} style={{ marginTop: 2, flexShrink: 0 }} />
                             <View style={{ flex: 1 }}>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: textCol }}>
+                                <Text style={{ fontSize: 12, fontWeight: 'bold', color: textCol }}>
                                   [{w.severity}] {w.type || 'LÂM SÀNG'}
                                 </Text>
                                 {w.source && (
-                                  <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>{w.source}</Text>
+                                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>{w.source}</Text>
                                 )}
                               </View>
-                              <Text style={{ fontSize: 11, color: '#1E293B', fontWeight: isCrit ? 'bold' : '500' }}>
+                              <Text style={{ fontSize: 12, color: '#1E293B', fontWeight: isCrit ? 'bold' : '500' }}>
                                 {w.message}
                               </Text>
                               {w.recommendation && (
-                                <Text style={{ fontSize: 10, color: textCol, marginTop: 3, fontStyle: 'italic' }}>
+                                <Text style={{ fontSize: 12, color: textCol, marginTop: 3, fontStyle: 'italic' }}>
                                   👉 Xử trí: {w.recommendation}
                                 </Text>
                               )}
@@ -368,8 +368,8 @@ const PrescriptionTab = ({
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}>
-                    <CheckCircle2 size={14} color="#16A34A" />
-                    <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '500' }}>
+                    <CheckCircle2 size={14} color="#047857" />
+                    <Text style={{ fontSize: 12, color: '#047857', fontWeight: '500' }}>
                       Chưa phát hiện tương tác hoặc chống chỉ định bất lợi trong danh mục thuốc đã chọn.
                     </Text>
                   </View>
@@ -379,7 +379,7 @@ const PrescriptionTab = ({
                 {clinicalClassifications.map((c, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
                     <Info size={13} color="#475569" style={{ marginTop: 2, flexShrink: 0 }} />
-                    <Text style={{ fontSize: 10, color: '#475569', fontStyle: 'italic', flex: 1 }}>
+                    <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', flex: 1 }}>
                       {c.name}: {c.warning}
                     </Text>
                   </View>
@@ -389,12 +389,12 @@ const PrescriptionTab = ({
                 {hasSevereWarning && (
                   <View style={{ marginTop: 10, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <AlertOctagon size={14} color="#DC2626" />
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>
+                      <AlertOctagon size={14} color="#B91C1C" />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#B91C1C' }}>
                         YÊU CẦU LÝ DO LÂM SÀNG ĐỂ GHI ĐÈ (CLINICAL OVERRIDE):
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 10, color: '#7F1D1D', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, color: '#7F1D1D', marginBottom: 6 }}>
                       Đơn thuốc có cảnh báo nguy cơ cao. Theo quy chuẩn an toàn, Bác sĩ bắt buộc phải ghi rõ giải trình chuyên môn để lưu vết thẩm định:
                     </Text>
                     <TextInput
@@ -419,7 +419,7 @@ const PrescriptionTab = ({
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#16A34A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+              style={[styles.submitButton, { backgroundColor: '#047857', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
               onPress={handleSavePrescription}
               disabled={isSavingPrescription}
             >
@@ -451,17 +451,17 @@ const PrescriptionTab = ({
               </TouchableOpacity>
             )}
 
-            <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.primary }]}>
+            <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: Colors.brandGreen }]}>
               {/* Header bệnh viện */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>Hotline: 1900 571 563 - ĐT Cấp cứu: 0236 3615 115</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: Colors.brandNavy }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>Hotline: 1900 571 563 - ĐT Cấp cứu: 0236 3615 115</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 10, color: '#475569', fontWeight: '500' }}>Mã y tế: <Text style={{ fontWeight: 'bold' }}>PT-003</Text></Text>
-                  <Text style={{ fontSize: 10, color: '#475569', fontWeight: '500' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>NS-{patient?._id?.substring(18).toUpperCase()}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#475569', fontWeight: '500' }}>Mã y tế: <Text style={{ fontWeight: 'bold' }}>PT-003</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#475569', fontWeight: '500' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>NS-{patient?._id?.substring(18).toUpperCase()}</Text></Text>
                 </View>
               </View>
 
@@ -483,22 +483,22 @@ const PrescriptionTab = ({
               <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B', marginBottom: 8 }}>CHỈ ĐỊNH THUỐC ĐIỀU TRỊ:</Text>
               <View style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#CBD5E1' }}>
-                  <Text style={{ flex: 0.4, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>STT</Text>
-                  <Text style={{ flex: 2.2, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>Tên thuốc / Hàm lượng</Text>
-                  <Text style={{ flex: 0.8, fontSize: 11, fontWeight: 'bold', color: '#475569', textAlign: 'center' }}>S.Lượng</Text>
-                  <Text style={{ flex: 0.8, fontSize: 11, fontWeight: 'bold', color: '#475569' }}>Đơn vị</Text>
+                  <Text style={{ flex: 0.4, fontSize: 12, fontWeight: 'bold', color: '#475569' }}>STT</Text>
+                  <Text style={{ flex: 2.2, fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Tên thuốc / Hàm lượng</Text>
+                  <Text style={{ flex: 0.8, fontSize: 12, fontWeight: 'bold', color: '#475569', textAlign: 'center' }}>S.Lượng</Text>
+                  <Text style={{ flex: 0.8, fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Đơn vị</Text>
                 </View>
                 
                 {activePres.drugs.map((drug, idx) => (
                   <View key={idx} style={{ borderBottomWidth: idx === activePres.drugs.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0', paddingVertical: 8, paddingHorizontal: 12 }}>
                     <View style={{ flexDirection: 'row' }}>
                       <Text style={{ flex: 0.4, fontSize: 12, color: '#334155', fontWeight: '500' }}>{idx + 1}</Text>
-                      <Text style={{ flex: 2.2, fontSize: 12, color: '#1E3A8A', fontWeight: 'bold' }}>{drug.name}</Text>
+                      <Text style={{ flex: 2.2, fontSize: 12, color: Colors.brandNavy, fontWeight: 'bold' }}>{drug.name}</Text>
                       <Text style={{ flex: 0.8, fontSize: 12, color: '#334155', fontWeight: 'bold', textAlign: 'center' }}>{drug.quantity}</Text>
                       <Text style={{ flex: 0.8, fontSize: 12, color: '#475569' }}>{drug.unit}</Text>
                     </View>
                     {drug.usage ? (
-                      <Text style={{ fontSize: 11, color: '#475569', fontStyle: 'italic', marginTop: 4, marginLeft: 20 }}>Cách dùng: {drug.usage}</Text>
+                      <Text style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginTop: 4, marginLeft: 20 }}>Cách dùng: {drug.usage}</Text>
                     ) : null}
                   </View>
                 ))}
@@ -518,12 +518,12 @@ const PrescriptionTab = ({
               {/* Phần ký tên */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
                 <View>
-                  <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Khám ngày: {new Date(activePres.recorded_at).toLocaleDateString('vi-VN')}</Text>
-                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>Đã ghi nhận trên hệ thống</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>Khám ngày: {new Date(activePres.recorded_at).toLocaleDateString('vi-VN')}</Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>Đã ghi nhận trên hệ thống</Text>
                 </View>
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>BÁC SĨ KHÁM BỆNH</Text>
-                  <Text style={{ fontSize: 10, color: '#64748B', marginBottom: 25 }}>{activePres.doctor_name}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155' }}>BÁC SĨ KHÁM BỆNH</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 25 }}>{activePres.doctor_name}</Text>
                   <View style={styles.signatureSigned}>
                     <Text style={styles.badgeTextSmall}>Đã ký số điện tử</Text>
                   </View>
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeTextSmall: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#166534',
   },

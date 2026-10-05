@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,8 +9,15 @@ import {
   SafeAreaView,
   Platform,
   Linking,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import Config from '../constants/config';
+import Colors from '../constants/colors';
+import { Feather } from '@expo/vector-icons';
+import ResponsiveLayout from '../components/ResponsiveLayout';
+import PressableScale from '../components/PressableScale';
+import FadeIn from '../components/FadeIn';
 import { apiRequest } from '../utils/apiClient';
 import { FileText, Image as ImageIcon, Paperclip, AlertTriangle } from 'lucide-react';
 import DocTypeIcon from '../components/DocTypeIcon';
@@ -232,65 +239,70 @@ const buildFileUrl = (fileUrl) => {
   return `${Config.API_URL}${fileUrl}`;
 };
 
+// Nhãn ngắn cho dòng tóm tắt: bỏ phần giải thích sau "—", "(" hoặc "/".
+const shortLabel = (label) => label.split(/\s[—(/]/)[0].trim();
+
 const RenderFileIcon = ({ fileName, fileType, docType, isUpload }) => {
   if (isUpload) {
     const name = (fileName || '').toLowerCase();
     const type = (fileType || '').toLowerCase();
-    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText size={20} color="#0891B2" />;
-    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|webp|heic)$/)) return <ImageIcon size={20} color="#059669" />;
-    return <Paperclip size={20} color="#64748B" />;
+    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText size={20} color={Colors.brandGreen} />;
+    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|webp|heic)$/)) return <ImageIcon size={20} color={Colors.brandGreen} />;
+    return <Paperclip size={20} color={Colors.slateMuted} />;
   }
-  return <DocTypeIcon docType={docType} size={20} color="#0891B2" />;
+  return <DocTypeIcon docType={docType} size={20} color={Colors.brandGreen} />;
 };
 
 // ── SavedDocRow ───────────────────────────────────────────────────────────────
 
-const SavedDocRow = ({ savedDoc, onView, onOpen }) => {
-  const [hovered, setHovered] = useState(false);
+const SavedDocRow = ({ savedDoc, fields, index, onView, onOpen }) => {
   const isUpload = savedDoc.storageType === 'upload';
 
-  const hoverProps = Platform.OS === 'web'
-    ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
-    : {};
-  const showActions = Platform.OS !== 'web' || hovered;
-
-  const manualSummary = () => {
-    if (!savedDoc.manualData) return '';
-    return Object.values(savedDoc.manualData).filter(Boolean).slice(0, 3).join(' · ');
-  };
+  // 2 trường đầu có dữ liệu, dạng "Nhãn: giá trị" để bệnh nhân nhận ra giấy tờ nào.
+  const summary = isUpload
+    ? 'Tệp PDF hoặc hình ảnh'
+    : fields
+        .filter((f) => savedDoc.manualData?.[f.key])
+        .slice(0, 2)
+        .map((f) => `${shortLabel(f.label)}: ${savedDoc.manualData[f.key]}`)
+        .join('   ·   ');
 
   return (
-    <View style={[styles.savedRow, hovered && styles.savedRowHovered]} {...hoverProps}>
-      <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-        <RenderFileIcon fileName={savedDoc.fileName} fileType={savedDoc.fileType} docType={savedDoc.docType} isUpload={isUpload} />
-      </View>
-      <View style={styles.savedRowInfo}>
-        {isUpload ? (
-          <>
-            <Text style={styles.savedRowTitle} numberOfLines={1}>{savedDoc.fileName || 'Tài liệu đã tải lên'}</Text>
-            <Text style={styles.savedRowMeta}>File PDF / Hình ảnh</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.savedRowTitle}>Form điền tay</Text>
-            {manualSummary() ? <Text style={styles.savedRowMeta} numberOfLines={1}>{manualSummary()}</Text> : null}
-          </>
-        )}
-      </View>
-
-      <View style={[styles.savedRowActions, !showActions && styles.savedRowActionsHidden]}>
-        {isUpload
-          ? <TouchableOpacity style={styles.textBtnBlue} onPress={onOpen}><Text style={styles.textBtnBlueLabel}>Mở</Text></TouchableOpacity>
-          : <TouchableOpacity style={styles.textBtnBlue} onPress={onView}><Text style={styles.textBtnBlueLabel}>Xem</Text></TouchableOpacity>}
-      </View>
-    </View>
+    <FadeIn delay={index * 70}>
+      <PressableScale
+        style={styles.savedRow}
+        hoverStyle={styles.savedRowHover}
+        onPress={isUpload ? onOpen : onView}
+        accessibilityRole="button"
+        accessibilityLabel={isUpload ? `Mở tệp ${savedDoc.fileName || ''}` : 'Xem nội dung giấy tờ'}
+      >
+        <View style={styles.savedIcon}>
+          <RenderFileIcon fileName={savedDoc.fileName} fileType={savedDoc.fileType} docType={savedDoc.docType} isUpload={isUpload} />
+        </View>
+        <View style={styles.savedRowInfo}>
+          <Text style={styles.savedRowTitle} numberOfLines={1}>
+            {isUpload ? savedDoc.fileName || 'Tài liệu đã tải lên' : 'Bản điền tay'}
+          </Text>
+          {summary ? <Text style={styles.savedRowMeta} numberOfLines={2}>{summary}</Text> : null}
+        </View>
+        <View style={styles.savedRowAction}>
+          <Text style={styles.savedRowActionText}>{isUpload ? 'Mở tệp' : 'Xem'}</Text>
+          <Feather name={isUpload ? 'external-link' : 'chevron-right'} size={16} color={Colors.brandGreen} />
+        </View>
+      </PressableScale>
+    </FadeIn>
   );
 };
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 const DocumentDetailScreen = ({ route, navigation }) => {
-  const { doc, savedDocs = [] } = route.params;
+  const { width } = useWindowDimensions();
+  const isWide = width > 768;
+  const params = route.params || {};
+  // Tải lại trang (F5) trên web: params object bị chuyển thành chuỗi "[object Object]" → không còn dữ liệu.
+  const doc = params.doc && typeof params.doc === 'object' ? params.doc : null;
+  const savedDocs = Array.isArray(params.savedDocs) ? params.savedDocs : [];
 
   const schema = DOC_SCHEMAS[doc?.docKey] || null;
   const fields = schema?.fields || [];
@@ -300,11 +312,13 @@ const DocumentDetailScreen = ({ route, navigation }) => {
   // Chỉ xem: formData chỉ dùng để hiển thị dữ liệu đã lưu, không có input nào ghi vào đây nữa
   const [mode, setMode] = useState('view');
   const [formData, setFormData] = useState({});
+  // Mục chỉ có đúng 1 bản điền tay → mở thẳng nội dung, không bắt chọn từ danh sách 1 dòng.
+  const openedDirectly = useRef(false);
 
   const [warnings, setWarnings] = useState([]);
   const [checking, setChecking] = useState(false);
 
-  const patientId = route.params.patientId || '';
+  const patientId = params.patientId || '';
 
   useEffect(() => {
     if (doc?.docKey !== 'toa_thuoc' && doc?.docKey !== 'mri' && doc?.docKey !== 'ct_scan' && doc?.docKey !== 'phieu_chi_dinh') {
@@ -351,6 +365,13 @@ const DocumentDetailScreen = ({ route, navigation }) => {
     setMode('viewManual');
   };
 
+  useEffect(() => {
+    if (localDocs.length === 1 && localDocs[0].storageType !== 'upload' && schema) {
+      openedDirectly.current = true;
+      handleViewManual(localDocs[0]);
+    }
+  }, []);
+
   // ── Open file ──────────────────────────────────────────────────────────────
   const handleOpenFile = (savedDoc) => {
     const fullUrl = buildFileUrl(savedDoc.fileUrl);
@@ -359,27 +380,29 @@ const DocumentDetailScreen = ({ route, navigation }) => {
     else Linking.openURL(fullUrl).catch(() => {});
   };
 
-  // ── Read-only field renderer ──────────────────────────────────────────────
-  const renderReadOnlyField = (field) => (
-    <View key={field.key} style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>{field.label}</Text>
-      <Text style={styles.readOnlyValue}>{formData[field.key] || '—'}</Text>
-    </View>
-  );
+  const handleBack = () => {
+    if (mode === 'viewManual' && !openedDirectly.current) setMode('view');
+    else if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('PatientRecords');
+  };
 
   // ── View mode ──────────────────────────────────────────────────────────────
   const renderView = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{localDocs.length} tài liệu đã lưu</Text>
-      </View>
+    <View>
+      <Text style={styles.sectionTitle}>{localDocs.length} bản đã lưu</Text>
       {localDocs.length === 0 ? (
-        <Text style={styles.emptyText}>Chưa có tài liệu nào cho mục này.</Text>
+        <View style={styles.emptyBox}>
+          <Image source={require('../../assets/images/illus-records.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
+          <Text style={styles.emptyTitle}>Chưa có giấy tờ nào cho mục này</Text>
+          <Text style={styles.emptyText}>Giấy tờ sẽ hiện ở đây khi bệnh viện cập nhật vào hồ sơ của bạn.</Text>
+        </View>
       ) : (
-        localDocs.map((sd) => (
+        localDocs.map((sd, i) => (
           <SavedDocRow
-            key={sd._id}
+            key={sd._id || i}
+            index={i}
             savedDoc={sd}
+            fields={fields}
             onView={() => handleViewManual(sd)}
             onOpen={() => handleOpenFile(sd)}
           />
@@ -388,137 +411,166 @@ const DocumentDetailScreen = ({ route, navigation }) => {
     </View>
   );
 
-  // ── View manual mode ───────────────────────────────────────────────────────
-  const renderViewManual = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{schema?.title || doc?.label}</Text>
-      {fields.map(renderReadOnlyField)}
-
-      {checking && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
-          <ActivityIndicator size="small" color="#0D9488" />
-          <Text style={{ fontSize: 12, color: '#0D9488', marginLeft: 8 }}>Đang kiểm tra an toàn kê đơn...</Text>
-        </View>
-      )}
-
-      {warnings.length > 0 && (
-        <View style={styles.warningBanner}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <AlertTriangle size={15} color="#DC2626" />
-            <Text style={styles.warningBannerTitle}>Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+  // ── View manual mode (trình bày như 1 tờ phiếu, ẩn trường trống) ──────────
+  const renderViewManual = () => {
+    const filled = fields.filter((f) => formData[f.key]);
+    const emptyCount = fields.length - filled.length;
+    return (
+      <FadeIn style={styles.sheet}>
+        <View style={styles.sheetHeader}>
+          <View style={styles.sheetIcon}>
+            <DocTypeIcon docType={doc?.docKey} size={22} color={Colors.brandGreen} />
           </View>
-          {warnings.map((w, idx) => (
-            <Text key={idx} style={styles.warningItem}>
-              • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})
-            </Text>
-          ))}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sheetTitle}>{schema?.title || doc?.label}</Text>
+            <Text style={styles.sheetSub}>Bản sao thông tin bệnh viện đã cung cấp. Chỉ xem.</Text>
+          </View>
         </View>
-      )}
-    </View>
-  );
 
-  // ── Header ─────────────────────────────────────────────────────────────────
-  const handleBack = () => {
-    if (mode === 'viewManual') setMode('view');
-    else navigation.goBack();
+        {filled.map((field, i) => (
+          <View key={field.key} style={[styles.fieldRow, isWide && styles.fieldRowWide, i === filled.length - 1 && styles.fieldRowLast]}>
+            <Text style={[styles.fieldLabel, isWide && styles.fieldLabelWide]}>{field.label}</Text>
+            <Text style={[styles.fieldValue, isWide && styles.fieldValueWide]} selectable>{formData[field.key]}</Text>
+          </View>
+        ))}
+        {filled.length === 0 && <Text style={styles.emptyText}>Giấy tờ này chưa có thông tin nào được điền.</Text>}
+        {emptyCount > 0 && filled.length > 0 && (
+          <Text style={styles.emptyNote}>{emptyCount} mục chưa có thông tin nên không hiển thị.</Text>
+        )}
+
+        {checking && (
+          <View style={styles.checkingRow}>
+            <ActivityIndicator size="small" color={Colors.brandGreen} />
+            <Text style={styles.checkingText}>Đang kiểm tra an toàn kê đơn…</Text>
+          </View>
+        )}
+
+        {warnings.length > 0 && (
+          <View style={styles.warningBanner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <AlertTriangle size={15} color="#B91C1C" />
+              <Text style={styles.warningBannerTitle}>Cảnh báo an toàn lâm sàng (ADR Alert)</Text>
+            </View>
+            {warnings.map((w, idx) => (
+              <Text key={idx} style={styles.warningItem}>
+                • {w.message} ({w.severity === 'CRITICAL' ? 'Nguy kịch' : w.severity === 'HIGH' ? 'Cao' : 'Trung bình'})
+              </Text>
+            ))}
+          </View>
+        )}
+      </FadeIn>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Quay lại</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{doc?.label}</Text>
-        {mode === 'view' && localDocs.length > 0 && (
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{localDocs.length}</Text>
+    <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={[styles.body, isWide && styles.bodyWide]} keyboardShouldPersistTaps="handled">
+          <View style={styles.topRow}>
+            <PressableScale style={styles.backBtn} hoverStyle={styles.backBtnHover} onPress={handleBack} accessibilityRole="button" accessibilityLabel="Quay lại">
+              <Feather name="arrow-left" size={16} color={Colors.slateMuted} />
+              <Text style={styles.backBtnText}>Quay lại</Text>
+            </PressableScale>
           </View>
-        )}
-      </View>
 
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        {mode === 'view' && renderView()}
-        {mode === 'viewManual' && renderViewManual()}
-      </ScrollView>
-    </SafeAreaView>
+          {!doc ? (
+            <View style={styles.emptyBox}>
+              <Image source={require('../../assets/images/illus-records.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
+              <Text style={styles.emptyTitle}>Không mở lại được giấy tờ này</Text>
+              <Text style={styles.emptyText}>Trang vừa được tải lại nên mất thông tin. Hãy mở lại từ Lịch sử khám.</Text>
+              <PressableScale style={styles.primaryBtn} hoverStyle={styles.primaryBtnHover} onPress={() => navigation.navigate('PatientRecords')}>
+                <Text style={styles.primaryBtnText}>Về Lịch sử khám</Text>
+              </PressableScale>
+            </View>
+          ) : (
+            <>
+              {/* Ở chế độ xem phiếu, tiêu đề đã nằm trong tờ phiếu — không lặp lại */}
+              {mode === 'view' && <Text style={styles.pageTitle} accessibilityRole="header">{doc.label || schema?.title}</Text>}
+              {mode === 'view' && renderView()}
+              {mode === 'viewManual' && renderViewManual()}
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </ResponsiveLayout>
   );
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
-  },
-  backBtn: { paddingRight: 12 },
-  backBtnText: { fontSize: 14, color: '#64748B' },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
-  headerBadge: {
-    minWidth: 24, height: 24, borderRadius: 12, backgroundColor: '#15803D',
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6,
-  },
-  headerBadgeText: { fontSize: 12, color: '#FFF', fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: Colors.background },
   body: { padding: 16, paddingBottom: 40 },
+  bodyWide: { padding: 28, maxWidth: 880, width: '100%', alignSelf: 'center' },
 
-  // ── Saved docs ─────────────────────────────────────────────────────────────
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#0F172A' },
+  topRow: { flexDirection: 'row', marginBottom: 12 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 38, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  backBtnHover: { borderColor: Colors.brandGreen },
+  backBtnText: { fontSize: 14, fontWeight: '600', color: Colors.slateMuted },
+  pageTitle: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, letterSpacing: -0.3, marginBottom: 16 },
 
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.slateMuted, marginBottom: 12 },
   savedRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF',
-    borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
   },
-  savedRowHovered: { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' },
-  savedRowIcon: { fontSize: 26, marginRight: 12 },
-  savedRowInfo: { flex: 1 },
-  savedRowTitle: { fontSize: 13, fontWeight: '600', color: '#0F172A', marginBottom: 2 },
-  savedRowMeta: { fontSize: 11, color: '#94A3B8' },
-  savedRowActions: { flexDirection: 'row', gap: 6 },
-  savedRowActionsHidden: { opacity: 0 },
+  savedRowHover: { borderColor: Colors.brandGreen, boxShadow: '0 10px 24px -14px rgba(11, 42, 85, 0.3)' },
+  savedIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.brandGreenSoft, alignItems: 'center', justifyContent: 'center' },
+  savedRowInfo: { flex: 1, minWidth: 0 },
+  savedRowTitle: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  savedRowMeta: { fontSize: 13, color: Colors.slateMuted, marginTop: 2, lineHeight: 18 },
+  savedRowAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  savedRowActionText: { fontSize: 14, fontWeight: '700', color: Colors.brandGreen },
 
-  textBtnBlue: {
-    paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#EFF6FF',
-    borderRadius: 6, borderWidth: 1, borderColor: '#BFDBFE',
+  sheet: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05)',
   },
-  textBtnBlueLabel: { fontSize: 12, color: '#1D4ED8', fontWeight: '600' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 16, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  sheetIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.brandGreenSoft, alignItems: 'center', justifyContent: 'center' },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: Colors.brandNavy },
+  sheetSub: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  fieldRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', gap: 4 },
+  fieldRowWide: { flexDirection: 'row', gap: 16 },
+  fieldRowLast: { borderBottomWidth: 0 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.slateMuted },
+  fieldLabelWide: { width: '34%' },
+  fieldValue: { fontSize: 15, lineHeight: 22, color: Colors.slateDark },
+  fieldValueWide: { flex: 1 },
+  emptyNote: { fontSize: 13, color: Colors.secondary, marginTop: 8 },
+  checkingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  checkingText: { fontSize: 13, color: Colors.brandGreen },
 
-  emptyText: { fontSize: 13, color: '#94A3B8', textAlign: 'center', marginTop: 24 },
+  emptyBox: { alignItems: 'center', padding: 24, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.borderStrong, backgroundColor: Colors.surface },
+  emptyIllus: { width: 140, height: 140 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: Colors.secondary, textAlign: 'center', marginTop: 4, lineHeight: 20 },
+  primaryBtn: { marginTop: 16, height: 44, paddingHorizontal: 18, borderRadius: 10, backgroundColor: Colors.brandGreen, justifyContent: 'center' },
+  primaryBtnHover: { backgroundColor: Colors.brandGreenPressed },
+  primaryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 
-  section: {},
-
-  // ── Form fields (read-only) ────────────────────────────────────────────────
-  fieldGroup: { marginBottom: 16 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: '#334155', marginBottom: 8 },
-  readOnlyValue: {
-    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0',
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#0F172A',
-  },
-
-  // ── Shared ─────────────────────────────────────────────────────────────────
+  // ── Cảnh báo an toàn kê đơn ────────────────────────────────────────────────
   warningBanner: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FCA5A5',
     borderWidth: 1,
     borderRadius: 12,
     padding: 14,
-    marginVertical: 12,
+    marginTop: 16,
   },
-  warningBannerTitle: {
-    color: '#991B1B',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  warningItem: {
-    color: '#7F1D1D',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
+  warningBannerTitle: { color: '#991B1B', fontSize: 14, fontWeight: '700' },
+  warningItem: { color: '#7F1D1D', fontSize: 13, lineHeight: 19, marginTop: 4 },
 });
 
 export default DocumentDetailScreen;

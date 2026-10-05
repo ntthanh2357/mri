@@ -78,7 +78,7 @@ const DischargeTransferTab = ({
           <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <FileText size={18} color="#0891B2" />
+                <FileText size={18} color={Colors.brandGreen} />
                 <Text style={styles.cardTitleText}>Lập Giấy ra viện</Text>
               </View>
               <Text style={styles.cardSubtitleText}>Hoàn tất thủ tục xuất viện cho người bệnh</Text>
@@ -135,7 +135,7 @@ const DischargeTransferTab = ({
               </View>
 
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: '#16A34A' }]}
+                style={[styles.submitButton, { backgroundColor: '#047857' }]}
                 onPress={handleSaveDischargePaper}
                 disabled={isSavingDischarge}
               >
@@ -169,18 +169,18 @@ const DischargeTransferTab = ({
               <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#10B981' }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeDisc.dischargeNo}/GV</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: Colors.brandNavy }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Số: {activeDisc.dischargeNo}/GV</Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
-                    <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
                     <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>--------------------</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Mẫu số: <Text style={{ fontWeight: 'bold' }}>02-GV</Text></Text>
-                    <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeDisc.hospitalNo}</Text></Text>
+                    <Text style={{ fontSize: 12, color: '#475569' }}>Mẫu số: <Text style={{ fontWeight: 'bold' }}>02-GV</Text></Text>
+                    <Text style={{ fontSize: 12, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeDisc.hospitalNo}</Text></Text>
                   </View>
                 </View>
 
@@ -208,7 +208,7 @@ const DischargeTransferTab = ({
                     <Text style={{ fontSize: 13, color: '#334155' }}>• Ra viện lúc: <Text style={{ fontWeight: '600' }}>16:00 ngày {new Date(activeDisc.dateOut || Date.now()).toLocaleDateString('vi-VN')}</Text></Text>
                     
                     <Text style={{ fontSize: 13, color: '#334155', marginTop: 4 }}>• Chẩn đoán ra viện: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeDisc.diagnosis}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Phương pháp điều trị: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeDisc.treatment}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155' }}>• Phương pháp điều trị: <Text style={{ fontWeight: '500', color: Colors.brandNavy }}>{activeDisc.treatment}</Text></Text>
                     
                     {activeDisc.note ? (
                       <Text style={{ fontSize: 13, color: '#334155' }}>• Lời dặn bác sĩ / Ghi chú: <Text style={{ fontWeight: '500', fontStyle: 'italic' }}>{activeDisc.note}</Text></Text>
@@ -218,15 +218,15 @@ const DischargeTransferTab = ({
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }}>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>NGƯỜI HÀNH NGHỀ KCB</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
-                    <Text style={{ fontSize: 11, color: '#1E3A8A', fontWeight: 'bold', marginTop: 25 }}>{activeDisc.doctor_name}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155' }}>NGƯỜI HÀNH NGHỀ KCB</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
+                    <Text style={{ fontSize: 12, color: Colors.brandNavy, fontWeight: 'bold', marginTop: 25 }}>{activeDisc.doctor_name}</Text>
                   </View>
                   
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeDisc.recorded_at || Date.now()).getDate()} tháng {new Date(activeDisc.recorded_at || Date.now()).getMonth() + 1} năm {new Date(activeDisc.recorded_at || Date.now()).getFullYear()}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN ĐƠN VỊ KCB</Text>
-                    <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeDisc.recorded_at || Date.now()).getDate()} tháng {new Date(activeDisc.recorded_at || Date.now()).getMonth() + 1} năm {new Date(activeDisc.recorded_at || Date.now()).getFullYear()}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN ĐƠN VỊ KCB</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
                     <View style={[styles.signatureSigned, { marginTop: 15 }]}>
                       <Text style={styles.badgeTextSmall}>Đã đóng dấu điện tử</Text>
                     </View>
@@ -269,7 +269,7 @@ const DischargeTransferTab = ({
         <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <Send size={18} color="#0891B2" />
+              <Send size={18} color={Colors.brandGreen} />
               <Text style={styles.cardTitleText}>Lập Phiếu chuyển tuyến BHYT</Text>
             </View>
             <Text style={styles.cardSubtitleText}>Chuyển bệnh nhân lên tuyến trên hoặc bệnh viện khác</Text>
@@ -319,8 +319,8 @@ const DischargeTransferTab = ({
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={styles.inputLabel}>Tóm tắt cận lâm sàng chính</Text>
                 <TouchableOpacity onPress={handleAutofillLabResults} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#3B82F6', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Zap size={11} color={Colors.primary} />
-                  <Text style={{ fontSize: 10, color: Colors.primary, fontWeight: 'bold' }}>Trích LIS Lab gần nhất</Text>
+                  <Zap size={11} color={Colors.brandGreen} />
+                  <Text style={{ fontSize: 12, color: Colors.brandGreen, fontWeight: 'bold' }}>Trích LIS Lab gần nhất</Text>
                 </TouchableOpacity>
               </View>
               <TextInput
@@ -475,7 +475,7 @@ const DischargeTransferTab = ({
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#16A34A' }]}
+              style={[styles.submitButton, { backgroundColor: '#047857' }]}
               onPress={handleSaveTransferForm}
               disabled={isSavingTransfer}
             >
@@ -509,23 +509,23 @@ const DischargeTransferTab = ({
             <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#F59E0B' }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeTrans.transferNo}/GCT</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: Colors.brandNavy }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Số: {activeTrans.transferNo}/GCT</Text>
                 </View>
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
-                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Độc lập - Tự do - Hạnh phúc</Text>
                   <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>--------------------</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeTrans.hospitalNo}</Text></Text>
-                  <Text style={{ fontSize: 9, color: '#475569' }}>Vào sổ chuyển số: <Text style={{ fontWeight: 'bold' }}>{activeTrans.transferNo}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeTrans.hospitalNo}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#475569' }}>Vào sổ chuyển số: <Text style={{ fontWeight: 'bold' }}>{activeTrans.transferNo}</Text></Text>
                 </View>
               </View>
 
               <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 6 }}>PHIẾU CHUYỂN CƠ SỞ KHÁM BỆNH, CHỮA BỆNH BẢO HIỂM Y TẾ</Text>
-              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E3A8A', textAlign: 'center', marginBottom: 20 }}>Kính gửi: {activeTrans.transferTo}</Text>
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center', marginBottom: 20 }}>Kính gửi: {activeTrans.transferTo}</Text>
 
               <View style={{ gap: 10, marginBottom: 20 }}>
                 <Text style={{ fontSize: 13, color: '#334155' }}>Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>Bệnh viện Chuyên Khoa Ung Thư Não NeuroScan</Text> trân trọng giới thiệu:</Text>
@@ -548,7 +548,7 @@ const DischargeTransferTab = ({
                   <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>- Nơi làm việc: <Text style={{ fontWeight: '500' }}>N/A</Text></Text>
                 </View>
 
-                <Text style={{ fontSize: 13, color: '#334155' }}>- Số thẻ Bảo hiểm y tế: <Text style={{ fontWeight: 'bold', color: '#1E3A8A' }}>GD4797921800244</Text></Text>
+                <Text style={{ fontSize: 13, color: '#334155' }}>- Số thẻ Bảo hiểm y tế: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>GD4797921800244</Text></Text>
                 
                 <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4 }}>
                   <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B', marginBottom: 6 }}>TÓM TẮT BỆNH ÁN:</Text>
@@ -557,7 +557,7 @@ const DischargeTransferTab = ({
                   
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>2. Tóm tắt kết quả xét nghiệm, cận lâm sàng chính: </Text>
                   <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginLeft: 12, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 11, color: '#334155', fontFamily: 'monospace', lineHeight: 16 }}>{activeTrans.labSummary || 'N/A'}</Text>
+                    <Text style={{ fontSize: 12, color: '#334155', fontFamily: 'monospace', lineHeight: 16 }}>{activeTrans.labSummary || 'N/A'}</Text>
                   </View>
 
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>3. Chẩn đoán bệnh chính: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeTrans.diagnosis}</Text></Text>
@@ -568,7 +568,7 @@ const DischargeTransferTab = ({
 
                 <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4, gap: 4 }}>
                   <Text style={{ fontSize: 13, color: '#334155' }}>- Lý do chuyển tuyến: <Text style={{ fontWeight: 'bold', color: '#D97706' }}>Mục [{activeTrans.reason}] — {activeTrans.reasonDetail}</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>- Hướng điều trị tiếp theo: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeTrans.treatmentDirection || 'Theo chỉ định của tuyến trên'}</Text></Text>
+                  <Text style={{ fontSize: 13, color: '#334155' }}>- Hướng điều trị tiếp theo: <Text style={{ fontWeight: '500', color: Colors.brandNavy }}>{activeTrans.treatmentDirection || 'Theo chỉ định của tuyến trên'}</Text></Text>
                   <Text style={{ fontSize: 13, color: '#334155' }}>- Thời gian chuyển tuyến: <Text style={{ fontWeight: '500' }}>{new Date(activeTrans.transferTime).toLocaleTimeString('vi-VN')} ngày {new Date(activeTrans.transferTime).toLocaleDateString('vi-VN')}</Text></Text>
                   <Text style={{ fontSize: 13, color: '#334155' }}>- Trường hợp chuyển tuyến có giá trị trong 01 năm: <Text style={{ fontWeight: 'bold' }}>{activeTrans.isOneYearValid}</Text></Text>
                   
@@ -583,15 +583,15 @@ const DischargeTransferTab = ({
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }}>
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>Y BÁC SĨ ĐIỀU TRỊ</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
-                  <Text style={{ fontSize: 11, color: '#1E3A8A', fontWeight: 'bold', marginTop: 25 }}>{activeTrans.doctor_name}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155' }}>Y BÁC SĨ ĐIỀU TRỊ</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
+                  <Text style={{ fontSize: 12, color: Colors.brandNavy, fontWeight: 'bold', marginTop: 25 }}>{activeTrans.doctor_name}</Text>
                 </View>
                 
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeTrans.recorded_at).getDate()} tháng {new Date(activeTrans.recorded_at).getMonth() + 1} năm {new Date(activeTrans.recorded_at).getFullYear()}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN CƠ SỞ KCB</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeTrans.recorded_at).getDate()} tháng {new Date(activeTrans.recorded_at).getMonth() + 1} năm {new Date(activeTrans.recorded_at).getFullYear()}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN CƠ SỞ KCB</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
                   <View style={[styles.signatureSigned, { marginTop: 15 }]}>
                     <Text style={styles.badgeTextSmall}>Đã ký số phê duyệt</Text>
                   </View>
@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeTextSmall: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#166534',
   },

@@ -14,6 +14,8 @@ import { createEmptyMedicalRecord, MEDICAL_RECORD_STORAGE_KEY } from '../models/
 import { formatDate, formatCurrency } from '../utils/format.js';
 import { extractMedications, extractOrders } from '../utils/clinicalText.js';
 import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
+import { initialsOf } from '../utils/initials.js';
+import { isStaffPortalPath } from '../utils/portalPath.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -248,6 +250,33 @@ it('parseSimpleMarkdown keeps unmatched ** as plain text and handles empty input
   const [b] = parseSimpleMarkdown('Chỉ số 5 ** chưa đóng');
   assert.strictEqual(b.type, 'paragraph');
   assert.strictEqual(b.segments.map((s) => s.text).join(''), 'Chỉ số 5 ** chưa đóng');
+});
+
+// ── initialsOf: avatar bệnh nhân (trước đây mọi tên mẫu "Bệnh nhân …" đều ra "B") ──
+it('initialsOf strips the "Bệnh nhân" prefix and the note in parentheses', () => {
+  assert.strictEqual(initialsOf('Bệnh nhân Tuấn Thành (U Màng Não)'), 'TT');
+  assert.strictEqual(initialsOf('Bệnh nhân Minh Hằng (Glioblastoma Phù Não)'), 'MH');
+  assert.strictEqual(initialsOf('Nguyễn Văn An'), 'VA');
+});
+
+it('initialsOf handles single words and empty input', () => {
+  assert.strictEqual(initialsOf('An'), 'A');
+  assert.strictEqual(initialsOf(''), '?');
+  assert.strictEqual(initialsOf(undefined), '?');
+});
+
+// ── isStaffPortalPath: trước đây "/staff-management" bị coi là cổng nội bộ (F5 bị đá về dashboard) ──
+it('isStaffPortalPath matches only /staff and /staff/*', () => {
+  assert.strictEqual(isStaffPortalPath('/staff'), true);
+  assert.strictEqual(isStaffPortalPath('/staff/home'), true);
+  assert.strictEqual(isStaffPortalPath('/staff/staff-management'), true);
+});
+
+it('isStaffPortalPath ignores main-app routes that merely start with "staff"', () => {
+  assert.strictEqual(isStaffPortalPath('/staff-management'), false);
+  assert.strictEqual(isStaffPortalPath('/staff-scheduling'), false);
+  assert.strictEqual(isStaffPortalPath('/'), false);
+  assert.strictEqual(isStaffPortalPath(''), false);
 });
 
 console.log(`\n======================================================================`);

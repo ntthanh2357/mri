@@ -219,7 +219,7 @@ export default function AdminUsersView() {
 
       <View style={styles.listCard}>
         {loading ? (
-          <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 24 }} />
+          <ActivityIndicator color={Colors.brandGreen} style={{ paddingVertical: 24 }} />
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : filteredUsers.length === 0 ? (
@@ -240,7 +240,7 @@ export default function AdminUsersView() {
                     <Text style={styles.roleBadgeText}>{roleLabel(user.role)}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: user.status === 'Active' ? '#ecfdf5' : '#fef2f2' }]}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: user.status === 'Active' ? '#059669' : '#e11d48' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: user.status === 'Active' ? '#047857' : '#e11d48' }}>
                       {user.status}
                     </Text>
                   </View>
@@ -270,7 +270,7 @@ export default function AdminUsersView() {
 
             <ScrollView style={{ maxHeight: 460 }}>
               {detailLoading ? (
-                <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 40 }} />
+                <ActivityIndicator color={Colors.brandGreen} style={{ paddingVertical: 40 }} />
               ) : detailError ? (
                 <Text style={styles.errorText}>{detailError}</Text>
               ) : selectedUserDetail ? (
@@ -298,7 +298,7 @@ export default function AdminUsersView() {
                   <DetailRow
                     label="Trạng thái khóa"
                     value={selectedUserDetail.isLocked ? 'Locked' : 'Active'}
-                    valueColor={selectedUserDetail.isLocked ? '#e11d48' : '#059669'}
+                    valueColor={selectedUserDetail.isLocked ? '#e11d48' : '#047857'}
                   />
                   <DetailRow
                     label="Xác minh danh tính"
@@ -326,7 +326,7 @@ export default function AdminUsersView() {
                           <Text style={[styles.actionBtnText, { color: '#b45309' }]}>⚠️ Hủy duyệt Quản lý bệnh viện</Text>
                         </TouchableOpacity>
                       ) : (
-                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#2563eb' }]} onPress={() => handleVerifyUser(selectedUserDetail._id, true)}>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.brandGreen }]} onPress={() => handleVerifyUser(selectedUserDetail._id, true)}>
                           <Text style={styles.actionBtnText}>✅ Duyệt Quản lý bệnh viện</Text>
                         </TouchableOpacity>
                       )
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   headerTitle: { fontSize: 14, fontWeight: '800', color: Colors.black },
-  headerSubtitle: { fontSize: 11, color: Colors.secondary, marginTop: 4 },
+  headerSubtitle: { fontSize: 12, color: Colors.secondary, marginTop: 4 },
   searchInput: {
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -382,10 +382,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
-  filterChipText: { fontSize: 11, fontWeight: '600', color: Colors.secondary },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: Colors.secondary },
   filterChipTextActive: { color: Colors.white },
   listCard: {
     backgroundColor: Colors.white,
@@ -406,15 +406,15 @@ const styles = StyleSheet.create({
   userRowLocked: { backgroundColor: '#fff5f5' },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#e2e8f0' },
   userName: { fontSize: 13, fontWeight: '700', color: Colors.black },
-  userEmail: { fontSize: 11, color: Colors.secondary, marginTop: 1 },
+  userEmail: { fontSize: 12, color: Colors.secondary, marginTop: 1 },
   userMetaRow: { flexDirection: 'row', gap: 6, marginTop: 5 },
   roleBadge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: '#eff6ff',
+    backgroundColor: Colors.brandGreenSoft,
   },
-  roleBadgeText: { fontSize: 9.5, fontWeight: '700', color: '#1d4ed8' },
+  roleBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.brandGreenPressed },
   statusBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   lockBtn: {
     width: 30,
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   detailAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#e2e8f0' },
   detailName: { fontSize: 14, fontWeight: '800', color: Colors.black },
-  detailRole: { fontSize: 10, color: Colors.secondary, marginTop: 2, textTransform: 'uppercase', fontWeight: '700' },
+  detailRole: { fontSize: 12, color: Colors.secondary, marginTop: 2, textTransform: 'uppercase', fontWeight: '700' },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
     borderStyle: 'dashed',
   },
-  detailLabel: { fontSize: 10.5, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase' },
+  detailLabel: { fontSize: 12, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase' },
   detailValue: { fontSize: 12, color: Colors.black, fontWeight: '700', maxWidth: '55%' },
   actionBtn: {
     paddingVertical: 11,

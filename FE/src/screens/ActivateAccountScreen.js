@@ -12,6 +12,8 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import Colors from '../constants/colors';
+import PressableScale from '../components/PressableScale';
 import { put, setAuthToken, get } from '../services/api.service';
 import { Lock, Shield, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -135,8 +137,10 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             resizeMode="contain"
           />
           <View>
-            <Text style={styles.brandName}>NeuroScan AI</Text>
-            <Text style={styles.brandSub}>ĐỘ CHÍNH XÁC LÂM SÀNG</Text>
+            <Text style={styles.brandName}>
+              Neuro<Text style={styles.brandNameAccent}>Scan</Text> AI
+            </Text>
+            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
           </View>
         </View>
 
@@ -144,7 +148,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.lockBadge}>
-              <Lock size={28} color="#0891B2" />
+              <Lock size={26} color={Colors.brandGreen} />
             </View>
             <Text style={styles.title}>Kích hoạt tài khoản</Text>
             <Text style={styles.subtitle}>
@@ -180,7 +184,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="vidu@neuroscan.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={Colors.secondary}
                   value={newEmail}
                   onChangeText={setNewEmail}
                   autoCapitalize="none"
@@ -203,7 +207,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Nhập mật khẩu tạm thời"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={Colors.secondary}
                 secureTextEntry={!showCurrent}
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
@@ -228,7 +232,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Đặt mật khẩu mới của bạn"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={Colors.secondary}
                 secureTextEntry={!showNew}
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -252,7 +256,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Nhập lại mật khẩu mới"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={Colors.secondary}
                 secureTextEntry={!showConfirm}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -269,16 +273,17 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           {/* Strength indicator */}
           {newPassword.length > 0 && (
             <View style={styles.strengthRow}>
-              <View style={[styles.strengthBar, { backgroundColor: newPassword.length >= 8 ? '#16A34A' : newPassword.length >= 6 ? '#D97706' : '#EF4444' }]} />
-              <Text style={[styles.strengthText, { color: newPassword.length >= 8 ? '#16A34A' : newPassword.length >= 6 ? '#D97706' : '#EF4444' }]}>
+              <View style={[styles.strengthBar, { backgroundColor: newPassword.length >= 8 ? '#047857' : newPassword.length >= 6 ? '#B45309' : '#B91C1C' }]} />
+              <Text style={[styles.strengthText, { color: newPassword.length >= 8 ? '#047857' : newPassword.length >= 6 ? '#B45309' : '#B91C1C' }]}>
                 {newPassword.length >= 8 ? 'Độ bảo mật: Mạnh' : newPassword.length >= 6 ? 'Độ bảo mật: Trung bình' : 'Độ bảo mật: Yếu'}
               </Text>
             </View>
           )}
 
           {/* Submit */}
-          <TouchableOpacity
+          <PressableScale
             style={[styles.activateBtn, loading && { opacity: 0.7 }]}
+            hoverStyle={styles.activateBtnHover}
             onPress={handleActivate}
             disabled={loading}
           >
@@ -288,16 +293,16 @@ const ActivateAccountScreen = ({ route, navigation }) => {
                 <Text style={styles.activateBtnText}>Đang xác thực thông tin...</Text>
               </View>
             ) : (
-              <Text style={styles.activateBtnText}>Kích hoạt tài khoản & Vào hệ thống →</Text>
+              <Text style={styles.activateBtnText}>Kích hoạt và vào hệ thống</Text>
             )}
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         {/* Security note */}
         <View style={styles.securityNote}>
-          <Shield size={18} color="#0891B2" style={{ marginRight: 8, marginTop: 2 }} />
+          <Shield size={18} color={Colors.brandGreen} style={{ marginTop: 1 }} />
           <Text style={styles.securityText}>
-            Hệ thống sử dụng cơ chế mã hóa một chiều an toàn (bcrypt) cho mật khẩu. Thông tin tài khoản được bảo mật tuyệt đối theo tiêu chuẩn HIPAA.
+            Mật khẩu được mã hóa một chiều (bcrypt) trước khi lưu. Không chia sẻ mật khẩu với bất kỳ ai, kể cả nhân viên hỗ trợ.
           </Text>
         </View>
 
@@ -309,11 +314,11 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           <View style={styles.alertCard}>
             <View style={[
               styles.alertIconCircle,
-              alert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              alert.type === 'success' && { backgroundColor: Colors.brandGreenSoft },
               alert.type === 'error' && { backgroundColor: '#FEF2F2' },
             ]}>
               {alert.type === 'success' ? (
-                <CheckCircle2 size={32} color="#16A34A" />
+                <CheckCircle2 size={32} color={Colors.brandGreen} />
               ) : (
                 <AlertCircle size={32} color="#DC2626" />
               )}
@@ -321,14 +326,14 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             <Text style={styles.alertTitle}>{alert.title}</Text>
             <Text style={styles.alertMessage}>{alert.message}</Text>
             <TouchableOpacity
-              style={[styles.alertBtn, { backgroundColor: alert.type === 'success' ? '#15803D' : '#DC2626' }]}
+              style={[styles.alertBtn, { backgroundColor: alert.type === 'success' ? Colors.brandGreen : '#B91C1C' }]}
               onPress={() => {
                 setAlert(prev => ({ ...prev, visible: false }));
                 if (alert.onClose) alert.onClose();
               }}
             >
               <Text style={styles.alertBtnText}>
-                {alert.type === 'success' ? 'Vào hệ thống →' : 'Thử lại'}
+                {alert.type === 'success' ? 'Vào hệ thống' : 'Thử lại'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -339,7 +344,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: Colors.background },
   scroll: { paddingHorizontal: 20, paddingVertical: 48, alignItems: 'center' },
   brandHeader: {
     flexDirection: 'row',
@@ -347,37 +352,33 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   logoImage: {
-    width: 57,
-    height: 57,
-    borderRadius: 29,
+    width: 48,
+    height: 48,
     marginRight: 10,
   },
   brandName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    letterSpacing: 0.5,
+    fontSize: 19,
+    fontWeight: '800',
+    color: Colors.brandNavy,
+    letterSpacing: -0.2,
   },
+  brandNameAccent: { color: Colors.brandGreen },
   brandSub: {
-    fontSize: 9,
-    color: '#15803D',
+    fontSize: 11,
+    color: Colors.brandGreen,
     fontWeight: '700',
-    letterSpacing: 1.2,
-    marginTop: -2,
+    letterSpacing: 0.4,
+    marginTop: 1,
   },
   card: {
     width: '100%',
     maxWidth: 420,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 28,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 20,
-    elevation: 4,
+    borderColor: Colors.border,
+    boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05), 0 16px 36px -20px rgba(11, 42, 85, 0.25)',
   },
   cardHeader: {
     alignItems: 'center',
@@ -387,16 +388,16 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E6F4EA',
+    backgroundColor: Colors.brandGreenSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: '#A3E635',
+    borderWidth: 1,
+    borderColor: '#CDEBDF',
   },
   lockEmoji: { fontSize: 24 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 18 },
+  title: { fontSize: 22, fontWeight: '800', color: Colors.brandNavy, textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: Colors.slateMuted, textAlign: 'center', lineHeight: 20 },
   infoBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
@@ -414,10 +415,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  infoLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
-  infoValue: { fontSize: 12, color: '#0F172A', fontWeight: 'bold' },
+  infoLabel: { fontSize: 13, color: Colors.slateMuted, fontWeight: '500' },
+  infoValue: { fontSize: 13, color: Colors.slateDark, fontWeight: '700' },
   roleBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  roleBadgeText: { fontSize: 11, fontWeight: 'bold' },
+  roleBadgeText: { fontSize: 12, fontWeight: '700' },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
@@ -426,15 +427,15 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 16,
   },
-  label: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 4 },
-  hint: { fontSize: 11, color: '#94A3B8', marginBottom: 8 },
+  label: { fontSize: 14, fontWeight: '600', color: Colors.slateDark, marginBottom: 4 },
+  hint: { fontSize: 12, color: Colors.secondary, marginBottom: 8 },
   passwordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.borderStrong,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     overflow: 'hidden',
     ...Platform.select({
       web: {
@@ -443,56 +444,53 @@ const styles = StyleSheet.create({
     }),
   },
   passwordRowFocused: {
-    borderColor: '#047857',
-    borderWidth: 2,
+    borderColor: Colors.brandGreen,
     ...Platform.select({
       web: {
-        outline: 'none',
-        boxShadow: '0 0 0 3px rgba(4, 120, 87, 0.15)',
+        outlineStyle: 'none',
+        boxShadow: '0 0 0 3px rgba(6, 122, 94, 0.18)',
       }
     }),
   },
-  passwordInput: { flex: 1, height: 48, paddingHorizontal: 14, fontSize: 14, color: '#0F172A' },
+  passwordInput: { flex: 1, height: 46, paddingHorizontal: 14, fontSize: 15, color: Colors.slateDark },
   eyeBtn: { padding: 12 },
   eyeIcon: { fontSize: 16, color: '#64748B' },
   strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -8, marginBottom: 16 },
   strengthBar: { height: 4, width: 60, borderRadius: 2 },
-  strengthText: { fontSize: 11, fontWeight: '600' },
+  strengthText: { fontSize: 12, fontWeight: '600' },
   activateBtn: {
-    height: 50,
-    backgroundColor: '#15803D',
-    borderRadius: 12,
+    height: 48,
+    backgroundColor: Colors.brandGreen,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#15803D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: '0 10px 22px -12px rgba(6, 122, 94, 0.7)',
   },
-  activateBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
+  activateBtnHover: { backgroundColor: Colors.brandGreenPressed },
+  activateBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   securityNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     marginTop: 24,
     padding: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
+    width: '100%',
     maxWidth: 420,
   },
   securityIcon: { fontSize: 16 },
-  securityText: { flex: 1, fontSize: 11, color: '#475569', lineHeight: 16 },
-  alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  alertCard: { width: 320, backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center' },
+  securityText: { flex: 1, fontSize: 13, color: Colors.slateMuted, lineHeight: 19 },
+  alertOverlay: { flex: 1, backgroundColor: 'rgba(11, 42, 85, 0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  alertCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center' },
   alertIconCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   alertIconText: { fontSize: 24, fontWeight: 'bold' },
-  alertTitle: { fontSize: 17, fontWeight: 'bold', color: '#0F172A', marginBottom: 8, textAlign: 'center' },
-  alertMessage: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
-  alertBtn: { width: '100%', height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  alertTitle: { fontSize: 17, fontWeight: '800', color: Colors.brandNavy, marginBottom: 8, textAlign: 'center' },
+  alertMessage: { fontSize: 14, color: Colors.slateMuted, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  alertBtn: { width: '100%', height: 46, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   alertBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
 });
 

@@ -34,7 +34,8 @@ import { apiRequest } from '../utils/apiClient';
 
 const AdminBackofficeScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('metrics');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Điện thoại: sidebar 240px chiếm gần nửa màn hình → mặc định thu gọn thành thanh icon 72px.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
   const [searchQuery, setSearchQuery] = useState('');
   const [adminUser, setAdminUser] = useState(null);
 
@@ -87,26 +88,26 @@ const AdminBackofficeScreen = ({ navigation }) => {
     <div className="h-screen w-screen bg-[#f7f9fb] flex flex-row text-slate-700 font-sans antialiased overflow-hidden">
       
       {/* 1. NEUROSCAN ADMIN SIDEBAR - Pure Flexbox, no fixed positioning */}
-      <aside className={`bg-[#0F172A] text-[#9ca3af] flex flex-col shrink-0 border-r border-[#1e293b]/50 select-none z-30 transition-all duration-300 ease-in-out h-screen overflow-hidden ${
+      <aside className={`bg-white text-slate-600 flex flex-col shrink-0 border-r border-slate-200 select-none z-30 transition-all duration-300 ease-in-out h-screen overflow-hidden ${
         sidebarCollapsed 
           ? 'w-[72px]' 
           : 'w-[240px]'
       }`}>
         
         {/* Sidebar Header: Logo, Space & Collapse control */}
-        <div className={`border-b border-[#1e293b]/40 flex items-center justify-between transition-all duration-300 ${
+        <div className={`border-b border-slate-200 flex items-center justify-between transition-all duration-300 ${
           sidebarCollapsed ? 'p-4 flex-col gap-4' : 'p-6'
         }`}>
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
+            <div className="w-9 h-9 bg-[#0B2A55] rounded-xl flex items-center justify-center shrink-0">
               <ShieldAlert className="w-4.5 h-4.5 text-white" />
             </div>
             {!sidebarCollapsed && (
               <div className="flex flex-col min-w-0 transition-all">
-                <span className="font-sans font-bold text-white text-[18px] leading-tight tracking-tight truncate">
+                <span className="font-sans font-extrabold text-[#0B2A55] text-[16px] leading-tight tracking-tight truncate">
                   NeuroScan AI
                 </span>
-                <span className="text-[12px] opacity-70 text-[#9ca3af] font-medium leading-none mt-0.5 truncate">
+                <span className="text-[12px] text-[#067A5E] font-semibold leading-none mt-0.5 truncate">
                   Admin Console
                 </span>
               </div>
@@ -117,7 +118,7 @@ const AdminBackofficeScreen = ({ navigation }) => {
           <button 
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"}
-            className="p-1.5 hover:bg-[#1e293b]/60 hover:text-white rounded-lg transition-all cursor-pointer text-slate-500 hover:scale-105 active:scale-95"
+            className="p-1.5 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-all cursor-pointer text-slate-500 hover:scale-105 active:scale-95"
           >
             <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${!sidebarCollapsed ? 'rotate-180' : ''}`} />
           </button>
@@ -129,9 +130,9 @@ const AdminBackofficeScreen = ({ navigation }) => {
           {/* CATEGORY: TỔNG QUAN */}
           <div>
             {sidebarCollapsed ? (
-              <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
+              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
             ) : (
-              <span className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider opacity-60 mb-3 block">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
                 TỔNG QUAN
               </span>
             )}
@@ -142,8 +143,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'metrics'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Dashboard" : undefined}
@@ -157,9 +158,9 @@ const AdminBackofficeScreen = ({ navigation }) => {
           {/* CATEGORY: QUẢN LÝ */}
           <div>
             {sidebarCollapsed ? (
-              <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
+              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
             ) : (
-              <span className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider opacity-60 mb-3 block">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
                 QUẢN LÝ
               </span>
             )}
@@ -170,8 +171,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'users'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Người dùng" : undefined}
@@ -186,8 +187,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'hospitals'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Bệnh viện" : undefined}
@@ -202,8 +203,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'datasets'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Dataset" : undefined}
@@ -217,9 +218,9 @@ const AdminBackofficeScreen = ({ navigation }) => {
           {/* CATEGORY: TUÂN THỦ */}
           <div>
             {sidebarCollapsed ? (
-              <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
+              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
             ) : (
-              <span className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider opacity-60 mb-3 block">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
                 TUÂN THỦ
               </span>
             )}
@@ -230,8 +231,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'audit-logs'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "Audit Logs" : undefined}
@@ -246,8 +247,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'saas-suite'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? "SaaS Suite" : undefined}
@@ -261,9 +262,9 @@ const AdminBackofficeScreen = ({ navigation }) => {
           {/* CATEGORY: HỆ THỐNG AI */}
           <div>
             {sidebarCollapsed ? (
-              <div className="h-px bg-[#1e293b]/50 my-3 w-8 mx-auto" />
+              <div className="h-px bg-slate-200 my-3 w-8 mx-auto" />
             ) : (
-              <span className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider opacity-60 mb-3 block">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
                 HỆ THỐNG AI
               </span>
             )}
@@ -274,8 +275,8 @@ const AdminBackofficeScreen = ({ navigation }) => {
                   sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
                 } ${
                   activeTab === 'ai-config'
-                    ? 'bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20'
-                    : 'hover:bg-[#1e293b]/50 hover:text-white font-medium text-slate-400'
+                    ? 'bg-[#E7F6F0] text-[#067A5E] font-semibold ring-1 ring-[#CDEBDF]'
+                    : 'hover:bg-slate-100 hover:text-slate-900 font-medium text-slate-600'
                 }`}
                 style={{ height: '44px', transition: 'all 0.25s ease' }}
                 title={sidebarCollapsed ? 'Huấn luyện & Chatbot AI' : undefined}
@@ -289,10 +290,10 @@ const AdminBackofficeScreen = ({ navigation }) => {
         </nav>
 
         {/* 9. KIỂM LOGOUT AREA */}
-        <div className="mt-auto pt-4 border-t border-white/10 px-4 pb-6 shrink-0">
+        <div className="mt-auto pt-4 border-t border-slate-200 px-4 pb-6 shrink-0">
           <button 
             onClick={handleLogout}
-            className={`flex items-center gap-3 rounded-[12px] text-xs font-bold cursor-pointer text-[#9ca3af] hover:bg-rose-950/40 hover:text-rose-450 transition-all duration-250 ease-out hover:translate-x-[2px] ${
+            className={`flex items-center gap-3 rounded-[12px] text-xs font-bold cursor-pointer text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-all duration-250 ease-out hover:translate-x-[2px] ${
               sidebarCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'px-4 w-full'
             }`}
             style={{ height: '44px', transition: 'all 0.25s ease' }}
