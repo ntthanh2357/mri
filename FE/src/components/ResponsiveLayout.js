@@ -195,13 +195,12 @@ const ResponsiveLayout = ({
       case 'doctor':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Hàng chờ Khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
-          { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Danh mục Thuốc', route: 'DrugManagement', icon: Package },
-          { label: 'Lịch trực Bác sĩ', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'technician':
@@ -209,7 +208,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
-          { label: 'Lịch làm việc KTV', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'nurse':
@@ -217,30 +216,30 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Bệnh án & EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
-          { label: 'Lịch làm việc Điều dưỡng', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'receptionist':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
+          { label: 'Tiếp nhận bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Lịch làm việc Lễ tân', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'hospital_admin':
         return [
           { label: 'Tổng quan', route: 'ClinicDashboard', icon: LayoutDashboard },
-          { label: 'Quản lý EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Quản lý Nhân sự', route: 'StaffManagement', icon: Users },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Quản lý nhân sự', route: 'StaffManagement', icon: Users },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
-          { label: 'Báo cáo Tài chính', route: 'Financials', icon: DollarSign },
+          { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -255,8 +254,8 @@ const ResponsiveLayout = ({
           { label: 'Nhật ký hệ thống', route: 'AdminBackoffice', params: { tab: 'audit-logs' }, icon: ClipboardList },
           { label: 'SaaS Suite (nâng cao)', route: 'AdminBackoffice', params: { tab: 'saas-suite' }, icon: Sliders },
           { label: 'Huấn luyện & Chatbot AI', route: 'AdminBackoffice', params: { tab: 'ai-config' }, icon: Brain },
-          { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Quản lý giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -278,6 +277,10 @@ const ResponsiveLayout = ({
   };
 
   const isItemActive = (item) => {
+    if (item.group && activeRoute.startsWith(item.route)) {
+      const hasOwnItem = menuItems.some(o => o !== item && o.params?.tab && activeRoute === `${o.route}_${o.params.tab}`);
+      if (!hasOwnItem) return true;
+    }
     if (item.params?.tab) {
       if (activeRoute === `${item.route}_${item.params.tab}`) return true;
       if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') return true;
@@ -365,7 +368,7 @@ const ResponsiveLayout = ({
                 CẤP CỨU: {activeEmergency.patientName} ({activeEmergency.medicalId})
               </Text>
             </View>
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', marginLeft: 6 }}>Xử lý ngay →</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', marginLeft: 6 }}>Xử lý ngay</Text>
           </TouchableOpacity>
         )}
 

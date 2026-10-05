@@ -312,11 +312,11 @@ export default function AdminUsersView() {
                   <View style={{ gap: 8, marginTop: 8 }}>
                     {selectedUserDetail.isLocked ? (
                       <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.success }]} onPress={() => handleUnlockUser(selectedUserDetail._id)}>
-                        <Text style={styles.actionBtnText}>🔓 Mở Khóa Tài Khoản</Text>
+                        <Text style={styles.actionBtnText}>🔓 Mở khóa tài khoản</Text>
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecdd3' }]} onPress={() => handleLockUser(selectedUserDetail._id)}>
-                        <Text style={[styles.actionBtnText, { color: '#e11d48' }]}>🔒 Khóa Tài Khoản</Text>
+                        <Text style={[styles.actionBtnText, { color: '#e11d48' }]}>🔒 Khóa tài khoản</Text>
                       </TouchableOpacity>
                     )}
 

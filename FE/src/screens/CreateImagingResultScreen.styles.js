@@ -6,47 +6,6 @@ export default StyleSheet.create({
     flex: 1,
     backgroundColor: '#F1F5F9',
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  backBtnText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.brandNavy,
-  },
-  saveBtn: {
-    backgroundColor: Colors.brandGreen,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  saveBtnDisabled: {
-    backgroundColor: '#9ED9C4',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
   scrollContainer: {
     padding: 16,
   },

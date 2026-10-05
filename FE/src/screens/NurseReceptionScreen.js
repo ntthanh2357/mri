@@ -731,7 +731,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   onPress={handleSaveBhyt}
                   disabled={savingBhyt}
                 >
-                  <Text style={styles.btnConfirmText}>{savingBhyt ? 'Đang lưu...' : 'Lưu & Thẩm Định Quyền Lợi'}</Text>
+                  <Text style={styles.btnConfirmText}>{savingBhyt ? 'Đang lưu...' : 'Lưu và thẩm định quyền lợi'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

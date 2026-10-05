@@ -323,7 +323,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
             <ArrowLeft size={16} color="#64748B" strokeWidth={2.2} />
             <Text style={styles.backBtnText}>Hủy</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isPatient ? 'Phân tích AI' : 'Chẩn Đoán Hình Ảnh AI'}</Text>
+          <Text style={styles.headerTitle}>{isPatient ? 'Phân tích AI' : 'Chẩn đoán hình ảnh AI'}</Text>
           {phase === 'result' ? (
             <TouchableOpacity onPress={runAnalysis} style={[styles.retryBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
               <RotateCcw size={13} color={Colors.brandNavy} strokeWidth={2.2} />

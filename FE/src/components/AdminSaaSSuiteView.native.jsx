@@ -13,7 +13,7 @@ import Colors from '../constants/colors';
 import { apiRequest } from '../utils/apiClient';
 
 const SUB_TABS = [
-  { key: 'subscriptions', label: '💳 Gói Dịch Vụ' },
+  { key: 'subscriptions', label: '💳 Gói dịch vụ' },
   { key: 'sla', label: '⚡ SLA & Isolation' },
   { key: 'backup', label: '📂 Backup/Restore' },
   { key: 'ai-models', label: '🤖 AI Models' },
@@ -217,7 +217,7 @@ export default function AdminSaaSSuiteView() {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <View>
-              <Text style={styles.cardTitle}>Quản Lý Gói Dịch Vụ SaaS</Text>
+              <Text style={styles.cardTitle}>Quản lý gói dịch vụ SaaS</Text>
               <Text style={styles.cardSubtitle}>Theo dõi thời hạn thuê bao từng bệnh viện</Text>
             </View>
             <TouchableOpacity onPress={loadHospitals}><Text style={styles.refreshText}>🔄 Làm mới</Text></TouchableOpacity>
@@ -294,7 +294,7 @@ export default function AdminSaaSSuiteView() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Xác Thực Tenant Isolation</Text>
+            <Text style={styles.cardTitle}>Xác thực tenant isolation</Text>
             <Text style={styles.cardSubtitle}>Quét chéo hệ thống chứng minh cách biệt dữ liệu</Text>
             <TouchableOpacity style={styles.darkBtn} onPress={handleVerifyIsolation} disabled={verifyingIsolation}>
               <Text style={styles.darkBtnText}>{verifyingIsolation ? '⏳ Đang quét...' : '🛡️ Bắt đầu quét & xác thực'}</Text>
@@ -321,7 +321,7 @@ export default function AdminSaaSSuiteView() {
 
       {subTab === 'backup' && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sao Lưu & Khôi Phục Dữ Liệu</Text>
+          <Text style={styles.cardTitle}>Sao lưu & khôi phục dữ liệu</Text>
           <Text style={styles.cardSubtitle}>Backup độc lập theo từng bệnh viện</Text>
           {hospitals.map((h) => (
             <View key={h._id} style={styles.rowCard}>
@@ -349,7 +349,7 @@ export default function AdminSaaSSuiteView() {
       {subTab === 'ai-models' && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Quản Lý Phiên Bản Mô Hình AI</Text>
+            <Text style={styles.cardTitle}>Quản lý phiên bản mô hình AI</Text>
             <View style={[styles.pill, { backgroundColor: Colors.brandGreenSoft }]}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.brandGreenPressed }}>{currentAiVersion}</Text>
             </View>
@@ -379,7 +379,7 @@ export default function AdminSaaSSuiteView() {
 
       {subTab === 'announcements' && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Đăng Thông Báo Khẩn Cấp Hệ Thống</Text>
+          <Text style={styles.cardTitle}>Đăng thông báo khẩn cấp hệ thống</Text>
           <Text style={styles.cardSubtitle}>Gửi tin nhắn khẩn cấp tới tất cả bệnh viện</Text>
           <View style={{ gap: 10, marginTop: 8 }}>
             <View>
@@ -413,7 +413,7 @@ export default function AdminSaaSSuiteView() {
             <Text style={styles.modalTitle}>Thay đổi gói: {selectedHospital?.name}</Text>
             <View style={{ gap: 10, marginTop: 10 }}>
               <View>
-                <Text style={styles.inputLabel}>Gói Dịch Vụ</Text>
+                <Text style={styles.inputLabel}>Gói dịch vụ</Text>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[{ v: 'trial', l: 'Trial' }, { v: 'basic', l: 'Basic' }, { v: 'pro', l: 'Pro' }].map((o) => (
                     <TouchableOpacity key={o.v} onPress={() => setEditPlan(o.v)} style={[styles.filterChip, editPlan === o.v && styles.filterChipActive]}>

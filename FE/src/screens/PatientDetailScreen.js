@@ -14,19 +14,14 @@ import {
 } from 'react-native';
 import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
-import { initialsOf } from '../utils/initials';
 
 // Tab hợp lệ — defaultTab lạ (vd. 'emr' từ nút "Bệnh án EMR") trước đây làm trang trống.
 const VALID_TABS = ['lab', 'vitals', 'prescription', 'discharge', 'transfer', 'imaging'];
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
 import {
-  FlaskConical,
-  Activity,
-  Pill,
-  FileText,
-  Share2,
-  Scan,
-  ChevronLeft,
   Edit2,
   Save,
   Plus,
@@ -1020,121 +1015,35 @@ const PatientDetailScreen = ({ route, navigation }) => {
       activeRoute={targetActiveRoute}
     >
       <SafeAreaView style={styles.container}>
-        {/* Header điều hướng back */}
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleBackNavigation} style={styles.backButton}>
-              <ChevronLeft size={18} color={Colors.brandGreen} />
-              <Text style={styles.backButtonText}>Quay lại</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
-          </View>
-        )}
+        <PageHeader
+          bar
+          onBack={handleBackNavigation}
+          backLabel="Danh sách bệnh nhân"
+          title={patient?.profile?.name || 'Chưa rõ họ tên'}
+          subtitle={[
+            `Mã bệnh nhân ${patient?.profile?.medicalId || `NS-${patient?._id?.substring(18).toUpperCase() || ''}`}`,
+            patient?.profile?.gender,
+            patient?.phone ? `Điện thoại ${patient.phone}` : null,
+            patient?.email,
+          ].filter(Boolean).join(', ')}
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'lab', label: 'Xét nghiệm LIS' },
+                { key: 'vitals', label: 'Sinh hiệu' },
+                { key: 'prescription', label: 'Toa thuốc' },
+                { key: 'discharge', label: 'Giấy ra viện' },
+                { key: 'transfer', label: 'Chuyển tuyến' },
+                { key: 'imaging', label: 'Phim MRI/CT' },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+          }
+        />
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* 1. Thẻ thông tin cá nhân bệnh nhân */}
-          <View style={styles.patientProfileCard}>
-            <View style={styles.avatarBig}>
-              <Text style={styles.avatarBigText}>{initialsOf(patient?.profile?.name)}</Text>
-            </View>
-            
-            <View style={styles.patientProfileDetails}>
-              <View style={styles.nameRow}>
-                <Text style={styles.patientNameText}>{patient?.profile?.name || 'Chưa rõ họ tên'}</Text>
-                <View style={styles.genderBadge}>
-                  <Text style={styles.genderBadgeText}>
-                    {patient?.profile?.gender || 'Nam'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.patientSubText}>Email: {patient?.email} • SĐT: {patient?.phone || 'Chưa cập nhật'}</Text>
-              
-              <View style={styles.metadataGrid}>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>MÃ BỆNH NHÂN</Text>
-                  <Text style={styles.metaValue}>NS-{patient?._id?.substring(18).toUpperCase() || 'N/A'}</Text>
-                </View>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>EMAIL</Text>
-                  <Text style={styles.metaValue}>{patient?.email || 'N/A'}</Text>
-                </View>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>VAI TRÒ</Text>
-                  <Text style={[styles.metaValue, { color: Colors.success, fontWeight: 'bold' }]}>Bệnh nhân</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* 2. Bộ Tab chuyển màn hình */}
-          <View style={styles.tabsWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tabsScrollContent}
-            >
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'lab' && styles.activeTabButton]}
-                onPress={() => setActiveTab('lab')}
-              >
-                <FlaskConical size={16} color={activeTab === 'lab' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'lab' && styles.activeTabButtonText]}>
-                  Xét nghiệm LIS
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'vitals' && styles.activeTabButton]}
-                onPress={() => setActiveTab('vitals')}
-              >
-                <Activity size={16} color={activeTab === 'vitals' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'vitals' && styles.activeTabButtonText]}>
-                  Sinh hiệu
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'prescription' && styles.activeTabButton]}
-                onPress={() => setActiveTab('prescription')}
-              >
-                <Pill size={16} color={activeTab === 'prescription' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'prescription' && styles.activeTabButtonText]}>
-                  Toa thuốc
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'discharge' && styles.activeTabButton]}
-                onPress={() => setActiveTab('discharge')}
-              >
-                <FileText size={16} color={activeTab === 'discharge' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'discharge' && styles.activeTabButtonText]}>
-                  Giấy ra viện
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'transfer' && styles.activeTabButton]}
-                onPress={() => setActiveTab('transfer')}
-              >
-                <Share2 size={16} color={activeTab === 'transfer' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'transfer' && styles.activeTabButtonText]}>
-                  Chuyển tuyến
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'imaging' && styles.activeTabButton]}
-                onPress={() => setActiveTab('imaging')}
-              >
-                <Scan size={16} color={activeTab === 'imaging' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'imaging' && styles.activeTabButtonText]}>
-                  Phim MRI/CT
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
+          <PageContainer>
           {/* 3. Nội dung TAB 1: SINH HIỆU */}
           {activeTab === 'vitals' && (
             <VitalsTab
@@ -1286,6 +1195,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
             />
           )}
 
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
@@ -1308,146 +1218,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 14,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: Colors.brandGreen,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  patientProfileCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  avatarBig: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#ECFEFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: '#CFFAFE',
-  },
-  avatarBigText: {
-    color: Colors.brandGreen,
-    fontWeight: 'bold',
-    fontSize: 24,
-  },
-  patientProfileDetails: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  patientNameText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginRight: 8,
-  },
-  genderBadge: {
-    backgroundColor: '#ECFEFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  genderBadgeText: {
-    fontSize: 12,
-    color: Colors.brandGreen,
-    fontWeight: 'bold',
-  },
-  patientSubText: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  metadataGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 12,
-  },
-  metaCell: {
-    flex: 1,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  metaValue: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  tabsWrapper: {
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingBottom: 8,
-  },
-  tabsScrollContent: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  activeTabButton: {
-    backgroundColor: Colors.brandGreen,
-    borderColor: Colors.brandGreen,
-  },
-  tabButtonText: {
-    fontSize: 14,
-    color: '#475569',
-    fontWeight: 'bold',
-  },
-  activeTabButtonText: {
-    color: '#FFFFFF',
-  },
+  scrollContainer: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: {
     flexDirection: 'row',
     gap: 20,

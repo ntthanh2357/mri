@@ -227,12 +227,14 @@ const ClinicDashboardScreen = ({ navigation }) => {
                 </View>
               <View style={styles.activityCard}>
                 {/* Table Header for Desktop */}
+                {isDesktop && (
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Mã ca / Bệnh nhân</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>Bác sĩ phụ trách</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Phương pháp</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: 'right' }]}>Trạng thái</Text>
                 </View>
+                )}
 
                 {loadingStats ? (
                   <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -243,7 +245,21 @@ const ClinicDashboardScreen = ({ navigation }) => {
                     <Text style={{ color: Colors.secondary, fontSize: 13 }}>Không có hoạt động nào gần đây.</Text>
                   </View>
                 ) : (
-                  recentActivity.map((activity, index) => (
+                  recentActivity.map((activity, index) => !isDesktop ? (
+                    <View key={activity.id} style={[styles.activityRow, styles.activityRowStacked, index === recentActivity.length - 1 && styles.lastActivityRow]}>
+                      <View style={styles.stackedTop}>
+                        <Text style={styles.patientId}>Ca #{activity.id}</Text>
+                        <View style={[styles.statusBadge, activity.isSuccess ? styles.statusSuccess : styles.statusPending]}>
+                          <Text style={[styles.statusBadgeText, activity.isSuccess ? styles.statusSuccessText : styles.statusPendingText]}>
+                            {activity.status}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.patientNameText}>{activity.patientName}</Text>
+                      <Text style={styles.activityTableCellText}>{activity.scanType}, {activity.doctor}</Text>
+                      <Text style={styles.activityTime}>{activity.time}</Text>
+                    </View>
+                  ) : (
                     <View key={activity.id} style={[styles.activityRow, index === recentActivity.length - 1 && styles.lastActivityRow]}>
                       <View style={{ flex: 1.5 }}>
                         <Text style={styles.patientId}>Ca #{activity.id}</Text>

@@ -367,17 +367,6 @@ export default function AdminUsersView() {
   return (
     <div className="space-y-6">
 
-      {/* Page Header */}
-      <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h2 className="text-base font-extrabold text-slate-800">Quản lý Tài Khoản &amp; Khóa User</h2>
-          <p className="text-slate-400 text-xs">Phân hệ hiển thị, can thiệp khóa/mở quyền đăng nhập của y bác sĩ lẫn bệnh án B2C (ADM-01, ADM-02, ADM-04, ADM-05)</p>
-        </div>
-        <span className="text-[10px] bg-slate-100 text-slate-650 border border-slate-200 font-bold px-3 py-2 rounded-lg shrink-0">
-          Tổng: {usersList.length} tài khoản
-        </span>
-      </div>
-
       {/* Control filters & search query */}
       <div className="flex flex-col lg:flex-row gap-3">
         {/* Search */}
@@ -425,10 +414,10 @@ export default function AdminUsersView() {
 
         {/* Users Roster List Table (Covers ADM-01) */}
         <div className={`${selectedUserId ? 'xl:col-span-2' : ''} bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs`}>
-          <h3 className="text-base font-bold text-slate-850 mb-4 font-sans">Danh sách người dùng</h3>
+          <h3 className="text-base font-bold text-slate-850 mb-4 font-sans">Danh sách người dùng ({filteredUsers.length})</h3>
 
           <div className="overflow-x-auto border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-250 text-slate-500 font-bold text-xs uppercase">
                   <th className="py-2.5 px-3">Mã</th>
@@ -725,7 +714,7 @@ export default function AdminUsersView() {
                       className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"
                     >
                       <Unlock className="w-4 h-4 shrink-0" />
-                      <span>Mở Khóa Tài Khoản</span>
+                      <span>Mở khóa tài khoản</span>
                     </button>
                   ) : (
                     <button
@@ -733,7 +722,7 @@ export default function AdminUsersView() {
                       className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                     >
                       <Lock className="w-4 h-4 shrink-0" />
-                      <span>Khóa Tài Khoản</span>
+                      <span>Khóa tài khoản</span>
                     </button>
                   )}
                 </div>

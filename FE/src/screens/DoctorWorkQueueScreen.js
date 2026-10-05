@@ -1055,7 +1055,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           <View style={styles.modalBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Scan size={20} color={Colors.brandGreen} strokeWidth={2.4} />
-              <Text style={styles.modalTitle}>Ra Y Lệnh Chụp MRI</Text>
+              <Text style={styles.modalTitle}>Ra y lệnh chụp MRI</Text>
             </View>
             <Text style={styles.modalSub}>
               Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
@@ -1288,7 +1288,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <CheckCircle2 size={15} color="#fff" />
-                    <Text style={styles.btnConfirmText}>Nộp Kết Quả Phim Chụp</Text>
+                    <Text style={styles.btnConfirmText}>Nộp kết quả phim chụp</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1303,7 +1303,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           <View style={[styles.modalBox, { backgroundColor: '#FFF5F5', borderColor: '#FCA5A5', borderWidth: 2 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertTriangle size={22} color="#DC2626" />
-              <Text style={[styles.modalTitle, { color: '#991B1B', marginBottom: 0 }]}>Kích Hoạt Cảnh Báo Cấp Cứu Khẩn Cấp</Text>
+              <Text style={[styles.modalTitle, { color: '#991B1B', marginBottom: 0 }]}>Kích hoạt cảnh báo cấp cứu</Text>
             </View>
             <Text style={styles.modalSub}>
               Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{emergencyVisit?.patientId?.profile?.name || 'Bệnh nhân'}</Text>

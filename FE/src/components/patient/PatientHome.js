@@ -94,7 +94,7 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
         </Text>
         <Pressable onPress={onEditProfile} accessibilityRole="button" hitSlop={8} style={styles.heroEdit}>
           {({ hovered }) => (
-            <Text style={[styles.heroEditText, hovered && styles.heroEditTextHover]}>Chỉnh sửa thông tin cá nhân →</Text>
+            <Text style={[styles.heroEditText, hovered && styles.heroEditTextHover]}>Chỉnh sửa thông tin cá nhân</Text>
           )}
         </Pressable>
 
@@ -115,7 +115,7 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
               <Text style={styles.sectionTitle}>Kết quả phim gần nhất</Text>
               {imaging.total > 1 && (
                 <Pressable onPress={() => navigation.navigate('ImagingHistory')} accessibilityRole="link" hitSlop={8}>
-                  <Text style={styles.sectionLink}>Tất cả {imaging.total} phim →</Text>
+                  <Text style={styles.sectionLink}>Xem tất cả {imaging.total} phim</Text>
                 </Pressable>
               )}
             </View>

@@ -435,4 +435,6 @@ export default StyleSheet.create({
   colMain: { flex: 1.6, minWidth: 0 },
   colSide: { flex: 1, minWidth: 0 },
   sectionGap: { marginTop: 28 },
+  activityRowStacked: { flexDirection: 'column', alignItems: 'stretch', gap: 4 },
+  stackedTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
 });

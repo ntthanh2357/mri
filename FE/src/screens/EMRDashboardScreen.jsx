@@ -500,12 +500,12 @@ const EMRDashboardScreen = ({ navigation, route }) => {
           availableDrugs={availableDrugs}
         />
 
-        {/* Modal Lập Phụ Lục Bệnh Án theo TT 46/2018/TT-BYT */}
+        {/* Modal Lập phụ lục bệnh án theo TT 46/2018/TT-BYT */}
         <Modal visible={addendumModal} transparent animationType="slide" onRequestClose={() => setAddendumModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalBox, { maxWidth: 500, backgroundColor: '#fff', borderRadius: 16, padding: 20 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập Phụ Lục Bệnh Án (TT 46/2018)</Text>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 46/2018)</Text>
                 <TouchableOpacity onPress={() => setAddendumModal(false)}>
                   <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
                 </TouchableOpacity>
@@ -556,7 +556,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   disabled={submittingAddendum}
                 >
                   <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#fff' }}>
-                    {submittingAddendum ? 'Đang lưu phụ lục...' : 'Lưu Phụ Lục Bệnh Án'}
+                    {submittingAddendum ? 'Đang lưu phụ lục...' : 'Lưu phụ lục bệnh án'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -681,7 +681,7 @@ const NurseQueueTab = ({ navigation }) => {
                   style={[styles.primaryButton, { marginTop: 12, paddingVertical: 10, maxWidth: 160 }]} 
                   onPress={() => openVitalsModal(v)}
                 >
-                  <Text style={styles.primaryButtonText}>🩺 Nhập Sinh Hiệu</Text>
+                  <Text style={styles.primaryButtonText}>🩺 Nhập sinh hiệu</Text>
                 </TouchableOpacity>
               </View>
             ))
@@ -693,7 +693,7 @@ const NurseQueueTab = ({ navigation }) => {
       <Modal visible={vitalsModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { padding: 20 }]}>
-            <Text style={styles.modalTitle}>🩺 Nhập Sinh Hiệu Cho Bệnh Nhân</Text>
+            <Text style={styles.modalTitle}>🩺 Nhập sinh hiệu cho bệnh nhân</Text>
             <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
               Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
             </Text>
@@ -765,7 +765,7 @@ const NurseQueueTab = ({ navigation }) => {
                 {updating ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Lưu & Hoàn Thành</Text>
+                  <Text style={styles.primaryButtonText}>Lưu & hoàn thành</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1287,7 +1287,7 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
   <View style={styles.card}>
     <TouchableOpacity onPress={onPress}>
       <View style={styles.cardHeader}>
-        <View>
+        <View style={styles.cardHeaderMain}>
           <Text style={styles.patientName}>{record.patientName}</Text>
           <Text style={styles.patientInfo}>
             {record.gender} • {record.age} tuổi • {record.patientId}
@@ -1299,36 +1299,38 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
         </View>
       </View>
       <View style={styles.cardFooter}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={styles.footerItem}>
           <User size={12} color="#64748B" />
           <Text style={styles.footerText}>{record.doctorInCharge}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={styles.footerItem}>
           <Building2 size={12} color="#64748B" />
-          <Text style={styles.footerText}>{record.department} • {record.admissionType}</Text>
+          <Text style={styles.footerText}>{record.department}, {record.admissionType}</Text>
         </View>
       </View>
     </TouchableOpacity>
 
     {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 46/2018 */}
-    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-      {record.signStatus !== 'đã ký' ? (
+    <View style={styles.cardActions}>
+      {record.signStatus !== 'Đã ký số' ? (
         <TouchableOpacity
-          style={{ backgroundColor: '#0284C7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          style={styles.signBtn}
           onPress={() => onSign && onSign(record)}
+          accessibilityRole="button"
         >
-          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✍️ Ký Số EMR</Text>
+          <Text style={styles.signBtnText}>Ký số bệnh án</Text>
         </TouchableOpacity>
       ) : (
         <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6 }}>
-          <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>✓ Đã Ký Số Toàn Vẹn</Text>
+          <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>✓ Đã ký số</Text>
         </View>
       )}
       <TouchableOpacity
-        style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+        style={styles.addendumBtn}
         onPress={() => onAddendum && onAddendum(record)}
+        accessibilityRole="button"
       >
-        <Text style={{ color: '#475569', fontSize: 12, fontWeight: 'bold' }}>+ Lập Phụ Lục (TT 46)</Text>
+        <Text style={styles.addendumBtnText}>Lập phụ lục (TT 46)</Text>
       </TouchableOpacity>
     </View>
   </View>
@@ -2173,7 +2175,7 @@ const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>Kê Đơn Thuốc</Text>
+        <Text style={styles.modalTitle}>Kê đơn thuốc</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <X size={20} color="#64748B" />
         </TouchableOpacity>
@@ -2360,9 +2362,20 @@ const styles = StyleSheet.create({
   },
   badgeContainer: {
     alignItems: 'flex-end',
+    gap: 6,
+    flexShrink: 0,
   },
+  cardHeaderMain: { flex: 1, minWidth: 0 },
+  footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  signBtn: { height: 34, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.brandGreen, justifyContent: 'center' },
+  signBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  addendumBtn: { height: 34, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface, justifyContent: 'center' },
+  addendumBtnText: { color: Colors.brandGreen, fontSize: 13, fontWeight: '600' },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',

@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '../constants/colors';
 import { FileText, Upload, CheckCircle2, Clock } from 'lucide-react';
@@ -293,25 +295,16 @@ export default function HospitalOnboardingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="HospitalOnboarding">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.headerTitle}>Khai báo Thông tin Bệnh viện</Text>
-              <Text style={styles.headerSub}>Điền đầy đủ để hoàn tất đăng ký tài khoản</Text>
-            </View>
-            {hospital?.status !== 'provisioned' && (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => navigation.navigate('ClinicDashboard')}
-              >
-                <Text style={styles.backBtnText}>← Quay lại Dashboard</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        <PageHeader
+          bar
+          title="Thông tin bệnh viện"
+          subtitle={hospital?.status === 'provisioned'
+            ? 'Điền đầy đủ để hoàn tất đăng ký tài khoản bệnh viện.'
+            : 'Thông tin pháp lý, liên hệ và giấy phép hoạt động của bệnh viện.'}
+        />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <PageContainer width="reading">
           {/* Status Banner */}
           {(hospital?.status === 'submitted' || hospital?.status === 'active' || success) && (
             <View style={[
@@ -416,6 +409,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={{ height: 40 }} />
+          </PageContainer>
         </ScrollView>
 
         {/* Success Redirect Modal */}
@@ -436,7 +430,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
                   navigation.replace('ClinicDashboard');
                 }}
               >
-                <Text style={styles.successBtnText}>Đi tới Dashboard Phòng khám →</Text>
+                <Text style={styles.successBtnText}>Đi tới trang tổng quan</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -449,13 +443,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
-  header: {
-    paddingHorizontal: 20, paddingVertical: 16,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
-  },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.brandNavy },
-  headerSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  scroll: { padding: 16, gap: 16 },
+  scroll: { paddingTop: 20, paddingBottom: 40 },
   infoBox: {
     backgroundColor: '#EFF6FF', borderRadius: 12,
     padding: 14, borderWidth: 1, borderColor: '#BFDBFE',
@@ -531,24 +519,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4B5563',
     lineHeight: 18,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  backBtnText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: Colors.brandGreen,
   },
   modalOverlay: {
     flex: 1,

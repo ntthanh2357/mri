@@ -186,7 +186,7 @@ export default function InterHospitalTransferView({ currentUser }) {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
-                Quản Lý Chuyển Viện Liên Viện (Inter-Hospital Transfers)
+                Chuyển viện liên viện
               </h1>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
                 Quy trình tiếp nhận cấp cứu, phân bổ giường bệnh và cấp quyền xem chéo EMR 7 ngày (Chuẩn HIPAA / TT 46)
@@ -398,7 +398,7 @@ export default function InterHospitalTransferView({ currentUser }) {
       {showRejectModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <h3 className="text-base font-bold text-slate-800">Từ Chối Tiếp Nhận Ca Chuyển Viện</h3>
+            <h3 className="text-base font-bold text-slate-800">Từ chối tiếp nhận ca chuyển viện</h3>
             <p className="text-xs text-slate-500">
               Vui lòng cung cấp lý do từ chối rõ ràng để bệnh viện tuyến gửi có thể kịp thời chuyển bệnh nhân sang cơ sở y tế khác.
             </p>
@@ -424,7 +424,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                 disabled={actionLoading}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs"
               >
-                {actionLoading ? 'Đang gửi...' : 'Xác Nhận Từ Chối'}
+                {actionLoading ? 'Đang gửi...' : 'Xác nhận từ chối'}
               </button>
             </div>
           </div>
@@ -435,7 +435,7 @@ export default function InterHospitalTransferView({ currentUser }) {
       {showCapacityModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <h3 className="text-base font-bold text-slate-800">Tra Cứu Khả Năng Tiếp Nhận Phẫu Thuật</h3>
+            <h3 className="text-base font-bold text-slate-800">Tra cứu khả năng tiếp nhận phẫu thuật</h3>
             <p className="text-xs text-slate-500">
               Kiểm tra số giường trống thời gian thực tại các bệnh viện tuyến trên trước khi ra chỉ định chuyển viện.
             </p>
@@ -479,7 +479,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                 disabled={actionLoading}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs"
               >
-                {actionLoading ? 'Đang tra cứu...' : 'Kiểm Tra Ngay'}
+                {actionLoading ? 'Đang tra cứu...' : 'Kiểm tra ngay'}
               </button>
             </div>
           </div>
@@ -492,7 +492,7 @@ export default function InterHospitalTransferView({ currentUser }) {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center gap-2 text-indigo-700">
               <ShieldCheck className="w-6 h-6" />
-              <h3 className="text-base font-bold">Cấp Mã Truy Cập Bệnh Án Liên Viện Thành Công</h3>
+              <h3 className="text-base font-bold">Đã cấp mã truy cập bệnh án liên viện</h3>
             </div>
             <p className="text-xs text-slate-500">
               Đường dẫn bảo mật (Token-Based Capability) có hiệu lực trong 7 ngày, cho phép bác sĩ bệnh viện đích tra cứu toàn bộ ảnh chụp MRI và phân tích AI.

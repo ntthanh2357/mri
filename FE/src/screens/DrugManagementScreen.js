@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
@@ -294,64 +297,29 @@ export default function DrugManagementScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="DrugManagement">
       <SafeAreaView style={styles.container}>
-        {/* Main Content Area */}
+        <PageHeader
+          bar
+          title={isHospitalAdmin ? 'Kho thuốc' : 'Danh mục thuốc'}
+          subtitle={isHospitalAdmin
+            ? 'Danh mục thuốc, tồn kho, hạn dùng và tương tác thuốc của bệnh viện.'
+            : 'Tra cứu thuốc đang có, tồn kho và hạn dùng.'}
+          actions={isHospitalAdmin && !showForm && !isEditing ? (
+            <HeaderAction variant="primary" icon="plus" label="Thêm thuốc" onPress={() => { setActiveTab('list'); setShowForm(true); }} />
+          ) : null}
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'list', label: 'Danh mục và tồn kho' },
+                { key: 'alerts', label: 'Cảnh báo tồn kho thấp', count: alerts.length || null },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+          }
+        />
+
         <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header */}
-          <View style={styles.titleContainer}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={styles.title}>Quản lý kho dược phẩm & lâm sàng</Text>
-                <Text style={styles.subtitle}>
-                  Quản lý danh mục thuốc sử dụng tại bệnh viện, theo dõi tồn kho, hạn sử dụng và cấu hình tương tác lâm sàng.
-                </Text>
-              </View>
-                <View style={styles.headerActions}>
-                  {alerts.length > 0 && (
-                    <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-                      <Text style={{ fontSize: 12 }}>⚠️</Text>
-                      <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
-                    </View>
-                  )}
-                  {isHospitalAdmin && !showForm && !isEditing && (
-                    <TouchableOpacity
-                      style={styles.addDrugBtn}
-                      onPress={() => { setActiveTab('list'); setShowForm(true); }}
-                      accessibilityRole="button"
-                    >
-                      <Plus size={16} color="#FFFFFF" />
-                      <Text style={styles.addDrugBtnText}>Thêm thuốc</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-            </View>
-          </View>
-
-          {/* Quick tab filters */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'list' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('list')}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 14 }}>💊</Text>
-                <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
-                  Danh mục thuốc & Tồn kho
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'alerts' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('alerts')}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 14 }}>⚠️</Text>
-                <Text style={[styles.tabText, activeTab === 'alerts' && styles.tabTextActive]}>
-                  Cảnh báo tồn kho thấp ({alerts.length})
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
+          <PageContainer>
           {activeTab === 'list' ? (
             <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
               {/* Form / Edit Column (Only for hospital_admin) */}
@@ -763,6 +731,7 @@ export default function DrugManagementScreen({ navigation }) {
               )}
             </View>
           )}
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
 
@@ -855,34 +824,10 @@ export default function DrugManagementScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scroll: { padding: 24, gap: 20 },
-  titleContainer: { marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.brandNavy },
-  subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
-  alertHeaderBadge: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FEE2E2',
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  alertHeaderBadgeText: {
-    color: '#B91C1C',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
-  tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: Colors.brandGreen },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: Colors.brandGreen, fontWeight: 'bold' },
+  scroll: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
-  addDrugBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 16, borderRadius: 10, backgroundColor: Colors.brandGreen },
-  addDrugBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   listColumn: { flex: 1.8 },
   fullWidth: { width: '100%' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },

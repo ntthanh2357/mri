@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
 import { get, post, put, del } from '../services/api.service';
 import {
-  Calendar,
   User,
   RefreshCw,
   ChevronLeft,
@@ -26,7 +28,6 @@ import {
   Clock,
   PlusCircle,
   ArrowLeftRight,
-  CheckCircle2,
   Sun,
   Sunset,
   Moon,
@@ -35,7 +36,6 @@ import {
   X,
   Trash2,
   CalendarCheck,
-  Sparkles,
   ClipboardList,
 } from 'lucide-react';
 
@@ -655,148 +655,45 @@ export default function StaffSchedulingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffScheduling">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header Hero Banner */}
-          <View style={styles.headerHero}>
-            <View style={styles.headerHeroLeft}>
-              <View style={styles.badgePill}>
-                <Sparkles size={12} color={Colors.brandGreen} />
-                <Text style={styles.badgePillText}>HỆ THỐNG PHÂN CA & ĐĂNG KÝ TRỰC LÂM SÀNG</Text>
-              </View>
-              <Text style={styles.heroTitle}>Lịch Làm Việc & Phân Ca Nhân Sự</Text>
-              <Text style={styles.heroSub}>
-                Phân bổ kíp trực buồng máy MRI 3.0T, điều dưỡng chăm sóc, tiếp đón và phê duyệt điều chuyển ca trực chuẩn y khoa.
-              </Text>
-            </View>
-
-            <View style={styles.headerHeroActions}>
-              <TouchableOpacity
-                style={styles.btnPrimaryRegister}
-                onPress={() => handleOpenSelfRegister(new Date())}
-              >
-                <PlusCircle size={16} color="#FFFFFF" />
-                <Text style={styles.btnPrimaryRegisterText}>Đăng ký ca làm</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.btnSecondaryRefresh}
+        <PageHeader
+          bar
+          title="Lịch làm việc"
+          subtitle={isHospitalAdmin
+            ? 'Xếp ca, duyệt đăng ký ca và yêu cầu đổi ca của nhân sự.'
+            : 'Lịch trực của bạn và của khoa. Đăng ký thêm ca hoặc xin đổi ca tại đây.'}
+          actions={
+            <>
+              <HeaderAction
+                icon="refresh-cw"
+                label="Làm mới"
                 onPress={() => {
                   fetchWeeklySchedules();
                   fetchRegistrations();
                   fetchSwapRequests();
                 }}
-              >
-                <RefreshCw size={14} color="#0F172A" />
-                <Text style={styles.btnSecondaryRefreshText}>Làm mới</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+              />
+              <HeaderAction variant="primary" icon="plus-circle" label="Đăng ký ca làm" onPress={() => handleOpenSelfRegister(new Date())} />
+            </>
+          }
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'weekly', label: 'Thời khóa biểu toàn khoa' },
+                { key: 'my-schedule', label: 'Lịch của tôi' },
+                { key: 'registrations', label: isHospitalAdmin ? 'Duyệt đăng ký ca' : 'Đăng ký ca của tôi', count: kpiStats.pendingCount || null },
+                { key: 'swap', label: 'Đổi ca trực', count: kpiStats.swapCount || null },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+          }
+        />
 
-          {/* KPI Stat Cards */}
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiCard}>
-              <View style={[styles.kpiIconBox, { backgroundColor: Colors.brandGreenSoft }]}>
-                <Calendar size={18} color="#0284C7" />
-              </View>
-              <View>
-                <Text style={styles.kpiValue}>{kpiStats.totalWeekly}</Text>
-                <Text style={styles.kpiLabel}>Tổng ca tuần này</Text>
-              </View>
-            </View>
-
-            <View style={styles.kpiCard}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#DCFCE7' }]}>
-                <CheckCircle2 size={18} color={Colors.brandGreen} />
-              </View>
-              <View>
-                <Text style={styles.kpiValue}>{kpiStats.confirmedCount}</Text>
-                <Text style={styles.kpiLabel}>Ca đã phê duyệt</Text>
-              </View>
-            </View>
-
-            <View style={[styles.kpiCard, kpiStats.pendingCount > 0 && styles.kpiCardHighlight]}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
-                <Clock size={18} color="#D97706" />
-              </View>
-              <View>
-                <Text style={[styles.kpiValue, kpiStats.pendingCount > 0 && { color: '#B45309' }]}>
-                  {kpiStats.pendingCount}
-                </Text>
-                <Text style={styles.kpiLabel}>Ca chờ phê duyệt</Text>
-              </View>
-            </View>
-
-            <View style={styles.kpiCard}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#EEF3FA' }]}>
-                <ArrowLeftRight size={18} color={Colors.brandNavy} />
-              </View>
-              <View>
-                <Text style={styles.kpiValue}>{kpiStats.swapCount}</Text>
-                <Text style={styles.kpiLabel}>Yêu cầu đổi ca</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Navigation Tab Bar */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'weekly' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('weekly')}
-            >
-              <View style={styles.tabContentRow}>
-                <Calendar size={16} color={activeTab === 'weekly' ? Colors.brandGreen : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'weekly' && styles.tabTextActive]}>
-                  Thời khóa biểu toàn khoa
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'my-schedule' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('my-schedule')}
-            >
-              <View style={styles.tabContentRow}>
-                <User size={16} color={activeTab === 'my-schedule' ? Colors.brandGreen : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'my-schedule' && styles.tabTextActive]}>
-                  Lịch làm của tôi
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'registrations' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('registrations')}
-            >
-              <View style={styles.tabContentRow}>
-                <ClipboardList size={16} color={activeTab === 'registrations' ? Colors.brandGreen : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'registrations' && styles.tabTextActive]}>
-                  {isHospitalAdmin ? 'Duyệt đăng ký ca' : 'Đăng ký ca của tôi'}
-                </Text>
-                {kpiStats.pendingCount > 0 && (
-                  <View style={styles.tabBadgeAmber}>
-                    <Text style={styles.tabBadgeAmberText}>{kpiStats.pendingCount}</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'swap' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('swap')}
-            >
-              <View style={styles.tabContentRow}>
-                <RefreshCw size={16} color={activeTab === 'swap' ? Colors.brandGreen : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'swap' && styles.tabTextActive]}>
-                  Đổi ca trực
-                </Text>
-                {kpiStats.swapCount > 0 && (
-                  <View style={styles.tabBadgePurple}>
-                    <Text style={styles.tabBadgePurpleText}>{kpiStats.swapCount}</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          </View>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <PageContainer spaced>
+          <Text style={styles.weekSummary}>
+            Tuần này có <Text style={styles.weekSummaryStrong}>{kpiStats.totalWeekly} ca</Text>: {kpiStats.confirmedCount} đã duyệt, {kpiStats.pendingCount} chờ duyệt.
+          </Text>
 
           {/* TAB 1: WEEKLY GRID */}
           {activeTab === 'weekly' && (
@@ -1025,7 +922,7 @@ export default function StaffSchedulingScreen({ navigation }) {
             <View style={styles.card}>
               <View style={styles.myScheduleHeader}>
                 <View>
-                  <Text style={styles.cardTitle}>Lịch Làm Việc Cá Nhân</Text>
+                  <Text style={styles.cardTitle}>Lịch làm việc cá nhân</Text>
                   <Text style={styles.cardSub}>
                     Kíp trực cá nhân của bạn trong tuần. Bạn có thể đăng ký thêm ca hoặc xin đổi ca trực.
                   </Text>
@@ -1191,7 +1088,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               <View style={styles.registrationsHeader}>
                 <View>
                   <Text style={styles.cardTitle}>
-                    {isHospitalAdmin ? 'Hộp Thư Phê Duyệt Phiếu Đăng Ký Ca' : 'Lịch Sử Đăng Ký Ca Trực'}
+                    {isHospitalAdmin ? 'Hộp thư phê duyệt phiếu đăng ký ca' : 'Lịch sử đăng ký ca trực'}
                   </Text>
                   <Text style={styles.cardSub}>
                     {isHospitalAdmin
@@ -1383,7 +1280,7 @@ export default function StaffSchedulingScreen({ navigation }) {
             <View style={styles.card}>
               <View style={styles.registrationsHeader}>
                 <View>
-                  <Text style={styles.cardTitle}>Phê Duyệt Đổi Ca Trực</Text>
+                  <Text style={styles.cardTitle}>Phê duyệt đổi ca trực</Text>
                   <Text style={styles.cardSub}>
                     {isHospitalAdmin
                       ? 'Danh sách các đề xuất đổi hoặc bàn giao ca làm việc cần quản lý phê duyệt.'
@@ -1520,6 +1417,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               )}
             </View>
           )}
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
 
@@ -1547,10 +1445,10 @@ export default function StaffSchedulingScreen({ navigation }) {
                   <View>
                     <Text style={styles.modalTitle}>
                       {selectedSchedule
-                        ? 'Cập Nhật Ca Làm Việc'
+                        ? 'Cập nhật ca làm việc'
                         : isHospitalAdmin && selectedStaff?._id !== currentUser?.id
-                        ? 'Phân Ca Trực Nhân Sự'
-                        : 'Đăng Ký Ca Trực Mới'}
+                        ? 'Phân ca trực nhân sự'
+                        : 'Đăng ký ca trực mới'}
                     </Text>
                     <Text style={styles.modalSubHeader}>
                       {isHospitalAdmin && selectedStaff?._id !== currentUser?.id
@@ -1825,7 +1723,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                     <ArrowLeftRight size={18} color={Colors.brandNavy} />
                   </View>
                   <View>
-                    <Text style={styles.modalTitle}>Tạo Yêu Cầu Đổi Ca Trực</Text>
+                    <Text style={styles.modalTitle}>Tạo yêu cầu đổi ca trực</Text>
                     <Text style={styles.modalSubHeader}>
                       Ca: {SHIFT_CONFIG[swapSchedule.shift]?.label || swapSchedule.shift} ngày{' '}
                       {new Date(swapSchedule.date).toLocaleDateString('vi-VN')}
@@ -1926,7 +1824,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                   <View style={[styles.modalHeaderIcon, { backgroundColor: '#FEE2E2' }]}>
                     <AlertCircle size={18} color="#B91C1C" />
                   </View>
-                  <Text style={styles.modalTitle}>Từ Chối Phiếu Đăng Ký Ca</Text>
+                  <Text style={styles.modalTitle}>Từ chối phiếu đăng ký ca</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.modalCloseBtn}
@@ -2025,41 +1923,11 @@ const isSameDay = (d1, d2) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scroll: { padding: 24, gap: 20 },
+  scroll: { paddingTop: 20, paddingBottom: 40 },
+  weekSummary: { fontSize: 14, color: Colors.slateMuted },
+  weekSummaryStrong: { fontWeight: '700', color: Colors.brandNavy },
 
   // Header Hero Banner
-  headerHero: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 16,
-    shadowColor: Colors.brandNavy,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-  },
-  headerHeroLeft: { flex: 1, minWidth: 300 },
-  badgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.brandGreenSoft,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    marginBottom: 8,
-  },
-  badgePillText: { fontSize: 12, fontWeight: 'bold', color: Colors.brandGreen, letterSpacing: 0.5 },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: Colors.brandNavy, letterSpacing: -0.5 },
-  heroSub: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 20, maxWidth: 650 },
-  headerHeroActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   btnPrimaryRegister: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2074,108 +1942,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   btnPrimaryRegisterText: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
-  btnSecondaryRefresh: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  btnSecondaryRefreshText: { color: '#334155', fontSize: 13, fontWeight: '600' },
 
   // KPI Stat Cards
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: 160,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-  },
-  kpiCardHighlight: {
-    borderColor: '#FCD34D',
-    backgroundColor: '#FFFDF5',
-  },
-  kpiIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kpiValue: { fontSize: 20, fontWeight: '800', color: Colors.brandNavy },
-  kpiLabel: { fontSize: 12, color: '#64748B', fontWeight: '500', marginTop: 2 },
 
   // Tabs
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    gap: 6,
-    overflow: 'scroll',
-  },
-  tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabButtonActive: {
-    borderBottomColor: Colors.brandGreen,
-  },
-  tabContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  tabTextActive: {
-    color: Colors.brandGreen,
-    fontWeight: '700',
-  },
-  tabBadgeAmber: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  tabBadgeAmberText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#B45309',
-  },
-  tabBadgePurple: {
-    backgroundColor: '#EEF3FA',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  tabBadgePurpleText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: Colors.brandNavy,
-  },
 
   // Main Card
   card: {

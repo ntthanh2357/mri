@@ -874,7 +874,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
+                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
                       </Text>
                     )}
                   </PressableScale>
@@ -1315,7 +1315,7 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
+                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
                       </Text>
                     )}
                   </PressableScale>

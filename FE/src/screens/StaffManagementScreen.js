@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
 import { get, post, put } from '../services/api.service';
 
 const ROLE_LABELS = {
@@ -144,30 +147,21 @@ export default function StaffManagementScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffManagement">
       <SafeAreaView style={styles.container}>
+        <PageHeader
+          bar
+          title="Quản lý nhân sự"
+          subtitle="Cấp tài khoản, phân chức danh và khóa/mở khóa tài khoản nhân viên của bệnh viện."
+          below={
+            <PageTabs
+              tabs={Object.keys(ROLE_LABELS).map((role) => ({ key: role, label: ROLE_LABELS[role] }))}
+              value={activeRoleTab}
+              onChange={setActiveRoleTab}
+            />
+          }
+        />
+
         <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Quản trị & Cấp tài khoản nhân sự</Text>
-            <Text style={styles.subtitle}>
-              Cấp tài khoản làm việc, phân quyền chức danh và quản lý trạng thái hoạt động của nhân viên cơ sở.
-            </Text>
-          </View>
-
-          {/* Tab buttons */}
-          <View style={styles.tabBar}>
-            {Object.keys(ROLE_LABELS).map((role) => (
-              <TouchableOpacity
-                key={role}
-                style={[styles.tabButton, activeRoleTab === role && styles.tabButtonActive]}
-                onPress={() => setActiveRoleTab(role)}
-              >
-                <Text style={[styles.tabText, activeRoleTab === role && styles.tabTextActive]}>
-                  {ROLE_LABELS[role]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
+          <PageContainer>
           {/* Grid Layout */}
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
             {/* Form Column */}
@@ -355,6 +349,7 @@ export default function StaffManagementScreen({ navigation }) {
               </View>
             </View>
           </View>
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
@@ -363,15 +358,7 @@ export default function StaffManagementScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scroll: { padding: 24, gap: 20 },
-  titleContainer: { marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.brandNavy },
-  subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
-  tabBar: { flexDirection: 'row', flexWrap: 'wrap', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 0, marginBottom: 16 },
-  tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: Colors.brandGreen },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: Colors.brandGreen, fontWeight: 'bold' },
+  scroll: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
 import Colors from '../constants/colors';
@@ -254,24 +255,17 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleCancel}>
-            <Text style={styles.backBtnText}>← Hủy</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Nhập Kết quả MRI / CT-Scan</Text>
-          <TouchableOpacity 
-            style={[styles.saveBtn, loading && styles.saveBtnDisabled]} 
-            onPress={handleSaveResult}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.saveBtnText}>Lưu & Đăng</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <PageHeader
+          bar
+          title="Nhập kết quả chụp MRI / CT"
+          subtitle="Điền thông tin bệnh nhân và chỉ định, tải ảnh phim lên. Có ảnh rồi thì có thể chạy AI phân tích."
+          actions={
+            <>
+              <HeaderAction icon="x" label="Hủy" onPress={handleCancel} />
+              <HeaderAction variant="primary" icon="upload-cloud" label={loading ? 'Đang lưu…' : 'Lưu và đăng kết quả'} onPress={handleSaveResult} disabled={loading} />
+            </>
+          }
+        />
 
         <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
           <View style={styles.formSheet}>

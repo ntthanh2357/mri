@@ -810,7 +810,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                   ) : (
                     <>
                       <Save size={16} color="#FFFFFF" />
-                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Lưu Kết Quả & Hoàn Tất Khám</Text>
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Lưu kết quả và hoàn tất khám</Text>
                     </>
                   )}
                 </TouchableOpacity>

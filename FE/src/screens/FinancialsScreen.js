@@ -759,7 +759,7 @@ const FinancialsScreen = ({ navigation }) => {
                       </View>
                       <View style={styles.reportRight}>
                         <Text style={styles.reportValue}>{report.totalAmount.toLocaleString('vi-VN')}đ</Text>
-                        <Text style={styles.reportDetailLink}>Xem chi tiết →</Text>
+                        <Text style={styles.reportDetailLink}>Xem chi tiết</Text>
                       </View>
                     </TouchableOpacity>
                   )}
@@ -889,7 +889,7 @@ const FinancialsScreen = ({ navigation }) => {
                       </View>
                       <View style={styles.reportRight}>
                         <Text style={styles.reportValue}>{report.items?.length || 0} loại thuốc</Text>
-                        <Text style={styles.reportDetailLink}>Xem chi tiết →</Text>
+                        <Text style={styles.reportDetailLink}>Xem chi tiết</Text>
                       </View>
                     </TouchableOpacity>
                   ))

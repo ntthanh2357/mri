@@ -585,7 +585,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
                       <Printer size={13} color="#fff" />
-                      <Text style={s.docPrintBtnText}>In Phiếu Khám</Text>
+                      <Text style={s.docPrintBtnText}>In phiếu khám</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -722,7 +722,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
                       <Printer size={13} color="#fff" />
-                      <Text style={s.docPrintBtnText}>In Phiếu Chỉ Định</Text>
+                      <Text style={s.docPrintBtnText}>In phiếu chỉ định</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -876,7 +876,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   <View style={s.docActionRow}>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}>
                       <Printer size={14} color="#fff" />
-                      <Text style={s.docPrintBtnText}>In Hóa Đơn Thu Viện Phí</Text>
+                      <Text style={s.docPrintBtnText}>In hóa đơn viện phí</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -935,7 +935,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       )}
                     </TouchableOpacity>
                     
-                    <Text style={s.hintText}>Sau khi xác nhận, hóa đơn sẽ tự động chuyển sang hàng đợi Chờ Thanh Toán của quầy Lễ tân/Thu ngân.</Text>
+                    <Text style={s.hintText}>Sau khi xác nhận, hóa đơn sẽ tự động chuyển sang hàng đợi Chờ thanh toán của quầy Lễ tân/Thu ngân.</Text>
                   </View>
                 </View>
               )}

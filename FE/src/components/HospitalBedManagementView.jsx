@@ -338,7 +338,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
-                Sơ Đồ Buồng Giường Khoa Ung Thư Não (Neuro-Oncology Bed Map)
+                Sơ đồ giường Khoa Ung Thư Não
               </h1>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
                 Quản lý phân bổ buồng giường nội trú u não: Hồi sức tụt não, Hậu phẫu mổ mở sọ vi phẫu, Hóa - Xạ trị và Chăm sóc giảm nhẹ
@@ -704,7 +704,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                 {activeModal === 'occupy' && `Nhập Viện Vào Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'release' && `Giải Phóng Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'transfer' && `Điều Chuyển Bệnh Nhân (Giường ${selectedBed?.bedNumber})`}
-                {activeModal === 'create' && 'Thêm Giường Bệnh Mới Vào Hệ Thống'}
+                {activeModal === 'create' && 'Thêm giường bệnh mới'}
               </h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -786,7 +786,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang khóa giường...' : 'Xác Nhận Giữ Chỗ'}
+                    {actionLoading ? 'Đang khóa giường...' : 'Xác nhận giữ chỗ'}
                   </button>
                 </div>
               </div>
@@ -850,7 +850,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang lưu...' : 'Xác Nhận Nhập Giường'}
+                    {actionLoading ? 'Đang lưu...' : 'Xác nhận nhập giường'}
                   </button>
                 </div>
               </div>
@@ -881,7 +881,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang xử lý...' : 'Xác Nhận Giải Phóng Giường'}
+                    {actionLoading ? 'Đang xử lý...' : 'Xác nhận giải phóng giường'}
                   </button>
                 </div>
               </div>
@@ -943,7 +943,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang điều chuyển...' : 'Xác Nhận Chuyển Giường'}
+                    {actionLoading ? 'Đang điều chuyển...' : 'Xác nhận chuyển giường'}
                   </button>
                 </div>
               </div>
@@ -1026,7 +1026,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang tạo...' : 'Tạo Giường Mới'}
+                    {actionLoading ? 'Đang tạo...' : 'Tạo giường mới'}
                   </button>
                 </div>
               </div>

@@ -253,7 +253,7 @@ export default function AdminMetricsView({ onSelectTab }) {
             <Text style={styles.cardSubtitle}>Các sự kiện hệ thống hôm nay</Text>
           </View>
           <TouchableOpacity onPress={() => onSelectTab?.('audit-logs')}>
-            <Text style={styles.linkText}>Xem tất cả →</Text>
+            <Text style={styles.linkText}>Xem tất cả</Text>
           </TouchableOpacity>
         </View>
         {recentActivities.length === 0 ? (

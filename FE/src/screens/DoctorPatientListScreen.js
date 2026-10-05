@@ -6,11 +6,16 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
-  Alert,
   ActivityIndicator,
+  Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
+import Layout from '../constants/layout';
 import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
 import Colors from '../constants/colors';
@@ -43,6 +48,8 @@ const DoctorPatientListScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
+  const { width } = useWindowDimensions();
+  const wide = width >= Layout.wide;
 
   useEffect(() => {
     get('/auth/me').then(r => setUser(r.user)).catch(() => { });
@@ -59,17 +66,6 @@ const DoctorPatientListScreen = ({ navigation }) => {
           const totalOrders = stats.total_lab_orders || 0;
           const completedOrders = stats.completed_lab_orders || 0;
           const lastVital = stats.last_vital;
-
-          let diagnosisStr = 'Chưa có dữ liệu';
-          if (totalOrders > 0 || lastVital) {
-            const parts = [];
-            if (totalOrders > 0) parts.push(`${completedOrders}/${totalOrders} phiếu XN`);
-            if (lastVital) {
-              const d = new Date(lastVital.recorded_at);
-              parts.push(`Sinh hiệu: ${d.getDate()}/${d.getMonth() + 1}`);
-            }
-            diagnosisStr = parts.join(' · ');
-          }
 
           let status = 'Chưa theo dõi';
           let statusCode = 'NONE';
@@ -88,17 +84,17 @@ const DoctorPatientListScreen = ({ navigation }) => {
             textColor = Colors.brandGreen;
           }
 
+          const age = calculateAge(p.profile?.dob, p.profile?.birthYear);
+          const recorded = lastVital ? new Date(lastVital.recorded_at) : null;
           return {
             id: p.profile?.medicalId || `NS-${p._id.substring(18).toUpperCase()}`,
             dbId: p._id,
             name: p.profile?.name || p.email,
-            age: calculateAge(p.profile?.dob, p.profile?.birthYear),
-            gender: p.profile?.gender || 'N/A',
-            phone: p.phone || 'N/A',
-            diagnosis: diagnosisStr,
-            lastScan: lastVital
-              ? `${new Date(lastVital.recorded_at).getDate()}/${new Date(lastVital.recorded_at).getMonth() + 1}`
-              : 'Chưa có',
+            gender: p.profile?.gender || '',
+            genderAge: [p.profile?.gender, age !== 'N/A' ? `${age} tuổi` : null].filter(Boolean).join(', '),
+            phone: p.phone || '',
+            labText: totalOrders > 0 ? `${completedOrders}/${totalOrders} phiếu có kết quả` : 'Chưa có phiếu',
+            vitalText: recorded ? `${recorded.getDate()}/${recorded.getMonth() + 1}` : 'Chưa đo',
             status,
             statusCode,
             badgeColor,
@@ -121,39 +117,8 @@ const DoctorPatientListScreen = ({ navigation }) => {
     fetchPatients();
   }, []);
 
-  const handlePatientPress = (patient) => {
-    Alert.alert(
-      'Tùy chọn Bệnh án',
-      `Chọn tác vụ cho bệnh nhân ${patient.name}:`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xem Lịch sử Phim MRI/CT',
-          onPress: () => navigation.navigate('ImagingHistory', {
-            patientMedicalId: patient.id,
-            patientName: patient.name
-          })
-        },
-        {
-          text: 'Nhập phim MRI/CT mới',
-          onPress: () => navigation.navigate('CreateImagingResult', {
-            patientInfo: { id: patient.id, name: patient.name, gender: patient.gender }
-          })
-        },
-        { 
-          text: 'Xem EMR & Xét nghiệm LIS', 
-          onPress: () => navigation.navigate('PatientDetail', { 
-            patientId: patient.dbId,
-            activeRoute: 'DoctorPatientList',
-          }) 
-        },
-      ]
-    );
-  };
-
   const filtered = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.diagnosis.toLowerCase().includes(search.toLowerCase()) ||
       p.id.toLowerCase().includes(search.toLowerCase());
     
     if (!matchesSearch) return false;
@@ -166,130 +131,139 @@ const DoctorPatientListScreen = ({ navigation }) => {
   const xnCount = patients.filter(p => p.statusCode === 'XN').length;
   const trackingCount = patients.filter(p => p.statusCode === 'TRACKING').length;
 
+  const openDetail = (patient) => navigation.navigate('PatientDetail', { patientId: patient.dbId, activeRoute: 'DoctorPatientList' });
+  const openFilms = (patient) => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name });
+  const newFilm = (patient) => navigation.navigate('CreateImagingResult', { patientInfo: { id: patient.id, name: patient.name, gender: patient.gender } });
+
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Quay lại</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Danh sách bệnh nhân</Text>
-        </View>
-
-        {/* Stats Summary Bar */}
-        <View style={styles.statsSummaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryVal}>{totalCount}</Text>
-            <Text style={styles.summaryLbl}>Tổng bệnh nhân</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={[styles.summaryVal, { color: Colors.brandGreen }]}>{xnCount}</Text>
-            <Text style={styles.summaryLbl}>Có kết quả XN</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={[styles.summaryVal, { color: '#0369A1' }]}>{trackingCount}</Text>
-            <Text style={styles.summaryLbl}>Đang theo dõi</Text>
-          </View>
-        </View>
-
-        {/* Search & Filter Bar */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-          <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm theo tên, chẩn đoán, mã y tế..."
-              placeholderTextColor={Colors.secondary}
-              value={search}
-              onChangeText={setSearch}
+        <PageHeader
+          bar
+          title="Bệnh nhân"
+          subtitle="Tình trạng xét nghiệm và sinh hiệu gần nhất của từng bệnh nhân."
+          actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={fetchPatients} />}
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'ALL', label: 'Tất cả', count: totalCount },
+                { key: 'XN', label: 'Có kết quả XN', count: xnCount },
+                { key: 'TRACKING', label: 'Đang theo dõi', count: trackingCount },
+              ]}
+              value={activeFilter}
+              onChange={setActiveFilter}
             />
-          </View>
+          }
+        />
 
-          {/* Filter Chips */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {[
-              { key: 'ALL', label: `Tất cả (${totalCount})` },
-              { key: 'XN', label: `Có kết quả XN (${xnCount})` },
-              { key: 'TRACKING', label: `Đang theo dõi (${trackingCount})` },
-            ].map(f => {
-              const active = activeFilter === f.key;
-              return (
-                <TouchableOpacity
-                  key={f.key}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                  onPress={() => setActiveFilter(f.key)}
-                >
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <ScrollView>
+          <PageContainer style={styles.page}>
+            <View style={styles.searchContainer}>
+              <Search size={16} color={Colors.secondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm theo tên hoặc mã y tế…"
+                placeholderTextColor={Colors.secondary}
+                value={search}
+                onChangeText={setSearch}
+              />
+            </View>
 
-        {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={Colors.brandGreen} />
-            <Text style={{ marginTop: 12, color: '#64748B' }}>Đang tải danh sách bệnh nhân...</Text>
-          </View>
-        ) : error ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <Text style={{ color: '#B91C1C', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
-            <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: Colors.brandGreen, borderRadius: 8 }} onPress={fetchPatients}>
-              <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Tải lại</Text>
-            </TouchableOpacity>
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-            <Text style={{ fontSize: 36, marginBottom: 10 }}>📋</Text>
-            <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 14 }}>Không tìm thấy bệnh nhân nào.</Text>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.list}>
-            {filtered.map(patient => (
-              <View key={patient.id} style={styles.card}>
-                <TouchableOpacity onPress={() => handlePatientPress(patient)} activeOpacity={0.8} style={styles.cardTop}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{initialsOf(patient.name)}</Text>
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.patientName}>{patient.name}</Text>
-                    <Text style={styles.patientMeta}>{patient.id} · {patient.gender}, {patient.age} tuổi</Text>
-                    <Text style={styles.patientPhone}>SĐT: {patient.phone}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
-                    <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <View style={styles.cardBottom}>
-                  <Text style={styles.diagnosisLabel}>Chẩn đoán: </Text>
-                  <Text style={styles.diagnosisValue} numberOfLines={1}>{patient.diagnosis}</Text>
-                  <Text style={styles.lastScan}>Lần cuối: {patient.lastScan}</Text>
-                </View>
-
-                {/* Quick Action Buttons */}
-                <View style={styles.cardActionsRow}>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'emr', activeRoute: 'DoctorPatientList' })} 
-                    style={[styles.actionBtn, styles.actionBtnPrimary]}
-                  >
-                    <Text style={styles.actionBtnPrimaryText}>📋 Bệnh án EMR</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    onPress={() => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name })} 
-                    style={[styles.actionBtn, styles.actionBtnSecondary]}
-                  >
-                    <Text style={styles.actionBtnSecondaryText}>🧠 Phim MRI/CT</Text>
-                  </TouchableOpacity>
-                </View>
+            {loading ? (
+              <View style={styles.stateBox}>
+                <ActivityIndicator size="large" color={Colors.brandGreen} />
+                <Text style={styles.stateText}>Đang tải danh sách bệnh nhân…</Text>
               </View>
-            ))}
-          </ScrollView>
-        )}
+            ) : error ? (
+              <View style={styles.stateBox}>
+                <Text style={styles.stateError}>{error}</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={fetchPatients} accessibilityRole="button">
+                  <Text style={styles.retryBtnText}>Tải lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : filtered.length === 0 ? (
+              <View style={styles.stateBox}>
+                <Text style={styles.stateTitle}>Không tìm thấy bệnh nhân nào</Text>
+                <Text style={styles.stateText}>{search ? 'Thử tìm bằng tên khác hoặc mã y tế.' : 'Chưa có bệnh nhân trong nhóm này.'}</Text>
+              </View>
+            ) : wide ? (
+              <View style={styles.table}>
+                <View style={[styles.tr, styles.thead]}>
+                  <Text style={[styles.th, styles.cName]}>Bệnh nhân</Text>
+                  <Text style={[styles.th, styles.cInfo]}>Giới tính, tuổi</Text>
+                  <Text style={[styles.th, styles.cPhone]}>Điện thoại</Text>
+                  <Text style={[styles.th, styles.cLab]}>Xét nghiệm</Text>
+                  <Text style={[styles.th, styles.cVital]}>Sinh hiệu gần nhất</Text>
+                  <Text style={[styles.th, styles.cStatus]}>Tình trạng</Text>
+                  <Text style={[styles.th, styles.cActions, styles.thRight]}>Thao tác</Text>
+                </View>
+                {filtered.map(patient => (
+                  <Pressable
+                    key={patient.id}
+                    onPress={() => openDetail(patient)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mở hồ sơ ${patient.name}`}
+                    style={({ hovered }) => [styles.tr, styles.trBody, hovered && styles.trHover]}
+                  >
+                    <View style={[styles.cName, styles.nameCell]}>
+                      <View style={styles.avatar}><Text style={styles.avatarText}>{initialsOf(patient.name)}</Text></View>
+                      <View style={styles.grow}>
+                        <Text style={styles.patientName} numberOfLines={2}>{patient.name}</Text>
+                        <Text style={styles.cellSub}>{patient.id}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.cellText, styles.cInfo]}>{patient.genderAge || '—'}</Text>
+                    <Text style={[styles.cellNum, styles.cPhone]}>{patient.phone || '—'}</Text>
+                    <Text style={[styles.cellText, styles.cLab]}>{patient.labText}</Text>
+                    <Text style={[styles.cellNum, styles.cVital]}>{patient.vitalText}</Text>
+                    <View style={styles.cStatus}>
+                      <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
+                        <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
+                      </View>
+                    </View>
+                    <View style={[styles.cActions, styles.rowActions]}>
+                      <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
+                        <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
+                        <Text style={styles.btnGhostText}>Nhập phim</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.list}>
+                {filtered.map(patient => (
+                  <View key={patient.id} style={styles.card}>
+                    <Pressable onPress={() => openDetail(patient)} accessibilityRole="button" style={styles.cardTop}>
+                      <View style={styles.avatar}><Text style={styles.avatarText}>{initialsOf(patient.name)}</Text></View>
+                      <View style={styles.grow}>
+                        <Text style={styles.patientName}>{patient.name}</Text>
+                        <Text style={styles.cellSub}>{[patient.id, patient.genderAge].filter(Boolean).join(', ')}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
+                        <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
+                      </View>
+                    </Pressable>
+                    <Text style={styles.cardMeta}>Xét nghiệm: {patient.labText}. Sinh hiệu: {patient.vitalText}.</Text>
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => openDetail(patient)} accessibilityRole="button">
+                        <Text style={styles.btnPrimaryText}>Mở hồ sơ</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
+                        <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
+                        <Text style={styles.btnGhostText}>Nhập phim</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </PageContainer>
+        </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
   );
