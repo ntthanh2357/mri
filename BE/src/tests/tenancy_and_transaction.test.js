@@ -336,7 +336,7 @@ describe('Unit & Security Tests: Tenancy BOLA/IDOR & ACID Transaction Audit', ()
 
   test('12. Session Revocation: Thu hồi phiên tức thời và vô hiệu hóa Auth Cache khi khóa tài khoản', async () => {
     const targetUser = await User.create({
-      email: 'staff.locked@hospital.com',
+      email: `staff.locked_${Date.now()}@hospital.com`,
       passwordHash: 'dummy_hash',
       role: 'nurse',
       hospitalId: hospA._id,
@@ -356,7 +356,7 @@ describe('Unit & Security Tests: Tenancy BOLA/IDOR & ACID Transaction Audit', ()
     expect(authCache.getUserAuth(targetUser._id.toString())).toBeDefined();
 
     // Admin khóa tài khoản
-    await toggleUserLock(targetUser._id, true, adminUser._id);
+    await toggleUserLock(targetUser._id, true, adminUser._id, 'admin');
 
     // Xác nhận cache bị xóa ngay lập tức
     expect(authCache.getUserAuth(targetUser._id.toString())).toBeNull();

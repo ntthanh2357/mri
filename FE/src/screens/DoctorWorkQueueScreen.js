@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, Alert, Image, Platform,
@@ -58,7 +58,7 @@ const STATUS_CONFIG = {
 };
 
 const DoctorWorkQueueScreen = ({ navigation, route }) => {
-  const [currentMode, setCurrentMode] = useState(route?.params?.tab || 'examQueue');
+  const [currentMode, setCurrentMode] = useState(route?.params?.tab || 'all');
   const [user, setUser] = useState(route?.params?.user || null);
   const [visits, setVisits] = useState([]);
   const [technicians, setTechnicians] = useState([]);
@@ -113,53 +113,58 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [cancelReason, setCancelReason] = useState('');
   const [submittingCancel, setSubmittingCancel] = useState(false);
 
+  const isMountedRef = useRef(true);
   useEffect(() => {
-    let isMounted = true;
-    if (!user) {
-      get('/auth/me').then(r => { if (isMounted) setUser(r.user); }).catch(() => {});
-    }
-    return () => { isMounted = false; };
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [visitRes, staffRes] = await Promise.all([
         get('/api/v1/visits/my-queue'),
         get('/api/v1/visits/staff'),
       ]);
-      setVisits(visitRes.visits || []);
-      setTechnicians(staffRes.technicians || []);
+      if (isMountedRef.current) {
+        setVisits(visitRes.visits || []);
+        setTechnicians(staffRes.technicians || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Lỗi nạp dữ liệu hàng đợi:', e);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    const runFetch = async () => {
-      setLoading(true);
-      try {
-        const [visitRes, staffRes] = await Promise.all([
-          get('/api/v1/visits/my-queue'),
-          get('/api/v1/visits/staff'),
-        ]);
-        if (isMounted) {
-          setVisits(visitRes.visits || []);
-          setTechnicians(staffRes.technicians || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
+    if (!user) {
+      get('/auth/me')
+        .then(r => {
+          if (isMountedRef.current && r?.user) {
+            setUser(r.user);
+          }
+        })
+        .catch(err => {
+          console.warn('[DoctorWorkQueueScreen] Lỗi xác thực người dùng:', err);
+          if (isMountedRef.current) {
+            Alert.alert(
+              'Phiên làm việc hết hạn',
+              'Không thể xác thực thông tin tài khoản hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+              [{ text: 'Đăng nhập', onPress: () => navigation?.navigate?.('Welcome') }]
+            );
+          }
+        });
+    }
+  }, [user, navigation]);
 
-    runFetch();
-    return () => { isMounted = false; };
-  }, [currentMode, route.params?.refresh]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, currentMode, route.params?.refresh]);
 
   // Emergency Modal states
   const [emergencyModal, setEmergencyModal] = useState(false);
@@ -454,20 +459,58 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       const results = [...uploadedImages];
       for (const asset of result.assets.slice(0, 3 - uploadedImages.length)) {
         try {
-          const fileData = `data:image/jpeg;base64,${asset.base64}`;
           const fileName = asset.fileName || `mri_${Date.now()}.jpg`;
-          const res = await post('/api/v1/imaging/upload', {
-            fileData,
-            fileName,
-            imagingType: 'MRI',
+          const fileType = asset.mimeType || (fileName.endsWith('.png') ? 'image/png' : 'image/jpeg');
+
+          // Ưu tiên multipart FormData chuẩn REST API
+          const formData = new FormData();
+          formData.append('file', {
+            uri: asset.uri,
+            name: fileName,
+            type: fileType,
           });
-          if (res.success && res.data?.imageUrl) {
+          formData.append('imagingType', 'MRI');
+
+          let res = await postFormData('/api/v1/imaging/upload', formData);
+
+          // Fallback sang base64 nếu môi trường native không hỗ trợ streaming FormData
+          if (!res?.success && asset.base64) {
+            const fileData = `data:${fileType};base64,${asset.base64}`;
+            res = await post('/api/v1/imaging/upload', {
+              fileData,
+              fileName,
+              imagingType: 'MRI',
+            });
+          }
+
+          if (res?.success && res.data?.imageUrl) {
             results.push(res.data.imageUrl);
           } else {
-            Alert.alert('Lỗi upload', res.message || 'Không thể tải ảnh này.');
+            Alert.alert('Lỗi upload', res?.message || 'Không thể tải ảnh này.');
           }
         } catch (err) {
-          Alert.alert('Lỗi', `Không thể upload ảnh: ${err.message}`);
+          // Thử lại bằng base64 nếu FormData xảy ra lỗi ngoại lệ
+          let recovered = false;
+          if (asset.base64) {
+            try {
+              const fileType = asset.mimeType || 'image/jpeg';
+              const fileData = `data:${fileType};base64,${asset.base64}`;
+              const fbRes = await post('/api/v1/imaging/upload', {
+                fileData,
+                fileName: asset.fileName || `mri_${Date.now()}.jpg`,
+                imagingType: 'MRI',
+              });
+              if (fbRes?.success && fbRes.data?.imageUrl) {
+                results.push(fbRes.data.imageUrl);
+                recovered = true;
+              }
+            } catch (fbErr) {
+              // ignore
+            }
+          }
+          if (!recovered) {
+            Alert.alert('Lỗi', `Không thể upload ảnh: ${err.message}`);
+          }
         }
       }
       setUploadedImages(results);
@@ -531,9 +574,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
+      const patientId = activeVisit.patientId?._id 
+        || (typeof activeVisit.patientId === 'string' ? activeVisit.patientId : null) 
+        || activeVisit.patientId;
+
       await post('/api/v1/imaging-results', {
         visitId: activeVisit._id,
-        patientId: activeVisit.patientId?._id,
+        patientId,
         imageUrl: uploadedImages[0],
         images: uploadedImages,
         dicomZipUrl: dicomZipFile?.url || null,
@@ -543,6 +590,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         region: activeVisit.mriOrder?.region || '',
         requestAiAnalysis: activeVisit.mriOrder?.requestAiAnalysis || false,
       });
+
+      // Đồng bộ trạng thái lượt khám sang 'chờ kết quả AI' hoặc 'chờ bác sĩ đọc'
+      try {
+        const nextStatus = activeVisit.mriOrder?.requestAiAnalysis ? 'chờ kết quả AI' : 'chờ bác sĩ đọc';
+        await put(`/api/v1/visits/${activeVisit._id}/status`, { status: nextStatus });
+      } catch (statusErr) {
+        console.warn('Lưu ý cập nhật status lượt khám:', statusErr?.message);
+      }
 
       if (Platform.OS === 'web') {
         alert('Hoàn thành: Đã nộp ảnh phim chụp & lưu trữ Mini-PACS thành công. Bác sĩ sẽ nhận thông báo đọc kết quả.');
@@ -572,6 +627,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   const activeVisits = visits.filter(v => {
     if (['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status)) return false;
+    if (currentMode === 'all') {
+      return ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
+    }
     if (currentMode === 'mriQueue') {
       return ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
     } else {
@@ -582,6 +640,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const doneVisits = visits.filter(v => {
     if (v.status === 'đã hủy') return true;
     if (!['hoàn tất', 'đã đóng'].includes(v.status)) return false;
+    if (currentMode === 'all') {
+      return true;
+    }
     if (currentMode === 'mriQueue') {
       return !!v.mriOrder?.region;
     } else {
@@ -589,17 +650,18 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
   });
 
-  const isDoctor = user?.role === 'doctor' || user?.role === 'admin' || user?.role === 'hospital_admin';
+  const isDoctor = user?.role === 'doctor';
   const isTechnician = user?.role === 'technician';
   const isNurse = user?.role === 'nurse';
   const isReceptionist = user?.role === 'receptionist';
+  const isAdmin = ['admin', 'system_admin', 'hospital_admin'].includes(user?.role);
 
   const renderVisitCard = (v) => {
     const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
     const canOrderMri = v.status === 'đang khám';
     const canStartMri = v.status === 'chờ chụp' || v.status === 'chờ chụp lại';
     const canUploadMri = v.status === 'đang chụp';
-    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI';
+    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI' || Boolean(v.mriOrder?.imagingResultId);
 
     return (
       <View key={v._id} style={styles.card}>
@@ -715,7 +777,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
         {/* Actions - differ by role */}
         <View style={styles.actions}>
-          {isDoctor && (
+          {(isDoctor || isAdmin) && (
             <TouchableOpacity
               style={{ backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
               onPress={() => openEmergencyModal(v)}
@@ -725,13 +787,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           )}
 
-          {isDoctor && canOrderMri && (
+          {(isDoctor || isAdmin) && canOrderMri && (
             <TouchableOpacity style={[styles.btnMri, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openMriModal(v)}>
               <Scan size={14} color="#FFFFFF" strokeWidth={2.2} />
               <Text style={styles.btnMriText}>Ra Y Lệnh MRI</Text>
             </TouchableOpacity>
           )}
-          {(isTechnician || isDoctor) && canStartMri && (
+          {(isTechnician || isAdmin) && canStartMri && (
             <TouchableOpacity
               style={[styles.btnStart, { backgroundColor: v.mriSafetyChecklist?.passed ? '#059669' : '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
               onPress={() => handleStartScan(v)}
@@ -742,13 +804,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               </Text>
             </TouchableOpacity>
           )}
-          {(isTechnician || isDoctor) && canUploadMri && (
+          {(isTechnician || isAdmin) && canUploadMri && (
             <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openUploadModal(v)}>
               <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
               <Text style={styles.btnStartText}>Nộp Ảnh Phim</Text>
             </TouchableOpacity>
           )}
-          {(isTechnician || isDoctor) && (canStartMri || canUploadMri) && (
+          {(isTechnician || isAdmin) && (canStartMri || canUploadMri) && (
             <>
               <TouchableOpacity
                 style={[styles.btnStart, { backgroundColor: '#EA580C', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
@@ -769,9 +831,24 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           {!isNurse && hasReadResult && (
             <TouchableOpacity
               style={[styles.btnRead, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={() => {
-                const rid = v.mriOrder?.imagingResultId;
-                const ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
+              onPress={async () => {
+                let rid = v.mriOrder?.imagingResultId;
+                let ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
+
+                // [FIX-BUG-DR-03]: Nếu v.mriOrder.imagingResultId chưa có, tự động tra cứu qua API /by-visit
+                if (!ridStr) {
+                  try {
+                    const fallbackRes = await get(`/api/v1/imaging/by-visit/${v._id}`);
+                    const fetchedId = fallbackRes?.data?._id || fallbackRes?.data?.id || fallbackRes?._id;
+                    if (fetchedId) {
+                      ridStr = fetchedId.toString();
+                      if (v.mriOrder) v.mriOrder.imagingResultId = ridStr;
+                    }
+                  } catch (e) {
+                    console.log('Chưa tìm thấy kết quả qua by-visit:', e.message);
+                  }
+                }
+
                 if (!ridStr) {
                   Alert.alert('Chưa có kết quả', 'Kỹ thuật viên chưa upload kết quả phim chụp cho ca khám này.');
                   return;
@@ -796,7 +873,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 try {
                   await put(`/api/v1/visits/${v._id}/status`, { status: 'đang khám' });
                   fetchData();
-                } catch (e) { Alert.alert('Lỗi', e.message); }
+                } catch (e) {
+                  Alert.alert('Lỗi bắt đầu khám', e.message || 'Không thể chuyển trạng thái sang đang khám.');
+                }
               }}
             >
               <Stethoscope size={14} color="#FFFFFF" strokeWidth={2.2} />
@@ -815,33 +894,77 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <TouchableOpacity
                 style={[styles.btnStart, { backgroundColor: '#059669', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                 onPress={() => {
-                  Alert.alert(
-                    'Kết thúc khám',
-                    'Vui lòng chọn hướng điều trị cho bệnh nhân này:',
-                    [
-                      { 
-                        text: 'Ngoại trú (Cấp toa)', 
-                        onPress: async () => {
-                          try {
-                            await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Ngoại trú' });
-                            fetchData();
-                            Alert.alert('Thành công', 'Đã hoàn tất ca khám (Ngoại trú).');
-                          } catch (e) { Alert.alert('Lỗi', e.message); }
-                        }
-                      },
-                      { 
-                        text: 'Nội trú (Nhập viện)', 
-                        onPress: async () => {
-                          try {
-                            await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Nội trú' });
-                            fetchData();
-                            Alert.alert('Thành công', 'Đã hoàn tất ca khám và chỉ định Nhập viện (Nội trú).');
-                          } catch (e) { Alert.alert('Lỗi', e.message); }
-                        }
-                      },
-                      { text: 'Hủy', style: 'cancel' }
-                    ]
-                  );
+                  // [BUG-DR-02 FIX]: Cảnh báo lâm sàng nếu có triệu chứng u não mà chưa chỉ định MRI
+                  const hasBrainTumorWarning = Boolean(
+                    v.reason?.match(/(u não|khối u|u góc cầu|glioma|meningioma|áp lực nội sọ|co giật|chèn ép não|u màng não|u tuyến yên)/i)
+                  ) && !v.mriOrder?.region;
+
+                  const promptTreatmentChoice = () => {
+                    Alert.alert(
+                      'Kết thúc khám',
+                      'Vui lòng chọn hướng xử trí tiếp theo cho bệnh nhân:',
+                      [
+                        { 
+                          text: 'Ngoại trú (Cấp toa & Hoàn tất)', 
+                          onPress: async () => {
+                            try {
+                              await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Ngoại trú' });
+                              fetchData();
+                              Alert.alert('Thành công', 'Đã hoàn tất ca khám ngoại trú.');
+                            } catch (e) {
+                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể hoàn tất ca khám.');
+                            }
+                          }
+                        },
+                        { 
+                          text: 'Nội trú (Chuyển Nhập Viện)', 
+                          onPress: async () => {
+                            try {
+                              await put(`/api/v1/visits/${v._id}/status`, { status: 'chờ nhập viện', visitType: 'Nội trú' });
+                              fetchData();
+                              Alert.alert('Thành công', 'Đã chuyển bệnh nhân sang trạng thái Chờ Nhập Viện (Khoa Ngoại Thần Kinh).');
+                            } catch (e) {
+                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể chuyển viện nội trú.');
+                            }
+                          }
+                        },
+                        {
+                          text: 'Hội Chẩn Tumor Board',
+                          onPress: async () => {
+                            try {
+                              await put(`/api/v1/visits/${v._id}/status`, { status: 'chờ hội chẩn' });
+                              fetchData();
+                              Alert.alert('Thành công', 'Đã gửi hồ sơ sang Hội đồng Hội chẩn U Não (Tumor Board).');
+                            } catch (e) {
+                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể chuyển hội chẩn.');
+                            }
+                          }
+                        },
+                        { text: 'Hủy', style: 'cancel' }
+                      ]
+                    );
+                  };
+
+                  if (hasBrainTumorWarning) {
+                    Alert.alert(
+                      'Cảnh Báo Lâm Sàng',
+                      `Bệnh nhân có triệu chứng nghi ngờ tổn thương thần kinh / u não ("${v.reason}") nhưng chưa được chỉ định chụp MRI.\n\nBác sĩ có muốn ra y lệnh MRI trước khi kết thúc không?`,
+                      [
+                        {
+                          text: 'Ra Y Lệnh MRI',
+                          onPress: () => openMriModal(v),
+                        },
+                        {
+                          text: 'Bỏ qua & Tiếp tục',
+                          style: 'destructive',
+                          onPress: promptTreatmentChoice,
+                        },
+                        { text: 'Hủy', style: 'cancel' }
+                      ]
+                    );
+                  } else {
+                    promptTreatmentChoice();
+                  }
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -879,7 +1002,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-      {/* Top Segmented Mode Switcher: Khám Bệnh Lâm Sàng vs Hàng Đợi Chụp MRI */}
+      {/* Top Segmented Mode Switcher: Tất Cả vs Khám Bệnh Lâm Sàng vs Hàng Đợi Chụp MRI */}
       <View style={{
         flexDirection: 'row',
         backgroundColor: '#F1F5F9',
@@ -899,6 +1022,29 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
+            backgroundColor: currentMode === 'all' ? '#0891B2' : 'transparent',
+            gap: 6,
+          }}
+          onPress={() => setCurrentMode('all')}
+        >
+          <Activity size={16} color={currentMode === 'all' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
+          <Text style={{
+            fontSize: 13,
+            fontWeight: 'bold',
+            color: currentMode === 'all' ? '#FFFFFF' : '#475569',
+          }}>
+            Tất Cả ({examActiveCount + mriActiveCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 10,
+            borderRadius: 9,
             backgroundColor: currentMode === 'examQueue' ? '#0891B2' : 'transparent',
             gap: 6,
           }}
@@ -910,7 +1056,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             fontWeight: 'bold',
             color: currentMode === 'examQueue' ? '#FFFFFF' : '#475569',
           }}>
-            Khám Bệnh Lâm Sàng ({examActiveCount})
+            Khám Lâm Sàng ({examActiveCount})
           </Text>
         </TouchableOpacity>
 
@@ -933,7 +1079,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             fontWeight: 'bold',
             color: currentMode === 'mriQueue' ? '#FFFFFF' : '#475569',
           }}>
-            Hàng Đợi Chụp MRI ({mriActiveCount})
+            Chụp & Đọc MRI ({mriActiveCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -986,8 +1132,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
             {/* Vùng chụp */}
             <Text style={styles.fieldLabel}>Vùng Chụp *</Text>
-            <View style={styles.chipRow}>
-              {['Não bộ'].map(r => (
+            <View style={[styles.chipRow, { flexWrap: 'wrap' }]}>
+              {['Não bộ', 'Hố sau & Tuyến yên', 'Cột sống cổ', 'Cột sống ngực', 'Cột sống thắt lưng', 'Tủy sống toàn phần'].map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.chip, region === r && styles.chipActive]}

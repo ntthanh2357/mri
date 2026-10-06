@@ -192,12 +192,15 @@ export const getMyQueue = async (req, res) => {
         { createdAt: { $gte: startOfDay }, hospitalId: req.user.hospitalId }
       ];
     } else if (role === "technician") {
+      filter.hospitalId = req.user.hospitalId;
       filter.$or = [
         { technicianId: id },
-        { technicianId: null },
-        { technicianId: { $exists: false } }
+        { 
+          technicianId: { $in: [null, undefined] },
+          status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật"] }
+        }
       ];
-      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] };
+      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
@@ -347,7 +350,7 @@ export const ALLOWED_TRANSITIONS = {
   'đang khám': ['chờ chụp', 'chờ chụp sau phẫu thuật', 'chờ hội chẩn', 'chờ nhập viện', 'hoàn tất', 'đã hủy'],
   'chờ chụp': ['đang chụp', 'chờ chụp lại', 'đang khám', 'đã hủy'],
   'chờ chụp sau phẫu thuật': ['đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'đang khám', 'đã hủy'],
-  'đang chụp': ['chờ kết quả AI', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
+  'đang chụp': ['chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
   'chờ kết quả AI': ['chờ bác sĩ đọc', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
   'lỗi AI': ['chờ bác sĩ đọc', 'chờ kết quả AI', 'chờ chụp lại', 'đang khám', 'đã hủy'],
   'chờ chụp lại': ['đang chụp', 'đang khám', 'đã hủy'],

@@ -21,7 +21,7 @@ const REMINDER_TIME_SLOTS = {
   4: ["08:00", "12:00", "17:00", "21:00"],
 };
 
-const generateRemindersForPrescription = async (prescription) => {
+export const generateRemindersForPrescription = async (prescription) => {
   const reminders = [];
   const { startOfDay: today } = getDayRangeVN();
 
@@ -343,7 +343,7 @@ export const getPatientPrescriptions = async (req, res) => {
 export const addPatientPrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { doctor_name, diagnosis, drugs, note, overrideReason, requestAi } = req.body;
+    const { doctor_name, diagnosis, drugs, note, overrideCategory, overrideReason, requestAi, aiConsultation } = req.body;
 
     if (!diagnosis || !drugs || !Array.isArray(drugs) || drugs.length === 0) {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
@@ -359,51 +359,82 @@ export const addPatientPrescription = async (req, res) => {
       patientId,
       medications: drugs,
       diagnosis,
-      requestAi: !!requestAi
+      requestAi: !!requestAi || !aiConsultation
     });
 
-    // Nếu có cảnh báo mức CRITICAL hoặc HIGH mà bác sĩ không nhập lý do ghi đè
+    // Nếu có cảnh báo mức CRITICAL hoặc HIGH mà bác sĩ không nhập lý do ghi đè hợp lệ (tối thiểu 15 ký tự, không lặp ký tự vô nghĩa)
     const hasSevereWarning = safetyCheck.warnings && safetyCheck.warnings.some(
       w => w.severity === "CRITICAL" || w.severity === "HIGH"
     );
 
-    if (hasSevereWarning && (!overrideReason || !overrideReason.trim())) {
+    const cleanOverride = (overrideReason || "").trim();
+    const isRepetitive = /(.)\1{4,}/.test(cleanOverride);
+    const words = cleanOverride.split(/\s+/).filter(w => w.length > 1);
+    const isMeaningful = cleanOverride.length >= 15 && !isRepetitive && words.length >= 3;
+
+    if (hasSevereWarning && !isMeaningful) {
       return res.status(422).json({
         success: false,
         requiresOverride: true,
-        message: "Đơn thuốc có tương tác hoặc chống chỉ định lâm sàng nghiêm trọng. Bác sĩ bắt buộc phải cung cấp lý do lâm sàng (overrideReason) để lưu đơn và ký số.",
+        message: "Đơn thuốc có tương tác hoặc chống chỉ định lâm sàng nghiêm trọng. Bác sĩ bắt buộc phải chọn nhóm lý do và cung cấp giải trình chuyên môn có ý nghĩa (tối thiểu 15 ký tự, từ 3 từ có nghĩa trở lên, không lặp ký tự vô nghĩa) trước khi ký duyệt.",
         safetyCheck: {
           safetyScore: safetyCheck.safetyScore,
           status: safetyCheck.status,
+          evaluationCoverage: safetyCheck.evaluationCoverage,
           warnings: safetyCheck.warnings,
-          aiConsultation: safetyCheck.aiConsultation
+          aiConsultation: aiConsultation || safetyCheck.aiConsultation
         }
       });
     }
 
+    // Kiểm tra thẩm quyền khai báo Cấp Cứu (ACUTE_EMERGENCY):
+    // Chỉ Bác sĩ Khoa Cấp Cứu / Hồi Sức Tích Cực (ICU), Bác sĩ trực cấp cứu, hoặc Quản trị viên mới được kích hoạt
+    if (overrideCategory === "ACUTE_EMERGENCY") {
+      const userDept = (req.user?.department || req.user?.profile?.department || "").toUpperCase();
+      const userSpecialty = (req.user?.specialty || req.user?.profile?.specialty || "").toUpperCase();
+      const isEmergencyContext = 
+        userDept.includes("CẤP CỨU") || userDept.includes("EMERGENCY") || userDept.includes("ICU") || userDept.includes("HỒI SỨC") ||
+        userSpecialty.includes("EMERGENCY") || userSpecialty.includes("CẤP CỨU") ||
+        ["admin", "system_admin"].includes(req.user?.role) ||
+        req.user?.isEmergencyDuty === true || req.user?.dutyRole === "emergency" || req.user?.profile?.isEmergencyDuty === true;
+
+      if (!isEmergencyContext) {
+        return res.status(403).json({
+          success: false,
+          message: "Thẩm quyền từ chối: Nhóm lý do 'ACUTE_EMERGENCY' chỉ áp dụng cho Bác sĩ thuộc Khoa Cấp Cứu / Hồi Sức Tích Cực (ICU) hoặc Bác sĩ trong ca trực cấp cứu được phân công. Vui lòng chọn nhóm lý do lâm sàng khác hoặc xin ý kiến Dược sĩ lâm sàng."
+        });
+      }
+    }
+
+    const hasCriticalWarning = safetyCheck.warnings && safetyCheck.warnings.some(w => w.severity === "CRITICAL");
     const newItem = new Prescription({
       patient_id: patientId,
-      doctor_name: doctor_name || "Bác sĩ điều trị",
+      doctorId: req.user?.id || null,
+      doctor_name: doctor_name || req.user?.profile?.name || "Bác sĩ điều trị",
       diagnosis,
       drugs,
       note: note || "",
+      dispenseStatus: hasCriticalWarning ? "AWAITING_PHARMACY_VERIFICATION" : "PENDING_DISPENSE",
       clinicalSafety: {
         safetyScore: safetyCheck.safetyScore,
         status: safetyCheck.status,
+        evaluationCoverage: safetyCheck.evaluationCoverage,
         warnings: safetyCheck.warnings,
-        aiConsultation: safetyCheck.aiConsultation,
-        overrideReason: overrideReason ? overrideReason.trim() : "",
-        overriddenBy: overrideReason ? (doctor_name || req.user?.profile?.name || "Bác sĩ điều trị") : "",
-        overriddenAt: overrideReason ? new Date() : null
+        aiConsultation: aiConsultation || safetyCheck.aiConsultation,
+        isOverridden: hasSevereWarning && isMeaningful,
+        overrideCategory: overrideCategory || (hasSevereWarning ? "CLINICAL_DISCRETION" : ""),
+        overrideReason: cleanOverride,
+        overriddenBy: cleanOverride ? (doctor_name || req.user?.profile?.name || "Bác sĩ điều trị") : "",
+        overriddenAt: cleanOverride ? new Date() : null,
+        requiresDualSign: hasCriticalWarning,
+        dualSignStatus: hasCriticalWarning ? "PENDING_PHARMACY_VERIFICATION" : "NONE"
       }
     });
 
     await newItem.save();
 
-    // Việc khấu trừ kho thuốc sẽ được thực hiện khi thanh toán hóa đơn thực tế (ở invoice.controller.js)
-
-    // Tự động sinh lịch nhắc uống thuốc cho bệnh nhân dựa trên số lần/ngày và số ngày uống
-    await generateRemindersForPrescription(newItem);
+    // Việc khấu trừ kho thuốc sẽ được thực hiện khi thanh toán hóa đơn thực tế (ở invoice.controller.js).
+    // Lịch nhắc uống thuốc (Medication Reminders) sẽ chỉ được kích hoạt khi Dược sĩ hoàn tất phát thuốc (DISPENSED) tại quầy Dược.
 
     return successResponse(res, newItem, "Thêm đơn thuốc mới thành công.", 201);
   } catch (error) {

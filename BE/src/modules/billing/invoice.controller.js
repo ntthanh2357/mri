@@ -11,6 +11,102 @@ import { Prescription } from "../pharmacy/models/prescription.model.js";
 import { executeWithTransaction } from "../../utils/transaction.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
+import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import { tenantStorage } from "../../middlewares/tenant.middleware.js";
+
+/**
+ * Hàm trừ kho dùng chung cho toàn bộ các luồng thanh toán (payInvoice, createAndPayInvoice, handlePayOSWebhook)
+ * Đảm bảo:
+ * 1. Trừ kho nguyên tử với điều kiện $gte (chống race condition, âm kho).
+ * 2. Lấy giá trị sau cập nhật (new: true) để ghi nhận balanceAfter chính xác tuyệt đối.
+ * 3. Hỗ trợ truyền session trong transaction ACID.
+ */
+export const deductStockForInvoice = async ({ invoice, session = null, performedBy = null, reason = "" }) => {
+  // 1. Nếu toàn bộ hóa đơn đã trừ kho hoặc không còn thuốc cần trừ
+  if (invoice.stockDeductionStatus === "DEDUCTED") {
+    return { success: true, deductedItems: [], isAlreadyDeducted: true };
+  }
+
+  // 2. Lọc các dòng thuốc chưa xuất phát vật lý (loại trừ các dòng đã DISPENSED ở ca cấp cứu)
+  const drugItems = (invoice.items || []).filter(it => it.type === 'drug' && it.quantity > 0 && it.dispenseStatus !== 'DISPENSED');
+  if (drugItems.length === 0) {
+    return { success: true, deductedItems: [], isAlreadyDeducted: true };
+  }
+
+  const sessOpts = session ? { session } : {};
+  const deductedItems = [];
+
+  for (const item of drugItems) {
+    const qty = Number(item.quantity) || 1;
+    let findQuery = {};
+    if (invoice.hospitalId) {
+      findQuery.hospitalId = invoice.hospitalId;
+    }
+
+    if (item.drugId) {
+      findQuery._id = item.drugId;
+    } else {
+      const escapedName = (item.drugName || item.description || "").replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      findQuery.name = new RegExp(`^${escapedName}$`, "i");
+    }
+
+    // Kiểm tra thuốc có tồn tại trong danh mục không
+    const drugDoc = await Drug.findOne(findQuery).session(session || null);
+    if (!drugDoc) {
+      return {
+        success: false,
+        code: "DRUG_NOT_FOUND",
+        error: `Thuốc '${item.drugName || item.description}' không tồn tại trong danh mục dược phẩm của bệnh viện.`,
+        failedItem: item
+      };
+    }
+
+    // 1. Trừ kho nguyên tử và trả về document sau update để lấy tồn kho tức thời (balanceAfter)
+    const updatedDrug = await Drug.findOneAndUpdate(
+      { _id: drugDoc._id, "stock.quantity": { $gte: qty } },
+      {
+        $inc: { "stock.quantity": -qty },
+        $set: { "stock.lastUpdated": new Date() }
+      },
+      { new: true, ...sessOpts }
+    );
+
+    if (!updatedDrug) {
+      return {
+        success: false,
+        code: "STOCK_SHORTAGE",
+        error: `Thuốc '${drugDoc.name}' thiếu tồn kho để xuất (Cần: ${qty}, Hiện có: ${drugDoc.stock?.quantity || 0}).`,
+        failedItem: item
+      };
+    }
+
+    // 2. Ghi nhận nhật ký biến động kho với running balance (balanceAfter) chính xác tuyệt đối
+    const balanceAfter = updatedDrug.stock.quantity;
+    await Drug.updateOne(
+      { _id: updatedDrug._id },
+      {
+        $push: {
+          stockMovements: {
+            type: "dispense",
+            quantity: qty,
+            balanceAfter: balanceAfter,
+            invoiceId: invoice._id,
+            visitId: invoice.visitId || null,
+            performedBy: performedBy || null,
+            reason: reason || `Xuất thuốc theo hóa đơn ${invoice._id}`,
+            timestamp: new Date()
+          }
+        }
+      },
+      sessOpts
+    );
+
+    deductedItems.push({ drugId: updatedDrug._id, name: updatedDrug.name, quantity: qty, balanceAfter });
+  }
+
+  return { success: true, deductedItems };
+};
+
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
 // @access  Private (Receptionist, Admin)
@@ -63,7 +159,6 @@ export const createAndPayInvoice = async (req, res) => {
         hospitalId: req.user.hospitalId,
         name: { $in: drugNames }
       });
-      const bulkOps = [];
 
       for (const pDrug of prescription.drugs) {
         const pDrugRegex = new RegExp(`^${pDrug.name.trim()}$`, "i");
@@ -90,29 +185,6 @@ export const createAndPayInvoice = async (req, res) => {
           unit: pDrug.unit || dbDrug?.stock?.unit || 'Viên',
           dosage: pDrug.dosage || null
         });
-
-        // Trừ tồn kho nguyên tử (Atomic decrement) chống Race Condition & Lost Updates
-        if (dbDrug) {
-          bulkOps.push({
-            updateOne: {
-              filter: { _id: dbDrug._id, "stock.quantity": { $gte: pDrug.quantity } },
-              update: { 
-                $inc: { "stock.quantity": -pDrug.quantity },
-                $set: { "stock.lastUpdated": new Date() },
-                $push: {
-                  stockMovements: {
-                    type: "dispense",
-                    quantity: pDrug.quantity,
-                    visitId: visit._id,
-                    performedBy: req.user.id,
-                    reason: `Kê đơn viện phí lượt khám ${visit._id}`,
-                    timestamp: new Date()
-                  }
-                }
-              }
-            }
-          });
-        }
       }
 
       // Giao dịch ACID: Trừ kho và tạo/cập nhật hóa đơn
@@ -126,20 +198,13 @@ export const createAndPayInvoice = async (req, res) => {
       await executeWithTransaction(async (session) => {
         const sessOpts = session ? { session } : {};
 
-        if (bulkOps.length > 0) {
-          const bulkRes = await Drug.bulkWrite(bulkOps, sessOpts);
-          if (bulkRes.modifiedCount < bulkOps.length) {
-            throw new Error("Một số loại thuốc đã hết hàng hoặc không đủ số lượng trong quá trình xử lý giao dịch.");
-          }
-        }
-
         if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
           existingInvoice.items = items;
           existingInvoice.totalAmount = totalAmount;
           existingInvoice.status = "đã thanh toán";
+          existingInvoice.stockDeductionStatus = "DEDUCTED";
           existingInvoice.paymentMethod = mappedMethod;
           existingInvoice.paidAt = new Date();
-          await existingInvoice.save(sessOpts);
           invoice = existingInvoice;
         } else {
           invoice = new Invoice({
@@ -149,11 +214,25 @@ export const createAndPayInvoice = async (req, res) => {
             items,
             totalAmount,
             status: "đã thanh toán",
+            stockDeductionStatus: "DEDUCTED",
             paymentMethod: mappedMethod,
             paidAt: new Date()
           });
-          await invoice.save(sessOpts);
         }
+
+        // Trừ tồn kho bằng hàm dùng chung với balanceAfter chuẩn xác
+        const stockRes = await deductStockForInvoice({
+          invoice,
+          session,
+          performedBy: req.user.id,
+          reason: `Kê đơn viện phí lượt khám ${visit._id}`
+        });
+
+        if (!stockRes.success) {
+          throw new Error(stockRes.error);
+        }
+
+        await invoice.save(sessOpts);
 
         if (prescription) {
           prescription.isBilled = true;
@@ -276,8 +355,6 @@ export const payInvoice = async (req, res) => {
           hospitalId: req.user.hospitalId,
           name: { $in: drugNames }
         });
-        const bulkOps = [];
-
         for (const pDrug of prescription.drugs) {
           const pDrugRegex = new RegExp(`^${pDrug.name.trim()}$`, "i");
           const dbDrug = dbDrugs.find(d => pDrugRegex.test(d.name));
@@ -302,30 +379,6 @@ export const payInvoice = async (req, res) => {
             unit: pDrug.unit || dbDrug?.stock?.unit || 'Viên',
             dosage: pDrug.dosage || null
           });
-
-          // Trừ tồn kho nguyên tử (Atomic decrement) chống Race Condition & Lost Updates
-          if (dbDrug) {
-            bulkOps.push({
-              updateOne: {
-                filter: { _id: dbDrug._id, "stock.quantity": { $gte: pDrug.quantity } },
-                update: { 
-                  $inc: { "stock.quantity": -pDrug.quantity },
-                  $set: { "stock.lastUpdated": new Date() },
-                  $push: {
-                    stockMovements: {
-                      type: "dispense",
-                      quantity: pDrug.quantity,
-                      visitId: visit._id,
-                      invoiceId: invoice._id,
-                      performedBy: req.user.id,
-                      reason: `Thanh toán đơn thuốc hóa đơn ${invoice._id}`,
-                      timestamp: new Date()
-                    }
-                  }
-                } 
-              }
-            });
-          }
         }
 
         // Cập nhật lại tổng tiền hóa đơn
@@ -337,17 +390,23 @@ export const payInvoice = async (req, res) => {
           mappedMethod = "chuyển khoản";
         }
         invoice.status = "đã thanh toán";
+        invoice.stockDeductionStatus = "DEDUCTED";
         invoice.paymentMethod = mappedMethod;
         invoice.paidAt = new Date();
 
         await executeWithTransaction(async (session) => {
           const sessOpts = session ? { session } : {};
 
-          if (bulkOps.length > 0) {
-            const bulkRes = await Drug.bulkWrite(bulkOps, sessOpts);
-            if (bulkRes.modifiedCount < bulkOps.length) {
-              throw new Error("Một số loại thuốc đã hết hàng hoặc không đủ số lượng trong quá trình xử lý giao dịch.");
-            }
+          // Trừ kho nguyên tử bằng hàm dùng chung với balanceAfter chuẩn xác
+          const stockRes = await deductStockForInvoice({
+            invoice,
+            session,
+            performedBy: req.user.id,
+            reason: `Thanh toán đơn thuốc hóa đơn ${invoice._id}`
+          });
+
+          if (!stockRes.success) {
+            throw new Error(stockRes.error);
           }
 
           prescription.isBilled = true;
@@ -552,6 +611,8 @@ export const createPayOSPayment = async (req, res) => {
 // @desc    Webhook tiếp nhận kết quả thanh toán từ PayOS
 // @route   POST /api/v1/invoices/payos-webhook
 // @access  Public
+// @route   POST /api/v1/invoices/payos-webhook
+// @access  Public
 export const handlePayOSWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
@@ -560,55 +621,319 @@ export const handlePayOSWebhook = async (req, res) => {
     const verifiedData = payos.webhooks.verify(webhookData);
 
     if (verifiedData.code === "00") {
-      const orderCode = verifiedData.orderCode;
+      const orderCode = Number(verifiedData.orderCode);
 
-      // 1. Kiểm tra xem có phải là hóa đơn lượt khám
-      const invoice = await Invoice.findOne({ orderCode });
+      // 1. Cập nhật trạng thái có điều kiện nguyên tử: Chỉ khóa nếu status là "chờ thanh toán"
+      // Vì là Webhook công khai từ PayOS (chưa có store), truy vấn qua bypassTenancy tường minh và hẹp
+      const invoice = await Invoice.findOneAndUpdate(
+        { orderCode, status: "chờ thanh toán" },
+        { 
+          $set: { 
+            status: "đang xử lý",
+            paymentMethod: "vietqr",
+            paidAt: new Date()
+          } 
+        },
+        { new: true, bypassTenancy: true }
+      );
+
       if (invoice) {
-        if (invoice.status !== "đã thanh toán") {
-          invoice.status = "đã thanh toán";
-          invoice.paidAt = new Date();
-          await invoice.save();
+        // GẮN CHẶT NGỮ CẢNH TENANT: Mọi thao tác tiếp theo (trừ kho, cập nhật đơn thuốc, thông báo)
+        // PHẢI chạy trong tenant context của chính bệnh viện sở hữu hóa đơn đó (an toàn với hóa đơn cũ thiếu hospitalId)
+        const targetHospitalId = invoice.hospitalId ? invoice.hospitalId.toString() : null;
+        return await tenantStorage.run({ hospitalId: targetHospitalId, bypassTenancy: !targetHospitalId }, async () => {
+          let stockDeductionSuccess = false;
+          let stockDeductionError = "";
+          let stockDeductionCode = null;
 
-          // Cập nhật trạng thái lượt khám liên quan
-          const visit = await Visit.findById(invoice.visitId);
-          if (visit) {
-            visit.invoiceId = invoice._id;
-            visit.status = "đã đóng";
-            await visit.save();
+          // Chạy trừ kho trong Transaction ACID
+          try {
+            await executeWithTransaction(async (session) => {
+              const sessOpts = session ? { session } : {};
+
+              const stockRes = await deductStockForInvoice({
+                invoice,
+                session,
+                performedBy: null,
+                reason: `Thanh toán trực tuyến PayOS VietQR mã GD ${orderCode}`
+              });
+
+              if (!stockRes.success) {
+                // Ném lỗi có mã lỗi có cấu trúc để phân loại ngoài transaction
+                const err = new Error(stockRes.error || "Thiếu tồn kho dược phẩm");
+                err.code = stockRes.code || "STOCK_SHORTAGE";
+                throw err;
+              }
+
+              // Trừ kho thành công -> Chuyển trạng thái sang "đã thanh toán" TRONG TRANSACTION
+              const invInSession = await Invoice.findById(invoice._id).session(session);
+              invInSession.status = "đã thanh toán";
+              invInSession.stockDeductionStatus = "DEDUCTED";
+              await invInSession.save(sessOpts);
+
+              // Cập nhật lượt khám trong cùng transaction
+              if (invInSession.visitId) {
+                const visit = await Visit.findById(invInSession.visitId).session(session);
+                if (visit) {
+                  visit.invoiceId = invInSession._id;
+                  visit.status = "đã đóng";
+                  await visit.save(sessOpts);
+                }
+              }
+
+              // Cập nhật đơn thuốc liên quan trong cùng transaction
+              const prescription = await Prescription.findOne({
+                patient_id: invInSession.patientId,
+                $or: [
+                  { visitId: invInSession.visitId },
+                  { invoiceId: invInSession._id }
+                ]
+              }).session(session);
+
+              if (prescription) {
+                prescription.isBilled = true;
+                prescription.invoiceId = invInSession._id;
+                await prescription.save(sessOpts);
+              }
+
+              stockDeductionSuccess = true;
+            });
+          } catch (txErr) {
+            stockDeductionSuccess = false;
+            stockDeductionError = txErr.message;
+            stockDeductionCode = txErr.code;
           }
-          console.log(`[PayOS Webhook] Thanh toán thành công cho hóa đơn: ${invoice._id}, orderCode: ${orderCode}`);
-        }
+
+          // XỬ LÝ NGOÀI TRANSACTION KHI THIẾU KHO HOẶC LỖI HẠ TẦNG:
+          if (!stockDeductionSuccess) {
+            const isShortage = stockDeductionCode === "STOCK_SHORTAGE";
+
+            // Phân biệt lỗi hạ tầng có thể thử lại (Transient/Retryable) vs Lỗi vĩnh viễn (Permanent)
+            const isTransientError = 
+              stockDeductionCode === "ETIMEDOUT" ||
+              stockDeductionCode === "ECONNRESET" ||
+              stockDeductionCode === 112 || // MongoDB WriteConflict
+              (stockDeductionError && (
+                stockDeductionError.includes("WriteConflict") ||
+                stockDeductionError.includes("timed out") ||
+                stockDeductionError.includes("MongoNetworkError") ||
+                stockDeductionError.includes("TransientTransactionError")
+              ));
+
+            if (isTransientError) {
+              const currentRetries = (invoice.webhookRetryCount || 0) + 1;
+              if (currentRetries < 5) {
+                // Lỗi hạ tầng tạm thời: Khôi phục trạng thái về 'chờ thanh toán' để PayOS tự động gửi lại
+                try {
+                  await Invoice.findByIdAndUpdate(invoice._id, {
+                    status: "chờ thanh toán",
+                    webhookRetryCount: currentRetries,
+                    paymentNotes: `Lỗi hạ tầng tạm thời khi xử lý webhook (${stockDeductionCode || 'INFRA_ERROR'}, lần ${currentRetries}/5): ${stockDeductionError}. Đang chờ PayOS gửi lại.`
+                  });
+                } catch (revertErr) {
+                  console.error("[PayOS Webhook] Không thể khôi phục trạng thái chờ thanh toán do lỗi DB:", revertErr.message);
+                }
+                console.error(`[PayOS Webhook LỖI HẠ TẦNG TẠM THỜI] Trả HTTP 500 (lần ${currentRetries}/5): ${stockDeductionError}`);
+                return res.status(500).json({ 
+                  message: "Lỗi hạ tầng cơ sở dữ liệu tạm thời, yêu cầu retry webhook.", 
+                  errorCode: stockDeductionCode || "INFRA_ERROR",
+                  retryCount: currentRetries,
+                  error: stockDeductionError 
+                });
+              } else {
+                // Đã vượt quá 5 lần retry: Chặn retry loop vô hạn
+                console.error(`[PayOS Webhook VƯỢT QUÁ RETRY] Hóa đơn ${invoice._id} đã thử lại ${currentRetries} lần thất bại.`);
+                await Invoice.findByIdAndUpdate(invoice._id, {
+                  status: "đang xử lý",
+                  stockDeductionStatus: "EXCEEDED_MAX_RETRIES",
+                  webhookRetryCount: currentRetries,
+                  paymentNotes: `Thanh toán VietQR ${orderCode} thành công nhưng hệ thống gặp lỗi hạ tầng lặp lại ${currentRetries} lần: ${stockDeductionError}. Đã chuyển sang hàng đợi đối soát IT.`
+                });
+                return res.status(200).json({ success: true, message: "Đã đạt trần retry. Hóa đơn được chuyển sang hàng đợi đối soát IT." });
+              }
+            }
+
+            // Xử lý lỗi vĩnh viễn (Permanent Error) hoặc Thiếu kho (Stock Shortage):
+            // Tuyệt đối KHÔNG trả về 500 hay quay lại 'chờ thanh toán' vì tiền người bệnh đã trừ thành công!
+            const flagStatus = isShortage ? "SHORTAGE_FLAGGED" : "PERMANENT_ERROR_FLAGGED";
+            console.error(`[PayOS Webhook LỖI ${flagStatus}] Hóa đơn ${invoice._id}: ${stockDeductionError}`);
+
+            await Invoice.findByIdAndUpdate(invoice._id, {
+              status: "đang xử lý",
+              stockDeductionStatus: flagStatus,
+              paymentNotes: `Thanh toán PayOS ${orderCode} thành công nhưng phát sinh sự cố (${flagStatus}): ${stockDeductionError}`
+            });
+
+            // Gửi thông báo khẩn cấp tới Quản trị viên & Dược sĩ
+            try {
+              const admins = await User.find({ role: { $in: ["hospital_admin", "admin", "pharmacist"] } });
+              for (const admin of admins) {
+                await createNotificationInternal({
+                  hospitalId: invoice.hospitalId,
+                  recipientId: admin._id,
+                  type: isShortage ? "stock_shortage" : "system_alert",
+                  title: isShortage 
+                    ? "🚨 Báo động thiếu tồn kho sau khi bệnh nhân đã thanh toán PayOS"
+                    : "🚨 Báo động lỗi dữ liệu khi ghi nhận hóa đơn PayOS",
+                  message: `Hóa đơn mã GD ${orderCode} (ID: ${invoice._id}) đã nhận tiền VietQR nhưng gặp sự cố (${flagStatus}): ${stockDeductionError}. Hóa đơn được giữ trạng thái 'đang xử lý'. Đề nghị can thiệp thủ công!`,
+                  relatedId: invoice._id
+                });
+              }
+            } catch (notifErr) {
+              console.error("[PayOS Webhook Notif Error]", notifErr.message);
+            }
+
+            return res.status(200).json({ success: true, message: `Đã ghi nhận thanh toán và gắn cờ ${flagStatus}.` });
+          } else {
+            console.log(`[PayOS Webhook] Thanh toán & trừ tồn kho thành công cho hóa đơn: ${invoice._id}, orderCode: ${orderCode}`);
+            return res.status(200).json({ success: true, message: "Thanh toán và trừ tồn kho thành công." });
+          }
+        });
       } else {
+        // Kiểm tra xem hóa đơn này đã được thanh toán hoặc đang xử lý trước đó chưa (Idempotent response)
+        const existingInvoice = await Invoice.findOne({ orderCode }, null, { bypassTenancy: true });
+        if (existingInvoice) {
+          if (existingInvoice.status === "đã thanh toán") {
+            console.log(`[PayOS Webhook Idempotent] Hóa đơn ${existingInvoice._id} đã được xử lý thanh toán trước đó.`);
+            return res.status(200).json({ success: true, message: "Hóa đơn đã được xử lý thanh toán (idempotent)." });
+          }
+          if (existingInvoice.status === "đang xử lý") {
+            console.log(`[PayOS Webhook Idempotent] Hóa đơn ${existingInvoice._id} đang trong trạng thái xử lý/thiếu kho.`);
+            return res.status(200).json({ success: true, message: "Hóa đơn đang được xử lý (idempotent)." });
+          }
+        }
+
         // 2. Nếu không phải hóa đơn lượt khám, kiểm tra đơn hàng Premium
-        const premiumOrder = await PremiumOrder.findOne({ orderCode });
+        const premiumOrder = await PremiumOrder.findOne({ orderCode }, null, { bypassTenancy: true });
         if (premiumOrder && premiumOrder.status !== "completed") {
           premiumOrder.status = "completed";
           premiumOrder.paidAt = new Date();
           await premiumOrder.save();
 
-          // Cập nhật trạng thái Premium của User
-          const user = await User.findById(premiumOrder.userId);
+          const user = await User.findById(premiumOrder.userId, null, { bypassTenancy: true });
           if (user) {
             user.isPremium = true;
-
-            // Premium có giá trị trong 1 năm (Gói Premium 99.000 VNĐ)
             const oneYearFromNow = new Date();
             oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
             user.premiumUntil = oneYearFromNow;
-            user.autoRenew = true; // Bật tự động gia hạn khi đăng ký mới
-
+            user.autoRenew = true;
             await user.save();
             console.log(`[PayOS Webhook] Nâng cấp Premium thành công cho User: ${user.email}, orderCode: ${orderCode}`);
           }
+          return res.status(200).json({ success: true, message: "Nâng cấp Premium thành công." });
         }
       }
     }
 
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, message: "Webhook nhận thành công nhưng không phải trạng thái thành công 00." });
   } catch (error) {
     console.error("[PayOS Webhook Error]", error.message);
-    res.status(400).json({ message: "Lỗi xác thực webhook", error: error.message });
+    return res.status(400).json({ message: "Lỗi xác thực webhook", error: error.message });
+  }
+};
+
+// @desc    Lấy danh sách các hóa đơn kẹt ở trạng thái "đang xử lý" (thiếu kho hoặc timeout)
+// @route   GET /api/v1/invoices/stuck-processing
+// @access  Private (Pharmacist, Hospital Admin, Admin, Receptionist)
+export const getStuckProcessingInvoices = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    const filter = { status: "đang xử lý" };
+    if (hospitalId && !["admin", "system_admin"].includes(req.user.role)) {
+      filter.hospitalId = hospitalId;
+    }
+
+    const invoices = await Invoice.find(filter)
+      .populate("patientId", "profile email")
+      .populate("visitId", "reason status")
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return res.status(200).json({ success: true, count: invoices.length, invoices });
+  } catch (error) {
+    console.error("Lỗi getStuckProcessingInvoices:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+  }
+};
+
+// @desc    Xử lý lối thoát cho hóa đơn kẹt "đang xử lý" (Dược sĩ nhập kho bù -> trừ kho, hoặc Thu ngân hoàn tiền)
+// @route   POST /api/v1/invoices/:id/resolve-processing
+// @access  Private (Pharmacist, Hospital Admin, Admin)
+export const resolveProcessingInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, note } = req.body; // action: "retry_deduct" | "cancel_refund"
+
+    const invoice = await Invoice.findById(id);
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
+
+    if (invoice.status !== "đang xử lý") {
+      return res.status(400).json({ message: `Hóa đơn không ở trạng thái 'đang xử lý' (Hiện tại: ${invoice.status}).` });
+    }
+
+    if (action === "retry_deduct") {
+      // Dược sĩ đã nhập thêm thuốc vào kho, thử trừ kho lại
+      await executeWithTransaction(async (session) => {
+        const sessOpts = session ? { session } : {};
+        const stockRes = await deductStockForInvoice({
+          invoice,
+          session,
+          performedBy: req.user.id,
+          reason: `Trừ kho bù sau khi bổ sung tồn kho (Người duyệt: ${req.user.email})`
+        });
+
+        if (!stockRes.success) {
+          throw new Error(stockRes.error || "Kho vẫn chưa đủ số lượng thuốc");
+        }
+
+        invoice.status = "đã thanh toán";
+        invoice.stockDeductionStatus = "DEDUCTED";
+        invoice.paymentNotes = note || "Đã bổ sung thuốc và trừ kho thành công.";
+        await invoice.save(sessOpts);
+      });
+
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.STOCK_ADJUSTED,
+          entity: "Invoice",
+          entityId: invoice._id,
+          performedBy: req.user.id,
+          hospitalId: req.user.hospitalId || invoice.hospitalId,
+          details: `Xử lý gỡ kẹt hóa đơn PayOS: Dược sĩ đã bổ sung kho và trừ bù tồn kho thành công cho hóa đơn ${invoice._id}. Ghi chú: ${note || 'N/A'}`
+        });
+      } catch (auditErr) {
+        console.warn("[AuditLog Warn]", auditErr.message);
+      }
+
+      return res.status(200).json({ success: true, message: "Đã trừ kho bù thành công và chuyển hóa đơn sang 'đã thanh toán'.", invoice });
+    } else if (action === "cancel_refund") {
+      // Không thể cấp thuốc -> hoàn tiền cho người bệnh
+      invoice.status = "hoàn trả";
+      invoice.refundReason = note || "Kho không thể cung ứng thuốc sau thanh toán VietQR.";
+      invoice.refundedAt = new Date();
+      invoice.refundedBy = req.user.id;
+      await invoice.save();
+
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.REFUND_APPROVED,
+          entity: "Invoice",
+          entityId: invoice._id,
+          performedBy: req.user.id,
+          hospitalId: req.user.hospitalId || invoice.hospitalId,
+          details: `Xử lý gỡ kẹt hóa đơn PayOS: Hủy đơn và phê duyệt hoàn trả viện phí do kho thiếu thuốc không thể cấp phát. Ghi chú: ${note || 'N/A'}`
+        });
+      } catch (auditErr) {
+        console.warn("[AuditLog Warn]", auditErr.message);
+      }
+
+      return res.status(200).json({ success: true, message: "Đã hủy hóa đơn và chuyển sang trạng thái hoàn trả cho người bệnh.", invoice });
+    } else {
+      return res.status(400).json({ message: "action phải là 'retry_deduct' hoặc 'cancel_refund'." });
+    }
+  } catch (error) {
+    console.error("Lỗi resolveProcessingInvoice:", error);
+    return res.status(500).json({ message: error.message || "Lỗi xử lý hóa đơn treo.", error: error.message });
   }
 };
 
@@ -1045,33 +1370,69 @@ export const refundInvoice = async (req, res) => {
       invoice.status = "hoàn trả";
     }
 
-    // 4. [BUG-08 REFACTOR] Hoàn trả tồn kho dược phẩm: ƯU TIÊN DÙNG KHÓA NGOẠI TRỰC TIẾP (drugId FK)
+    // 4. [BUG-08 REFACTOR] Hoàn trả tồn kho dược phẩm: CHỈ hoàn trả nếu kho ĐÃ TỪNG BỊ KHẤU TRỪ (stockDeductionStatus === 'DEDUCTED')
+    // Nếu hóa đơn bị thiếu kho (SHORTAGE_FLAGGED) hoặc chưa trừ kho (PENDING), tuyệt đối không cộng kho để chống tạo tồn kho ma!
     if (targetDrugItems.length > 0) {
-      try {
-        const bulkOps = [];
+      if (invoice.stockDeductionStatus !== "DEDUCTED") {
+        console.log(`[RefundInvoice] Hóa đơn ${invoice._id} chưa từng khấu trừ tồn kho (Trạng thái trừ kho: ${invoice.stockDeductionStatus}). Bỏ qua hoàn kho để chống tạo tồn kho ma.`);
+      } else {
+        try {
+          const bulkOps = [];
+        let quarantinedCount = 0;
+        let restockedCount = 0;
+
         for (const item of targetDrugItems) {
           const qty = item.refundQuantity || item.quantity;
+          const isPhysicallyDispensed = item.dispenseStatus === 'DISPENSED' || invoice.dispenseStatus === 'DISPENSED';
+
           if (item.drugId) {
-            // Chuẩn hóa Enterprise: Trực tiếp hoàn kho bằng Foreign Key drugId (Chính xác 100% SKU, không phụ thuộc chuỗi văn bản)
-            bulkOps.push({
-              updateOne: {
-                filter: { _id: item.drugId, hospitalId: invoice.hospitalId },
-                update: {
-                  $inc: { "stock.quantity": qty },
-                  $set: { "stock.lastUpdated": new Date() },
-                  $push: {
-                    stockMovements: {
-                      type: "refund",
-                      quantity: qty,
-                      invoiceId: invoice._id,
-                      performedBy: req.user.id,
-                      reason: refundReason || "Hoàn tiền đơn thuốc",
-                      timestamp: new Date()
+            if (isPhysicallyDispensed) {
+              // Quy chế Dược Bệnh viện (Thông tư 22/2011/TT-BYT & GPP):
+              // Thuốc đã xuất vật lý ra khỏi quầy dược cho người bệnh TUYỆT ĐỐI KHÔNG hoàn lại kho cấp phát chính!
+              // Tự động chuyển vào Kho Biệt Trữ / Cách Ly (quarantineStock) chờ kiểm định hoặc tiêu hủy.
+              quarantinedCount++;
+              bulkOps.push({
+                updateOne: {
+                  filter: { _id: item.drugId, hospitalId: invoice.hospitalId },
+                  update: {
+                    $inc: { "quarantineStock.quantity": qty },
+                    $set: { "stock.lastUpdated": new Date() },
+                    $push: {
+                      stockMovements: {
+                        type: "return_quarantine",
+                        quantity: qty,
+                        invoiceId: invoice._id,
+                        performedBy: req.user.id,
+                        reason: `[Quy chế Dược] Thuốc đã xuất vật lý cho người bệnh - Đưa vào Kho Biệt Trữ kiểm định tiêu hủy: ${refundReason || 'Hoàn tiền trả thuốc'}`,
+                        timestamp: new Date()
+                      }
                     }
                   }
                 }
-              }
-            });
+              });
+            } else {
+              // Thuốc chưa xuất kho vật lý (bệnh nhân hủy thanh toán trước khi quầy dược phát thuốc) -> Hoàn lại kho cấp phát an toàn
+              restockedCount++;
+              bulkOps.push({
+                updateOne: {
+                  filter: { _id: item.drugId, hospitalId: invoice.hospitalId },
+                  update: {
+                    $inc: { "stock.quantity": qty },
+                    $set: { "stock.lastUpdated": new Date() },
+                    $push: {
+                      stockMovements: {
+                        type: "cancel_restock",
+                        quantity: qty,
+                        invoiceId: invoice._id,
+                        performedBy: req.user.id,
+                        reason: `[Hủy trước khi phát thuốc] Hoàn kho cấp phát chính: ${refundReason || 'Hủy đơn thuốc'}`,
+                        timestamp: new Date()
+                      }
+                    }
+                  }
+                }
+              });
+            }
           } else {
             // Fallback an toàn cho các hóa đơn cũ lưu dạng text description
             console.warn(`[LEGACY_REFUND_MIGRATION_WARN] Invoice ${invoice._id} item '${item.description}' using regex fallback. Migration deadline: 2026-12-31.`);
@@ -1097,23 +1458,24 @@ export const refundInvoice = async (req, res) => {
 
         if (bulkOps.length > 0) {
           await Drug.bulkWrite(bulkOps);
-          console.log(`[RefundInvoice] Đã hoàn trả tồn kho cho ${bulkOps.length} loại thuốc của hóa đơn ${invoice._id}`);
+          console.log(`[RefundInvoice] Đã xử lý tồn kho (${restockedCount} hoàn kho chính, ${quarantinedCount} đưa vào kho biệt trữ) cho hóa đơn ${invoice._id}`);
           
           try {
             await recordAuditLog({
-              action: AUDIT_ACTIONS.STOCK_RESTOCKED,
+              action: quarantinedCount > 0 ? "STOCK_QUARANTINED" : AUDIT_ACTIONS.STOCK_RESTOCKED,
               entity: "Drug",
               entityId: invoice._id,
               performedBy: req.user.id,
               hospitalId: req.user.hospitalId,
-              details: `Hoàn kho thành công ${bulkOps.length} loại thuốc từ hóa đơn ${invoice._id}`
+              details: `Xử lý hoàn tiền dược phẩm: ${restockedCount} loại thuốc chưa xuất vật lý hoàn kho chính, ${quarantinedCount} loại thuốc đã xuất vật lý đưa vào Kho Biệt Trữ kiểm định tiêu hủy theo quy chế GPP.`
             });
           } catch (stockLogErr) {
             console.warn("[Stock AuditLog Warn]", stockLogErr.message);
           }
         }
-      } catch (stockErr) {
-        console.error("⚠️ Lỗi hoàn trả kho thuốc khi refundInvoice:", stockErr);
+        } catch (stockErr) {
+          console.error("⚠️ Lỗi hoàn trả kho thuốc khi refundInvoice:", stockErr);
+        }
       }
     }
 

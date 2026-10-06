@@ -183,8 +183,9 @@ const ResponsiveLayout = ({
       case 'doctor':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Hàng chờ Khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Hàng đợi Khám & Đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
+          { label: 'Khám bệnh Lâm sàng', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Chụp & Đọc phim MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
           { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
@@ -215,6 +216,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
+          { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Lịch làm việc Lễ tân', route: 'StaffScheduling', icon: Calendar },

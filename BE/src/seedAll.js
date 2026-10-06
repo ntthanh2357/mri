@@ -237,7 +237,7 @@ const seedComprehensiveDatabase = async () => {
           hospitalId: hospital._id,
           departmentId: "KUTN-SURG",
           isVerified: true,
-          profile: { name: "TS.BS.CKII Nguyễn Gia Huy (Trưởng khoa Ngoại Thần Kinh)", medicalId: "BS-001", address: "Hà Nội", specialty: "neurosurgeon" },
+          profile: { name: "TS.BS.CKII Nguyễn Gia Huy (Bác sĩ Khám Lâm Sàng & Đọc Phim CĐHA)", medicalId: "BS-001", address: "Hà Nội", specialty: "neurosurgeon_radiologist" },
         },
         {
           email: "doctor2@neuroscan.com",

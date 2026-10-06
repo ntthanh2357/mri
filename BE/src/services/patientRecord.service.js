@@ -3,6 +3,7 @@ import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
 import { uploadToGCS } from "../config/gcs.js";
 import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
+import storageService from "./storage/storageService.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
 
 export const getOrCreateProfile = async (userId) => {
@@ -355,14 +356,34 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
   const user = await User.findById(userId).lean();
   const patientName = user?.profile?.name || "Bệnh nhân";
 
-  let fileUrl;
+  // 1. Lưu bản chính vào Local-First Hybrid Storage (Tự động tính SHA-256 & sync Drive ngầm)
+  let savedStorage = null;
+  let fileUrl = "";
   try {
-    const patientFolder = await getOrCreatePatientFolder(userId, patientName);
-    const driveResult = await uploadToDrive(fileBuffer, originalName, mimeType, patientFolder.id);
-    fileUrl = driveResult.downloadUrl;
-  } catch (driveErr) {
-    console.warn("⚠️ Google Drive upload failed, falling back to GCS:", driveErr.message);
-    fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
+    savedStorage = await storageService.put({
+      category: "patient_upload",
+      studyId: visitId.toString(),
+      fileName: originalName,
+      buffer: fileBuffer,
+      mimeType,
+      patientId: userId,
+      uploadedBy: userId,
+    });
+    fileUrl = `/api/v1/storage/files/${savedStorage.fileId}`;
+  } catch (storageErr) {
+    console.warn("⚠️ [Hybrid Storage] Lỗi lưu patient_upload:", storageErr.message);
+  }
+
+  // 2. Fallback legacy Google Drive / GCS nếu Local-First thất bại
+  if (!fileUrl) {
+    try {
+      const patientFolder = await getOrCreatePatientFolder(userId, patientName);
+      const driveResult = await uploadToDrive(fileBuffer, originalName, mimeType, patientFolder.id);
+      fileUrl = driveResult.downloadUrl;
+    } catch (driveErr) {
+      console.warn("⚠️ Google Drive upload failed, falling back to GCS:", driveErr.message);
+      fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
+    }
   }
 
   visit.documents.push({
@@ -371,6 +392,8 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
     label,
     storageType: "upload",
     fileUrl,
+    fileId: savedStorage?.fileId || null,
+    sha256: savedStorage?.sha256 || null,
     fileName: originalName,
     fileType: mimeType,
     uploadedAt: new Date(),

@@ -11,7 +11,8 @@ import {
   approveImagingResultAI,
   explainImagingResultAI,
   getAllImagingResults,
-  updateImagingResult
+  updateImagingResult,
+  getImagingResultByVisitId
 } from "./imaging.controller.js";
 import { protect } from "../../middlewares/auth.middleware.js";
 import { uploadImagingFile } from "../../middlewares/imagingUpload.middleware.js";
@@ -41,6 +42,9 @@ router.post("/approve-ai", protect, approveImagingResultAI);
 
 // Explain imaging result in simple, Hippocratic terms for patient (Requires login)
 router.post("/:id/explain-ai", protect, explainImagingResultAI);
+
+// Get imaging results by visit ID
+router.get("/by-visit/:visitId", protect, getImagingResultByVisitId);
 
 // Get imaging results by patient User ID (ObjectId) - fallback for patients without medicalId
 router.get("/by-patient/:patientId", protect, getResultsByPatientUserId);

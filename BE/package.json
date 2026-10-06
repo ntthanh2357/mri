@@ -10,7 +10,10 @@
     "test": "node src/tests/test_runner.js",
     "test:security": "node src/tests/security_audit.test.js",
     "test:all": "node src/tests/run_all_tests.js",
-    "test:coverage": "c8 --reporter=text --reporter=html node src/tests/run_all_tests.js"
+    "test:coverage": "c8 --reporter=text --reporter=html node src/tests/run_all_tests.js",
+    "storage:verify": "node scripts/verifyStorage.js",
+    "db:backup": "node scripts/backupDatabase.js",
+    "dataset:import": "node scripts/importTamTriDataset.js"
   },
   "type": "module",
   "dependencies": {
