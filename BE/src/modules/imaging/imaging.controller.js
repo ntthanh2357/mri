@@ -118,9 +118,26 @@ export const createImagingResult = async (req, res) => {
       return errorResponse(res, "Vui lòng nhập đầy đủ các trường bắt buộc.", 400);
     }
 
+    // [BUG-KTV-06 FIX]: Tự động khớp lượt khám đang hoạt động nếu visitId không được gửi lên
+    let effectiveVisitId = visitId;
+    if (!effectiveVisitId && medicalId) {
+      const patientUser = await User.findOne({ "profile.medicalId": medicalId });
+      if (patientUser) {
+        const activeVisit = await Visit.findOne({
+          hospitalId: req.user.hospitalId,
+          patientId: patientUser._id,
+          status: { $in: ["đang chụp", "chờ chụp", "chờ chụp lại", "chờ kết quả AI", "chờ bác sĩ đọc", "đang khám"] }
+        }).sort({ createdAt: -1 });
+        if (activeVisit) {
+          effectiveVisitId = activeVisit._id;
+        }
+      }
+    }
+
     // 3. Create record
     const newResult = new ImagingResult({
       hospitalId: req.user.hospitalId,
+      visitId: effectiveVisitId || null,
       medicalId,
       patientName,
       birthYear,
@@ -147,9 +164,10 @@ export const createImagingResult = async (req, res) => {
 
     await newResult.save();
 
-    if (visitId) {
-      const visit = await Visit.findById(visitId);
+    if (effectiveVisitId) {
+      const visit = await Visit.findById(effectiveVisitId);
       if (visit) {
+        if (!visit.mriOrder) visit.mriOrder = {};
         visit.mriOrder.imagingResultId = newResult._id;
         visit.status = visit.mriOrder.requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
         await visit.save();
@@ -847,8 +865,8 @@ export const createKtvImagingResult = async (req, res) => {
       ? images
       : (imageUrl ? [imageUrl] : []);
 
-    if (!visitId || !patientId || imageList.length === 0) {
-      return res.status(400).json({ message: "Thiếu thông tin lượt khám, bệnh nhân hoặc đường dẫn hình ảnh." });
+    if (!visitId || imageList.length === 0) {
+      return res.status(400).json({ message: "Thiếu thông tin lượt khám hoặc đường dẫn hình ảnh." });
     }
 
     // Lấy thông tin lượt khám
@@ -857,10 +875,15 @@ export const createKtvImagingResult = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy lượt khám tương ứng." });
     }
 
-    // Lấy thông tin bệnh nhân
-    const patient = await User.findById(patientId);
+    // Lấy thông tin bệnh nhân (hỗ trợ fallback từ visit.patientId)
+    const effectivePatientId = patientId || visit.patientId?._id || visit.patientId;
+    if (!effectivePatientId) {
+      return res.status(400).json({ message: "Không tìm thấy thông tin bệnh nhân trong lượt khám." });
+    }
+
+    const patient = await User.findById(effectivePatientId);
     if (!patient) {
-      return res.status(404).json({ message: "Không tìm thấy bệnh nhân." });
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ người dùng bệnh nhân." });
     }
 
     // Lấy thông tin bác sĩ chỉ định từ visit
@@ -874,6 +897,7 @@ export const createKtvImagingResult = async (req, res) => {
     // Tạo bản ghi ImagingResult mới với các trường bắt buộc
     const imagingResult = new ImagingResult({
       hospitalId: req.user.hospitalId || visit.hospitalId,
+      visitId: visit._id,
       medicalId: patientMedicalId,
       patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
       birthYear: patient.profile?.birthYear || 1990,
@@ -900,7 +924,8 @@ export const createKtvImagingResult = async (req, res) => {
 
     await imagingResult.save();
 
-    // Liên kết với visit và cập nhật trạng thái
+    // Liên kết với visit và cập nhật trạng thái an toàn
+    if (!visit.mriOrder) visit.mriOrder = {};
     visit.mriOrder.imagingResultId = imagingResult._id;
     visit.status = requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
     await visit.save();
@@ -1088,6 +1113,41 @@ export const updateImagingResult = async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi cập nhật kết quả phim chụp:", error);
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Get imaging result by visit ID (Kèm tính năng tự hàn gắn / auto-heal liên kết với Visit)
+// @route   GET /api/v1/imaging/by-visit/:visitId
+// @access  Private (Doctor, Admin, Technician, Nurse)
+export const getImagingResultByVisitId = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    if (!visitId) {
+      return errorResponse(res, "Thiếu ID lượt khám.", 400);
+    }
+
+    let result = await ImagingResult.findOne({ visitId }).sort({ createdAt: -1 });
+    const visit = await Visit.findById(visitId);
+
+    if (!result && visit?.mriOrder?.imagingResultId) {
+      result = await ImagingResult.findById(visit.mriOrder.imagingResultId);
+    }
+
+    if (!result) {
+      return errorResponse(res, "Không tìm thấy kết quả phim chụp cho lượt khám này.", 404);
+    }
+
+    // Auto-heal: Đồng bộ liên kết nếu visit.mriOrder.imagingResultId bị thiếu
+    if (visit && (!visit.mriOrder?.imagingResultId || visit.mriOrder.imagingResultId.toString() !== result._id.toString())) {
+      if (!visit.mriOrder) visit.mriOrder = {};
+      visit.mriOrder.imagingResultId = result._id;
+      await visit.save();
+    }
+
+    return successResponse(res, result, "Lấy thông tin phim chụp theo lượt khám thành công.");
+  } catch (error) {
+    console.error("Lỗi khi lấy phim theo visitId:", error);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", 500);
   }
 };
 

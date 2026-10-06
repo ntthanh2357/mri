@@ -170,6 +170,7 @@ async function runAllTests() {
     './clinical_workflow_e2e.test.js',
     './schedule_registration.test.js',
     './emergency_protocol.test.js',
+    './referral_package_email.test.js',
   ];
 
   const startTime = Date.now();

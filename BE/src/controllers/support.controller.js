@@ -108,7 +108,10 @@ export const updateTicketStatus = async (req, res) => {
 // Trả về số liệu thực từ MongoDB, không cần server giám sát phần cứng
 export const getSystemMetrics = async (req, res) => {
   try {
-    const hospitalId = req.user.hospitalId;
+    // [BUG-SA-06 FIX]: system_admin hoặc admin tổng không bị ép theo hospitalId null
+    const isSystemAdmin = req.user.role === 'system_admin' || (req.user.role === 'admin' && !req.user.hospitalId);
+    const hospitalFilter = (!isSystemAdmin && req.user.hospitalId) ? { hospitalId: req.user.hospitalId } : {};
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -123,28 +126,28 @@ export const getSystemMetrics = async (req, res) => {
       pendingLabsCount,
     ] = await Promise.all([
       Visit.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         createdAt: { $gte: today },
       }),
       Visit.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         createdAt: { $gte: thisMonth },
       }),
       User.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         isLocked: false,
         role: { $in: ["doctor", "nurse", "technician", "receptionist"] },
       }),
       SupportTicket.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         status: "open",
       }),
       ImagingResult.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         createdAt: { $gte: today },
       }).catch(() => 0),
       LabOrder.countDocuments({
-        hospitalId,
+        ...hospitalFilter,
         status: "PENDING",
       }).catch(() => 0),
     ]);

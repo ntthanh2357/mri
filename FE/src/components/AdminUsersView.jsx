@@ -109,6 +109,8 @@ function getDepartmentLabel(deptId) {
 // Human-readable specialty label
 function getSpecialtyLabel(spec) {
   switch (spec) {
+    case 'neurosurgeon_radiologist':
+      return 'Khám Lâm Sàng & Đọc Phim CĐHA';
     case 'neurosurgeon':
       return 'Phẫu thuật Thần kinh U Não';
     case 'neuro_oncologist':

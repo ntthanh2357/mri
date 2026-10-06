@@ -861,7 +861,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
             {/* Doctor Signature */}
             <View style={styles.signatureSection}>
               <Text style={styles.signDate}>Đà Nẵng, {formatDate(result.reportDate)}</Text>
-              <Text style={styles.signTitle}>BÁC SĨ CHUYÊN KHOA CĐHA</Text>
+              <Text style={styles.signTitle}>BÁC SĨ ĐIỀU TRỊ & CHẨN ĐOÁN HÌNH ẢNH</Text>
               
               {/* Digitally Signed Stamp Component */}
               <DigitalSignatureBadge

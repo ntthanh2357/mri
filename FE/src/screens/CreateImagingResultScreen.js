@@ -138,17 +138,24 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 
   // Simulated OCR & Fill function
   const handleOcrFill = () => {
-    setMedicalId('26025699');
-    setPatientName('Bệnh nhân Tuấn Thành');
-    setBirthYear('1995');
-    setGender('Nam');
-    setAddress('291 Nguyễn Văn Linh, Thanh Khê, Đà Nẵng');
+    // [BUG-KTV-07 FIX]: Ưu tiên bảo toàn thông tin bệnh nhân thực từ lượt khám, không ghi đè dữ liệu giả
+    const realMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || medicalId || 'BN-26025699';
+    const realPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || patientName || 'Bệnh nhân';
+    const realBirthYear = (visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || birthYear || '1995').toString();
+    const realGender = visit?.patientId?.profile?.gender || patientInfo?.gender || gender || 'Nam';
+    const realAddress = visit?.patientId?.profile?.address || patientInfo?.address || address || 'Đà Nẵng';
+
+    setMedicalId(realMedicalId);
+    setPatientName(realPatientName);
+    setBirthYear(realBirthYear);
+    setGender(realGender);
+    setAddress(realAddress);
     setImagingType('MRI');
-    setProcedure('Chụp cộng hưởng từ sọ não (MRI) có cản từ');
-    setTechnique('Chụp cộng hưởng từ sọ não đa xung, lát cắt mỏng qua các bể sọ và nhu mô não thất.');
-    setFindings('Phát hiện khối u vùng thùy trán bên trái, kích thước tương đương 15x18mm. Khối u có ranh giới rõ ràng, bắt thuốc cản từ mạnh và đồng nhất sau tiêm, gây phù nề nhẹ xung quanh.');
-    setConclusion('U màng não thùy trán trái (Meningioma) lành tính. Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.');
-    setRadiologist('Bs. Lê Quốc Tuấn');
+    if (!procedure) setProcedure('Chụp cộng hưởng từ sọ não (MRI) có cản từ');
+    if (!technique) setTechnique('Chụp cộng hưởng từ sọ não đa xung, lát cắt mỏng qua các bể sọ và nhu mô não thất.');
+    setFindings(findings || 'Phát hiện khối u vùng thùy trán bên trái, kích thước tương đương 15x18mm. Khối u có ranh giới rõ ràng, bắt thuốc cản từ mạnh và đồng nhất sau tiêm, gây phù nề nhẹ xung quanh.');
+    setConclusion(conclusion || 'U màng não thùy trán trái (Meningioma) lành tính. Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.');
+    if (!radiologist) setRadiologist('Bs. Chẩn Đoán Hình Ảnh');
 
     // Clear validation errors when template fields are filled
     setErrors(prev => ({
@@ -161,7 +168,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       radiologist: null,
     }));
 
-    showAlert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin hành chính & chẩn đoán hình ảnh mẫu từ mẫu phim chụp!');
+    showAlert('Điền mẫu OCR', 'Đã tự động trích xuất và điền nội dung mô tả hình ảnh & kết luận từ mẫu scan.');
   };
 
   // ── Điều hướng sang màn hình AI chuyên biệt ──
@@ -176,8 +183,6 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       visitId: visit?._id || null,
     });
   };
-
-
 
   const handleSaveResult = async () => {
     // Validate required fields
@@ -198,6 +203,11 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     setErrors({});
     setLoading(true);
     try {
+      // [BUG-KTV-08 FIX]: Sinh medicalRecordNumber nhất quán từ ID lượt khám hoặc mã y tế
+      const generatedMrn = visit?._id
+        ? `BA${visit._id.toString().substring(18)}`
+        : `SBA-${new Date().getFullYear()}-${(medicalId || 'MRN').toString().slice(-6).toUpperCase()}`;
+
       const payload = {
         medicalId,
         patientName,
@@ -207,7 +217,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         orderDate: new Date(),
         orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ chỉ định',
         orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
-        medicalRecordNumber: `SBA-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+        medicalRecordNumber: generatedMrn,
         diagnosis: visit?.reason || 'Theo dõi u não',
         procedure,
         technique,

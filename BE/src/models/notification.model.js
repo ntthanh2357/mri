@@ -21,7 +21,7 @@ const notificationSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ["new_visit", "mri_order", "ai_ready", "low_stock", "stock_shortage", "announcement", "swap_request", "system_alert", "other"],
+      enum: ["new_visit", "mri_order", "ai_ready", "low_stock", "stock_shortage", "announcement", "swap_request", "system_alert", "transfer_draft", "transfer_sent", "transfer_incoming", "transfer_accepted", "other"],
       default: "other",
     },
     title: {

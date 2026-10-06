@@ -533,7 +533,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSaveTransferForm = async () => {
+  const handleSaveTransferForm = async (extraData = {}) => {
     if (!transferTo || !transferDiagnosis) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập nơi chuyển tuyến đến và chẩn đoán bệnh.');
       return;
@@ -542,9 +542,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
     setIsSavingTransfer(true);
     try {
       const targetPatientId = patient?._id;
+      const isSmart = extraData.isSmartPackage !== false; // Mặc định là gói chuyển viện thông minh
+
       const body = {
-        doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
-        transferNo: transferNo || `CT-${Math.floor(1000 + Math.random() * 9000)}`,
+        patient_id: targetPatientId,
+        doctor_name: currentUser?.profile?.name || currentUser?.name || "Bác sĩ điều trị",
+        transferNo: transferNo || `CV-${Math.floor(100000 + Math.random() * 900000)}`,
         hospitalNo: transferHospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
         transferTo,
         dateIn,
@@ -561,11 +564,22 @@ const PatientDetailScreen = ({ route, navigation }) => {
         transferTime: new Date(),
         isOneYearValid: transferOneYearValid,
         transportation: transferTransportation,
-        escort: transferEscort
+        escort: transferEscort,
+        // Dành riêng cho gói chuyển viện số (DICOM, AI Report, 3D Mesh)
+        imagingResultId: extraData.imagingResultId || undefined,
+        recipientEmail: extraData.recipientEmail || patient?.email || patient?.profile?.email || "",
       };
 
-      await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
-      Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      if (isSmart) {
+        await post('/api/v1/transfers', body);
+        Alert.alert(
+          'Khởi tạo Gói Chuyển Viện Thành Công (UC-DOC-10)',
+          'Hệ thống đã tự động đóng gói file DICOM nén, Báo cáo AI u não và Mô hình 3D khối u, đồng thời chuyển hồ sơ sang bàn Lễ tân để gửi email điện tử cho bệnh nhân!'
+        );
+      } else {
+        await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
+        Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      }
       
       // Reset form
       setTransferNo('');
@@ -1291,6 +1305,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               handleSaveTransferForm={handleSaveTransferForm}
               isSavingTransfer={isSavingTransfer}
               labOrders={labOrders}
+              imagingResults={imagingResults}
             />
           )}
 
