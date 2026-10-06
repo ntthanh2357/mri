@@ -53,23 +53,6 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
-    isPremium: {
-      type: Boolean,
-      default: false,
-    },
-    premiumUntil: {
-      type: Date,
-      default: null,
-    },
-    autoRenew: {
-      type: Boolean,
-      default: true,
-    },
-    // [BUG-07 FIX] Flag để tránh gửi email nhắc gia hạn Premium lặp vô hạn
-    renewalReminderSent: {
-      type: Boolean,
-      default: false,
-    },
     otpCode: {
       type: String,
       default: null,

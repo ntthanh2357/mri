@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import ResponsiveLayout from "../components/ResponsiveLayout";
 import Colors from "../constants/colors";
+import PatientSafetyStrip from "../components/staff/PatientSafetyStrip";
 import { get, post, put } from "../services/api.service";
 import safeStorage from "../utils/safeStorage.js";
 import {
@@ -473,6 +474,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+          <PatientSafetyStrip patientId={patient._id} />
 
           {/* ───────────────────────────────────────────────────────────────────
               1. TAB INFO (Thông Tin Bệnh Nhân)

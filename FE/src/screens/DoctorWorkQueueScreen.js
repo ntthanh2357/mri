@@ -11,6 +11,8 @@ import Colors from '../constants/colors';
 import MriSafetyCheckModal from '../components/MriSafetyCheckModal';
 import MriRescanModal from '../components/MriRescanModal';
 import MriCancelModal from '../components/MriCancelModal';
+import ContrastConsentReview from '../components/staff/ContrastConsentReview';
+import { consentStatus } from '../utils/signature';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
@@ -104,6 +106,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [region, setRegion] = useState('');
   const [instructions, setInstructions] = useState('');
   const [requestAi, setRequestAi] = useState(true);
+  const [withContrast, setWithContrast] = useState(false);
+  const [consentVisit, setConsentVisit] = useState(null); // UC-PAT-06: ca đang xem phiếu cản quang
   const [mriLoading, setMriLoading] = useState(false);
 
   // Upload modal state
@@ -233,6 +237,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     setRegion('Não bộ');
     setInstructions('');
     setRequestAi(true);
+    setWithContrast(false);
     setMriModal(true);
   };
 
@@ -255,8 +260,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         region,
         instructions,
         requestAiAnalysis: requestAi,
+        withContrast,
       });
-      Alert.alert('Thành công', `Đã ra y lệnh chụp MRI và phân công KTV thực hiện.`);
+      Alert.alert('Thành công', withContrast
+        ? 'Đã ra y lệnh chụp MRI. Bệnh nhân sẽ nhận phiếu đồng thuận tiêm cản quang trên ứng dụng.'
+        : `Đã ra y lệnh chụp MRI và phân công KTV thực hiện.`);
       setMriModal(false);
       fetchData();
     } catch (err) {
@@ -301,7 +309,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         passed: true,
       });
 
-      if (res && res.success) {
+      if (res && res.success && res.contrastConsentPending) {
+        const msg = 'Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp.';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('Đã lưu bảng kiểm', msg);
+        setSafetyModal(false);
+        fetchData();
+      } else if (res && res.success) {
         if (Platform.OS === 'web') alert('Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
         else Alert.alert('An toàn đạt chuẩn', 'Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
         setSafetyModal(false);
@@ -381,6 +394,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   };
 
   const handleStartScan = async (visit) => {
+    // UC-PAT-06: tiêm cản quang mà bệnh nhân chưa ký phiếu → chưa cho bắt đầu chụp (BE cũng chặn)
+    if (visit.mriOrder?.withContrast && !visit.contrastConsent?.patientSigned) {
+      const msg = 'Bệnh nhân chưa ký phiếu đồng thuận tiêm thuốc cản quang trên ứng dụng. Mở "Phiếu cản quang" để xem trạng thái.';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Chưa thể bắt đầu chụp', msg);
+      return;
+    }
     // [THỰC TẾ BV: NGHỊCH LÝ 3] Nếu chưa qua bảng kiểm an toàn MRI, bắt buộc kiểm tra trước
     if (!visit.mriSafetyChecklist?.isScreened || !visit.mriSafetyChecklist?.passed) {
       openSafetyModal(visit);
@@ -639,6 +659,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     if (v.mriSafetyChecklist?.isScreened) return { tone: 'danger', icon: XCircle, label: 'Chống chỉ định MRI' };
     return null;
   };
+  const CONSENT_FLAG = {
+    checklist: { tone: 'info', icon: Clock, label: 'Cản quang: chờ trả lời' },
+    blocked: { tone: 'warning', icon: AlertTriangle, label: 'Cản quang: chờ duyệt' },
+    ready: { tone: 'info', icon: Clock, label: 'Cản quang: chờ ký' },
+    signed: { tone: 'success', icon: CheckCircle2, label: 'Cản quang: đã ký' },
+  };
+  const consentFlagOf = (v) => (v.mriOrder?.withContrast ? CONSENT_FLAG[consentStatus(v.contrastConsent || {}).key] : null);
   const fmtWhen = (d) => {
     const t = new Date(d);
     const sameDay = t.toDateString() === new Date().toDateString();
@@ -715,7 +742,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     if (!isNurse && v.status === 'đang khám') list.push({ key: 'exam', variant: 'primary', icon: Pill, label: 'Khám & kê đơn', onPress: () => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id }) });
     if (isDoctor && canOrderMri) list.push({ key: 'mri', variant: 'secondary', icon: Scan, label: 'Ra y lệnh MRI', onPress: () => openMriModal(v) });
     if (!isNurse && v.status === 'đang khám') list.push({ key: 'finish', variant: 'secondary', icon: CheckCircle2, label: 'Kết thúc khám', onPress: () => finishExam(v) });
-    if ((isTechnician || isDoctor) && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
+    if ((isTechnician || isDoctor) && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
     if ((isTechnician || isDoctor) && canUploadMri) list.push({ key: 'upload', variant: 'primary', icon: Upload, label: 'Nộp ảnh phim', onPress: () => openUploadModal(v) });
     if (!isNurse && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
     if (isNurse && v.status === 'đang chờ') list.push({ key: 'vitals', variant: 'primary', icon: Activity, label: 'Nhập sinh hiệu', onPress: () => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } }) });
@@ -723,6 +750,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       list.push({ key: 'rescan', variant: 'secondary', icon: RotateCcw, label: 'Chụp lại', onPress: () => openRescanModal(v) });
       list.push({ key: 'cancel', variant: 'danger', icon: XCircle, label: 'Hủy ca', onPress: () => openCancelModal(v) });
     }
+    if ((isTechnician || isDoctor) && v.mriOrder?.withContrast) list.push({ key: 'consent', variant: 'secondary', icon: FileText, label: 'Phiếu cản quang', onPress: () => setConsentVisit(v) });
     if (isDoctor) list.push({ key: 'emergency', variant: 'danger', icon: Flame, label: 'Chuyển cấp cứu', onPress: () => openEmergencyModal(v) });
     return list;
   };
@@ -800,6 +828,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     const mri = Boolean(v.mriOrder?.region);
     const fee = mri ? feeFlagOf(v) : isEmergency(v) ? { tone: 'danger', icon: Flame, label: 'Cấp cứu' } : null;
     const safety = mri ? safetyFlagOf(v) : null;
+    const consent = mri ? consentFlagOf(v) : null;
     return (
       <View key={v._id} style={[styles.tr, styles.trBody, activeTab === 'queue' && isEmergency(v) && styles.trUrgent, menuFor === v._id && styles.trMenuOpen]}>
         <Text style={[styles.cellNo, styles.colNo]}>{i + 1}</Text>
@@ -811,6 +840,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           <ClinicalStatusBadge status={v.status} />
           {fee ? <Flag {...fee} /> : null}
           {safety ? <Flag {...safety} /> : null}
+          {consent ? <Flag {...consent} /> : null}
         </View>
         <View style={[styles.colInfo, styles.cellStack]}>
           {mri ? (
@@ -938,6 +968,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             </Text>
           </View>
         )}
+        {consentFlagOf(v) ? <View style={styles.cardFlags}><Flag {...consentFlagOf(v)} /></View> : null}
 
         {/* Nurse info */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1094,6 +1125,17 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Cpu size={14} color={Colors.brandGreen} strokeWidth={2.2} />
                 <Text style={styles.aiToggleText}>Yêu cầu AI phân tích kết quả sau khi chụp</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* UC-PAT-06: tiêm cản quang → bệnh nhân ký phiếu đồng thuận trên app */}
+            <TouchableOpacity style={styles.aiToggleRow} onPress={() => setWithContrast(v => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: withContrast }}>
+              <View style={[styles.checkbox, withContrast && styles.checkboxChecked]}>
+                {withContrast && <CheckCircle2 size={13} color="#FFFFFF" />}
+              </View>
+              <View style={styles.contrastToggleBody}>
+                <Text style={styles.aiToggleText}>Có tiêm thuốc cản quang Gadolinium</Text>
+                <Text style={styles.contrastToggleHint}>Bệnh nhân trả lời sàng lọc và ký phiếu đồng thuận trên ứng dụng.</Text>
               </View>
             </TouchableOpacity>
 
@@ -1408,6 +1450,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       />
 
       {/* ── [THỰC TẾ BV: NGHỊCH LÝ 4] MODAL HỦY CA CHỤP MRI ───────────────────────── */}
+      <ContrastConsentReview
+        visible={Boolean(consentVisit)}
+        onClose={() => setConsentVisit(null)}
+        consent={consentVisit?.contrastConsent || null}
+        patientName={consentVisit?.patientId?.profile?.name || 'Bệnh nhân'}
+        canOverride={user?.role === 'doctor' || user?.role === 'admin'}
+        onChanged={fetchData}
+      />
+
       <MriCancelModal
         visible={cancelModal}
         onClose={() => setCancelModal(false)}
@@ -1523,6 +1574,8 @@ const styles = StyleSheet.create({
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },
   btnConfirm: { flex: 2, height: 48, borderRadius: 12, backgroundColor: Colors.brandGreen, justifyContent: 'center', alignItems: 'center' },
   btnConfirmText: { fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  contrastToggleBody: { flex: 1, gap: 2 },
+  contrastToggleHint: { fontSize: 13, color: Colors.slateMuted },
 });
 
 export default DoctorWorkQueueScreen;

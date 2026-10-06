@@ -16,6 +16,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
+import { Feather } from '@expo/vector-icons';
+import QueueDesk from '../components/staff/QueueDesk';
+import { useQueueDesk } from '../controllers/useQueueDesk';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import { PlusCircle, ClipboardList, CreditCard, ShieldCheck, Search, Sparkles, CheckCircle2, ChevronRight, Clock } from 'lucide-react';
@@ -48,7 +51,17 @@ const InvoiceStatus = ({ status }) => {
 };
 
 const NurseReceptionScreen = ({ route, navigation }) => {
-  const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'myQueue' | 'billing'
+  const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'callQueue' | 'myQueue' | 'billing'
+  // UC-PAT-03: số thứ tự bệnh nhân lấy online
+  const queueDesk = useQueueDesk();
+  const queueWaiting = queueDesk.tickets.filter((t) => ['waiting', 'arrived', 'missed'].includes(t.status)).length;
+  // Tiếp nhận số → sang form tạo lượt khám, chọn sẵn bệnh nhân (kể cả khi danh sách bệnh nhân chưa có người này)
+  const serveFromQueue = (patient) => {
+    if (!patient?._id) return;
+    setPatients((prev) => (prev.some((p) => p._id === patient._id) ? prev : [patient, ...prev]));
+    setSelectedPatientId(patient._id);
+    setActiveTab('createVisit');
+  };
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
   const { width } = useWindowDimensions();
@@ -89,6 +102,42 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [bhytHasTransferForm, setBhytHasTransferForm] = useState(false);
   const [savingBhyt, setSavingBhyt] = useState(false);
   const [applyingBhytId, setApplyingBhytId] = useState(null);
+  // UC-PAT-02 — thẻ BHYT bệnh nhân tự khai trên app, lễ tân đối chiếu thẻ thật rồi xác nhận
+  const [declared, setDeclared] = useState({ loading: false, data: null });
+
+  const openBhytModal = async () => {
+    setShowBhytModal(true);
+    setDeclared({ loading: true, data: null });
+    try {
+      const res = await get(`/api/v1/patient/profile/identity?patientId=${selectedPatientId}`);
+      setDeclared({ loading: false, data: res?.data?.bhyt?.cardNumber ? res.data : null });
+    } catch (err) {
+      console.error('Lỗi tải thẻ BHYT tự khai:', err);
+      setDeclared({ loading: false, data: null });
+    }
+  };
+
+  const fillFromDeclared = () => {
+    const b = declared.data?.bhyt;
+    if (!b) return;
+    setBhytCardNumber(b.cardNumber || '');
+    if (b.registrationPlace) setBhytRegistrationPlace(b.registrationPlace);
+    if (b.expiresAt) setBhytExpiryDate(String(b.expiresAt).slice(0, 10));
+  };
+
+  /** Sau khi lưu thẻ thật: khớp số thẻ tự khai → xác nhận; khác → báo bệnh nhân thông tin chưa đúng. */
+  const reviewDeclaredCard = async (savedCard) => {
+    const b = declared.data?.bhyt;
+    if (!b?.cardNumber || b.status === 'verified') return '';
+    const action = b.cardNumber === savedCard ? 'verify' : 'reject';
+    try {
+      await put(`/api/v1/patient/profile/identity/bhyt-review?patientId=${selectedPatientId}`, { action });
+      return action === 'verify' ? ' Đã xác nhận thẻ bệnh nhân tự khai.' : ' Số thẻ bệnh nhân tự khai không khớp, đã báo bệnh nhân kiểm tra lại.';
+    } catch (err) {
+      console.error('Lỗi xác nhận thẻ tự khai:', err);
+      return '';
+    }
+  };
 
   const handleSaveBhyt = async () => {
     if (!selectedPatientId) {
@@ -111,7 +160,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
         hasTransferForm: bhytHasTransferForm,
       });
       if (res && res.success) {
-        Alert.alert('Thành công', `Đã lưu và xác thực thẻ BHYT (${bhytCoverageRate}%).`);
+        const reviewNote = await reviewDeclaredCard(bhytCardNumber.trim().toUpperCase());
+        Alert.alert('Thành công', `Đã lưu và xác thực thẻ BHYT (${bhytCoverageRate}%).${reviewNote}`);
         setShowBhytModal(false);
       } else {
         Alert.alert('Lỗi', res.message || 'Không thể lưu BHYT.');
@@ -370,6 +420,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             <PageTabs
               tabs={[
                 { key: 'createVisit', label: 'Tạo lượt khám' },
+                { key: 'callQueue', label: 'Gọi số', count: queueWaiting || null },
                 { key: 'myQueue', label: 'Hôm nay', count: visits.length || null },
                 { key: 'billing', label: 'Thu ngân', count: pendingInvoicesCount || null },
               ]}
@@ -400,7 +451,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                           Alert.alert('Thông báo', 'Vui lòng bấm chọn 1 bệnh nhân trong danh sách trước khi khai báo thẻ BHYT.');
                           return;
                         }
-                        setShowBhytModal(true);
+                        openBhytModal();
                       }}
                     >
                       <ShieldCheck size={14} color={Colors.brandGreen} strokeWidth={2.2} />
@@ -514,6 +565,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                 </View>
               </View>
             )}
+
+            {activeTab === 'callQueue' && <QueueDesk desk={queueDesk} onServe={serveFromQueue} />}
 
             {activeTab === 'myQueue' && (
               visits.length === 0 ? (
@@ -666,6 +719,25 @@ const NurseReceptionScreen = ({ route, navigation }) => {
               <Text style={styles.modalSub}>
                 Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patients.find(p => p._id === selectedPatientId)?.profile?.name || 'Đã chọn'}</Text>
               </Text>
+
+              {declared.loading ? (
+                <Text style={styles.declaredHint}>Đang kiểm tra thẻ bệnh nhân tự khai…</Text>
+              ) : declared.data ? (
+                <View style={styles.declaredBox}>
+                  <View style={styles.declaredHead}>
+                    <Feather name="smartphone" size={15} color={Colors.infoText} />
+                    <Text style={styles.declaredTitle}>
+                      {declared.data.bhyt.status === 'verified' ? 'Bệnh nhân tự khai trên app (đã xác nhận)' : 'Bệnh nhân tự khai trên app, cần đối chiếu thẻ thật'}
+                    </Text>
+                  </View>
+                  <Text style={styles.declaredLine}>Mã thẻ: <Text style={styles.declaredValue}>{declared.data.bhyt.cardNumber}</Text></Text>
+                  {declared.data.bhyt.expiresAt ? <Text style={styles.declaredLine}>Hạn: <Text style={styles.declaredValue}>{new Date(declared.data.bhyt.expiresAt).toLocaleDateString('vi-VN')}</Text></Text> : null}
+                  {declared.data.bhyt.registrationPlace ? <Text style={styles.declaredLine}>Nơi ĐK KCB: <Text style={styles.declaredValue}>{declared.data.bhyt.registrationPlace}</Text></Text> : null}
+                  <TouchableOpacity style={styles.declaredBtn} onPress={fillFromDeclared} accessibilityRole="button">
+                    <Text style={styles.declaredBtnText}>Điền theo thông tin này</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               <Text style={styles.fieldLabel}>Mã số thẻ BHYT (15 ký tự):</Text>
               <TextInput
@@ -1004,6 +1076,14 @@ const styles = StyleSheet.create({
   payBtnSecondaryText: { color: Colors.brandGreen, fontWeight: '600', fontSize: 14 },
   statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusPillText: { fontSize: 12, fontWeight: '600' },
+  declaredHint: { fontSize: 13, color: Colors.slateMuted, marginBottom: 10 },
+  declaredBox: { backgroundColor: Colors.infoBg, borderRadius: 10, padding: 12, gap: 4, marginBottom: 12 },
+  declaredHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  declaredTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: Colors.infoText },
+  declaredLine: { fontSize: 13, color: Colors.slateMuted },
+  declaredValue: { fontWeight: '600', color: Colors.slateDark, fontVariant: ['tabular-nums'] },
+  declaredBtn: { alignSelf: 'flex-start', marginTop: 6, height: 36, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface, justifyContent: 'center' },
+  declaredBtnText: { fontSize: 13, fontWeight: '600', color: Colors.brandGreen },
 });
 
 export default NurseReceptionScreen;

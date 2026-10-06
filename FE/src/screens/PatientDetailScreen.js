@@ -21,6 +21,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
+import PatientSafetyStrip from '../components/staff/PatientSafetyStrip';
 import {
   Edit2,
   Save,
@@ -1044,6 +1045,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <PageContainer>
+          <PatientSafetyStrip patientId={patientId} />
           {/* 3. Nội dung TAB 1: SINH HIỆU */}
           {activeTab === 'vitals' && (
             <VitalsTab

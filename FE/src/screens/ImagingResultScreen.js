@@ -13,6 +13,7 @@ import {
   Platform,
   Alert,
   TextInput,
+  Linking,
 } from 'react-native';
 import { get, post, put } from '../services/api.service';
 import Config from '../constants/config';
@@ -105,23 +106,17 @@ const ImagingResultScreen = ({ route, navigation }) => {
     setDownloadingPdf(true);
     try {
       const res = await get(`/api/v1/patient-b2c/imaging/${resultId}/report-pdf`);
-      if (res && res.success) {
-        const url = res.data?.pdfUrl;
-        if (url) {
-          if (Platform.OS === 'web') {
-            window.open(url, '_blank');
-          } else {
-            Alert.alert('Tải báo cáo PDF', `Đường dẫn tải file PDF:\n${url}`);
-          }
-        } else {
-          Alert.alert('Thông báo', 'Báo cáo PDF đã được chuẩn bị và sẽ tải về máy của bạn.');
-        }
-      } else {
-        Alert.alert('Lỗi', res.message || 'Chưa thể xuất PDF báo cáo lúc này.');
+      // BE trả link ngắn hạn (pdfPath) hoặc file đã lưu sẵn (pdfUrl)
+      const url = res?.data?.pdfUrl || (res?.data?.pdfPath ? `${Config.API_URL}${res.data.pdfPath}` : null);
+      if (!res?.success || !url) {
+        Alert.alert('Chưa tải được báo cáo', res?.message || 'Chưa thể xuất báo cáo PDF lúc này.');
+        return;
       }
+      if (Platform.OS === 'web') window.open(url, '_blank');
+      else await Linking.openURL(url);
     } catch (err) {
       console.error('Lỗi tải PDF:', err);
-      Alert.alert('Thông báo', 'Yêu cầu xuất PDF đã gửi tới hệ thống bệnh viện.');
+      Alert.alert('Chưa tải được báo cáo', err?.message || 'Chưa thể xuất báo cáo PDF lúc này. Vui lòng thử lại sau.');
     } finally {
       setDownloadingPdf(false);
     }
@@ -415,8 +410,11 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
         <ScrollView contentContainerStyle={[styles.scrollContainer, isDesktop && styles.scrollContainerDesktop]}>
           <FadeIn style={styles.reportSheet}>
+            {!result.isSigned ? (
+              <Text style={styles.actionHint}>Báo cáo PDF sẽ tải được sau khi bác sĩ ký kết quả.</Text>
+            ) : null}
             <View style={styles.actionBar}>
-              <PressableScale style={styles.actionPrimary} hoverStyle={styles.actionPrimaryHover} onPress={handleDownloadPdf} disabled={downloadingPdf}>
+              <PressableScale style={[styles.actionPrimary, !result.isSigned && styles.actionDisabled]} hoverStyle={styles.actionPrimaryHover} onPress={handleDownloadPdf} disabled={downloadingPdf || !result.isSigned} accessibilityHint={result.isSigned ? undefined : 'Báo cáo PDF có sau khi bác sĩ ký kết quả'}>
                 {downloadingPdf ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (

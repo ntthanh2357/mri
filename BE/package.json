@@ -14,6 +14,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@google-cloud/storage": "^5.18.3",
     "@payos/node": "^2.0.5",
     "bcryptjs": "^2.4.3",
@@ -25,7 +26,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.3.4",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.1"
+    "nodemailer": "^9.0.1",
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
     "c8": "^12.0.0",

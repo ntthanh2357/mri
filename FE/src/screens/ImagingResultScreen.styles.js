@@ -64,6 +64,8 @@ export default StyleSheet.create({
     color: Colors.brandNavy,
   },
   actionBar: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  actionDisabled: { opacity: 0.5 },
+  actionHint: { fontSize: 13, color: Colors.slateMuted, textAlign: 'right', marginBottom: 8 },
   actionPrimary: {
     flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, paddingHorizontal: 16, borderRadius: 10,
     backgroundColor: Colors.brandGreen, boxShadow: '0 6px 14px -6px rgba(6, 122, 94, 0.45)',

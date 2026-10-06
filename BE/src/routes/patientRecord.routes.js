@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
 import * as ctrl from "../controllers/patientRecord.controller.js";
+import * as consentCtrl from "../controllers/patientConsent.controller.js";
 
 const router = Router();
 
@@ -23,6 +24,7 @@ const blockPatientWrite = (req, res, next) => {
 // Identity card
 router.get("/profile/identity", ctrl.getIdentity);
 router.put("/profile/identity", ctrl.updateIdentity);
+router.put("/profile/identity/bhyt-review", ctrl.reviewDeclaredBhyt);
 
 // Visits
 router.get("/records", ctrl.listVisits);
@@ -36,8 +38,15 @@ router.post("/records/:visitId/documents/upload", blockPatientWrite, uploadSingl
 router.post("/records/:visitId/documents/manual", blockPatientWrite, ctrl.saveManualDocument);
 router.delete("/records/:visitId/documents/:docId", blockPatientWrite, ctrl.deleteDocument);
 
+// Phiếu đồng thuận tiêm cản quang (UC-PAT-06) — chỉ bệnh nhân, trên phiếu của chính mình
+router.get("/consents", consentCtrl.listMyConsents);
+router.put("/consents/:id/checklist", consentCtrl.submitMyChecklist);
+router.put("/consents/:id/sign", consentCtrl.signMyConsent);
+
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);
+router.get("/reminders/settings", ctrl.getReminderSettings);
+router.put("/reminders/settings", ctrl.updateReminderSettings);
 router.put("/reminders/:id/done", ctrl.markReminderDone);
 router.delete("/reminders/:id", ctrl.skipReminder);
 

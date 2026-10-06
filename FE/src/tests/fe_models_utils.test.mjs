@@ -17,6 +17,8 @@ import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
+import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
+import { strokesToPath, consentStatus } from '../utils/signature.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -310,6 +312,61 @@ it('nextUpVisits keeps only the role\'s active statuses, emergencies first', () 
   ];
   assert.deepStrictEqual(nextUpVisits('technician', visits).map(v => v._id), ['c', 'a']);
   assert.deepStrictEqual(nextUpVisits('receptionist', visits, 2).map(v => v._id), ['c', 'a']);
+});
+
+// ── myHealth: diễn giải chỉ số cho bệnh nhân (màn "Sức khỏe của tôi") ──
+it('bpStatus classifies blood pressure (ACC/AHA) and tolerates missing data', () => {
+  assert.strictEqual(bpStatus({ systolic: 115, diastolic: 75 }).level, 'normal');
+  assert.strictEqual(bpStatus({ systolic: 125, diastolic: 78 }).level, 'elevated');
+  assert.strictEqual(bpStatus({ systolic: 118, diastolic: 85 }).level, 'high');
+  assert.strictEqual(bpStatus({ systolic: 150, diastolic: 95 }).level, 'high');
+  assert.strictEqual(bpStatus(null), null);
+  assert.strictEqual(bpStatus({ systolic: 120 }), null);
+});
+
+it('pulseStatus and spo2Status flag values outside common ranges', () => {
+  assert.strictEqual(pulseStatus(72).level, 'normal');
+  assert.strictEqual(pulseStatus(52).level, 'low');
+  assert.strictEqual(pulseStatus(110).level, 'high');
+  assert.strictEqual(spo2Status(98).level, 'normal');
+  assert.strictEqual(spo2Status(92).level, 'low');
+  assert.strictEqual(spo2Status(undefined), null);
+});
+
+it('labResultFlag and drugSchedule produce patient-friendly text', () => {
+  assert.strictEqual(labResultFlag({ is_abnormal: true, abnormal_direction: 'HIGH' }).label, 'Cao hơn tham chiếu');
+  assert.strictEqual(labResultFlag({ is_abnormal: true, abnormal_direction: 'LOW' }).label, 'Thấp hơn tham chiếu');
+  assert.strictEqual(labResultFlag({ is_abnormal: false }).level, 'normal');
+  assert.strictEqual(drugSchedule({ timesPerDay: 2, durationDays: 7 }), '2 lần/ngày, trong 7 ngày');
+  assert.strictEqual(drugSchedule({}), '');
+});
+
+// ── signature: chữ ký tay + trạng thái phiếu đồng thuận cản quang (UC-PAT-06) ──
+it('strokesToPath scales pad strokes into the 300x120 viewBox and keeps single taps visible', () => {
+  const path = strokesToPath([[{ x: 0, y: 0 }, { x: 600, y: 240 }]], { width: 600, height: 240 });
+  assert.strictEqual(path, 'M0 0 L300 120');
+  assert.ok(strokesToPath([[{ x: 10, y: 10 }]], { width: 300, height: 120 }).includes('L'));
+  assert.strictEqual(strokesToPath([], { width: 300, height: 120 }), '');
+  assert.ok(/^[ML0-9.\s-]+$/.test(strokesToPath([[{ x: 1.234, y: 5.678 }, { x: 9, y: 9 }]], { width: 300, height: 120 })));
+});
+
+it('consentStatus orders the steps: checklist → doctor review → sign → signed', () => {
+  assert.strictEqual(consentStatus({}).key, 'checklist');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', isBlockedByChecklist: true }).key, 'blocked');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', isBlockedByChecklist: true, isDoctorOverridden: true }).key, 'ready');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06' }).key, 'ready');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', patientSigned: true }).key, 'signed');
+  assert.strictEqual(consentStatus(null), null);
+});
+
+// ── UC-PAT-13: nhắc uống thuốc trong app ──
+it('isReminderDue flags pending doses whose time has come, not done/skipped/future ones', () => {
+  const now = new Date(2026, 9, 6, 13, 5);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '13:00' }, now), true);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '13:05' }, now), true);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '20:00' }, now), false);
+  assert.strictEqual(isReminderDue({ status: 'done', time: '08:00' }, now), false);
+  assert.strictEqual(isReminderDue({ status: 'skipped', time: '08:00' }, now), false);
 });
 
 console.log(`\n======================================================================`);

@@ -5,6 +5,7 @@ import Colors from '../../constants/colors';
 import Config from '../../constants/config';
 import PressableScale from '../PressableScale';
 import { usePatientHome } from '../../controllers/usePatientHome';
+import { isReminderDue } from '../../utils/myHealth';
 import { useStaggeredEntrance, useCountUp, useLoop, useDrift, driftStyle, useProgress, enterStyle } from '../../controllers/useMotion';
 
 const greetingFor = (date) => {
@@ -60,7 +61,7 @@ const QuickLink = ({ icon, title, sub, onPress }) => (
 );
 
 const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
-  const { imaging, visitCount, reminders, doneCount, markReminderDone } = usePatientHome();
+  const { imaging, visitCount, reminders, doneCount, markReminderDone, consentsToDo } = usePatientHome();
   const sections = useStaggeredEntrance(5);
   const heroDrift = useDrift(18000);
   const filmScan = useLoop(2600, { pause: 900 });
@@ -106,6 +107,21 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
           <HeroStat value={doneCount} suffix={`/${totalMeds}`} label="thuốc đã uống hôm nay" />
         </View>
       </Animated.View>
+
+      {consentsToDo > 0 ? (
+        <Pressable
+          onPress={() => navigation.navigate('ContrastConsent')}
+          accessibilityRole="button"
+          style={({ hovered }) => [styles.consentCard, hovered && styles.consentCardHover]}
+        >
+          <View style={styles.consentIcon}><Feather name="edit-3" size={18} color={Colors.infoText} /></View>
+          <View style={styles.consentBody}>
+            <Text style={styles.consentTitle}>{consentsToDo > 1 ? `Bạn có ${consentsToDo} phiếu đồng thuận cần ký` : 'Bạn có 1 phiếu đồng thuận cần ký'}</Text>
+            <Text style={styles.consentText}>Bác sĩ chỉ định chụp MRI có tiêm thuốc cản quang. Hãy trả lời vài câu hỏi sàng lọc và ký trước khi đến chụp.</Text>
+          </View>
+          <Text style={styles.consentAction}>Mở phiếu</Text>
+        </Pressable>
+      ) : null}
 
       <View style={[styles.columns, isDesktop && styles.columnsDesktop]}>
         {/* ── Cột chính ── */}
@@ -188,9 +204,6 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
           <Animated.View style={[styles.quickLinks, isDesktop && styles.quickLinksDesktop, enterStyle(sections[2])]}>
             <QuickLink icon="file-text" title="Lịch sử khám" sub={`${visitCount} lượt khám đã lưu`} onPress={() => navigation.navigate('PatientRecords')} />
             <QuickLink icon="film" title="Phim MRI & CT" sub="Xem phim và kết quả" onPress={() => navigation.navigate('ImagingHistory')} />
-            {!user?.isPremium && (
-              <QuickLink icon="star" title="Nâng cấp Premium" sub="99.000đ/năm" onPress={() => navigation.navigate('Premium')} />
-            )}
           </Animated.View>
         </View>
 
@@ -201,6 +214,10 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
               <Text style={styles.cardTitle}>Thuốc hôm nay</Text>
               {totalMeds > 0 && <Text style={styles.cardCount}>{doneCount}/{totalMeds} đã uống</Text>}
             </View>
+            <Pressable onPress={() => navigation.navigate('MyHealth', { tab: 'prescriptions' })} accessibilityRole="link" hitSlop={8} style={styles.medSettingsLink}>
+              <Feather name="bell" size={13} color={Colors.brandGreen} />
+              <Text style={styles.sectionLink}>Đổi giờ nhắc</Text>
+            </Pressable>
             {totalMeds > 0 && (
               <View style={styles.progressTrack} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: totalMeds, now: doneCount }}>
                 <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
@@ -223,6 +240,12 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
                     <View style={styles.medInfo}>
                       <Text style={[styles.medName, done && styles.medNameDone]}>{item.drugName}</Text>
                       <Text style={styles.medDose}>{item.dosageText}</Text>
+                      {isReminderDue(item) ? (
+                        <View style={styles.medDue}>
+                          <Feather name="bell" size={12} color={Colors.warningText} />
+                          <Text style={styles.medDueText}>Đến giờ uống</Text>
+                        </View>
+                      ) : null}
                     </View>
                     {done ? (
                       <View style={styles.medDone}>
@@ -436,6 +459,16 @@ const styles = StyleSheet.create({
   helpText: { fontSize: 14, color: Colors.slateMuted, lineHeight: 20, marginTop: 4 },
 
   skeleton: { backgroundColor: '#E8EDF3', borderRadius: 8 },
+  consentCard: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: Colors.infoBg, backgroundColor: Colors.infoBg },
+  consentCardHover: { borderColor: Colors.infoText },
+  consentIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  consentBody: { flex: 1, minWidth: 220, gap: 2 },
+  consentTitle: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy },
+  consentText: { fontSize: 14, lineHeight: 20, color: Colors.slateMuted },
+  consentAction: { fontSize: 15, fontWeight: '700', color: Colors.brandGreen },
+  medSettingsLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 4 },
+  medDue: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: Colors.warningBg },
+  medDueText: { fontSize: 12, fontWeight: '600', color: Colors.warningText },
 });
 
 export default PatientHome;

@@ -28,11 +28,9 @@ import {
   Activity, 
   FileText, 
   ClipboardList, 
-  Star, 
   CreditCard,
   Bell,
   AlertTriangle,
-  Sparkles,
   X,
   ChevronRight,
   ShieldCheck,
@@ -40,6 +38,8 @@ import {
   UploadCloud,
   Menu,
   Database,
+  Heart,
+  Ticket,
   Sliders,
 } from 'lucide-react';
 
@@ -186,10 +186,11 @@ const ResponsiveLayout = ({
       case 'patient':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Lấy số khám', route: 'QueueTicket', icon: Ticket },
           { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: Brain },
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
-          { label: 'Mua Premium', route: 'Premium', icon: Star },
+          { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
@@ -267,7 +268,7 @@ const ResponsiveLayout = ({
     }
   };
 
-  const menuItems = localUser ? getMenuItems(localUser.role) : [];
+  const menuItems = localUser ? getMenuItems(localUser.role).filter(Boolean) : [];
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -607,25 +608,6 @@ const ResponsiveLayout = ({
 
         {/* Footer Actions */}
         <View style={styles.sidebarFooter}>
-          {isPatient && (
-            <View style={styles.upgradeCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Sparkles size={14} color={Colors.brandMint} strokeWidth={2.4} />
-                <Text style={styles.upgradeTitle}>Nâng cấp Premium VIP</Text>
-              </View>
-              <Text style={styles.upgradeDesc}>
-                Chỉ 99k/năm. Chat AI 24/7 & Phân tích chuyên sâu.
-              </Text>
-              <TouchableOpacity
-                style={styles.upgradeBtn}
-                onPress={() => navigation.navigate('Premium')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.upgradeBtnText}>Nâng cấp ngay</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout} activeOpacity={0.7}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <LogOut size={15} color="#64748B" strokeWidth={2} />
@@ -919,34 +901,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     gap: 12,
-  },
-  upgradeCard: {
-    backgroundColor: Colors.brandNavy,
-    borderRadius: 14,
-    padding: 14,
-    boxShadow: '0 6px 16px -6px rgba(11, 42, 85, 0.45)',
-  },
-  upgradeTitle: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  upgradeDesc: {
-    color: '#D7E3F4',
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 10,
-  },
-  upgradeBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  upgradeBtnText: {
-    color: Colors.brandNavy,
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   logoutBtn: {
     paddingVertical: 10,

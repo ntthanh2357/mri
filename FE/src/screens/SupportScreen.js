@@ -34,9 +34,8 @@ const SECURITY_FAQ = {
 const PATIENT_FAQS = [
   { q: 'Làm sao để xem kết quả phim MRI/CT của tôi?', a: 'Vào mục “Phim MRI & CT”, chọn phim cần xem. Trong trang kết quả, bấm “Giải thích kết quả” để đọc bản giải thích dễ hiểu do AI tạo.' },
   { q: 'Kết quả AI có thay thế chẩn đoán của bác sĩ không?', a: 'Không. AI chỉ hỗ trợ tham khảo. Kết luận cuối cùng là của bác sĩ chuyên khoa đã đọc và ký kết quả — hãy trao đổi với bác sĩ điều trị trước khi quyết định.' },
-  { q: 'Thanh toán gói Premium như thế nào?', a: 'Vào “Mua Premium”, bấm “Nâng cấp ngay” rồi quét mã VietQR bằng ứng dụng ngân hàng. Nếu đã trừ tiền mà gói chưa kích hoạt sau vài phút, hãy gửi yêu cầu hỗ trợ kèm thời gian thanh toán.' },
   SECURITY_FAQ,
-];
+].filter(Boolean);
 
 const STAFF_FAQS = [
   { q: 'Làm thế nào để thêm bác sĩ mới vào hệ thống?', a: 'Vào Bảng điều khiển phòng khám → nhấn nút "Thêm bác sĩ" góc trên bên phải. Điền đầy đủ thông tin để cấp quyền tài khoản.' },
@@ -45,7 +44,7 @@ const STAFF_FAQS = [
   { q: 'Tôi có thể tích hợp NeuroScan AI với phần mềm HIS hiện tại không?', a: 'Có, hệ thống hỗ trợ tích hợp API RESTful và chuẩn HL7 FHIR. Vui lòng liên hệ đội ngũ kỹ thuật để nhận tài liệu tích hợp.' },
 ];
 
-const TOPICS = ['Lỗi kỹ thuật phần mềm', 'Câu hỏi về thuật toán AI', 'Thanh toán & Nâng cấp Premium', 'Yêu cầu tính năng mới'];
+const TOPICS = ['Lỗi kỹ thuật phần mềm', 'Câu hỏi về thuật toán AI', 'Thanh toán viện phí', 'Yêu cầu tính năng mới'];
 
 const STATUS = {
   open: { bg: Colors.brandGreenSoft, text: Colors.brandGreen, label: 'Đang mở', icon: 'circle' },
@@ -236,7 +235,7 @@ const SupportScreen = ({ navigation }) => {
             <Text style={styles.label}>Mô tả vấn đề</Text>
             <TextInput
               style={styles.textarea}
-              placeholder="Ví dụ: Đã thanh toán Premium lúc 9:30 nhưng tài khoản chưa nâng cấp…"
+              placeholder="Ví dụ: Đã quét VietQR lúc 9:30 nhưng hóa đơn chưa cập nhật…"
               placeholderTextColor={Colors.secondary}
               accessibilityLabel="Mô tả vấn đề"
               multiline
