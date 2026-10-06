@@ -46,7 +46,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#004080',
+    backgroundColor: '#1A5FD0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -70,7 +70,7 @@ export default StyleSheet.create({
   brandSub: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#0090D0',
+    color: '#1A5FD0',
   },
   navLinks: {
     flexDirection: 'row',
@@ -99,7 +99,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   loginBtn: {
-    backgroundColor: '#004080',
+    backgroundColor: '#1A5FD0',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -136,6 +136,113 @@ export default StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#334155',
+  },
+
+  // TRANG ĐĂNG NHẬP RIÊNG (UI refresh)
+  authSplit: {
+    flex: 1,
+    flexDirection: 'row',
+    height: '100%',
+    width: '100%',
+  },
+  authVisual: {
+    flex: 1.05,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#0B2A5B',
+  },
+  authVisualImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  authVisualOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(11,42,91,0.8)',
+  },
+  authVisualContent: {
+    flex: 1,
+    padding: 48,
+    justifyContent: 'space-between',
+  },
+  backHome: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  backHomeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  authBrandSub: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6FDDB2',
+    letterSpacing: 0.8,
+  },
+  authVisualTitle: {
+    color: '#FFFFFF',
+    fontSize: 38,
+    lineHeight: 48,
+    fontWeight: '700',
+    maxWidth: 520,
+    marginTop: 28,
+    marginBottom: 24,
+  },
+  authCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 14,
+    maxWidth: 480,
+  },
+  authCheckText: {
+    color: '#DBEAFE',
+    fontSize: 15,
+    lineHeight: 22,
+    flex: 1,
+  },
+  authVisualFoot: {
+    color: '#93C5FD',
+    fontSize: 12,
+  },
+  authFormCol: {
+    flex: 0.95,
+    backgroundColor: '#F5F8FC',
+  },
+  authFormScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 32,
+  },
+  mobileHero: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#0B2A5B',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 84,
+    gap: 24,
+  },
+  mobileFormOverlap: {
+    marginTop: -48,
+    marginBottom: 32,
   },
 
   // SPLIT SCREEN DESKTOP & MOBILE WRAPPERS
@@ -315,8 +422,10 @@ export default StyleSheet.create({
   // INTEGRATED AUTH CARD STYLES
   authCardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 40,
+    borderRadius: 28,
+    padding: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
@@ -333,7 +442,7 @@ export default StyleSheet.create({
         elevation: 8,
       },
       web: {
-        boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 4px 12px -4px rgba(15, 23, 42, 0.04)',
+        boxShadow: '0 30px 60px -20px rgba(11, 42, 91, 0.45), 0 12px 24px -12px rgba(11, 42, 91, 0.25)',
       }
     }),
   },
@@ -369,7 +478,7 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#004080',
+    color: '#1A5FD0',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'none',
@@ -484,8 +593,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#004080',
-    borderColor: '#004080',
+    backgroundColor: '#1A5FD0',
+    borderColor: '#1A5FD0',
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -499,9 +608,9 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#004080',
-    height: 50,
-    borderRadius: 12,
+    backgroundColor: '#1A5FD0',
+    height: 48,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -557,7 +666,7 @@ export default StyleSheet.create({
   formFooterLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0090D0',
+    color: '#1A5FD0',
   },
   resendRow: {
     flexDirection: 'row',
@@ -573,7 +682,7 @@ export default StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0090D0',
+    color: '#1A5FD0',
   },
   backButtonInline: {
     alignItems: 'center',

@@ -462,7 +462,7 @@ const FinancialsScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Báo cáo & Tài chính Bệnh viện</Text>
 
           <TouchableOpacity
-            style={{ backgroundColor: '#0891B2', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            style={{ backgroundColor: '#1A5FD0', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
             onPress={handleExportBhytXml}
             disabled={exportingBhyt}
           >
@@ -499,7 +499,7 @@ const FinancialsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {loading && <ActivityIndicator size="large" color="#15803D" style={{ marginVertical: 30 }} />}
+        {loading && <ActivityIndicator size="large" color="#0F9D6B" style={{ marginVertical: 30 }} />}
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           {/* TAB 1: OVERVIEW */}
@@ -510,8 +510,8 @@ const FinancialsScreen = ({ navigation }) => {
                 <View style={styles.metricRow}>
                   <View style={styles.metricCard}>
                     <View style={styles.metricHeader}>
-                      <View style={{ backgroundColor: '#DCFCE7', padding: 8, borderRadius: 8 }}>
-                        <DollarSign size={20} color="#15803D" />
+                      <View style={{ backgroundColor: '#D5F5E7', padding: 8, borderRadius: 8 }}>
+                        <DollarSign size={20} color="#0F9D6B" />
                       </View>
                       <View style={styles.badgeGreen}>
                         <Text style={styles.badgeGreenText}>Hoạt động</Text>
@@ -557,7 +557,7 @@ const FinancialsScreen = ({ navigation }) => {
               {/* Stacked Bar Chart for Revenue Distribution */}
               <View style={styles.chartCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <BarChart2 size={16} color="#15803D" />
+                  <BarChart2 size={16} color="#0F9D6B" />
                   <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Cơ cấu nguồn thu trung tâm MRI & não bộ</Text>
                 </View>
                 <Text style={styles.chartSub}>Tỷ lệ nguồn thu bóc tách từ các hóa đơn đã thanh toán</Text>
@@ -610,7 +610,7 @@ const FinancialsScreen = ({ navigation }) => {
               {/* Pricing Section Card */}
               <View style={styles.chartCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Pill size={16} color="#15803D" />
+                  <Pill size={16} color="#0F9D6B" />
                   <Text style={[styles.chartTitle, { marginBottom: 0 }]}>Bảng giá dịch vụ & Giới hạn tiếp đón</Text>
                 </View>
                 <Text style={styles.chartSub}>Cấu hình giá dịch vụ áp dụng cho hóa đơn và số lượng bệnh nhân tối đa tại cơ sở của bạn.</Text>
@@ -683,7 +683,7 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Các hóa đơn phát sinh gần đây</Text>
                 <TouchableOpacity onPress={fetchFinancialData} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <RefreshCw size={12} color="#15803D" />
+                  <RefreshCw size={12} color="#0F9D6B" />
                   <Text style={styles.viewAllText}>Làm mới</Text>
                 </TouchableOpacity>
               </View>
@@ -857,7 +857,7 @@ const FinancialsScreen = ({ navigation }) => {
 
               <View style={styles.formActions}>
                 <TouchableOpacity style={[styles.btnSecondary, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={calculatePercentages}>
-                  <BarChart2 size={14} color="#0891B2" />
+                  <BarChart2 size={14} color="#1A5FD0" />
                   <Text style={styles.btnSecondaryText}>Tính tỉ lệ & Tổng</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.btnPrimary, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={handleCreateRevenueReport} disabled={submitting}>
@@ -950,7 +950,7 @@ const FinancialsScreen = ({ navigation }) => {
               <View style={styles.formSectionHeader}>
                 <Text style={styles.formSectionSubtitle}>Danh sách thuốc sử dụng</Text>
                 <TouchableOpacity style={[styles.btnAddRow, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={addDrugRow}>
-                  <Plus size={14} color="#0891B2" />
+                  <Plus size={14} color="#1A5FD0" />
                   <Text style={styles.btnAddRowText}>Thêm thuốc</Text>
                 </TouchableOpacity>
               </View>
@@ -1099,8 +1099,8 @@ const FinancialsScreen = ({ navigation }) => {
             <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '100%', maxWidth: 560, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <FileText size={20} color="#0891B2" />
-                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0891B2' }}>
+                  <FileText size={20} color="#1A5FD0" />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A5FD0' }}>
                     Hồ Sơ Giám Định Điện Tử BHYT (XML 4210)
                   </Text>
                 </View>
@@ -1110,14 +1110,14 @@ const FinancialsScreen = ({ navigation }) => {
               </View>
 
               <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
-                Kỳ giám định: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{bhytExportData?.period || 'Tháng hiện tại'}</Text> | Tổng số hồ sơ lượt khám: <Text style={{ fontWeight: 'bold', color: '#15803D' }}>{bhytExportData?.totalRecords || 0}</Text>
+                Kỳ giám định: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{bhytExportData?.period || 'Tháng hiện tại'}</Text> | Tổng số hồ sơ lượt khám: <Text style={{ fontWeight: 'bold', color: '#0F9D6B' }}>{bhytExportData?.totalRecords || 0}</Text>
               </Text>
 
-              <View style={{ backgroundColor: '#F0FDF4', padding: 14, borderRadius: 10, marginBottom: 16, borderWidth: 1, borderColor: '#BBF7D0' }}>
-                <Text style={{ fontSize: 12, color: '#166534', marginBottom: 4 }}>
+              <View style={{ backgroundColor: '#EEFBF5', padding: 14, borderRadius: 10, marginBottom: 16, borderWidth: 1, borderColor: '#A8EBCD' }}>
+                <Text style={{ fontSize: 12, color: '#0B7A53', marginBottom: 4 }}>
                   • Tổng chi phí BHYT chi trả: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{(bhytExportData?.totalBhytAmount || 0).toLocaleString('vi-VN')}đ</Text>
                 </Text>
-                <Text style={{ fontSize: 12, color: '#166534' }}>
+                <Text style={{ fontSize: 12, color: '#0B7A53' }}>
                   • Tổng người bệnh đồng chi trả: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{(bhytExportData?.totalPatientAmount || 0).toLocaleString('vi-VN')}đ</Text>
                 </Text>
               </View>
@@ -1128,7 +1128,7 @@ const FinancialsScreen = ({ navigation }) => {
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#15803D', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, backgroundColor: '#0F9D6B', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
                   onPress={() => {
                     Alert.alert('Thành công', 'Đã tải xuống dữ liệu XML 4210 chuẩn Bảo hiểm xã hội!');
                     setBhytExportModal(false);

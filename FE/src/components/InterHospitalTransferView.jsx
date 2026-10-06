@@ -356,7 +356,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                   </span>
 
                   {snapshot?.representativeSliceUrl && (
-                    <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-sky-50 text-sky-700 border border-sky-200">
+                    <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-blue-50 text-blue-700 border border-blue-200">
                       🖼️ Ảnh cắt lớp chính
                     </span>
                   )}

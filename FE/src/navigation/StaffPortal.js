@@ -157,7 +157,7 @@ const StaffPortalNavigator = () => {
         initialRouteName="StaffLogin"
         screenOptions={{
           headerStyle: { backgroundColor: '#0B0F17' },
-          headerTintColor: '#22D3EE',
+          headerTintColor: '#60A5FA',
           headerTitleStyle: { fontWeight: 'bold' },
           headerBackTitle: 'Quay lại',
         }}

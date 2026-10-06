@@ -234,7 +234,7 @@ const StaffLoginScreen = ({ navigation }) => {
         <View style={[styles.card, !isDesktop && styles.cardMobile]}>
           {/* ===== Header ===== */}
           <View style={styles.headerRow}>
-            <ShieldCheck color="#22D3EE" size={26} />
+            <ShieldCheck color="#60A5FA" size={26} />
             <View style={styles.headerTextBox}>
               <Text style={styles.headerTitle}>Cổng Nội Bộ</Text>
               <Text style={styles.headerSub}>Dành riêng cho Nhân viên Y tế & Quản trị</Text>
@@ -242,13 +242,13 @@ const StaffLoginScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.secureBadge}>
-            <Lock size={12} color="#22D3EE" />
+            <Lock size={12} color="#60A5FA" />
             <Text style={styles.secureText}>Kết nối nội bộ · Xác thực 2 lớp bắt buộc · Phiên tự đóng sau 15 phút</Text>
           </View>
 
           {checkingAuth ? (
             <View style={styles.checkingBox}>
-              <ActivityIndicator color="#22D3EE" />
+              <ActivityIndicator color="#60A5FA" />
               <Text style={styles.checkingText}>Đang kiểm tra phiên làm việc…</Text>
             </View>
           ) : showTwoFactor ? (
@@ -274,9 +274,9 @@ const StaffLoginScreen = ({ navigation }) => {
               </TouchableOpacity>
               <TouchableOpacity style={styles.resendBtn} onPress={handleResend2FA} disabled={resendingOtp || loading}>
                 {resendingOtp ? (
-                  <ActivityIndicator size="small" color="#22D3EE" />
+                  <ActivityIndicator size="small" color="#60A5FA" />
                 ) : (
-                  <RefreshCw size={13} color="#22D3EE" />
+                  <RefreshCw size={13} color="#60A5FA" />
                 )}
                 <Text style={styles.resendBtnText}>
                   {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   eyeBtn: { position: 'absolute', right: 12 },
   fieldError: { color: '#F87171', fontSize: 11, marginTop: 5 },
   primaryBtn: {
-    backgroundColor: '#22D3EE', borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+    backgroundColor: '#60A5FA', borderRadius: 12, paddingVertical: 13, alignItems: 'center',
     marginTop: 16, marginBottom: 12,
   },
   btnDisabled: { opacity: 0.5 },
@@ -425,9 +425,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 6, marginBottom: 4,
   },
-  resendBtnText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
+  resendBtnText: { color: '#60A5FA', fontSize: 12, fontWeight: '600' },
   forgotLinkBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2, marginBottom: 8 },
-  forgotLinkText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
+  forgotLinkText: { color: '#60A5FA', fontSize: 12, fontWeight: '600' },
   noteText: { color: '#64748B', fontSize: 10.5, textAlign: 'center', marginTop: 4, lineHeight: 15 },
   backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20, padding: 6 },
   backLinkText: { color: '#64748B', fontSize: 12 },

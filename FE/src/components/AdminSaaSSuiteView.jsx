@@ -326,7 +326,7 @@ export default function AdminSaaSSuiteView() {
                     <td className="px-4 py-4">
                       <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${
                         h.subscriptionPlan === 'pro' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                        h.subscriptionPlan === 'basic' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-slate-50 text-slate-600 border border-slate-200'
+                        h.subscriptionPlan === 'basic' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-600 border border-slate-200'
                       }`}>
                         {h.subscriptionPlan || 'trial'}
                       </span>

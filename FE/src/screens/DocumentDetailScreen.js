@@ -264,11 +264,11 @@ const RenderFileIcon = ({ fileName, fileType, docType, isUpload }) => {
   if (isUpload) {
     const name = (fileName || '').toLowerCase();
     const type = (fileType || '').toLowerCase();
-    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText size={20} color="#0891B2" />;
+    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText size={20} color="#1A5FD0" />;
     if (type.includes('image') || name.match(/\.(jpg|jpeg|png|webp|heic)$/)) return <ImageIcon size={20} color="#059669" />;
     return <Paperclip size={20} color="#64748B" />;
   }
-  return <DocTypeIcon docType={docType} size={20} color="#0891B2" />;
+  return <DocTypeIcon docType={docType} size={20} color="#1A5FD0" />;
 };
 
 // ── SavedDocRow ───────────────────────────────────────────────────────────────
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
   backBtnText: { fontSize: 14, color: '#64748B' },
   headerTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
   headerBadge: {
-    minWidth: 24, height: 24, borderRadius: 12, backgroundColor: '#15803D',
+    minWidth: 24, height: 24, borderRadius: 12, backgroundColor: '#0F9D6B',
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6,
   },
   headerBadgeText: { fontSize: 12, color: '#FFF', fontWeight: 'bold' },

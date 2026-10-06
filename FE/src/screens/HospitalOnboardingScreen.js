@@ -373,7 +373,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
             <Text style={styles.sectionNote}>Tải lên tài liệu PDF hoặc hình ảnh giấy phép kinh doanh/hoạt động.</Text>
             {licenseFile ? (
               <View style={styles.uploadedFileRow}>
-                <FileText size={18} color="#0891B2" style={{ marginRight: 6 }} />
+                <FileText size={18} color="#1A5FD0" style={{ marginRight: 6 }} />
                 <Text style={styles.uploadedFileName} numberOfLines={1}>
                   {licenseFile.split('/').pop() || 'Giấy phép hoạt động'}
                 </Text>
@@ -384,7 +384,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
             ) : (
               <TouchableOpacity style={styles.uploadBtn} onPress={handlePickLicense} disabled={uploadingFile}>
                 {uploadingFile ? (
-                  <ActivityIndicator color="#15803D" size="small" />
+                  <ActivityIndicator color="#0F9D6B" size="small" />
                 ) : (
                   <View style={styles.uploadBtnContent}>
                     <Upload size={18} color="#64748B" style={{ marginRight: 8 }} />
@@ -477,11 +477,11 @@ const styles = StyleSheet.create({
     fontSize: 14, color: '#0F172A', backgroundColor: '#F8FAFC',
   },
   uploadedFileRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4',
-    borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 10, padding: 12,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEFBF5',
+    borderWidth: 1, borderColor: '#A8EBCD', borderRadius: 10, padding: 12,
   },
   uploadedFileIcon: { fontSize: 18, marginRight: 8 },
-  uploadedFileName: { flex: 1, fontSize: 13, color: '#166534', fontWeight: '600' },
+  uploadedFileName: { flex: 1, fontSize: 13, color: '#0B7A53', fontWeight: '600' },
   removeFileBtn: { paddingHorizontal: 10, paddingVertical: 4 },
   removeFileText: { fontSize: 12, color: '#EF4444', fontWeight: 'bold' },
   uploadBtn: {
@@ -493,13 +493,13 @@ const styles = StyleSheet.create({
   uploadBtnText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
   errorText: { color: '#EF4444', fontSize: 13, textAlign: 'center' },
   submitBtn: {
-    backgroundColor: Colors.primary || '#15803D', borderRadius: 14,
+    backgroundColor: Colors.primary || '#0F9D6B', borderRadius: 14,
     paddingVertical: 16, alignItems: 'center', marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   successBox: { alignItems: 'center', padding: 32, maxWidth: 320 },
-  successIcon: { fontSize: 48, color: '#15803D', marginBottom: 12 },
+  successIcon: { fontSize: 48, color: '#0F9D6B', marginBottom: 12 },
   successTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
   successSub: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
   statusBanner: {
@@ -509,8 +509,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusBannerActive: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#D5F5E7',
+    borderColor: '#A8EBCD',
   },
   statusBannerPending: {
     backgroundColor: '#FEF3C7',
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusBannerTitleActive: {
-    color: '#166534',
+    color: '#0B7A53',
   },
   statusBannerTitlePending: {
     color: '#92400E',
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   modalOverlay: {
     flex: 1,
@@ -574,17 +574,17 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#BBF7D0',
+    borderColor: '#A8EBCD',
   },
   successIconText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   successModalTitle: {
     fontSize: 18,
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   successBtn: {
     width: '100%',
     height: 48,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',

@@ -126,7 +126,7 @@ export default function AdminMetricsView({ onSelectTab }) {
   ];
 
   const quickActions = [
-    { key: 'users', icon: '🩺', label: 'Duyệt CCHN', sub: `${pendingDoctors ?? 0} chờ duyệt`, color: '#06b6d4' },
+    { key: 'users', icon: '🩺', label: 'Duyệt CCHN', sub: `${pendingDoctors ?? 0} chờ duyệt`, color: '#3B82F6' },
     { key: 'datasets', icon: '🗄️', label: 'Thêm Dataset', sub: 'Tạo dataset mới', color: '#10b981' },
     { key: 'audit-logs', icon: '📋', label: 'Audit Logs', sub: `${totalAuditLogs ?? 0} log hôm nay`, color: '#334155' },
     { key: 'users', icon: '👥', label: 'Quản lý User', sub: 'Khóa/mở khóa TK', color: '#3b82f6' },
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f0f9ff',
     borderWidth: 1,
-    borderColor: '#e0f2fe',
+    borderColor: '#E7F0FE',
     borderRadius: 12,
     padding: 10,
     marginTop: 14,

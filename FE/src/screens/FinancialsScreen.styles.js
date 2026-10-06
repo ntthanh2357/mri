@@ -42,7 +42,7 @@ export default StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
   },
   tabText: {
     fontSize: 14,
@@ -83,14 +83,14 @@ export default StyleSheet.create({
     fontSize: 18,
   },
   badgeGreen: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgeGreenText: {
     fontSize: 9,
-    color: '#166534',
+    color: '#0B7A53',
     fontWeight: 'bold',
   },
   metricLabel: {
@@ -118,7 +118,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: '600',
   },
   transactionsCard: {
@@ -168,7 +168,7 @@ export default StyleSheet.create({
     borderRadius: 6,
   },
   statusSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
   },
   statusPending: {
     backgroundColor: '#FEF3C7',
@@ -178,13 +178,13 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   statusSuccessText: {
-    color: '#166534',
+    color: '#0B7A53',
   },
   statusPendingText: {
     color: '#B45309',
   },
   btnCreate: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -234,7 +234,7 @@ export default StyleSheet.create({
   reportValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
     marginBottom: 4,
   },
   reportDetailLink: {
@@ -376,7 +376,7 @@ export default StyleSheet.create({
     marginTop: 10,
   },
   btnPrimary: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -390,14 +390,14 @@ export default StyleSheet.create({
   btnSecondary: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
   },
   btnSecondaryText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -452,7 +452,7 @@ export default StyleSheet.create({
   modalSummaryText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
     marginVertical: 10,
   },
   detailTable: {
@@ -490,7 +490,7 @@ export default StyleSheet.create({
   btnExport: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -498,7 +498,7 @@ export default StyleSheet.create({
     justifyContent: 'center',
   },
   btnExportText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 11,
     fontWeight: 'bold',
   },

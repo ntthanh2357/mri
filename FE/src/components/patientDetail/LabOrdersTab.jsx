@@ -43,9 +43,9 @@ const LabOrdersTab = ({
                   <View style={styles.orderItemHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {order.category === 'HOA_SINH' ? (
-                        <FlaskConical size={14} color={isSelected ? '#0891B2' : '#0284C7'} />
+                        <FlaskConical size={14} color={isSelected ? '#1A5FD0' : '#0284C7'} />
                       ) : (
-                        <Droplets size={14} color={isSelected ? '#0891B2' : '#DC2626'} />
+                        <Droplets size={14} color={isSelected ? '#1A5FD0' : '#DC2626'} />
                       )}
                       <Text style={[styles.orderCategoryText, isSelected && styles.selectedOrderText]}>
                         {order.category === 'HOA_SINH' ? 'Hóa sinh máu' : 'Huyết học'}
@@ -76,11 +76,11 @@ const LabOrdersTab = ({
               <Text style={styles.actionSectionTitle}>Yêu cầu xét nghiệm mới</Text>
               <View style={styles.buttonRow}>
                 <TouchableOpacity
-                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: '#0891B2' }]}
+                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: '#1A5FD0' }]}
                   onPress={() => handleCreateLabOrder('HOA_SINH')}
                 >
-                  <FlaskConical size={14} color="#0891B2" />
-                  <Text style={[styles.actionBtnOutlineText, { color: '#0891B2' }]}>Hóa Sinh</Text>
+                  <FlaskConical size={14} color="#1A5FD0" />
+                  <Text style={[styles.actionBtnOutlineText, { color: '#1A5FD0' }]}>Hóa Sinh</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
@@ -149,11 +149,11 @@ const LabOrdersTab = ({
 
               {selectedOrder.status === 'COMPLETED' && !isEditingLab && currentUser?.role !== 'patient' && (
                 <TouchableOpacity
-                  style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: '#0891B2' }]}
+                  style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F2F7FF', borderWidth: 1, borderColor: '#1A5FD0' }]}
                   onPress={() => setIsEditingLab(true)}
                 >
-                  <Edit2 size={14} color="#0891B2" />
-                  <Text style={[styles.editLabResultsBtnText, { color: '#0891B2' }]}>Chỉnh sửa kết quả xét nghiệm</Text>
+                  <Edit2 size={14} color="#1A5FD0" />
+                  <Text style={[styles.editLabResultsBtnText, { color: '#1A5FD0' }]}>Chỉnh sửa kết quả xét nghiệm</Text>
                 </TouchableOpacity>
               )}
 

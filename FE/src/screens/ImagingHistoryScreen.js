@@ -109,14 +109,14 @@ const ImagingHistoryScreen = ({ route, navigation }) => {
             </Text>
           </View>
           <TouchableOpacity style={[styles.refreshBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={fetchHistory}>
-            <RotateCw size={14} color="#15803D" />
+            <RotateCw size={14} color="#0F9D6B" />
             <Text style={styles.refreshBtnText}>Làm mới</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#15803D" />
+            <ActivityIndicator size="large" color="#0F9D6B" />
             <Text style={styles.loadingText}>Đang tải lịch sử phim chụp...</Text>
           </View>
         ) : error ? (

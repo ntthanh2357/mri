@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { ReceptionScheduleHeader, ReceptionWeekStrip, weekHoursOf } from '../components/reception/ReceptionSchedule';
 import { get, post, put, del } from '../services/api.service';
 import {
   Calendar,
@@ -57,7 +58,7 @@ const SHIFT_CONFIG = {
     startTime: '14:00',
     endTime: '22:00',
     icon: Sunset,
-    bg: '#E0F2FE',
+    bg: '#E7F0FE',
     border: '#93C5FD',
     text: '#1D4ED8',
     badgeBg: '#F0F9FF',
@@ -652,15 +653,37 @@ export default function StaffSchedulingScreen({ navigation }) {
     return { totalWeekly, confirmedCount, pendingCount, swapCount };
   }, [weeklySchedules, swapRequests]);
 
+  // Lễ tân dùng bố cục lịch riêng (banner + dải 7 ngày)
+  const isReceptionistUser = currentUser?.role === 'receptionist';
+  const findMine = (date) => (currentUser ? findSchedules(currentUser.id, date) : []);
+  const myWeekSchedules = weekDates.flatMap((d) => findMine(d));
+  const todayKey = formatDateKey(new Date());
+  const nextShift = myWeekSchedules
+    .filter((x) => x.status !== 'rejected' && formatDateKey(x.date) >= todayKey)
+    .sort((a, b) => formatDateKey(a.date).localeCompare(formatDateKey(b.date)) || String(a.startTime).localeCompare(String(b.startTime)))[0] || null;
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffScheduling">
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scroll}>
+          {isReceptionistUser ? (
+            <ReceptionScheduleHeader
+              nextShift={nextShift}
+              shiftConfig={SHIFT_CONFIG}
+              weekHours={Math.round(weekHoursOf(myWeekSchedules, SHIFT_CONFIG))}
+              kpi={kpiStats}
+              activeTab={activeTab}
+              onTab={setActiveTab}
+              onRegister={() => handleOpenSelfRegister(new Date())}
+              onRefresh={() => { fetchWeeklySchedules(); fetchRegistrations(); fetchSwapRequests(); }}
+            />
+          ) : (
+          <>
           {/* Header Hero Banner */}
           <View style={styles.headerHero}>
             <View style={styles.headerHeroLeft}>
               <View style={styles.badgePill}>
-                <Sparkles size={12} color="#0891B2" />
+                <Sparkles size={12} color="#1A5FD0" />
                 <Text style={styles.badgePillText}>HỆ THỐNG PHÂN CA & ĐĂNG KÝ TRỰC LÂM SÀNG</Text>
               </View>
               <Text style={styles.heroTitle}>Lịch Làm Việc & Phân Ca Nhân Sự</Text>
@@ -695,7 +718,7 @@ export default function StaffSchedulingScreen({ navigation }) {
           {/* KPI Stat Cards */}
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#E0F2FE' }]}>
+              <View style={[styles.kpiIconBox, { backgroundColor: '#E7F0FE' }]}>
                 <Calendar size={18} color="#0284C7" />
               </View>
               <View>
@@ -705,8 +728,8 @@ export default function StaffSchedulingScreen({ navigation }) {
             </View>
 
             <View style={styles.kpiCard}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#DCFCE7' }]}>
-                <CheckCircle2 size={18} color="#15803D" />
+              <View style={[styles.kpiIconBox, { backgroundColor: '#D5F5E7' }]}>
+                <CheckCircle2 size={18} color="#0F9D6B" />
               </View>
               <View>
                 <Text style={styles.kpiValue}>{kpiStats.confirmedCount}</Text>
@@ -744,7 +767,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               onPress={() => setActiveTab('weekly')}
             >
               <View style={styles.tabContentRow}>
-                <Calendar size={16} color={activeTab === 'weekly' ? '#0891B2' : '#64748B'} />
+                <Calendar size={16} color={activeTab === 'weekly' ? '#1A5FD0' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'weekly' && styles.tabTextActive]}>
                   Thời khóa biểu toàn khoa
                 </Text>
@@ -756,7 +779,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               onPress={() => setActiveTab('my-schedule')}
             >
               <View style={styles.tabContentRow}>
-                <User size={16} color={activeTab === 'my-schedule' ? '#0891B2' : '#64748B'} />
+                <User size={16} color={activeTab === 'my-schedule' ? '#1A5FD0' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'my-schedule' && styles.tabTextActive]}>
                   Lịch làm của tôi
                 </Text>
@@ -768,7 +791,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               onPress={() => setActiveTab('registrations')}
             >
               <View style={styles.tabContentRow}>
-                <ClipboardList size={16} color={activeTab === 'registrations' ? '#0891B2' : '#64748B'} />
+                <ClipboardList size={16} color={activeTab === 'registrations' ? '#1A5FD0' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'registrations' && styles.tabTextActive]}>
                   {isHospitalAdmin ? 'Duyệt đăng ký ca' : 'Đăng ký ca của tôi'}
                 </Text>
@@ -785,7 +808,7 @@ export default function StaffSchedulingScreen({ navigation }) {
               onPress={() => setActiveTab('swap')}
             >
               <View style={styles.tabContentRow}>
-                <RefreshCw size={16} color={activeTab === 'swap' ? '#0891B2' : '#64748B'} />
+                <RefreshCw size={16} color={activeTab === 'swap' ? '#1A5FD0' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'swap' && styles.tabTextActive]}>
                   Đổi ca trực
                 </Text>
@@ -797,6 +820,9 @@ export default function StaffSchedulingScreen({ navigation }) {
               </View>
             </TouchableOpacity>
           </View>
+
+          </>
+          )}
 
           {/* TAB 1: WEEKLY GRID */}
           {activeTab === 'weekly' && (
@@ -810,7 +836,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.todayJumpBtn} onPress={handleCurrentWeek}>
-                    <CalendarCheck size={14} color="#0891B2" />
+                    <CalendarCheck size={14} color="#1A5FD0" />
                     <Text style={styles.todayJumpBtnText}>Tuần này</Text>
                   </TouchableOpacity>
 
@@ -857,10 +883,10 @@ export default function StaffSchedulingScreen({ navigation }) {
                         const isToday = isSameDay(date, new Date());
                         return (
                           <View key={idx} style={[styles.tableTh, { width: 130 }, isToday && styles.thToday]}>
-                            <Text style={[styles.tableThText, isToday && { color: '#0891B2', fontWeight: 'bold' }]}>
+                            <Text style={[styles.tableThText, isToday && { color: '#1A5FD0', fontWeight: 'bold' }]}>
                               {DAYS_OF_WEEK.find((d) => d.key === date.getDay())?.label}
                             </Text>
-                            <Text style={[styles.thSub, isToday && { color: '#0891B2', fontWeight: 'bold' }]}>
+                            <Text style={[styles.thSub, isToday && { color: '#1A5FD0', fontWeight: 'bold' }]}>
                               {date.getDate()}/{date.getMonth() + 1}
                               {isToday ? ' (Hôm nay)' : ''}
                             </Text>
@@ -879,7 +905,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                           <View key={staff._id} style={[styles.tableTr, isMe && styles.tableTrMe]}>
                             <View style={[styles.tableTdNameCol, { width: 180 }]}>
                               <View style={styles.staffAvatarRow}>
-                                <View style={[styles.staffAvatar, isMe && { backgroundColor: '#0891B2' }]}>
+                                <View style={[styles.staffAvatar, isMe && { backgroundColor: '#1A5FD0' }]}>
                                   <Text style={styles.staffAvatarText}>
                                     {(staff.profile?.name || staff.email || 'NV').slice(0, 2).toUpperCase()}
                                   </Text>
@@ -968,7 +994,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                           style={styles.btnAddExtraShift}
                                           onPress={() => handleOpenAdminAddShift(staff, date)}
                                         >
-                                          <Plus size={10} color="#0891B2" />
+                                          <Plus size={10} color="#1A5FD0" />
                                           <Text style={styles.btnAddExtraShiftText}>Thêm ca</Text>
                                         </TouchableOpacity>
                                       )}
@@ -993,7 +1019,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                     >
                                       {isHospitalAdmin ? (
                                         <View style={styles.cellEmptyAdminContent}>
-                                          <Plus size={12} color="#0891B2" />
+                                          <Plus size={12} color="#1A5FD0" />
                                           <Text style={styles.cellEmptyAdminText}>Xếp ca</Text>
                                         </View>
                                       ) : isMe ? (
@@ -1020,8 +1046,26 @@ export default function StaffSchedulingScreen({ navigation }) {
             </View>
           )}
 
+          {/* TAB 2: MY SCHEDULE — bố cục riêng cho lễ tân */}
+          {activeTab === 'my-schedule' && isReceptionistUser && (
+            <ReceptionWeekStrip
+              weekDates={weekDates}
+              weekLabel={formatWeekRange()}
+              findMine={findMine}
+              shiftConfig={SHIFT_CONFIG}
+              isSameDay={isSameDay}
+              isWide={width > 1180}
+              onPrev={handlePrevWeek}
+              onNext={handleNextWeek}
+              onToday={handleCurrentWeek}
+              onRegister={(date) => handleOpenSelfRegister(date)}
+              onCancel={handleCancelRegistration}
+              onSwap={handleOpenSwapModal}
+            />
+          )}
+
           {/* TAB 2: MY SCHEDULE */}
-          {activeTab === 'my-schedule' && (
+          {activeTab === 'my-schedule' && !isReceptionistUser && (
             <View style={styles.card}>
               <View style={styles.myScheduleHeader}>
                 <View>
@@ -1056,7 +1100,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                     <View key={idx} style={[styles.myDayCard, isToday && styles.myDayCardToday]}>
                       <View style={styles.myDayCardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[styles.myDayCardTitle, isToday && { color: '#0891B2' }]}>
+                          <Text style={[styles.myDayCardTitle, isToday && { color: '#1A5FD0' }]}>
                             {dayName}
                           </Text>
                           <Text style={styles.myDayCardDate}>
@@ -1117,7 +1161,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                           ? { color: '#B45309' }
                                           : isRejected
                                           ? { color: '#DC2626' }
-                                          : { color: '#15803D' },
+                                          : { color: '#0F9D6B' },
                                       ]}
                                     >
                                       {isPending ? 'Chờ duyệt' : isRejected ? 'Từ chối' : 'Đã xác nhận'}
@@ -1149,7 +1193,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                       style={styles.btnRequestSwap}
                                       onPress={() => handleOpenSwapModal(sched)}
                                     >
-                                      <RefreshCw size={12} color="#0891B2" />
+                                      <RefreshCw size={12} color="#1A5FD0" />
                                       <Text style={styles.btnRequestSwapText}>Yêu cầu đổi ca</Text>
                                     </TouchableOpacity>
                                   )}
@@ -1173,7 +1217,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                             style={styles.btnRegisterDayEmpty}
                             onPress={() => handleOpenSelfRegister(date)}
                           >
-                            <Plus size={12} color="#0891B2" />
+                            <Plus size={12} color="#1A5FD0" />
                             <Text style={styles.btnRegisterDayEmptyText}>+ Đăng ký ca trực ngày này</Text>
                           </TouchableOpacity>
                         </View>
@@ -1332,7 +1376,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                 isPending
                                   ? { color: '#B45309' }
                                   : isConfirmed
-                                  ? { color: '#15803D' }
+                                  ? { color: '#0F9D6B' }
                                   : { color: '#DC2626' },
                               ]}
                             >
@@ -1444,7 +1488,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                             </Text>
                             <Text style={styles.swapDetailText}>
                               • Đổi sang ngày:{' '}
-                              <Text style={{ fontWeight: 'bold', color: '#0891B2' }}>{tgtDate}</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#1A5FD0' }}>{tgtDate}</Text>
                             </Text>
                             {req.targetStaffId ? (
                               <Text style={styles.swapDetailText}>
@@ -1479,7 +1523,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                               style={[
                                 styles.statusBadgeText,
                                 req.status === 'approved'
-                                  ? { color: '#15803D' }
+                                  ? { color: '#0F9D6B' }
                                   : req.status === 'rejected'
                                   ? { color: '#DC2626' }
                                   : { color: '#B45309' },
@@ -1537,11 +1581,11 @@ export default function StaffSchedulingScreen({ navigation }) {
             <View style={styles.modalContainer}>
               <View style={styles.modalHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={[styles.modalHeaderIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <View style={[styles.modalHeaderIcon, { backgroundColor: '#E7F0FE' }]}>
                     {selectedSchedule ? (
-                      <Edit2 size={18} color="#0891B2" />
+                      <Edit2 size={18} color="#1A5FD0" />
                     ) : (
-                      <PlusCircle size={18} color="#0891B2" />
+                      <PlusCircle size={18} color="#1A5FD0" />
                     )}
                   </View>
                   <View>
@@ -1592,7 +1636,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                     </View>
                   ) : (
                     <View style={styles.staffReadOnlyBox}>
-                      <User size={16} color="#0891B2" />
+                      <User size={16} color="#1A5FD0" />
                       <Text style={styles.staffReadOnlyName}>
                         {selectedStaff?.profile?.name || selectedStaff?.email || 'Nhân sự'}
                       </Text>
@@ -2049,14 +2093,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E7F0FE',
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
     marginBottom: 8,
   },
-  badgePillText: { fontSize: 10, fontWeight: 'bold', color: '#0891B2', letterSpacing: 0.5 },
+  badgePillText: { fontSize: 10, fontWeight: 'bold', color: '#1A5FD0', letterSpacing: 0.5 },
   heroTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
   heroSub: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 20, maxWidth: 650 },
   headerHeroActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -2064,11 +2108,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#0891B2',
+    shadowColor: '#1A5FD0',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -2138,7 +2182,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabButtonActive: {
-    borderBottomColor: '#0891B2',
+    borderBottomColor: '#1A5FD0',
   },
   tabContentRow: {
     flexDirection: 'row',
@@ -2151,7 +2195,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabTextActive: {
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: '700',
   },
   tabBadgeAmber: {
@@ -2223,14 +2267,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E7F0FE',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
-  todayJumpBtnText: { fontSize: 12, fontWeight: 'bold', color: '#0891B2' },
+  todayJumpBtnText: { fontSize: 12, fontWeight: 'bold', color: '#1A5FD0' },
   weekRangeTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginLeft: 8 },
 
   filterBox: {
@@ -2273,7 +2317,7 @@ const styles = StyleSheet.create({
   },
   tableThText: { fontSize: 12, fontWeight: 'bold', color: '#334155', textAlign: 'center' },
   thSub: { fontSize: 10, color: '#64748B', marginTop: 2 },
-  thToday: { backgroundColor: '#E0F2FE' },
+  thToday: { backgroundColor: '#E7F0FE' },
   tableTr: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -2281,7 +2325,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   tableTrMe: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
   },
   tableTdNameCol: {
     paddingVertical: 12,
@@ -2351,7 +2395,7 @@ const styles = StyleSheet.create({
     borderColor: '#94A3B8',
     backgroundColor: '#FFFFFF',
   },
-  btnAddExtraShiftText: { fontSize: 9, fontWeight: 'bold', color: '#0891B2' },
+  btnAddExtraShiftText: { fontSize: 9, fontWeight: 'bold', color: '#1A5FD0' },
 
   cellEmpty: {
     width: '100%',
@@ -2377,13 +2421,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#86EFAC',
-    backgroundColor: '#F0FDF4',
+    borderColor: '#6FDDB2',
+    backgroundColor: '#EEFBF5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   cellEmptyAdminContent: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cellEmptyAdminText: { fontSize: 10, fontWeight: 'bold', color: '#0891B2' },
+  cellEmptyAdminText: { fontSize: 10, fontWeight: 'bold', color: '#1A5FD0' },
 
   // My Schedule Day Cards
   myScheduleHeader: {
@@ -2403,7 +2447,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   myDayCardToday: {
-    borderColor: '#0891B2',
+    borderColor: '#1A5FD0',
     backgroundColor: '#F0FDFA',
   },
   myDayCardHeader: {
@@ -2414,7 +2458,7 @@ const styles = StyleSheet.create({
   myDayCardTitle: { fontSize: 14, fontWeight: 'bold', color: '#0F172A' },
   myDayCardDate: { fontSize: 12, color: '#64748B' },
   todayBadge: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2438,7 +2482,7 @@ const styles = StyleSheet.create({
   myShiftBoxNotes: { fontSize: 11, color: '#475569', marginTop: 4 },
   myShiftBoxReviewNotes: {
     fontSize: 11,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontStyle: 'italic',
     marginTop: 4,
     backgroundColor: '#F0F9FF',
@@ -2457,12 +2501,12 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
   },
-  btnRequestSwapText: { fontSize: 11, fontWeight: 'bold', color: '#0891B2' },
+  btnRequestSwapText: { fontSize: 11, fontWeight: 'bold', color: '#1A5FD0' },
   btnCancelPending: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2485,8 +2529,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#86EFAC',
-    backgroundColor: '#F0FDF4',
+    borderColor: '#6FDDB2',
+    backgroundColor: '#EEFBF5',
   },
   btnAddMoreShiftText: { fontSize: 11, fontWeight: 'bold', color: '#059669' },
 
@@ -2506,12 +2550,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E7F0FE',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
-  btnRegisterDayEmptyText: { fontSize: 11, fontWeight: 'bold', color: '#0891B2' },
+  btnRegisterDayEmptyText: { fontSize: 11, fontWeight: 'bold', color: '#1A5FD0' },
 
   // Registrations Header & List
   registrationsHeader: {
@@ -2532,8 +2576,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   filterPillActive: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
+    borderColor: '#1A5FD0',
   },
   filterPillText: { fontSize: 11, fontWeight: '600', color: '#475569' },
   filterPillTextActive: { color: '#FFFFFF', fontWeight: 'bold' },
@@ -2573,7 +2617,7 @@ const styles = StyleSheet.create({
   regDateText: { fontSize: 12, color: '#334155' },
   regHoursText: { fontSize: 11, color: '#64748B', fontWeight: '600' },
   regNotesText: { fontSize: 11, color: '#475569', fontStyle: 'italic', marginTop: 6 },
-  regReviewNotesText: { fontSize: 11, color: '#0891B2', fontWeight: '600', marginTop: 4 },
+  regReviewNotesText: { fontSize: 11, color: '#1A5FD0', fontWeight: '600', marginTop: 4 },
   swapDetailText: { fontSize: 12, color: '#475569' },
 
   registrationCardRight: { alignItems: 'flex-end', gap: 10 },
@@ -2583,7 +2627,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   badgePending: { backgroundColor: '#FEF3C7' },
-  badgeApproved: { backgroundColor: '#DCFCE7' },
+  badgeApproved: { backgroundColor: '#D5F5E7' },
   badgeRejected: { backgroundColor: '#FEE2E2' },
   statusBadgeText: { fontSize: 11, fontWeight: 'bold' },
 
@@ -2593,7 +2637,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeSmallPending: { backgroundColor: '#FEF3C7' },
-  badgeSmallConfirmed: { backgroundColor: '#DCFCE7' },
+  badgeSmallConfirmed: { backgroundColor: '#D5F5E7' },
   badgeSmallRejected: { backgroundColor: '#FEE2E2' },
   statusBadgeSmallText: { fontSize: 10, fontWeight: 'bold' },
 
@@ -2745,12 +2789,12 @@ const styles = StyleSheet.create({
   },
   staffReadOnlyName: { fontSize: 13, fontWeight: 'bold', color: '#0F172A', flex: 1 },
   staffReadOnlyRole: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E7F0FE',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
-  staffReadOnlyRoleText: { fontSize: 10, fontWeight: 'bold', color: '#0891B2' },
+  staffReadOnlyRoleText: { fontSize: 10, fontWeight: 'bold', color: '#1A5FD0' },
 
   // Quick Date Presets Row
   quickDateRow: {
@@ -2768,8 +2812,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   quickDateChipActive: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
+    borderColor: '#1A5FD0',
   },
   quickDateChipText: { fontSize: 10, fontWeight: '600', color: '#475569' },
   quickDateChipTextActive: { color: '#FFFFFF', fontWeight: 'bold' },
@@ -2815,8 +2859,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 10,
-    backgroundColor: '#0891B2',
-    shadowColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
+    shadowColor: '#1A5FD0',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,

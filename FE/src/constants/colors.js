@@ -1,11 +1,17 @@
 const Colors = {
-  // Clinical Teal / Cyan (Primary Brand)
-  primary: '#0891B2',
-  primaryFocus: '#0E7490',
-  primaryLight: '#E0F2FE',
-  primaryMuted: '#ECFEFF',
+  // Medical Blue (Primary Brand)
+  primary: '#1A5FD0',
+  primaryFocus: '#144BA8',
+  primaryDeep: '#0B2A5B',
+  primaryLight: '#E7F0FE',
+  primaryMuted: '#F2F7FF',
 
-  // Clinical Emerald (Actions / Safe / Normal)
+  // Mint Green (Accent / Call-to-action)
+  accent: '#0F9D6B',
+  accentDark: '#0B7A53',
+  accentLight: '#E3F7EF',
+
+  // Clinical Emerald (Safe / Normal)
   emerald: '#059669',
   emeraldLight: '#ECFDF5',
   emeraldDark: '#047857',
@@ -14,7 +20,7 @@ const Colors = {
   secondary: '#64748B',
   slateDark: '#0F172A',
   slateMuted: '#475569',
-  background: '#F8FAFC',
+  background: '#F5F8FC',
   surface: '#FFFFFF',
   border: '#E2E8F0',
   borderStrong: '#CBD5E1',
@@ -33,12 +39,11 @@ const Colors = {
   warningBg: '#FFFBEB',
   success: '#059669',
   successBg: '#ECFDF5',
-  info: '#0284C7',
-  infoBg: '#F0F9FF',
+  info: '#1A5FD0',
+  infoBg: '#F2F7FF',
 
   white: '#FFFFFF',
   black: '#0F172A',
 };
 
 export default Colors;
-

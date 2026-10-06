@@ -210,15 +210,15 @@ const PremiumScreen = ({ navigation }) => {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-            <ActivityIndicator size="large" color="#166534" />
+            <ActivityIndicator size="large" color="#0B7A53" />
             <Text style={{ marginTop: 12, color: '#64748B', fontSize: 14 }}>Đang tải thông tin gói...</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContainer}>
             {/* Banner Section */}
             <View style={styles.bannerContainer}>
-              <View style={[styles.badge, user?.isPremium && { backgroundColor: '#BBF7D0' }]}>
-                <Text style={[styles.badgeText, user?.isPremium && { color: '#166534' }]}>
+              <View style={[styles.badge, user?.isPremium && { backgroundColor: '#A8EBCD' }]}>
+                <Text style={[styles.badgeText, user?.isPremium && { color: '#0B7A53' }]}>
                   {user?.isPremium ? 'GÓI PREMIUM' : 'GÓI HỘI VIÊN'}
                 </Text>
               </View>
@@ -316,15 +316,15 @@ const PremiumScreen = ({ navigation }) => {
             {/* Trust Badges */}
             <View style={styles.trustContainer}>
               <View style={styles.trustItem}>
-                <Shield size={20} color="#0891B2" style={{ marginBottom: 4 }} />
+                <Shield size={20} color="#1A5FD0" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>BẢO MẬT DỮ LIỆU</Text>
               </View>
               <View style={styles.trustItem}>
-                <FileCheck size={20} color="#0891B2" style={{ marginBottom: 4 }} />
+                <FileCheck size={20} color="#1A5FD0" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>CHỨNG NHẬN Y KHOA</Text>
               </View>
               <View style={styles.trustItem}>
-                <Zap size={20} color="#0891B2" style={{ marginBottom: 4 }} />
+                <Zap size={20} color="#1A5FD0" style={{ marginBottom: 4 }} />
                 <Text style={styles.trustText}>KẾT QUẢ TỨC THÌ</Text>
               </View>
             </View>
@@ -358,7 +358,7 @@ const PremiumScreen = ({ navigation }) => {
             <View style={styles.popupCard}>
               <View style={[
                 styles.popupIconCircle,
-                popup.severity === 'success' && { backgroundColor: '#F0FDF4' },
+                popup.severity === 'success' && { backgroundColor: '#EEFBF5' },
                 popup.severity === 'error' && { backgroundColor: '#FEF2F2' },
                 popup.severity === 'warning' && { backgroundColor: '#FFFBEB' },
                 popup.severity === 'info' && { backgroundColor: '#EFF6FF' },
@@ -382,7 +382,7 @@ const PremiumScreen = ({ navigation }) => {
                   <TouchableOpacity
                     style={[
                       styles.popupButton,
-                      popup.severity === 'warning' ? { backgroundColor: '#D97706' } : { backgroundColor: '#15803D' }
+                      popup.severity === 'warning' ? { backgroundColor: '#D97706' } : { backgroundColor: '#0F9D6B' }
                     ]}
                     onPress={() => {
                       setPopup(prev => ({ ...prev, visible: false }));
@@ -396,7 +396,7 @@ const PremiumScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={[
                     styles.popupSingleButton,
-                    popup.severity === 'success' && { backgroundColor: '#15803D' },
+                    popup.severity === 'success' && { backgroundColor: '#0F9D6B' },
                     popup.severity === 'error' && { backgroundColor: '#DC2626' },
                     popup.severity === 'info' && { backgroundColor: '#2563EB' },
                   ]}

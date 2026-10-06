@@ -64,7 +64,7 @@ const PrescriptionTab = ({
         <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <PenTool size={18} color="#0891B2" />
+              <PenTool size={18} color="#1A5FD0" />
               <Text style={styles.cardTitleText}>Kê đơn thuốc mới</Text>
             </View>
             <Text style={styles.cardSubtitleText}>Thiết lập danh mục và kiểm tra tương tác chéo</Text>
@@ -144,7 +144,7 @@ const PrescriptionTab = ({
                                 }}
                               >
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                  <Pill size={14} color="#0891B2" />
+                                  <Pill size={14} color="#1A5FD0" />
                                   <Text style={styles.suggestionText}>
                                     {drug.name} (Tồn: {drug.stock?.quantity || 0} {drug.stock?.unit || 'viên'})
                                   </Text>
@@ -249,7 +249,7 @@ const PrescriptionTab = ({
                 {/* Header thanh điểm & Tham vấn AI */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <ShieldAlert size={16} color={clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#DC2626'} />
+                    <ShieldAlert size={16} color={clinicalSafetyScore >= 90 ? '#0F9D6B' : clinicalSafetyScore >= 70 ? '#B45309' : '#DC2626'} />
                     <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>THẨM ĐỊNH DƯỢC LÂM SÀNG</Text>
                   </View>
 
@@ -261,18 +261,18 @@ const PrescriptionTab = ({
                       borderRadius: 12,
                       backgroundColor: clinicalSafetyStatus === 'UNEVALUATED'
                         ? '#F1F5F9'
-                        : (clinicalSafetyScore >= 90 ? '#DCFCE7' : clinicalSafetyScore >= 70 ? '#FEF3C7' : '#FEE2E2'),
+                        : (clinicalSafetyScore >= 90 ? '#D5F5E7' : clinicalSafetyScore >= 70 ? '#FEF3C7' : '#FEE2E2'),
                       borderWidth: 1,
                       borderColor: clinicalSafetyStatus === 'UNEVALUATED'
                         ? '#CBD5E1'
-                        : (clinicalSafetyScore >= 90 ? '#86EFAC' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5')
+                        : (clinicalSafetyScore >= 90 ? '#6FDDB2' : clinicalSafetyScore >= 70 ? '#FCD34D' : '#FCA5A5')
                     }}>
                       <Text style={{
                         fontSize: 11,
                         fontWeight: 'bold',
                         color: clinicalSafetyStatus === 'UNEVALUATED'
                           ? '#64748B'
-                          : (clinicalSafetyScore >= 90 ? '#15803D' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C')
+                          : (clinicalSafetyScore >= 90 ? '#0F9D6B' : clinicalSafetyScore >= 70 ? '#B45309' : '#B91C1C')
                       }}>
                         {clinicalSafetyStatus === 'UNEVALUATED'
                           ? 'Trạng thái: Chưa đánh giá'
@@ -286,14 +286,14 @@ const PrescriptionTab = ({
                         paddingHorizontal: 8,
                         paddingVertical: 3,
                         borderRadius: 12,
-                        backgroundColor: clinicalEvaluationCoverage.percentage === 100 ? '#F0FDF4' : '#FFFBEB',
+                        backgroundColor: clinicalEvaluationCoverage.percentage === 100 ? '#EEFBF5' : '#FFFBEB',
                         borderWidth: 1,
-                        borderColor: clinicalEvaluationCoverage.percentage === 100 ? '#BBF7D0' : '#FDE68A'
+                        borderColor: clinicalEvaluationCoverage.percentage === 100 ? '#A8EBCD' : '#FDE68A'
                       }}>
                         <Text style={{
                           fontSize: 11,
                           fontWeight: '600',
-                          color: clinicalEvaluationCoverage.percentage === 100 ? '#166534' : '#92400E'
+                          color: clinicalEvaluationCoverage.percentage === 100 ? '#0B7A53' : '#92400E'
                         }}>
                           Độ phủ: {clinicalEvaluationCoverage.percentage}% ({clinicalEvaluationCoverage.evaluated}/{clinicalEvaluationCoverage.total} thuốc)
                         </Text>
@@ -425,9 +425,9 @@ const PrescriptionTab = ({
 
                       if (isInfo) {
                         if (isAiTumorNote) {
-                          bg = '#F0FDF4';
-                          borderCol = '#86EFAC';
-                          textCol = '#15803D';
+                          bg = '#EEFBF5';
+                          borderCol = '#6FDDB2';
+                          textCol = '#0F9D6B';
                         } else {
                           bg = '#F8FAFC';
                           borderCol = '#CBD5E1';
@@ -572,7 +572,7 @@ const PrescriptionTab = ({
                       <Text
                         style={{
                           fontSize: 10,
-                          color: isMeaningful ? '#15803D' : '#B91C1C',
+                          color: isMeaningful ? '#0F9D6B' : '#B91C1C',
                           marginTop: 4,
                           fontWeight: '500'
                         }}
@@ -733,7 +733,7 @@ const PrescriptionTab = ({
                   backgroundColor: '#F8FAFC',
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#86EFAC' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5',
+                  borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#6FDDB2' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5',
                   padding: 12,
                   marginBottom: 16
                 }}>
@@ -745,17 +745,17 @@ const PrescriptionTab = ({
                       </Text>
                     </View>
                     <View style={{
-                      backgroundColor: activePres.clinicalSafety.safetyScore >= 90 ? '#DCFCE7' : activePres.clinicalSafety.safetyScore >= 70 ? '#FEF3C7' : '#FEE2E2',
+                      backgroundColor: activePres.clinicalSafety.safetyScore >= 90 ? '#D5F5E7' : activePres.clinicalSafety.safetyScore >= 70 ? '#FEF3C7' : '#FEE2E2',
                       paddingHorizontal: 8,
                       paddingVertical: 2,
                       borderRadius: 12,
                       borderWidth: 1,
-                      borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#86EFAC' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
+                      borderColor: activePres.clinicalSafety.safetyScore >= 90 ? '#6FDDB2' : activePres.clinicalSafety.safetyScore >= 70 ? '#FCD34D' : '#FCA5A5'
                     }}>
                       <Text style={{
                         fontSize: 10,
                         fontWeight: 'bold',
-                        color: activePres.clinicalSafety.safetyScore >= 90 ? '#15803D' : activePres.clinicalSafety.safetyScore >= 70 ? '#B45309' : '#B91C1C'
+                        color: activePres.clinicalSafety.safetyScore >= 90 ? '#0F9D6B' : activePres.clinicalSafety.safetyScore >= 70 ? '#B45309' : '#B91C1C'
                       }}>
                         Điểm an toàn: {activePres.clinicalSafety.safetyScore}/100 ({activePres.clinicalSafety.status || 'SAFE'})
                       </Text>
@@ -956,13 +956,13 @@ const styles = StyleSheet.create({
   signatureSigned: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     borderRadius: 4,
   },
   badgeTextSmall: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#166534',
+    color: '#0B7A53',
   },
   noOrderSelectedCard: {
     backgroundColor: '#FFFFFF',

@@ -262,7 +262,7 @@ const RegisterScreen = ({ navigation }) => {
 
                   {/* Info banner for staff */}
                   <View style={styles.staffNotice}>
-                    <Building2 size={20} color="#0891B2" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
+                    <Building2 size={20} color="#1A5FD0" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
                       <Text style={styles.staffNoticeText}>
@@ -396,7 +396,7 @@ const RegisterScreen = ({ navigation }) => {
 
             {/* Info banner for staff */}
             <View style={styles.staffNotice}>
-              <Building2 size={20} color="#0891B2" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
+              <Building2 size={20} color="#1A5FD0" style={{ marginRight: 10, marginTop: 2, flexShrink: 0 }} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.staffNoticeTitle}>Bạn là nhân viên y tế?</Text>
                 <Text style={styles.staffNoticeText}>
@@ -435,20 +435,20 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.alertCard}>
             <View style={[
               styles.alertIconCircle,
-              customAlert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              customAlert.type === 'success' && { backgroundColor: '#EEFBF5' },
               customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
               customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
             ]}>
               {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" />}
               {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" />}
-              {customAlert.type === 'info' && <Info size={28} color="#0891B2" />}
+              {customAlert.type === 'info' && <Info size={28} color="#1A5FD0" />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
             <TouchableOpacity
               style={[
                 styles.alertButton,
-                customAlert.type === 'success' && { backgroundColor: '#15803D' },
+                customAlert.type === 'success' && { backgroundColor: '#0F9D6B' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
                 customAlert.type === 'info' && { backgroundColor: '#2563EB' },
               ]}

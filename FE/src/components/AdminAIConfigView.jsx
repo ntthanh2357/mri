@@ -480,12 +480,12 @@ export default function AdminAIConfigView() {
             >
               {retraining ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
                   <span>Đang tiến hành huấn luyện ngầm trên máy chủ...</span>
                 </>
               ) : (
                 <>
-                  <RotateCw className="w-4 h-4 text-cyan-400" />
+                  <RotateCw className="w-4 h-4 text-blue-400" />
                   <span>
                     {feedback.length >= 50
                       ? `Kích hoạt Huấn luyện lại đạt chuẩn (${feedback.length} ca)`
@@ -549,7 +549,7 @@ export default function AdminAIConfigView() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 text-center">
                 <div>
                   <p className="text-slate-400 text-[10px] uppercase">Mẫu huấn luyện</p>
-                  <p className="text-xl font-bold font-mono text-cyan-300">{retrainStatus.result.samples_trained} ca</p>
+                  <p className="text-xl font-bold font-mono text-blue-300">{retrainStatus.result.samples_trained} ca</p>
                 </div>
                 <div>
                   <p className="text-slate-400 text-[10px] uppercase">Độ chính xác gốc</p>
@@ -569,7 +569,7 @@ export default function AdminAIConfigView() {
 
               <div className="pt-3 border-t border-indigo-800/40 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-[11px] text-slate-300">
-                  Mô hình ứng viên: <span className="font-mono text-cyan-300">{retrainStatus.result.candidate_model_path?.split('/').pop()}</span>
+                  Mô hình ứng viên: <span className="font-mono text-blue-300">{retrainStatus.result.candidate_model_path?.split('/').pop()}</span>
                 </p>
                 <button
                   onClick={handleDeployModel}

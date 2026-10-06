@@ -27,8 +27,8 @@ const STATUS_MAP = {
   'chờ khám bệnh': {
     label: 'Chờ khám bệnh',
     icon: Stethoscope,
-    bg: '#E0F2FE',
-    border: '#BAE6FD',
+    bg: '#E7F0FE',
+    border: '#C9DCFB',
     text: '#0369A1',
   },
   'đang khám': {
@@ -55,9 +55,9 @@ const STATUS_MAP = {
   'đang chụp': {
     label: 'Đang chụp MRI',
     icon: Activity,
-    bg: '#CFFAFE',
-    border: '#A5F3FC',
-    text: '#0E7490',
+    bg: '#DBEAFE',
+    border: '#BFDBFE',
+    text: '#144BA8',
   },
   'chờ kết quả AI': {
     label: 'Chờ AI phân tích',
@@ -76,9 +76,9 @@ const STATUS_MAP = {
   'hoàn tất': {
     label: 'Hoàn tất',
     icon: CheckCircle2,
-    bg: '#F0FDF4',
-    border: '#BBF7D0',
-    text: '#15803D',
+    bg: '#EEFBF5',
+    border: '#A8EBCD',
+    text: '#0F9D6B',
   },
   'đã hủy': {
     label: 'Đã hủy',

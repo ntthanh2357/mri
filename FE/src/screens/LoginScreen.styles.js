@@ -21,7 +21,7 @@ export default StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -83,7 +83,7 @@ export default StyleSheet.create({
   },
   forgotText: {
     fontSize: 14,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: '500',
   },
   passwordContainer: {
@@ -113,11 +113,11 @@ export default StyleSheet.create({
   },
   loginButton: {
     height: 52,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#15803D',
+    shadowColor: '#0F9D6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -141,7 +141,7 @@ export default StyleSheet.create({
     marginTop: 4,
   },
   resendOtpText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -220,7 +220,7 @@ export default StyleSheet.create({
   },
   registerLink: {
     fontSize: 14,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
   quickButton: {
@@ -280,7 +280,7 @@ export default StyleSheet.create({
   },
   modalSubmitButton: {
     height: 52,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -292,19 +292,19 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
   otpNotice: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
   otpNoticeText: {
-    color: '#166534',
+    color: '#0B7A53',
     fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   otpNoticeSubtext: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 11,
     lineHeight: 16,
   },
@@ -336,7 +336,7 @@ export default StyleSheet.create({
   modalConfirmButton: {
     flex: 2,
     height: 52,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -433,7 +433,7 @@ export default StyleSheet.create({
   desktopTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#15803D',
+    color: '#0F9D6B',
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -597,7 +597,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -625,7 +625,7 @@ export default StyleSheet.create({
   brandSub: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   navLinks: {
     flexDirection: 'row',
@@ -654,7 +654,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   loginBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -709,11 +709,11 @@ export default StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     backgroundColor: '#FFFFFF',
   },
   homeLinkBtnText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 13,
     fontWeight: 'bold',
   },
@@ -746,7 +746,7 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   activeMethodTabText: {
-    color: '#004080',
+    color: '#0F9D6B',
   },
   inputFocused: {
     borderColor: '#004080',
@@ -768,7 +768,7 @@ export default StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activeRoleTab: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -799,7 +799,7 @@ export default StyleSheet.create({
     lineHeight: 18,
   },
   hotlineLink: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
 });

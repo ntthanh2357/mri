@@ -522,7 +522,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>SỞ Y TẾ ĐÀ NẴNG</Text>
                       <Text style={s.docHospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                     </View>
-                    <Building2 size={26} color="#0891B2" />
+                    <Building2 size={26} color="#1A5FD0" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THÔNG TIN KHÁM BỆNH</Text>
@@ -580,7 +580,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   
                   <View style={s.docActionRow}>
                     <TouchableOpacity onPress={() => setExamDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
-                      <Edit2 size={13} color="#0891B2" />
+                      <Edit2 size={13} color="#1A5FD0" />
                       <Text style={s.docEditBtnText}>Sửa lại phiếu</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
@@ -660,7 +660,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                       <Text style={s.docHospitalSub}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
                     </View>
-                    <FileText size={26} color="#0891B2" />
+                    <FileText size={26} color="#1A5FD0" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU CHỈ ĐỊNH DỊCH VỤ</Text>
@@ -717,7 +717,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   
                   <View style={s.docActionRow}>
                     <TouchableOpacity onPress={() => setOrderDone(false)} style={[s.docEditBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
-                      <Edit2 size={13} color="#0891B2" />
+                      <Edit2 size={13} color="#1A5FD0" />
                       <Text style={s.docEditBtnText}>Sửa lại chỉ định</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => window.print()} style={[s.docPrintBtn, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
@@ -805,7 +805,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
                       <Text style={s.docHospitalAddress}>Khu Công Nghệ Cao Y Tế & Chuyên Khoa U Não Đà Nẵng</Text>
                     </View>
-                    <CreditCard size={26} color="#0891B2" />
+                    <CreditCard size={26} color="#1A5FD0" />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THU VIỆN PHÍ</Text>
@@ -976,7 +976,7 @@ const s = StyleSheet.create({
   toggleBtnRed: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
   toggleBtnText: { color: "#64748B", fontWeight: "600", fontSize: 13 },
   toggleBtnTextActive: { color: "#065F46" },
-  serviceRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: "#BBF7D0" },
+  serviceRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#EEFBF5", borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: "#A8EBCD" },
   addBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 14, justifyContent: "center", alignItems: "center", minHeight: 44 },
   addBtnText: { color: "#fff", fontWeight: "800", fontSize: 20 },
   quickChip: { backgroundColor: "#EFF6FF", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#BFDBFE" },

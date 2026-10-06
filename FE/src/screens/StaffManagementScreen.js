@@ -340,8 +340,8 @@ export default function StaffManagementScreen({ navigation }) {
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ fontSize: 12, color: item.isLocked ? '#166534' : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
-                                <Text style={[styles.lockButtonText, item.isLocked && { color: '#166534' }]}>
+                                <Text style={{ fontSize: 12, color: item.isLocked ? '#0B7A53' : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
+                                <Text style={[styles.lockButtonText, item.isLocked && { color: '#0B7A53' }]}>
                                   {item.isLocked ? 'Mở khóa' : 'Khóa'}
                                 </Text>
                               </View>
@@ -369,9 +369,9 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
   tabBar: { flexDirection: 'row', flexWrap: 'wrap', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 0, marginBottom: 16 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#15803D' },
+  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#0F9D6B' },
   tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#15803D', fontWeight: 'bold' },
+  tabTextActive: { color: '#0F9D6B', fontWeight: 'bold' },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   field: { marginBottom: 14 },
   label: { fontSize: 11, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
   input: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, backgroundColor: '#F8FAFC', color: '#0F172A' },
-  submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  submitButton: { height: 40, backgroundColor: '#0F9D6B', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.7 },
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   listHeader: { flexDirection: 'column', gap: 10, marginBottom: 16 },
@@ -400,11 +400,11 @@ const styles = StyleSheet.create({
   staffActions: { alignItems: 'flex-end', gap: 6 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeLocked: { backgroundColor: '#FEE2E2' },
-  badgeActive: { backgroundColor: '#DCFCE7' },
+  badgeActive: { backgroundColor: '#D5F5E7' },
   badgePending: { backgroundColor: '#FEF3C7' },
   statusBadgeText: { fontSize: 10, fontWeight: '600' },
   textLocked: { color: '#991B1B' },
-  textActive: { color: '#166534' },
+  textActive: { color: '#0B7A53' },
   textPending: { color: '#B45309' },
   lockButton: { paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, backgroundColor: '#FFFFFF' },
   unlockButton: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },

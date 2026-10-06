@@ -31,7 +31,7 @@ const MriSafetyCheckModal = ({
       <View style={styles.modalOverlay}>
         <View style={[styles.modalBox, { maxHeight: '92%' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-            <ClipboardCheck size={22} color="#0891B2" style={{ marginRight: 8 }} />
+            <ClipboardCheck size={22} color="#1A5FD0" style={{ marginRight: 8 }} />
             <Text style={[styles.modalTitle, { color: '#0F172A', marginBottom: 0 }]}>Bảng Kiểm An Toàn MRI Trước Buồng Máy</Text>
           </View>
           <Text style={styles.modalSub}>
@@ -168,7 +168,7 @@ const MriSafetyCheckModal = ({
             <TouchableOpacity
               style={[
                 styles.btnConfirm,
-                { backgroundColor: hasPacemakerOrMetal ? '#DC2626' : '#15803D' }
+                { backgroundColor: hasPacemakerOrMetal ? '#DC2626' : '#0F9D6B' }
               ]}
               onPress={onSubmit}
               disabled={submitting}

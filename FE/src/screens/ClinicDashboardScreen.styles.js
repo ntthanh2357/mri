@@ -61,7 +61,7 @@ export default StyleSheet.create({
   actionButtonSolid: {
     flex: 1,
     height: 44,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -89,7 +89,7 @@ export default StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -109,14 +109,14 @@ export default StyleSheet.create({
     marginVertical: 4,
   },
   badgeGreen: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgeGreenText: {
     fontSize: 10,
-    color: '#14532D',
+    color: '#075E40',
     fontWeight: '600',
   },
   walletCard: {
@@ -145,7 +145,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   walletDepositBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -254,7 +254,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: '500',
   },
   activityCard: {
@@ -299,7 +299,7 @@ export default StyleSheet.create({
     marginBottom: 4,
   },
   statusSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
   },
   statusPending: {
     backgroundColor: '#FEF3C7',
@@ -307,7 +307,7 @@ export default StyleSheet.create({
   statusSuccessText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#166534',
+    color: '#0B7A53',
   },
   statusPendingText: {
     fontSize: 10,
@@ -398,7 +398,7 @@ export default StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   pricingSubmitBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 8,
     height: 38,
     justifyContent: 'center',

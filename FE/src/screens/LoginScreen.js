@@ -88,7 +88,7 @@ const LoginScreen = ({ navigation }) => {
   if (checkingAuth) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
-        <ActivityIndicator size="large" color="#15803D" />
+        <ActivityIndicator size="large" color="#0F9D6B" />
       </SafeAreaView>
     );
   }
@@ -777,7 +777,7 @@ const LoginScreen = ({ navigation }) => {
                               style={[styles.eyeButton, styles.desktopEyeButton, { right: 10, width: 80, height: 40, justifyContent: 'center' }]}
                               onPress={() => setOtpSent(false)}
                             >
-                              <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                              <Text style={{ fontSize: 11, color: '#0F9D6B', fontWeight: '600' }}>Gửi lại mã</Text>
                             </TouchableOpacity>
                           </View>
                           {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
@@ -794,8 +794,8 @@ const LoginScreen = ({ navigation }) => {
                           height: 18,
                           borderRadius: 4,
                           borderWidth: 1.5,
-                          borderColor: rememberMe ? '#0891B2' : '#94A3B8',
-                          backgroundColor: rememberMe ? '#0891B2' : 'transparent',
+                          borderColor: rememberMe ? '#1A5FD0' : '#94A3B8',
+                          backgroundColor: rememberMe ? '#1A5FD0' : 'transparent',
                           alignItems: 'center',
                           justifyContent: 'center',
                           marginRight: 8
@@ -1100,7 +1100,7 @@ const LoginScreen = ({ navigation }) => {
                         style={[styles.eyeButton, { right: 10, width: 80, height: 50, justifyContent: 'center' }]}
                         onPress={() => setOtpSent(false)}
                       >
-                        <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Gửi lại mã</Text>
+                        <Text style={{ fontSize: 11, color: '#0F9D6B', fontWeight: '600' }}>Gửi lại mã</Text>
                       </TouchableOpacity>
                     </View>
                     {passwordError ? <Text style={styles.inlineError}>{passwordError}</Text> : null}
@@ -1117,8 +1117,8 @@ const LoginScreen = ({ navigation }) => {
                     height: 18,
                     borderRadius: 4,
                     borderWidth: 1.5,
-                    borderColor: rememberMe ? '#0891B2' : '#94A3B8',
-                    backgroundColor: rememberMe ? '#0891B2' : 'transparent',
+                    borderColor: rememberMe ? '#1A5FD0' : '#94A3B8',
+                    backgroundColor: rememberMe ? '#1A5FD0' : 'transparent',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 8
@@ -1294,20 +1294,20 @@ const LoginScreen = ({ navigation }) => {
           <View style={styles.alertCard}>
             <View style={[
               styles.alertIconCircle,
-              customAlert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              customAlert.type === 'success' && { backgroundColor: '#EEFBF5' },
               customAlert.type === 'error' && { backgroundColor: '#FEF2F2' },
               customAlert.type === 'info' && { backgroundColor: '#EFF6FF' },
             ]}>
               {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" />}
               {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" />}
-              {customAlert.type === 'info' && <Info size={28} color="#0891B2" />}
+              {customAlert.type === 'info' && <Info size={28} color="#1A5FD0" />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
             <TouchableOpacity
               style={[
                 styles.alertButton,
-                customAlert.type === 'success' && { backgroundColor: '#15803D' },
+                customAlert.type === 'success' && { backgroundColor: '#0F9D6B' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
                 customAlert.type === 'info' && { backgroundColor: '#2563EB' },
               ]}

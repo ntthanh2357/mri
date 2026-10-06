@@ -23,7 +23,7 @@ const FeeStatusBadge = ({ visit, invoice }) => {
   if (hasBHYT) {
     return (
       <View style={[styles.badge, styles.bhytBadge]}>
-        <ShieldCheck size={12} color="#15803D" style={{ marginRight: 4 }} />
+        <ShieldCheck size={12} color="#0F9D6B" style={{ marginRight: 4 }} />
         <Text style={[styles.badgeText, styles.bhytText]}>BHYT: Đã bảo lãnh</Text>
       </View>
     );
@@ -32,7 +32,7 @@ const FeeStatusBadge = ({ visit, invoice }) => {
   if (isPaid) {
     return (
       <View style={[styles.badge, styles.paidBadge]}>
-        <CreditCard size={12} color="#166534" style={{ marginRight: 4 }} />
+        <CreditCard size={12} color="#0B7A53" style={{ marginRight: 4 }} />
         <Text style={[styles.badgeText, styles.paidText]}>Đã đóng viện phí</Text>
       </View>
     );
@@ -69,18 +69,18 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
   },
   bhytBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     borderColor: '#16A34A',
   },
   bhytText: {
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   paidBadge: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     borderColor: '#22C55E',
   },
   paidText: {
-    color: '#166534',
+    color: '#0B7A53',
   },
   unpaidBadge: {
     backgroundColor: '#FEF3C7',

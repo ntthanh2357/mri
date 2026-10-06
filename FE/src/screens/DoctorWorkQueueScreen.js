@@ -6,6 +6,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import ReceptionQueueBoard from '../components/reception/ReceptionQueueBoard';
 import Config from '../constants/config';
 import MriSafetyCheckModal from '../components/MriSafetyCheckModal';
 import MriRescanModal from '../components/MriRescanModal';
@@ -45,15 +46,15 @@ import {
 
 const STATUS_CONFIG = {
   'đang chờ':       { color: '#FEF3C7', text: '#D97706', label: 'Đang chờ' },
-  'chờ khám bệnh':  { color: '#E0F2FE', text: '#0284C7', label: 'Chờ khám bệnh' },
+  'chờ khám bệnh':  { color: '#E7F0FE', text: '#0284C7', label: 'Chờ khám bệnh' },
   'đang khám':      { color: '#DBEAFE', text: '#2563EB', label: 'Đang khám' },
   'chờ chụp':       { color: '#FDE8FF', text: '#9333EA', label: 'Chờ chụp MRI' },
   'chờ chụp lại':   { color: '#FFEDD5', text: '#EA580C', label: 'Chờ chụp lại' },
-  'đang chụp':      { color: '#E0F2FE', text: '#0284C7', label: 'Đang chụp' },
+  'đang chụp':      { color: '#E7F0FE', text: '#0284C7', label: 'Đang chụp' },
   'đã hủy':         { color: '#FEE2E2', text: '#DC2626', label: 'Đã hủy' },
   'chờ kết quả AI': { color: '#FEF9C3', text: '#CA8A04', label: 'Chờ AI' },
-  'chờ bác sĩ đọc': { color: '#ECFEFF', text: '#0891B2', label: 'Chờ đọc phim' },
-  'hoàn tất':       { color: '#F0FDF4', text: '#059669', label: 'Hoàn tất' },
+  'chờ bác sĩ đọc': { color: '#F2F7FF', text: '#1A5FD0', label: 'Chờ đọc phim' },
+  'hoàn tất':       { color: '#EEFBF5', text: '#059669', label: 'Hoàn tất' },
   'đã đóng':        { color: '#F1F5F9', text: '#64748B', label: 'Đã đóng' },
 };
 
@@ -688,12 +689,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>CẤP CỨU: Chụp trước, thu sau</Text>
               </View>
             ) : (v.patientId?.profile?.hasBhyt || v.visitType === 'BHYT') ? (
-              <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#86EFAC', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <ShieldCheck size={12} color="#166534" strokeWidth={2.4} />
-                <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>BHYT: Đã bảo lãnh chi trả</Text>
+              <View style={{ backgroundColor: '#D5F5E7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#6FDDB2', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <ShieldCheck size={12} color="#0B7A53" strokeWidth={2.4} />
+                <Text style={{ color: '#0B7A53', fontSize: 11, fontWeight: 'bold' }}>BHYT: Đã bảo lãnh chi trả</Text>
               </View>
             ) : v.invoiceId?.status === 'đã thanh toán' ? (
-              <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ backgroundColor: '#E7F0FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#C9DCFB', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <CreditCard size={12} color="#0369A1" strokeWidth={2.2} />
                 <Text style={{ color: '#0369A1', fontSize: 11, fontWeight: 'bold' }}>Đã đóng phí MRI ({v.invoiceId?.totalAmount?.toLocaleString('vi-VN')}đ)</Text>
               </View>
@@ -706,9 +707,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
             {/* Bảng kiểm an toàn MRI status badge */}
             {v.mriSafetyChecklist?.passed ? (
-              <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <CheckCircle2 size={12} color="#15803D" strokeWidth={2.4} />
-                <Text style={{ color: '#15803D', fontSize: 11, fontWeight: '600' }}>An toàn MRI: Đạt ({v.mriSafetyChecklist.screenedBy || 'KTV'})</Text>
+              <View style={{ backgroundColor: '#EEFBF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#A8EBCD', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <CheckCircle2 size={12} color="#0F9D6B" strokeWidth={2.4} />
+                <Text style={{ color: '#0F9D6B', fontSize: 11, fontWeight: '600' }}>An toàn MRI: Đạt ({v.mriSafetyChecklist.screenedBy || 'KTV'})</Text>
               </View>
             ) : v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.passed ? (
               <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FCA5A5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -742,7 +743,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* Vitals */}
         {Boolean(v.vitals?.bloodPressure) && (
           <View style={styles.vitalsRow}>
-            <Activity size={13} color="#0891B2" strokeWidth={2.2} />
+            <Activity size={13} color="#1A5FD0" strokeWidth={2.2} />
             <Text style={styles.vitalsLabel}>Sinh hiệu:</Text>
             <Text style={styles.vitalsValue}>
               HA {v.vitals.bloodPressure} | Mạch {v.vitals.pulse} | SpO₂ {v.vitals.spo2}%
@@ -753,7 +754,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* MRI Order info */}
         {Boolean(v.mriOrder?.region) && (
           <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-            <Scan size={13} color="#0891B2" strokeWidth={2.2} />
+            <Scan size={13} color="#1A5FD0" strokeWidth={2.2} />
             <Text style={styles.mriInfoText}>
               Y lệnh MRI: <Text style={{ fontWeight: 'bold' }}>{v.mriOrder.region}</Text>
               {v.mriOrder.requestAiAnalysis ? ' · Yêu cầu AI phân tích' : ''}
@@ -795,7 +796,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           )}
           {(isTechnician || isAdmin) && canStartMri && (
             <TouchableOpacity
-              style={[styles.btnStart, { backgroundColor: v.mriSafetyChecklist?.passed ? '#059669' : '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+              style={[styles.btnStart, { backgroundColor: v.mriSafetyChecklist?.passed ? '#059669' : '#1A5FD0', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
               onPress={() => handleStartScan(v)}
             >
               <Camera size={14} color="#FFFFFF" strokeWidth={2.2} />
@@ -805,7 +806,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           )}
           {(isTechnician || isAdmin) && canUploadMri && (
-            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openUploadModal(v)}>
+            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#1A5FD0', flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openUploadModal(v)}>
               <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
               <Text style={styles.btnStartText}>Nộp Ảnh Phim</Text>
             </TouchableOpacity>
@@ -885,7 +886,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           {!isNurse && v.status === 'đang khám' && (
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
               <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                style={[styles.btnStart, { backgroundColor: '#1A5FD0', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                 onPress={() => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id })}
               >
                 <Pill size={14} color="#FFFFFF" strokeWidth={2.2} />
@@ -998,6 +999,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
 
+  // Lễ tân dùng màn hình gọi số riêng (chỉ xem, không thao tác lâm sàng)
+  if (isReceptionist) {
+    return (
+      <ResponsiveLayout navigation={navigation} title="Hàng chờ ca khám" user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
+        <ReceptionQueueBoard navigation={navigation} />
+      </ResponsiveLayout>
+    );
+  }
+
   const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng Đợi Khám & Chẩn Đoán';
 
   return (
@@ -1022,7 +1032,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
-            backgroundColor: currentMode === 'all' ? '#0891B2' : 'transparent',
+            backgroundColor: currentMode === 'all' ? '#1A5FD0' : 'transparent',
             gap: 6,
           }}
           onPress={() => setCurrentMode('all')}
@@ -1045,7 +1055,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
-            backgroundColor: currentMode === 'examQueue' ? '#0891B2' : 'transparent',
+            backgroundColor: currentMode === 'examQueue' ? '#1A5FD0' : 'transparent',
             gap: 6,
           }}
           onPress={() => setCurrentMode('examQueue')}
@@ -1068,7 +1078,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             justifyContent: 'center',
             paddingVertical: 10,
             borderRadius: 9,
-            backgroundColor: currentMode === 'mriQueue' ? '#0891B2' : 'transparent',
+            backgroundColor: currentMode === 'mriQueue' ? '#1A5FD0' : 'transparent',
             gap: 6,
           }}
           onPress={() => setCurrentMode('mriQueue')}
@@ -1101,14 +1111,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color="#1A5FD0" style={{ marginTop: 60 }} />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {(activeTab === 'queue' ? activeVisits : doneVisits).map(renderVisitCard)}
           {(activeTab === 'queue' ? activeVisits : doneVisits).length === 0 && (
             <View style={styles.empty}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#ECFEFF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                {activeTab === 'queue' ? <Inbox size={26} color="#0891B2" strokeWidth={2} /> : <CheckCircle2 size={26} color="#059669" strokeWidth={2} />}
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#F2F7FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                {activeTab === 'queue' ? <Inbox size={26} color="#1A5FD0" strokeWidth={2} /> : <CheckCircle2 size={26} color="#059669" strokeWidth={2} />}
               </View>
               <Text style={styles.emptyText}>
                 {activeTab === 'queue' ? 'Không có ca khám đang chờ xử lý' : 'Chưa có ca hoàn tất'}
@@ -1123,7 +1133,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <Scan size={20} color="#0891B2" strokeWidth={2.4} />
+              <Scan size={20} color="#1A5FD0" strokeWidth={2.4} />
               <Text style={styles.modalTitle}>Ra Y Lệnh Chụp MRI</Text>
             </View>
             <Text style={styles.modalSub}>
@@ -1161,7 +1171,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 {requestAi && <CheckCircle2 size={13} color="#FFFFFF" />}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Cpu size={14} color="#0891B2" strokeWidth={2.2} />
+                <Cpu size={14} color="#1A5FD0" strokeWidth={2.2} />
                 <Text style={styles.aiToggleText}>Yêu cầu AI phân tích kết quả sau khi chụp</Text>
               </View>
             </TouchableOpacity>
@@ -1189,7 +1199,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <UploadCloud size={20} color="#0891B2" />
+                  <UploadCloud size={20} color="#1A5FD0" />
                   <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Nộp Phim Chụp & Lưu Trữ Mini-PACS</Text>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
@@ -1208,8 +1218,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                   <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E293B' }}>
                     ① Ảnh cắt lớp tiêu biểu (Key Slices) <Text style={{ color: '#EF4444' }}>*</Text>
                   </Text>
-                  <View style={{ backgroundColor: uploadedImages.length > 0 ? '#DCFCE7' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: uploadedImages.length > 0 ? '#166534' : '#991B1B' }}>
+                  <View style={{ backgroundColor: uploadedImages.length > 0 ? '#D5F5E7' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: uploadedImages.length > 0 ? '#0B7A53' : '#991B1B' }}>
                       {uploadedImages.length}/3 ảnh
                     </Text>
                   </View>
@@ -1494,7 +1504,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, margin: 16, padding: 4, gap: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: '#15803D' },
+  tabActive: { backgroundColor: '#0F9D6B' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   tabTextActive: { color: '#fff' },
   list: { padding: 16, gap: 12 },
@@ -1519,7 +1529,7 @@ const styles = StyleSheet.create({
   btnMriText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   btnRead: { backgroundColor: '#0284C7', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   btnReadText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  btnStart: { backgroundColor: '#15803D', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  btnStart: { backgroundColor: '#0F9D6B', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   btnStartText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
   emptyIcon: { fontSize: 48 },
@@ -1539,7 +1549,7 @@ const styles = StyleSheet.create({
   textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
   aiToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  checkboxChecked: { backgroundColor: '#0F9D6B', borderColor: '#0F9D6B' },
   checkmark: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   aiToggleText: { fontSize: 13, color: '#334155', flex: 1 },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },

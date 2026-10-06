@@ -52,8 +52,8 @@ export default StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   filterChipActive: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: '#0F9D6B',
+    borderColor: '#0F9D6B',
   },
   filterChipText: { fontSize: 12, fontWeight: '600', color: '#475569' },
   filterChipTextActive: { color: '#FFFFFF' },
@@ -107,7 +107,7 @@ export default StyleSheet.create({
     justify: 'center',
   },
   actionBtnPrimary: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
   },
   actionBtnPrimaryText: {
     color: '#FFFFFF',

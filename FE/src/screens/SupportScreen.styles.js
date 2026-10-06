@@ -146,7 +146,7 @@ export default StyleSheet.create({
   faqCategory: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#1A5FD0',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 8,
@@ -263,7 +263,7 @@ export default StyleSheet.create({
   },
   sendBtn: {
     height: 48,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',

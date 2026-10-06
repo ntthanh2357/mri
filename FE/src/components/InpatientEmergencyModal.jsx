@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -69,6 +71,14 @@ export default function InpatientEmergencyModal({
       }
     }
   }, [existingEvent]);
+
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
 
   if (!isOpen) return null;
 
@@ -154,7 +164,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã giải trừ báo động nhầm (Stand-down).');
+        await alert('Đã giải trừ báo động nhầm (Stand-down).');
         setShowCancelPrompt(false);
         if (onSuccess) onSuccess(res.data.event);
         onClose();
@@ -258,7 +268,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã đóng sự kiện cấp cứu thành công.');
+        await alert('Đã đóng sự kiện cấp cứu thành công.');
         if (onSuccess) onSuccess(res.data.event);
         onClose();
       }
@@ -278,6 +288,8 @@ export default function InpatientEmergencyModal({
   };
 
   return (
+    <Portal>
+      {dialog}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         
@@ -490,7 +502,7 @@ export default function InpatientEmergencyModal({
                   {/* Kíp trực điều phối Roster */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                      <UserCheck className="w-4 h-4 text-cyan-700" /> Kíp Trực Điều Phối (Roster On-Duty)
+                      <UserCheck className="w-4 h-4 text-blue-700" /> Kíp Trực Điều Phối (Roster On-Duty)
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(eventData.assignedRoster || []).map((r, i) => (
@@ -568,7 +580,7 @@ export default function InpatientEmergencyModal({
               {/* TAB 2: POST-TRIGGER ENRICH */}
               {activeTab === 'enrich' && (
                 <div className="space-y-4">
-                  <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-900">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
                     💡 <b>Bổ sung thông số lâm sàng:</b> Giúp kíp trực nắm rõ mức độ tri giác và dấu hiệu thần kinh khu trú.
                   </div>
 
@@ -767,7 +779,7 @@ export default function InpatientEmergencyModal({
               {/* TAB 5: ICU BED PROPOSAL */}
               {activeTab === 'icu_bed' && (
                 <div className="space-y-4">
-                  <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-900 leading-relaxed">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
                     🏥 <b>Đề xuất giữ giường Hồi sức U Não (Neuro-ICU):</b> Hệ thống gửi yêu cầu sang Bác sĩ trực Đơn nguyên Hồi sức Cấp cứu U Não để phê duyệt giữ giường tạm thời trong 4 giờ.
                   </div>
 
@@ -878,5 +890,6 @@ export default function InpatientEmergencyModal({
 
       </div>
     </div>
+    </Portal>
   );
 }

@@ -30,7 +30,7 @@ export default StyleSheet.create({
     color: '#0F172A',
   },
   saveBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -39,7 +39,7 @@ export default StyleSheet.create({
     minWidth: 100,
   },
   saveBtnDisabled: {
-    backgroundColor: '#86EFAC',
+    backgroundColor: '#6FDDB2',
   },
   saveBtnText: {
     color: '#FFFFFF',
@@ -133,15 +133,15 @@ export default StyleSheet.create({
     alignItems: 'center',
   },
   activeGenderBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
+    borderColor: '#0F9D6B',
+    backgroundColor: '#D5F5E7',
   },
   genderBtnText: {
     fontSize: 13,
     color: '#475569',
   },
   activeGenderBtnText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
   typeRow: {
@@ -159,15 +159,15 @@ export default StyleSheet.create({
     alignItems: 'center',
   },
   activeTypeBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
+    borderColor: '#0F9D6B',
+    backgroundColor: '#D5F5E7',
   },
   typeBtnText: {
     fontSize: 14,
     color: '#475569',
   },
   activeTypeBtnText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
   divider: {
@@ -240,7 +240,7 @@ export default StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
@@ -251,7 +251,7 @@ export default StyleSheet.create({
     borderColor: '#94A3B8',
   },
   uploadButtonText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 13,
     fontWeight: 'bold',
   },

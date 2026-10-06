@@ -193,7 +193,7 @@ export default function AdminSaaSSuiteView() {
 
   const planStyle = (plan) => {
     if (plan === 'pro') return { bg: '#eef2ff', color: '#4338ca' };
-    if (plan === 'basic') return { bg: '#e0f2fe', color: '#0369a1' };
+    if (plan === 'basic') return { bg: '#E7F0FE', color: '#0369a1' };
     return { bg: '#f1f5f9', color: '#475569' };
   };
 

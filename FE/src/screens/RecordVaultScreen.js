@@ -186,7 +186,7 @@ const RecordVaultScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#15803D" />
+        <ActivityIndicator size="large" color="#0F9D6B" />
       </View>
     );
   }
@@ -213,14 +213,14 @@ const RecordVaultScreen = ({ navigation }) => {
           </Text>
 
           {/* Privacy Security Notice Banner */}
-          <View style={{ backgroundColor: '#F0FDF4', borderLeftWidth: 4, borderLeftColor: '#16A34A', padding: 14, borderRadius: 8, marginBottom: 20 }}>
+          <View style={{ backgroundColor: '#EEFBF5', borderLeftWidth: 4, borderLeftColor: '#16A34A', padding: 14, borderRadius: 8, marginBottom: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <ShieldCheck size={16} color="#15803D" />
-              <Text style={{ fontWeight: 'bold', color: '#15803D', fontSize: 13 }}>
+              <ShieldCheck size={16} color="#0F9D6B" />
+              <Text style={{ fontWeight: 'bold', color: '#0F9D6B', fontSize: 13 }}>
                 Bảo mật danh tính an toàn (Nghị định 13/2023/NĐ-CP)
               </Text>
             </View>
-            <Text style={{ fontSize: 12, color: '#166534', lineHeight: 18 }}>
+            <Text style={{ fontSize: 12, color: '#0B7A53', lineHeight: 18 }}>
               Hệ thống không lưu trữ số CCCD hoặc số thẻ BHYT để bảo vệ dữ liệu cá nhân. Hồ sơ của bạn được định danh qua <Text style={{ fontWeight: 'bold' }}>Mã y tế (Medical ID)</Text> được cấp khi khám bệnh.
             </Text>
           </View>
@@ -239,7 +239,7 @@ const RecordVaultScreen = ({ navigation }) => {
                   >
                     <View style={styles.cardLeft}>
                       <View style={styles.iconBox}>
-                        <DocTypeIcon type={type} size={20} color="#0891B2" />
+                        <DocTypeIcon type={type} size={20} color="#1A5FD0" />
                       </View>
                       <View style={styles.cardMeta}>
                         <Text style={styles.cardLabel}>{info.label}</Text>
@@ -275,7 +275,7 @@ const RecordVaultScreen = ({ navigation }) => {
               <>
                 <View style={styles.sheetHandle} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <DocTypeIcon type={docModal.type} size={22} color="#0891B2" />
+                  <DocTypeIcon type={docModal.type} size={22} color="#1A5FD0" />
                   <Text style={styles.sheetTitle}>
                     {docModal.info.label}
                   </Text>
@@ -283,7 +283,7 @@ const RecordVaultScreen = ({ navigation }) => {
 
                 {/* Upload */}
                 <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage} activeOpacity={0.8}>
-                  <ImageIcon size={22} color="#0891B2" style={{ marginRight: 8 }} />
+                  <ImageIcon size={22} color="#1A5FD0" style={{ marginRight: 8 }} />
                   <View>
                     <Text style={styles.sheetBtnLabel}>Tải ảnh lên</Text>
                     <Text style={styles.sheetBtnSub}>Chụp hoặc chọn ảnh/PDF từ thiết bị</Text>
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   pageSubtitle: { fontSize: 13, color: '#64748B', lineHeight: 20, marginBottom: 24 },
   group: { marginBottom: 28 },
   groupTitle: {
-    fontSize: 12, fontWeight: 'bold', color: '#15803D',
+    fontSize: 12, fontWeight: 'bold', color: '#0F9D6B',
     textTransform: 'uppercase', letterSpacing: 0.5,
     marginBottom: 12, paddingBottom: 6,
     borderBottomWidth: 1, borderBottomColor: '#D1FAE5',
@@ -434,15 +434,15 @@ const styles = StyleSheet.create({
   cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconBox: {
     width: 44, height: 44, borderRadius: 12,
-    backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', marginRight: 12,
+    backgroundColor: '#EEFBF5', alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
   iconText: { fontSize: 22 },
   cardMeta: { flex: 1 },
   cardLabel: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
-  cardCount: { fontSize: 11, color: '#15803D', marginTop: 2 },
+  cardCount: { fontSize: 11, color: '#0F9D6B', marginTop: 2 },
   countBadge: {
     width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#0F9D6B', alignItems: 'center', justifyContent: 'center',
   },
   countBadgeText: { fontSize: 12, color: '#FFFFFF', fontWeight: 'bold' },
   addIcon: { fontSize: 22, color: '#CBD5E1' },
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10,
     backgroundColor: '#F8FAFC',
   },
-  sheetBtnPrimary: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  sheetBtnPrimary: { backgroundColor: '#0F9D6B', borderColor: '#0F9D6B' },
   sheetBtnIcon: { fontSize: 22, marginRight: 14 },
   sheetBtnLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
   sheetBtnLabelPrimary: { color: '#FFFFFF' },

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 import {
   FileText,
   AlertTriangle,
@@ -41,6 +43,14 @@ export default function EdHandoffModal({
   const [pacsAccessionNumber, setPacsAccessionNumber] = useState('');
 
   const [createdEvent, setCreatedEvent] = useState(null);
+
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
 
   if (!isOpen) return null;
 
@@ -87,7 +97,7 @@ export default function EdHandoffModal({
     try {
       const res = await put(`/api/v1/emergency/ed-accept/${createdEvent._id}`, {});
       if (res && res.success) {
-        alert('Bác sĩ Ngoại Thần Kinh đã chấp thuận nhận bệnh. Trách nhiệm lâm sàng đã được chuyển giao chính thức sang Khoa Ung Thư Não!');
+        await alert('Bác sĩ Ngoại Thần Kinh đã chấp thuận nhận bệnh. Trách nhiệm lâm sàng đã được chuyển giao chính thức sang Khoa Ung Thư Não!');
         onClose();
       }
     } catch (err) {
@@ -98,6 +108,8 @@ export default function EdHandoffModal({
   };
 
   return (
+    <Portal>
+      {dialog}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
         
@@ -138,7 +150,7 @@ export default function EdHandoffModal({
               {/* Thông tin hành chính & Liên kết HIS */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-cyan-700" /> I — Identification (Định danh bệnh nhân)
+                  <User className="w-4 h-4 text-blue-700" /> I — Identification (Định danh bệnh nhân)
                 </h4>
 
                 <div className="flex items-center gap-4">
@@ -271,12 +283,12 @@ export default function EdHandoffModal({
               </div>
 
               {/* Kéo ảnh CT từ PACS */}
-              <div className="p-4 bg-cyan-50/70 border border-cyan-200 rounded-xl space-y-2">
+              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
                 <div className="flex items-center gap-2">
-                  <Scan className="w-4 h-4 text-cyan-800" />
-                  <h4 className="text-xs font-bold text-cyan-950 uppercase">Liên Kết Ảnh CT Đã Chụp Tại Khoa Cấp Cứu</h4>
+                  <Scan className="w-4 h-4 text-blue-800" />
+                  <h4 className="text-xs font-bold text-blue-950 uppercase">Liên Kết Ảnh CT Đã Chụp Tại Khoa Cấp Cứu</h4>
                 </div>
-                <p className="text-[11px] text-cyan-800">
+                <p className="text-[11px] text-blue-800">
                   Nếu bệnh nhân đã được chụp CT sọ não cấp cứu tại ED, nhập mã Accession để kéo ảnh thẳng từ PACS chung, <b>tránh bắt bệnh nhân chụp lại</b>:
                 </p>
                 <input
@@ -284,7 +296,7 @@ export default function EdHandoffModal({
                   value={pacsAccessionNumber}
                   onChange={(e) => setPacsAccessionNumber(e.target.value)}
                   placeholder="VD: CT_BRAIN_STAT_88219 (Kéo ảnh từ PACS)"
-                  className="w-full text-xs px-3 py-2 border border-cyan-300 bg-white rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full text-xs px-3 py-2 border border-blue-300 bg-white rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -339,5 +351,6 @@ export default function EdHandoffModal({
 
       </div>
     </div>
+    </Portal>
   );
 }

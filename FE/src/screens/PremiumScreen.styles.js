@@ -103,7 +103,7 @@ export default StyleSheet.create({
   },
   featureIcon: {
     fontSize: 14,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
   featureIconDisabled: {
@@ -132,7 +132,7 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
   planCardPremium: {
-    backgroundColor: '#166534',
+    backgroundColor: '#0B7A53',
     borderRadius: 16,
     padding: 20,
     position: 'relative',
@@ -159,7 +159,7 @@ export default StyleSheet.create({
   },
   planDescPremium: {
     fontSize: 11,
-    color: '#BBF7D0',
+    color: '#A8EBCD',
     marginTop: 2,
     marginBottom: 12,
   },
@@ -175,17 +175,17 @@ export default StyleSheet.create({
   },
   planPeriodPremium: {
     fontSize: 13,
-    color: '#BBF7D0',
+    color: '#A8EBCD',
     marginLeft: 4,
   },
   featureIconPremium: {
     fontSize: 14,
-    color: '#86EFAC',
+    color: '#6FDDB2',
     fontWeight: 'bold',
   },
   featureTextPremium: {
     fontSize: 13,
-    color: '#F0FDF4',
+    color: '#EEFBF5',
   },
   premiumBtn: {
     height: 44,
@@ -195,7 +195,7 @@ export default StyleSheet.create({
     alignItems: 'center',
   },
   premiumBtnText: {
-    color: '#166534',
+    color: '#0B7A53',
     fontSize: 13,
     fontWeight: 'bold',
   },
@@ -214,7 +214,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   expireNoticeText: {
-    color: '#BBF7D0',
+    color: '#A8EBCD',
     fontSize: 11,
     textAlign: 'center',
     marginTop: 8,

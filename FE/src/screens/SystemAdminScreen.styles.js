@@ -108,7 +108,7 @@ export default StyleSheet.create({
   },
   barFill: {
     height: '100%',
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 2,
   },
   metricSub: {
@@ -130,13 +130,13 @@ export default StyleSheet.create({
   updateBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   updateBtnText: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -168,13 +168,13 @@ export default StyleSheet.create({
     color: '#0F172A',
   },
   activeTag: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   activeTagText: {
-    color: '#166534',
+    color: '#0B7A53',
     fontSize: 9,
     fontWeight: 'bold',
   },
@@ -210,14 +210,14 @@ export default StyleSheet.create({
   },
   sliderFill: {
     height: '100%',
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 2,
   },
   sliderThumb: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     position: 'absolute',
     transform: [{ translateX: -5 }],
   },
@@ -228,7 +228,7 @@ export default StyleSheet.create({
   },
   viewMoreText: {
     fontSize: 13,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: '600',
   },
   hardCasesCard: {
@@ -269,13 +269,13 @@ export default StyleSheet.create({
   deployBtnMini: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   deployBtnTextMini: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 11,
     fontWeight: 'bold',
   },
@@ -305,7 +305,7 @@ export default StyleSheet.create({
     marginTop: 2,
   },
   addDocBtn: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,

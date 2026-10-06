@@ -32,7 +32,7 @@ import styles from './PatientRecordsScreen.styles';
 
 const GROUP_META = {
   nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', Icon: FolderArchive, color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
-  nhom2: { label: 'Nhóm 2 — Lâm sàng', Icon: Stethoscope, color: '#F0FDF4', border: '#BBF7D0', text: '#059669' },
+  nhom2: { label: 'Nhóm 2 — Lâm sàng', Icon: Stethoscope, color: '#EEFBF5', border: '#A8EBCD', text: '#059669' },
   nhom3: { label: 'Nhóm 3 — Cận lâm sàng', Icon: Microscope, color: '#FFF7ED', border: '#FED7AA', text: '#D97706' },
   nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', Icon: ShieldCheck, color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
 };
@@ -78,7 +78,7 @@ const DocCard = ({ slot, savedDocs = [], onPress }) => {
   };
 
   const DocIcon = !hasSaved ? UploadCloud : uploadCount > 0 ? Paperclip : ClipboardList;
-  const docIconColor = !hasSaved ? '#94A3B8' : uploadCount > 0 ? '#0891B2' : '#059669';
+  const docIconColor = !hasSaved ? '#94A3B8' : uploadCount > 0 ? '#1A5FD0' : '#059669';
 
   return (
     <TouchableOpacity
@@ -243,7 +243,7 @@ const PatientRecordsScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#0891B2" />
+          <ActivityIndicator size="large" color="#1A5FD0" />
           <Text style={styles.centerText}>Đang tải hồ sơ...</Text>
         </View>
       </ResponsiveLayout>
@@ -291,7 +291,7 @@ const PatientRecordsScreen = ({ navigation }) => {
               <Text style={styles.statLabel}>Lượt khám</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#0891B2' }]}>{savedCount}</Text>
+              <Text style={[styles.statValue, { color: '#1A5FD0' }]}>{savedCount}</Text>
               <Text style={styles.statLabel}>Tài liệu đã lưu</Text>
             </View>
             <View style={styles.statCard}>
@@ -366,7 +366,7 @@ const PatientRecordsScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.infoNote}>
-            <Info size={16} color="#0891B2" style={{ marginTop: 2, marginRight: 8 }} />
+            <Info size={16} color="#1A5FD0" style={{ marginTop: 2, marginRight: 8 }} />
             <Text style={styles.infoNoteText}>
               Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>

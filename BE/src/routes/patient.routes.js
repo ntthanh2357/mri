@@ -39,7 +39,7 @@ const checkSelfOrRoles = (allowedRoles) => {
 router.use(protect);
 
 // Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
-router.get("/", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatients);
+router.get("/", checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getPatients);
 
 // Lấy chi tiết 1 bệnh nhân theo ID (cho phép xuyên viện để phục vụ chuyển tuyến)
 router.get("/:patientId", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatientById);

@@ -365,7 +365,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute={activeRoute}>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#15803D" />
+          <ActivityIndicator size="large" color="#0F9D6B" />
           <Text style={styles.loadingText}>Đang tải chi tiết kết quả chẩn đoán...</Text>
         </View>
       </ResponsiveLayout>
@@ -407,7 +407,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <TouchableOpacity
                 style={{
-                  backgroundColor: '#0891B2',
+                  backgroundColor: '#1A5FD0',
                   paddingVertical: 10,
                   paddingHorizontal: 16,
                   borderRadius: 8,
@@ -528,7 +528,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 </View>
                 <View style={styles.gridCell}>
                   <Text style={styles.fieldLabel}>Bác sĩ CĐHA (Đọc phim):</Text>
-                  <Text style={[styles.fieldValBold, { color: result.isSigned ? '#15803D' : '#D97706' }]}>
+                  <Text style={[styles.fieldValBold, { color: result.isSigned ? '#0F9D6B' : '#D97706' }]}>
                     {result.radiologist || 'Chờ bác sĩ CĐHA đọc & ký duyệt'}
                   </Text>
                 </View>
@@ -617,7 +617,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                       )}
 
                       <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#0891B2', borderRadius: 8 }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#1A5FD0', borderRadius: 8 }}
                         onPress={() => setShowFeedbackForm(!showFeedbackForm)}
                         disabled={approveSuccess}
                       >
@@ -835,12 +835,12 @@ const ImagingResultScreen = ({ route, navigation }) => {
               )}
 
               {explanation ? (
-                <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', padding: 16, borderRadius: 10, marginTop: 16 }}>
+                <View style={{ backgroundColor: '#EEFBF5', borderWidth: 1, borderColor: '#A8EBCD', padding: 16, borderRadius: 10, marginTop: 16 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Brain size={16} color="#166534" />
-                    <Text style={{ fontWeight: 'bold', color: '#166534', fontSize: 13 }}>GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
+                    <Brain size={16} color="#0B7A53" />
+                    <Text style={{ fontWeight: 'bold', color: '#0B7A53', fontSize: 13 }}>GIẢI THÍCH KẾT QUẢ BỞI AI (Dễ hiểu & Y đức):</Text>
                   </View>
-                  <Text style={{ color: '#14532D', fontSize: 13, lineHeight: 20 }}>{explanation}</Text>
+                  <Text style={{ color: '#075E40', fontSize: 13, lineHeight: 20 }}>{explanation}</Text>
                 </View>
               ) : explaining ? (
                 <View style={{ marginTop: 16, alignItems: 'center', padding: 12 }}>
@@ -887,7 +887,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
           <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <QrCode size={20} color="#0891B2" />
+                <QrCode size={20} color="#1A5FD0" />
                 <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center' }}>
                   Mã QR Chia Sẻ Kết Quả Chụp MRI
                 </Text>
@@ -914,7 +914,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
               <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
                 <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#0891B2', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, backgroundColor: '#1A5FD0', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
                   onPress={() => {
                     Alert.alert('Thành công', 'Đã sao chép link chia sẻ vào bộ nhớ tạm!');
                   }}

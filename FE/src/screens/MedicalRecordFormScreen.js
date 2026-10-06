@@ -116,7 +116,7 @@ const MedicalRecordFormScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#15803D" />
+        <ActivityIndicator size="large" color="#0F9D6B" />
         <Text style={styles.loadingText}>Đang tải biểu mẫu bệnh án...</Text>
       </View>
     );
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
   },
   lastSaved: {
     fontSize: 11,
-    color: '#15803D',
+    color: '#0F9D6B',
     marginTop: 4,
     fontWeight: '600',
   },
@@ -649,17 +649,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
   },
   sectionHeaderText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
     flex: 1,
   },
   sectionToggleIcon: {
     fontSize: 12,
-    color: '#15803D',
+    color: '#0F9D6B',
     marginLeft: 8,
   },
   sectionBody: {
@@ -742,8 +742,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   checkboxChecked: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
+    backgroundColor: '#0F9D6B',
+    borderColor: '#0F9D6B',
   },
   checkboxTick: {
     color: '#FFFFFF',
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     alignItems: 'center',
     justifyContent: 'center',
   },

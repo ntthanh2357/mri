@@ -746,7 +746,7 @@ const DocumentFormScreen = ({ route, navigation }) => {
   if (!initialLoaded) {
     return (
       <View style={s.errContainer}>
-        <ActivityIndicator size="large" color="#15803D" />
+        <ActivityIndicator size="large" color="#0F9D6B" />
       </View>
     );
   }
@@ -759,7 +759,7 @@ const DocumentFormScreen = ({ route, navigation }) => {
             <Text style={s.backBtnText}>← Quay lại</Text>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-            <DocTypeIcon type={type} size={20} color="#0891B2" />
+            <DocTypeIcon type={type} size={20} color="#1A5FD0" />
             <Text style={s.headerTitle} numberOfLines={1}>{info.label}</Text>
           </View>
         </View>
@@ -809,10 +809,10 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 15, fontWeight: 'bold', color: '#0F172A', flex: 1 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40 },
   metaCard: {
-    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#D1FAE5',
+    backgroundColor: '#EEFBF5', borderWidth: 1, borderColor: '#D1FAE5',
     borderRadius: 14, padding: 14, marginBottom: 12,
   },
-  metaTitle: { fontSize: 12, fontWeight: 'bold', color: '#15803D', marginBottom: 10 },
+  metaTitle: { fontSize: 12, fontWeight: 'bold', color: '#0F9D6B', marginBottom: 10 },
   formCard: {
     backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0',
     borderRadius: 14, padding: 16, marginBottom: 16,
@@ -838,7 +838,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC',
   },
-  radioBtnActive: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  radioBtnActive: { backgroundColor: '#0F9D6B', borderColor: '#0F9D6B' },
   radioBtnText: { fontSize: 12, color: '#475569', fontWeight: '500' },
   radioBtnTextActive: { color: '#FFFFFF' },
   cbRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, paddingVertical: 2 },
@@ -848,7 +848,7 @@ const s = StyleSheet.create({
     borderColor: '#CBD5E1', backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center', marginRight: 10, marginTop: 1, flexShrink: 0,
   },
-  cbChecked: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  cbChecked: { backgroundColor: '#0F9D6B', borderColor: '#0F9D6B' },
   cbTick: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', lineHeight: 16 },
   cbLabel: { fontSize: 13, color: '#475569', flex: 1, lineHeight: 20 },
   cbLabelActive: { color: '#0F172A', fontWeight: '500' },
@@ -867,9 +867,9 @@ const s = StyleSheet.create({
   addRowBtn: {
     paddingVertical: 10, borderRadius: 10,
     borderWidth: 1, borderColor: '#D1FAE5', borderStyle: 'dashed',
-    alignItems: 'center', marginBottom: 8, backgroundColor: '#F0FDF4',
+    alignItems: 'center', marginBottom: 8, backgroundColor: '#EEFBF5',
   },
-  addRowBtnText: { fontSize: 13, color: '#15803D', fontWeight: '600' },
+  addRowBtnText: { fontSize: 13, color: '#0F9D6B', fontWeight: '600' },
   refRange: {
     fontSize: 11, color: '#64748B', backgroundColor: '#F8FAFC',
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
@@ -881,7 +881,7 @@ const s = StyleSheet.create({
   },
   saveBtn: {
     paddingVertical: 16, borderRadius: 14,
-    backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#0F9D6B', alignItems: 'center', justifyContent: 'center',
   },
   saveBtnText: { fontSize: 15, fontWeight: 'bold', color: '#FFFFFF' },
 });

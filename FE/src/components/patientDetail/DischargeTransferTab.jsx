@@ -165,7 +165,7 @@ const DischargeTransferTab = ({
           <View style={isDesktop ? styles.sideCol : styles.fullWidth}>
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <FileText size={18} color="#0891B2" />
+                <FileText size={18} color="#1A5FD0" />
                 <Text style={styles.cardTitleText}>Lập Giấy ra viện</Text>
               </View>
               <Text style={styles.cardSubtitleText}>Hoàn tất thủ tục xuất viện cho người bệnh</Text>
@@ -381,7 +381,7 @@ const DischargeTransferTab = ({
             {/* Header Form */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Brain size={20} color="#0891B2" />
+                <Brain size={20} color="#1A5FD0" />
                 <Text style={styles.cardTitleText}>Gói Chuyển Viện Thông Minh</Text>
               </View>
               <View style={[styles.badgePill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
@@ -427,7 +427,7 @@ const DischargeTransferTab = ({
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <ShieldCheck size={13} color="#16A34A" />
-                  <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '600' }}>Tự động gom</Text>
+                  <Text style={{ fontSize: 11, color: '#0F9D6B', fontWeight: '600' }}>Tự động gom</Text>
                 </View>
               </View>
 
@@ -692,7 +692,7 @@ const DischargeTransferTab = ({
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {activeTrans.status === 'sent' ? (
-                    <CheckCircle2 size={20} color="#15803D" />
+                    <CheckCircle2 size={20} color="#0F9D6B" />
                   ) : (
                     <Clock size={20} color="#B45309" />
                   )}
@@ -701,14 +701,14 @@ const DischargeTransferTab = ({
                       style={{
                         fontSize: 13,
                         fontWeight: '800',
-                        color: activeTrans.status === 'sent' ? '#166534' : '#92400E',
+                        color: activeTrans.status === 'sent' ? '#0B7A53' : '#92400E',
                       }}
                     >
                       {activeTrans.status === 'sent'
                         ? 'TRẠNG THÁI: ĐÃ GỬI EMAIL THÀNH CÔNG CHO BỆNH NHÂN'
                         : 'TRẠNG THÁI: ĐANG CHỜ LỄ TÂN GỬI EMAIL CHO BỆNH NHÂN'}
                     </Text>
-                    <Text style={{ fontSize: 11, color: activeTrans.status === 'sent' ? '#15803D' : '#B45309', marginTop: 2 }}>
+                    <Text style={{ fontSize: 11, color: activeTrans.status === 'sent' ? '#0F9D6B' : '#B45309', marginTop: 2 }}>
                       {activeTrans.status === 'sent'
                         ? `Đã gửi tới: ${activeTrans.recipientEmail || 'Bệnh nhân'} • Lúc: ${activeTrans.sentAt ? new Date(activeTrans.sentAt).toLocaleString('vi-VN') : 'Vừa xong'}`
                         : `Gói hồ sơ đã lập xong. Lễ tân sẽ đối chiếu email [${activeTrans.recipientEmail || patient?.email || 'Chưa có email'}] và bấm gửi.`}
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
   packageConfigSection: {
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     borderRadius: 10,
     padding: 10,
     marginBottom: 12,
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     paddingLeft: 8,
     fontSize: 12,
     backgroundColor: '#FFFFFF',
@@ -1119,7 +1119,7 @@ const styles = StyleSheet.create({
     height: 36,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     borderRadius: 6,
     paddingHorizontal: 10,
     justifyContent: 'center',
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E0F2FE',
+    borderColor: '#E7F0FE',
   },
   snapshotItemText: {
     fontSize: 10,
@@ -1235,13 +1235,13 @@ const styles = StyleSheet.create({
   signatureSigned: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
     borderRadius: 4,
   },
   badgeTextSmall: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#166534',
+    color: '#0B7A53',
   },
   noOrderSelectedCard: {
     backgroundColor: '#FFFFFF',
@@ -1288,8 +1288,8 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
   },
   statusBannerSent: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#EEFBF5',
+    borderColor: '#A8EBCD',
   },
   viewPackageBtn: {
     flexDirection: 'row',
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#C9DCFB',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,

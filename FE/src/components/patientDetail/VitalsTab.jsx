@@ -61,7 +61,7 @@ const VitalsTab = ({
           </View>
 
           <View style={styles.metricCard}>
-            <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E7F0FE', alignItems: 'center', justifyContent: 'center' }}>
               <Wind size={20} color="#0284C7" />
             </View>
             <View>
@@ -171,7 +171,7 @@ const VitalsTab = ({
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
+              style={[styles.submitButton, { backgroundColor: '#1A5FD0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
               onPress={handleAddVitals}
               disabled={isSubmittingVital}
             >

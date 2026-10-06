@@ -930,7 +930,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       <View style={styles.manualLabFormContainer}>
         <View style={styles.manualFormHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Edit2 size={15} color="#0891B2" />
+            <Edit2 size={15} color="#1A5FD0" />
             <Text style={styles.manualFormTitle}>
               {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
@@ -940,7 +940,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
             onPress={handleAutoFillNormalLab}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={13} color="#0891B2" />
+              <Sparkles size={13} color="#1A5FD0" />
               <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
             </View>
           </TouchableOpacity>
@@ -1050,7 +1050,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         {!isDesktop && (
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackNavigation} style={styles.backButton}>
-              <ChevronLeft size={18} color="#0891B2" />
+              <ChevronLeft size={18} color="#1A5FD0" />
               <Text style={styles.backButtonText}>Quay lại</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
@@ -1357,7 +1357,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 14,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: '600',
   },
   headerTitle: {
@@ -1382,15 +1382,15 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#ECFEFF',
+    backgroundColor: '#F2F7FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
     borderWidth: 1,
-    borderColor: '#CFFAFE',
+    borderColor: '#DBEAFE',
   },
   avatarBigText: {
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: 'bold',
     fontSize: 24,
   },
@@ -1409,14 +1409,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   genderBadge: {
-    backgroundColor: '#ECFEFF',
+    backgroundColor: '#F2F7FF',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
   },
   genderBadgeText: {
     fontSize: 11,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: 'bold',
   },
   patientSubText: {
@@ -1468,8 +1468,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   activeTabButton: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
+    borderColor: '#1A5FD0',
   },
   tabButtonText: {
     fontSize: 14,
@@ -1680,7 +1680,7 @@ const styles = StyleSheet.create({
   },
   selectedOrderItem: {
     borderColor: Colors.primary,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
   },
   orderItemHeader: {
     flexDirection: 'row',
@@ -1694,7 +1694,7 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   selectedOrderText: {
-    color: '#166534',
+    color: '#0B7A53',
   },
   orderBarcodeText: {
     fontSize: 11,
@@ -1712,7 +1712,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
   },
   badgePending: {
     backgroundColor: '#FEF3C7',
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
   badgeTextSmall: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#166534',
+    color: '#0B7A53',
   },
   createOrderActions: {
     borderTopWidth: 1,
@@ -2164,15 +2164,15 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: '#6FDDB2',
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   editLabResultsBtnText: {
     fontSize: 13,
-    color: '#166534',
+    color: '#0B7A53',
     fontWeight: '600',
   },
   suggestionsContainer: {

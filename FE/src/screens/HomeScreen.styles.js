@@ -37,7 +37,7 @@ export default StyleSheet.create({
   retryButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 8,
   },
   retryButtonText: {
@@ -64,7 +64,7 @@ export default StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -111,7 +111,7 @@ export default StyleSheet.create({
     marginRight: 10,
   },
   patientBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
   },
   doctorBadge: {
     backgroundColor: '#DBEAFE',
@@ -155,7 +155,7 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   promoButton: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,
@@ -221,7 +221,7 @@ export default StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     marginTop: 4,
     marginRight: 16,
     zIndex: 2,
@@ -261,7 +261,7 @@ export default StyleSheet.create({
   statVal: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#1A5FD0',
     marginBottom: 4,
   },
   statLabel: {
@@ -333,7 +333,7 @@ export default StyleSheet.create({
   },
   clinicLinkText: {
     fontSize: 14,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: 'bold',
   },
   desktopRow: {
@@ -370,7 +370,7 @@ export default StyleSheet.create({
   },
   greetingSubtitle: {
     fontSize: 13,
-    color: '#166534',
+    color: '#0B7A53',
     marginTop: 4,
   },
   metricsContainer: {
@@ -403,7 +403,7 @@ export default StyleSheet.create({
     fontSize: 16,
   },
   metricBadge: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -411,7 +411,7 @@ export default StyleSheet.create({
   metricBadgeText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#166534',
+    color: '#0B7A53',
   },
   metricLabel: {
     fontSize: 11,
@@ -511,7 +511,7 @@ export default StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     left: 12,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -588,7 +588,7 @@ export default StyleSheet.create({
     color: '#334155',
   },
   mriReportBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
@@ -619,7 +619,7 @@ export default StyleSheet.create({
   },
   sideCardLink: {
     fontSize: 12,
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: 'bold',
   },
   scheduleList: {
@@ -684,7 +684,7 @@ export default StyleSheet.create({
     fontWeight: '500',
   },
   tagSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#D5F5E7',
   },
   tagSuccessText: {
     color: '#059669',
@@ -740,7 +740,7 @@ export default StyleSheet.create({
     lineHeight: 15,
   },
   aiChatBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
@@ -770,7 +770,7 @@ export default StyleSheet.create({
   doctorStatVal: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#0891B2',
+    color: '#1A5FD0',
     marginBottom: 4,
   },
   doctorStatLabel: {

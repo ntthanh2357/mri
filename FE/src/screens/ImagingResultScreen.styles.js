@@ -29,7 +29,7 @@ export default StyleSheet.create({
   backBtn: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 8,
   },
   backBtnText: {
@@ -52,7 +52,7 @@ export default StyleSheet.create({
   backArrowText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   badge: {
     paddingHorizontal: 10,
@@ -253,7 +253,7 @@ export default StyleSheet.create({
     borderColor: 'transparent',
   },
   activeThumbnailWrapper: {
-    borderColor: '#15803D',
+    borderColor: '#0F9D6B',
   },
   thumbnailImage: {
     width: '100%',
@@ -272,7 +272,7 @@ export default StyleSheet.create({
     marginTop: 20,
     backgroundColor: '#F8FAFC',
     borderLeftWidth: 4,
-    borderLeftColor: '#15803D',
+    borderLeftColor: '#0F9D6B',
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
@@ -281,7 +281,7 @@ export default StyleSheet.create({
   conclusionHeading: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
     letterSpacing: 0.5,
     marginBottom: 6,
   },

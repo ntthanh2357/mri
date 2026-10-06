@@ -20,6 +20,9 @@ import { signInWithGoogleWeb } from '../firebase';
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw } from 'lucide-react';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import styles from './WelcomeScreen.styles';
+import { ArrowLeft } from 'lucide-react';
+import { LANDING_IMAGES } from '../components/landing/LandingSections';
+import { FloatingOrb } from '../components/ui/Motion';
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
 const servicesData = [
@@ -28,7 +31,7 @@ const servicesData = [
   { id: 3, title: 'Chẩn đoán hình ảnh Ung thư Não', icon: 'Microscope' },
 ];
 
-const WelcomeScreen = ({ navigation }) => {
+const WelcomeScreen = ({ navigation, route }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   // Cổng bệnh nhân (B2C): trên Web chỉ dành cho đăng nhập Bệnh nhân —
@@ -42,7 +45,7 @@ const WelcomeScreen = ({ navigation }) => {
   const sectionOffsets = useRef({});
 
   // Form toggles & field states
-  const [activeForm, setActiveForm] = useState('login'); // 'login' | 'register'
+  const [activeForm, setActiveForm] = useState(route?.params?.mode === 'register' ? 'register' : 'login'); // 'login' | 'register'
   const [loginRole, setLoginRole] = useState('patient'); // 'patient' | 'staff'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -545,78 +548,63 @@ const WelcomeScreen = ({ navigation }) => {
     }
   };
 
+  const goHome = () => navigation.navigate('Landing');
+
+  // Đi từ nút 'Đăng ký' ở trang chủ khi trang này đã mở sẵn
+  useEffect(() => {
+    if (route?.params?.mode) setActiveForm(route.params.mode === 'register' ? 'register' : 'login');
+  }, [route?.params?.mode]);
+
   return (
     <SafeAreaView style={styles.container}>
       {isDesktop ? (
-        <View style={styles.desktopContainer}>
-          {/* Left Column - Full-bleed Hero Image with overlay */}
-          <View style={styles.leftColumn}>
-            <Image
-              source={require('../../assets/nero.png')}
-              style={styles.leftColumnBg}
-              resizeMode="cover"
-            />
-            <View style={styles.leftColumnOverlay} />
-            <View style={styles.leftColumnContent}>
-              {/* Logo in white */}
-              <View style={styles.brandContainerWhite}>
-                <Image
-                  source={require('../../assets/logo.png')}
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                />
-                <View>
-                  <Text style={styles.brandNameWhite}>
-                    Neuro<Text style={styles.brandNameAccentCyan}>Scan</Text> AI
-                  </Text>
-                  <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
+        <View style={styles.authSplit}>
+          {/* Cột trái: ảnh bác sĩ + giới thiệu */}
+          <View style={styles.authVisual}>
+            <Image source={LANDING_IMAGES.doctorsDiscuss} style={styles.authVisualImage} resizeMode="cover" />
+            <View style={styles.authVisualOverlay} dataSet={{ bg: 'auth-overlay' }} />
+            <FloatingOrb size={360} color="rgba(52,211,153,0.25)" style={{ bottom: -140, right: -80 }} slow />
+            <View style={styles.authVisualContent}>
+              <TouchableOpacity style={styles.backHome} onPress={goHome} dataSet={{ hover: 'tint' }}>
+                <ArrowLeft size={16} color="#FFFFFF" />
+                <Text style={styles.backHomeText}>Về trang chủ</Text>
+              </TouchableOpacity>
+
+              <View dataSet={{ anim: 'fade-up' }}>
+                <View style={styles.brandContainerWhite}>
+                  <Image source={require('../../assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
+                  <View>
+                    <Text style={styles.brandNameWhite}>NeuroScan AI</Text>
+                    <Text style={styles.authBrandSub}>BỆNH VIỆN CHUYÊN KHOA U NÃO</Text>
+                  </View>
                 </View>
+                <Text style={styles.authVisualTitle} dataSet={{ font: 'display' }}>
+                  Hồ sơ y tế và kết quả MRI của bạn, an toàn ở một nơi
+                </Text>
+                {[
+                  'Xem phim MRI và kết luận đã được bác sĩ ký số',
+                  'Kết quả AI hỗ trợ sàng lọc u não trong vài giây',
+                  'Dữ liệu tách biệt theo bệnh viện, mọi truy cập đều được ghi nhật ký',
+                ].map((t) => (
+                  <View key={t} style={styles.authCheckRow}>
+                    <CheckCircle2 size={18} color="#6FDDB2" />
+                    <Text style={styles.authCheckText}>{t}</Text>
+                  </View>
+                ))}
               </View>
 
-              {/* Slogan */}
-              <View style={styles.sloganContainer}>
-                <View style={styles.sloganAccent} />
-                <Text style={styles.sloganTitle}>
-                  Hệ thống Y tế số thông minh ứng dụng Trí tuệ nhân tạo
-                </Text>
-                <Text style={styles.sloganSub}>
-                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu cùng đội ngũ bác sĩ thần kinh.
-                </Text>
-              </View>
-
-              {/* Feature pills — dịch vụ thực tế của hệ thống (thay cho badge số liệu) */}
-              <View style={styles.featureList}>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Brain size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Chụp cộng hưởng từ MRI não bộ chuẩn hóa</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Sparkles size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Tầm soát & phát hiện tổn thương bởi AI đa mô hình</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Microscope size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Báo cáo chẩn đoán hình ảnh hội chẩn chuyên khoa</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Stethoscope size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Theo dõi hồ sơ bệnh án điện tử xuyên suốt</Text>
-                </View>
-              </View>
+              <Text style={styles.authVisualFoot}>© 2026 NeuroScan AI · Hotline 0236 3650 676</Text>
             </View>
           </View>
 
-          {/* Right Column - Centered Form Card */}
-          <View style={styles.rightColumn}>
-            <View style={styles.authCardContainer}>
+          {/* Cột phải: form đăng nhập / đăng ký */}
+          <View style={styles.authFormCol} dataSet={{ bg: 'soft' }}>
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.authFormScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+            <View style={styles.authCardContainer} dataSet={{ anim: 'fade-up' }}>
               {showTwoFactor ? (
                 <View style={styles.authForm}>
                   <Text style={styles.authCardTitle}>Xác thực 2 lớp</Text>
@@ -1008,32 +996,34 @@ const WelcomeScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
+            </ScrollView>
           </View>
         </View>
       ) : (
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.mobileScrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mobile Header Logo */}
-          <View style={styles.mobileHeader}>
-            <View style={styles.brandContainer}>
-              <Image
-                source={require('../../assets/logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
+          {/* Mobile Hero ảnh nhỏ */}
+          <View style={styles.mobileHero}>
+            <Image source={LANDING_IMAGES.doctorsDiscuss} style={styles.authVisualImage} resizeMode="cover" />
+            <View style={styles.authVisualOverlay} dataSet={{ bg: 'auth-overlay' }} />
+            <TouchableOpacity style={styles.backHome} onPress={goHome}>
+              <ArrowLeft size={16} color="#FFFFFF" />
+              <Text style={styles.backHomeText}>Về trang chủ</Text>
+            </TouchableOpacity>
+            <View style={styles.brandContainerWhite}>
+              <Image source={require('../../assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
               <View>
-                <Text style={styles.brandName}>
-                  Neuro<Text style={styles.brandNameAccentDark}>Scan</Text> AI
-                </Text>
-                <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
+                <Text style={styles.brandNameWhite}>NeuroScan AI</Text>
+                <Text style={styles.authBrandSub}>BỆNH VIỆN CHUYÊN KHOA U NÃO</Text>
               </View>
             </View>
           </View>
 
           {/* Form Card */}
-          <View style={styles.mobileFormContainer}>
+          <View style={[styles.mobileFormContainer, styles.mobileFormOverlap]}>
             <View style={styles.authCardContainer}>
               {showTwoFactor ? (
                 <View style={styles.authForm}>
@@ -1425,6 +1415,7 @@ const WelcomeScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+
         </ScrollView>
       )}
 
@@ -1458,7 +1449,7 @@ const WelcomeScreen = ({ navigation }) => {
             ]}>
               {customAlert.type === 'success' && <CheckCircle2 size={28} color="#059669" strokeWidth={2.5} />}
               {customAlert.type === 'error' && <AlertCircle size={28} color="#DC2626" strokeWidth={2.5} />}
-              {customAlert.type === 'info' && <Info size={28} color="#0090D0" strokeWidth={2.5} />}
+              {customAlert.type === 'info' && <Info size={28} color="#1A5FD0" strokeWidth={2.5} />}
             </View>
             <Text style={styles.alertTitle}>{customAlert.title}</Text>
             <Text style={styles.alertMessage}>{customAlert.message}</Text>
@@ -1467,7 +1458,7 @@ const WelcomeScreen = ({ navigation }) => {
                 styles.alertButton,
                 customAlert.type === 'success' && { backgroundColor: '#059669' },
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
-                customAlert.type === 'info' && { backgroundColor: '#0090D0' },
+                customAlert.type === 'info' && { backgroundColor: '#1A5FD0' },
               ]}
               onPress={() => {
                 setCustomAlert(prev => ({ ...prev, visible: false }));

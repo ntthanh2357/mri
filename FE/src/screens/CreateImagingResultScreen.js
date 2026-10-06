@@ -567,10 +567,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 disabled={uploading}
               >
                 {uploading ? (
-                  <ActivityIndicator size="small" color="#15803D" />
+                  <ActivityIndicator size="small" color="#0F9D6B" />
                 ) : (
                   <>
-                    <Upload size={15} color="#15803D" />
+                    <Upload size={15} color="#0F9D6B" />
                     <Text style={styles.uploadButtonText}>Tải ảnh lên từ thiết bị</Text>
                   </>
                 )}

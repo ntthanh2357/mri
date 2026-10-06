@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import { useAppDialog } from '../components/ui/AppDialog';
 import Config from '../constants/config';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
@@ -49,6 +50,7 @@ import HospitalBedManagementView from '../components/HospitalBedManagementView.j
 import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
 
 const EMRDashboardScreen = ({ navigation, route }) => {
+  const { dialog, confirm: confirmDialog, notify } = useAppDialog();
   const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -73,19 +75,25 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   }, [route?.params?.tab]);
 
   const handleSignRecord = async (record) => {
-    if (!confirm(`Xác nhận ký số điện tử cho hồ sơ bệnh án của bệnh nhân ${record.patientName}? Hồ sơ sau khi ký sẽ được xác thực toàn vẹn chống sửa đổi theo quy định Bộ Y Tế.`)) return;
+    const ok = await confirmDialog({
+      title: 'Ký số hồ sơ bệnh án',
+      message: `Xác nhận ký số điện tử cho hồ sơ của ${record.patientName}?`,
+      note: 'Sau khi ký, hồ sơ được xác thực toàn vẹn và khóa chỉnh sửa theo Thông tư 46/2018/TT-BYT. Muốn bổ sung, hãy dùng "Lập Phụ Lục".',
+      confirmText: 'Ký số ngay',
+    });
+    if (!ok) return;
     try {
       const res = await apiRequest(`/emr/records/${record._id}/sign`, {
         method: 'PUT',
       });
       if (res && res.success) {
-        Alert.alert('Thành công', 'Đã ký số hồ sơ bệnh án điện tử thành công!');
+        notify('Ký số thành công', `Hồ sơ bệnh án của ${record.patientName} đã được ký số và khóa chỉnh sửa.`, 'success');
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể ký số bệnh án.');
+        notify('Lỗi', res.message || 'Không thể ký số bệnh án.');
       }
     } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Ký số thất bại.');
+      notify('Lỗi', err.message || 'Ký số thất bại.');
     }
   };
 
@@ -99,7 +107,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   const handleCreateAddendum = async () => {
     if (!addendumTitle.trim() || !addendumContent.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
+      notify('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
       return;
     }
     setSubmittingAddendum(true);
@@ -113,14 +121,14 @@ const EMRDashboardScreen = ({ navigation, route }) => {
         }),
       });
       if (res && res.success) {
-        Alert.alert('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
+        notify('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
         setAddendumModal(false);
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể tạo phụ lục.');
+        notify('Lỗi', res.message || 'Không thể tạo phụ lục.');
       }
     } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Tạo phụ lục thất bại.');
+      notify('Lỗi', err.message || 'Tạo phụ lục thất bại.');
     } finally {
       setSubmittingAddendum(false);
     }
@@ -198,7 +206,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       const data = await apiRequest('/emr/records');
       setRecords(data.data || []);
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tải danh sách bệnh án.');
+      notify('Lỗi', error.message || 'Không thể tải danh sách bệnh án.');
     } finally {
       setLoading(false);
     }
@@ -249,16 +257,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       });
       setRecords(prev => [data.data, ...prev]);
       setIsModalVisible(false);
-      Alert.alert('Thành công', 'Hồ sơ bệnh án mới đã được tạo!');
+      notify('Thành công', 'Hồ sơ bệnh án mới đã được tạo!');
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tạo hồ sơ.');
+      notify('Lỗi', error.message || 'Không thể tạo hồ sơ.');
     }
   };
 
   // Create new care sheet
   const handleCreateCareSheet = async (formData) => {
     if (!selectedRecord) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+      notify('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
       return;
     }
     try {
@@ -268,16 +276,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       });
       setCareSheets(prev => [data.data, ...prev]);
       setIsModalVisible(false);
-      Alert.alert('Thành công', 'Phiếu chăm sóc đã được tạo!');
+      notify('Thành công', 'Phiếu chăm sóc đã được tạo!');
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tạo phiếu chăm sóc.');
+      notify('Lỗi', error.message || 'Không thể tạo phiếu chăm sóc.');
     }
   };
 
   // Create new consultation
   const handleCreateConsultation = async (formData) => {
     if (!selectedRecord) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+      notify('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
       return;
     }
     try {
@@ -287,16 +295,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       });
       setConsultations(prev => [data.data, ...prev]);
       setIsModalVisible(false);
-      Alert.alert('Thành công', 'Biên bản hội chẩn đã được tạo!');
+      notify('Thành công', 'Biên bản hội chẩn đã được tạo!');
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tạo biên bản hội chẩn.');
+      notify('Lỗi', error.message || 'Không thể tạo biên bản hội chẩn.');
     }
   };
 
   // Create new consent
   const handleCreateConsent = async (formData) => {
     if (!selectedRecord) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+      notify('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
       return;
     }
     try {
@@ -306,16 +314,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       });
       setConsents(prev => [data.data, ...prev]);
       setIsModalVisible(false);
-      Alert.alert('Thành công', 'Giấy cam đoan đã được tạo!');
+      notify('Thành công', 'Giấy cam đoan đã được tạo!');
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Không thể tạo giấy cam đoan.');
+      notify('Lỗi', error.message || 'Không thể tạo giấy cam đoan.');
     }
   };
 
   // Create new prescription
   const handleCreatePrescription = async (formData) => {
     if (!selectedRecord) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+      notify('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
       return;
     }
     try {
@@ -326,12 +334,12 @@ const EMRDashboardScreen = ({ navigation, route }) => {
       if (data && data.success) {
         setPrescriptions(prev => [data.data, ...prev]);
         setIsModalVisible(false);
-        Alert.alert('Thành công', 'Đã tạo đơn thuốc mới!');
+        notify('Thành công', 'Đã tạo đơn thuốc mới!');
       } else {
-        Alert.alert('Lỗi', data.message || 'Không thể tạo đơn thuốc.');
+        notify('Lỗi', data.message || 'Không thể tạo đơn thuốc.');
       }
     } catch (error) {
-      Alert.alert('Lỗi', error.message || 'Lỗi kết nối khi tạo đơn thuốc.');
+      notify('Lỗi', error.message || 'Lỗi kết nối khi tạo đơn thuốc.');
     }
   };
 
@@ -343,6 +351,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
+      {dialog}
       <SafeAreaView style={styles.container}>
         {/* Header */}
         {!isDesktop && (
@@ -524,7 +533,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0891B2" />
+                <ActivityIndicator size="large" color="#1A5FD0" />
                 <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
               </View>
             ) : (
@@ -547,7 +556,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                       } else {
                         setSelectedRecord(record);
                         fetchRecordDetails(record._id);
-                        Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
+                        notify('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
                       }
                     }}
                     onRefresh={fetchRecords}
@@ -653,7 +662,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
               <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
                 Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
               </Text>
-              <Text style={{ fontSize: 11, color: '#0891B2', backgroundColor: '#ECFEFF', padding: 8, borderRadius: 8, marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, color: '#1A5FD0', backgroundColor: '#F2F7FF', padding: 8, borderRadius: 8, marginBottom: 12 }}>
                 ℹ️ Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
               </Text>
 
@@ -691,7 +700,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569' }}>Hủy</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={{ flex: 2, paddingVertical: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#0891B2', opacity: submittingAddendum ? 0.6 : 1 }}
+                  style={{ flex: 2, paddingVertical: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#1A5FD0', opacity: submittingAddendum ? 0.6 : 1 }}
                   onPress={handleCreateAddendum}
                   disabled={submittingAddendum}
                 >
@@ -715,7 +724,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onPress }) => (
     onPress={onPress}
   >
     <View style={styles.sidebarIconContainer}>
-      <IconComponent size={16} color={active ? '#0891B2' : '#64748B'} />
+      <IconComponent size={16} color={active ? '#1A5FD0' : '#64748B'} />
     </View>
     <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
       {label}
@@ -807,7 +816,7 @@ const NurseQueueTab = ({ navigation }) => {
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Stethoscope size={22} color="#0891B2" />
+          <Stethoscope size={22} color="#1A5FD0" />
           <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={fetchQueue}>
@@ -816,7 +825,7 @@ const NurseQueueTab = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#1A5FD0" style={{ marginTop: 40 }} />
       ) : (
         <View style={{ gap: 12 }}>
           {visits.length === 0 ? (
@@ -1057,11 +1066,11 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
         onPress={onBack}
         style={{ flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: 4 }}
       >
-        <Text style={{ color: '#0891B2', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
+        <Text style={{ color: '#1A5FD0', fontWeight: '600', fontSize: 15 }}>← Quay lại danh sách</Text>
       </TouchableOpacity>
 
       {/* Patient name header */}
-      <View style={{ backgroundColor: '#0891B2', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
+      <View style={{ backgroundColor: '#1A5FD0', padding: 16, marginHorizontal: 0, marginBottom: 0 }}>
         <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>{patientName}</Text>
         <Text style={{ color: '#CCFBF1', fontSize: 13, marginTop: 2 }}>
           {gender}{age ? ` • ${age} tuổi` : ''}{department ? ` • ${department}` : ''}
@@ -1079,9 +1088,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               style={{
                 paddingHorizontal: 14, paddingVertical: 8,
                 borderRadius: 20,
-                backgroundColor: activeForm === t.key ? '#0891B2' : '#fff',
+                backgroundColor: activeForm === t.key ? '#1A5FD0' : '#fff',
                 borderWidth: 1,
-                borderColor: activeForm === t.key ? '#0891B2' : '#CBD5E1',
+                borderColor: activeForm === t.key ? '#1A5FD0' : '#CBD5E1',
               }}
             >
               <Text style={{ color: activeForm === t.key ? '#fff' : '#475569', fontWeight: '600', fontSize: 13 }}>
@@ -1112,9 +1121,9 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 <Text style={{ flex: 1, color: '#0F172A', fontSize: 13, fontWeight: '500' }}>{value}</Text>
               </View>
             ))}
-            <View style={{ backgroundColor: '#ECFEFF', borderRadius: 10, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#A5F3FC' }}>
-              <Text style={{ color: '#0E7490', fontWeight: '600', fontSize: 13 }}>Hướng dẫn quy trình</Text>
-              <Text style={{ color: '#155E75', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
+            <View style={{ backgroundColor: '#F2F7FF', borderRadius: 10, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#BFDBFE' }}>
+              <Text style={{ color: '#144BA8', fontWeight: '600', fontSize: 13 }}>Hướng dẫn quy trình</Text>
+              <Text style={{ color: '#123F8C', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
                 Điền đầy đủ 3 phiếu bên dưới theo trình tự:{'\n'}
                 1. Mẫu khám bệnh – nhập sinh hiệu{'\n'}
                 2. Phiếu chỉ định – thêm dịch vụ chỉ định{'\n'}
@@ -1133,7 +1142,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </Text>
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>Patient Information Registration Form</Text>
 
-              <Text style={{ fontWeight: '700', color: '#0891B2', marginBottom: 8 }}>Sinh hiệu (Vital Signs)</Text>
+              <Text style={{ fontWeight: '700', color: '#1A5FD0', marginBottom: 8 }}>Sinh hiệu (Vital Signs)</Text>
               {[
                 ['Mạch (lần/phút)', examPulse, setExamPulse, 'numeric', 'Ví dụ: 80'],
                 ['Huyết áp (mmHg)', examBP, setExamBP, 'default', 'Ví dụ: 120/80'],
@@ -1156,7 +1165,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 </View>
               ))}
 
-              <Text style={{ fontWeight: '700', color: '#0891B2', marginBottom: 8, marginTop: 8 }}>Thông tin khám</Text>
+              <Text style={{ fontWeight: '700', color: '#1A5FD0', marginBottom: 8, marginTop: 8 }}>Thông tin khám</Text>
               <View style={{ marginBottom: 10 }}>
                 <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Yêu cầu khám (Request)</Text>
                 <TextInput
@@ -1224,7 +1233,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 8 }}>Danh sách chỉ định:</Text>
 
               {orderServices.map((svc, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEFBF5', borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#A8EBCD' }}>
                   <Text style={{ flex: 1, color: '#065F46', fontSize: 13 }}>{svc}</Text>
                   <TouchableOpacity onPress={() => removeOrderService(idx)}>
                     <X size={16} color="#EF4444" />
@@ -1261,7 +1270,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                     onPress={() => { setOrderServices(prev => prev.includes(s) ? prev : [...prev, s]); }}
                     style={{ backgroundColor: '#EFF6FF', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#BFDBFE' }}
                   >
-                    <Text style={{ color: '#0891B2', fontSize: 12 }}>{s}</Text>
+                    <Text style={{ color: '#1A5FD0', fontSize: 12 }}>{s}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1345,7 +1354,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               </View>
 
               {/* Total */}
-              <View style={{ backgroundColor: '#0891B2', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <View style={{ backgroundColor: '#1A5FD0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>TỔNG CỘNG:</Text>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
@@ -1404,7 +1413,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <ClipboardList size={22} color="#0891B2" />
+          <ClipboardList size={22} color="#1A5FD0" />
           <Text style={styles.tabTitle}>Hồ sơ bệnh án</Text>
         </View>
         <View style={styles.headerActions}>
@@ -1487,8 +1496,8 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
           <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>✍️ Ký Số EMR</Text>
         </TouchableOpacity>
       ) : (
-        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6 }}>
-          <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>✓ Đã Ký Số Toàn Vẹn</Text>
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#D5F5E7', borderRadius: 6 }}>
+          <Text style={{ color: '#0B7A53', fontSize: 11, fontWeight: 'bold' }}>✓ Đã Ký Số Toàn Vẹn</Text>
         </View>
       )}
       <TouchableOpacity
@@ -1505,7 +1514,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <FileText size={18} color="#0891B2" />
+        <FileText size={18} color="#1A5FD0" />
         <Text style={styles.tabTitle}>Phiếu chăm sóc</Text>
       </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
@@ -1515,7 +1524,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+        <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
@@ -1553,7 +1562,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Brain size={18} color="#0891B2" />
+        <Brain size={18} color="#1A5FD0" />
         <Text style={styles.tabTitle}>Hội chẩn chuyên khoa</Text>
       </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewConsult}>
@@ -1563,7 +1572,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+        <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
@@ -1597,7 +1606,7 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <PenTool size={18} color="#0891B2" />
+        <PenTool size={18} color="#1A5FD0" />
         <Text style={styles.tabTitle}>Giấy cam đoan</Text>
       </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewConsent}>
@@ -1607,7 +1616,7 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+        <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
@@ -1643,7 +1652,7 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Pill size={18} color="#0891B2" />
+        <Pill size={18} color="#1A5FD0" />
         <Text style={styles.tabTitle}>Kê đơn thuốc</Text>
       </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewPrescription}>
@@ -1653,7 +1662,7 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+        <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
@@ -1687,14 +1696,14 @@ const VersionTab = ({ versions, selectedRecord }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <History size={18} color="#0891B2" />
+        <History size={18} color="#1A5FD0" />
         <Text style={styles.tabTitle}>Lịch sử sửa đổi bệnh án (Audit Trail)</Text>
       </View>
     </View>
 
     {!selectedRecord ? (
       <View style={styles.emptyState}>
-        <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+        <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
         <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
       </View>
     ) : (
@@ -1708,7 +1717,7 @@ const VersionTab = ({ versions, selectedRecord }) => (
           versions.map(v => (
             <View key={v._id || v.id} style={styles.itemCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={[styles.itemTitle, { color: '#0891B2' }]}>Phiên bản EMR v{v.version}</Text>
+                <Text style={[styles.itemTitle, { color: '#1A5FD0' }]}>Phiên bản EMR v{v.version}</Text>
                 <Text style={{ fontSize: 11, color: '#64748B', fontWeight: 'bold' }}>
                   {new Date(v.modifiedAt).toLocaleString('vi-VN')}
                 </Text>
@@ -1747,8 +1756,8 @@ const StatusBadge = ({ status }) => {
     bg = '#EFF6FF';
     color = '#059669';
   } else if (status === 'Xuất viện' || status === 'Đã ký') {
-    bg = '#DCFCE7';
-    color = '#166534';
+    bg = '#D5F5E7';
+    color = '#0B7A53';
   } else {
     bg = '#FEF3C7';
     color = '#B45309';
@@ -1763,8 +1772,8 @@ const StatusBadge = ({ status }) => {
 const SignBadge = ({ signStatus }) => {
   let color, bg;
   if (signStatus === 'Đã ký số' || signStatus === 'Đã duyệt') {
-    bg = '#DCFCE7';
-    color = '#166534';
+    bg = '#D5F5E7';
+    color = '#0B7A53';
   } else if (signStatus === 'Đã duyệt') {
     bg = '#EFF6FF';
     color = '#059669';
@@ -1784,14 +1793,14 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Brain size={18} color="#0891B2" />
+          <Brain size={18} color="#1A5FD0" />
           <Text style={styles.tabTitle}>Lịch sử Chẩn đoán Hình ảnh</Text>
         </View>
       </View>
 
       {!selectedRecord ? (
         <View style={styles.emptyState}>
-          <ArrowLeft size={32} color="#0891B2" style={{ marginBottom: 8 }} />
+          <ArrowLeft size={32} color="#1A5FD0" style={{ marginBottom: 8 }} />
           <Text style={styles.emptyText}>Vui lòng chọn một hồ sơ bệnh án</Text>
         </View>
       ) : imagingResults.length === 0 ? (
@@ -1838,7 +1847,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
                   <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'flex-end' }}>
                     <TouchableOpacity
                       style={{
-                        backgroundColor: '#0891B2',
+                        backgroundColor: '#1A5FD0',
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         borderRadius: 6,
@@ -2356,7 +2365,7 @@ const NewPrescriptionForm = ({ onClose, onSubmit, availableDrugs }) => {
               {availableDrugs.map(ad => (
                  <TouchableOpacity 
                    key={ad._id} 
-                   style={{ padding: 8, backgroundColor: d.drugId === ad._id ? '#0891B2' : '#F1F5F9', borderRadius: 6, marginRight: 8 }}
+                   style={{ padding: 8, backgroundColor: d.drugId === ad._id ? '#1A5FD0' : '#F1F5F9', borderRadius: 6, marginRight: 8 }}
                    onPress={() => updateDrug(index, 'drugId', ad._id)}
                  >
                    <Text style={{ color: d.drugId === ad._id ? '#FFF' : '#374151', fontSize: 12 }}>{ad.name}</Text>
@@ -2461,9 +2470,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   sidebarItemActive: {
-    backgroundColor: '#ECFEFF',
+    backgroundColor: '#F2F7FF',
     borderLeftWidth: 3,
-    borderLeftColor: '#0891B2',
+    borderLeftColor: '#1A5FD0',
     paddingLeft: 11,
   },
   sidebarIconContainer: {
@@ -2478,20 +2487,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sidebarItemTextActive: {
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: '700',
   },
   selectedRecordBox: {
     marginTop: 30,
     padding: 16,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#22C55E',
   },
   selectedRecordLabel: {
     fontSize: 12,
-    color: '#166534',
+    color: '#0B7A53',
     marginBottom: 4,
   },
   selectedRecordName: {
@@ -2511,7 +2520,7 @@ const styles = StyleSheet.create({
   clearSelectionText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#166534',
+    color: '#0B7A53',
     textAlign: 'center',
   },
   mainContent: {
@@ -2532,7 +2541,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   mobileTabItemActive: {
-    borderBottomColor: '#0891B2',
+    borderBottomColor: '#1A5FD0',
   },
   mobileTabText: {
     fontSize: 13,
@@ -2540,7 +2549,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   mobileTabTextActive: {
-    color: '#0891B2',
+    color: '#1A5FD0',
     fontWeight: '700',
   },
   scrollContainer: {
@@ -2577,11 +2586,11 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   actionButton: {
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#0891B2',
+    shadowColor: '#1A5FD0',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,

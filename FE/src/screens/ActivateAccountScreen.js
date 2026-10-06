@@ -130,7 +130,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         {/* Brand Header */}
         <View style={styles.brandHeader}>
           <Image
-            source={require('../../assets/logo.jpg')}
+            source={require('../../assets/logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -144,7 +144,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.lockBadge}>
-              <Lock size={28} color="#0891B2" />
+              <Lock size={28} color="#1A5FD0" />
             </View>
             <Text style={styles.title}>Kích hoạt tài khoản</Text>
             <Text style={styles.subtitle}>
@@ -295,7 +295,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
 
         {/* Security note */}
         <View style={styles.securityNote}>
-          <Shield size={18} color="#0891B2" style={{ marginRight: 8, marginTop: 2 }} />
+          <Shield size={18} color="#1A5FD0" style={{ marginRight: 8, marginTop: 2 }} />
           <Text style={styles.securityText}>
             Hệ thống sử dụng cơ chế mã hóa một chiều an toàn (bcrypt) cho mật khẩu. Thông tin tài khoản được bảo mật tuyệt đối theo tiêu chuẩn HIPAA.
           </Text>
@@ -309,7 +309,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           <View style={styles.alertCard}>
             <View style={[
               styles.alertIconCircle,
-              alert.type === 'success' && { backgroundColor: '#F0FDF4' },
+              alert.type === 'success' && { backgroundColor: '#EEFBF5' },
               alert.type === 'error' && { backgroundColor: '#FEF2F2' },
             ]}>
               {alert.type === 'success' ? (
@@ -321,7 +321,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             <Text style={styles.alertTitle}>{alert.title}</Text>
             <Text style={styles.alertMessage}>{alert.message}</Text>
             <TouchableOpacity
-              style={[styles.alertBtn, { backgroundColor: alert.type === 'success' ? '#15803D' : '#DC2626' }]}
+              style={[styles.alertBtn, { backgroundColor: alert.type === 'success' ? '#0F9D6B' : '#DC2626' }]}
               onPress={() => {
                 setAlert(prev => ({ ...prev, visible: false }));
                 if (alert.onClose) alert.onClose();
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   brandSub: {
     fontSize: 9,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: '700',
     letterSpacing: 1.2,
     marginTop: -2,
@@ -460,12 +460,12 @@ const styles = StyleSheet.create({
   strengthText: { fontSize: 11, fontWeight: '600' },
   activateBtn: {
     height: 50,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#15803D',
+    shadowColor: '#0F9D6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,

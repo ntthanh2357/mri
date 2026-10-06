@@ -81,8 +81,8 @@ const DoctorPatientListScreen = ({ navigation }) => {
           if (completedOrders > 0) {
             status = 'Có kết quả XN';
             statusCode = 'XN';
-            badgeColor = '#DCFCE7';
-            textColor = '#15803D';
+            badgeColor = '#D5F5E7';
+            textColor = '#0F9D6B';
           }
 
           return {
@@ -181,7 +181,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
             <Text style={styles.summaryLbl}>Tổng bệnh nhân</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={[styles.summaryVal, { color: '#15803D' }]}>{xnCount}</Text>
+            <Text style={[styles.summaryVal, { color: '#0F9D6B' }]}>{xnCount}</Text>
             <Text style={styles.summaryLbl}>Có kết quả XN</Text>
           </View>
           <View style={styles.summaryCard}>
@@ -228,13 +228,13 @@ const DoctorPatientListScreen = ({ navigation }) => {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#15803D" />
+            <ActivityIndicator size="large" color="#0F9D6B" />
             <Text style={{ marginTop: 12, color: '#64748B' }}>Đang tải danh sách bệnh nhân...</Text>
           </View>
         ) : error ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
             <Text style={{ color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>{error}</Text>
-            <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#15803D', borderRadius: 8 }} onPress={fetchPatients}>
+            <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#0F9D6B', borderRadius: 8 }} onPress={fetchPatients}>
               <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Tải lại</Text>
             </TouchableOpacity>
           </View>

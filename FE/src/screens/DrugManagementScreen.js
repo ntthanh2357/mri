@@ -761,7 +761,7 @@ export default function DrugManagementScreen({ navigation }) {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Package size={18} color="#0891B2" />
+                <Package size={18} color="#1A5FD0" />
                 <Text style={styles.modalTitle}>Cập nhật tồn kho dược phẩm</Text>
               </View>
               <Text style={styles.modalSub}>
@@ -858,9 +858,9 @@ const styles = StyleSheet.create({
   },
   tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', marginRight: 8 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#15803D' },
+  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#0F9D6B' },
   tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#15803D', fontWeight: 'bold' },
+  tabTextActive: { color: '#0F9D6B', fontWeight: 'bold' },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },
   formColumn: { flex: 1 },
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
   },
-  submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  submitButton: { height: 40, backgroundColor: '#0F9D6B', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   buttonDisabled: { opacity: 0.7 },
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   cancelBtn: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
@@ -944,8 +944,8 @@ const styles = StyleSheet.create({
   miniAlertTagText: { color: '#991B1B', fontSize: 9, fontWeight: 'bold' },
   priceText: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
   expiryText: { fontSize: 12, color: '#64748B' },
-  tblBtnStock: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#DCFCE7', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
-  tblBtnStockText: { color: '#166534', fontSize: 11, fontWeight: 'bold' },
+  tblBtnStock: { backgroundColor: '#EEFBF5', borderWidth: 1, borderColor: '#D5F5E7', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
+  tblBtnStockText: { color: '#0B7A53', fontSize: 11, fontWeight: 'bold' },
   tblBtnEdit: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
   tblBtnEditText: { color: '#475569', fontSize: 11 },
   tblBtnDel: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FEE2E2', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 },
@@ -965,12 +965,12 @@ const styles = StyleSheet.create({
   modalSub: { fontSize: 12, color: '#64748B', marginBottom: 20 },
   modalActionRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   modalActionBtn: { flex: 1, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, alignItems: 'center', backgroundColor: '#F8FAFC' },
-  modalActionBtnActive: { borderColor: '#15803D', backgroundColor: '#DCFCE7' },
+  modalActionBtnActive: { borderColor: '#0F9D6B', backgroundColor: '#D5F5E7' },
   modalActionText: { fontSize: 11, fontWeight: 'bold', color: '#64748B' },
-  modalActionTextActive: { color: '#15803D' },
+  modalActionTextActive: { color: '#0F9D6B' },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 },
   modalCancelBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   modalCancelText: { fontSize: 12, fontWeight: 'bold', color: '#64748B' },
-  modalSubmitBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#15803D', justifyContent: 'center', alignItems: 'center' },
+  modalSubmitBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#0F9D6B', justifyContent: 'center', alignItems: 'center' },
   modalSubmitText: { fontSize: 12, fontWeight: 'bold', color: '#FFFFFF' },
 });

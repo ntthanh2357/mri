@@ -12,6 +12,7 @@ import {
 import { setAuthToken } from '../services/api.service';
 import { portalLoginRoute } from '../utils/navigationRef';
 import performLogout from '../utils/logout';
+import { PageEnter } from './ui/Motion';
 import { 
   LayoutDashboard, 
   FolderOpen, 
@@ -354,9 +355,9 @@ const ResponsiveLayout = ({
         )}
 
         {/* Main Content Area on Mobile */}
-        <View style={{ flex: 1 }}>
+        <PageEnter style={{ flex: 1, minHeight: 0 }}>
           {children}
-        </View>
+        </PageEnter>
 
         {/* Mobile Navigation Drawer Modal */}
         <Modal
@@ -380,7 +381,7 @@ const ResponsiveLayout = ({
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
                   <View>
                     <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
-                    <Text style={{ color: '#0891B2', fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
+                    <Text style={{ color: '#1A5FD0', fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
                     <X size={20} color="#94A3B8" />
@@ -401,7 +402,7 @@ const ResponsiveLayout = ({
                           paddingHorizontal: 14,
                           borderRadius: 8,
                           marginBottom: 4,
-                          backgroundColor: isActive ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
+                          backgroundColor: isActive ? 'rgba(26, 95, 208, 0.2)' : 'transparent',
                           borderLeftWidth: isActive ? 3 : 0,
                           borderLeftColor: '#38BDF8',
                         }}
@@ -460,7 +461,7 @@ const ResponsiveLayout = ({
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                    <Bell size={18} color="#1A5FD0" strokeWidth={2.3} />
                     <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -515,7 +516,7 @@ const ResponsiveLayout = ({
   return (
     <View style={styles.desktopWrapper}>
       {/* Left Sidebar */}
-      <View style={styles.sidebar}>
+      <View style={styles.sidebar} dataSet={{ bg: 'sidebar' }}>
         {/* Brand Logo */}
         <View style={styles.brandContainer}>
           <Image
@@ -551,7 +552,7 @@ const ResponsiveLayout = ({
               activeOpacity={0.7}
               accessibilityLabel="Thông báo"
             >
-              <Bell size={17} color="#0891B2" strokeWidth={2.2} />
+              <Bell size={17} color="#FFFFFF" strokeWidth={2.2} />
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>{unreadCount}</Text>
@@ -572,9 +573,11 @@ const ResponsiveLayout = ({
                 style={[styles.navItem, isActive && styles.navItemActive]}
                 onPress={() => navigation.navigate(item.route, item.params)}
                 activeOpacity={0.7}
+                dataSet={isActive ? undefined : { hover: 'nav' }}
               >
+                {isActive && <View style={styles.navActiveBar} />}
                 <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
-                  <IconComponent size={17} color={isActive ? '#0891B2' : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
+                  <IconComponent size={17} color={isActive ? '#1A5FD0' : '#93C5FD'} strokeWidth={isActive ? 2.3 : 1.8} />
                 </View>
                 <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
                   {item.label}
@@ -587,7 +590,7 @@ const ResponsiveLayout = ({
         {/* Footer Actions */}
         <View style={styles.sidebarFooter}>
           {isPatient && (
-            <View style={styles.upgradeCard}>
+            <View style={styles.upgradeCard} dataSet={{ bg: 'band' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <Sparkles size={14} color="#FDE047" strokeWidth={2.4} />
                 <Text style={styles.upgradeTitle}>Nâng cấp Premium VIP</Text>
@@ -607,7 +610,7 @@ const ResponsiveLayout = ({
 
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout} activeOpacity={0.7}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <LogOut size={15} color="#64748B" strokeWidth={2} />
+              <LogOut size={15} color="#CBD5E1" strokeWidth={2} />
               <Text style={styles.logoutText}>Đăng xuất</Text>
             </View>
           </TouchableOpacity>
@@ -667,7 +670,9 @@ const ResponsiveLayout = ({
           </View>
         )}
 
-        {children}
+        <PageEnter style={{ flex: 1, minHeight: 0 }}>
+          {children}
+        </PageEnter>
       </View>
 
       {/* Notification Modal */}
@@ -682,7 +687,7 @@ const ResponsiveLayout = ({
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                  <Bell size={18} color="#1A5FD0" strokeWidth={2.3} />
                   <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -742,10 +747,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sidebar: {
-    width: 250,
-    backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#F1F5F9',
+    width: 256,
+    backgroundColor: '#0B2A5B',
+    borderRightWidth: 0,
+    borderRightColor: '#0B2A5B',
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
@@ -755,13 +760,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   logoCircle: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#1A5FD0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -782,28 +787,31 @@ const styles = StyleSheet.create({
   brandName: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: '#FFFFFF',
     lineHeight: 19,
     letterSpacing: -0.2,
   },
   brandSub: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#0891B2',
+    color: '#6FDDB2',
     letterSpacing: 0.6,
   },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    padding: 12,
+    margin: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   avatarCircle: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#0891B2',
+    backgroundColor: '#0F9D6B',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -820,20 +828,20 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   userRole: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#93C5FD',
     fontWeight: '500',
   },
   bellBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ECFEFF',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: '#CFFAFE',
+    borderColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -850,7 +858,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: '#0B2A5B',
   },
   bellBadgeText: {
     color: '#FFFFFF',
@@ -868,15 +876,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+    position: 'relative',
+    overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   navItemActive: {
-    backgroundColor: '#ECFEFF',
-    borderColor: '#CFFAFE',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  navActiveBar: {
+    position: 'absolute',
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: '#0F9D6B',
   },
   navIconContainer: {
     marginRight: 12,
@@ -890,23 +909,23 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#475569',
+    color: '#DBEAFE',
   },
   navLabelActive: {
-    color: '#0891B2',
+    color: '#0B2A5B',
     fontWeight: '700',
   },
   sidebarFooter: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: 'rgba(255,255,255,0.08)',
     gap: 12,
   },
   upgradeCard: {
-    backgroundColor: '#0891B2',
-    borderRadius: 12,
+    backgroundColor: '#1A5FD0',
+    borderRadius: 16,
     padding: 12,
-    shadowColor: '#0891B2',
+    shadowColor: '#1A5FD0',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
@@ -917,7 +936,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   upgradeDesc: {
-    color: '#ECFEFF',
+    color: '#F2F7FF',
     fontSize: 10,
     lineHeight: 14,
     marginBottom: 10,
@@ -929,21 +948,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeBtnText: {
-    color: '#0891B2',
+    color: '#0B7A53',
     fontSize: 11,
     fontWeight: 'bold',
   },
   logoutBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
   },
   logoutText: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#CBD5E1',
     fontWeight: '500',
   },
   mainContent: {
@@ -1021,7 +1040,7 @@ const styles = StyleSheet.create({
   markAllReadText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   notifScroll: {
     flex: 1,
@@ -1050,8 +1069,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   notifItemUnread: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#EEFBF5',
+    borderColor: '#A8EBCD',
   },
   notifTitle: {
     fontSize: 13,
@@ -1060,7 +1079,7 @@ const styles = StyleSheet.create({
   },
   textBold: {
     fontWeight: 'bold',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
   unreadDot: {
     width: 8,

@@ -327,7 +327,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
               <View style={[isDesktop ? styles.leftCol : styles.fullWidth]}>
                 <View style={styles.imgCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                    <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                    <Scan size={16} color="#1A5FD0" strokeWidth={2.2} />
                     <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Phim chụp MRI đang phân tích</Text>
                   </View>
                   <View style={styles.scanPreviewBox}>
@@ -354,7 +354,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
               <View style={[isDesktop ? styles.rightCol : styles.fullWidth]}>
                 <View style={styles.actionCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <ActivityIndicator size="small" color="#15803D" />
+                    <ActivityIndicator size="small" color="#0F9D6B" />
                     <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>
                       Đang xử lý phim chụp...
                     </Text>
@@ -380,7 +380,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                         >
                           <View style={styles.stepStatusIcon}>
                             {isCompleted && <CheckCircle2 size={16} color="#059669" />}
-                            {isCurrent && <ActivityIndicator size="small" color="#0891B2" />}
+                            {isCurrent && <ActivityIndicator size="small" color="#1A5FD0" />}
                             {isPending && <View style={styles.pendingDot} />}
                           </View>
                           <View style={{ flex: 1 }}>
@@ -426,7 +426,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                   {/* Original image */}
                   <View style={styles.imgCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                      <Scan size={16} color="#0891B2" strokeWidth={2.2} />
+                      <Scan size={16} color="#1A5FD0" strokeWidth={2.2} />
                       <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Ảnh gốc MRI</Text>
                     </View>
                     <View style={styles.imgViewer}>
@@ -442,7 +442,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                   {annotatedUri && (
                     <View style={styles.imgCard}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                        <Layers size={16} color="#0891B2" strokeWidth={2.2} />
+                        <Layers size={16} color="#1A5FD0" strokeWidth={2.2} />
                         <Text style={{ color: '#475569', fontSize: 13, fontWeight: '600' }}>Bản đồ nhiệt kích hoạt (Grad-CAM + YOLO)</Text>
                       </View>
                       <View style={styles.imgViewer}>

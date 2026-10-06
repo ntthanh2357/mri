@@ -29,7 +29,7 @@ const ICON_MAP = {
   cam_ket_pt: PenTool,
 };
 
-export default function DocTypeIcon({ type, size = 20, color = '#0891B2', style }) {
+export default function DocTypeIcon({ type, size = 20, color = '#1A5FD0', style }) {
   const IconComponent = ICON_MAP[type] || FileText;
   return <IconComponent size={size} color={color} style={style} />;
 }

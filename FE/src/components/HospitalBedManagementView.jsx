@@ -18,6 +18,8 @@ import {
 import { get, post, put } from '../services/api.service';
 import InpatientEmergencyModal from './InpatientEmergencyModal';
 import EdHandoffModal from './EdHandoffModal';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 
 const STATUS_MAP = {
   available: { label: 'Trống', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
@@ -47,6 +49,13 @@ const NEURO_ONCOLOGY_DIVISIONS = [
 ];
 
 export default function HospitalBedManagementView({ currentUser }) {
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
   const [loading, setLoading] = useState(false);
   const [bedMapData, setBedMapData] = useState({ summary: {}, departments: [] });
   const [icuAlert, setIcuAlert] = useState(null);
@@ -315,12 +324,13 @@ export default function HospitalBedManagementView({ currentUser }) {
 
   return (
     <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
+      {dialog}
       
       {/* ── HEADER & CAPACITY ALERT ────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-cyan-50 rounded-xl text-cyan-700 border border-cyan-100">
+            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-700 border border-blue-100">
               <Building2 className="w-6 h-6" />
             </div>
             <div>
@@ -396,7 +406,7 @@ export default function HospitalBedManagementView({ currentUser }) {
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
           <p className="text-xs text-slate-500 font-medium">Tổng số giường</p>
           <p className="text-2xl font-bold text-slate-800 mt-1">{bedMapData.summary?.totalBeds || 0}</p>
-          <div className="mt-2 text-[11px] text-cyan-700 font-medium">Khoa Ung Thư Não</div>
+          <div className="mt-2 text-[11px] text-blue-700 font-medium">Khoa Ung Thư Não</div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-2xs">
@@ -437,7 +447,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                 key={div.id}
                 onClick={() => setSelectedDepartment(div.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  isActive ? 'bg-cyan-700 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  isActive ? 'bg-blue-700 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 {div.name}
@@ -454,7 +464,7 @@ export default function HospitalBedManagementView({ currentUser }) {
               placeholder="Tìm theo số giường, phòng..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -480,7 +490,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             <div key={dept.departmentId} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-600" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
                   <h2 className="text-base md:text-lg font-bold text-slate-800">{dept.departmentName}</h2>
                   <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-semibold">
                     {dept.total} giường
@@ -571,7 +581,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                                     </span>
                                   )}
                                   {bed.type === 'post_op_recovery' && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 font-semibold">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
                                       🩺 Hậu phẫu mở sọ
                                     </span>
                                   )}
@@ -646,7 +656,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                                     </button>
                                     <button
                                       onClick={() => handleOpenModal('transfer', bed)}
-                                      className="flex-1 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 rounded-lg text-xs font-bold border border-cyan-200 flex items-center justify-center gap-1"
+                                      className="flex-1 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg text-xs font-bold border border-blue-200 flex items-center justify-center gap-1"
                                     >
                                       <ArrowRightLeft className="w-3 h-3" /> Chuyển
                                     </button>
@@ -683,6 +693,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
       {/* ── MODALS FOR ACTIONS ─────────────────────────────────────────── */}
       {activeModal && (
+        <Portal>
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -749,7 +760,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                         key={reasonText}
                         type="button"
                         onClick={() => setFormReason(reasonText)}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-cyan-50 hover:text-cyan-700 border border-slate-200 transition-all"
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition-all"
                       >
                         + {reasonText}
                       </button>
@@ -906,7 +917,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                         key={transReason}
                         type="button"
                         onClick={() => setFormReason(transReason)}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-cyan-50 hover:text-cyan-700 border border-slate-200 transition-all"
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition-all"
                       >
                         + {transReason}
                       </button>
@@ -928,7 +939,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                   <button
                     onClick={handleInternalTransfer}
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
                     {actionLoading ? 'Đang điều chuyển...' : 'Xác Nhận Chuyển Giường'}
                   </button>
@@ -1020,6 +1031,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Modal Cấp Cứu Nội Viện 1-Chạm */}

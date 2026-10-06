@@ -561,8 +561,8 @@ export default function AdminMetricsView({
                     iconColor = "text-blue-500";
                   } else if (act.type && act.type.includes("dataset")) {
                     Icon = Database;
-                    bgClass = "bg-teal-50 border-teal-100";
-                    iconColor = "text-teal-600";
+                    bgClass = "bg-emerald-50 border-emerald-100";
+                    iconColor = "text-emerald-600";
                   } else {
                     Icon = Sparkles;
                     bgClass = "bg-indigo-50 border-indigo-100";
@@ -607,10 +607,10 @@ export default function AdminMetricsView({
               {/* Tile 1: Duyệt CCHN */}
               <button
                 onClick={() => onSelectTab?.('doctors')}
-                className="p-4 rounded-xl border border-cyan-100/80 bg-cyan-50/20 hover:bg-cyan-50/45 text-left group transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer"
+                className="p-4 rounded-xl border border-blue-100/80 bg-blue-50/20 hover:bg-blue-50/45 text-left group transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-sm">
                     <Stethoscope className="w-4.5 h-4.5" />
                   </div>
                   <div className="min-w-0">

@@ -19,7 +19,7 @@ import Config from '../constants/config';
 const STATUS_LABEL = {
   provisioned: { text: 'Chờ điền thông tin', bg: '#fef9c3', color: '#a16207' },
   submitted: { text: 'Chờ duyệt', bg: '#dbeafe', color: '#1d4ed8' },
-  active: { text: 'Đã kích hoạt', bg: '#dcfce7', color: '#15803d' },
+  active: { text: 'Đã kích hoạt', bg: '#D5F5E7', color: '#0F9D6B' },
   rejected: { text: 'Từ chối', bg: '#fee2e2', color: '#b91c1c' },
 };
 
@@ -359,7 +359,7 @@ export default function AdminHospitalsView() {
                 {selected.status === 'submitted' && (
                   <View style={styles.section}>
                     {activateMsg === 'success' ? (
-                      <Text style={{ color: '#15803d', fontWeight: '700', textAlign: 'center', fontSize: 13 }}>✓ Đã kích hoạt thành công!</Text>
+                      <Text style={{ color: '#0F9D6B', fontWeight: '700', textAlign: 'center', fontSize: 13 }}>✓ Đã kích hoạt thành công!</Text>
                     ) : (
                       <>
                         {!!activateMsg && <Text style={styles.errorText}>{activateMsg}</Text>}
@@ -407,7 +407,7 @@ export default function AdminHospitalsView() {
             {provResult ? (
               <View style={{ gap: 12, marginTop: 12 }}>
                 <View style={styles.successBox}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803d' }}>✓ Tạo thành công! Lưu lại thông tin sau:</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F9D6B' }}>✓ Tạo thành công! Lưu lại thông tin sau:</Text>
                   <Text style={styles.mutedText}>Tên đăng nhập:</Text>
                   <Text style={styles.mono}>{provResult.tempUsername}</Text>
                   <Text style={styles.mutedText}>Mật khẩu tạm:</Text>
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
   licenseImage: { width: '100%', height: 160, borderRadius: 10, marginTop: 8, backgroundColor: '#f1f5f9' },
   mono: { fontSize: 13, fontWeight: '700', color: Colors.black, marginTop: 1 },
   resetBox: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 10, padding: 10, marginTop: 8 },
-  successBox: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, padding: 12, gap: 2 },
+  successBox: { backgroundColor: '#EEFBF5', borderWidth: 1, borderColor: '#A8EBCD', borderRadius: 12, padding: 12, gap: 2 },
   errorText: { fontSize: 11, fontWeight: '700', color: '#e11d48', marginTop: 6 },
   actionBtn: { paddingVertical: 11, borderRadius: 12, alignItems: 'center' },
   actionBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },

@@ -208,7 +208,7 @@ const SystemAdminScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} title="Đang xác thực...">
         <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', minHeight: 300 }]}>
-          <ActivityIndicator size="large" color="#0891B2" />
+          <ActivityIndicator size="large" color="#1A5FD0" />
           <Text style={{ marginTop: 12, color: '#64748B', fontSize: 14 }}>Đang kiểm tra quyền Quản trị viên...</Text>
         </SafeAreaView>
       </ResponsiveLayout>
@@ -227,7 +227,7 @@ const SystemAdminScreen = ({ navigation }) => {
             Bạn không có thẩm quyền truy cập vào trung tâm điều hành Hệ thống (Super Admin). Vui lòng liên hệ quản trị viên hoặc quay lại.
           </Text>
           <TouchableOpacity
-            style={{ marginTop: 24, backgroundColor: '#0891B2', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+            style={{ marginTop: 24, backgroundColor: '#1A5FD0', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
             onPress={() => navigation.goBack()}
           >
             <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Quay lại</Text>
@@ -294,7 +294,7 @@ const SystemAdminScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>TẢI HỆ THỐNG</Text>
               {loadingMetrics ? (
-                <ActivityIndicator size="small" color="#15803D" />
+                <ActivityIndicator size="small" color="#0F9D6B" />
               ) : (
                 <>
                   <Text style={styles.metricValue}>{utilizationPct}%</Text>
@@ -308,7 +308,7 @@ const SystemAdminScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>ĐỘ TRỄ TRUY VẤN</Text>
               {loadingMetrics ? (
-                <ActivityIndicator size="small" color="#15803D" />
+                <ActivityIndicator size="small" color="#0F9D6B" />
               ) : (
                 <>
                   <Text style={styles.metricValue}>{latencyMs} ms</Text>
@@ -325,7 +325,7 @@ const SystemAdminScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>NHÂN SỰ HOẠT ĐỘNG</Text>
               {loadingMetrics ? (
-                <ActivityIndicator size="small" color="#15803D" />
+                <ActivityIndicator size="small" color="#0F9D6B" />
               ) : (
                 <>
                   <Text style={styles.metricValue}>{activeStaff}</Text>
@@ -337,7 +337,7 @@ const SystemAdminScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>LƯỢT KHÁM HÔM NAY</Text>
               {loadingMetrics ? (
-                <ActivityIndicator size="small" color="#15803D" />
+                <ActivityIndicator size="small" color="#0F9D6B" />
               ) : (
                 <>
                   <Text style={styles.metricValue}>{metrics?.visitedToday ?? 0}</Text>
@@ -376,7 +376,7 @@ const SystemAdminScreen = ({ navigation }) => {
         <View style={styles.agentCard}>
           <View style={styles.agentHeader}>
             <View style={styles.agentTitleRow}>
-              <FileText size={20} color="#0891B2" style={{ marginRight: 8 }} />
+              <FileText size={20} color="#1A5FD0" style={{ marginRight: 8 }} />
               <Text style={styles.agentName}>OCR Transformer</Text>
             </View>
             <View style={styles.activeTag}>
@@ -458,7 +458,7 @@ const SystemAdminScreen = ({ navigation }) => {
         <View style={styles.agentCard}>
           <View style={styles.agentHeader}>
             <View style={styles.agentTitleRow}>
-              <MessageSquare size={20} color="#0891B2" style={{ marginRight: 8 }} />
+              <MessageSquare size={20} color="#1A5FD0" style={{ marginRight: 8 }} />
               <Text style={styles.agentName}>Thông dịch viên Thần kinh</Text>
             </View>
             <View style={styles.activeTag}>
@@ -589,7 +589,7 @@ const SystemAdminScreen = ({ navigation }) => {
             ) : (
               ragDocs.map((doc, idx) => (
                 <View key={idx} style={styles.docRow}>
-                  <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#166534' : '#991B1B', alignItems: 'center', justifyContent: 'center' }]}>
+                  <View style={[styles.docIcon, { backgroundColor: doc.isSuccess ? '#0B7A53' : '#991B1B', alignItems: 'center', justifyContent: 'center' }]}>
                     <Folder size={16} color="#FFFFFF" />
                   </View>
                   <View style={styles.docInfo}>

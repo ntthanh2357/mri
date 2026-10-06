@@ -73,7 +73,7 @@ export default StyleSheet.create({
   retryButton: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 8,
   },
   retryButtonText: {
@@ -190,6 +190,6 @@ export default StyleSheet.create({
   footerLink: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#15803D',
+    color: '#0F9D6B',
   },
 });

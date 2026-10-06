@@ -75,7 +75,7 @@ export default StyleSheet.create({
     justifyContent: 'center',
   },
   activeRoleGridTab: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
   },
   roleGridTabText: {
     fontSize: 12,
@@ -95,12 +95,12 @@ export default StyleSheet.create({
   },
   registerButton: {
     height: 52,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#15803D',
+    shadowColor: '#0F9D6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -124,7 +124,7 @@ export default StyleSheet.create({
   },
   footerLink: {
     fontSize: 14,
-    color: '#15803D',
+    color: '#0F9D6B',
     fontWeight: 'bold',
   },
   inputError: {
@@ -197,19 +197,19 @@ export default StyleSheet.create({
     paddingVertical: 20,
   },
   otpNotice: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
   otpNoticeText: {
-    color: '#166534',
+    color: '#0B7A53',
     fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   otpNoticeSubtext: {
-    color: '#15803D',
+    color: '#0F9D6B',
     fontSize: 11,
     lineHeight: 16,
   },
@@ -241,7 +241,7 @@ export default StyleSheet.create({
   modalConfirmButton: {
     flex: 2,
     height: 52,
-    backgroundColor: '#15803D',
+    backgroundColor: '#0F9D6B',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -397,7 +397,7 @@ export default StyleSheet.create({
   desktopTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#15803D',
+    color: '#0F9D6B',
     textAlign: 'center',
     marginBottom: 6,
   },

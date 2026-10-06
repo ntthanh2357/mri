@@ -127,7 +127,7 @@ const PatientsView = ({
             setShowAddForm(true);
             onSetEditingPatient(null);
           }}
-          className="bg-[#0d9488] hover:bg-teal-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+          className="bg-[#0d9488] hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm Bệnh Nhân</span>
@@ -183,7 +183,7 @@ const PatientsView = ({
               ) : (
                 filteredPatients.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-4 font-extrabold text-teal-600 font-mono">
+                    <td className="py-3 px-4 font-extrabold text-emerald-600 font-mono">
                       {p.id}
                     </td>
                     <td className="py-3 px-4">
@@ -219,7 +219,7 @@ const PatientsView = ({
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
-                        p.status === 'Active' ? 'bg-teal-50 text-teal-600' : 'bg-slate-150 text-slate-500'
+                        p.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-150 text-slate-500'
                       }`}>
                         {p.status === 'Active' ? 'Đang khám điều trị' : 'Tạm thời ngừng'}
                       </span>
@@ -230,7 +230,7 @@ const PatientsView = ({
                           setSelectedPatientEHR(p);
                           setActiveEHRSubTab('info');
                         }}
-                        className="bg-teal-50 hover:bg-teal-100 text-[#0d9488] font-bold px-3 py-1 rounded-lg text-[10px] transition-all cursor-pointer inline-flex items-center gap-1"
+                        className="bg-emerald-50 hover:bg-emerald-100 text-[#0d9488] font-bold px-3 py-1 rounded-lg text-[10px] transition-all cursor-pointer inline-flex items-center gap-1"
                       >
                         <FileText className="w-3 h-3" />
                         <span>Xem EMR</span>
@@ -243,7 +243,7 @@ const PatientsView = ({
                             onSetEditingPatient(p);
                             setShowAddForm(false);
                           }}
-                          className="p-1.5 hover:bg-teal-50 hover:text-[#0d9488] rounded-md transition-colors text-slate-400"
+                          className="p-1.5 hover:bg-emerald-50 hover:text-[#0d9488] rounded-md transition-colors text-slate-400"
                           title="Sửa thông tin"
                         >
                           <Edit className="w-4 h-4" />
@@ -282,7 +282,7 @@ const PatientsView = ({
                   className="w-12 h-12 rounded-full border-2 border-white/50 object-cover" 
                 />
                 <div>
-                  <div className="text-xs bg-teal-800 text-teal-100 px-2 py-0.5 rounded font-mono font-bold w-fit mb-0.5">
+                  <div className="text-xs bg-emerald-800 text-emerald-100 px-2 py-0.5 rounded font-mono font-bold w-fit mb-0.5">
                     HỒ SƠ BỆNH ÁN ĐIỆN TỬ {selectedPatientEHR.id}
                   </div>
                   <h3 className="text-base font-extrabold">{selectedPatientEHR.name}</h3>
@@ -301,7 +301,7 @@ const PatientsView = ({
               <button 
                 onClick={() => setActiveEHRSubTab('info')}
                 className={`py-3 px-3.5 text-xs font-bold transition-all border-b-2 ${
-                  activeEHRSubTab === 'info' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-400 hover:text-slate-600'
+                  activeEHRSubTab === 'info' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
                 Hành chính & Tiền sử
@@ -309,7 +309,7 @@ const PatientsView = ({
               <button 
                 onClick={() => setActiveEHRSubTab('appointments')}
                 className={`py-3 px-3.5 text-xs font-bold transition-all border-b-2 ${
-                  activeEHRSubTab === 'appointments' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-400 hover:text-slate-600'
+                  activeEHRSubTab === 'appointments' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
                 Sổ tay Lịch hẹn ({patientAppointments.length})
@@ -317,7 +317,7 @@ const PatientsView = ({
               <button 
                 onClick={() => setActiveEHRSubTab('prescriptions')}
                 className={`py-3 px-3.5 text-xs font-bold transition-all border-b-2 ${
-                  activeEHRSubTab === 'prescriptions' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-400 hover:text-slate-600'
+                  activeEHRSubTab === 'prescriptions' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
                 Toa thuốc điện tử ({patientPrescriptions.length})
@@ -325,7 +325,7 @@ const PatientsView = ({
               <button 
                 onClick={() => setActiveEHRSubTab('billing')}
                 className={`py-3 px-3.5 text-xs font-bold transition-all border-b-2 ${
-                  activeEHRSubTab === 'billing' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-400 hover:text-slate-600'
+                  activeEHRSubTab === 'billing' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
                 Hóa đơn viện phí ({patientInvoices.length})
@@ -389,7 +389,7 @@ const PatientsView = ({
                       <History className="w-4 h-4" />
                       <span>Chi tiết Bệnh lý & Tiền sử Lâm sàng</span>
                     </h4>
-                    <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-teal-50/20 p-3 rounded-lg border border-teal-500/10">
+                    <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-emerald-50/20 p-3 rounded-lg border border-emerald-500/10">
                       {selectedPatientEHR.medicalHistory}
                     </p>
                   </div>
@@ -404,7 +404,7 @@ const PatientsView = ({
                     patientAppointments.map((apt) => (
                       <div key={apt.id} className="bg-white border border-slate-150 p-3.5 rounded-xl shadow-3xs">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="bg-teal-50 text-[#0d9488] px-2.5 py-0.5 rounded font-bold font-mono text-[9px]">
+                          <span className="bg-emerald-50 text-[#0d9488] px-2.5 py-0.5 rounded font-bold font-mono text-[9px]">
                             {apt.date} | {apt.time}
                           </span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -455,7 +455,7 @@ const PatientsView = ({
                                   <div className="font-extrabold text-slate-800">{med.name}</div>
                                   <div className="text-slate-400 text-[10px]">Chỉ dẫn: {med.note}</div>
                                 </div>
-                                <div className="text-right text-[10px] font-bold text-teal-700">
+                                <div className="text-right text-[10px] font-bold text-emerald-700">
                                   <div>{med.dosage} ({med.frequency})</div>
                                   <div>Dùng trong: {med.duration}</div>
                                 </div>
@@ -520,7 +520,7 @@ const PatientsView = ({
                   <User className="w-5 h-5" />
                   <span>{editingPatient ? 'Sử Thông Tin Bệnh Nhân' : 'Thêm Bệnh Nhân Mới'}</span>
                 </h3>
-                <p className="text-teal-100 text-[10px] mt-0.5">Vui lòng điền thông tin hành chính chính xác để lập hồ sơ EMR</p>
+                <p className="text-emerald-100 text-[10px] mt-0.5">Vui lòng điền thông tin hành chính chính xác để lập hồ sơ EMR</p>
               </div>
               <button 
                 type="button" 
@@ -545,7 +545,7 @@ const PatientsView = ({
                     if (editingPatient) onSetEditingPatient({...editingPatient, name: e.target.value});
                     else setNewPatient({...newPatient, name: e.target.value});
                   }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm"
                   placeholder="Ví dụ: Nguyễn Văn Hải"
                   required
                 />
@@ -562,7 +562,7 @@ const PatientsView = ({
                       if (editingPatient) onSetEditingPatient({...editingPatient, phone: e.target.value});
                       else setNewPatient({...newPatient, phone: e.target.value});
                     }}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm"
                     placeholder="VD: 0912xxxxxx"
                     required
                   />
@@ -576,7 +576,7 @@ const PatientsView = ({
                       if (editingPatient) onSetEditingPatient({...editingPatient, age: Number(e.target.value)});
                       else setNewPatient({...newPatient, age: Number(e.target.value)});
                     }}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm"
                     min="1" 
                     max="120"
                   />
@@ -593,7 +593,7 @@ const PatientsView = ({
                       if (editingPatient) onSetEditingPatient({...editingPatient, email: e.target.value});
                       else setNewPatient({...newPatient, email: e.target.value});
                     }}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm"
                     placeholder="VD: name@domain.com"
                   />
                 </div>
@@ -605,7 +605,7 @@ const PatientsView = ({
                       if (editingPatient) onSetEditingPatient({...editingPatient, bloodGroup: e.target.value});
                       else setNewPatient({...newPatient, bloodGroup: e.target.value});
                     }}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm font-bold"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm font-bold"
                   >
                     {['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'].map(bg => (
                       <option key={bg} value={bg}>{bg}</option>
@@ -632,7 +632,7 @@ const PatientsView = ({
                             else setNewPatient({...newPatient, gender: g});
                           }}
                           className={`flex-1 py-1.5 rounded-xl font-bold border transition-all text-center ${
-                            isSel ? 'bg-teal-50 border-[#0d9488] text-teal-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
+                            isSel ? 'bg-emerald-50 border-[#0d9488] text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
                           }`}
                         >
                           {g}
@@ -649,7 +649,7 @@ const PatientsView = ({
                       if (editingPatient) onSetEditingPatient({...editingPatient, status: e.target.value});
                       else setNewPatient({...newPatient, status: e.target.value});
                     }}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm font-bold"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm font-bold"
                   >
                     <option value="Active">Đang khám điều trị</option>
                     <option value="Inactive">Tạm thời ngừng</option>
@@ -667,7 +667,7 @@ const PatientsView = ({
                     if (editingPatient) onSetEditingPatient({...editingPatient, address: e.target.value});
                     else setNewPatient({...newPatient, address: e.target.value});
                   }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm"
                   placeholder="Ví dụ: 12 Nguyễn Du, Hà Nội"
                 />
               </div>
@@ -682,7 +682,7 @@ const PatientsView = ({
                     if (editingPatient) onSetEditingPatient({...editingPatient, medicalHistory: e.target.value});
                     else setNewPatient({...newPatient, medicalHistory: e.target.value});
                   }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-xs sm:text-sm leading-relaxed"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm leading-relaxed"
                   placeholder="Ghi chú cụ thể của bác sĩ (Ví dụ: Tiền sử tăng huyết áp vô căn, tiểu đường tuýp 2, dị ứng penicillin...)"
                 />
               </div>
@@ -702,7 +702,7 @@ const PatientsView = ({
               </button>
               <button 
                 type="submit"
-                className="bg-[#0d9488] hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-xl transition-colors text-center shadow-sm cursor-pointer"
+                className="bg-[#0d9488] hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-colors text-center shadow-sm cursor-pointer"
               >
                 {editingPatient ? 'Cập nhật EMR' : 'Tạo hồ sơ'}
               </button>

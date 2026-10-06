@@ -134,7 +134,7 @@ export default StyleSheet.create({
   },
   stepItemCompleted: {
     borderColor: '#D1FAE5',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EEFBF5',
   },
   stepStatusIcon: {
     width: 24,
