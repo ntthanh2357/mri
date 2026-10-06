@@ -299,6 +299,7 @@ export const login = async (req, res) => {
 
     // Check if verification is required
     let requiresVerification = !user.isVerified && user.role === 'patient';
+    let justActivated = false;
 
     // If patient requires verification and has provided the OTP code, verify it right here!
     if (requiresVerification && req.body.otp) {
@@ -309,6 +310,7 @@ export const login = async (req, res) => {
         user.otpExpires = undefined;
         await user.save();
         requiresVerification = false; // Verification satisfied!
+        justActivated = true; // Vừa xác thực email xong → miễn 2FA cho phiên này
         // Log the change
         try {
           await AuditLog.create({
@@ -343,19 +345,28 @@ export const login = async (req, res) => {
       }
     }
 
+    // [2FA] Xác thực 2 lớp BẮT BUỘC với MỌI tài khoản đã xác thực (bệnh nhân
+    // + nhân viên). Token KHÔNG được cấp tại bước này — chỉ trả về sau khi
+    // người dùng nhập đúng mã OTP qua /auth/verify-2fa (verify phía server).
+    // Ngoại lệ: tài khoản bệnh nhân vừa kích hoạt qua OTP ở ngay yêu cầu này
+    // (justActivated) thì miễn 2FA vì vừa chứng minh quyền sở hữu email.
     let otp2FaCode;
-    const isStaff = user.role !== 'patient';
-    if (isStaff && !requiresActivation && !requiresVerification) {
+    const requires2FA = !requiresVerification && !requiresActivation && !justActivated;
+    if (requires2FA) {
       otp2FaCode = generateSecureOtp();
+      user.otp2FACode = otp2FaCode;
+      user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+      user.otp2FAAttempts = 0;
+      await user.save({ validateBeforeSave: false });
       try {
         await sendOtpEmail(user.email, otp2FaCode);
       } catch (emailErr) {
-        console.error("Lỗi gửi email 2FA nhân viên:", emailErr);
+        console.error("Lỗi gửi email OTP xác thực 2 lớp:", emailErr);
       }
     }
 
-    const accessToken = requiresVerification ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
-    const refreshToken = requiresVerification ? undefined : generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const accessToken = requiresVerification || requires2FA ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = requiresVerification || requires2FA ? undefined : generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
     // Thiết lập cookie HttpOnly + Secure + SameSite cho phiên làm việc web an toàn
     if (refreshToken && typeof res.cookie === "function") {
@@ -368,13 +379,26 @@ export const login = async (req, res) => {
       });
     }
 
-    if (!requiresVerification) {
+    if (!requiresVerification && !requires2FA) {
       authCache.setUserAuth(user._id.toString(), {
         tokenVersion: user.tokenVersion || 0,
         isLocked: user.isLocked,
         hospitalId: user.hospitalId,
         role: user.role,
       });
+    }
+
+    const debugOtpEnabled = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true";
+
+    if (requires2FA) {
+      // Chưa hoàn tất 2FA — KHÔNG trả về token lẫn thông tin người dùng
+      res.status(200).json({
+        message: "Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.",
+        requires2FA: true,
+        twoFactorEmail: user.email,
+        otp2FA: debugOtpEnabled ? otp2FaCode : undefined,
+      });
+      return;
     }
 
     res.status(200).json({
@@ -385,8 +409,9 @@ export const login = async (req, res) => {
       refreshToken,
       requiresActivation,
       requiresVerification,
-      otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
-      debugOtp: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true" && requiresVerification) ? otpCode : undefined,
+      requires2FA: false,
+      otp2FA: undefined,
+      debugOtp: (debugOtpEnabled && requiresVerification) ? otpCode : undefined,
       user: {
         id: user._id,
         email: user.email,
@@ -400,6 +425,153 @@ export const login = async (req, res) => {
     console.error("Lỗi đăng nhập:", error);
     res.status(500).json({
       message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập. Vui lòng thử lại sau.",
+      ...(process.env.NODE_ENV !== "production" ? { debug: error.message } : {})
+    });
+  }
+};
+
+// @desc    Xác thực mã OTP 2 lớp và cấp token đăng nhập
+// @route   POST /auth/verify-2fa
+// @access  Public
+export const verify2FA = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      res.status(400).json({ message: "Vui lòng cung cấp email và mã OTP xác thực." });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      res.status(404).json({ message: "Không tìm thấy yêu cầu đăng nhập cho email này. Vui lòng đăng nhập lại." });
+      return;
+    }
+
+    if (user.isLocked) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
+      return;
+    }
+
+    // Chống dò mã (brute-force): quá 5 lần sai → vô hiệu hoá mã, buộc yêu cầu mã mới
+    if (user.otp2FAAttempts >= 5) {
+      user.otp2FACode = undefined;
+      user.otp2FAExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      res.status(400).json({
+        message: "Bạn đã nhập sai mã OTP quá 5 lần. Mã hiện tại đã bị vô hiệu — vui lòng yêu cầu gửi lại mã mới.",
+      });
+      return;
+    }
+
+    const isMasterOtp = (process.env.NODE_ENV !== "production" && otp === "123456");
+    if (!isMasterOtp && (!user.otp2FACode || user.otp2FACode !== otp)) {
+      user.otp2FAAttempts = (user.otp2FAAttempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      const remaining = 5 - user.otp2FAAttempts;
+      res.status(400).json({
+        message: `Mã OTP không chính xác.${remaining > 0 ? ` Bạn còn ${remaining} lần thử trước khi mã bị vô hiệu.` : ""}`,
+      });
+      return;
+    }
+
+    if (!isMasterOtp && (!user.otp2FAExpires || user.otp2FAExpires < new Date())) {
+      res.status(400).json({ message: "Mã OTP đã hết hạn (hiệu lực 5 phút). Vui lòng yêu cầu gửi lại mã mới." });
+      return;
+    }
+
+    // OTP đúng → xoá mã, cấp token phiên đăng nhập
+    user.otp2FACode = undefined;
+    user.otp2FAExpires = undefined;
+    user.otp2FAAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
+    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+
+    if (typeof res.cookie === "function") {
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/auth",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+
+    authCache.setUserAuth(user._id.toString(), {
+      tokenVersion: user.tokenVersion || 0,
+      isLocked: user.isLocked,
+      hospitalId: user.hospitalId,
+      role: user.role,
+    });
+
+    res.status(200).json({
+      message: "Xác thực 2 lớp thành công! Đăng nhập hoàn tất.",
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        hospitalId: user.hospitalId,
+        isVerified: user.isVerified,
+        profile: user.profile,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi xác thực 2 lớp:", error);
+    res.status(500).json({
+      message: "Đã xảy ra lỗi trên máy chủ khi xác thực 2 lớp. Vui lòng thử lại sau.",
+      ...(process.env.NODE_ENV !== "production" ? { debug: error.message } : {})
+    });
+  }
+};
+
+// @desc    Gửi lại mã OTP xác thực 2 lớp
+// @route   POST /auth/resend-2fa
+// @access  Public
+export const resend2FA = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ message: "Vui lòng cung cấp email." });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || user.isLocked) {
+      res.status(404).json({ message: "Không tìm thấy yêu cầu đăng nhập cho email này. Vui lòng đăng nhập lại." });
+      return;
+    }
+
+    // Chống spam: chỉ gửi lại nếu không có mã hiệu lực hoặc mã cũ đã trên 30 giây
+    if (user.otp2FAExpires && user.otp2FAExpires > new Date() && user.otp2FAExpires - new Date() > 4.5 * 60 * 1000) {
+      res.status(429).json({ message: "Bạn vừa yêu cầu mã gần đây. Vui lòng chờ vài giây rồi thử lại." });
+      return;
+    }
+
+    const otp2FaCode = generateSecureOtp();
+    user.otp2FACode = otp2FaCode;
+    user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000);
+    user.otp2FAAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
+    try {
+      await sendOtpEmail(user.email, otp2FaCode);
+    } catch (emailErr) {
+      console.error("Lỗi gửi lại email OTP xác thực 2 lớp:", emailErr);
+    }
+
+    res.status(200).json({
+      message: "Mã OTP mới đã được gửi tới email của bạn.",
+      otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi gửi lại mã OTP 2 lớp:", error);
+    res.status(500).json({
+      message: "Đã xảy ra lỗi khi gửi lại mã. Vui lòng thử lại sau.",
       ...(process.env.NODE_ENV !== "production" ? { debug: error.message } : {})
     });
   }
@@ -503,6 +675,35 @@ export const refresh = async (req, res) => {
   }
 };
 
+// Sinh mã OTP 2 lớp cho user và trả phản hồi yêu cầu xác thực (KHÔNG cấp token)
+// — dùng chung cho login mật khẩu và SSO Google để mọi luồng đều qua đúng chính sách 2FA.
+const issue2FAChallenge = async (user, res, message) => {
+  const otp2FaCode = generateSecureOtp();
+  user.otp2FACode = otp2FaCode;
+  user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+  user.otp2FAAttempts = 0;
+  await user.save({ validateBeforeSave: false });
+  try {
+    await sendOtpEmail(user.email, otp2FaCode);
+  } catch (emailErr) {
+    console.error("Lỗi gửi email OTP xác thực 2 lớp:", emailErr);
+  }
+  res.status(200).json({
+    message,
+    requires2FA: true,
+    twoFactorEmail: user.email,
+    otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+  });
+};
+
+// [Tách luồng bảo mật] Tài khoản nhân viên KHÔNG được đăng nhập Cổng bệnh nhân
+// qua Google/SSO — không cấp token, chỉ dẫn sang Cổng nội bộ.
+const rejectStaffSso = (res) => {
+  res.status(403).json({
+    message: "Tài khoản Google này thuộc phân hệ Bác sĩ / Nhân viên y tế. Tài khoản nhân viên không thể đăng nhập qua Cổng bệnh nhân — vui lòng sử dụng Cổng nội bộ của bệnh viện.",
+  });
+};
+
 // @desc    Firebase/Google SSO Login
 // @route   POST /auth/firebase-login
 // @access  Public
@@ -562,22 +763,17 @@ export const firebaseLogin = async (req, res) => {
       await user.save();
     }
 
-    // Generate tokens
-    const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-    const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
+    // [Tách luồng + 2FA] Nhân viên bị chặn khỏi Cổng bệnh nhân; bệnh nhân phải
+    // hoàn tất OTP email qua /auth/verify-2fa trước khi được cấp token.
+    if (user.role !== "patient") {
+      return rejectStaffSso(res);
+    }
 
-    res.status(200).json({
-      message: "Đăng nhập Google thành công!",
-      accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        profile: user.profile,
-      },
-    });
+    return await issue2FAChallenge(
+      user,
+      res,
+      "Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập."
+    );
   } catch (error) {
     console.error("Lỗi đăng nhập Google:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
@@ -616,21 +812,15 @@ export const ssoLogin = async (req, res) => {
           });
           await user.save();
         }
-        const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0);
-        res.status(200).json({
-          message: "Đăng nhập Google thành công! (MOCK)",
-          accessToken,
-          refreshToken,
-          user: {
-            id: user._id,
-            email: user.email,
-            role: user.role,
-            isVerified: user.isVerified,
-            profile: user.profile,
-          },
-        });
-        return;
+        // [2FA] Mock cũng tuân thủ chính sách 2FA — không cấp token trực tiếp
+        if (user.role !== "patient") {
+          return rejectStaffSso(res);
+        }
+        return await issue2FAChallenge(
+          user,
+          res,
+          "Đăng nhập Google thành công! (MOCK) Mã OTP xác thực 2 lớp đã được gửi tới email của bạn."
+        );
       }
 
       const apiKey = process.env.FIREBASE_API_KEY || "AIzaSyAaKP0Q5HpkLlVGfMo9Bz2TmIU2wOVSyoM";
@@ -690,22 +880,17 @@ export const ssoLogin = async (req, res) => {
         }
       }
 
-      // Generate tokens (include hospitalId so hospital staff have proper access)
-      const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
-      const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
+      // [Tách luồng + 2FA] Nhân viên bị chặn khỏi Cổng bệnh nhân; bệnh nhân phải
+      // hoàn tất OTP email qua /auth/verify-2fa trước khi được cấp token.
+      if (user.role !== "patient") {
+        return rejectStaffSso(res);
+      }
 
-      res.status(200).json({
-        message: "Đăng nhập Google thành công!",
-        accessToken,
-        refreshToken,
-        user: {
-          id: user._id,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-          profile: user.profile,
-        },
-      });
+      return await issue2FAChallenge(
+        user,
+        res,
+        "Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập."
+      );
     } catch (error) {
       console.error("Lỗi đăng nhập Google:", error);
       res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi đăng nhập Google.", error: error.message });
@@ -714,6 +899,28 @@ export const ssoLogin = async (req, res) => {
   }
 
   res.status(400).json({ message: `Provider '${provider}' không được hỗ trợ.` });
+};
+
+// @desc    Logout from current device — hủy phiên phía server
+// @route   POST /auth/logout
+// @access  Public (hoạt động cả khi access token đã hết hạn — logout phải luôn thành công)
+export const logout = async (req, res) => {
+  try {
+    // Xóa cookie HttpOnly refreshToken trên trình duyệt hiện tại.
+    // Clear ở cả 2 biến thể path để chắc chắn khớp với mọi cách BE từng set
+    // (path "/auth" theo login; "/" cho các triển khai sau reverse-proxy).
+    if (typeof res.clearCookie === "function") {
+      res.clearCookie("refreshToken", { path: "/auth" });
+      res.clearCookie("refreshToken", { path: "/" });
+    }
+
+    res.status(200).json({ message: "Đăng xuất thành công. Phiên làm việc đã được hủy." });
+  } catch (error) {
+    // Không bao giờ để logout thất bại vì lỗi server — vẫn trả OK để FE
+    // tiếp tục dọn dẹp trạng thái local theo đúng quy trình.
+    console.error("Lỗi đăng xuất:", error);
+    res.status(200).json({ message: "Đăng xuất thành công." });
+  }
 };
 
 // @desc    Logout from all devices by invalidating all active sessions

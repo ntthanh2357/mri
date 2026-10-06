@@ -104,9 +104,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [clinicalSafetyScore, setClinicalSafetyScore] = useState(100);
   const [clinicalSafetyStatus, setClinicalSafetyStatus] = useState('SAFE');
+  const [clinicalEvaluationCoverage, setClinicalEvaluationCoverage] = useState(null);
+  const [clinicalSources, setClinicalSources] = useState(null);
   const [aiConsultationData, setAiConsultationData] = useState(null);
   const [isConsultingAi, setIsConsultingAi] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const [overrideCategory, setOverrideCategory] = useState('BENEFIT_EXCEEDS_RISK');
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
   const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
@@ -341,6 +344,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
       setClinicalClassifications([]);
       setClinicalSafetyScore(100);
       setClinicalSafetyStatus('SAFE');
+      setClinicalEvaluationCoverage(null);
+      setClinicalSources(null);
       setAiConsultationData(null);
       return;
     }
@@ -364,6 +369,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setClinicalClassifications(response.data.classifications || []);
         setClinicalSafetyScore(response.data.safetyScore ?? 100);
         setClinicalSafetyStatus(response.data.status || 'SAFE');
+        setClinicalEvaluationCoverage(response.data.evaluationCoverage || null);
+        setClinicalSources(response.data.sources || null);
         if (response.data.aiConsultation) {
           setAiConsultationData(response.data.aiConsultation);
         }
@@ -425,12 +432,17 @@ const PatientDetailScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Kiểm tra nếu có cảnh báo nghiêm trọng mà bác sĩ chưa ghi chú lý do ghi đè
+    // Kiểm tra nếu có cảnh báo nghiêm trọng mà bác sĩ chưa ghi chú lý do ghi đè hợp lệ (tối thiểu 15 ký tự)
     const hasSevereWarning = clinicalWarnings.some(w => w.severity === 'CRITICAL' || w.severity === 'HIGH');
-    if (hasSevereWarning && (!overrideReason || !overrideReason.trim())) {
+    const cleanOverride = (overrideReason || '').trim();
+    const isRepetitive = /(.)\1{4,}/.test(cleanOverride);
+    const words = cleanOverride.split(/\s+/).filter(w => w.length > 1);
+    const isMeaningful = cleanOverride.length >= 15 && !isRepetitive && words.length >= 3;
+
+    if (hasSevereWarning && !isMeaningful) {
       Alert.alert(
-        'Yêu cầu Lý do Lâm sàng (Override)',
-        'Đơn thuốc có cảnh báo tương tác hoặc chống chỉ định mức độ CAO/NGUY KỊCH. Theo quy định, Bác sĩ bắt buộc phải nhập "Lý do ghi đè lâm sàng" ở khung bên dưới trước khi ký số lưu đơn.'
+        'Yêu cầu Lý do Lâm sàng Hợp lệ (Override)',
+        'Đơn thuốc có cảnh báo tương tác hoặc chống chỉ định mức độ CAO / NGUY KỊCH. Bác sĩ bắt buộc phải chọn nhóm lý do và nhập giải trình chuyên môn có ý nghĩa (tối thiểu 15 ký tự, từ 3 từ có nghĩa trở lên, không lặp ký tự vô nghĩa) trước khi ký số lưu đơn.'
       );
       return;
     }
@@ -443,7 +455,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
         diagnosis: prescriptionDiagnosis,
         drugs: prescriptionDrugs,
         note: prescriptionNote,
-        overrideReason: overrideReason ? overrideReason.trim() : ""
+        overrideCategory: overrideCategory || 'BENEFIT_EXCEEDS_RISK',
+        overrideReason: cleanOverride,
+        requestAi: !!aiConsultationData,
+        aiConsultation: aiConsultationData
       };
 
       const res = await post(`/api/patients/${targetPatientId}/prescriptions`, body);
@@ -454,6 +469,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setPrescriptionDiagnosis('');
         setPrescriptionNote('');
         setOverrideReason('');
+        setOverrideCategory('BENEFIT_EXCEEDS_RISK');
         setPrescriptionDrugs([]);
         setClinicalWarnings([]);
         setClinicalClassifications([]);
@@ -517,7 +533,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSaveTransferForm = async () => {
+  const handleSaveTransferForm = async (extraData = {}) => {
     if (!transferTo || !transferDiagnosis) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập nơi chuyển tuyến đến và chẩn đoán bệnh.');
       return;
@@ -526,9 +542,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
     setIsSavingTransfer(true);
     try {
       const targetPatientId = patient?._id;
+      const isSmart = extraData.isSmartPackage !== false; // Mặc định là gói chuyển viện thông minh
+
       const body = {
-        doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
-        transferNo: transferNo || `CT-${Math.floor(1000 + Math.random() * 9000)}`,
+        patient_id: targetPatientId,
+        doctor_name: currentUser?.profile?.name || currentUser?.name || "Bác sĩ điều trị",
+        transferNo: transferNo || `CV-${Math.floor(100000 + Math.random() * 900000)}`,
         hospitalNo: transferHospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
         transferTo,
         dateIn,
@@ -545,11 +564,22 @@ const PatientDetailScreen = ({ route, navigation }) => {
         transferTime: new Date(),
         isOneYearValid: transferOneYearValid,
         transportation: transferTransportation,
-        escort: transferEscort
+        escort: transferEscort,
+        // Dành riêng cho gói chuyển viện số (DICOM, AI Report, 3D Mesh)
+        imagingResultId: extraData.imagingResultId || undefined,
+        recipientEmail: extraData.recipientEmail || patient?.email || patient?.profile?.email || "",
       };
 
-      await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
-      Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      if (isSmart) {
+        await post('/api/v1/transfers', body);
+        Alert.alert(
+          'Khởi tạo Gói Chuyển Viện Thành Công (UC-DOC-10)',
+          'Hệ thống đã tự động đóng gói file DICOM nén, Báo cáo AI u não và Mô hình 3D khối u, đồng thời chuyển hồ sơ sang bàn Lễ tân để gửi email điện tử cho bệnh nhân!'
+        );
+      } else {
+        await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
+        Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      }
       
       // Reset form
       setTransferNo('');
@@ -1203,11 +1233,15 @@ const PatientDetailScreen = ({ route, navigation }) => {
               clinicalClassifications={clinicalClassifications}
               clinicalSafetyScore={clinicalSafetyScore}
               clinicalSafetyStatus={clinicalSafetyStatus}
+              clinicalEvaluationCoverage={clinicalEvaluationCoverage}
+              clinicalSources={clinicalSources}
               aiConsultationData={aiConsultationData}
               isConsultingAi={isConsultingAi}
               onConsultAi={handleConsultAi}
               overrideReason={overrideReason}
               setOverrideReason={setOverrideReason}
+              overrideCategory={overrideCategory}
+              setOverrideCategory={setOverrideCategory}
               prescriptionNote={prescriptionNote}
               setPrescriptionNote={setPrescriptionNote}
               handleSavePrescription={handleSavePrescription}
@@ -1271,6 +1305,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               handleSaveTransferForm={handleSaveTransferForm}
               isSavingTransfer={isSavingTransfer}
               labOrders={labOrders}
+              imagingResults={imagingResults}
             />
           )}
 

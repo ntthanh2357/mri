@@ -31,7 +31,7 @@ export const protect = async (req, res, next) => {
       // Tầng đệm Auth Cache (In-Memory Fast Path): Tránh gọi DB lặp lại trên mọi request
       let user = authCache.getUserAuth(decoded.id);
       if (!user) {
-        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role").lean();
+        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role departmentId profile emergencyDuty").lean();
         if (user) {
           authCache.setUserAuth(decoded.id, user, 60000); // Cache 60s
         }
@@ -80,10 +80,24 @@ export const protect = async (req, res, next) => {
         return;
       }
 
-      // Add user info to request
-      req.user = decoded;
-      req.user.role = user.role || decoded.role;
-      req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null;
+      // Add user info to request with full clinical profile & emergency duty status
+      const hasActiveEmergencyShift = Boolean(
+        user.emergencyDuty?.isAssigned &&
+        (!user.emergencyDuty.expiresAt || new Date(user.emergencyDuty.expiresAt) > new Date())
+      );
+
+      req.user = {
+        ...decoded,
+        role: user.role || decoded.role,
+        hospitalId: user.hospitalId ? user.hospitalId.toString() : null,
+        departmentId: user.departmentId || null,
+        department: user.departmentId || null,
+        profile: user.profile || decoded.profile || {},
+        specialty: user.profile?.specialty || null,
+        emergencyDuty: user.emergencyDuty || null,
+        isEmergencyDuty: hasActiveEmergencyShift,
+        dutyRole: hasActiveEmergencyShift ? "emergency" : null
+      };
 
       const isSuperAdmin = req.user.role === "admin" || req.user.role === "system_admin";
       tenantStorage.run({

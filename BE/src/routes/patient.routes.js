@@ -63,7 +63,7 @@ router.get("/:patientId/discharge-papers", checkSelfOrRoles(["doctor", "nurse", 
 router.post("/:patientId/discharge-papers", checkRole(["doctor", "admin", "hospital_admin"]), addPatientDischargePaper);
 
 // Quản lý phiếu chuyển tuyến
-router.get("/:patientId/transfer-forms", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientTransferForms);
-router.post("/:patientId/transfer-forms", checkRole(["doctor", "admin", "hospital_admin"]), addPatientTransferForm);
+router.get("/:patientId/transfer-forms", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin", "receptionist"]), getPatientTransferForms);
+router.post("/:patientId/transfer-forms", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), addPatientTransferForm);
 
 export default router;

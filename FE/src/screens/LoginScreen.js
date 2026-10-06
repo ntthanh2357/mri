@@ -41,7 +41,8 @@ const LoginScreen = ({ navigation }) => {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [tempLoginResponse, setTempLoginResponse] = useState(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [resendingOtp, setResendingOtp] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Forgot password states
@@ -134,7 +135,7 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const data = await post('/auth/phone-login-verify', { phone: email.trim(), otp: otpCode.trim() });
-      setAuthToken(data.accessToken);
+      setAuthToken(data.accessToken, data.refreshToken);
       showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
         navigation.reset({
           index: 0,
@@ -193,7 +194,42 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/login', { email, password, roleType: loginRole });
 
-      // Phân tách nghiêm ngặt vai trò (Client-side defense)
+      // Bệnh nhân chưa kích hoạt OTP qua email
+      if (data.requiresVerification) {
+        showAlert(
+          'info',
+          'Tài khoản chưa kích hoạt',
+          'Tài khoản bệnh nhân chưa được kích hoạt qua mã OTP. Mã xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra email hoặc đăng nhập qua OTP.' +
+          (data.debugOtp ? ` (Mã OTP: ${data.debugOtp})` : '')
+        );
+        return;
+      }
+
+      // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
+      if (data.requiresActivation) {
+        await setAuthToken(data.accessToken, data.refreshToken);
+        navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
+        return;
+      }
+
+      // [2FA] Xác thực 2 lớp bắt buộc với MỌI tài khoản (bệnh nhân + nhân viên).
+      // Server KHÔNG trả token ở bước này — token chỉ được cấp sau khi nhập
+      // đúng mã OTP qua /auth/verify-2fa (kiểm định phía server).
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || email).trim());
+        setShowTwoFactor(true);
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
+      // Phân tách nghiêm ngặt vai trò (Client-side defense) — đặt SAU các bước
+      // chờ OTP vì response requires2FA / requiresVerification KHÔNG kèm user;
+      // tới đây thì response chắc chắn đã có user (đăng nhập hoàn tất).
       const isStaffUser = data.user && data.user.role !== 'patient';
       if (loginRole === 'patient' && isStaffUser) {
         showAlert(
@@ -212,40 +248,18 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      // Bệnh nhân chưa kích hoạt OTP qua email
-      if (data.requiresVerification) {
-        showAlert(
-          'info',
-          'Tài khoản chưa kích hoạt',
-          'Tài khoản bệnh nhân chưa được kích hoạt qua mã OTP. Mã xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra email hoặc đăng nhập qua OTP.' +
-          (data.debugOtp ? ` (Mã OTP: ${data.debugOtp})` : '')
-        );
-        return;
-      }
-
-      // Nhân viên chưa kích hoạt → bắt buộc đặt mật khẩu mới
-      if (data.requiresActivation) {
-        await setAuthToken(data.accessToken);
-        navigation.replace('ActivateAccount', { user: data.user, accessToken: data.accessToken });
-        return;
-      }
-
-      // If logging in as staff/doctor, trigger 2FA OTP simulation
-      if (loginRole === 'staff' || (data.user && data.user.role !== 'patient')) {
-        setTempLoginResponse(data);
-        setShowTwoFactor(true);
-      } else {
-        await setAuthToken(data.accessToken, data.refreshToken);
-        const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
-          ? 'AdminBackoffice'
-          : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
-        showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: destination, params: { user: data.user } }],
-          });
+      // Trường hợp còn lại (vd: bệnh nhân vừa kích hoạt tài khoản bằng OTP
+      // ngay ở bước đăng nhập) — server xác nhận email nên cấp token luôn.
+      await setAuthToken(data.accessToken, data.refreshToken);
+      const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
+        ? 'AdminBackoffice'
+        : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
+      showAlert('success', 'Đăng nhập thành công', 'Chào mừng bạn quay trở lại với NeuroScan AI!', () => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: destination, params: { user: data.user } }],
         });
-      }
+      });
     } catch (error) {
       console.error('Login error:', error);
       const errMsg = error.message || 'Không thể kết nối đến máy chủ.';
@@ -272,10 +286,32 @@ const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // Simulate network request duration
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Xác thực OTP phía SERVER — token chỉ được cấp khi mã đúng
+      const data = await post('/auth/verify-2fa', {
+        email: twoFactorEmail,
+        otp: twoFactorCode.trim(),
+      });
 
-      const data = tempLoginResponse;
+      // [Tách luồng] Nếu tài khoản là nhân viên lâm sàng → KHÔNG lưu token vào
+      // ứng dụng bệnh nhân (đề phòng xác thực OTP cho phiên đăng nhập sai phân hệ).
+      const verifiedRole = data.user ? data.user.role : null;
+      const clinicalStaff =
+        verifiedRole &&
+        !['patient', 'admin', 'system_admin', 'hospital_admin'].includes(verifiedRole);
+      if (clinicalStaff) {
+        showAlert(
+          'error',
+          'Sai phân hệ đăng nhập',
+          'Tài khoản của bạn thuộc phân hệ Bác sĩ / Nhân viên y tế. Ứng dụng này dành cho Bệnh nhân — vui lòng sử dụng Cổng nội bộ của bệnh viện.',
+          () => {
+            setShowTwoFactor(false);
+            setTwoFactorCode('');
+            setTwoFactorEmail('');
+          }
+        );
+        return;
+      }
+
       await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin')
         ? 'AdminBackoffice'
@@ -284,15 +320,35 @@ const LoginScreen = ({ navigation }) => {
       showAlert('success', 'Đăng nhập thành công', 'Xác thực 2 lớp thành công!', () => {
         setShowTwoFactor(false);
         setTwoFactorCode('');
+        setTwoFactorEmail('');
         navigation.reset({
           index: 0,
           routes: [{ name: destination, params: { user: data.user } }],
         });
       });
     } catch (error) {
-      setTwoFactorError('Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
+      setTwoFactorError(error.message || 'Xác thực 2 lớp thất bại. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP xác thực 2 lớp (mã cũ bị vô hiệu hoá, mã mới hiệu lực 5 phút)
+  const handleResend2FA = async () => {
+    setTwoFactorError('');
+    setResendingOtp(true);
+    try {
+      const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
+      showAlert(
+        'info',
+        'Đã gửi lại mã',
+        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
+        (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+      );
+    } catch (error) {
+      setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
+    } finally {
+      setResendingOtp(false);
     }
   };
 
@@ -323,6 +379,19 @@ const LoginScreen = ({ navigation }) => {
 
       const data = await post('/auth/sso/google', { idToken });
 
+      // [2FA] SSO Google giờ cũng yêu cầu OTP email — response KHÔNG có token/user.
+      if (data.requires2FA) {
+        setTwoFactorEmail((data.twoFactorEmail || '').trim());
+        setShowTwoFactor(true);
+        showAlert(
+          'info',
+          'Xác thực 2 lớp',
+          'Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
+          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
+        );
+        return;
+      }
+
       // Phân tách nghiêm ngặt vai trò cho Google SSO
       const isStaffUser = data.user && data.user.role !== 'patient';
       if (loginRole === 'patient' && isStaffUser) {
@@ -342,7 +411,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      await setAuthToken(data.accessToken);
+      await setAuthToken(data.accessToken, data.refreshToken);
       const destination = data.user && (data.user.role === 'admin' || data.user.role === 'system_admin') ? 'AdminBackoffice' : (data.user && data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
@@ -415,7 +484,7 @@ const LoginScreen = ({ navigation }) => {
           {/* Logo & Brand */}
           <TouchableOpacity style={styles.brandContainer} onPress={() => navigation.navigate('Welcome')}>
             <Image
-              source={require('../../assets/logo.jpg')}
+              source={require('../../assets/logo.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -450,22 +519,12 @@ const LoginScreen = ({ navigation }) => {
               />
               <View style={styles.leftPanelOverlay} />
               <View style={styles.leftPanelContent}>
-                <View style={styles.statsBadgeContainer}>
-                  <View style={styles.statMiniCard}>
-                    <Text style={styles.statMiniLabel}>ĐỘ CHÍNH XÁC</Text>
-                    <Text style={styles.statMiniValue}>99.8%</Text>
-                  </View>
-                  <View style={styles.statMiniCard}>
-                    <Text style={styles.statMiniLabel}>THỜI GIAN XỬ LÝ</Text>
-                    <Text style={styles.statMiniValue}>&lt; 2 Giây</Text>
-                  </View>
-                </View>
                 <Text style={styles.leftPanelTextTitle}>
                   Chẩn đoán thông minh hơn với{' '}
                   <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
                 </Text>
                 <Text style={styles.leftPanelTextDesc}>
-                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng với độ chính xác tuyệt đối.
+                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng đưa ra quyết định chẩn đoán chính xác.
                 </Text>
               </View>
             </View>
@@ -482,7 +541,7 @@ const LoginScreen = ({ navigation }) => {
                   <View style={styles.desktopForm}>
                     <View style={styles.desktopTitleContainer}>
                       <Text style={styles.desktopTitle}>Xác thực 2 lớp (2FA)</Text>
-                      <Text style={styles.desktopSubtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
+                      <Text style={styles.desktopSubtitle}>Mã OTP 6 chữ số đã được gửi tới email của bạn. Vui lòng nhập để hoàn tất đăng nhập.</Text>
                     </View>
 
                     <Text style={styles.desktopLabel}>Mã xác thực OTP (6 chữ số)</Text>
@@ -523,6 +582,15 @@ const LoginScreen = ({ navigation }) => {
                       ) : (
                         <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
                       )}
+                    </TouchableOpacity>
+
+                    <Text style={styles.twoFactorEmailHint}>
+                      Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+                    </Text>
+                    <TouchableOpacity style={styles.resendOtpRow} onPress={handleResend2FA} disabled={resendingOtp || loading}>
+                      <Text style={styles.resendOtpText}>
+                        {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -802,7 +870,7 @@ const LoginScreen = ({ navigation }) => {
           {showTwoFactor ? (
             <View style={styles.form}>
               <Text style={styles.title}>Xác thực 2 lớp (2FA)</Text>
-              <Text style={styles.subtitle}>Vui lòng nhập mã OTP từ Google Authenticator hoặc SMS để tiếp tục</Text>
+              <Text style={styles.subtitle}>Mã OTP 6 chữ số đã được gửi tới email của bạn. Vui lòng nhập để hoàn tất đăng nhập.</Text>
 
               <Text style={styles.label}>Mã xác thực OTP (6 chữ số)</Text>
               <TextInput
@@ -841,6 +909,15 @@ const LoginScreen = ({ navigation }) => {
                 ) : (
                   <Text style={styles.loginButtonText}>Xác nhận & Đăng nhập →</Text>
                 )}
+              </TouchableOpacity>
+
+              <Text style={styles.twoFactorEmailHint}>
+                Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
+              </Text>
+              <TouchableOpacity style={styles.resendOtpRow} onPress={handleResend2FA} disabled={resendingOtp || loading}>
+                <Text style={styles.resendOtpText}>
+                  {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity

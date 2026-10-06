@@ -46,12 +46,11 @@ export const flagForPeerReview = async (req, res) => {
     });
     const firstReaderId = firstReaderAssignment?.doctorId?.toString() || req.user.id;
 
-    // Chọn reviewer thứ 2 — bác sĩ cùng specialty, khác người đọc đầu
+    // Chọn reviewer thứ 2 — bác sĩ khác người đọc/khám đầu
     const reviewer2 = await User.findOne({
       hospitalId,
       role: 'doctor',
       _id: { $ne: firstReaderId },
-      "profile.specialty": { $in: ['neuroradiologist', 'radiologist'] },
       isLocked: false,
     }).lean();
 

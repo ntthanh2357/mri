@@ -133,9 +133,6 @@ const ClinicDashboardScreen = ({ navigation }) => {
         if (statsRes.recentActivity) {
           setRecentActivity(statsRes.recentActivity);
         }
-        if (statsRes.recentActivity) {
-          setRecentActivity(statsRes.recentActivity);
-        }
       }
     } catch (err) {
       console.error('Lỗi khi tải thông tin tổng quan phòng khám:', err);

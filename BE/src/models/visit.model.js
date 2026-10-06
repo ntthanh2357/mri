@@ -19,6 +19,8 @@ const visitSchema = new Schema(
         label: { type: String },
         storageType: { type: String },
         fileUrl: { type: String },
+        fileId: { type: String, default: null },
+        sha256: { type: String, default: null },
         fileName: { type: String },
         fileType: { type: String },
         manualData: { type: Schema.Types.Mixed },
