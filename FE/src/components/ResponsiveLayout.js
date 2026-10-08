@@ -10,6 +10,8 @@ import {
   Image,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
+import Colors from '../constants/colors';
+import PressableScale from './PressableScale';
 import { portalLoginRoute } from '../utils/navigationRef';
 import performLogout from '../utils/logout';
 import { 
@@ -26,18 +28,29 @@ import {
   Activity, 
   FileText, 
   ClipboardList, 
-  Star, 
   CreditCard,
   Bell,
   AlertTriangle,
-  Sparkles,
   X,
   ChevronRight,
   ShieldCheck,
   ArrowRightLeft,
+  Stethoscope,
   UploadCloud,
   Menu,
+  Database,
+  Heart,
+  Ticket,
+  Sliders,
 } from 'lucide-react';
+
+// Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
+// Khung giao diện dùng chung 1 bộ màu thương hiệu cho mọi role (quyết định 2026-10-04 — bỏ teal của nhân viên).
+const SHELL_THEME = {
+  accent: Colors.brandGreen, accentSoft: Colors.brandGreenSoft, accentBorder: '#CDEBDF',
+  dark: Colors.brandNavy, darkRaised: '#16386B', onDarkAccent: Colors.brandGreenOnDark, onDarkSub: Colors.brandGreenOnDark,
+  onDarkActiveBg: 'rgba(61, 219, 166, 0.15)', avatar: Colors.brandNavy,
+};
 
 const ResponsiveLayout = ({
   children,
@@ -160,7 +173,8 @@ const ResponsiveLayout = ({
   };
 
   const isPatient = localUser?.role === 'patient';
-  const roleLabel = (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
+  const theme = SHELL_THEME;
+  const roleLabel = !localUser ? 'Đang tải…' : (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
                     localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
@@ -173,24 +187,25 @@ const ResponsiveLayout = ({
       case 'patient':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Lấy số khám', route: 'QueueTicket', icon: Ticket },
           { label: 'Phim MRI & CT', route: 'ImagingHistory', icon: Brain },
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
-          { label: 'Khai báo bệnh án', route: 'RecordVault', icon: ClipboardList },
-          { label: 'Mua Premium', route: 'Premium', icon: Star },
+          { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Hàng đợi Khám & Đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
-          { label: 'Khám bệnh Lâm sàng', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Chụp & Đọc phim MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
-          { label: 'Bệnh án & Bệnh nhân', route: 'DoctorPatientList', icon: FolderOpen },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Danh mục Thuốc', route: 'DrugManagement', icon: Package },
-          { label: 'Lịch trực Bác sĩ', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
+          { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'technician':
@@ -198,7 +213,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
-          { label: 'Lịch làm việc KTV', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'nurse':
@@ -206,31 +221,31 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Bệnh án & EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
-          { label: 'Lịch làm việc Điều dưỡng', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'receptionist':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Tiếp nhận Bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
+          { label: 'Tiếp nhận bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Lịch làm việc Lễ tân', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'hospital_admin':
         return [
           { label: 'Tổng quan', route: 'ClinicDashboard', icon: LayoutDashboard },
-          { label: 'Quản lý EMR', route: 'EMRDashboard', params: { tab: 'records' }, icon: FolderOpen },
-          { label: 'Sơ đồ Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Quản lý Nhân sự', route: 'StaffManagement', icon: Users },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Quản lý nhân sự', route: 'StaffManagement', icon: Users },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
-          { label: 'Báo cáo Tài chính', route: 'Financials', icon: DollarSign },
+          { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -238,9 +253,15 @@ const ResponsiveLayout = ({
       case 'admin':
       case 'system_admin':
         return [
-          { label: 'Tổng quan', route: 'AdminBackoffice', icon: LayoutDashboard },
-          { label: 'Quản lý Giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện Liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Tổng quan', route: 'AdminBackoffice', params: { tab: 'metrics' }, icon: LayoutDashboard },
+          { label: 'Người dùng', route: 'AdminBackoffice', params: { tab: 'users' }, icon: Users },
+          { label: 'Bệnh viện', route: 'AdminBackoffice', params: { tab: 'hospitals' }, icon: Building2 },
+          { label: 'Dataset', route: 'AdminBackoffice', params: { tab: 'datasets' }, icon: Database },
+          { label: 'Nhật ký hệ thống', route: 'AdminBackoffice', params: { tab: 'audit-logs' }, icon: ClipboardList },
+          { label: 'SaaS Suite (nâng cao)', route: 'AdminBackoffice', params: { tab: 'saas-suite' }, icon: Sliders },
+          { label: 'Huấn luyện & Chatbot AI', route: 'AdminBackoffice', params: { tab: 'ai-config' }, icon: Brain },
+          { label: 'Quản lý giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -252,7 +273,7 @@ const ResponsiveLayout = ({
     }
   };
 
-  const menuItems = getMenuItems(localUser?.role);
+  const menuItems = localUser ? getMenuItems(localUser.role).filter(Boolean) : [];
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -262,6 +283,10 @@ const ResponsiveLayout = ({
   };
 
   const isItemActive = (item) => {
+    if (item.group && activeRoute.startsWith(item.route)) {
+      const hasOwnItem = menuItems.some(o => o !== item && o.params?.tab && activeRoute === `${o.route}_${o.params.tab}`);
+      if (!hasOwnItem) return true;
+    }
     if (item.params?.tab) {
       if (activeRoute === `${item.route}_${item.params.tab}`) return true;
       if (activeRoute === 'ReceptionistDashboard_createVisit' && item.route === 'NurseReception' && item.params?.tab === 'createVisit') return true;
@@ -282,7 +307,7 @@ const ResponsiveLayout = ({
       <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
         {/* Mobile Top Navigation Header */}
         <View style={{
-          backgroundColor: '#0F172A',
+          backgroundColor: theme.dark,
           paddingTop: 10,
           paddingBottom: 10,
           paddingHorizontal: 14,
@@ -290,16 +315,16 @@ const ResponsiveLayout = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottomWidth: 1,
-          borderBottomColor: '#1E293B',
+          borderBottomColor: theme.darkRaised,
           zIndex: 40,
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
               onPress={() => setShowMobileMenu(true)}
-              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              style={{ padding: 6, backgroundColor: theme.darkRaised, borderRadius: 8 }}
               accessibilityLabel="Mở danh mục chức năng"
             >
-              <Menu size={20} color="#38BDF8" />
+              <Menu size={20} color={theme.onDarkAccent} />
             </TouchableOpacity>
             <View>
               <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15, letterSpacing: -0.2 }}>NeuroScan AI</Text>
@@ -322,7 +347,7 @@ const ResponsiveLayout = ({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDefaultLogout}
-              style={{ padding: 6, backgroundColor: '#1E293B', borderRadius: 8 }}
+              style={{ padding: 6, backgroundColor: theme.darkRaised, borderRadius: 8 }}
               accessibilityLabel="Đăng xuất"
             >
               <LogOut size={16} color="#EF4444" />
@@ -335,7 +360,7 @@ const ResponsiveLayout = ({
           <TouchableOpacity
             onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
             style={{
-              backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+              backgroundColor: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C',
               paddingVertical: 8,
               paddingHorizontal: 12,
               flexDirection: 'row',
@@ -349,7 +374,7 @@ const ResponsiveLayout = ({
                 CẤP CỨU: {activeEmergency.patientName} ({activeEmergency.medicalId})
               </Text>
             </View>
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', marginLeft: 6 }}>Xử lý ngay →</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', marginLeft: 6 }}>Xử lý ngay</Text>
           </TouchableOpacity>
         )}
 
@@ -369,7 +394,7 @@ const ResponsiveLayout = ({
             <View style={{
               width: '82%',
               maxWidth: 320,
-              backgroundColor: '#0F172A',
+              backgroundColor: theme.dark,
               height: '100%',
               paddingTop: 20,
               paddingBottom: 24,
@@ -377,10 +402,10 @@ const ResponsiveLayout = ({
               justifyContent: 'space-between',
             }}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.darkRaised }}>
                   <View>
                     <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
-                    <Text style={{ color: '#0891B2', fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
+                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
                     <X size={20} color="#94A3B8" />
@@ -401,18 +426,18 @@ const ResponsiveLayout = ({
                           paddingHorizontal: 14,
                           borderRadius: 8,
                           marginBottom: 4,
-                          backgroundColor: isActive ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
+                          backgroundColor: isActive ? theme.onDarkActiveBg : 'transparent',
                           borderLeftWidth: isActive ? 3 : 0,
-                          borderLeftColor: '#38BDF8',
+                          borderLeftColor: theme.onDarkAccent,
                         }}
                         onPress={() => {
                           setShowMobileMenu(false);
                           navigation.navigate(item.route, item.params);
                         }}
                       >
-                        <IconComponent size={18} color={isActive ? '#38BDF8' : '#94A3B8'} />
+                        <IconComponent size={18} color={isActive ? theme.onDarkAccent : '#94A3B8'} />
                         <Text style={{
-                          color: isActive ? '#38BDF8' : '#E2E8F0',
+                          color: isActive ? theme.onDarkAccent : '#E2E8F0',
                           fontWeight: isActive ? 'bold' : '500',
                           marginLeft: 12,
                           fontSize: 14,
@@ -432,7 +457,7 @@ const ResponsiveLayout = ({
                   gap: 10,
                   paddingVertical: 12,
                   paddingHorizontal: 14,
-                  backgroundColor: '#1E293B',
+                  backgroundColor: theme.darkRaised,
                   borderRadius: 8,
                 }}
                 onPress={() => {
@@ -460,7 +485,7 @@ const ResponsiveLayout = ({
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                    <Bell size={18} color={theme.accent} strokeWidth={2.3} />
                     <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -525,13 +550,13 @@ const ResponsiveLayout = ({
           />
           <View>
             <Text style={styles.brandName}>NeuroScan AI</Text>
-            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
+            <Text style={[styles.brandSub, { color: theme.accent }]}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
           </View>
         </View>
 
         {/* User Card */}
         <View style={styles.userCard}>
-          <View style={styles.avatarCircle}>
+          <View style={[styles.avatarCircle, { backgroundColor: theme.avatar }]}>
             <Text style={styles.avatarText}>
               {localUser ? getInitials(localUser.profile?.name) : 'U'}
             </Text>
@@ -551,7 +576,7 @@ const ResponsiveLayout = ({
               activeOpacity={0.7}
               accessibilityLabel="Thông báo"
             >
-              <Bell size={17} color="#0891B2" strokeWidth={2.2} />
+              <Bell size={17} color={theme.accent} strokeWidth={2.2} />
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>{unreadCount}</Text>
@@ -567,44 +592,27 @@ const ResponsiveLayout = ({
             const isActive = isItemActive(item);
             const IconComponent = item.icon;
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={`${item.route}_${item.label}`}
-                style={[styles.navItem, isActive && styles.navItemActive]}
+                style={[styles.navItem, isActive && { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}
+                hoverStyle={!isActive && styles.navItemHover}
                 onPress={() => navigation.navigate(item.route, item.params)}
-                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityState={{ selected: isActive }}
               >
                 <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
-                  <IconComponent size={17} color={isActive ? '#0891B2' : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
+                  <IconComponent size={17} color={isActive ? theme.accent : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
                 </View>
-                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                <Text style={[styles.navLabel, isActive && styles.navLabelActive, isActive && { color: theme.accent }]}>
                   {item.label}
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
         </ScrollView>
 
         {/* Footer Actions */}
         <View style={styles.sidebarFooter}>
-          {isPatient && (
-            <View style={styles.upgradeCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Sparkles size={14} color="#FDE047" strokeWidth={2.4} />
-                <Text style={styles.upgradeTitle}>Nâng cấp Premium VIP</Text>
-              </View>
-              <Text style={styles.upgradeDesc}>
-                Chỉ 99k/năm. Chat AI 24/7 & Phân tích chuyên sâu.
-              </Text>
-              <TouchableOpacity
-                style={styles.upgradeBtn}
-                onPress={() => navigation.navigate('Premium')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.upgradeBtnText}>Nâng cấp ngay</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           <TouchableOpacity style={styles.logoutBtn} onPress={handleDefaultLogout} activeOpacity={0.7}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <LogOut size={15} color="#64748B" strokeWidth={2} />
@@ -619,14 +627,14 @@ const ResponsiveLayout = ({
         {/* Emergency Protocol Red/Orange Alert Banner */}
         {activeEmergency && !isPatient && (
           <View style={{
-            backgroundColor: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C',
+            backgroundColor: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C',
             paddingVertical: 10,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             borderBottomWidth: 2,
-            borderBottomColor: activeEmergency.level === 'RED' ? '#991B1B' : '#C2410C',
+            borderBottomColor: activeEmergency.level === 'RED' ? '#7F1D1D' : '#9A3412',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{
@@ -659,10 +667,10 @@ const ResponsiveLayout = ({
               onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
               activeOpacity={0.85}
             >
-              <Text style={{ color: activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C', fontWeight: 'bold', fontSize: 12 }}>
+              <Text style={{ color: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C', fontWeight: 'bold', fontSize: 12 }}>
                 Xử lý ngay
               </Text>
-              <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#DC2626' : '#EA580C'} strokeWidth={2.5} />
+              <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C'} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         )}
@@ -682,7 +690,7 @@ const ResponsiveLayout = ({
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Bell size={18} color="#0891B2" strokeWidth={2.3} />
+                  <Bell size={18} color={theme.accent} strokeWidth={2.3} />
                   <Text style={styles.modalTitle}>Thông báo y khoa nội bộ</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowNotifModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -761,15 +769,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandNavy,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   logoImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     marginRight: 10,
   },
   logoInner: {
@@ -789,8 +797,7 @@ const styles = StyleSheet.create({
   brandSub: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#0891B2',
-    letterSpacing: 0.6,
+    letterSpacing: 0.6, // giữ cỡ cũ: chữ in hoa dài, sidebar 250px không đủ chỗ cho cỡ lớn hơn
   },
   userCard: {
     flexDirection: 'row',
@@ -803,7 +810,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandNavy,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -823,7 +830,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   userRole: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
   },
@@ -831,9 +838,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ECFEFF',
+    backgroundColor: Colors.brandGreenSoft,
     borderWidth: 1,
-    borderColor: '#CFFAFE',
+    borderColor: '#CDEBDF',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -874,9 +881,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  navItemActive: {
-    backgroundColor: '#ECFEFF',
-    borderColor: '#CFFAFE',
+  navItemHover: {
+    backgroundColor: '#F1F5F9',
   },
   navIconContainer: {
     marginRight: 12,
@@ -888,12 +894,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   navLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: '#475569',
   },
   navLabelActive: {
-    color: '#0891B2',
     fontWeight: '700',
   },
   sidebarFooter: {
@@ -901,37 +906,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     gap: 12,
-  },
-  upgradeCard: {
-    backgroundColor: '#0891B2',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#0891B2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  upgradeTitle: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  upgradeDesc: {
-    color: '#ECFEFF',
-    fontSize: 10,
-    lineHeight: 14,
-    marginBottom: 10,
-  },
-  upgradeBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  upgradeBtnText: {
-    color: '#0891B2',
-    fontSize: 11,
-    fontWeight: 'bold',
   },
   logoutBtn: {
     paddingVertical: 10,

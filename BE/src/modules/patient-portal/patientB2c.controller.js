@@ -4,6 +4,8 @@ import { User } from "../auth/models/user.model.js";
 import { AiJob } from "../imaging/models/aiJob.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import crypto from "crypto";
+import { Hospital } from "../hospital/models/hospital.model.js";
+import { createReportToken, verifyReportToken, loadReportImages, buildImagingReportPdf } from "../../services/reportPdf.service.js";
 
 // ─── H.1 — Xem ảnh kết quả MRI đại diện (cho bệnh nhân) ─────────────────────
 // @route GET /api/v1/patient-b2c/imaging/:imagingResultId
@@ -57,7 +59,7 @@ export const getPatientMriResult = async (req, res) => {
 
 // ─── H.2 — Tải báo cáo kết quả dạng PDF (URL download) ──────────────────────
 // @route GET /api/v1/patient-b2c/imaging/:imagingResultId/report-pdf
-// @access Private (Patient — chỉ tải kết quả của mình; Premium để tải không giới hạn)
+// @access Private (Patient — chỉ tải kết quả của mình)
 export const downloadPatientReport = async (req, res) => {
   try {
     const { imagingResultId } = req.params;
@@ -69,30 +71,55 @@ export const downloadPatientReport = async (req, res) => {
       const user = await User.findById(req.user.id).lean();
       const isMine = user?.profile?.medicalId === imaging.medicalId;
       if (!isMine) return errorResponse(res, "Bạn không có quyền tải báo cáo này.", 403);
-
-      // H.2 — Giới hạn tải cho tài khoản thường (có thể mở rộng theo Premium)
-      // isPremium check ở đây nếu cần giới hạn số lần tải
     }
 
     if (!imaging.isSigned) {
       return errorResponse(res, "Báo cáo chưa được bác sĩ ký duyệt. Không thể tải PDF.", 400);
     }
 
-    // Trả về URL PDF từ Drive (nếu đã tạo) hoặc URL tạm
-    // Trong thực tế, đây là Drive signed URL hoặc Firebase signed URL
-    const pdfUrl = imaging.patientReportPdfUrl || null;
-
-    if (!pdfUrl) {
-      return errorResponse(res, "Báo cáo PDF chưa được tạo. Vui lòng liên hệ bệnh viện.", 404);
+    const filename = `ket_qua_${(imaging.imagingType || "mri").toLowerCase()}_${imaging._id}.pdf`;
+    // File PDF đã lưu sẵn (nếu có) thì dùng luôn
+    if (imaging.patientReportPdfUrl) {
+      return successResponse(res, { pdfUrl: imaging.patientReportPdfUrl, filename, reportDate: imaging.reportDate }, "Tải báo cáo PDF thành công.");
     }
-
+    // UC-PAT-08: tạo PDF khi tải — trả link ngắn hạn (10 phút) để web/app mở trực tiếp không cần header đăng nhập
+    const token = createReportToken(imaging._id, req.user.id);
     return successResponse(res, {
-      pdfUrl,
-      filename: `ket_qua_mri_${imaging._id}.pdf`,
+      pdfPath: `/api/v1/patient-b2c/report-file/${token}`,
+      filename,
       reportDate: imaging.reportDate,
-    }, "Tải báo cáo PDF thành công.");
+    }, "Đã tạo liên kết tải báo cáo PDF.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// ─── H.2b — Tải file PDF qua link ngắn hạn (token tạo ở H.2, đã kiểm tra quyền sở hữu + đã ký) ──
+// @route GET /api/v1/patient-b2c/report-file/:token
+// @access Public — chỉ hợp lệ với token còn hạn
+export const streamImagingReportPdf = async (req, res) => {
+  let payload;
+  try {
+    payload = verifyReportToken(req.params.token);
+  } catch {
+    return errorResponse(res, "Liên kết tải báo cáo đã hết hạn hoặc không hợp lệ. Vui lòng bấm tải lại.", 401);
+  }
+  try {
+    const imaging = await ImagingResult.findById(payload.rid).lean();
+    if (!imaging) return errorResponse(res, "Không tìm thấy kết quả chụp.", 404);
+    if (!imaging.isSigned) return errorResponse(res, "Báo cáo chưa được bác sĩ ký duyệt. Không thể tải PDF.", 400);
+
+    const hospital = imaging.hospitalId ? await Hospital.findById(imaging.hospitalId).select("name").lean() : null;
+    const images = await loadReportImages(imaging.images || []);
+    const pdf = await buildImagingReportPdf(imaging, { hospitalName: hospital?.name || "", images });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="ket-qua-${(imaging.imagingType || "mri").toLowerCase()}-${imaging._id}.pdf"`);
+    res.setHeader("Cache-Control", "no-store");
+    return res.send(pdf);
+  } catch (err) {
+    console.error("[report-file] Lỗi tạo PDF:", err);
+    return errorResponse(res, "Không tạo được báo cáo PDF lúc này. Vui lòng thử lại sau.", 500);
   }
 };
 

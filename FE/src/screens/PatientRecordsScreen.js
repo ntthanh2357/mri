@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import {
   FolderArchive,
@@ -19,22 +20,25 @@ import {
   ClipboardList,
   ChevronUp,
   ChevronDown,
-  ChevronLeft,
   Search,
   AlertTriangle,
   Info,
 } from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
+import FadeIn from '../components/FadeIn';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
+import Colors from '../constants/colors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GROUP_META = {
-  nhom1: { label: 'Nhóm 1 — Hành chính & Tài chính', Icon: FolderArchive, color: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' },
-  nhom2: { label: 'Nhóm 2 — Lâm sàng', Icon: Stethoscope, color: '#F0FDF4', border: '#BBF7D0', text: '#059669' },
-  nhom3: { label: 'Nhóm 3 — Cận lâm sàng', Icon: Microscope, color: '#FFF7ED', border: '#FED7AA', text: '#D97706' },
-  nhom5: { label: 'Nhóm 5 — Pháp lý / Có chữ ký', Icon: ShieldCheck, color: '#FDF4FF', border: '#E9D5FF', text: '#7C3AED' },
+  nhom1: { label: 'Hành chính & Tài chính', Icon: FolderArchive, accent: '#1D4ED8' },
+  nhom2: { label: 'Lâm sàng', Icon: Stethoscope, accent: '#059669' },
+  nhom3: { label: 'Cận lâm sàng', Icon: Microscope, accent: '#D97706' },
+  nhom5: { label: 'Pháp lý / Có chữ ký', Icon: ShieldCheck, accent: '#7C3AED' },
 };
 
 
@@ -78,7 +82,7 @@ const DocCard = ({ slot, savedDocs = [], onPress }) => {
   };
 
   const DocIcon = !hasSaved ? UploadCloud : uploadCount > 0 ? Paperclip : ClipboardList;
-  const docIconColor = !hasSaved ? '#94A3B8' : uploadCount > 0 ? '#0891B2' : '#059669';
+  const docIconColor = !hasSaved ? Colors.secondary : Colors.brandGreen;
 
   return (
     <TouchableOpacity
@@ -174,19 +178,19 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
             const groupSaved = slots.filter((s) => savedMap[s.docKey]).length;
             const isGroupExpanded = expandedGroups[groupKey];
             return (
-              <View key={groupKey} style={[styles.groupCard, { borderColor: meta.border, backgroundColor: meta.color }]}>
+              <View key={groupKey} style={[styles.groupCard, { borderLeftColor: meta.accent }]}>
                 <TouchableOpacity
                   style={styles.groupHeader}
                   onPress={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
                   activeOpacity={0.7}
                 >
-                  <GroupIcon size={16} color={meta.text} />
-                  <Text style={[styles.groupLabel, { color: meta.text }]}>{meta.label}</Text>
-                  <Text style={[styles.groupCount, { color: meta.text }]}>{groupSaved}/{slots.length}</Text>
+                  <GroupIcon size={15} color={meta.accent} />
+                  <Text style={styles.groupLabel}>{meta.label}</Text>
+                  <Text style={styles.groupCount}>{groupSaved}/{slots.length}</Text>
                   {isGroupExpanded ? (
-                    <ChevronUp size={16} color={meta.text} />
+                    <ChevronUp size={16} color={Colors.secondary} />
                   ) : (
-                    <ChevronDown size={16} color={meta.text} />
+                    <ChevronDown size={16} color={Colors.secondary} />
                   )}
                 </TouchableOpacity>
                 {isGroupExpanded && (
@@ -243,7 +247,7 @@ const PatientRecordsScreen = ({ navigation }) => {
     return (
       <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#0891B2" />
+          <ActivityIndicator size="large" color={Colors.brandGreen} />
           <Text style={styles.centerText}>Đang tải hồ sơ...</Text>
         </View>
       </ResponsiveLayout>
@@ -267,77 +271,64 @@ const PatientRecordsScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
       <SafeAreaView style={styles.container}>
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-              <ChevronLeft size={18} color="#64748B" />
-              <Text style={styles.backButtonText}>Quay lại</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Kho hồ sơ sức khỏe</Text>
-          </View>
-        )}
+        <ScrollView keyboardShouldPersistTaps="handled">
+          <PageContainer width="reading">
+          <PageHeader
+            title="Lịch sử khám"
+            subtitle="Giấy tờ bệnh viện gửi cho bạn sau mỗi lượt khám. Dùng khi tái khám, chuyển viện hoặc làm thủ tục BHYT."
+            style={styles.pageHeader}
+          />
 
-        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-          <View style={styles.pageTitleBlock}>
-            <Text style={styles.pageTitle}>Kho Hồ Sơ Sức Khỏe Cá Nhân</Text>
-            <Text style={styles.pageSubtitle}>
-              Lưu trữ tài liệu nhận từ bệnh viện — tra cứu khi tái khám, chuyển viện hoặc làm thủ tục BHYT.
+          <FadeIn style={styles.passportCard}>
+            <View style={styles.passportGlow} />
+            <View style={styles.passportSpine} />
+            <View style={styles.passportRow}>
+            <View style={styles.passportMain}>
+            <Text style={styles.passportEyebrow}>Sổ sức khỏe cá nhân</Text>
+            <Text style={styles.passportName}>{identity?.name || 'Chưa cập nhật họ tên'}</Text>
+            <Text style={styles.passportDob}>
+              Sinh ngày {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
             </Text>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{visits.length}</Text>
-              <Text style={styles.statLabel}>Lượt khám</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#0891B2' }]}>{savedCount}</Text>
-              <Text style={styles.statLabel}>Tài liệu đã lưu</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#D97706' }]}>{Math.max(0, totalSlots - savedCount)}</Text>
-              <Text style={styles.statLabel}>Còn thiếu</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: '#2563EB' }]}>
+            <View style={styles.passportDivider} />
+            <View style={styles.passportSummaryRow}>
+              <Text style={styles.passportSummaryStrong}>{visits.length}</Text>
+              <Text style={styles.passportSummaryText}>lượt khám</Text>
+              <Text style={styles.passportSummaryDot}>·</Text>
+              <Text style={styles.passportSummaryStrong}>{savedCount}</Text>
+              <Text style={styles.passportSummaryText}>tài liệu đã lưu</Text>
+              <Text style={styles.passportSummaryDot}>·</Text>
+              <Text style={styles.passportSummaryStrong}>
                 {totalSlots > 0 ? Math.round((savedCount / totalSlots) * 100) : 0}%
               </Text>
-              <Text style={styles.statLabel}>Hoàn thiện</Text>
+              <Text style={styles.passportSummaryText}>đầy đủ</Text>
             </View>
-          </View>
-
-          <TouchableOpacity style={styles.identityCard} onPress={() => navigation.navigate('PatientIdentity')} activeOpacity={0.85}>
-            <View style={styles.identityRow}>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>Họ và tên</Text>
-                <Text style={styles.identityValue}>{identity?.name || '—'}</Text>
-              </View>
-              <View style={styles.identityField}>
-                <Text style={styles.identityLabel}>Ngày sinh</Text>
-                <Text style={styles.identityValue}>
-                  {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
-                </Text>
-              </View>
             </View>
-            <Text style={styles.identityEditHint}>Nhấn để chỉnh sửa thông tin →</Text>
-          </TouchableOpacity>
+            <Image
+              source={require('../../assets/images/illus-health-passport.png')}
+              style={[styles.passportIllus, !isDesktop && styles.passportIllusMobile]}
+              resizeMode="contain"
+              accessible={false}
+            />
+            </View>
+          </FadeIn>
 
           <View style={styles.searchContainer}>
             <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={Colors.secondary}
               value={search}
               onChangeText={setSearch}
             />
           </View>
 
-          <Text style={styles.sectionTitle}>Lịch sử khám & Tài liệu ({filtered.length} lượt)</Text>
+          <Text style={styles.sectionTitle}>Lịch sử khám</Text>
+          <Text style={styles.sectionSub}>{filtered.length} lượt khám, theo thứ tự gần nhất trước</Text>
 
           {filtered.length === 0 && (
             <View style={styles.emptyState}>
-              <FolderArchive size={40} color="#CBD5E1" style={{ marginBottom: 12 }} />
+              <Image source={require('../../assets/images/illus-records.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
               <Text style={styles.emptyText}>
                 {visits.length === 0
                   ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
@@ -348,7 +339,7 @@ const PatientRecordsScreen = ({ navigation }) => {
 
           <View style={styles.timelineContainer}>
             {filtered.map((visit, index) => (
-              <View key={visit._id} style={styles.timelineItem}>
+              <FadeIn key={visit._id} delay={120 + index * 90} style={styles.timelineItem}>
                 <View style={styles.timelineBar}>
                   <View style={[styles.timelineDot, (visit.visitType === 'noi_tru' || visit.visitType === 'Nội trú') ? styles.dotInpatient : styles.dotOutpatient]} />
                   {index < filtered.length - 1 && <View style={styles.timelineLine} />}
@@ -361,16 +352,17 @@ const PatientRecordsScreen = ({ navigation }) => {
                     onDocPress={handleDocPress}
                   />
                 </View>
-              </View>
+              </FadeIn>
             ))}
           </View>
 
           <View style={styles.infoNote}>
-            <Info size={16} color="#0891B2" style={{ marginTop: 2, marginRight: 8 }} />
+            <Info size={16} color={Colors.brandGreen} style={{ marginTop: 2, marginRight: 8 }} />
             <Text style={styles.infoNoteText}>
               Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
             </Text>
           </View>
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>

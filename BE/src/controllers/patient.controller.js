@@ -11,30 +11,24 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { assessPrescriptionSafety } from "../modules/pharmacy/services/drugSafety.service.js";
+import { scheduleFor, getReminderTimes } from "../services/medicineReminder.service.js";
 export { checkPatientTenancy };
 
-// Khung giờ nhắc uống thuốc cố định theo số lần/ngày
-const REMINDER_TIME_SLOTS = {
-  1: ["08:00"],
-  2: ["08:00", "20:00"],
-  3: ["08:00", "13:00", "20:00"],
-  4: ["08:00", "12:00", "17:00", "21:00"],
-};
-
+// Giờ nhắc theo số lần/ngày: dùng giờ bệnh nhân tự đặt (UC-PAT-13), chưa đặt thì giờ cố định mặc định
 export const generateRemindersForPrescription = async (prescription) => {
   const reminders = [];
   const { startOfDay: today } = getDayRangeVN();
+  const prefs = await getReminderTimes(prescription.patient_id);
 
   for (const drug of prescription.drugs) {
-    const timesPerDay = Math.min(Math.max(drug.timesPerDay || 2, 1), 4);
     const durationDays = Math.max(drug.durationDays || 7, 1);
-    const slots = REMINDER_TIME_SLOTS[timesPerDay];
+    const slots = scheduleFor(drug.timesPerDay || 2, prefs);
     const dosageText = `${drug.quantity} ${drug.unit}${drug.usage ? ` — ${drug.usage}` : ""}`;
 
     for (let day = 0; day < durationDays; day++) {
       const date = new Date(today);
       date.setDate(date.getDate() + day);
-      for (const time of slots) {
+      for (const { slot, time } of slots) {
         reminders.push({
           hospitalId: prescription.hospitalId,
           patientId: prescription.patient_id,
@@ -43,6 +37,7 @@ export const generateRemindersForPrescription = async (prescription) => {
           dosageText,
           date,
           time,
+          slot,
         });
       }
     }

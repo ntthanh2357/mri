@@ -16,6 +16,7 @@ import hospitalRoutes from "./hospital.routes.js";
 import scheduleRoutes from "./schedule.routes.js";
 import notificationRoutes from "./notification.routes.js";
 import supportRoutes from "./support.routes.js";
+import queueTicketRoutes from "./queueTicket.routes.js";
 
 // Module v3.2 new routes
 import mriRoomRoutes from "./mriRoom.routes.js";
@@ -70,6 +71,7 @@ router.use("/api/v1/hospital", hospitalRoutes);
 router.use("/api/v1/schedules", scheduleRoutes);
 router.use("/api/v1/notifications", notificationRoutes);
 router.use("/api/v1/support", supportRoutes);
+router.use("/api/v1/queue-tickets", queueTicketRoutes); // UC-PAT-03 lấy số tiếp đón online
 
 // Mount v3.2 core foundation routes
 router.use("/api/v1/mri-rooms", mriRoomRoutes);

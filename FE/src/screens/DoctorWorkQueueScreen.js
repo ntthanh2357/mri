@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Modal, Alert, Image, Platform,
+  ActivityIndicator, TextInput, Modal, Alert, Image, Platform, Pressable, useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
+import Colors from '../constants/colors';
 import MriSafetyCheckModal from '../components/MriSafetyCheckModal';
 import MriRescanModal from '../components/MriRescanModal';
 import MriCancelModal from '../components/MriCancelModal';
+import ContrastConsentReview from '../components/staff/ContrastConsentReview';
+import { consentStatus } from '../utils/signature';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
+import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
+import Layout from '../constants/layout';
 import { 
   Scan, 
   RotateCcw, 
@@ -41,6 +48,7 @@ import {
   Trash2,
   BellRing,
   Image as ImageIcon,
+  MoreHorizontal,
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -52,9 +60,26 @@ const STATUS_CONFIG = {
   'đang chụp':      { color: '#E0F2FE', text: '#0284C7', label: 'Đang chụp' },
   'đã hủy':         { color: '#FEE2E2', text: '#DC2626', label: 'Đã hủy' },
   'chờ kết quả AI': { color: '#FEF9C3', text: '#CA8A04', label: 'Chờ AI' },
-  'chờ bác sĩ đọc': { color: '#ECFEFF', text: '#0891B2', label: 'Chờ đọc phim' },
+  'chờ bác sĩ đọc': { color: Colors.brandGreenSoft, text: Colors.brandGreen, label: 'Chờ đọc phim' },
   'hoàn tất':       { color: '#F0FDF4', text: '#059669', label: 'Hoàn tất' },
   'đã đóng':        { color: '#F1F5F9', text: '#64748B', label: 'Đã đóng' },
+};
+
+// Cờ trạng thái nhỏ: luôn icon + chữ, màu chữ đạt AA trên nền nhạt
+const FLAG_TONES = {
+  danger: { bg: Colors.errorBg, fg: Colors.errorText },
+  warning: { bg: Colors.warningBg, fg: Colors.warningText },
+  success: { bg: Colors.successBg, fg: Colors.successText },
+  info: { bg: Colors.infoBg, fg: Colors.infoText },
+};
+const Flag = ({ tone, icon: Icon, label }) => {
+  const t = FLAG_TONES[tone];
+  return (
+    <View style={[styles.flag, { backgroundColor: t.bg }]}>
+      <Icon size={12} color={t.fg} strokeWidth={2.4} />
+      <Text style={[styles.flagText, { color: t.fg }]} numberOfLines={1}>{label}</Text>
+    </View>
+  );
 };
 
 const DoctorWorkQueueScreen = ({ navigation, route }) => {
@@ -64,6 +89,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'done'
+  const { width: winWidth } = useWindowDimensions();
+  const tableLayout = winWidth >= Layout.wide;
+  const [menuFor, setMenuFor] = useState(null); // id ca đang mở menu "⋯"
 
   useEffect(() => {
     if (route?.params?.tab) {
@@ -78,6 +106,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [region, setRegion] = useState('');
   const [instructions, setInstructions] = useState('');
   const [requestAi, setRequestAi] = useState(true);
+  const [withContrast, setWithContrast] = useState(false);
+  const [consentVisit, setConsentVisit] = useState(null); // UC-PAT-06: ca đang xem phiếu cản quang
   const [mriLoading, setMriLoading] = useState(false);
 
   // Upload modal state
@@ -212,6 +242,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     setRegion('Não bộ');
     setInstructions('');
     setRequestAi(true);
+    setWithContrast(false);
     setMriModal(true);
   };
 
@@ -234,8 +265,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         region,
         instructions,
         requestAiAnalysis: requestAi,
+        withContrast,
       });
-      Alert.alert('Thành công', `Đã ra y lệnh chụp MRI và phân công KTV thực hiện.`);
+      Alert.alert('Thành công', withContrast
+        ? 'Đã ra y lệnh chụp MRI. Bệnh nhân sẽ nhận phiếu đồng thuận tiêm cản quang trên ứng dụng.'
+        : `Đã ra y lệnh chụp MRI và phân công KTV thực hiện.`);
       setMriModal(false);
       fetchData();
     } catch (err) {
@@ -280,7 +314,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         passed: true,
       });
 
-      if (res && res.success) {
+      if (res && res.success && res.contrastConsentPending) {
+        const msg = 'Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp.';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('Đã lưu bảng kiểm', msg);
+        setSafetyModal(false);
+        fetchData();
+      } else if (res && res.success) {
         if (Platform.OS === 'web') alert('Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
         else Alert.alert('An toàn đạt chuẩn', 'Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
         setSafetyModal(false);
@@ -360,6 +399,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   };
 
   const handleStartScan = async (visit) => {
+    // UC-PAT-06: tiêm cản quang mà bệnh nhân chưa ký phiếu → chưa cho bắt đầu chụp (BE cũng chặn)
+    if (visit.mriOrder?.withContrast && !visit.contrastConsent?.patientSigned) {
+      const msg = 'Bệnh nhân chưa ký phiếu đồng thuận tiêm thuốc cản quang trên ứng dụng. Mở "Phiếu cản quang" để xem trạng thái.';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Chưa thể bắt đầu chụp', msg);
+      return;
+    }
     // [THỰC TẾ BV: NGHỊCH LÝ 3] Nếu chưa qua bảng kiểm an toàn MRI, bắt buộc kiểm tra trước
     if (!visit.mriSafetyChecklist?.isScreened || !visit.mriSafetyChecklist?.passed) {
       openSafetyModal(visit);
@@ -656,12 +702,235 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const isReceptionist = user?.role === 'receptionist';
   const isAdmin = ['admin', 'system_admin', 'hospital_admin'].includes(user?.role);
 
-  const renderVisitCard = (v) => {
-    const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
+  const patientNameOf = (v) => v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân';
+  const isEmergency = (v) => v.priority === 'khẩn cấp';
+  // Ca cấp cứu lên đầu, còn lại giữ nguyên thứ tự tiếp nhận
+  const queueList = [...activeVisits].sort((a, b) => isEmergency(b) - isEmergency(a));
+  const shownList = activeTab === 'queue' ? queueList : doneVisits;
+  const emergencyCount = activeVisits.filter(isEmergency).length;
+
+  // [THỰC TẾ BV: NGHỊCH LÝ 1] Viện phí & BHYT/Cấp cứu trước khi chụp MRI
+  const feeFlagOf = (v) => {
+    if (isEmergency(v)) return { tone: 'danger', icon: Flame, label: 'Cấp cứu · thu phí sau' };
+    if (v.patientId?.profile?.hasBhyt || v.visitType === 'BHYT') return { tone: 'success', icon: ShieldCheck, label: 'BHYT bảo lãnh' };
+    if (v.invoiceId?.status === 'đã thanh toán') return { tone: 'info', icon: CreditCard, label: 'Đã đóng phí MRI' };
+    return { tone: 'warning', icon: AlertTriangle, label: 'Chưa đóng phí MRI' };
+  };
+  const safetyFlagOf = (v) => {
+    if (v.mriSafetyChecklist?.passed) return { tone: 'success', icon: CheckCircle2, label: 'An toàn MRI: đạt' };
+    if (v.mriSafetyChecklist?.isScreened) return { tone: 'danger', icon: XCircle, label: 'Chống chỉ định MRI' };
+    return null;
+  };
+  const CONSENT_FLAG = {
+    checklist: { tone: 'info', icon: Clock, label: 'Cản quang: chờ trả lời' },
+    blocked: { tone: 'warning', icon: AlertTriangle, label: 'Cản quang: chờ duyệt' },
+    ready: { tone: 'info', icon: Clock, label: 'Cản quang: chờ ký' },
+    signed: { tone: 'success', icon: CheckCircle2, label: 'Cản quang: đã ký' },
+  };
+  const consentFlagOf = (v) => (v.mriOrder?.withContrast ? CONSENT_FLAG[consentStatus(v.contrastConsent || {}).key] : null);
+  const fmtWhen = (d) => {
+    const t = new Date(d);
+    const sameDay = t.toDateString() === new Date().toDateString();
+    return t.toLocaleString('vi-VN', sameDay ? { hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  };
+  const waitLabel = (d) => {
+    const m = Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 60000));
+    if (m < 60) return `chờ ${m} phút`;
+    if (m < 1440) return `chờ ${Math.floor(m / 60)} giờ ${m % 60} phút`;
+    return `chờ ${Math.floor(m / 1440)} ngày`;
+  };
+
+  const openReadResult = (v) => {
+    const rid = v.mriOrder?.imagingResultId;
+    const ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
+    if (!ridStr) {
+      Alert.alert('Chưa có kết quả', 'Kỹ thuật viên chưa upload kết quả phim chụp cho ca khám này.');
+      return;
+    }
+    navigation.navigate('ImagingResult', {
+      visitId: v._id,
+      resultId: ridStr,
+      imagingResultId: ridStr,
+      activeRoute: `DoctorWorkQueue_${currentMode}`,
+      visitStatus: v.status,
+    });
+  };
+
+  const startExam = async (v) => {
+    try {
+      await put(`/api/v1/visits/${v._id}/status`, { status: 'đang khám' });
+      fetchData();
+    } catch (e) { Alert.alert('Lỗi', e.message); }
+  };
+
+  const finishExam = (v) => {
+    Alert.alert(
+      'Kết thúc khám',
+      'Vui lòng chọn hướng điều trị cho bệnh nhân này:',
+      [
+        {
+          text: 'Ngoại trú (Cấp toa)',
+          onPress: async () => {
+            try {
+              await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Ngoại trú' });
+              fetchData();
+              Alert.alert('Thành công', 'Đã hoàn tất ca khám (Ngoại trú).');
+            } catch (e) { Alert.alert('Lỗi', e.message); }
+          }
+        },
+        {
+          text: 'Nội trú (Nhập viện)',
+          onPress: async () => {
+            try {
+              await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Nội trú' });
+              fetchData();
+              Alert.alert('Thành công', 'Đã hoàn tất ca khám và chỉ định Nhập viện (Nội trú).');
+            } catch (e) { Alert.alert('Lỗi', e.message); }
+          }
+        },
+        { text: 'Hủy', style: 'cancel' }
+      ]
+    );
+  };
+
+  // Thao tác theo role — 1 nguồn dùng chung cho thẻ (điện thoại) và dòng bảng (desktop).
+  const actionsOf = (v) => {
     const canOrderMri = v.status === 'đang khám';
     const canStartMri = v.status === 'chờ chụp' || v.status === 'chờ chụp lại';
     const canUploadMri = v.status === 'đang chụp';
     const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI' || Boolean(v.mriOrder?.imagingResultId);
+    const list = [];
+    if (!isNurse && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh')) list.push({ key: 'start', variant: 'primary', icon: Stethoscope, label: 'Bắt đầu khám', onPress: () => startExam(v) });
+    if (!isNurse && v.status === 'đang khám') list.push({ key: 'exam', variant: 'primary', icon: Pill, label: 'Khám & kê đơn', onPress: () => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id }) });
+    if ((isDoctor || isAdmin) && canOrderMri) list.push({ key: 'mri', variant: 'secondary', icon: Scan, label: 'Ra y lệnh MRI', onPress: () => openMriModal(v) });
+    if (!isNurse && v.status === 'đang khám') list.push({ key: 'finish', variant: 'secondary', icon: CheckCircle2, label: 'Kết thúc khám', onPress: () => finishExam(v) });
+    if ((isTechnician || isAdmin) && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
+    if ((isTechnician || isAdmin) && canUploadMri) list.push({ key: 'upload', variant: 'primary', icon: Upload, label: 'Nộp ảnh phim', onPress: () => openUploadModal(v) });
+    if (!isNurse && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
+    if (isNurse && v.status === 'đang chờ') list.push({ key: 'vitals', variant: 'primary', icon: Activity, label: 'Nhập sinh hiệu', onPress: () => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } }) });
+    if ((isTechnician || isAdmin) && (canStartMri || canUploadMri)) {
+      list.push({ key: 'rescan', variant: 'secondary', icon: RotateCcw, label: 'Chụp lại', onPress: () => openRescanModal(v) });
+      list.push({ key: 'cancel', variant: 'danger', icon: XCircle, label: 'Hủy ca', onPress: () => openCancelModal(v) });
+    }
+    if ((isTechnician || isDoctor || isAdmin) && v.mriOrder?.withContrast) list.push({ key: 'consent', variant: 'secondary', icon: FileText, label: 'Phiếu cản quang', onPress: () => setConsentVisit(v) });
+    if (isDoctor || isAdmin) list.push({ key: 'emergency', variant: 'danger', icon: Flame, label: 'Chuyển cấp cứu', onPress: () => openEmergencyModal(v) });
+    return list;
+  };
+
+  const btnStyleOf = (variant) => ({
+    primary: { box: styles.btnPrimary, text: styles.btnPrimaryText, icon: '#FFFFFF' },
+    secondary: { box: styles.btnSecondary, text: styles.btnSecondaryText, icon: Colors.brandGreen },
+    danger: { box: styles.btnDangerOutline, text: styles.btnDangerOutlineText, icon: Colors.errorText },
+  })[variant];
+
+  const renderActionButton = (a) => {
+    const s = btnStyleOf(a.variant);
+    const Icon = a.icon;
+    return (
+      <TouchableOpacity key={a.key} style={[styles.btnBase, s.box]} onPress={a.onPress} accessibilityRole="button">
+        <Icon size={14} color={s.icon} strokeWidth={2.2} />
+        <Text style={s.text}>{a.label}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  // Thẻ (điện thoại): hiện đủ nút
+  const renderActions = (v) => actionsOf(v).map(renderActionButton);
+
+  // Dòng bảng (desktop): nút chính + menu "⋯" cho thao tác phụ
+  const renderRowActions = (v) => {
+    const all = actionsOf(v);
+    const main = all.filter(a => a.variant === 'primary');
+    const more = all.filter(a => a.variant !== 'primary');
+    const open = menuFor === v._id;
+    return (
+      <View style={[styles.colActions, styles.rowActions]}>
+        {main.map(renderActionButton)}
+        {more.length > 0 ? (
+          <View>
+            <Pressable
+              onPress={() => setMenuFor(open ? null : v._id)}
+              accessibilityRole="button"
+              accessibilityLabel="Thao tác khác"
+              accessibilityState={{ expanded: open }}
+              style={({ hovered }) => [styles.moreBtn, (hovered || open) && styles.moreBtnActive]}
+            >
+              <MoreHorizontal size={18} color={Colors.slateMuted} strokeWidth={2.2} />
+            </Pressable>
+            {open ? (
+              <>
+                <Pressable style={styles.menuBackdrop} onPress={() => setMenuFor(null)} accessibilityLabel="Đóng menu" />
+                <View style={styles.menu}>
+                  {more.map(a => {
+                    const Icon = a.icon;
+                    const danger = a.variant === 'danger';
+                    return (
+                      <Pressable
+                        key={a.key}
+                        accessibilityRole="menuitem"
+                        onPress={() => { setMenuFor(null); a.onPress(); }}
+                        style={({ hovered }) => [styles.menuItem, hovered && styles.menuItemHover]}
+                      >
+                        <Icon size={15} color={danger ? Colors.errorText : Colors.slateMuted} strokeWidth={2.2} />
+                        <Text style={[styles.menuText, danger && styles.menuTextDanger]}>{a.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  // Desktop: mỗi ca 1 dòng — đọc lướt theo cột, thao tác ở cuối dòng
+  const renderVisitRow = (v, i) => {
+    const mri = Boolean(v.mriOrder?.region);
+    const fee = mri ? feeFlagOf(v) : isEmergency(v) ? { tone: 'danger', icon: Flame, label: 'Cấp cứu' } : null;
+    const safety = mri ? safetyFlagOf(v) : null;
+    const consent = mri ? consentFlagOf(v) : null;
+    return (
+      <View key={v._id} style={[styles.tr, styles.trBody, activeTab === 'queue' && isEmergency(v) && styles.trUrgent, menuFor === v._id && styles.trMenuOpen]}>
+        <Text style={[styles.cellNo, styles.colNo]}>{i + 1}</Text>
+        <View style={styles.colPatient}>
+          <Text style={styles.cellName} numberOfLines={1}>{patientNameOf(v)}</Text>
+          <Text style={styles.cellSub} numberOfLines={1}>{v.reason || 'Khám tổng quát'} · {v.visitType || 'Ngoại trú'}</Text>
+        </View>
+        <View style={[styles.colStatus, styles.cellStack]}>
+          <ClinicalStatusBadge status={v.status} />
+          {fee ? <Flag {...fee} /> : null}
+          {safety ? <Flag {...safety} /> : null}
+          {consent ? <Flag {...consent} /> : null}
+        </View>
+        <View style={[styles.colInfo, styles.cellStack]}>
+          {mri ? (
+            <Text style={styles.cellText}>MRI {v.mriOrder.region}{v.mriOrder.requestAiAnalysis ? ' · có AI phân tích' : ''}</Text>
+          ) : v.vitals?.bloodPressure ? (
+            <Text style={styles.cellNum}>HA {v.vitals.bloodPressure} · Mạch {v.vitals.pulse} · SpO₂ {v.vitals.spo2}%</Text>
+          ) : (
+            <Text style={styles.cellMuted}>Chưa đo sinh hiệu</Text>
+          )}
+          {v.status === 'chờ chụp lại' && v.mriRescanReason ? (
+            <Text style={[styles.cellNote, styles.cellNoteWarn]}>Chụp lại: {v.mriRescanReason}</Text>
+          ) : null}
+          {v.status === 'đã hủy' && v.mriCancelReason ? (
+            <Text style={[styles.cellNote, styles.cellNoteDanger]}>Lý do hủy: {v.mriCancelReason}</Text>
+          ) : null}
+        </View>
+        <View style={styles.colTime}>
+          <Text style={styles.cellNum}>{fmtWhen(v.createdAt)}</Text>
+          {activeTab === 'queue' ? <Text style={styles.cellSub}>{waitLabel(v.createdAt)}</Text> : null}
+          <Text style={styles.cellSub} numberOfLines={1}>Điều dưỡng: {v.nurseId?.profile?.name || v.nurseId?.email || 'Đã phân công'}</Text>
+        </View>
+        {renderRowActions(v)}
+      </View>
+    );
+  };
+
+  const renderVisitCard = (v) => {
+    const cfg = STATUS_CONFIG[v.status] || STATUS_CONFIG['đang chờ'];
 
     return (
       <View key={v._id} style={styles.card}>
@@ -678,6 +947,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           </View>
           <ClinicalStatusBadge status={v.status} />
         </View>
+        {isEmergency(v) && !v.mriOrder?.region ? <View style={styles.cardFlags}><Flag tone="danger" icon={Flame} label="Cấp cứu" /></View> : null}
 
         {/* [THỰC TẾ BV: NGHỊCH LÝ 1] Trạng thái Viện phí & Quy chuẩn BHYT/Cấp cứu */}
         {Boolean(v.mriOrder?.region) && (
@@ -742,7 +1012,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* Vitals */}
         {Boolean(v.vitals?.bloodPressure) && (
           <View style={styles.vitalsRow}>
-            <Activity size={13} color="#0891B2" strokeWidth={2.2} />
+            <Activity size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.vitalsLabel}>Sinh hiệu:</Text>
             <Text style={styles.vitalsValue}>
               HA {v.vitals.bloodPressure} | Mạch {v.vitals.pulse} | SpO₂ {v.vitals.spo2}%
@@ -753,13 +1023,14 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         {/* MRI Order info */}
         {Boolean(v.mriOrder?.region) && (
           <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-            <Scan size={13} color="#0891B2" strokeWidth={2.2} />
+            <Scan size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.mriInfoText}>
               Y lệnh MRI: <Text style={{ fontWeight: 'bold' }}>{v.mriOrder.region}</Text>
               {v.mriOrder.requestAiAnalysis ? ' · Yêu cầu AI phân tích' : ''}
             </Text>
           </View>
         )}
+        {consentFlagOf(v) ? <View style={styles.cardFlags}><Flag {...consentFlagOf(v)} /></View> : null}
 
         {/* Nurse info */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -776,214 +1047,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         </View>
 
         {/* Actions - differ by role */}
-        <View style={styles.actions}>
-          {(isDoctor || isAdmin) && (
-            <TouchableOpacity
-              style={{ backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-              onPress={() => openEmergencyModal(v)}
-            >
-              <Flame size={14} color="#FFFFFF" strokeWidth={2.4} />
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>Cấp cứu</Text>
-            </TouchableOpacity>
-          )}
-
-          {(isDoctor || isAdmin) && canOrderMri && (
-            <TouchableOpacity style={[styles.btnMri, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openMriModal(v)}>
-              <Scan size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnMriText}>Ra Y Lệnh MRI</Text>
-            </TouchableOpacity>
-          )}
-          {(isTechnician || isAdmin) && canStartMri && (
-            <TouchableOpacity
-              style={[styles.btnStart, { backgroundColor: v.mriSafetyChecklist?.passed ? '#059669' : '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={() => handleStartScan(v)}
-            >
-              <Camera size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>
-                {v.mriSafetyChecklist?.passed ? 'Vào Buồng Chụp' : 'Kiểm tra An toàn & Chụp'}
-              </Text>
-            </TouchableOpacity>
-          )}
-          {(isTechnician || isAdmin) && canUploadMri && (
-            <TouchableOpacity style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => openUploadModal(v)}>
-              <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>Nộp Ảnh Phim</Text>
-            </TouchableOpacity>
-          )}
-          {(isTechnician || isAdmin) && (canStartMri || canUploadMri) && (
-            <>
-              <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#EA580C', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                onPress={() => openRescanModal(v)}
-              >
-                <RotateCcw size={14} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.btnStartText}>Chụp lại</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#DC2626', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                onPress={() => openCancelModal(v)}
-              >
-                <XCircle size={14} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.btnStartText}>Hủy ca</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {!isNurse && hasReadResult && (
-            <TouchableOpacity
-              style={[styles.btnRead, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={async () => {
-                let rid = v.mriOrder?.imagingResultId;
-                let ridStr = rid?._id ? rid._id.toString() : (rid ? rid.toString() : null);
-
-                // [FIX-BUG-DR-03]: Nếu v.mriOrder.imagingResultId chưa có, tự động tra cứu qua API /by-visit
-                if (!ridStr) {
-                  try {
-                    const fallbackRes = await get(`/api/v1/imaging/by-visit/${v._id}`);
-                    const fetchedId = fallbackRes?.data?._id || fallbackRes?.data?.id || fallbackRes?._id;
-                    if (fetchedId) {
-                      ridStr = fetchedId.toString();
-                      if (v.mriOrder) v.mriOrder.imagingResultId = ridStr;
-                    }
-                  } catch (e) {
-                    console.log('Chưa tìm thấy kết quả qua by-visit:', e.message);
-                  }
-                }
-
-                if (!ridStr) {
-                  Alert.alert('Chưa có kết quả', 'Kỹ thuật viên chưa upload kết quả phim chụp cho ca khám này.');
-                  return;
-                }
-                navigation.navigate('ImagingResult', {
-                  visitId: v._id,
-                  resultId: ridStr,
-                  imagingResultId: ridStr,
-                  activeRoute: `DoctorWorkQueue_${currentMode}`,
-                  visitStatus: v.status,
-                });
-              }}
-            >
-              <Eye size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnReadText}>Đọc Kết Quả Phim</Text>
-            </TouchableOpacity>
-          )}
-          {!isNurse && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh') && (
-            <TouchableOpacity
-              style={[styles.btnStart, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={async () => {
-                try {
-                  await put(`/api/v1/visits/${v._id}/status`, { status: 'đang khám' });
-                  fetchData();
-                } catch (e) {
-                  Alert.alert('Lỗi bắt đầu khám', e.message || 'Không thể chuyển trạng thái sang đang khám.');
-                }
-              }}
-            >
-              <Stethoscope size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>Bắt đầu khám</Text>
-            </TouchableOpacity>
-          )}
-          {!isNurse && v.status === 'đang khám' && (
-            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-              <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                onPress={() => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id })}
-              >
-                <Pill size={14} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.btnStartText}>Khám & Kê đơn</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnStart, { backgroundColor: '#059669', flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                onPress={() => {
-                  // [BUG-DR-02 FIX]: Cảnh báo lâm sàng nếu có triệu chứng u não mà chưa chỉ định MRI
-                  const hasBrainTumorWarning = Boolean(
-                    v.reason?.match(/(u não|khối u|u góc cầu|glioma|meningioma|áp lực nội sọ|co giật|chèn ép não|u màng não|u tuyến yên)/i)
-                  ) && !v.mriOrder?.region;
-
-                  const promptTreatmentChoice = () => {
-                    Alert.alert(
-                      'Kết thúc khám',
-                      'Vui lòng chọn hướng xử trí tiếp theo cho bệnh nhân:',
-                      [
-                        { 
-                          text: 'Ngoại trú (Cấp toa & Hoàn tất)', 
-                          onPress: async () => {
-                            try {
-                              await put(`/api/v1/visits/${v._id}/status`, { status: 'hoàn tất', visitType: 'Ngoại trú' });
-                              fetchData();
-                              Alert.alert('Thành công', 'Đã hoàn tất ca khám ngoại trú.');
-                            } catch (e) {
-                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể hoàn tất ca khám.');
-                            }
-                          }
-                        },
-                        { 
-                          text: 'Nội trú (Chuyển Nhập Viện)', 
-                          onPress: async () => {
-                            try {
-                              await put(`/api/v1/visits/${v._id}/status`, { status: 'chờ nhập viện', visitType: 'Nội trú' });
-                              fetchData();
-                              Alert.alert('Thành công', 'Đã chuyển bệnh nhân sang trạng thái Chờ Nhập Viện (Khoa Ngoại Thần Kinh).');
-                            } catch (e) {
-                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể chuyển viện nội trú.');
-                            }
-                          }
-                        },
-                        {
-                          text: 'Hội Chẩn Tumor Board',
-                          onPress: async () => {
-                            try {
-                              await put(`/api/v1/visits/${v._id}/status`, { status: 'chờ hội chẩn' });
-                              fetchData();
-                              Alert.alert('Thành công', 'Đã gửi hồ sơ sang Hội đồng Hội chẩn U Não (Tumor Board).');
-                            } catch (e) {
-                              Alert.alert('Lỗi cập nhật trạng thái', e.message || 'Không thể chuyển hội chẩn.');
-                            }
-                          }
-                        },
-                        { text: 'Hủy', style: 'cancel' }
-                      ]
-                    );
-                  };
-
-                  if (hasBrainTumorWarning) {
-                    Alert.alert(
-                      'Cảnh Báo Lâm Sàng',
-                      `Bệnh nhân có triệu chứng nghi ngờ tổn thương thần kinh / u não ("${v.reason}") nhưng chưa được chỉ định chụp MRI.\n\nBác sĩ có muốn ra y lệnh MRI trước khi kết thúc không?`,
-                      [
-                        {
-                          text: 'Ra Y Lệnh MRI',
-                          onPress: () => openMriModal(v),
-                        },
-                        {
-                          text: 'Bỏ qua & Tiếp tục',
-                          style: 'destructive',
-                          onPress: promptTreatmentChoice,
-                        },
-                        { text: 'Hủy', style: 'cancel' }
-                      ]
-                    );
-                  } else {
-                    promptTreatmentChoice();
-                  }
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <CheckCircle2 size={14} color="#FFF" />
-                  <Text style={styles.btnStartText}>Kết thúc khám</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-          {isNurse && v.status === 'đang chờ' && (
-            <TouchableOpacity
-              style={[styles.btnStart, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={() => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } })}
-            >
-              <Activity size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <Text style={styles.btnStartText}>Nhập sinh hiệu</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <View style={styles.actions}>{renderActions(v)}</View>
       </View>
     );
   };
@@ -998,133 +1062,94 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
 
-  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng Đợi Khám & Chẩn Đoán';
+  const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng đợi khám & chẩn đoán';
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-      {/* Top Segmented Mode Switcher: Tất Cả vs Khám Bệnh Lâm Sàng vs Hàng Đợi Chụp MRI */}
-      <View style={{
-        flexDirection: 'row',
-        backgroundColor: '#F1F5F9',
-        padding: 5,
-        borderRadius: 12,
-        marginHorizontal: 16,
-        marginTop: 14,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-      }}>
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 10,
-            borderRadius: 9,
-            backgroundColor: currentMode === 'all' ? '#0891B2' : 'transparent',
-            gap: 6,
-          }}
-          onPress={() => setCurrentMode('all')}
-        >
-          <Activity size={16} color={currentMode === 'all' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
-          <Text style={{
-            fontSize: 13,
-            fontWeight: 'bold',
-            color: currentMode === 'all' ? '#FFFFFF' : '#475569',
-          }}>
-            Tất Cả ({examActiveCount + mriActiveCount})
-          </Text>
-        </TouchableOpacity>
+      <PageHeader
+        bar
+        title={screenTitle}
+        subtitle="Ca cấp cứu luôn nằm đầu danh sách."
+        actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={fetchData} />}
+        below={
+          <PageTabs
+            tabs={[
+              { key: 'all', label: 'Tất cả', count: examActiveCount + mriActiveCount },
+              { key: 'examQueue', label: 'Khám lâm sàng', count: examActiveCount },
+              { key: 'mriQueue', label: 'Chụp MRI', count: mriActiveCount },
+            ]}
+            value={currentMode}
+            onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
+          />
+        }
+      />
 
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 10,
-            borderRadius: 9,
-            backgroundColor: currentMode === 'examQueue' ? '#0891B2' : 'transparent',
-            gap: 6,
-          }}
-          onPress={() => setCurrentMode('examQueue')}
-        >
-          <Stethoscope size={16} color={currentMode === 'examQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
-          <Text style={{
-            fontSize: 13,
-            fontWeight: 'bold',
-            color: currentMode === 'examQueue' ? '#FFFFFF' : '#475569',
-          }}>
-            Khám Lâm Sàng ({examActiveCount})
-          </Text>
-        </TouchableOpacity>
+      <ScrollView>
+        <PageContainer style={styles.page}>
+          <View style={styles.toolbar}>
+            <View style={styles.seg}>
+              {[
+                { key: 'queue', label: 'Đang xử lý', count: activeVisits.length },
+                { key: 'done', label: 'Đã xong', count: doneVisits.length },
+              ].map(t => (
+                <Pressable
+                  key={t.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === t.key }}
+                  onPress={() => { setMenuFor(null); setActiveTab(t.key); }}
+                  style={({ hovered }) => [styles.segBtn, activeTab === t.key && styles.segBtnActive, hovered && activeTab !== t.key && styles.segBtnHover]}
+                >
+                  <Text style={[styles.segText, activeTab === t.key && styles.segTextActive]}>{t.label} · {t.count}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {activeTab === 'queue' && emergencyCount > 0 ? (
+              <Flag tone="danger" icon={Flame} label={`${emergencyCount} ca cấp cứu`} />
+            ) : null}
+          </View>
 
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 10,
-            borderRadius: 9,
-            backgroundColor: currentMode === 'mriQueue' ? '#0891B2' : 'transparent',
-            gap: 6,
-          }}
-          onPress={() => setCurrentMode('mriQueue')}
-        >
-          <Brain size={16} color={currentMode === 'mriQueue' ? '#FFFFFF' : '#475569'} strokeWidth={2.3} />
-          <Text style={{
-            fontSize: 13,
-            fontWeight: 'bold',
-            color: currentMode === 'mriQueue' ? '#FFFFFF' : '#475569',
-          }}>
-            Chụp & Đọc MRI ({mriActiveCount})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabRow}>
-        {[
-          { key: 'queue', label: `Đang Xử Lý (${activeVisits.length})` },
-          { key: 'done',  label: `Đã Hoàn Tất (${doneVisits.length})` },
-        ].map(t => (
-          <TouchableOpacity
-            key={t.key}
-            style={[styles.tab, activeTab === t.key && styles.tabActive]}
-            onPress={() => setActiveTab(t.key)}
-          >
-            <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>{t.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading ? (
-        <ActivityIndicator size="large" color="#0891B2" style={{ marginTop: 60 }} />
-      ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {(activeTab === 'queue' ? activeVisits : doneVisits).map(renderVisitCard)}
-          {(activeTab === 'queue' ? activeVisits : doneVisits).length === 0 && (
+          {loading ? (
             <View style={styles.empty}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#ECFEFF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                {activeTab === 'queue' ? <Inbox size={26} color="#0891B2" strokeWidth={2} /> : <CheckCircle2 size={26} color="#059669" strokeWidth={2} />}
+              <ActivityIndicator size="large" color={Colors.brandGreen} />
+              <Text style={styles.emptyText}>Đang tải…</Text>
+            </View>
+          ) : shownList.length === 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIconWrap}>
+                {activeTab === 'queue' ? <Inbox size={26} color={Colors.brandGreen} strokeWidth={2} /> : <CheckCircle2 size={26} color={Colors.brandGreen} strokeWidth={2} />}
               </View>
               <Text style={styles.emptyText}>
-                {activeTab === 'queue' ? 'Không có ca khám đang chờ xử lý' : 'Chưa có ca hoàn tất'}
+                {activeTab === 'queue' ? 'Không có ca nào đang chờ xử lý' : 'Chưa có ca hoàn tất'}
+              </Text>
+              <Text style={styles.emptyHint}>
+                {activeTab === 'queue' ? 'Ca mới do điều dưỡng/lễ tân tiếp nhận sẽ hiện ở đây. Bấm "Làm mới" để cập nhật.' : 'Ca đã kết thúc trong hàng đợi này sẽ được lưu ở đây.'}
               </Text>
             </View>
+          ) : tableLayout ? (
+            <View style={styles.table}>
+              <View style={[styles.tr, styles.thead]}>
+                <Text style={[styles.th, styles.colNo]}>STT</Text>
+                <Text style={[styles.th, styles.colPatient]}>Bệnh nhân</Text>
+                <Text style={[styles.th, styles.colStatus]}>Trạng thái</Text>
+                <Text style={[styles.th, styles.colInfo]}>{currentMode === 'mriQueue' ? 'Y lệnh chụp' : currentMode === 'all' ? 'Sinh hiệu / y lệnh chụp' : 'Sinh hiệu'}</Text>
+                <Text style={[styles.th, styles.colTime]}>Tiếp nhận</Text>
+                <Text style={[styles.th, styles.colActions, styles.thRight]}>Thao tác</Text>
+              </View>
+              {shownList.map(renderVisitRow)}
+            </View>
+          ) : (
+            <View style={styles.list}>{shownList.map(renderVisitCard)}</View>
           )}
-        </ScrollView>
-      )}
+        </PageContainer>
+      </ScrollView>
 
       {/* MRI Order Modal */}
       <Modal visible={mriModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <Scan size={20} color="#0891B2" strokeWidth={2.4} />
-              <Text style={styles.modalTitle}>Ra Y Lệnh Chụp MRI</Text>
+              <Scan size={20} color={Colors.brandGreen} strokeWidth={2.4} />
+              <Text style={styles.modalTitle}>Ra y lệnh chụp MRI</Text>
             </View>
             <Text style={styles.modalSub}>
               Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
@@ -1161,8 +1186,19 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 {requestAi && <CheckCircle2 size={13} color="#FFFFFF" />}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Cpu size={14} color="#0891B2" strokeWidth={2.2} />
+                <Cpu size={14} color={Colors.brandGreen} strokeWidth={2.2} />
                 <Text style={styles.aiToggleText}>Yêu cầu AI phân tích kết quả sau khi chụp</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* UC-PAT-06: tiêm cản quang → bệnh nhân ký phiếu đồng thuận trên app */}
+            <TouchableOpacity style={styles.aiToggleRow} onPress={() => setWithContrast(v => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: withContrast }}>
+              <View style={[styles.checkbox, withContrast && styles.checkboxChecked]}>
+                {withContrast && <CheckCircle2 size={13} color="#FFFFFF" />}
+              </View>
+              <View style={styles.contrastToggleBody}>
+                <Text style={styles.aiToggleText}>Có tiêm thuốc cản quang Gadolinium</Text>
+                <Text style={styles.contrastToggleHint}>Bệnh nhân trả lời sàng lọc và ký phiếu đồng thuận trên ứng dụng.</Text>
               </View>
             </TouchableOpacity>
 
@@ -1189,11 +1225,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <UploadCloud size={20} color="#0891B2" />
+                  <UploadCloud size={20} color={Colors.brandGreen} />
                   <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Nộp Phim Chụp & Lưu Trữ Mini-PACS</Text>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                  Ca chụp: <Text style={{ fontWeight: '600', color: '#7C3AED' }}>MRI vùng {activeVisit?.mriOrder?.region || 'Não bộ'}</Text> — {activeVisit?.patientId?.profile?.name || 'Bệnh nhân'}
+                  Ca chụp: <Text style={{ fontWeight: '600', color: Colors.brandNavy }}>MRI vùng {activeVisit?.mriOrder?.region || 'Não bộ'}</Text> — {activeVisit?.patientId?.profile?.name || 'Bệnh nhân'}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setUploadModal(false)} style={{ padding: 4 }}>
@@ -1245,13 +1281,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                   >
                     {uploading ? (
                       <View style={{ alignItems: 'center' }}>
-                        <ActivityIndicator color="#7C3AED" />
-                        <Text style={{ color: '#7C3AED', marginTop: 8, fontSize: 12, fontWeight: '600' }}>Đang tải ảnh cắt lớp lên...</Text>
+                        <ActivityIndicator color={Colors.brandGreen} />
+                        <Text style={{ color: Colors.brandGreen, marginTop: 8, fontSize: 13, fontWeight: '600' }}>Đang tải ảnh cắt lớp lên...</Text>
                       </View>
                     ) : (
                       <View style={{ alignItems: 'center' }}>
-                        <ImageIcon size={26} color="#7C3AED" />
-                        <Text style={{ color: '#7C3AED', fontWeight: 'bold', marginTop: 6, fontSize: 13 }}>
+                        <ImageIcon size={26} color={Colors.brandGreen} />
+                        <Text style={{ color: Colors.brandGreen, fontWeight: 'bold', marginTop: 6, fontSize: 13 }}>
                           + Chọn ảnh cắt lớp tiêu biểu (.jpg, .png)
                         </Text>
                         <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>
@@ -1357,7 +1393,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <CheckCircle2 size={15} color="#fff" />
-                    <Text style={styles.btnConfirmText}>Nộp Kết Quả Phim Chụp</Text>
+                    <Text style={styles.btnConfirmText}>Nộp kết quả phim chụp</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1372,7 +1408,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
           <View style={[styles.modalBox, { backgroundColor: '#FFF5F5', borderColor: '#FCA5A5', borderWidth: 2 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertTriangle size={22} color="#DC2626" />
-              <Text style={[styles.modalTitle, { color: '#991B1B', marginBottom: 0 }]}>Kích Hoạt Cảnh Báo Cấp Cứu Khẩn Cấp</Text>
+              <Text style={[styles.modalTitle, { color: '#991B1B', marginBottom: 0 }]}>Kích hoạt cảnh báo cấp cứu</Text>
             </View>
             <Text style={styles.modalSub}>
               Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{emergencyVisit?.patientId?.profile?.name || 'Bệnh nhân'}</Text>
@@ -1477,6 +1513,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       />
 
       {/* ── [THỰC TẾ BV: NGHỊCH LÝ 4] MODAL HỦY CA CHỤP MRI ───────────────────────── */}
+      <ContrastConsentReview
+        visible={Boolean(consentVisit)}
+        onClose={() => setConsentVisit(null)}
+        consent={consentVisit?.contrastConsent || null}
+        patientName={consentVisit?.patientId?.profile?.name || 'Bệnh nhân'}
+        canOverride={user?.role === 'doctor' || user?.role === 'admin'}
+        onChanged={fetchData}
+      />
+
       <MriCancelModal
         visible={cancelModal}
         onClose={() => setCancelModal(false)}
@@ -1492,61 +1537,108 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, margin: 16, padding: 4, gap: 4 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: '#15803D' },
-  tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#fff' },
-  list: { padding: 16, gap: 12 },
+  page: { paddingTop: 20, paddingBottom: 32 },
+  toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
+  seg: { flexDirection: 'row', backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3, gap: 2 },
+  segBtn: { height: 34, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 8 },
+  segBtnActive: { backgroundColor: Colors.surface, boxShadow: '0 1px 2px rgba(11, 42, 85, 0.12)' },
+  segBtnHover: { backgroundColor: 'rgba(255, 255, 255, 0.6)' },
+  segText: { fontSize: 13, fontWeight: '600', color: Colors.slateMuted, fontVariant: ['tabular-nums'] },
+  segTextActive: { color: Colors.brandNavy, fontWeight: '700' },
+  flag: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', maxWidth: '100%', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  flagText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  cardFlags: { flexDirection: 'row', marginBottom: 8 },
+  // Bảng hàng đợi (desktop)
+  table: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border },
+  tr: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16 },
+  thead: { backgroundColor: Colors.background, paddingVertical: 10, borderTopLeftRadius: 13, borderTopRightRadius: 13 },
+  th: { fontSize: 12, fontWeight: '600', color: Colors.slateMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  thRight: { textAlign: 'right' },
+  trBody: { paddingVertical: 14, borderTopWidth: 1, borderTopColor: Colors.border },
+  trUrgent: { backgroundColor: Colors.errorBg },
+  trMenuOpen: { zIndex: 20 },
+  colNo: { width: 32 },
+  colPatient: { flex: 2.2, minWidth: 0 },
+  colStatus: { flex: 1.5, minWidth: 0 },
+  colInfo: { flex: 1.8, minWidth: 0 },
+  colTime: { flex: 1.3, minWidth: 0 },
+  colActions: { width: 280 },
+  cellStack: { gap: 6, alignItems: 'flex-start' },
+  cellNo: { fontSize: 14, fontWeight: '600', color: Colors.secondary, fontVariant: ['tabular-nums'] },
+  cellName: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  cellSub: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  cellText: { fontSize: 14, color: Colors.slateDark },
+  cellNum: { fontSize: 14, color: Colors.slateDark, fontVariant: ['tabular-nums'] },
+  cellMuted: { fontSize: 14, color: Colors.secondary },
+  cellNote: { fontSize: 13, lineHeight: 18 },
+  cellNoteWarn: { color: Colors.warningText },
+  cellNoteDanger: { color: Colors.errorText },
+  rowActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
+  moreBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
+  moreBtnActive: { backgroundColor: Colors.background },
+  menuBackdrop: { position: Platform.OS === 'web' ? 'fixed' : 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
+  menu: { position: 'absolute', top: 42, right: 0, zIndex: 2, minWidth: 200, paddingVertical: 6, backgroundColor: Colors.surface, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, boxShadow: '0 4px 12px rgba(11, 42, 85, 0.10)' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 40, paddingHorizontal: 14 },
+  menuItemHover: { backgroundColor: Colors.background },
+  menuText: { fontSize: 14, color: Colors.slateDark },
+  menuTextDanger: { color: Colors.errorText, fontWeight: '600' },
+  list: { gap: 12 },
   card: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: '#E2E8F0',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    backgroundColor: Colors.surface, borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: Colors.border,
+    boxShadow: '0 1px 2px rgba(11, 42, 85, 0.05)',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
-  patientName: { fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 },
-  reason: { fontSize: 12, color: '#64748B' },
+  patientName: { fontSize: 16, fontWeight: '700', color: Colors.brandNavy, marginBottom: 2 },
+  reason: { fontSize: 13, color: Colors.slateMuted, lineHeight: 18 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  badgeText: { fontSize: 11, fontWeight: 'bold' },
+  badgeText: { fontSize: 12, fontWeight: '700' },
   vitalsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   vitalsLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   vitalsValue: { fontSize: 12, color: '#0F172A' },
-  mriInfo: { backgroundColor: '#F5F3FF', padding: 8, borderRadius: 8, marginBottom: 6 },
-  mriInfoText: { fontSize: 12, color: '#7C3AED' },
-  subInfo: { fontSize: 12, color: '#94A3B8', marginTop: 3 },
+  mriInfo: { backgroundColor: '#EEF3FA', padding: 8, borderRadius: 8, marginBottom: 6 },
+  mriInfoText: { fontSize: 13, color: Colors.brandNavy },
+  subInfo: { fontSize: 12, color: Colors.secondary, marginTop: 3 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  btnBase: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 8 },
+  btnPrimary: { backgroundColor: Colors.brandGreen },
+  btnPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  btnSecondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderStrong },
+  btnSecondaryText: { color: Colors.slateDark, fontSize: 13, fontWeight: '600' },
+  btnDangerOutline: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: '#FCA5A5' },
+  btnDangerOutlineText: { color: '#B91C1C', fontSize: 13, fontWeight: '700' },
   btnMri: { backgroundColor: '#7C3AED', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   btnMriText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  btnRead: { backgroundColor: '#0284C7', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  btnReadText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  btnStart: { backgroundColor: '#15803D', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  btnStartText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
+  empty: { alignItems: 'center', paddingVertical: 56, paddingHorizontal: 24, gap: 8 },
+  emptyIconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.brandGreenSoft, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  emptyHint: { fontSize: 14, color: Colors.secondary, textAlign: 'center', maxWidth: 420, lineHeight: 20 },
   emptyIcon: { fontSize: 48 },
-  emptyText: { fontSize: 15, color: '#94A3B8', fontWeight: '500' },
+  emptyText: { fontSize: 15, color: Colors.secondary, fontWeight: '500' },
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(11, 42, 85, 0.45)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.brandNavy, marginBottom: 4 },
   modalSub: { fontSize: 13, color: '#64748B', marginBottom: 16 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-  chipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  chipActive: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   chipText: { fontSize: 13, color: '#475569', fontWeight: '500' },
   chipTextActive: { color: '#fff' },
   noTechText: { fontSize: 12, color: '#EF4444', fontStyle: 'italic' },
   textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
   aiToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#15803D', borderColor: '#15803D' },
+  checkboxChecked: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   checkmark: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   aiToggleText: { fontSize: 13, color: '#334155', flex: 1 },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   btnCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },
-  btnConfirm: { flex: 2, height: 48, borderRadius: 12, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' },
+  btnConfirm: { flex: 2, height: 48, borderRadius: 12, backgroundColor: Colors.brandGreen, justifyContent: 'center', alignItems: 'center' },
   btnConfirmText: { fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  contrastToggleBody: { flex: 1, gap: 2 },
+  contrastToggleHint: { fontSize: 13, color: Colors.slateMuted },
 });
 
 export default DoctorWorkQueueScreen;

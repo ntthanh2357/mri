@@ -535,7 +535,7 @@ export default function AdminMetricsView({
                 onClick={() => onSelectTab?.('audit-logs')}
                 className="text-xs text-[#0ea5e9] font-bold hover:underline py-1 px-2 select-none"
               >
-                Xem tất cả →
+                Xem tất cả
               </button>
             </div>
 

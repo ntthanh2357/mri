@@ -27,3 +27,10 @@ pnpm-debug.log*
 .vscode/
 .idea/
 .DS_Store
+
+# Playwright screenshot tooling (dùng để Claude tự xem UI, không phải asset dự án)
+screenshots/
+screenshot.js
+screenshot_all.js
+test-results/
+playwright-report/

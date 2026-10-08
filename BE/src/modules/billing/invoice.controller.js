@@ -4,7 +4,6 @@ import { Hospital } from "../hospital/models/hospital.model.js";
 import { MedicalRecord } from "../emr/models/medicalRecord.model.js";
 import { EMRVersion } from "../emr/models/emrVersion.model.js";
 import payos from "../../utils/payos.js";
-import { PremiumOrder } from "./models/premiumOrder.model.js";
 import { User } from "../auth/models/user.model.js";
 import { Drug } from "../pharmacy/models/drug.model.js";
 import { Prescription } from "../pharmacy/models/prescription.model.js";
@@ -802,26 +801,6 @@ export const handlePayOSWebhook = async (req, res) => {
             return res.status(200).json({ success: true, message: "Hóa đơn đang được xử lý (idempotent)." });
           }
         }
-
-        // 2. Nếu không phải hóa đơn lượt khám, kiểm tra đơn hàng Premium
-        const premiumOrder = await PremiumOrder.findOne({ orderCode }, null, { bypassTenancy: true });
-        if (premiumOrder && premiumOrder.status !== "completed") {
-          premiumOrder.status = "completed";
-          premiumOrder.paidAt = new Date();
-          await premiumOrder.save();
-
-          const user = await User.findById(premiumOrder.userId, null, { bypassTenancy: true });
-          if (user) {
-            user.isPremium = true;
-            const oneYearFromNow = new Date();
-            oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-            user.premiumUntil = oneYearFromNow;
-            user.autoRenew = true;
-            await user.save();
-            console.log(`[PayOS Webhook] Nâng cấp Premium thành công cho User: ${user.email}, orderCode: ${orderCode}`);
-          }
-          return res.status(200).json({ success: true, message: "Nâng cấp Premium thành công." });
-        }
       }
     }
 
@@ -937,76 +916,12 @@ export const resolveProcessingInvoice = async (req, res) => {
   }
 };
 
-// @desc    Tạo link thanh toán PayOS để nâng cấp Premium
-// @route   POST /api/v1/invoices/premium-payment
-// @access  Private
-export const createPremiumPayment = async (req, res) => {
-  try {
-    const userId = req.user.id; // Lấy từ auth middleware
-
-    // Kiểm tra xem người dùng đã là Premium chưa
-    const user = await User.findById(userId);
-    if (user && user.isPremium) {
-      return res.status(400).json({ message: "Tài khoản của bạn đã là Premium" });
-    }
-
-    const amount = 99000; // Gói Premium 99.000 VNĐ
-
-    // Tạo mã orderCode duy nhất dạng số nguyên cho PayOS (9 chữ số cuối của timestamp + số ngẫu nhiên)
-    const orderCode = Number(String(Date.now()).slice(-9)) + Math.floor(Math.random() * 1000);
-
-    // Lưu thông tin đơn hàng Premium
-    const premiumOrder = new PremiumOrder({
-      userId,
-      amount,
-      orderCode,
-      status: "pending"
-    });
-    await premiumOrder.save();
-
-    // Chuẩn bị dữ liệu gửi lên PayOS
-    const hostname = req.get("host");
-    const protocol = req.protocol;
-
-    // Sử dụng trang thông báo thành công đẹp mắt có sẵn (kèm orderCode để kích hoạt offline nếu dev cục bộ)
-    const returnUrl = `${protocol}://${hostname}/api/v1/invoices/payment/success?orderCode=${orderCode}`;
-    const cancelUrl = `${protocol}://${hostname}/api/v1/invoices/payment/cancel?orderCode=${orderCode}`;
-
-    const paymentBody = {
-      orderCode,
-      amount,
-      description: "Nang cap Premium",
-      items: [
-        {
-          name: "Gói Hội viên Premium (1 Năm)",
-          quantity: 1,
-          price: amount
-        }
-      ],
-      returnUrl,
-      cancelUrl
-    };
-
-    const paymentLinkData = await payos.paymentRequests.create(paymentBody);
-
-    res.status(200).json({
-      message: "Tạo link thanh toán Premium thành công",
-      checkoutUrl: paymentLinkData.checkoutUrl,
-      orderCode,
-      premiumOrder
-    });
-  } catch (error) {
-    console.error("[Create Premium Payment Error]", error);
-    res.status(500).json({ message: "Lỗi tạo link thanh toán Premium", error: error.message });
-  }
-};
-
 // @desc    Trang HTML hiển thị thanh toán thành công
 // @route   GET /api/v1/invoices/payment/success
 // @access  Public
 export const paymentSuccess = async (req, res) => {
   try {
-    // BẢO MẬT (BUG-01): Tuyệt đối không thay đổi trạng thái hóa đơn hay kích hoạt Premium tại returnUrl công khai.
+    // BẢO MẬT (BUG-01): Tuyệt đối không thay đổi trạng thái hóa đơn tại returnUrl công khai.
     // Toàn bộ việc cập nhật trạng thái thanh toán bắt buộc phải thông qua Webhook PayOS đã xác thực chữ ký số HMAC.
     const { orderCode, invoiceId } = req.query || {};
     if (orderCode || invoiceId) {

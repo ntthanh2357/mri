@@ -1,4 +1,5 @@
 import React from 'react';
+import Colors from '../constants/colors';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, StyleSheet
@@ -31,8 +32,8 @@ const MriSafetyCheckModal = ({
       <View style={styles.modalOverlay}>
         <View style={[styles.modalBox, { maxHeight: '92%' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-            <ClipboardCheck size={22} color="#0891B2" style={{ marginRight: 8 }} />
-            <Text style={[styles.modalTitle, { color: '#0F172A', marginBottom: 0 }]}>Bảng Kiểm An Toàn MRI Trước Buồng Máy</Text>
+            <ClipboardCheck size={22} color={Colors.brandGreen} style={{ marginRight: 8 }} />
+            <Text style={[styles.modalTitle, { color: Colors.brandNavy, marginBottom: 0 }]}>Bảng kiểm an toàn MRI trước buồng máy</Text>
           </View>
           <Text style={styles.modalSub}>
             Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patientName || 'Bệnh nhân'}</Text> · Từ trường 1.5T/3.0T
@@ -73,7 +74,7 @@ const MriSafetyCheckModal = ({
               {hasPacemakerOrMetal && (
                 <View style={styles.dangerAlertBox}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <XOctagon size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                    <XOctagon size={16} color="#B91C1C" style={{ marginRight: 6 }} />
                     <Text style={[styles.dangerAlertText, { flex: 1 }]}>
                       CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI! Nguy cơ tử vong do lực hút từ trường cực đại. Không được đưa vào buồng chụp!
                     </Text>
@@ -168,7 +169,7 @@ const MriSafetyCheckModal = ({
             <TouchableOpacity
               style={[
                 styles.btnConfirm,
-                { backgroundColor: hasPacemakerOrMetal ? '#DC2626' : '#15803D' }
+                { backgroundColor: hasPacemakerOrMetal ? '#B91C1C' : Colors.brandGreen }
               ]}
               onPress={onSubmit}
               disabled={submitting}
@@ -183,7 +184,7 @@ const MriSafetyCheckModal = ({
                     <Check size={16} color="#fff" strokeWidth={2.5} />
                   )}
                   <Text style={styles.btnConfirmText}>
-                    {hasPacemakerOrMetal ? 'Không Thể Cho Chụp' : 'Đạt An Toàn — Vào Buồng Chụp'}
+                    {hasPacemakerOrMetal ? 'Không thể cho chụp' : 'Đạt an toàn, vào buồng chụp'}
                   </Text>
                 </View>
               )}
@@ -198,27 +199,27 @@ const MriSafetyCheckModal = ({
 const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 4 },
   modalSub: { fontSize: 13, color: '#64748B', marginBottom: 16 },
   warningBox: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 16 },
   warningText: { color: '#92400E', fontSize: 12, lineHeight: 18, fontWeight: '600' },
   itemCard: { padding: 12, borderRadius: 10, borderWidth: 1.5, marginBottom: 12 },
   itemCardDefault: { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' },
-  itemCardDanger: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+  itemCardDanger: { backgroundColor: '#FEE2E2', borderColor: '#B91C1C' },
   itemCardWarning: { backgroundColor: '#FEF3C7', borderColor: '#D97706' },
   itemCardPink: { backgroundColor: '#FDF2F8', borderColor: '#DB2777' },
   itemHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  checkboxDanger: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
+  checkboxDanger: { backgroundColor: '#B91C1C', borderColor: '#B91C1C' },
   checkboxWarning: { backgroundColor: '#D97706', borderColor: '#D97706' },
   checkboxPink: { backgroundColor: '#DB2777', borderColor: '#DB2777' },
   checkmark: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   itemTitle: { fontSize: 13, fontWeight: 'bold' },
-  itemDesc: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  itemDesc: { fontSize: 12, color: '#64748B', marginTop: 2 },
   dangerAlertBox: { marginTop: 8, backgroundColor: '#FEF2F2', padding: 8, borderRadius: 6 },
-  dangerAlertText: { color: '#DC2626', fontSize: 11, fontWeight: 'bold' },
+  dangerAlertText: { color: '#B91C1C', fontSize: 12, fontWeight: 'bold' },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 12 },
-  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
+  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: Colors.brandNavy, minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   btnCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },

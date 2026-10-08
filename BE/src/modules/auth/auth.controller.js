@@ -588,24 +588,6 @@ export const getMe = async (req, res) => {
       return;
     }
 
-    // Check Premium expiration
-    if (userObj.isPremium && userObj.premiumUntil && new Date() > userObj.premiumUntil) {
-      if (userObj.autoRenew) {
-        // Auto-renew: Charge 99.000 VNĐ and extend by 1 year
-        const nextYear = new Date();
-        nextYear.setFullYear(nextYear.getFullYear() + 1);
-        userObj.premiumUntil = nextYear;
-        await userObj.save();
-        console.log(`[Auto-Renew] Automatically renewed Premium for ${userObj.email}. Charged 99.000 VNĐ. Next expiration: ${userObj.premiumUntil.toISOString()}`);
-      } else {
-        // Expire: Set isPremium to false
-        userObj.isPremium = false;
-        userObj.premiumUntil = null;
-        await userObj.save();
-        console.log(`[Subscription Expired] Premium expired for ${userObj.email} (autoRenew was false).`);
-      }
-    }
-
     // Return both id and _id to maintain compatibility across FE screens (Bug #16)
     const user = {
       id: userObj._id,
@@ -619,9 +601,6 @@ export const getMe = async (req, res) => {
       wardId: userObj.wardId,
       departmentId: userObj.departmentId,
       isLocked: userObj.isLocked,
-      isPremium: userObj.isPremium,
-      premiumUntil: userObj.premiumUntil,
-      autoRenew: userObj.autoRenew,
       createdAt: userObj.createdAt,
       updatedAt: userObj.updatedAt,
     };
@@ -1289,43 +1268,6 @@ export const phoneLoginVerify = async (req, res) => {
   } catch (error) {
     console.error("Lỗi xác minh OTP SĐT:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi xác minh OTP SĐT.", error: error.message });
-  }
-};
-
-// @desc    Downgrade to Basic package
-// @route   POST /auth/premium/downgrade
-// @access  Private
-export const downgradeToBasic = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "Không tìm thấy người dùng." });
-    }
-    user.isPremium = false;
-    user.premiumUntil = null;
-    await user.save();
-    res.status(200).json({ message: "Đã chuyển về Gói Cơ bản thành công.", user });
-  } catch (error) {
-    console.error("Lỗi hạ cấp gói:", error);
-    res.status(500).json({ message: "Lỗi máy chủ khi hạ cấp gói.", error: error.message });
-  }
-};
-
-// @desc    Cancel Premium auto-renewal
-// @route   POST /auth/premium/cancel-renew
-// @access  Private
-export const cancelPremiumRenew = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "Không tìm thấy người dùng." });
-    }
-    user.autoRenew = false;
-    await user.save();
-    res.status(200).json({ message: "Đã hủy gia hạn tự động thành công. Bạn vẫn được sử dụng Premium đến hết hạn.", user });
-  } catch (error) {
-    console.error("Lỗi hủy gia hạn gói:", error);
-    res.status(500).json({ message: "Lỗi máy chủ khi hủy gia hạn gói.", error: error.message });
   }
 };
 

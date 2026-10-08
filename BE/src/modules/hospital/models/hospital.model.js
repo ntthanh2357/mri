@@ -41,6 +41,11 @@ const hospitalSchema = new Schema(
       default: 'provisioned',
     },
 
+    // UC-PAT-03 — lấy số tiếp đón: số phút tiếp nhận trung bình mỗi người (để ước tính giờ tới lượt)
+    queueSettings: {
+      avgServeMinutes: { type: Number, default: 10, min: 1, max: 60 },
+    },
+
     pricing: {
       examFee: { type: Number, default: 150000 },
       mriFee: { type: Number, default: 1500000 },

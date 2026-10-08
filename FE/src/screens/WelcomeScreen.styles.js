@@ -1,4 +1,5 @@
 import { StyleSheet, Platform, Dimensions } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
@@ -38,10 +39,6 @@ export default StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   logoCircle: {
     width: 34,
     height: 34,
@@ -57,20 +54,6 @@ export default StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#FFFFFF',
-  },
-  brandName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    lineHeight: 18,
-  },
-  brandNameAccentDark: {
-    color: '#0090D0', // "Scan" hai tông như wordmark logo
-  },
-  brandSub: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#0090D0',
   },
   navLinks: {
     flexDirection: 'row',
@@ -149,6 +132,7 @@ export default StyleSheet.create({
   leftColumn: {
     flex: 1.1,
     position: 'relative',
+    overflow: 'hidden', // ảnh hero phóng to (Ken Burns) không tràn sang cột form
     padding: 48,
     justifyContent: 'space-between',
     ...Platform.select({
@@ -158,6 +142,7 @@ export default StyleSheet.create({
     }),
   },
   leftColumnBg: {
+    backgroundColor: Colors.brandNavy, // màu nền khi ảnh chưa tải xong
     position: 'absolute',
     top: 0,
     left: 0,
@@ -165,14 +150,6 @@ export default StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
-  },
-  leftColumnOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 45, 95, 0.90)', // Deep medical navy overlay (logo NeuroScan)
   },
   leftColumnContent: {
     flex: 1,
@@ -200,10 +177,10 @@ export default StyleSheet.create({
     borderColor: '#004080',
   },
   logoImage: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    marginRight: 14,
+    width: 57,
+    height: 57,
+    borderRadius: 18,
+    marginRight: 12,
     backgroundColor: '#FFFFFF',
     ...Platform.select({
       web: {
@@ -220,43 +197,49 @@ export default StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
   },
-  brandNameAccentCyan: {
-    color: '#00AEEF', // "Scan" — khớp wordmark logo (Neuro navy + Scan cyan)
+  brandNameAccentOnDark: {
+    color: Colors.brandGreenOnDark, // "Scan" — khớp wordmark logo, bản trên nền tối
   },
   brandSubWhite: {
-    fontSize: 8.5,
+    fontSize: 11,
     fontWeight: 'bold',
-    color: '#CFF2FF',
+    color: Colors.brandMint,
     letterSpacing: 1.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
+  heroBottom: {
+    gap: 32,
+  },
   sloganContainer: {
-    marginVertical: 36,
-    maxWidth: 480,
+    maxWidth: 520,
   },
   sloganAccent: {
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#00AEEF',
+    backgroundColor: Colors.brandGreenOnDark,
     marginBottom: 20,
   },
   sloganTitle: {
-    fontSize: 32,
+    fontSize: 38,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 42,
+    lineHeight: 46,
+    letterSpacing: -0.5,
     marginBottom: 16,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
+  sloganTitleAccent: {
+    color: Colors.brandMint,
+  },
   sloganSub: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#E2E8F0',
-    lineHeight: 24,
+    lineHeight: 26,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -273,16 +256,16 @@ export default StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(164, 251, 229, 0.10)', // brandMint mờ
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
+    borderColor: 'rgba(164, 251, 229, 0.28)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   featureText: {
-    fontSize: 14.5,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#F1F5F9',
     lineHeight: 20,
     flex: 1,
   },
@@ -303,13 +286,29 @@ export default StyleSheet.create({
     backgroundColor: '#F8FAFC',
     paddingBottom: 40,
   },
-  mobileHeader: {
-    paddingVertical: 32,
-    alignItems: 'center',
+  // Hero điện thoại: ảnh máy MRI, đáy ảnh phủ navy sẵn để đặt logo + slogan
+  mobileHero: {
+    height: 260,
+    overflow: 'hidden',
+    backgroundColor: Colors.brandNavy,
+    justifyContent: 'flex-end',
+  },
+  mobileHeroContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 48,
+    gap: 14,
+  },
+  mobileHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 30,
+    letterSpacing: -0.3,
   },
   mobileFormContainer: {
     paddingHorizontal: 20,
     width: '100%',
+    marginTop: -28, // thẻ đăng nhập đè nhẹ lên mép ảnh hero
   },
 
   // INTEGRATED AUTH CARD STYLES
@@ -343,7 +342,7 @@ export default StyleSheet.create({
   authCardTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 6,
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -369,8 +368,8 @@ export default StyleSheet.create({
     width: '100%',
   },
   forgotPasswordLink: {
-    color: '#004080',
-    fontSize: 12,
+    color: Colors.brandGreen,
+    fontSize: 13,
     fontWeight: '600',
     textDecorationLine: 'none',
   },
@@ -386,17 +385,17 @@ export default StyleSheet.create({
     marginBottom: 16,
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease',
+        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
       }
     }),
   },
   formInputFocused: {
-    borderColor: '#004080',
+    borderColor: Colors.brandGreen,
     borderWidth: 2,
     ...Platform.select({
       web: {
-        outline: 'none',
-        boxShadow: '0 0 0 3px rgba(0, 64, 128, 0.15)',
+        outlineStyle: 'none', // react-native-web không nhận shorthand `outline`; vòng focus thay bằng boxShadow bên dưới
+        boxShadow: '0 0 0 3px rgba(6, 122, 94, 0.18)',
       }
     }),
   },
@@ -422,7 +421,7 @@ export default StyleSheet.create({
   },
   inlineErrorText: {
     color: '#C2410C',
-    fontSize: 11,
+    fontSize: 12,
     marginTop: -12,
     marginBottom: 16,
     fontWeight: '500',
@@ -463,7 +462,7 @@ export default StyleSheet.create({
     color: '#64748B',
   },
   roleTabTextActive: {
-    color: '#004080',
+    color: Colors.brandGreen,
   },
   rememberRow: {
     marginBottom: 20,
@@ -484,8 +483,8 @@ export default StyleSheet.create({
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#004080',
-    borderColor: '#004080',
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
   },
   checkboxCheckmark: {
     color: '#FFFFFF',
@@ -499,7 +498,7 @@ export default StyleSheet.create({
     lineHeight: 16,
   },
   formButton: {
-    backgroundColor: '#004080',
+    backgroundColor: Colors.brandGreen,
     height: 50,
     borderRadius: 12,
     justifyContent: 'center',
@@ -509,8 +508,19 @@ export default StyleSheet.create({
       web: {
         transition: 'background-color 0.2s ease',
         cursor: 'pointer',
-        boxShadow: '0 8px 16px -6px rgba(0, 64, 128, 0.45)',
+        boxShadow: '0 8px 16px -6px rgba(6, 122, 94, 0.40)',
       }
+    }),
+  },
+  formButtonHover: {
+    backgroundColor: Colors.brandGreenPressed,
+  },
+  buttonFocus: {
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        boxShadow: '0 0 0 3px #FFFFFF, 0 0 0 5px rgba(6, 122, 94, 0.55)',
+      },
     }),
   },
   formButtonText: {
@@ -535,10 +545,14 @@ export default StyleSheet.create({
     marginBottom: 20,
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease',
+        transition: 'border-color 0.15s ease, background-color 0.15s ease',
         cursor: 'pointer',
       }
     }),
+  },
+  googleBtnHover: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#94A3B8',
   },
   googleBtnText: {
     color: '#334155',
@@ -557,7 +571,7 @@ export default StyleSheet.create({
   formFooterLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0090D0',
+    color: Colors.brandGreen,
   },
   resendRow: {
     flexDirection: 'row',
@@ -573,7 +587,7 @@ export default StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0090D0',
+    color: Colors.brandGreen,
   },
   backButtonInline: {
     alignItems: 'center',
@@ -585,7 +599,7 @@ export default StyleSheet.create({
     fontWeight: '500',
   },
   twoFactorEmailHint: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
     marginTop: 12,
@@ -599,7 +613,7 @@ export default StyleSheet.create({
     marginTop: 4,
   },
   resendOtpText: {
-    color: '#004080',
+    color: Colors.brandGreen,
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -611,12 +625,21 @@ export default StyleSheet.create({
   },
   supportContainerInline: {
     alignItems: 'center',
+    gap: 6,
   },
   supportTextInline: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  supportLink: {
+    fontWeight: 'bold',
+    color: Colors.brandGreen,
+  },
+  footerCopyrightInline: {
+    fontSize: 12,
+    color: Colors.secondary,
   },
 
   // ALERT MODAL STYLES

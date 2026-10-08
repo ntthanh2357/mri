@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
 import { navigationRef, navigateTo, resetTo } from '../utils/navigationRef';
+import { isStaffPortalPath } from '../utils/portalPath';
 import { setAuthToken } from '../services/api.service';
 import performLogout from '../utils/logout';
 import StaffPortalNavigator from './StaffPortal';
@@ -12,9 +13,11 @@ import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ClinicDashboardScreen from '../screens/ClinicDashboardScreen';
 import AIAnalysisScreen from '../screens/AIAnalysisScreen';
-import PremiumScreen from '../screens/PremiumScreen';
 import SystemAdminScreen from '../screens/SystemAdminScreen';
 import PatientRecordsScreen from '../screens/PatientRecordsScreen';
+import MyHealthScreen from '../screens/MyHealthScreen';
+import ContrastConsentScreen from '../screens/ContrastConsentScreen';
+import QueueTicketScreen from '../screens/QueueTicketScreen';
 import PatientDetailScreen from '../screens/PatientDetailScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
@@ -93,14 +96,16 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false, title: 'NeuroScan AI — Cổng Bệnh nhân' }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng nhập' }} />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng ký' }} />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI' }} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NeuroScan AI', headerShown: false }} />
         <Stack.Screen name="ClinicDashboard" component={ClinicDashboardScreen} options={{ title: 'Phòng khám', headerShown: false }} />
         <Stack.Screen name="EMRDashboard" component={EMRDashboardScreen} options={{ title: 'EMR Management', headerShown: false }} />
         <Stack.Screen name="AIAnalysis" component={AIAnalysisScreen} options={{ title: 'Phân tích AI', headerShown: false }} />
-        <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Hội viên Premium', headerShown: false }} />
         <Stack.Screen name="SystemAdmin" component={SystemAdminScreen} options={{ title: 'Hệ thống Quản trị', headerShown: false }} />
         <Stack.Screen name="AdminBackoffice" component={AdminBackofficeScreen} options={{ title: 'Admin Backoffice', headerShown: isNativeMobile }} />
         <Stack.Screen name="PatientRecords" component={PatientRecordsScreen} options={{ title: 'Hồ sơ bệnh nhân', headerShown: false }} />
+        <Stack.Screen name="MyHealth" component={MyHealthScreen} options={{ title: 'Sức khỏe của tôi', headerShown: false }} />
+        <Stack.Screen name="ContrastConsent" component={ContrastConsentScreen} options={{ title: 'Phiếu đồng thuận', headerShown: false }} />
+        <Stack.Screen name="QueueTicket" component={QueueTicketScreen} options={{ title: 'Lấy số khám', headerShown: false }} />
         <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: 'Chi tiết bệnh án', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
@@ -142,7 +147,7 @@ const AppNavigator = () => {
   const isStaffPortal =
     Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
-    window.location.pathname.indexOf('/staff') === 0;
+    isStaffPortalPath(window.location.pathname);
 
   if (isStaffPortal) {
     return <StaffPortalNavigator />;

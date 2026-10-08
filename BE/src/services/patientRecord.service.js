@@ -1,10 +1,23 @@
 import mongoose from "mongoose";
+import { normalizeIdentityUpdate } from "./patientIdentity.service.js";
 import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
 import { uploadToGCS } from "../config/gcs.js";
 import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 import storageService from "./storage/storageService.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
+
+/** Nhân viên xác nhận / từ chối thẻ BHYT bệnh nhân tự khai (sau khi kiểm tra thẻ thật tại quầy). */
+export const reviewDeclaredBhyt = async (userId, action, staffId) => {
+  if (!["verify", "reject"].includes(action)) throw { status: 400, message: "Thao tác không hợp lệ." };
+  const profile = await PatientProfile.findOne({ userId });
+  if (!profile || !profile.bhytDeclared?.cardNumberEnc) throw { status: 404, message: "Bệnh nhân chưa khai báo thẻ BHYT." };
+  profile.bhytDeclared.status = action === "verify" ? "verified" : "rejected";
+  profile.bhytDeclared.verifiedAt = new Date();
+  profile.bhytDeclared.verifiedBy = staffId;
+  await profile.save();
+  return profile;
+};
 
 export const getOrCreateProfile = async (userId) => {
   let profile = await PatientProfile.findOne({ userId });
@@ -18,11 +31,10 @@ export const getOrCreateProfile = async (userId) => {
 };
 
 export const updateProfile = async (userId, data) => {
-  const allowed = ["dateOfBirth", "gender", "phone", "address"];
-  const update = {};
-  allowed.forEach((key) => {
-    if (data[key] !== undefined) update[key] = data[key];
-  });
+  // UC-PAT-02: chuẩn hoá + kiểm tra định dạng, mã hoá CCCD/thẻ BHYT trước khi lưu
+  const { update, errors } = normalizeIdentityUpdate(data);
+  const firstError = Object.values(errors)[0];
+  if (firstError) throw { status: 400, message: firstError, errors };
 
   const profile = await PatientProfile.findOneAndUpdate(
     { userId },
