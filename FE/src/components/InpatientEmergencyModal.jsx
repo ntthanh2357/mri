@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -69,6 +71,14 @@ export default function InpatientEmergencyModal({
       }
     }
   }, [existingEvent]);
+
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
 
   if (!isOpen) return null;
 
@@ -154,7 +164,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã giải trừ báo động nhầm (Stand-down).');
+        await alert('Đã giải trừ báo động nhầm (Stand-down).');
         setShowCancelPrompt(false);
         if (onSuccess) onSuccess(res.data.event);
         onClose();
@@ -258,7 +268,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã đóng sự kiện cấp cứu thành công.');
+        await alert('Đã đóng sự kiện cấp cứu thành công.');
         if (onSuccess) onSuccess(res.data.event);
         onClose();
       }
@@ -278,6 +288,8 @@ export default function InpatientEmergencyModal({
   };
 
   return (
+    <Portal>
+      {dialog}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         
@@ -878,5 +890,6 @@ export default function InpatientEmergencyModal({
 
       </div>
     </div>
+    </Portal>
   );
 }

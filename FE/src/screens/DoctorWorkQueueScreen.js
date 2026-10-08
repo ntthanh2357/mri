@@ -12,6 +12,7 @@ import MriSafetyCheckModal from '../components/MriSafetyCheckModal';
 import MriRescanModal from '../components/MriRescanModal';
 import MriCancelModal from '../components/MriCancelModal';
 import ContrastConsentReview from '../components/staff/ContrastConsentReview';
+import ReceptionQueueBoard from '../components/reception/ReceptionQueueBoard';
 import { consentStatus } from '../utils/signature';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
@@ -1061,6 +1062,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
+
+  // Lễ tân: bảng gọi số ca khám riêng (chỉ xem, không thao tác lâm sàng) — dinhhuyhoang
+  if (isReceptionist) {
+    return (
+      <ResponsiveLayout navigation={navigation} title="Hàng chờ ca khám" user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
+        <ReceptionQueueBoard navigation={navigation} />
+      </ResponsiveLayout>
+    );
+  }
 
   const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng đợi khám & chẩn đoán';
 

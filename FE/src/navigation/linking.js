@@ -10,7 +10,8 @@ export const linkingConfig = {
   prefixes: ['/'],
   config: {
     screens: {
-      Welcome: '',
+      Landing: '',
+      Welcome: 'dang-nhap',
       Login: 'login',
       Register: 'register',
       Home: 'home',

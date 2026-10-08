@@ -16,6 +16,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
+import { ReceptionWeekStrip } from '../components/reception/ReceptionSchedule';
 import { get, post, put, del } from '../services/api.service';
 import {
   User,
@@ -652,6 +653,10 @@ export default function StaffSchedulingScreen({ navigation }) {
     return { totalWeekly, confirmedCount, pendingCount, swapCount };
   }, [weeklySchedules, swapRequests]);
 
+  // Lễ tân: tab "Lịch của tôi" hiển thị dải 7 ngày riêng (dinhhuyhoang)
+  const isReceptionistUser = currentUser?.role === 'receptionist';
+  const findMine = (date) => (currentUser ? findSchedules(currentUser.id, date) : []);
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffScheduling">
       <SafeAreaView style={styles.container}>
@@ -917,8 +922,24 @@ export default function StaffSchedulingScreen({ navigation }) {
             </View>
           )}
 
-          {/* TAB 2: MY SCHEDULE */}
-          {activeTab === 'my-schedule' && (
+          {/* TAB 2: MY SCHEDULE — lễ tân dùng dải 7 ngày */}
+          {activeTab === 'my-schedule' && isReceptionistUser && (
+            <ReceptionWeekStrip
+              weekDates={weekDates}
+              weekLabel={formatWeekRange()}
+              findMine={findMine}
+              shiftConfig={SHIFT_CONFIG}
+              isSameDay={isSameDay}
+              isWide={width > 1180}
+              onPrev={handlePrevWeek}
+              onNext={handleNextWeek}
+              onToday={handleCurrentWeek}
+              onRegister={(date) => handleOpenSelfRegister(date)}
+              onCancel={handleCancelRegistration}
+              onSwap={handleOpenSwapModal}
+            />
+          )}
+          {activeTab === 'my-schedule' && !isReceptionistUser && (
             <View style={styles.card}>
               <View style={styles.myScheduleHeader}>
                 <View>

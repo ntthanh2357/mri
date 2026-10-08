@@ -17,6 +17,7 @@ import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PatientHome from '../components/patient/PatientHome';
 import StaffHome from '../components/staff/StaffHome';
+import ReceptionistHome from '../components/reception/ReceptionistHome';
 import Colors from '../constants/colors';
 import styles from './HomeScreen.styles';
 import { Edit3, AlertCircle, Save } from 'lucide-react';
@@ -166,6 +167,9 @@ const HomeScreen = ({ route, navigation }) => {
           <ScrollView>
             <PatientHome user={user} isDesktop={isDesktop} navigation={navigation} onEditProfile={handleOpenEditProfile} />
           </ScrollView>
+        ) : user.role === 'receptionist' ? (
+          // Lễ tân: bàn làm việc tiếp đón & thu ngân riêng (dinhhuyhoang)
+          <ReceptionistHome user={user} navigation={navigation} />
         ) : (
           <StaffHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} />
         )}

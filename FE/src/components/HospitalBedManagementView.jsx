@@ -18,6 +18,8 @@ import {
 import { get, post, put } from '../services/api.service';
 import InpatientEmergencyModal from './InpatientEmergencyModal';
 import EdHandoffModal from './EdHandoffModal';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 
 const STATUS_MAP = {
   available: { label: 'Trống', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
@@ -47,6 +49,13 @@ const NEURO_ONCOLOGY_DIVISIONS = [
 ];
 
 export default function HospitalBedManagementView({ currentUser }) {
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
   const [loading, setLoading] = useState(false);
   const [bedMapData, setBedMapData] = useState({ summary: {}, departments: [] });
   const [icuAlert, setIcuAlert] = useState(null);
@@ -328,6 +337,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
   return (
     <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
+      {dialog}
       
       {/* ── HEADER & CAPACITY ALERT ────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -696,6 +706,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
       {/* ── MODALS FOR ACTIONS ─────────────────────────────────────────── */}
       {activeModal && (
+        <Portal>
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1033,6 +1044,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Modal Cấp Cứu Nội Viện 1-Chạm */}

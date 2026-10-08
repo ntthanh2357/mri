@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif:wght@500;600;700&display=swap');
 
 @import "tailwindcss";
 
 @theme {
+  --font-display: 'Noto Serif', 'Times New Roman', serif; /* tiêu đề trang Landing (data-font="display") */
   --font-sans: 'Figtree', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-clinical: 'Noto Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -164,3 +165,137 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   outline-offset: 2px;
 }
 
+/* ==========================================================================
+   NEUROSCAN UI REFRESH — Typography & Motion (Mayo-like calm + Docplanner-like motion)
+   Hiệu ứng gắn qua prop dataSet của react-native-web → thuộc tính data-*
+   ========================================================================== */
+
+#root [data-font="display"] {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.01em;
+}
+
+
+/* Thẻ nổi lên khi rê chuột */
+#root [data-hover="lift"] {
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1), box-shadow 260ms ease, border-color 260ms ease;
+}
+#root [data-hover="lift"]:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 40px -12px rgba(11, 42, 91, 0.25);
+  border-color: #bfdbfe;
+}
+#root [data-hover="glow"]:hover {
+  box-shadow: 0 0 0 4px rgba(6, 122, 94, 0.15), 0 10px 24px -8px rgba(6, 122, 94, 0.45);
+  transform: translateY(-2px);
+}
+#root [data-hover="tint"] { transition: background-color 200ms ease, transform 200ms ease; }
+#root [data-hover="tint"]:hover { background-color: rgba(6, 122, 94, 0.08); transform: translateX(3px); }
+
+/* Xuất hiện từ dưới lên */
+@keyframes ns-fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#root [data-anim="fade-up"] {
+  animation: ns-fade-up 700ms cubic-bezier(.2,.8,.2,1) backwards;
+}
+
+/* Trang vừa mở: trượt nhẹ vào */
+@keyframes ns-page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#root [data-anim="page"] {
+  animation: ns-page-in 420ms ease-out backwards;
+}
+
+/* Khối trang trí trôi nổi */
+@keyframes ns-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(18px, -22px) scale(1.06); }
+}
+#root [data-anim="float"]      { animation: ns-float 9s ease-in-out infinite; }
+#root [data-anim="float-slow"] { animation: ns-float 14s ease-in-out infinite reverse; }
+
+/* Nền gradient chuyển động */
+@keyframes ns-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+#root [data-bg="hero"] {
+  background-image: linear-gradient(120deg, #0b2a5b 0%, #1a5fd0 45%, #0f9d6b 100%);
+  background-size: 220% 220%;
+  animation: ns-gradient 16s ease infinite;
+}
+#root [data-bg="band"] {
+  background-image: linear-gradient(100deg, #1a5fd0 0%, #0f9d6b 100%);
+}
+#root [data-bg="soft"] {
+  background-image: radial-gradient(circle at 10% 0%, #e7f0fe 0%, transparent 45%),
+                    radial-gradient(circle at 90% 100%, #e3f7ef 0%, transparent 40%);
+}
+
+/* Chấm trạng thái nhấp nháy */
+@keyframes ns-ping {
+  0%   { box-shadow: 0 0 0 0 rgba(15, 157, 107, 0.55); }
+  80%  { box-shadow: 0 0 0 10px rgba(15, 157, 107, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(15, 157, 107, 0); }
+}
+#root [data-anim="ping"] { animation: ns-ping 2s infinite; }
+
+/* Viền sáng chạy quanh thẻ đăng nhập */
+@keyframes ns-shine {
+  from { transform: translateX(-120%) skewX(-20deg); }
+  to   { transform: translateX(320%) skewX(-20deg); }
+}
+#root [data-anim="shine"] { animation: ns-shine 3.8s ease-in-out infinite; }
+
+/* Tia quét MRI chạy dọc khung ảnh */
+@keyframes ns-scan {
+  0%   { top: 4%;  opacity: 0.2; }
+  50%  { top: 94%; opacity: 1; }
+  100% { top: 4%;  opacity: 0.2; }
+}
+#root [data-anim="scan"] { animation: ns-scan 3.4s ease-in-out infinite; }
+
+/* Thanh xác suất chạy từ trái sang */
+@keyframes ns-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+#root [data-anim="grow"] { transform-origin: left center; animation: ns-grow 1.1s cubic-bezier(.2,.8,.2,1) both; }
+
+/* Lớp phủ ảnh trang đăng nhập */
+#root [data-bg="auth-overlay"] {
+  background-color: transparent !important;
+  background-image: linear-gradient(160deg, rgba(11,42,91,0.92) 0%, rgba(11,42,91,0.78) 50%, rgba(15,157,107,0.55) 100%);
+}
+
+/* Lớp phủ ảnh hero trang chủ */
+#root [data-bg="hero-overlay"] {
+  background-color: transparent !important;
+  background-image: linear-gradient(90deg, rgba(11,42,91,0.95) 0%, rgba(11,42,91,0.82) 40%, rgba(26,95,208,0.30) 75%, rgba(15,157,107,0.15) 100%);
+}
+
+/* Banner trang lễ tân theo tông màu */
+#root [data-tone="navy"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(11,42,91,0.96) 0%, rgba(11,42,91,0.80) 45%, rgba(26,95,208,0.25) 100%); }
+#root [data-tone="teal"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(6,78,74,0.96) 0%, rgba(11,122,83,0.80) 45%, rgba(15,157,107,0.20) 100%); }
+#root [data-tone="indigo"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(30,27,75,0.96) 0%, rgba(55,48,163,0.78) 45%, rgba(99,102,241,0.20) 100%); }
+#root [data-tone="amber"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(69,26,3,0.95) 0%, rgba(146,64,14,0.80) 45%, rgba(217,119,6,0.20) 100%); }
+#root [data-tone="ocean"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(8,47,73,0.96) 0%, rgba(3,105,161,0.80) 45%, rgba(14,165,233,0.20) 100%); }
+#root [data-tone="plum"] { background-color: transparent !important; background-image: linear-gradient(100deg, rgba(59,7,100,0.95) 0%, rgba(126,34,206,0.78) 45%, rgba(219,39,119,0.22) 100%); }
+
+/* Sidebar xanh navy & menu */
+#root [data-bg="sidebar"] {
+  background-image: linear-gradient(180deg, #0b2a5b 0%, #0d3474 60%, #0b2a5b 100%);
+}
+#root [data-hover="nav"] { transition: background-color 180ms ease, transform 180ms ease; }
+#root [data-hover="nav"]:hover { background-color: rgba(255, 255, 255, 0.09); transform: translateX(4px); }
+
+/* Người dùng bật "giảm chuyển động" → tắt hiệu ứng */
+@media (prefers-reduced-motion: reduce) {
+  #root [data-anim], #root [data-bg="hero"] { animation: none !important; }
+  #root [data-hover]:hover { transform: none; }
+}

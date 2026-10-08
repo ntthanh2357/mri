@@ -7,6 +7,7 @@ import { isStaffPortalPath } from '../utils/portalPath';
 import { setAuthToken } from '../services/api.service';
 import performLogout from '../utils/logout';
 import StaffPortalNavigator from './StaffPortal';
+import LandingScreen from '../screens/LandingScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -86,13 +87,14 @@ const isNativeMobile = Platform.OS !== 'web';
   return (
     <NavigationContainer ref={navigationRef} linking={linkingConfig}>
       <Stack.Navigator
-        initialRouteName="Welcome"
+        initialRouteName="Landing"
         screenOptions={{
           headerStyle: { backgroundColor: '#0891B2' },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: { fontWeight: 'bold' },
         }}
       >
+        <Stack.Screen name="Landing" component={LandingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false, title: 'NeuroScan AI — Cổng Bệnh nhân' }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng nhập' }} />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false, title: 'NeuroScan AI — Đăng ký' }} />
