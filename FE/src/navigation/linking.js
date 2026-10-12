@@ -24,6 +24,8 @@ export const linkingConfig = {
       MyHealth: 'my-health',
       ContrastConsent: 'consents',
       QueueTicket: 'queue-ticket',
+      RecordShare: 'chia-se-benh-an',
+      SharedRecord: 'xem-benh-an',
       PatientDetail: 'patient-detail',
       Financials: 'financials',
       Support: 'support',

@@ -41,6 +41,7 @@ import {
   Database,
   Heart,
   Ticket,
+  QrCode,
   Sliders,
 } from 'lucide-react';
 
@@ -192,6 +193,7 @@ const ResponsiveLayout = ({
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
           { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
+          { label: 'Chia sẻ bệnh án', route: 'RecordShare', icon: QrCode },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':

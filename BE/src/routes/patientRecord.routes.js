@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
 import * as ctrl from "../controllers/patientRecord.controller.js";
 import * as consentCtrl from "../controllers/patientConsent.controller.js";
+import * as shareCtrl from "../controllers/recordShare.controller.js";
 
 const router = Router();
 
@@ -42,6 +43,11 @@ router.delete("/records/:visitId/documents/:docId", blockPatientWrite, ctrl.dele
 router.get("/consents", consentCtrl.listMyConsents);
 router.put("/consents/:id/checklist", consentCtrl.submitMyChecklist);
 router.put("/consents/:id/sign", consentCtrl.signMyConsent);
+
+// Chia sẻ bệnh án qua QR (UC-PAT-09) — chỉ bệnh nhân, trên bệnh án của chính mình
+router.post("/record-shares", checkRole(["patient"]), shareCtrl.createMine);
+router.get("/record-shares", checkRole(["patient"]), shareCtrl.listMine);
+router.delete("/record-shares/:id", checkRole(["patient"]), shareCtrl.revokeMine);
 
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);

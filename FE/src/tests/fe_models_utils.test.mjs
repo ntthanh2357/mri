@@ -19,6 +19,7 @@ import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
+import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, assetUrl } from '../utils/recordShare.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -397,6 +398,31 @@ it('chartRange covers both the data and the normal band, with padding', () => {
   assert.ok(r.min < 91 && r.max > 100);
   const flat = chartRange([{ values: [72] }], { min: 72, max: 72 });
   assert.ok(flat.max > flat.min);
+});
+
+// ── UC-PAT-09: chia sẻ bệnh án qua QR ──
+it('buildShareUrl puts the QR token in the public viewer URL (encoded, no trailing slash issues)', () => {
+  assert.strictEqual(buildShareUrl('https://app.neuroscan.vn/', 'abc_-123'), 'https://app.neuroscan.vn/xem-benh-an?q=abc_-123');
+  assert.strictEqual(buildShareUrl('http://192.168.1.5:8083', 'a+b'), 'http://192.168.1.5:8083/xem-benh-an?q=a%2Bb');
+});
+
+it('webOriginFrom maps the dev API port 3000 to the web port 8083, keeps proxied origins', () => {
+  assert.strictEqual(webOriginFrom('http://192.168.1.5:3000'), 'http://192.168.1.5:8083');
+  assert.strictEqual(webOriginFrom('https://api.neuroscan.vn'), 'https://api.neuroscan.vn');
+});
+
+it('countdown: seconds left never negative, formatted m:ss', () => {
+  const now = new Date('2026-10-12T08:00:00Z');
+  assert.strictEqual(secondsLeft('2026-10-12T08:05:00Z', now), 300);
+  assert.strictEqual(secondsLeft('2026-10-12T07:59:00Z', now), 0);
+  assert.strictEqual(fmtCountdown(300), '5:00');
+  assert.strictEqual(fmtCountdown(65), '1:05');
+});
+
+it('assetUrl prefixes relative upload paths with the API base, keeps absolute URLs', () => {
+  assert.strictEqual(assetUrl('/uploads/a.jpg', 'http://x:3000'), 'http://x:3000/uploads/a.jpg');
+  assert.strictEqual(assetUrl('https://drive.google.com/x', 'http://x:3000'), 'https://drive.google.com/x');
+  assert.strictEqual(assetUrl('', 'http://x:3000'), '');
 });
 
 console.log(`\n======================================================================`);
