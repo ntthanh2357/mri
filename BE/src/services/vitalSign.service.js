@@ -46,7 +46,7 @@ export const syncVisitVitals = async (visit) => {
       weight: latest?.weight,
       height: latest?.height,
       bmi: latest?.bmi,
-      recorded_at: visit.vitals?.measuredAt || new Date(),
+      recorded_at: visit.vitals?.measuredAt || visit.createdAt || new Date(), // số đo cũ: lấy ngày của lượt khám
     });
   }
   Object.assign(row, data);
