@@ -8,6 +8,8 @@ export const imagingApi = {
   getMyResults: () => get('/api/v1/imaging/my-results'),
   getResultById: (id) => get(`/api/v1/imaging/${id}`),
   getByPatientId: (patientId) => get(`/api/v1/imaging/by-patient/${patientId}`),
+  getByVisitId: (visitId) => get(`/api/v1/imaging/by-visit/${visitId}`),
+  submitKtvResult: (data) => post('/api/v1/imaging-results', data),
   updateResult: (id, data) => put(`/api/v1/imaging/${id}`, data),
   uploadScan: (formData) => postFormData('/api/v1/imaging/upload', formData),
   

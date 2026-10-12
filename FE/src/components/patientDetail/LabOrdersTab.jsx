@@ -43,9 +43,9 @@ const LabOrdersTab = ({
                   <View style={styles.orderItemHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {order.category === 'HOA_SINH' ? (
-                        <FlaskConical size={14} color={isSelected ? '#0891B2' : '#0284C7'} />
+                        <FlaskConical size={14} color={isSelected ? Colors.brandGreen : '#0284C7'} />
                       ) : (
-                        <Droplets size={14} color={isSelected ? '#0891B2' : '#DC2626'} />
+                        <Droplets size={14} color={isSelected ? Colors.brandGreen : '#B91C1C'} />
                       )}
                       <Text style={[styles.orderCategoryText, isSelected && styles.selectedOrderText]}>
                         {order.category === 'HOA_SINH' ? 'Hóa sinh máu' : 'Huyết học'}
@@ -76,19 +76,19 @@ const LabOrdersTab = ({
               <Text style={styles.actionSectionTitle}>Yêu cầu xét nghiệm mới</Text>
               <View style={styles.buttonRow}>
                 <TouchableOpacity
-                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: '#0891B2' }]}
+                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: Colors.brandGreen }]}
                   onPress={() => handleCreateLabOrder('HOA_SINH')}
                 >
-                  <FlaskConical size={14} color="#0891B2" />
-                  <Text style={[styles.actionBtnOutlineText, { color: '#0891B2' }]}>Hóa Sinh</Text>
+                  <FlaskConical size={14} color={Colors.brandGreen} />
+                  <Text style={[styles.actionBtnOutlineText, { color: Colors.brandGreen }]}>Hóa Sinh</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: '#DC2626' }]}
+                  style={[styles.actionBtnOutline, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderColor: '#B91C1C' }]}
                   onPress={() => handleCreateLabOrder('HUYET_HOC')}
                 >
-                  <Droplets size={14} color="#DC2626" />
-                  <Text style={[styles.actionBtnOutlineText, { color: '#DC2626' }]}>Huyết Học</Text>
+                  <Droplets size={14} color="#B91C1C" />
+                  <Text style={[styles.actionBtnOutlineText, { color: '#B91C1C' }]}>Huyết Học</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -149,11 +149,11 @@ const LabOrdersTab = ({
 
               {selectedOrder.status === 'COMPLETED' && !isEditingLab && currentUser?.role !== 'patient' && (
                 <TouchableOpacity
-                  style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: '#0891B2' }]}
+                  style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: Colors.brandGreen }]}
                   onPress={() => setIsEditingLab(true)}
                 >
-                  <Edit2 size={14} color="#0891B2" />
-                  <Text style={[styles.editLabResultsBtnText, { color: '#0891B2' }]}>Chỉnh sửa kết quả xét nghiệm</Text>
+                  <Edit2 size={14} color={Colors.brandGreen} />
+                  <Text style={[styles.editLabResultsBtnText, { color: Colors.brandGreen }]}>Chỉnh sửa kết quả xét nghiệm</Text>
                 </TouchableOpacity>
               )}
 
@@ -206,7 +206,7 @@ const LabOrdersTab = ({
                 renderManualLabForm()
               ) : (
                 <View style={styles.pendingReportBox}>
-                  <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: 12 }} />
+                  <ActivityIndicator size="small" color={Colors.brandGreen} style={{ marginBottom: 12 }} />
                   <Text style={styles.pendingReportText}>Đang chờ kết quả từ phòng xét nghiệm LIS...</Text>
                   <Text style={styles.pendingReportSubText}>
                     Hệ thống sẽ tự động cập nhật ngay khi phòng xét nghiệm trả kết quả.

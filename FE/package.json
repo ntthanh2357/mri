@@ -30,10 +30,11 @@
     "ios": "npm run build:css && node update-ip.js && expo start --ios",
     "web": "npm run build:css && node update-ip.js && expo start --web --port 8083",
     "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
-    "test": "node src/tests/fe_models_utils.test.mjs && node src/tests/fe_navigation_linking.test.mjs"
+    "test": "node src/tests/fe_models_utils.test.mjs && node src/tests/fe_navigation_linking.test.mjs && node src/tests/fe_transfer_package.test.mjs"
   },
   "private": true,
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/cli": "^4.1.14",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14"

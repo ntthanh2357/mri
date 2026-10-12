@@ -1,6 +1,8 @@
 import { StyleSheet, Platform } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
+<<<<<<< HEAD
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -90,4 +92,58 @@ export default StyleSheet.create({
   recordButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
   actionBtnPrimary: { backgroundColor: '#15803D', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 7 },
   actionBtnPrimaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+=======
+  container: { flex: 1, backgroundColor: Colors.background },
+  
+
+  searchContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.borderStrong, borderRadius: 10, backgroundColor: Colors.surface, marginBottom: 16 },
+  searchInput: { flex: 1, height: 42, fontSize: 15, color: Colors.slateDark },
+
+
+  list: { gap: 12 },
+  card: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 14, gap: 10 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.brandNavy, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 14, color: '#FFFFFF', fontWeight: '700' },
+  patientName: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  statusText: { fontSize: 12, fontWeight: '600' },
+  
+  page: { paddingTop: 20, paddingBottom: 32 },
+  stateBox: { alignItems: 'center', gap: 8, paddingVertical: 56, paddingHorizontal: 24 },
+  stateTitle: { fontSize: 15, fontWeight: '600', color: Colors.slateMuted },
+  stateText: { fontSize: 14, color: Colors.secondary, textAlign: 'center' },
+  stateError: { fontSize: 14, color: Colors.errorText, textAlign: 'center' },
+  retryBtn: { height: 40, paddingHorizontal: 20, borderRadius: 8, backgroundColor: Colors.brandGreen, justifyContent: 'center' },
+  retryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  table: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  tr: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16 },
+  thead: { backgroundColor: Colors.background, paddingVertical: 10 },
+  th: { fontSize: 12, fontWeight: '600', color: Colors.slateMuted },
+  thRight: { textAlign: 'right' },
+  trBody: { minHeight: 64, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  trHover: { backgroundColor: Colors.background },
+  cName: { flex: 2.4, minWidth: 0 },
+  cInfo: { flex: 1.1, minWidth: 0 },
+  cPhone: { flex: 1.2, minWidth: 0 },
+  cLab: { flex: 1.4, minWidth: 0 },
+  cVital: { flex: 1, minWidth: 0 },
+  cStatus: { flex: 1.2, minWidth: 0, alignItems: 'flex-start' },
+  cActions: { width: 220 },
+  nameCell: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  grow: { flex: 1, minWidth: 0 },
+  cellText: { fontSize: 14, color: Colors.slateDark },
+  cellNum: { fontSize: 14, color: Colors.slateDark, fontVariant: ['tabular-nums'] },
+  cellSub: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  rowActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  btn: { height: 36, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  btnPrimary: { backgroundColor: Colors.brandGreen },
+  btnPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  btnSecondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderStrong },
+  btnSecondaryText: { color: Colors.brandGreen, fontSize: 13, fontWeight: '600' },
+  btnGhost: { paddingHorizontal: 8 },
+  btnGhostText: { color: Colors.slateMuted, fontSize: 13, fontWeight: '600' },
+  cardMeta: { fontSize: 13, color: Colors.slateMuted },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+>>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
 });

@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageContainer from '../components/layout/PageContainer';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '../constants/colors';
 import { FileText, Upload, CheckCircle2, Clock } from 'lucide-react';
@@ -285,7 +287,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.brandGreen} />
       </SafeAreaView>
     );
   }
@@ -293,25 +295,16 @@ export default function HospitalOnboardingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="HospitalOnboarding">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.headerTitle}>Khai báo Thông tin Bệnh viện</Text>
-              <Text style={styles.headerSub}>Điền đầy đủ để hoàn tất đăng ký tài khoản</Text>
-            </View>
-            {hospital?.status !== 'provisioned' && (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => navigation.navigate('ClinicDashboard')}
-              >
-                <Text style={styles.backBtnText}>← Quay lại Dashboard</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        <PageHeader
+          bar
+          title="Thông tin bệnh viện"
+          subtitle={hospital?.status === 'provisioned'
+            ? 'Điền đầy đủ để hoàn tất đăng ký tài khoản bệnh viện.'
+            : 'Thông tin pháp lý, liên hệ và giấy phép hoạt động của bệnh viện.'}
+        />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <PageContainer width="reading">
           {/* Status Banner */}
           {(hospital?.status === 'submitted' || hospital?.status === 'active' || success) && (
             <View style={[
@@ -359,7 +352,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
                     onChangeText={(v) => setForm((prev) => ({ ...prev, [field.key]: v }))}
                     keyboardType={field.keyboard || 'default'}
                     autoCapitalize={field.keyboard === 'email-address' ? 'none' : 'sentences'}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     placeholder={field.required ? 'Bắt buộc' : 'Tùy chọn'}
                   />
                 </View>
@@ -373,7 +366,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
             <Text style={styles.sectionNote}>Tải lên tài liệu PDF hoặc hình ảnh giấy phép kinh doanh/hoạt động.</Text>
             {licenseFile ? (
               <View style={styles.uploadedFileRow}>
-                <FileText size={18} color="#0891B2" style={{ marginRight: 6 }} />
+                <FileText size={18} color={Colors.brandGreen} style={{ marginRight: 6 }} />
                 <Text style={styles.uploadedFileName} numberOfLines={1}>
                   {licenseFile.split('/').pop() || 'Giấy phép hoạt động'}
                 </Text>
@@ -384,7 +377,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
             ) : (
               <TouchableOpacity style={styles.uploadBtn} onPress={handlePickLicense} disabled={uploadingFile}>
                 {uploadingFile ? (
-                  <ActivityIndicator color="#15803D" size="small" />
+                  <ActivityIndicator color={Colors.brandGreen} size="small" />
                 ) : (
                   <View style={styles.uploadBtnContent}>
                     <Upload size={18} color="#64748B" style={{ marginRight: 8 }} />
@@ -416,13 +409,14 @@ export default function HospitalOnboardingScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={{ height: 40 }} />
+          </PageContainer>
         </ScrollView>
 
         {/* Success Redirect Modal */}
         <Modal visible={showSuccessModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.successCard}>
-              <View style={[styles.successIconCircle, { backgroundColor: '#ECFDF5' }]}>
+              <View style={[styles.successIconCircle, { backgroundColor: Colors.brandGreenSoft }]}>
                 <CheckCircle2 size={36} color="#059669" />
               </View>
               <Text style={styles.successModalTitle}>Gửi hồ sơ thành công!</Text>
@@ -436,7 +430,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
                   navigation.replace('ClinicDashboard');
                 }}
               >
-                <Text style={styles.successBtnText}>Đi tới Dashboard Phòng khám →</Text>
+                <Text style={styles.successBtnText}>Đi tới trang tổng quan</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -449,41 +443,35 @@ export default function HospitalOnboardingScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
-  header: {
-    paddingHorizontal: 20, paddingVertical: 16,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
-  },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
-  headerSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  scroll: { padding: 16, gap: 16 },
+  scroll: { paddingTop: 20, paddingBottom: 40 },
   infoBox: {
     backgroundColor: '#EFF6FF', borderRadius: 12,
     padding: 14, borderWidth: 1, borderColor: '#BFDBFE',
   },
-  infoLabel: { fontSize: 11, color: '#3B82F6', marginTop: 2 },
+  infoLabel: { fontSize: 12, color: '#3B82F6', marginTop: 2 },
   infoValue: { fontSize: 16, fontWeight: 'bold', color: '#1E40AF' },
   section: {
     backgroundColor: '#fff', borderRadius: 14,
     padding: 16, borderWidth: 1, borderColor: '#E2E8F0',
   },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#334155', marginBottom: 4 },
-  sectionNote: { fontSize: 11, color: '#F59E0B', marginBottom: 10, lineHeight: 16 },
+  sectionNote: { fontSize: 12, color: '#F59E0B', marginBottom: 10, lineHeight: 16 },
   fieldWrap: { marginTop: 12 },
   fieldLabel: { fontSize: 12, color: '#64748B', marginBottom: 4 },
-  required: { color: '#EF4444' },
+  required: { color: '#B91C1C' },
   input: {
     borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: Platform.OS === 'web' ? 10 : 8,
-    fontSize: 14, color: '#0F172A', backgroundColor: '#F8FAFC',
+    fontSize: 14, color: Colors.brandNavy, backgroundColor: '#F8FAFC',
   },
   uploadedFileRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4',
-    borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 10, padding: 12,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.brandGreenSoft,
+    borderWidth: 1, borderColor: '#CDEBDF', borderRadius: 10, padding: 12,
   },
   uploadedFileIcon: { fontSize: 18, marginRight: 8 },
-  uploadedFileName: { flex: 1, fontSize: 13, color: '#166534', fontWeight: '600' },
+  uploadedFileName: { flex: 1, fontSize: 13, color: Colors.brandGreenPressed, fontWeight: '600' },
   removeFileBtn: { paddingHorizontal: 10, paddingVertical: 4 },
-  removeFileText: { fontSize: 12, color: '#EF4444', fontWeight: 'bold' },
+  removeFileText: { fontSize: 12, color: '#B91C1C', fontWeight: 'bold' },
   uploadBtn: {
     borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10,
     paddingVertical: 18, alignItems: 'center', backgroundColor: '#F8FAFC',
@@ -491,16 +479,16 @@ const styles = StyleSheet.create({
   uploadBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   uploadBtnIcon: { fontSize: 16 },
   uploadBtnText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
-  errorText: { color: '#EF4444', fontSize: 13, textAlign: 'center' },
+  errorText: { color: '#B91C1C', fontSize: 13, textAlign: 'center' },
   submitBtn: {
-    backgroundColor: Colors.primary || '#15803D', borderRadius: 14,
+    backgroundColor: Colors.brandGreen || Colors.brandGreen, borderRadius: 14,
     paddingVertical: 16, alignItems: 'center', marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   successBox: { alignItems: 'center', padding: 32, maxWidth: 320 },
-  successIcon: { fontSize: 48, color: '#15803D', marginBottom: 12 },
-  successTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
+  successIcon: { fontSize: 48, color: Colors.brandGreen, marginBottom: 12 },
+  successTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.brandNavy, textAlign: 'center', marginBottom: 8 },
   successSub: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
   statusBanner: {
     padding: 16,
@@ -509,8 +497,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusBannerActive: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#BBF7D0',
+    backgroundColor: Colors.brandGreenSoft,
+    borderColor: '#CDEBDF',
   },
   statusBannerPending: {
     backgroundColor: '#FEF3C7',
@@ -522,7 +510,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusBannerTitleActive: {
-    color: '#166534',
+    color: Colors.brandGreenPressed,
   },
   statusBannerTitlePending: {
     color: '#92400E',
@@ -531,24 +519,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4B5563',
     lineHeight: 18,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  backBtnText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#15803D',
   },
   modalOverlay: {
     flex: 1,
@@ -564,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
-    shadowColor: '#0F172A',
+    shadowColor: Colors.brandNavy,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
     shadowRadius: 20,
@@ -574,22 +544,22 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: Colors.brandGreenSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#BBF7D0',
+    borderColor: '#CDEBDF',
   },
   successIconText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#15803D',
+    color: Colors.brandGreen,
   },
   successModalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -603,7 +573,7 @@ const styles = StyleSheet.create({
   successBtn: {
     width: '100%',
     height: 48,
-    backgroundColor: '#15803D',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',

@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import { bucket } from "../../config/firebase.js";
 import { uploadMetadataBackup, uploadToDrive } from "../../config/googleDrive.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import storageService from "../../services/storage/storageService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -117,9 +118,26 @@ export const createImagingResult = async (req, res) => {
       return errorResponse(res, "Vui lòng nhập đầy đủ các trường bắt buộc.", 400);
     }
 
+    // [BUG-KTV-06 FIX]: Tự động khớp lượt khám đang hoạt động nếu visitId không được gửi lên
+    let effectiveVisitId = visitId;
+    if (!effectiveVisitId && medicalId) {
+      const patientUser = await User.findOne({ "profile.medicalId": medicalId });
+      if (patientUser) {
+        const activeVisit = await Visit.findOne({
+          hospitalId: req.user.hospitalId,
+          patientId: patientUser._id,
+          status: { $in: ["đang chụp", "chờ chụp", "chờ chụp lại", "chờ kết quả AI", "chờ bác sĩ đọc", "đang khám"] }
+        }).sort({ createdAt: -1 });
+        if (activeVisit) {
+          effectiveVisitId = activeVisit._id;
+        }
+      }
+    }
+
     // 3. Create record
     const newResult = new ImagingResult({
       hospitalId: req.user.hospitalId,
+      visitId: effectiveVisitId || null,
       medicalId,
       patientName,
       birthYear,
@@ -146,9 +164,10 @@ export const createImagingResult = async (req, res) => {
 
     await newResult.save();
 
-    if (visitId) {
-      const visit = await Visit.findById(visitId);
+    if (effectiveVisitId) {
+      const visit = await Visit.findById(effectiveVisitId);
       if (visit) {
+        if (!visit.mriOrder) visit.mriOrder = {};
         visit.mriOrder.imagingResultId = newResult._id;
         visit.status = visit.mriOrder.requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
         await visit.save();
@@ -297,7 +316,26 @@ export const uploadImagingImage = async (req, res) => {
       }
     }
 
-    // ── 3. Backup scan image / DICOM archive to hospital's Google Drive (01_Original_Scans folder) ──
+    // ── 3. Lưu trữ vào Hệ thống Hybrid PACS (Local-First + Encrypted Drive Mirror) ──
+    let savedStorageFile = null;
+    try {
+      const bufferToSave = req.file ? await fs.promises.readFile(req.file.path) : streamOrBuffer;
+      if (bufferToSave && Buffer.isBuffer(bufferToSave)) {
+        savedStorageFile = await storageService.put({
+          category: "pacs",
+          studyId: req.body.studyId || req.body.medicalId || null,
+          fileName: originalName,
+          buffer: bufferToSave,
+          mimeType,
+          uploadedBy: req.user?.id,
+          patientId: req.body.patientId || null,
+        });
+      }
+    } catch (storageErr) {
+      console.warn("⚠️ [Storage Service] Không thể lưu vào Hybrid PACS:", storageErr.message);
+    }
+
+    // ── 4. Backup scan image / DICOM archive to hospital's Google Drive (Legacy compatibility) ──
     let driveViewLink = null;
     try {
       // Resolve hospitalId: from JWT, or from User DB (in case JWT is old)
@@ -312,30 +350,24 @@ export const uploadImagingImage = async (req, res) => {
       }
 
       if (!resolvedHospitalId) {
-        console.warn(`⚠️ [Drive] Bỏ qua backup: user ${req.user?.id} (role=${req.user?.role}) không có hospitalId.`);
+        console.warn(`⚠️ [Drive] Bỏ qua backup legacy: user ${req.user?.id} không có hospitalId.`);
       } else {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hospital = await Hospital.findById(resolvedHospitalId).lean();
         const scansFolderId = hospital?.subFolders?.originalScansId;
-        if (!scansFolderId) {
-          console.warn(`⚠️ [Drive] Bệnh viện "${hospital?.name}" chưa cấu hình thư mục 01_Original_Scans.`);
-        } else {
-          // Sao lưu ngầm lên Google Drive (Asynchronous Background Job) — Không bắt bác sĩ/client phải chờ upload 500MB
+        if (scansFolderId) {
           const bgStream = (req.file && req.file.path) ? fs.createReadStream(req.file.path) : streamOrBuffer;
           if (bgStream) {
             uploadToDrive(bgStream, originalName, mimeType, scansFolderId)
               .then((driveResult) => {
-                console.log(`✅ [Drive Background] Tệp ${originalName} đã sao lưu ngầm thành công vào 01_Original_Scans: ${driveResult.webViewLink}`);
+                console.log(`✅ [Legacy Drive] Tệp ${originalName} đã sao lưu vào 01_Original_Scans`);
               })
-              .catch((driveErr) => {
-                console.warn("⚠️ [Drive Background] Lỗi sao lưu ngầm lên Google Drive:", driveErr.message);
-              });
+              .catch(() => {});
           }
         }
       }
     } catch (driveErr) {
-      console.warn("⚠️ [Drive] Không thể backup lên Google Drive:", driveErr.message);
-      // Non-blocking: don't fail the upload if Drive is unavailable
+      // Non-blocking
     }
 
     return successResponse(
@@ -343,6 +375,9 @@ export const uploadImagingImage = async (req, res) => {
       {
         imageUrl: publicUrl,
         fileUrl: publicUrl,
+        streamUrl: savedStorageFile ? `/api/v1/storage/files/${savedStorageFile.fileId}` : publicUrl,
+        fileId: savedStorageFile ? savedStorageFile.fileId : null,
+        sha256: savedStorageFile ? savedStorageFile.sha256 : null,
         filename: originalName,
         size: fileSize,
         isArchive,
@@ -429,6 +464,24 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
           fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
           aiData.annotated_image = `/uploads/${localName}`;
           console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
+        }
+
+        // [HYBRID STORAGE] Lưu ảnh AI Heatmap vào hệ thống Hybrid PACS Local-First
+        try {
+          const heatmapName = `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`;
+          const savedHeatmap = await storageService.put({
+            category: "pacs",
+            studyId: visitId || `ai_${Date.now()}`,
+            fileName: heatmapName,
+            buffer: imageBuffer,
+            mimeType: "image/jpeg",
+            uploadedBy: user?.id,
+          });
+          aiData.storageHeatmapFileId = savedHeatmap.fileId;
+          aiData.heatmapStreamUrl = `/api/v1/storage/files/${savedHeatmap.fileId}`;
+          console.log(`✅ [Hybrid PACS] AI Heatmap đã lưu an toàn: ${savedHeatmap.logicalPath}`);
+        } catch (storageErr) {
+          console.warn("⚠️ [Storage Service] Không thể lưu heatmap vào Hybrid PACS:", storageErr.message);
         }
 
         // [DRIVE] Lưu ảnh AI heatmap vào thư mục 02_AI_Predictions
@@ -597,6 +650,23 @@ export const feedbackImagingResultAI = async (req, res) => {
     }
 
     const aiData = await aiResponse.json();
+
+    // [HYBRID STORAGE] Lưu ảnh hiệu chỉnh của bác sĩ vào Local-First Hybrid Storage
+    try {
+      const corrExt = ext || ".jpg";
+      const corrMime = corrExt === ".png" ? "image/png" : "image/jpeg";
+      await storageService.put({
+        category: "pacs",
+        studyId: req.body.studyId || req.body.medicalId || `correction_${Date.now()}`,
+        fileName: `doctor_correction_${correct_class}_${Date.now()}${corrExt}`,
+        buffer: fileBuffer,
+        mimeType: corrMime,
+        uploadedBy: req.user?.id,
+      });
+      console.log(`✅ [Hybrid PACS] Doctor correction saved locally for class: ${correct_class}`);
+    } catch (storageErr) {
+      console.warn("⚠️ [Storage Service] Không thể lưu doctor correction vào Hybrid PACS:", storageErr.message);
+    }
 
     // [DRIVE] Lưu ảnh hiệu chỉnh của bác sĩ vào thư mục 03_Doctor_Revisions
     try {
@@ -795,8 +865,8 @@ export const createKtvImagingResult = async (req, res) => {
       ? images
       : (imageUrl ? [imageUrl] : []);
 
-    if (!visitId || !patientId || imageList.length === 0) {
-      return res.status(400).json({ message: "Thiếu thông tin lượt khám, bệnh nhân hoặc đường dẫn hình ảnh." });
+    if (!visitId || imageList.length === 0) {
+      return res.status(400).json({ message: "Thiếu thông tin lượt khám hoặc đường dẫn hình ảnh." });
     }
 
     // Lấy thông tin lượt khám
@@ -805,10 +875,15 @@ export const createKtvImagingResult = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy lượt khám tương ứng." });
     }
 
-    // Lấy thông tin bệnh nhân
-    const patient = await User.findById(patientId);
+    // Lấy thông tin bệnh nhân (hỗ trợ fallback từ visit.patientId)
+    const effectivePatientId = patientId || visit.patientId?._id || visit.patientId;
+    if (!effectivePatientId) {
+      return res.status(400).json({ message: "Không tìm thấy thông tin bệnh nhân trong lượt khám." });
+    }
+
+    const patient = await User.findById(effectivePatientId);
     if (!patient) {
-      return res.status(404).json({ message: "Không tìm thấy bệnh nhân." });
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ người dùng bệnh nhân." });
     }
 
     // Lấy thông tin bác sĩ chỉ định từ visit
@@ -822,6 +897,7 @@ export const createKtvImagingResult = async (req, res) => {
     // Tạo bản ghi ImagingResult mới với các trường bắt buộc
     const imagingResult = new ImagingResult({
       hospitalId: req.user.hospitalId || visit.hospitalId,
+      visitId: visit._id,
       medicalId: patientMedicalId,
       patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
       birthYear: patient.profile?.birthYear || 1990,
@@ -848,7 +924,8 @@ export const createKtvImagingResult = async (req, res) => {
 
     await imagingResult.save();
 
-    // Liên kết với visit và cập nhật trạng thái
+    // Liên kết với visit và cập nhật trạng thái an toàn
+    if (!visit.mriOrder) visit.mriOrder = {};
     visit.mriOrder.imagingResultId = imagingResult._id;
     visit.status = requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
     await visit.save();
@@ -984,7 +1061,26 @@ export const updateImagingResult = async (req, res) => {
       };
       const targetHospitalId = req.user.hospitalId || result.hospitalId;
 
-      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports
+      // [HYBRID STORAGE] Lưu báo cáo chẩn đoán vào Local-First Hybrid Storage
+      try {
+        const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), "utf-8");
+        const savedReport = await storageService.put({
+          category: "report",
+          studyId: result.medicalId || result._id.toString(),
+          fileName: `report_${result.medicalId}_${Date.now()}.json`,
+          buffer: reportJson,
+          mimeType: "application/json",
+          patientId: result.patientId || null,
+          uploadedBy: req.user?.id,
+        });
+        result.storageReportFileId = savedReport.fileId;
+        await result.save();
+        console.log(`✅ [Hybrid PACS] Báo cáo chẩn đoán đã lưu local: ${savedReport.logicalPath}`);
+      } catch (storageErr) {
+        console.warn("⚠️ [Storage Service] Không thể lưu báo cáo vào Hybrid PACS:", storageErr.message);
+      }
+
+      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports (Drive Legacy)
       try {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hosp = await Hospital.findById(targetHospitalId).lean();
@@ -1017,6 +1113,41 @@ export const updateImagingResult = async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi cập nhật kết quả phim chụp:", error);
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Get imaging result by visit ID (Kèm tính năng tự hàn gắn / auto-heal liên kết với Visit)
+// @route   GET /api/v1/imaging/by-visit/:visitId
+// @access  Private (Doctor, Admin, Technician, Nurse)
+export const getImagingResultByVisitId = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    if (!visitId) {
+      return errorResponse(res, "Thiếu ID lượt khám.", 400);
+    }
+
+    let result = await ImagingResult.findOne({ visitId }).sort({ createdAt: -1 });
+    const visit = await Visit.findById(visitId);
+
+    if (!result && visit?.mriOrder?.imagingResultId) {
+      result = await ImagingResult.findById(visit.mriOrder.imagingResultId);
+    }
+
+    if (!result) {
+      return errorResponse(res, "Không tìm thấy kết quả phim chụp cho lượt khám này.", 404);
+    }
+
+    // Auto-heal: Đồng bộ liên kết nếu visit.mriOrder.imagingResultId bị thiếu
+    if (visit && (!visit.mriOrder?.imagingResultId || visit.mriOrder.imagingResultId.toString() !== result._id.toString())) {
+      if (!visit.mriOrder) visit.mriOrder = {};
+      visit.mriOrder.imagingResultId = result._id;
+      await visit.save();
+    }
+
+    return successResponse(res, result, "Lấy thông tin phim chụp theo lượt khám thành công.");
+  } catch (error) {
+    console.error("Lỗi khi lấy phim theo visitId:", error);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", 500);
   }
 };
 

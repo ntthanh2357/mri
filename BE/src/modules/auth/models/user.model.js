@@ -27,7 +27,7 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"],
+      enum: ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"],
       default: "patient",
       required: true,
     },
@@ -52,23 +52,6 @@ const userSchema = new Schema(
     lockUntil: {
       type: Date,
       default: null,
-    },
-    isPremium: {
-      type: Boolean,
-      default: false,
-    },
-    premiumUntil: {
-      type: Date,
-      default: null,
-    },
-    autoRenew: {
-      type: Boolean,
-      default: true,
-    },
-    // [BUG-07 FIX] Flag để tránh gửi email nhắc gia hạn Premium lặp vô hạn
-    renewalReminderSent: {
-      type: Boolean,
-      default: false,
     },
     otpCode: {
       type: String,
@@ -101,6 +84,15 @@ const userSchema = new Schema(
       type: String,
       default: "KUTN", // Chuẩn Khoa Ung Thư Não (KUTN-SURG, KUTN-ICU, KUTN-CHEMO, KUTN-PAL, KUTN-CLI, KCDHA, KD, KXN)
       trim: true,
+    },
+    // Phân công trực cấp cứu y khoa (Emergency Duty Assignment - Admin / Trưởng khoa cấp)
+    emergencyDuty: {
+      isAssigned: { type: Boolean, default: false },
+      assignedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null }, // Thời hạn ca trực có hiệu lực
+      assignedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      shiftType: { type: String, enum: ['day_shift', 'night_shift', 'weekend_shift', 'acute_code_blue', null], default: null },
+      department: { type: String, default: null }
     },
     profile: {
       name: {

@@ -133,19 +133,7 @@ export default function AdminAuditLogsView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-md shadow-slate-500/20">
-            <ClipboardList className="w-4.5 h-4.5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900">Audit Logs & Tuân thủ</h2>
-            <p className="text-slate-500 text-xs font-medium mt-0.5">
-              Theo dõi hoạt động hệ thống và quản lý ẩn danh dữ liệu
-            </p>
-          </div>
-        </div>
-
+      <div className="flex justify-end">
         <div className="flex items-center gap-2">
           <button
             onClick={handleAnonymize}
@@ -289,7 +277,7 @@ export default function AdminAuditLogsView() {
         {/* Table */}
         {!loading && !error && (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
+            <table className="min-w-full w-max text-xs">
               <thead className="bg-[#f8fafc]">
                 <tr className="text-[11px] text-slate-500 uppercase tracking-wider">
                   <th className="text-left px-5 py-3 font-semibold">Thời gian</th>

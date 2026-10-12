@@ -39,7 +39,7 @@ const STATUS_FILTERS = [
 
 const STATUS_STYLE = {
   published: { bg: '#d1fae5', color: '#047857' },
-  pending: { bg: '#dbeafe', color: '#1d4ed8' },
+  pending: { bg: '#dbeafe', color: Colors.brandGreenPressed },
   draft: { bg: '#fef3c7', color: '#b45309' },
   archived: { bg: '#f1f5f9', color: '#475569' },
 };
@@ -150,9 +150,9 @@ export default function AdminDatasetsView() {
   const totalSales = datasets.reduce((s, d) => s + d.salesCount, 0);
 
   const stats = [
-    { label: 'Tổng Dataset', value: datasets.length.toLocaleString('vi-VN'), icon: '🗄️', color: '#6366f1' },
-    { label: 'Tổng mẫu', value: totalSamples.toLocaleString('vi-VN'), icon: '📄', color: '#2563eb' },
-    { label: 'Doanh thu', value: `${(totalRevenue / 1000000).toFixed(1)}M`, icon: '💰', color: '#059669' },
+    { label: 'Tổng Dataset', value: datasets.length.toLocaleString('vi-VN'), icon: '🗄️', color: Colors.brandNavy },
+    { label: 'Tổng mẫu', value: totalSamples.toLocaleString('vi-VN'), icon: '📄', color: Colors.brandGreen },
+    { label: 'Doanh thu', value: `${(totalRevenue / 1000000).toFixed(1)}M`, icon: '💰', color: '#047857' },
     { label: 'Lượt bán', value: totalSales.toLocaleString('vi-VN'), icon: '📈', color: '#d97706' },
   ];
 
@@ -199,7 +199,7 @@ export default function AdminDatasetsView() {
       </ScrollView>
 
       {loading ? (
-        <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 24 }} />
+        <ActivityIndicator color={Colors.brandGreen} style={{ paddingVertical: 24 }} />
       ) : error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
@@ -223,7 +223,7 @@ export default function AdminDatasetsView() {
                       {ds.sampleCount > 0 ? `📄 ${ds.sampleCount.toLocaleString('vi-VN')} mẫu` : `📅 ${ds.createdAt}`}
                     </Text>
                     <View style={[styles.pill, { backgroundColor: st.bg }]}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: st.color }}>{ds.status.toUpperCase()}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: st.color }}>{ds.status.toUpperCase()}</Text>
                     </View>
                   </View>
 
@@ -231,7 +231,7 @@ export default function AdminDatasetsView() {
                     <View style={styles.tagRow}>
                       {ds.tags.map((tag) => (
                         <View key={tag} style={styles.tagPill}>
-                          <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#4338ca' }}>{tag}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.brandNavy }}>{tag}</Text>
                         </View>
                       ))}
                     </View>
@@ -256,7 +256,7 @@ export default function AdminDatasetsView() {
                       />
                       {!!priceError && <Text style={styles.errorTextSmall}>{priceError}</Text>}
                       <View style={{ flexDirection: 'row', gap: 6 }}>
-                        <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: '#4f46e5' }]} onPress={() => handlePriceUpdate(ds.id)} disabled={priceLoading}>
+                        <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: Colors.brandNavy }]} onPress={() => handlePriceUpdate(ds.id)} disabled={priceLoading}>
                           <Text style={styles.smallBtnText}>{priceLoading ? '...' : 'Lưu'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: '#f1f5f9' }]} onPress={cancelPriceEdit} disabled={priceLoading}>
@@ -304,7 +304,7 @@ export default function AdminDatasetsView() {
                 <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 11 }]} onPress={() => setShowCreate(false)}>
                   <Text style={[styles.smallBtnText, { color: Colors.secondary }]}>Hủy</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: '#4f46e5', paddingVertical: 11 }]} onPress={handleCreate} disabled={createLoading}>
+                <TouchableOpacity style={[styles.smallBtn, { flex: 1, backgroundColor: Colors.brandNavy, paddingVertical: 11 }]} onPress={handleCreate} disabled={createLoading}>
                   <Text style={styles.smallBtnText}>{createLoading ? 'Đang tạo...' : 'Tạo Dataset'}</Text>
                 </TouchableOpacity>
               </View>
@@ -320,9 +320,9 @@ const styles = StyleSheet.create({
   wrap: { gap: 10 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { fontSize: 16, fontWeight: '800', color: Colors.black },
-  subtitle: { fontSize: 11, color: Colors.secondary, marginTop: 2 },
-  createBtn: { backgroundColor: '#4f46e5', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
-  createBtnText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
+  subtitle: { fontSize: 12, color: Colors.secondary, marginTop: 2 },
+  createBtn: { backgroundColor: Colors.brandNavy, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
+  createBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   statCard: {
     flexBasis: '48%',
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  statLabel: { fontSize: 9.5, fontWeight: '700', color: Colors.secondary, textTransform: 'uppercase' },
+  statLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondary, textTransform: 'uppercase' },
   statValue: { fontSize: 16, fontWeight: '800', color: Colors.black, marginTop: 3 },
   statIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   searchInput: {
@@ -350,13 +350,13 @@ const styles = StyleSheet.create({
     color: Colors.black,
   },
   filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
-  filterChipText: { fontSize: 11, fontWeight: '600', color: Colors.secondary },
+  filterChipActive: { backgroundColor: Colors.brandNavy, borderColor: Colors.brandNavy },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: Colors.secondary },
   filterChipTextActive: { color: Colors.white },
   errorBox: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 12, padding: 14, alignItems: 'center', gap: 6 },
   errorText: { fontSize: 12, color: '#b91c1c', fontWeight: '600', textAlign: 'center' },
-  errorTextSmall: { fontSize: 11, color: '#e11d48', fontWeight: '700' },
-  retryText: { fontSize: 11, color: '#b91c1c', fontWeight: '700', textDecorationLine: 'underline' },
+  errorTextSmall: { fontSize: 12, color: '#e11d48', fontWeight: '700' },
+  retryText: { fontSize: 12, color: '#b91c1c', fontWeight: '700', textDecorationLine: 'underline' },
   emptyText: { fontSize: 12, color: Colors.secondary, padding: 24, textAlign: 'center' },
   card: {
     backgroundColor: Colors.white,
@@ -368,23 +368,23 @@ const styles = StyleSheet.create({
   thumbnail: { width: '100%', height: 110, backgroundColor: '#e2e8f0' },
   cardBody: { padding: 12, gap: 6 },
   cardName: { fontSize: 13, fontWeight: '800', color: Colors.black },
-  cardDesc: { fontSize: 11, color: Colors.secondary },
+  cardDesc: { fontSize: 12, color: Colors.secondary },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
-  metaText: { fontSize: 10.5, color: Colors.secondary, fontWeight: '600' },
+  metaText: { fontSize: 12, color: Colors.secondary, fontWeight: '600' },
   pill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  tagPill: { backgroundColor: '#eef2ff', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  tagPill: { backgroundColor: '#EEF3FA', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 8, marginTop: 2 },
-  priceLabel: { fontSize: 9.5, color: Colors.secondary },
+  priceLabel: { fontSize: 12, color: Colors.secondary },
   priceValue: { fontSize: 15, fontWeight: '800', color: Colors.black },
   updatePriceBtn: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  updatePriceBtnText: { fontSize: 11, fontWeight: '700', color: Colors.secondary },
+  updatePriceBtnText: { fontSize: 12, fontWeight: '700', color: Colors.secondary },
   priceInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12 },
   smallBtn: { paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  smallBtnText: { fontSize: 11, fontWeight: '700', color: Colors.white },
+  smallBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },
   centerOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', padding: 20 },
   centerSheet: { backgroundColor: Colors.white, borderRadius: 18, padding: 18 },
   modalTitle: { fontSize: 14, fontWeight: '800', color: Colors.black },
-  inputLabel: { fontSize: 11, fontWeight: '700', color: Colors.secondary, marginBottom: 4 },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondary, marginBottom: 4 },
   modalInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, color: Colors.black },
 });

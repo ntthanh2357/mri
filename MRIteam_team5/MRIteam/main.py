@@ -1275,16 +1275,25 @@ Hãy thẩm định dược lâm sàng chuyên sâu bằng chuyên môn Dược 
         ai_response = call_gemini(system_prompt, user_content, temperature=0.1)
         
         # Parse JSON
-        clean_text = ai_response.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        if clean_text.startswith("```"):
-            clean_text = clean_text[3:]
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
-        clean_text = clean_text.strip()
+        parsed = None
+        json_match = re.search(r'\{[\s\S]*\}', ai_response)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group(0).strip())
+            except Exception:
+                parsed = None
         
-        parsed = json.loads(clean_text)
+        if not parsed:
+            clean_text = ai_response.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            if clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            clean_text = clean_text.strip()
+            parsed = json.loads(clean_text)
+            
         return parsed
     except Exception as e:
         import traceback; traceback.print_exc()

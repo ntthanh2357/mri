@@ -1,4 +1,5 @@
 import React from 'react';
+import Colors from '../../constants/colors';
 import {
   View,
   Text,
@@ -49,7 +50,7 @@ const VitalsTab = ({
 
           <View style={styles.metricCard}>
             <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' }}>
-              <Droplets size={20} color="#DC2626" />
+              <Droplets size={20} color="#B91C1C" />
             </View>
             <View>
               <Text style={styles.metricLabelText}>Huyết áp</Text>
@@ -171,7 +172,7 @@ const VitalsTab = ({
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#0891B2', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
+              style={[styles.submitButton, { backgroundColor: Colors.brandGreen, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
               onPress={handleAddVitals}
               disabled={isSubmittingVital}
             >

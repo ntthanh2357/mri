@@ -95,6 +95,10 @@ test("Điều hướng chống chỉ định buồng máy MRI: Cho phép quay v�
     ALLOWED_TRANSITIONS['lỗi AI'].includes('chờ kết quả AI'),
     "Ca 'lỗi AI' phải cho phép thử lại phân tích ('chờ kết quả AI') khi server AI khôi phục"
   );
+  assert.ok(
+    ALLOWED_TRANSITIONS['đang chụp'].includes('chờ bác sĩ đọc'),
+    "Ca 'đang chụp' phải cho phép KTV nộp phim và chuyển sang 'chờ bác sĩ đọc'"
+  );
 });
 
 test("Đồng bộ hóa hóa đơn khi ca khám hoàn tất: Tự động ghép đơn thuốc và cập nhật isBilled", () => {

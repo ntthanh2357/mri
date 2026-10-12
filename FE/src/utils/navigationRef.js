@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { createNavigationContainerRef } from "@react-navigation/native";
+import { isStaffPortalPath } from "./portalPath";
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -35,7 +36,7 @@ export const isStaffPortalWeb = () =>
   Platform.OS === "web" &&
   typeof window !== "undefined" &&
   typeof window.location !== "undefined" &&
-  window.location.pathname.indexOf("/staff") === 0;
+  isStaffPortalPath(window.location.pathname);
 
 /**
  * Tên màn hình đăng nhập của CỔNG ĐANG TRUY CẬP:

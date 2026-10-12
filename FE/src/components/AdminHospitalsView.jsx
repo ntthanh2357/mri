@@ -160,11 +160,7 @@ export default function AdminHospitalsView() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-extrabold text-slate-800">Quản lý Bệnh viện & Onboarding</h2>
-          <p className="text-slate-400 text-xs mt-0.5">Cấp tài khoản tạm, theo dõi quá trình điền thông tin và xác thực bệnh viện</p>
-        </div>
+      <div className="flex items-start justify-end gap-4">
         <div className="flex items-center gap-2 shrink-0">
           {pendingCount > 0 && (
             <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg">
@@ -206,7 +202,7 @@ export default function AdminHospitalsView() {
       </div>
 
       {/* Main layout */}
-      <div className="flex gap-4" style={{ minHeight: 480 }}>
+      <div className="flex flex-col lg:flex-row gap-4">
         {/* List */}
         <div className="flex-1 border border-slate-200 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
@@ -255,7 +251,7 @@ export default function AdminHospitalsView() {
         </div>
 
         {/* Detail panel */}
-        <div className="w-96 border border-slate-200 rounded-2xl overflow-auto">
+        <div className={`${selected ? 'w-full lg:w-96' : 'hidden'} border border-slate-200 rounded-2xl overflow-auto`}>
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
             <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Chi tiết Bệnh viện</p>
           </div>

@@ -851,11 +851,6 @@ const LoginScreen = ({ navigation }) => {
                   </>
                 )}
 
-                {/* Hotline text helper */}
-                <Text style={styles.hotlineText}>
-                  Bạn gặp khó khăn khi đăng nhập? Gọi ngay Hotline:{' '}
-                  <Text style={styles.hotlineLink}>0236 3650 676</Text>
-                </Text>
               </ScrollView>
             </View>
           </View>
@@ -1174,13 +1169,23 @@ const LoginScreen = ({ navigation }) => {
             </>
           )}
 
-          {/* Hotline text helper */}
-          <Text style={styles.hotlineText}>
-            Bạn gặp khó khăn khi đăng nhập? Gọi ngay Hotline:{' '}
-            <Text style={styles.hotlineLink}>0236 3650 676</Text>
-          </Text>
         </ScrollView>
       )}
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Text style={styles.hotlineText}>
+          Bạn gặp khó khăn khi đăng nhập? Gọi ngay Hotline:{' '}
+          <Text style={styles.hotlineLink}>0236 3650 676</Text>
+        </Text>
+        <View style={styles.footerLinkRow}>
+          <TouchableOpacity onPress={() => navigation.navigate('Support')}>
+            <Text style={styles.footerLink}>Hỗ trợ kỹ thuật</Text>
+          </TouchableOpacity>
+          <Text style={styles.footerDot}>·</Text>
+          <Text style={styles.footerCopyright}>© 2026 NeuroScan AI</Text>
+        </View>
+      </View>
 
       {/* Forgot Password Modal */}
       <Modal visible={showForgotModal} animationType="slide" transparent>

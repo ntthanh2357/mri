@@ -1,9 +1,11 @@
 import * as service from "../services/patientRecord.service.js";
+import { toPublicIdentity } from "../services/patientIdentity.service.js";
 import { User } from "../models/user.model.js";
 import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import * as reminderService from "../services/medicineReminder.service.js";
 
 const getTargetPatientId = async (req) => {
   if (req.user && req.user.role !== 'patient') {
@@ -22,11 +24,15 @@ const getTargetPatientId = async (req) => {
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 
+// Nhân viên tiếp đón cần xem đủ số thẻ để đối chiếu với thẻ thật; người khác chỉ thấy dạng che
+const CARD_REVIEW_ROLES = ["receptionist", "nurse", "hospital_admin", "admin"];
+const canReviewCard = (req) => CARD_REVIEW_ROLES.includes(req.user?.role);
+
 export const getIdentity = async (req, res, next) => {
   try {
     const targetId = await getTargetPatientId(req);
     const profile = await service.getOrCreateProfile(targetId);
-    return successResponse(res, profile);
+    return successResponse(res, toPublicIdentity(profile, { revealCard: canReviewCard(req) }));
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
@@ -37,7 +43,21 @@ export const updateIdentity = async (req, res, next) => {
   try {
     const targetId = await getTargetPatientId(req);
     const profile = await service.updateProfile(targetId, req.body);
-    return successResponse(res, profile, "Cập nhật thông tin thành công.");
+    return successResponse(res, toPublicIdentity(profile, { revealCard: canReviewCard(req) }), "Cập nhật thông tin thành công.");
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status, err.errors || null);
+    next(err);
+  }
+};
+
+// PUT /api/v1/patient/profile/identity/bhyt-review?patientId=… { action: "verify" | "reject" }
+export const reviewDeclaredBhyt = async (req, res, next) => {
+  try {
+    if (!canReviewCard(req)) return errorResponse(res, "Chỉ nhân viên tiếp đón được xác nhận thẻ BHYT.", 403);
+    const targetId = await getTargetPatientId(req);
+    const profile = await service.reviewDeclaredBhyt(targetId, req.body?.action, req.user.id);
+    return successResponse(res, toPublicIdentity(profile, { revealCard: true }),
+      req.body?.action === "verify" ? "Đã xác nhận thẻ BHYT." : "Đã đánh dấu thông tin thẻ BHYT chưa đúng.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
@@ -183,6 +203,33 @@ export const getTodayReminders = async (req, res, next) => {
     }).sort({ time: 1 });
 
     return successResponse(res, reminders, "Lấy lịch trình uống thuốc hôm nay thành công.");
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
+};
+
+// UC-PAT-13 — giờ nhắc theo khung Sáng/Trưa/Chiều/Tối của chính bệnh nhân
+// GET /api/v1/patient/reminders/settings
+export const getReminderSettings = async (req, res, next) => {
+  try {
+    if (req.user.role !== "patient") return errorResponse(res, "Chỉ bệnh nhân mới cài giờ nhắc của mình.", 403);
+    const times = await reminderService.getReminderTimes(req.user.id);
+    return successResponse(res, { times, defaults: { morning: "08:00", noon: "12:00", afternoon: "17:00", evening: "20:00" } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /api/v1/patient/reminders/settings { morning, noon, afternoon, evening }
+export const updateReminderSettings = async (req, res, next) => {
+  try {
+    if (req.user.role !== "patient") return errorResponse(res, "Chỉ bệnh nhân mới cài giờ nhắc của mình.", 403);
+    const updated = await reminderService.saveReminderTimes(req.user.id, req.body, req.user.hospitalId);
+    const times = await reminderService.getReminderTimes(req.user.id);
+    return successResponse(res, { times, updated }, updated
+      ? `Đã lưu giờ nhắc và đổi giờ ${updated} lần uống thuốc sắp tới.`
+      : "Đã lưu giờ nhắc uống thuốc.");
   } catch (err) {
     if (err.status) return errorResponse(res, err.message, err.status);
     next(err);

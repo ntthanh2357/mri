@@ -12,14 +12,27 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Animated,
   Modal,
+  Linking,
 } from 'react-native';
 import Config from '../constants/config';
+import Colors from '../constants/colors';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw } from 'lucide-react';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
+import PressableScale from '../components/PressableScale';
+import HeroScanOverlay from '../components/HeroScanOverlay';
+import useWelcomeAnimations from '../controllers/useWelcomeAnimations';
 import styles from './WelcomeScreen.styles';
+
+// Ảnh hero desktop (Welcome): banner thương hiệu + 2 ảnh tạo bằng Gemini (nguồn ở assets/brand-src).
+const HERO_SLIDES = [
+  require('../../assets/welcome-hero.jpg'),
+  require('../../assets/images/welcome-hero-2.jpg'),
+  require('../../assets/images/welcome-hero-3.jpg'),
+];
 
 // Dữ liệu dịch vụ (static, dùng chung white-label)
 const servicesData = [
@@ -37,6 +50,7 @@ const WelcomeScreen = ({ navigation }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const scrollViewRef = useRef(null);
+  const anim = useWelcomeAnimations(4, HERO_SLIDES.length); // 4 dòng tính năng + các ảnh hero desktop
 
   // Offset để scroll tới từng section
   const sectionOffsets = useRef({});
@@ -551,15 +565,21 @@ const WelcomeScreen = ({ navigation }) => {
         <View style={styles.desktopContainer}>
           {/* Left Column - Full-bleed Hero Image with overlay */}
           <View style={styles.leftColumn}>
-            <Image
-              source={require('../../assets/nero.png')}
-              style={styles.leftColumnBg}
-              resizeMode="cover"
-            />
-            <View style={styles.leftColumnOverlay} />
+            {/* Ảnh hero chuyển mờ dần lần lượt; lớp phủ navy đã làm sẵn trong từng file ảnh */}
+            {HERO_SLIDES.map((source, i) => (
+              <Animated.Image
+                key={i}
+                source={source}
+                style={[styles.leftColumnBg, anim.reduceMotion ? null : anim.kenBurnsStyle, { opacity: anim.slides[i] }]}
+                resizeMode="cover"
+                accessible={false}
+              />
+            ))}
+            {/* Mạng nơ-ron chỉ hợp với slide 1 (banner) — mờ đi cùng slide 1 để không đè lên não/bác sĩ ở slide 2, 3 */}
+            <HeroScanOverlay scan={anim.scan} pulse={anim.pulse} reduceMotion={anim.reduceMotion} networkStyle={{ opacity: anim.slides[0] }} />
             <View style={styles.leftColumnContent}>
               {/* Logo in white */}
-              <View style={styles.brandContainerWhite}>
+              <Animated.View style={[styles.brandContainerWhite, anim.enterStyle(anim.brand)]}>
                 <Image
                   source={require('../../assets/logo.png')}
                   style={styles.logoImage}
@@ -567,48 +587,51 @@ const WelcomeScreen = ({ navigation }) => {
                 />
                 <View>
                   <Text style={styles.brandNameWhite}>
-                    Neuro<Text style={styles.brandNameAccentCyan}>Scan</Text> AI
+                    Neuro<Text style={styles.brandNameAccentOnDark}>Scan</Text> AI
                   </Text>
                   <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
                 </View>
-              </View>
+              </Animated.View>
 
-              {/* Slogan */}
-              <View style={styles.sloganContainer}>
-                <View style={styles.sloganAccent} />
-                <Text style={styles.sloganTitle}>
-                  Hệ thống Y tế số thông minh ứng dụng Trí tuệ nhân tạo
-                </Text>
-                <Text style={styles.sloganSub}>
-                  Giải pháp tiên phong phân tích hình ảnh MRI sọ não, u não và hỗ trợ quyết định lâm sàng chuyên sâu cùng đội ngũ bác sĩ thần kinh.
-                </Text>
-              </View>
+              {/* Slogan + tính năng gom ở đáy — vùng giữa ảnh là màn hình MRI, không đặt chữ đè lên */}
+              <View style={styles.heroBottom}>
+                <View style={styles.sloganContainer}>
+                  <View style={styles.sloganAccent} />
+                  <Animated.Text style={[styles.sloganTitle, anim.enterStyle(anim.title, 24)]} accessibilityRole="header">
+                    Kết nối Bệnh viện{'\n'}
+                    <Text style={styles.sloganTitleAccent}>và Bệnh nhân</Text>
+                  </Animated.Text>
+                  <Animated.Text style={[styles.sloganSub, anim.enterStyle(anim.subtitle)]}>
+                    Nền tảng AI quản lý hình ảnh MRI/CT trên Cloud.
+                  </Animated.Text>
+                </View>
 
-              {/* Feature pills — dịch vụ thực tế của hệ thống (thay cho badge số liệu) */}
-              <View style={styles.featureList}>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Brain size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Chụp cộng hưởng từ MRI não bộ chuẩn hóa</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Sparkles size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Tầm soát & phát hiện tổn thương bởi AI đa mô hình</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Microscope size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Báo cáo chẩn đoán hình ảnh hội chẩn chuyên khoa</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <View style={styles.featureIcon}>
-                    <Stethoscope size={20} color="#FFFFFF" strokeWidth={2} />
-                  </View>
-                  <Text style={styles.featureText}>Theo dõi hồ sơ bệnh án điện tử xuyên suốt</Text>
+                {/* Feature pills — dịch vụ thực tế của hệ thống (thay cho badge số liệu) */}
+                <View style={styles.featureList}>
+                  <Animated.View style={[styles.featureRow, anim.enterStyle(anim.features[0])]}>
+                    <View style={styles.featureIcon}>
+                      <Brain size={20} color={Colors.brandMint} strokeWidth={2} />
+                    </View>
+                    <Text style={styles.featureText}>Chụp cộng hưởng từ MRI não bộ chuẩn hóa</Text>
+                  </Animated.View>
+                  <Animated.View style={[styles.featureRow, anim.enterStyle(anim.features[1])]}>
+                    <View style={styles.featureIcon}>
+                      <Sparkles size={20} color={Colors.brandMint} strokeWidth={2} />
+                    </View>
+                    <Text style={styles.featureText}>Tầm soát & phát hiện tổn thương bởi AI đa mô hình</Text>
+                  </Animated.View>
+                  <Animated.View style={[styles.featureRow, anim.enterStyle(anim.features[2])]}>
+                    <View style={styles.featureIcon}>
+                      <Microscope size={20} color={Colors.brandMint} strokeWidth={2} />
+                    </View>
+                    <Text style={styles.featureText}>Báo cáo chẩn đoán hình ảnh hội chẩn chuyên khoa</Text>
+                  </Animated.View>
+                  <Animated.View style={[styles.featureRow, anim.enterStyle(anim.features[3])]}>
+                    <View style={styles.featureIcon}>
+                      <Stethoscope size={20} color={Colors.brandMint} strokeWidth={2} />
+                    </View>
+                    <Text style={styles.featureText}>Theo dõi hồ sơ bệnh án điện tử xuyên suốt</Text>
+                  </Animated.View>
                 </View>
               </View>
             </View>
@@ -616,7 +639,7 @@ const WelcomeScreen = ({ navigation }) => {
 
           {/* Right Column - Centered Form Card */}
           <View style={styles.rightColumn}>
-            <View style={styles.authCardContainer}>
+            <Animated.View style={[styles.authCardContainer, anim.enterStyle(anim.card, 24)]}>
               {showTwoFactor ? (
                 <View style={styles.authForm}>
                   <Text style={styles.authCardTitle}>Xác thực 2 lớp</Text>
@@ -632,7 +655,7 @@ const WelcomeScreen = ({ navigation }) => {
                       twoFactorError ? styles.formInputError : null
                     ]}
                     placeholder="Nhập 6 chữ số"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={twoFactorCode}
                     onChangeText={(text) => {
                       setTwoFactorCode(text);
@@ -647,8 +670,10 @@ const WelcomeScreen = ({ navigation }) => {
                   />
                   {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleVerify2Factor}
                     disabled={loading}
                   >
@@ -660,7 +685,7 @@ const WelcomeScreen = ({ navigation }) => {
                     ) : (
                       <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <Text style={styles.twoFactorEmailHint}>
                     Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
@@ -671,9 +696,9 @@ const WelcomeScreen = ({ navigation }) => {
                     disabled={resendingOtp || loading}
                   >
                     {resendingOtp ? (
-                      <ActivityIndicator size="small" color="#004080" />
+                      <ActivityIndicator size="small" color={Colors.brandGreen} />
                     ) : (
-                      <RefreshCw size={13} color="#004080" />
+                      <RefreshCw size={13} color={Colors.brandGreen} />
                     )}
                     <Text style={styles.resendOtpText}>
                       {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -736,7 +761,7 @@ const WelcomeScreen = ({ navigation }) => {
                       emailError ? styles.formInputError : null
                     ]}
                     placeholder={loginRole === 'patient' ? 'vidu@neuroscan.com' : 'Nhập mã nhân sự hoặc email'}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={email}
                     onChangeText={(text) => {
                       setEmail(text);
@@ -764,7 +789,7 @@ const WelcomeScreen = ({ navigation }) => {
                         passwordError ? styles.formInputError : null
                       ]}
                       placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={Colors.secondary}
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={(text) => {
@@ -796,7 +821,7 @@ const WelcomeScreen = ({ navigation }) => {
                           verificationError ? styles.formInputError : null
                         ]}
                         placeholder="Nhập 6 chữ số"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={Colors.secondary}
                         value={verificationCode}
                         onChangeText={(text) => {
                           setVerificationCode(text);
@@ -835,8 +860,10 @@ const WelcomeScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleLogin}
                     disabled={loading}
                   >
@@ -847,20 +874,20 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
+                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
                       </Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   {/* Google SSO */}
-                  <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin}>
+                  <PressableScale style={styles.googleBtn} hoverStyle={styles.googleBtnHover} focusStyle={styles.buttonFocus} onPress={handleGoogleLogin}>
                     <Image
                       source={{ uri: 'https://developers.google.com/static/identity/images/g-logo.png' }}
                       style={{ width: 18, height: 18, marginRight: 8 }}
                       resizeMode="contain"
                     />
                     <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <View style={styles.formFooter}>
                     <Text style={styles.formFooterText}>Chưa có tài khoản? </Text>
@@ -886,7 +913,7 @@ const WelcomeScreen = ({ navigation }) => {
                       nameError ? styles.formInputError : null
                     ]}
                     placeholder="Nguyễn Văn A"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={name}
                     onChangeText={(text) => {
                       setName(text);
@@ -905,7 +932,7 @@ const WelcomeScreen = ({ navigation }) => {
                       emailError ? styles.formInputError : null
                     ]}
                     placeholder="vidu@neuroscan.com"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={email}
                     onChangeText={(text) => {
                       setEmail(text);
@@ -926,7 +953,7 @@ const WelcomeScreen = ({ navigation }) => {
                       phoneError ? styles.formInputError : null
                     ]}
                     placeholder="09XXXXXXXX"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={phone}
                     onChangeText={(text) => {
                       setPhone(text);
@@ -949,7 +976,7 @@ const WelcomeScreen = ({ navigation }) => {
                         passwordError ? styles.formInputError : null
                       ]}
                       placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={Colors.secondary}
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={(text) => {
@@ -970,8 +997,10 @@ const WelcomeScreen = ({ navigation }) => {
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleRegister}
                     disabled={loading}
                   >
@@ -983,7 +1012,7 @@ const WelcomeScreen = ({ navigation }) => {
                     ) : (
                       <Text style={styles.formButtonText}>Đăng ký ngay</Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <View style={styles.formFooter}>
                     <Text style={styles.formFooterText}>Đã có tài khoản? </Text>
@@ -998,16 +1027,24 @@ const WelcomeScreen = ({ navigation }) => {
                 </View>
               )}
 
-              {/* Support Info below Form Card on Desktop */}
+              {/* Footer: Support Info below Form Card on Desktop */}
               {/* Lưu ý tách luồng: KHÔNG hiển thị liên kết tới Cổng nội bộ /staff
                   trên trang công khai — nhân viên dùng địa chỉ nội bộ riêng. */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
+                  Hotline hỗ trợ:{' '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
+                    0236 3650 676
+                  </Text>
+                  {'  |  Email: '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
+                    support@neuroscan.com
+                  </Text>
                 </Text>
+                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
               </View>
-            </View>
+            </Animated.View>
           </View>
         </View>
       ) : (
@@ -1015,26 +1052,35 @@ const WelcomeScreen = ({ navigation }) => {
           contentContainerStyle={styles.mobileScrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mobile Header Logo */}
-          <View style={styles.mobileHeader}>
-            <View style={styles.brandContainer}>
-              <Image
-                source={require('../../assets/logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-              <View>
-                <Text style={styles.brandName}>
-                  Neuro<Text style={styles.brandNameAccentDark}>Scan</Text> AI
+          {/* Mobile hero: ảnh máy MRI (đáy ảnh đã phủ navy sẵn) + logo + slogan */}
+          <View style={styles.mobileHero}>
+            <Animated.Image
+              source={require('../../assets/images/welcome-mobile-hero.jpg')}
+              style={[styles.leftColumnBg, anim.reduceMotion ? null : anim.kenBurnsStyle]}
+              resizeMode="cover"
+              accessible={false}
+            />
+            <Animated.View style={[styles.mobileHeroContent, anim.enterStyle(anim.brand)]}>
+              <View style={styles.brandContainerWhite}>
+                <Image
+                  source={require('../../assets/logo.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.brandNameWhite}>
+                  Neuro<Text style={styles.brandNameAccentOnDark}>Scan</Text> AI
                 </Text>
-                <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
               </View>
-            </View>
+              <Animated.Text style={[styles.mobileHeroTitle, anim.enterStyle(anim.title, 16)]} accessibilityRole="header">
+                Kết nối Bệnh viện{'\n'}
+                <Text style={styles.sloganTitleAccent}>và Bệnh nhân</Text>
+              </Animated.Text>
+            </Animated.View>
           </View>
 
           {/* Form Card */}
           <View style={styles.mobileFormContainer}>
-            <View style={styles.authCardContainer}>
+            <Animated.View style={[styles.authCardContainer, anim.enterStyle(anim.card, 24)]}>
               {showTwoFactor ? (
                 <View style={styles.authForm}>
                   <Text style={styles.authCardTitle}>Xác thực 2 lớp</Text>
@@ -1050,7 +1096,7 @@ const WelcomeScreen = ({ navigation }) => {
                       twoFactorError ? styles.formInputError : null
                     ]}
                     placeholder="Nhập 6 chữ số"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={twoFactorCode}
                     onChangeText={(text) => {
                       setTwoFactorCode(text);
@@ -1065,8 +1111,10 @@ const WelcomeScreen = ({ navigation }) => {
                   />
                   {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleVerify2Factor}
                     disabled={loading}
                   >
@@ -1078,7 +1126,7 @@ const WelcomeScreen = ({ navigation }) => {
                     ) : (
                       <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <Text style={styles.twoFactorEmailHint}>
                     Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
@@ -1089,9 +1137,9 @@ const WelcomeScreen = ({ navigation }) => {
                     disabled={resendingOtp || loading}
                   >
                     {resendingOtp ? (
-                      <ActivityIndicator size="small" color="#004080" />
+                      <ActivityIndicator size="small" color={Colors.brandGreen} />
                     ) : (
-                      <RefreshCw size={13} color="#004080" />
+                      <RefreshCw size={13} color={Colors.brandGreen} />
                     )}
                     <Text style={styles.resendOtpText}>
                       {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -1154,7 +1202,7 @@ const WelcomeScreen = ({ navigation }) => {
                       emailError ? styles.formInputError : null
                     ]}
                     placeholder={loginRole === 'patient' ? 'vidu@neuroscan.com' : 'Nhập mã nhân sự hoặc email'}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={email}
                     onChangeText={(text) => {
                       setEmail(text);
@@ -1182,7 +1230,7 @@ const WelcomeScreen = ({ navigation }) => {
                         passwordError ? styles.formInputError : null
                       ]}
                       placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={Colors.secondary}
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={(text) => {
@@ -1214,7 +1262,7 @@ const WelcomeScreen = ({ navigation }) => {
                           verificationError ? styles.formInputError : null
                         ]}
                         placeholder="Nhập 6 chữ số"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={Colors.secondary}
                         value={verificationCode}
                         onChangeText={(text) => {
                           setVerificationCode(text);
@@ -1253,8 +1301,10 @@ const WelcomeScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleLogin}
                     disabled={loading}
                   >
@@ -1265,20 +1315,20 @@ const WelcomeScreen = ({ navigation }) => {
                       </View>
                     ) : (
                       <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt & Đăng nhập →' : 'Đăng nhập →'}
+                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
                       </Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   {/* Google SSO */}
-                  <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin}>
+                  <PressableScale style={styles.googleBtn} hoverStyle={styles.googleBtnHover} focusStyle={styles.buttonFocus} onPress={handleGoogleLogin}>
                     <Image
                       source={{ uri: 'https://developers.google.com/static/identity/images/g-logo.png' }}
                       style={{ width: 18, height: 18, marginRight: 8 }}
                       resizeMode="contain"
                     />
                     <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <View style={styles.formFooter}>
                     <Text style={styles.formFooterText}>Chưa có tài khoản? </Text>
@@ -1304,7 +1354,7 @@ const WelcomeScreen = ({ navigation }) => {
                       nameError ? styles.formInputError : null
                     ]}
                     placeholder="Nguyễn Văn A"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={name}
                     onChangeText={(text) => {
                       setName(text);
@@ -1323,7 +1373,7 @@ const WelcomeScreen = ({ navigation }) => {
                       emailError ? styles.formInputError : null
                     ]}
                     placeholder="vidu@neuroscan.com"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={email}
                     onChangeText={(text) => {
                       setEmail(text);
@@ -1344,7 +1394,7 @@ const WelcomeScreen = ({ navigation }) => {
                       phoneError ? styles.formInputError : null
                     ]}
                     placeholder="09XXXXXXXX"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Colors.secondary}
                     value={phone}
                     onChangeText={(text) => {
                       setPhone(text);
@@ -1367,7 +1417,7 @@ const WelcomeScreen = ({ navigation }) => {
                         passwordError ? styles.formInputError : null
                       ]}
                       placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={Colors.secondary}
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={(text) => {
@@ -1388,8 +1438,10 @@ const WelcomeScreen = ({ navigation }) => {
                   </View>
                   {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
 
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.formButton}
+                    hoverStyle={styles.formButtonHover}
+                    focusStyle={styles.buttonFocus}
                     onPress={handleRegister}
                     disabled={loading}
                   >
@@ -1401,7 +1453,7 @@ const WelcomeScreen = ({ navigation }) => {
                     ) : (
                       <Text style={styles.formButtonText}>Đăng ký ngay</Text>
                     )}
-                  </TouchableOpacity>
+                  </PressableScale>
 
                   <View style={styles.formFooter}>
                     <Text style={styles.formFooterText}>Đã có tài khoản? </Text>
@@ -1416,14 +1468,22 @@ const WelcomeScreen = ({ navigation }) => {
                 </View>
               )}
 
-              {/* Support Info below Form Card on Mobile */}
+              {/* Footer: Support Info below Form Card on Mobile */}
               <View style={styles.formSeparator} />
               <View style={styles.supportContainerInline}>
                 <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>0236 3650 676</Text> | Email: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>support@neuroscan.com</Text>
+                  Hotline hỗ trợ:{' '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
+                    0236 3650 676
+                  </Text>
+                  {'  |  Email: '}
+                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
+                    support@neuroscan.com
+                  </Text>
                 </Text>
+                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
               </View>
-            </View>
+            </Animated.View>
           </View>
         </ScrollView>
       )}

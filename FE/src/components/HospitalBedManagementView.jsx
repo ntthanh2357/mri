@@ -18,6 +18,8 @@ import {
 import { get, post, put } from '../services/api.service';
 import InpatientEmergencyModal from './InpatientEmergencyModal';
 import EdHandoffModal from './EdHandoffModal';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 
 const STATUS_MAP = {
   available: { label: 'Trống', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
@@ -47,7 +49,13 @@ const NEURO_ONCOLOGY_DIVISIONS = [
 ];
 
 export default function HospitalBedManagementView({ currentUser }) {
-  const isDoctor = currentUser?.role === 'doctor';
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
   const [loading, setLoading] = useState(false);
   const [bedMapData, setBedMapData] = useState({ summary: {}, departments: [] });
   const [icuAlert, setIcuAlert] = useState(null);
@@ -90,7 +98,20 @@ export default function HospitalBedManagementView({ currentUser }) {
         setBedMapData(mapRes.data || { summary: {}, departments: [] });
       }
       if (icuRes && icuRes.success) {
-        setIcuAlert(icuRes.data);
+        const d = icuRes.data || {};
+        const total = d.totalBeds ?? d.total ?? 0;
+        const occupied = d.occupiedBeds ?? d.occupied ?? 0;
+        setIcuAlert({
+          ...d,
+          totalBeds: total,
+          occupiedBeds: occupied,
+          availableBeds: d.availableBeds ?? d.available ?? 0,
+          reservedBeds: d.reservedBeds ?? d.reserved ?? 0,
+          occupancyRate: d.occupancyRate ?? (total ? Math.round((occupied / total) * 100) : 0),
+          alertMessage: d.alertMessage ?? d.message,
+          isWarning: d.isWarning ?? d.alertLevel === 'WARNING',
+          isCritical: d.isCritical ?? d.alertLevel === 'CRITICAL',
+        });
       }
     } catch (err) {
       console.error('Lỗi tải dữ liệu buồng giường:', err);
@@ -318,6 +339,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
   return (
     <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
+      {dialog}
       
       {/* ── HEADER & CAPACITY ALERT ────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -328,7 +350,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
-                Sơ Đồ Buồng Giường Khoa Ung Thư Não (Neuro-Oncology Bed Map)
+                Sơ đồ giường Khoa Ung Thư Não
               </h1>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
                 Quản lý phân bổ buồng giường nội trú u não: Hồi sức tụt não, Hậu phẫu mổ mở sọ vi phẫu, Hóa - Xạ trị và Chăm sóc giảm nhẹ
@@ -689,16 +711,17 @@ export default function HospitalBedManagementView({ currentUser }) {
       </div>
 
       {/* ── MODALS FOR ACTIONS ─────────────────────────────────────────── */}
+<<<<<<< HEAD
       {!isDoctor && activeModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+=======
+      {activeModal && (
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-800">
                 {activeModal === 'reserve' && `Giữ Chỗ Giường ${selectedBed?.bedNumber} (Khóa 4h)`}
                 {activeModal === 'occupy' && `Nhập Viện Vào Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'release' && `Giải Phóng Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'transfer' && `Điều Chuyển Bệnh Nhân (Giường ${selectedBed?.bedNumber})`}
-                {activeModal === 'create' && 'Thêm Giường Bệnh Mới Vào Hệ Thống'}
+                {activeModal === 'create' && 'Thêm giường bệnh mới'}
               </h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -780,7 +803,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang khóa giường...' : 'Xác Nhận Giữ Chỗ'}
+                    {actionLoading ? 'Đang khóa giường...' : 'Xác nhận giữ chỗ'}
                   </button>
                 </div>
               </div>
@@ -844,7 +867,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang lưu...' : 'Xác Nhận Nhập Giường'}
+                    {actionLoading ? 'Đang lưu...' : 'Xác nhận nhập giường'}
                   </button>
                 </div>
               </div>
@@ -875,7 +898,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang xử lý...' : 'Xác Nhận Giải Phóng Giường'}
+                    {actionLoading ? 'Đang xử lý...' : 'Xác nhận giải phóng giường'}
                   </button>
                 </div>
               </div>
@@ -937,7 +960,7 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang điều chuyển...' : 'Xác Nhận Chuyển Giường'}
+                    {actionLoading ? 'Đang điều chuyển...' : 'Xác nhận chuyển giường'}
                   </button>
                 </div>
               </div>
@@ -1020,13 +1043,14 @@ export default function HospitalBedManagementView({ currentUser }) {
                     disabled={actionLoading}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs"
                   >
-                    {actionLoading ? 'Đang tạo...' : 'Tạo Giường Mới'}
+                    {actionLoading ? 'Đang tạo...' : 'Tạo giường mới'}
                   </button>
                 </div>
               </div>
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Modal Cấp Cứu Nội Viện 1-Chạm */}

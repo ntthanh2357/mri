@@ -1,42 +1,10 @@
 import { StyleSheet, Platform } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    paddingVertical: 4,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  scrollContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  titleContainer: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-    lineHeight: 18,
   },
   actionRow: {
     flexDirection: 'row',
@@ -61,7 +29,7 @@ export default StyleSheet.create({
   actionButtonSolid: {
     flex: 1,
     height: 44,
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -71,56 +39,11 @@ export default StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'flex-start',
-  },
-  statIconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#F0FDF4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   statEmojiIcon: {
     fontSize: 18,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginVertical: 4,
-  },
-  badgeGreen: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeGreenText: {
-    fontSize: 10,
-    color: '#14532D',
-    fontWeight: '600',
-  },
   walletCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     borderRadius: 16,
     padding: 18,
     marginBottom: 24,
@@ -135,7 +58,7 @@ export default StyleSheet.create({
     marginBottom: 12,
   },
   walletTitle: {
-    color: '#94A3B8',
+    color: Colors.secondary,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -145,7 +68,7 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   walletDepositBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -170,13 +93,13 @@ export default StyleSheet.create({
     borderRadius: 3,
   },
   walletFooterText: {
-    color: '#94A3B8',
-    fontSize: 11,
+    color: Colors.secondary,
+    fontSize: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 12,
   },
   demographicCard: {
@@ -197,11 +120,11 @@ export default StyleSheet.create({
   totalVal: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   totalLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: Colors.secondary,
     fontWeight: '600',
     marginTop: 2,
   },
@@ -234,7 +157,7 @@ export default StyleSheet.create({
   demographicPct: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   barBackground: {
     height: 6,
@@ -254,7 +177,7 @@ export default StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    color: '#0891B2',
+    color: Colors.brandGreen,
     fontWeight: '500',
   },
   activityCard: {
@@ -282,11 +205,11 @@ export default StyleSheet.create({
   patientId: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
     marginBottom: 2,
   },
   activitySub: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
   },
   activityRight: {
@@ -299,70 +222,24 @@ export default StyleSheet.create({
     marginBottom: 4,
   },
   statusSuccess: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Colors.brandGreenSoft,
   },
   statusPending: {
     backgroundColor: '#FEF3C7',
   },
   statusSuccessText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#166534',
+    color: Colors.brandGreenPressed,
   },
   statusPendingText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#B45309',
   },
   activityTime: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  bannerCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 24,
-    marginBottom: 20,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  bannerCategory: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#4ADE80',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    lineHeight: 22,
-  },
-  bannerLink: {
     fontSize: 12,
-    color: '#4ADE80',
-    fontWeight: '600',
-  },
-  desktopRow: {
-    flexDirection: 'row',
-    gap: 20,
-    width: '100%',
-  },
-  mobileColumn: {
-    flexDirection: 'column',
-    width: '100%',
-  },
-  leftColumn: {
-    flex: 2,
-  },
-  rightColumn: {
-    flex: 1,
-  },
-  fullWidth: {
-    width: '100%',
+    color: Colors.secondary,
   },
   pricingCard: {
     backgroundColor: '#FFFFFF',
@@ -373,7 +250,7 @@ export default StyleSheet.create({
     marginBottom: 24,
   },
   pricingDesc: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     lineHeight: 16,
     marginBottom: 16,
@@ -382,7 +259,7 @@ export default StyleSheet.create({
     marginBottom: 12,
   },
   pricingInputLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#475569',
     marginBottom: 4,
@@ -394,11 +271,11 @@ export default StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
+    color: Colors.brandNavy,
     backgroundColor: '#F8FAFC',
   },
   pricingSubmitBtn: {
-    backgroundColor: '#0891B2',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     height: 38,
     justifyContent: 'center',
@@ -435,7 +312,7 @@ export default StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: Colors.brandGreenSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -471,10 +348,10 @@ export default StyleSheet.create({
   doctorItemName: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   doctorItemEmail: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
@@ -484,7 +361,7 @@ export default StyleSheet.create({
     borderRadius: 6,
   },
   roleBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   emptyChartContainer: {
@@ -506,22 +383,11 @@ export default StyleSheet.create({
   emptyChartPercent: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#94A3B8',
+    color: Colors.secondary,
   },
   emptyChartText: {
     fontSize: 12,
-    color: '#94A3B8',
-  },
-  badgeBlue: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeBlueText: {
-    fontSize: 10,
-    color: '#1E3A8A',
-    fontWeight: '600',
+    color: Colors.secondary,
   },
   tableHeaderRow: {
     flexDirection: 'row',
@@ -534,7 +400,7 @@ export default StyleSheet.create({
     borderTopRightRadius: 16,
   },
   tableHeaderCell: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#64748B',
     textTransform: 'uppercase',
@@ -550,4 +416,25 @@ export default StyleSheet.create({
     color: '#475569',
     alignSelf: 'center',
   },
+  page: { paddingTop: 24, paddingBottom: 40 },
+  kpiStrip: { flexDirection: 'row', marginTop: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, overflow: 'hidden' },
+  kpiStripWrap: { flexWrap: 'wrap' },
+  kpi: { minWidth: 0, paddingVertical: 16, paddingHorizontal: 20 },
+  kpiFill: { flex: 1 },
+  kpiHalf: { width: '50%' },
+  kpiMain: { backgroundColor: Colors.brandGreenSoft },
+  kpiBorderLeft: { borderLeftWidth: 1, borderLeftColor: Colors.border },
+  kpiBorderTop: { borderTopWidth: 1, borderTopColor: Colors.border },
+  kpiLabel: { fontSize: 13, fontWeight: '600', color: Colors.slateMuted },
+  kpiValue: { fontSize: 22, fontWeight: '700', color: Colors.brandNavy, marginTop: 6, fontVariant: ['tabular-nums'] },
+  kpiValueMain: { fontSize: 30, color: Colors.brandGreen },
+  kpiLoading: { alignSelf: 'flex-start', marginVertical: 10 },
+  kpiSub: { fontSize: 12, color: Colors.secondary, marginTop: 4 },
+  columns: { gap: 28, marginTop: 28 },
+  columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  colMain: { flex: 1.6, minWidth: 0 },
+  colSide: { flex: 1, minWidth: 0 },
+  sectionGap: { marginTop: 28 },
+  activityRowStacked: { flexDirection: 'column', alignItems: 'stretch', gap: 4 },
+  stackedTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
 });

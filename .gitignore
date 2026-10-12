@@ -188,3 +188,16 @@ BE/test_upload.js
 ~$*
 *backup.xlsx
 *.tmp
+
+# Medical storage & keys
+/storage/
+BE/storage/
+neuroscan_storage/
+neuroscan_backup/
+*.enc
+*.key
+credentials.json
+.env
+dataTAMTRI/
+**/dataTAMTRI/
+dataTAMTRI*

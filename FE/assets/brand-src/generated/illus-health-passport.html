@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- NeuroScan "Clinical Calm" — sổ sức khỏe, đặt trên thẻ navy. Render: 512 512 2 --transparent -->
+<style>html,body{margin:0;background:transparent}</style></head>
+<body><svg id="art" width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2BC79A"/><stop offset="1" stop-color="#067A5E"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#A4FBE5" stop-opacity="0.38"/><stop offset="1" stop-color="#A4FBE5" stop-opacity="0"/></radialGradient>
+  </defs>
+  <circle cx="256" cy="256" r="230" fill="url(#glow)"/>
+
+  <g transform="rotate(-9 256 260)">
+    <!-- trang giấy lộ ra bên phải -->
+    <rect x="172" y="106" width="196" height="288" rx="20" fill="#E7F6F0"/>
+    <rect x="178" y="112" width="196" height="288" rx="20" fill="#FFFFFF" opacity="0.9"/>
+    <!-- bìa -->
+    <rect x="150" y="96" width="206" height="300" rx="22" fill="url(#cover)"/>
+    <rect x="150" y="96" width="22" height="300" rx="11" fill="#067A5E" opacity="0.55"/>
+    <rect x="186" y="128" width="140" height="236" rx="16" fill="none" stroke="#A4FBE5" stroke-width="2" opacity="0.45"/>
+    <!-- biểu tượng chữ thập + 4 nút mạng -->
+    <g transform="translate(256 236)">
+      <circle r="58" fill="#0B2A55" opacity="0.18"/>
+      <path d="M0,-34 L0,34 M-34,0 L34,0" stroke="#A4FBE5" stroke-width="16" stroke-linecap="round"/>
+      <circle cx="0" cy="-48" r="6" fill="#FFFFFF"/>
+      <circle cx="48" cy="0" r="6" fill="#FFFFFF"/>
+      <circle cx="0" cy="48" r="6" fill="#FFFFFF"/>
+      <circle cx="-48" cy="0" r="6" fill="#FFFFFF"/>
+    </g>
+    <rect x="206" y="318" width="100" height="8" rx="4" fill="#A4FBE5" opacity="0.55"/>
+  </g>
+
+  <g fill="#A4FBE5">
+    <circle cx="398" cy="140" r="6"/><circle cx="424" cy="182" r="3.5" opacity="0.7"/>
+    <circle cx="110" cy="330" r="5" opacity="0.8"/><circle cx="134" cy="372" r="3" opacity="0.6"/>
+    <circle cx="404" cy="380" r="4" opacity="0.6"/>
+  </g>
+</svg><script>window.__ART_DONE__ = true;</script></body></html>

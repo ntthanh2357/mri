@@ -301,19 +301,6 @@ export default function AdminAIConfigView() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-          <Brain className="w-4.5 h-4.5" />
-        </div>
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900">Quản trị Hệ thống AI — Huấn luyện & Chatbot</h2>
-          <p className="text-slate-500 text-xs font-medium mt-0.5">
-            Theo dõi thống kê ca đúng/sai, kích hoạt Active Learning và quản lý cấu hình trợ lý AI
-          </p>
-        </div>
-      </div>
-
       {/* ══════════════════════════════════════════════════════════════
           SECTION 1: AI TRAINING STATISTICS
       ══════════════════════════════════════════════════════════════ */}

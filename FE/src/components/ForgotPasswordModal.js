@@ -25,6 +25,8 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Colors from '../constants/colors';
+import PressableScale from './PressableScale';
 import { KeyRound, MailCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { post } from '../services/api.service';
 
@@ -137,40 +139,46 @@ const ForgotPasswordModal = ({
   // ===== Bộ màu theo theme =====
   const palette = isDark
     ? {
-        overlay: 'rgba(2, 6, 23, 0.82)',
-        card: '#111827',
-        cardBorder: '#1E293B',
-        title: '#F1F5F9',
-        text: '#CBD5E1',
-        subText: '#94A3B8',
-        inputBg: '#0B0F17',
-        inputBorder: '#1E293B',
-        inputText: '#F1F5F9',
-        accent: '#22D3EE',
-        accentText: '#0B0F17',
-        error: '#F87171',
-        noticeBg: 'rgba(34, 211, 238, 0.08)',
-        noticeBorder: 'rgba(34, 211, 238, 0.25)',
-        noticeText: '#67E8F9',
-        link: '#94A3B8',
+        overlay: 'rgba(2, 10, 25, 0.8)',
+        card: Colors.brandNavy,
+        cardBorder: Colors.onDarkBorder,
+        title: Colors.onDarkText,
+        text: Colors.onDarkText,
+        subText: Colors.onDarkMuted,
+        placeholder: Colors.onDarkSubtle,
+        inputBg: Colors.brandNavyInput,
+        inputBorder: Colors.onDarkBorder,
+        inputText: Colors.onDarkText,
+        accent: Colors.brandGreen,
+        accentText: '#FFFFFF',
+        accentFg: Colors.brandMint,
+        error: '#FCA5A5',
+        noticeBg: 'rgba(164, 251, 229, 0.08)',
+        noticeBorder: Colors.onDarkBorder,
+        noticeText: Colors.brandMint,
+        link: Colors.onDarkMuted,
+        iconBg: 'rgba(164, 251, 229, 0.08)',
       }
     : {
-        overlay: 'rgba(15, 23, 42, 0.55)',
-        card: '#FFFFFF',
-        cardBorder: '#E2E8F0',
-        title: '#0F172A',
-        text: '#334155',
-        subText: '#64748B',
-        inputBg: '#F8FAFC',
-        inputBorder: '#E2E8F0',
-        inputText: '#0F172A',
-        accent: '#004080',
+        overlay: 'rgba(11, 42, 85, 0.45)',
+        card: Colors.surface,
+        cardBorder: Colors.border,
+        title: Colors.brandNavy,
+        text: Colors.slateDark,
+        subText: Colors.slateMuted,
+        placeholder: Colors.secondary,
+        inputBg: Colors.surface,
+        inputBorder: Colors.borderStrong,
+        inputText: Colors.slateDark,
+        accent: Colors.brandGreen,
         accentText: '#FFFFFF',
-        error: '#DC2626',
-        noticeBg: '#F0F7FF',
-        noticeBorder: '#BFE3FF',
-        noticeText: '#004080',
-        link: '#64748B',
+        accentFg: Colors.brandGreen,
+        error: Colors.error,
+        noticeBg: Colors.brandGreenSoft,
+        noticeBorder: '#CDEBDF',
+        noticeText: Colors.brandGreen,
+        link: Colors.slateMuted,
+        iconBg: Colors.brandGreenSoft,
       };
 
   const dynamicStyles = {
@@ -204,17 +212,17 @@ const ForgotPasswordModal = ({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        style={[styles.overlay, { backgroundColor: palette.overlay }]}
       >
         <ScrollView contentContainerStyle={styles.scrollWrap} bounces={false}>
           <View style={[styles.card, dynamicStyles.card]}>
             {/* ===== Header ===== */}
             <View style={styles.headerRow}>
-              <View style={[styles.iconBadge, { backgroundColor: isDark ? '#0B0F17' : '#ECFDF5', borderColor: isDark ? '#1E293B' : '#A7F3D0' }]}>
+              <View style={[styles.iconBadge, { backgroundColor: palette.iconBg, borderColor: palette.cardBorder }]}>
                 {step === 'email' ? (
-                  <KeyRound color={palette.accent} size={22} />
+                  <KeyRound color={palette.accentFg} size={22} />
                 ) : (
-                  <ShieldCheck color={palette.accent} size={22} />
+                  <ShieldCheck color={palette.accentFg} size={22} />
                 )}
               </View>
               <View style={styles.headerTextBox}>
@@ -234,7 +242,7 @@ const ForgotPasswordModal = ({
                 <TextInput
                   style={[styles.input, dynamicStyles.input, error ? styles.inputError : null]}
                   placeholder="vidu@email.com"
-                  placeholderTextColor={palette.subText}
+                  placeholderTextColor={palette.placeholder}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
@@ -244,7 +252,8 @@ const ForgotPasswordModal = ({
                   editable={!loading}
                 />
                 {error ? <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text> : null}
-                <TouchableOpacity
+                <PressableScale
+                  hoverStyle={styles.primaryBtnHover}
                   style={[styles.primaryBtn, dynamicStyles.primaryBtn, loading ? styles.btnDisabled : null]}
                   onPress={handleSendOtp}
                   disabled={loading}
@@ -252,9 +261,9 @@ const ForgotPasswordModal = ({
                   {loading ? (
                     <ActivityIndicator color={palette.accentText} size="small" />
                   ) : (
-                    <Text style={[styles.primaryBtnText, dynamicStyles.primaryBtnText]}>Gửi mã OTP →</Text>
+                    <Text style={[styles.primaryBtnText, dynamicStyles.primaryBtnText]}>Gửi mã OTP</Text>
                   )}
-                </TouchableOpacity>
+                </PressableScale>
               </View>
             )}
 
@@ -278,7 +287,7 @@ const ForgotPasswordModal = ({
                 <TextInput
                   style={[styles.input, dynamicStyles.input, styles.otpInput, error ? styles.inputError : null]}
                   placeholder="000000"
-                  placeholderTextColor={palette.subText}
+                  placeholderTextColor={palette.placeholder}
                   keyboardType="number-pad"
                   maxLength={6}
                   value={otp}
@@ -291,7 +300,7 @@ const ForgotPasswordModal = ({
                   <TextInput
                     style={[styles.input, dynamicStyles.input, error ? styles.inputError : null]}
                     placeholder="Tối thiểu 6 ký tự"
-                    placeholderTextColor={palette.subText}
+                    placeholderTextColor={palette.placeholder}
                     secureTextEntry={!showPassword}
                     value={newPassword}
                     onChangeText={(t) => { setNewPassword(t); setError(''); }}
@@ -306,7 +315,7 @@ const ForgotPasswordModal = ({
                 <TextInput
                   style={[styles.input, dynamicStyles.input, error ? styles.inputError : null]}
                   placeholder="Nhập lại mật khẩu mới"
-                  placeholderTextColor={palette.subText}
+                  placeholderTextColor={palette.placeholder}
                   secureTextEntry={!showPassword}
                   value={confirmPassword}
                   onChangeText={(t) => { setConfirmPassword(t); setError(''); }}
@@ -316,7 +325,8 @@ const ForgotPasswordModal = ({
 
                 {error ? <Text style={[styles.errorText, dynamicStyles.errorText]}>{error}</Text> : null}
 
-                <TouchableOpacity
+                <PressableScale
+                  hoverStyle={styles.primaryBtnHover}
                   style={[styles.primaryBtn, dynamicStyles.primaryBtn, loading ? styles.btnDisabled : null]}
                   onPress={handleResetPassword}
                   disabled={loading}
@@ -326,15 +336,15 @@ const ForgotPasswordModal = ({
                   ) : (
                     <Text style={[styles.primaryBtnText, dynamicStyles.primaryBtnText]}>Đặt lại mật khẩu</Text>
                   )}
-                </TouchableOpacity>
+                </PressableScale>
 
                 <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp} disabled={resending || loading}>
                   {resending ? (
-                    <ActivityIndicator size="small" color={palette.accent} />
+                    <ActivityIndicator size="small" color={palette.accentFg} />
                   ) : (
-                    <RefreshCw size={13} color={palette.accent} />
+                    <RefreshCw size={14} color={palette.accentFg} />
                   )}
-                  <Text style={[styles.resendText, { color: palette.accent }]}>
+                  <Text style={[styles.resendText, { color: palette.accentFg }]}>
                     {resending ? 'Đang gửi lại…' : 'Gửi lại mã OTP'}
                   </Text>
                 </TouchableOpacity>
@@ -343,7 +353,7 @@ const ForgotPasswordModal = ({
 
             {/* ===== Đóng modal ===== */}
             <TouchableOpacity style={styles.backBtn} onPress={onClose} disabled={loading}>
-              <ArrowLeft size={13} color={palette.link} />
+              <ArrowLeft size={14} color={palette.link} />
               <Text style={[styles.backBtnText, dynamicStyles.linkText]}>Quay lại đăng nhập</Text>
             </TouchableOpacity>
           </View>
@@ -364,11 +374,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
+    width: '100%',
   },
   card: {
-    width: 440,
-    maxWidth: '100%',
+    // width 100% + maxWidth: trên web, width cố định 440 làm thẻ tràn ra ngoài màn hình điện thoại
+    width: '100%',
+    maxWidth: 440,
     borderRadius: 20,
     borderWidth: 1,
     padding: 28,
@@ -384,32 +396,34 @@ const styles = StyleSheet.create({
   },
   headerTextBox: { flex: 1 },
   title: { fontSize: 18, fontWeight: '800' },
-  subText: { fontSize: 11.5, marginTop: 3, lineHeight: 16 },
-  label: { fontSize: 12.5, fontWeight: '600', marginBottom: 6, marginTop: 6 },
+  subText: { fontSize: 13, marginTop: 3, lineHeight: 19 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 8 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
-    fontSize: 14,
+    borderRadius: 10,
+    fontSize: 15,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    height: 46,
     width: '100%',
   },
   inputError: { borderColor: '#DC2626' },
   otpInput: { letterSpacing: 6, textAlign: 'center', fontSize: 18, fontWeight: '700' },
   passwordWrap: { position: 'relative', justifyContent: 'center' },
-  eyeBtn: { position: 'absolute', right: 12 },
+  eyeBtn: { position: 'absolute', right: 6, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   primaryBtn: {
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 10,
+    height: 48,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
     marginBottom: 8,
   },
-  primaryBtnText: { fontSize: 14, fontWeight: '800' },
+  primaryBtnText: { fontSize: 15, fontWeight: '700' },
+  primaryBtnHover: { backgroundColor: Colors.brandGreenPressed },
   btnDisabled: { opacity: 0.55 },
-  errorText: { fontSize: 11.5, marginTop: 8, marginBottom: 2 },
-  noticeText: { fontSize: 11.5, marginTop: 8 },
-  debugText: { fontSize: 11, marginTop: 4, fontStyle: 'italic' },
+  errorText: { fontSize: 13, marginTop: 8, marginBottom: 2 },
+  noticeText: { fontSize: 13, marginTop: 8 },
+  debugText: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
   emailSentBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -420,7 +434,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 4,
   },
-  emailSentText: { flex: 1, fontSize: 11.5, flexWrap: 'wrap' },
+  emailSentText: { flex: 1, fontSize: 13, lineHeight: 18, flexWrap: 'wrap' },
   resendBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,9 +442,9 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
   },
-  resendText: { fontSize: 12, fontWeight: '600' },
+  resendText: { fontSize: 13, fontWeight: '600' },
   backBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
-  backBtnText: { fontSize: 12 },
+  backBtnText: { fontSize: 13 },
 });
 
 export default ForgotPasswordModal;

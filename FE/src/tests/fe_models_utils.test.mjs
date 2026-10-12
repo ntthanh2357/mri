@@ -12,6 +12,13 @@ import {
 } from '../models/documentVault.model.js';
 import { createEmptyMedicalRecord, MEDICAL_RECORD_STORAGE_KEY } from '../models/medicalRecord.model.js';
 import { formatDate, formatCurrency } from '../utils/format.js';
+import { extractMedications, extractOrders } from '../utils/clinicalText.js';
+import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
+import { initialsOf } from '../utils/initials.js';
+import { isStaffPortalPath } from '../utils/portalPath.js';
+import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
+import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
+import { strokesToPath, consentStatus } from '../utils/signature.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -212,6 +219,154 @@ it('findSchedules algorithm safely matches staff ID across string, ObjectId, and
   assert.strictEqual(found.length, 2);
   assert.strictEqual(found[0]._id, 's1');
   assert.strictEqual(found[1]._id, 's2');
+});
+
+// ── clinicalText: trích thuốc / chỉ định từ form (dùng chung DocumentDetail + MedicalRecordForm) ──
+it('extractMedications finds known drugs case-insensitively and ignores empty input', () => {
+  assert.deepStrictEqual(extractMedications(''), []);
+  assert.deepStrictEqual(extractMedications(undefined), []);
+  assert.deepStrictEqual(extractMedications('Depakine 500mg x2, Keppra 1000mg'), ['keppra', 'depakine']);
+});
+
+it('extractOrders detects MRI order in a flat document form', () => {
+  assert.deepStrictEqual(extractOrders({ chiDinh: 'Chụp MRI sọ não' }), ['MRI sọ não có cản quang']);
+  assert.deepStrictEqual(extractOrders({ chiDinh: 'Xét nghiệm máu' }), []);
+});
+
+it('extractOrders detects MRI order nested inside a medical-record form (regression: [object Object])', () => {
+  const nested = { hanhChinh: { hoTen: 'A' }, canLamSang: { hinhAnh: 'MRI có tiêm Gadolinium' } };
+  assert.deepStrictEqual(extractOrders(nested), ['MRI sọ não có cản quang']);
+});
+
+// ── simpleMarkdown: hiển thị câu trả lời AI (Gemini trả markdown) ──
+it('parseSimpleMarkdown turns bold-only lines into headings and bullets into list items', () => {
+  const blocks = parseSimpleMarkdown('Chào bạn,\n\n**Kết quả cho thấy gì?**\n\n*   **Vị trí:** thùy thái dương\n- Kích thước nhỏ\n1. Tái khám');
+  assert.deepStrictEqual(blocks.map((b) => b.type), ['paragraph', 'heading', 'bullet', 'bullet', 'numbered']);
+  assert.strictEqual(blocks[1].segments[0].text, 'Kết quả cho thấy gì?');
+  assert.deepStrictEqual(blocks[2].segments, [{ text: 'Vị trí:', bold: true }, { text: ' thùy thái dương', bold: false }]);
+  assert.strictEqual(blocks[4].marker, '1.');
+});
+
+it('parseSimpleMarkdown keeps unmatched ** as plain text and handles empty input', () => {
+  assert.deepStrictEqual(parseSimpleMarkdown(''), []);
+  assert.deepStrictEqual(parseSimpleMarkdown(null), []);
+  const [b] = parseSimpleMarkdown('Chỉ số 5 ** chưa đóng');
+  assert.strictEqual(b.type, 'paragraph');
+  assert.strictEqual(b.segments.map((s) => s.text).join(''), 'Chỉ số 5 ** chưa đóng');
+});
+
+// ── initialsOf: avatar bệnh nhân (trước đây mọi tên mẫu "Bệnh nhân …" đều ra "B") ──
+it('initialsOf strips the "Bệnh nhân" prefix and the note in parentheses', () => {
+  assert.strictEqual(initialsOf('Bệnh nhân Tuấn Thành (U Màng Não)'), 'TT');
+  assert.strictEqual(initialsOf('Bệnh nhân Minh Hằng (Glioblastoma Phù Não)'), 'MH');
+  assert.strictEqual(initialsOf('Nguyễn Văn An'), 'VA');
+});
+
+it('initialsOf handles single words and empty input', () => {
+  assert.strictEqual(initialsOf('An'), 'A');
+  assert.strictEqual(initialsOf(''), '?');
+  assert.strictEqual(initialsOf(undefined), '?');
+});
+
+// ── isStaffPortalPath: trước đây "/staff-management" bị coi là cổng nội bộ (F5 bị đá về dashboard) ──
+it('isStaffPortalPath matches only /staff and /staff/*', () => {
+  assert.strictEqual(isStaffPortalPath('/staff'), true);
+  assert.strictEqual(isStaffPortalPath('/staff/home'), true);
+  assert.strictEqual(isStaffPortalPath('/staff/staff-management'), true);
+});
+
+it('isStaffPortalPath ignores main-app routes that merely start with "staff"', () => {
+  assert.strictEqual(isStaffPortalPath('/staff-management'), false);
+  assert.strictEqual(isStaffPortalPath('/staff-scheduling'), false);
+  assert.strictEqual(isStaffPortalPath('/'), false);
+  assert.strictEqual(isStaffPortalPath(''), false);
+});
+
+// ── buildStaffTasks / nextUpVisits: trang chủ nhân viên "Việc cần làm hôm nay" ──
+it('buildStaffTasks counts doctor work by status and puts pending tasks first', () => {
+  const visits = [
+    { status: 'đang chờ' }, { status: 'chờ khám bệnh' }, { status: 'chờ bác sĩ đọc' }, { status: 'hoàn tất' },
+  ];
+  const emr = [{ signStatus: 'Chưa duyệt' }, { signStatus: 'Đã ký' }];
+  const tasks = buildStaffTasks('doctor', { visits, emr });
+  const byKey = Object.fromEntries(tasks.map(t => [t.key, t.count]));
+  assert.deepStrictEqual(byKey, { exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
+  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'examining', 'scan']);
+  // bác sĩ kiêm chụp MRI (BE my-queue trả cả ca chụp cho bác sĩ)
+  const withScan = buildStaffTasks('doctor', { visits: [{ status: 'chờ chụp' }, { status: 'đang chụp' }] });
+  assert.strictEqual(withScan.find(t => t.key === 'scan').count, 2);
+  assert.deepStrictEqual(tasks[0].params, { tab: 'examQueue' });
+});
+
+it('buildStaffTasks handles unknown role and missing data', () => {
+  assert.deepStrictEqual(buildStaffTasks('patient', {}), []);
+  assert.deepStrictEqual(buildStaffTasks('receptionist').map(t => t.count), [0, 0]);
+});
+
+it('nextUpVisits keeps only the role\'s active statuses, emergencies first', () => {
+  const visits = [
+    { _id: 'a', status: 'chờ chụp' },
+    { _id: 'b', status: 'đang khám' },
+    { _id: 'c', status: 'đang chụp', priority: 'khẩn cấp' },
+    { _id: 'd', status: 'hoàn tất' },
+  ];
+  assert.deepStrictEqual(nextUpVisits('technician', visits).map(v => v._id), ['c', 'a']);
+  assert.deepStrictEqual(nextUpVisits('receptionist', visits, 2).map(v => v._id), ['c', 'a']);
+});
+
+// ── myHealth: diễn giải chỉ số cho bệnh nhân (màn "Sức khỏe của tôi") ──
+it('bpStatus classifies blood pressure (ACC/AHA) and tolerates missing data', () => {
+  assert.strictEqual(bpStatus({ systolic: 115, diastolic: 75 }).level, 'normal');
+  assert.strictEqual(bpStatus({ systolic: 125, diastolic: 78 }).level, 'elevated');
+  assert.strictEqual(bpStatus({ systolic: 118, diastolic: 85 }).level, 'high');
+  assert.strictEqual(bpStatus({ systolic: 150, diastolic: 95 }).level, 'high');
+  assert.strictEqual(bpStatus(null), null);
+  assert.strictEqual(bpStatus({ systolic: 120 }), null);
+});
+
+it('pulseStatus and spo2Status flag values outside common ranges', () => {
+  assert.strictEqual(pulseStatus(72).level, 'normal');
+  assert.strictEqual(pulseStatus(52).level, 'low');
+  assert.strictEqual(pulseStatus(110).level, 'high');
+  assert.strictEqual(spo2Status(98).level, 'normal');
+  assert.strictEqual(spo2Status(92).level, 'low');
+  assert.strictEqual(spo2Status(undefined), null);
+});
+
+it('labResultFlag and drugSchedule produce patient-friendly text', () => {
+  assert.strictEqual(labResultFlag({ is_abnormal: true, abnormal_direction: 'HIGH' }).label, 'Cao hơn tham chiếu');
+  assert.strictEqual(labResultFlag({ is_abnormal: true, abnormal_direction: 'LOW' }).label, 'Thấp hơn tham chiếu');
+  assert.strictEqual(labResultFlag({ is_abnormal: false }).level, 'normal');
+  assert.strictEqual(drugSchedule({ timesPerDay: 2, durationDays: 7 }), '2 lần/ngày, trong 7 ngày');
+  assert.strictEqual(drugSchedule({}), '');
+});
+
+// ── signature: chữ ký tay + trạng thái phiếu đồng thuận cản quang (UC-PAT-06) ──
+it('strokesToPath scales pad strokes into the 300x120 viewBox and keeps single taps visible', () => {
+  const path = strokesToPath([[{ x: 0, y: 0 }, { x: 600, y: 240 }]], { width: 600, height: 240 });
+  assert.strictEqual(path, 'M0 0 L300 120');
+  assert.ok(strokesToPath([[{ x: 10, y: 10 }]], { width: 300, height: 120 }).includes('L'));
+  assert.strictEqual(strokesToPath([], { width: 300, height: 120 }), '');
+  assert.ok(/^[ML0-9.\s-]+$/.test(strokesToPath([[{ x: 1.234, y: 5.678 }, { x: 9, y: 9 }]], { width: 300, height: 120 })));
+});
+
+it('consentStatus orders the steps: checklist → doctor review → sign → signed', () => {
+  assert.strictEqual(consentStatus({}).key, 'checklist');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', isBlockedByChecklist: true }).key, 'blocked');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', isBlockedByChecklist: true, isDoctorOverridden: true }).key, 'ready');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06' }).key, 'ready');
+  assert.strictEqual(consentStatus({ patientChecklistAt: '2026-10-06', patientSigned: true }).key, 'signed');
+  assert.strictEqual(consentStatus(null), null);
+});
+
+// ── UC-PAT-13: nhắc uống thuốc trong app ──
+it('isReminderDue flags pending doses whose time has come, not done/skipped/future ones', () => {
+  const now = new Date(2026, 9, 6, 13, 5);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '13:00' }, now), true);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '13:05' }, now), true);
+  assert.strictEqual(isReminderDue({ status: 'pending', time: '20:00' }, now), false);
+  assert.strictEqual(isReminderDue({ status: 'done', time: '08:00' }, now), false);
+  assert.strictEqual(isReminderDue({ status: 'skipped', time: '08:00' }, now), false);
 });
 
 console.log(`\n======================================================================`);

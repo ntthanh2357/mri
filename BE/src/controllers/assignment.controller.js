@@ -34,33 +34,44 @@ export const autoAssignDoctor = async (req, res) => {
     const hospital = await Hospital.findById(hospitalId).lean();
     const readFilmDeadlineHours = hospital?.aiThresholds?.taskDeadlines?.readFilmHours || 4;
 
-    // D.1 — Tìm bác sĩ phù hợp
-    // Điều kiện: role=doctor, isOnCall=true, specialty phù hợp, caseload < maxCaseload
-    const candidateQuery = {
-      hospitalId,
-      role: "doctor",
-      isLocked: false,
-      "profile.isOnCall": true,
-    };
+    // D.1 — Tìm bác sĩ phù hợp (Gộp Lâm sàng & CĐHA)
+    let candidates = [];
 
-    if (assignmentType === 'read') {
-      // Ưu tiên Neuroradiologist cho đọc phim
-      candidateQuery["profile.specialty"] = { $in: ['neuroradiologist', 'radiologist'] };
+    // Ưu tiên 1: Gộp quy trình — Tự động gán cho chính Bác sĩ khám lâm sàng phụ trách ca này
+    if (visit.doctorId) {
+      const visitDoctor = await User.findOne({
+        _id: visit.doctorId,
+        hospitalId,
+        role: "doctor",
+        isLocked: false,
+      }).lean();
+      if (visitDoctor) {
+        candidates.push(visitDoctor);
+      }
     }
 
-    const candidates = await User.find(candidateQuery).lean();
+    // Nếu chưa có hoặc cần tìm thêm bác sĩ trực
+    if (!candidates.length) {
+      const candidateQuery = {
+        hospitalId,
+        role: "doctor",
+        isLocked: false,
+        "profile.isOnCall": true,
+      };
+
+      candidates = await User.find(candidateQuery).lean();
+    }
 
     if (!candidates.length) {
-      // Fallback: lấy bác sĩ có specialty phù hợp bất kể isOnCall
+      // Fallback: lấy bất kỳ bác sĩ nào trong bệnh viện đang hoạt động
       const fallbackCandidates = await User.find({
         hospitalId,
         role: "doctor",
         isLocked: false,
-        "profile.specialty": { $in: ['neuroradiologist', 'radiologist', 'neurosurgeon'] }
       }).lean();
 
       if (!fallbackCandidates.length) {
-        return errorResponse(res, "Không tìm được bác sĩ có chuyên khoa phù hợp. Vui lòng phân công thủ công (D.3).", 400);
+        return errorResponse(res, "Không tìm được bác sĩ phù hợp trong viện. Vui lòng phân công thủ công (D.3).", 400);
       }
       candidates.push(...fallbackCandidates);
     }

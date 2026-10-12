@@ -3,6 +3,7 @@ import { protect } from "../../middlewares/auth.middleware.js";
 import {
   getPatientMriResult,
   downloadPatientReport,
+  streamImagingReportPdf,
   generateShareQr,
   viewSharedResult,
   bookFollowUp,
@@ -26,6 +27,9 @@ router.get("/imaging/:imagingResultId", protect, getPatientMriResult);
 
 // H.2 — Tải báo cáo PDF
 router.get("/imaging/:imagingResultId/report-pdf", protect, downloadPatientReport);
+
+// H.2b — Tải file PDF qua link ngắn hạn (token chứa quyền đã kiểm tra ở H.2)
+router.get("/report-file/:token", streamImagingReportPdf);
 
 // H.3 — Tạo QR chia sẻ
 router.post("/imaging/:imagingResultId/share-qr", protect, generateShareQr);

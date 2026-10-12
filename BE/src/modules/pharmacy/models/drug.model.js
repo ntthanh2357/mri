@@ -44,6 +44,12 @@ const drugSchema = new Schema(
       lastUpdated: { type: Date, default: Date.now },
     },
 
+    // ── Kho Biệt trữ / Cách ly / Chờ tiêu hủy (Quy chế Dược Bệnh viện / GPP) ──
+    quarantineStock: {
+      quantity: { type: Number, default: 0, min: 0 },      // Thuốc bệnh nhân hoàn trả sau khi đã xuất vật lý
+      unit: { type: String, default: "Viên" }
+    },
+
     // ── Giá & Hạn sử dụng ────────────────────────────────────────────────────
     price: {
       type: Number,
@@ -71,7 +77,16 @@ const drugSchema = new Schema(
       {
         type: {
           type: String,
-          enum: ["import", "dispense", "refund", "adjustment", "clinical_trial_dispense"],
+          enum: [
+            "import",
+            "dispense",
+            "export",
+            "refund",
+            "adjustment",
+            "clinical_trial_dispense",
+            "return_quarantine", // Thuốc đã xuất vật lý cho bệnh nhân hoàn lại -> đưa vào kho biệt trữ tiêu hủy
+            "cancel_restock"     // Hủy thanh toán khi chưa phát thuốc vật lý -> hoàn kho cấp phát
+          ],
           required: true
         },
         quantity: { type: Number, required: true },

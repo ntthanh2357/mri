@@ -8,14 +8,17 @@ import {
   handlePayOSWebhook,
   paymentSuccess,
   paymentCancel,
-  createPremiumPayment,
   createPendingInvoice,
-  refundInvoice
+  refundInvoice,
+  getStuckProcessingInvoices,
+  resolveProcessingInvoice
 } from "./invoice.controller.js";
 
 const router = express.Router();
 
 // Lấy danh sách và thanh toán hóa đơn
+router.get("/stuck-processing", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin", "pharmacist"]), getStuckProcessingInvoices);
+router.post("/:id/resolve-processing", protect, checkRole(["admin", "hospital_admin", "pharmacist"]), resolveProcessingInvoice);
 router.get("/", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), getInvoices);
 router.put("/:id/pay", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), payInvoice);
 router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createAndPayInvoice);
@@ -25,7 +28,6 @@ router.put("/:id/refund", protect, checkRole(["nurse", "admin", "receptionist", 
 // Cổng thanh toán trực tuyến PayOS (VietQR)
 router.post("/visit/:visitId/payos", protect, createPayOSPayment);
 router.post("/:visitId/payos", protect, createPayOSPayment);
-router.post("/premium-payment", protect, createPremiumPayment);
 router.post("/payos-webhook", handlePayOSWebhook);
 router.get("/payment/success", paymentSuccess);
 router.get("/payment/cancel", paymentCancel);

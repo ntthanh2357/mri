@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- NeuroScan "Clinical Calm" — phim MRI trên hộp đèn. Render: canvas-design/scripts/render.js 512 512 2 --transparent -->
+<style>html,body{margin:0;background:transparent}</style></head>
+<body><svg id="art" width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14407A"/><stop offset="1" stop-color="#0B2A55"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F3FFFB"/><stop offset="1" stop-color="#C9F7EA"/></linearGradient>
+    <linearGradient id="film" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#223650"/><stop offset="1" stop-color="#15243A"/></linearGradient>
+    <radialGradient id="slice" cx="0.5" cy="0.45" r="0.6"><stop offset="0" stop-color="#C9D6E3"/><stop offset="1" stop-color="#7F93A8"/></radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#A4FBE5" stop-opacity="0.55"/><stop offset="1" stop-color="#A4FBE5" stop-opacity="0"/></radialGradient>
+    <g id="brain">
+      <path d="M0,-58 C30,-58 50,-36 50,-4 C50,32 30,58 0,58 C-30,58 -50,32 -50,-4 C-50,-36 -30,-58 0,-58 Z" fill="url(#slice)"/>
+      <path d="M0,-56 L0,54" stroke="#5E728A" stroke-width="2.5" opacity="0.7"/>
+      <path d="M-3,-20 C-12,-16 -14,-2 -7,10 M3,-20 C12,-16 14,-2 7,10" stroke="#3E5470" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <g stroke="#E4ECF4" stroke-width="2.4" fill="none" stroke-linecap="round" opacity="0.85">
+        <path d="M-42,-18 C-34,-14 -36,-4 -28,-2 M-40,8 C-32,6 -30,16 -22,14 M-34,30 C-28,24 -20,30 -16,24 M-20,-44 C-18,-34 -26,-30 -22,-22 M-30,-34 C-24,-28 -16,-32 -12,-26"/>
+        <path d="M42,-18 C34,-14 36,-4 28,-2 M40,8 C32,6 30,16 22,14 M34,30 C28,24 20,30 16,24 M20,-44 C18,-34 26,-30 22,-22 M30,-34 C24,-28 16,-32 12,-26"/>
+      </g>
+    </g>
+  </defs>
+
+  <ellipse cx="256" cy="446" rx="172" ry="16" fill="#0B2A55" opacity="0.10"/>
+  <circle cx="256" cy="268" r="200" fill="url(#glow)"/>
+
+  <!-- hộp đèn -->
+  <rect x="92" y="138" width="328" height="282" rx="26" fill="url(#box)"/>
+  <rect x="114" y="160" width="284" height="226" rx="14" fill="url(#screen)"/>
+  <g fill="#A4FBE5" opacity="0.85">
+    <circle cx="146" cy="403" r="3"/><circle cx="166" cy="403" r="3"/><circle cx="186" cy="403" r="3"/><circle cx="206" cy="403" r="3"/>
+    <circle cx="226" cy="403" r="3"/><circle cx="246" cy="403" r="3"/><circle cx="266" cy="403" r="3"/><circle cx="286" cy="403" r="3"/>
+    <circle cx="306" cy="403" r="3"/><circle cx="326" cy="403" r="3"/><circle cx="346" cy="403" r="3"/><circle cx="366" cy="403" r="3"/>
+  </g>
+  <rect x="150" y="420" width="34" height="14" rx="5" fill="#0B2A55"/>
+  <rect x="328" y="420" width="34" height="14" rx="5" fill="#0B2A55"/>
+
+  <!-- 2 tấm phim -->
+  <g transform="rotate(-7 196 270)">
+    <rect x="130" y="178" width="134" height="176" rx="12" fill="url(#film)" opacity="0.96"/>
+    <use href="#brain" transform="translate(197 262) scale(0.92)"/>
+  </g>
+  <g transform="rotate(6 318 276)">
+    <rect x="250" y="186" width="134" height="176" rx="12" fill="url(#film)" opacity="0.96"/>
+    <use href="#brain" transform="translate(317 270) scale(0.82)" opacity="0.92"/>
+  </g>
+
+  <!-- huy hiệu dấu tích -->
+  <circle cx="392" cy="150" r="38" fill="#FFFFFF"/>
+  <circle cx="392" cy="150" r="31" fill="#08A880"/>
+  <path d="M378,151 L388,161 L407,140" stroke="#FFFFFF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg><script>window.__ART_DONE__ = true;</script></body></html>

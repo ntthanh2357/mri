@@ -14,15 +14,15 @@ import {
 } from 'react-native';
 import { get, post } from '../services/api.service';
 import Colors from '../constants/colors';
+
+// Tab hợp lệ — defaultTab lạ (vd. 'emr' từ nút "Bệnh án EMR") trước đây làm trang trống.
+const VALID_TABS = ['lab', 'vitals', 'prescription', 'discharge', 'transfer', 'imaging'];
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PageHeader from '../components/layout/PageHeader';
+import PageTabs from '../components/layout/PageTabs';
+import PageContainer from '../components/layout/PageContainer';
+import PatientSafetyStrip from '../components/staff/PatientSafetyStrip';
 import {
-  FlaskConical,
-  Activity,
-  Pill,
-  FileText,
-  Share2,
-  Scan,
-  ChevronLeft,
   Edit2,
   Save,
   Plus,
@@ -66,7 +66,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [labOrders, setLabOrders] = useState([]);
   const [imagingResults, setImagingResults] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [activeTab, setActiveTab] = useState(route.params?.defaultTab || 'lab'); // 'vitals', 'lab', 'imaging', 'prescription', 'discharge', 'transfer'
+  const [activeTab, setActiveTab] = useState(VALID_TABS.includes(route.params?.defaultTab) ? route.params.defaultTab : 'lab'); // 'vitals', 'lab', 'imaging', 'prescription', 'discharge', 'transfer'
 
   // State cho form ghi nhận sinh hiệu mới
   const [pulseInput, setPulseInput] = useState('');
@@ -104,9 +104,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [clinicalClassifications, setClinicalClassifications] = useState([]);
   const [clinicalSafetyScore, setClinicalSafetyScore] = useState(100);
   const [clinicalSafetyStatus, setClinicalSafetyStatus] = useState('SAFE');
+  const [clinicalEvaluationCoverage, setClinicalEvaluationCoverage] = useState(null);
+  const [clinicalSources, setClinicalSources] = useState(null);
   const [aiConsultationData, setAiConsultationData] = useState(null);
   const [isConsultingAi, setIsConsultingAi] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const [overrideCategory, setOverrideCategory] = useState('BENEFIT_EXCEEDS_RISK');
   const [isSavingPrescription, setIsSavingPrescription] = useState(false);
   const [availableDrugs, setAvailableDrugs] = useState([]); // Kho thuốc của bệnh viện
 
@@ -341,6 +344,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
       setClinicalClassifications([]);
       setClinicalSafetyScore(100);
       setClinicalSafetyStatus('SAFE');
+      setClinicalEvaluationCoverage(null);
+      setClinicalSources(null);
       setAiConsultationData(null);
       return;
     }
@@ -364,6 +369,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setClinicalClassifications(response.data.classifications || []);
         setClinicalSafetyScore(response.data.safetyScore ?? 100);
         setClinicalSafetyStatus(response.data.status || 'SAFE');
+        setClinicalEvaluationCoverage(response.data.evaluationCoverage || null);
+        setClinicalSources(response.data.sources || null);
         if (response.data.aiConsultation) {
           setAiConsultationData(response.data.aiConsultation);
         }
@@ -425,12 +432,17 @@ const PatientDetailScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Kiểm tra nếu có cảnh báo nghiêm trọng mà bác sĩ chưa ghi chú lý do ghi đè
+    // Kiểm tra nếu có cảnh báo nghiêm trọng mà bác sĩ chưa ghi chú lý do ghi đè hợp lệ (tối thiểu 15 ký tự)
     const hasSevereWarning = clinicalWarnings.some(w => w.severity === 'CRITICAL' || w.severity === 'HIGH');
-    if (hasSevereWarning && (!overrideReason || !overrideReason.trim())) {
+    const cleanOverride = (overrideReason || '').trim();
+    const isRepetitive = /(.)\1{4,}/.test(cleanOverride);
+    const words = cleanOverride.split(/\s+/).filter(w => w.length > 1);
+    const isMeaningful = cleanOverride.length >= 15 && !isRepetitive && words.length >= 3;
+
+    if (hasSevereWarning && !isMeaningful) {
       Alert.alert(
-        'Yêu cầu Lý do Lâm sàng (Override)',
-        'Đơn thuốc có cảnh báo tương tác hoặc chống chỉ định mức độ CAO/NGUY KỊCH. Theo quy định, Bác sĩ bắt buộc phải nhập "Lý do ghi đè lâm sàng" ở khung bên dưới trước khi ký số lưu đơn.'
+        'Yêu cầu Lý do Lâm sàng Hợp lệ (Override)',
+        'Đơn thuốc có cảnh báo tương tác hoặc chống chỉ định mức độ CAO / NGUY KỊCH. Bác sĩ bắt buộc phải chọn nhóm lý do và nhập giải trình chuyên môn có ý nghĩa (tối thiểu 15 ký tự, từ 3 từ có nghĩa trở lên, không lặp ký tự vô nghĩa) trước khi ký số lưu đơn.'
       );
       return;
     }
@@ -443,7 +455,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
         diagnosis: prescriptionDiagnosis,
         drugs: prescriptionDrugs,
         note: prescriptionNote,
-        overrideReason: overrideReason ? overrideReason.trim() : ""
+        overrideCategory: overrideCategory || 'BENEFIT_EXCEEDS_RISK',
+        overrideReason: cleanOverride,
+        requestAi: !!aiConsultationData,
+        aiConsultation: aiConsultationData
       };
 
       const res = await post(`/api/patients/${targetPatientId}/prescriptions`, body);
@@ -454,6 +469,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         setPrescriptionDiagnosis('');
         setPrescriptionNote('');
         setOverrideReason('');
+        setOverrideCategory('BENEFIT_EXCEEDS_RISK');
         setPrescriptionDrugs([]);
         setClinicalWarnings([]);
         setClinicalClassifications([]);
@@ -517,7 +533,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSaveTransferForm = async () => {
+  const handleSaveTransferForm = async (extraData = {}) => {
     if (!transferTo || !transferDiagnosis) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập nơi chuyển tuyến đến và chẩn đoán bệnh.');
       return;
@@ -526,9 +542,12 @@ const PatientDetailScreen = ({ route, navigation }) => {
     setIsSavingTransfer(true);
     try {
       const targetPatientId = patient?._id;
+      const isSmart = extraData.isSmartPackage !== false; // Mặc định là gói chuyển viện thông minh
+
       const body = {
-        doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
-        transferNo: transferNo || `CT-${Math.floor(1000 + Math.random() * 9000)}`,
+        patient_id: targetPatientId,
+        doctor_name: currentUser?.profile?.name || currentUser?.name || "Bác sĩ điều trị",
+        transferNo: transferNo || `CV-${Math.floor(100000 + Math.random() * 900000)}`,
         hospitalNo: transferHospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
         transferTo,
         dateIn,
@@ -545,11 +564,22 @@ const PatientDetailScreen = ({ route, navigation }) => {
         transferTime: new Date(),
         isOneYearValid: transferOneYearValid,
         transportation: transferTransportation,
-        escort: transferEscort
+        escort: transferEscort,
+        // Dành riêng cho gói chuyển viện số (DICOM, AI Report, 3D Mesh)
+        imagingResultId: extraData.imagingResultId || undefined,
+        recipientEmail: extraData.recipientEmail || patient?.email || patient?.profile?.email || "",
       };
 
-      await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
-      Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      if (isSmart) {
+        await post('/api/v1/transfers', body);
+        Alert.alert(
+          'Khởi tạo Gói Chuyển Viện Thành Công (UC-DOC-10)',
+          'Hệ thống đã tự động đóng gói file DICOM nén, Báo cáo AI u não và Mô hình 3D khối u, đồng thời chuyển hồ sơ sang bàn Lễ tân để gửi email điện tử cho bệnh nhân!'
+        );
+      } else {
+        await post(`/api/patients/${targetPatientId}/transfer-forms`, body);
+        Alert.alert('Thành công', 'Đã lập phiếu chuyển tuyến thành công.');
+      }
       
       // Reset form
       setTransferNo('');
@@ -900,7 +930,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       <View style={styles.manualLabFormContainer}>
         <View style={styles.manualFormHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Edit2 size={15} color="#0891B2" />
+            <Edit2 size={15} color={Colors.brandGreen} />
             <Text style={styles.manualFormTitle}>
               {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
@@ -910,7 +940,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
             onPress={handleAutoFillNormalLab}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={13} color="#0891B2" />
+              <Sparkles size={13} color={Colors.brandGreen} />
               <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
             </View>
           </TouchableOpacity>
@@ -991,7 +1021,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.brandGreen} />
         <Text style={styles.loadingText}>Đang tải hồ sơ bệnh án...</Text>
       </View>
     );
@@ -1005,121 +1035,36 @@ const PatientDetailScreen = ({ route, navigation }) => {
       activeRoute="PatientRecords"
     >
       <SafeAreaView style={styles.container}>
-        {/* Header điều hướng back */}
-        {!isDesktop && (
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleBackNavigation} style={styles.backButton}>
-              <ChevronLeft size={18} color="#0891B2" />
-              <Text style={styles.backButtonText}>Quay lại</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Chi tiết bệnh án</Text>
-          </View>
-        )}
+        <PageHeader
+          bar
+          onBack={handleBackNavigation}
+          backLabel="Danh sách bệnh nhân"
+          title={patient?.profile?.name || 'Chưa rõ họ tên'}
+          subtitle={[
+            `Mã bệnh nhân ${patient?.profile?.medicalId || `NS-${patient?._id?.substring(18).toUpperCase() || ''}`}`,
+            patient?.profile?.gender,
+            patient?.phone ? `Điện thoại ${patient.phone}` : null,
+            patient?.email,
+          ].filter(Boolean).join(', ')}
+          below={
+            <PageTabs
+              tabs={[
+                { key: 'lab', label: 'Xét nghiệm LIS' },
+                { key: 'vitals', label: 'Sinh hiệu' },
+                { key: 'prescription', label: 'Toa thuốc' },
+                { key: 'discharge', label: 'Giấy ra viện' },
+                { key: 'transfer', label: 'Chuyển tuyến' },
+                { key: 'imaging', label: 'Phim MRI/CT' },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+          }
+        />
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* 1. Thẻ thông tin cá nhân bệnh nhân */}
-          <View style={styles.patientProfileCard}>
-            <View style={styles.avatarBig}>
-              <Text style={styles.avatarBigText}>{patient?.profile?.name?.charAt(0) || 'BN'}</Text>
-            </View>
-            
-            <View style={styles.patientProfileDetails}>
-              <View style={styles.nameRow}>
-                <Text style={styles.patientNameText}>{patient?.profile?.name || 'Chưa rõ họ tên'}</Text>
-                <View style={styles.genderBadge}>
-                  <Text style={styles.genderBadgeText}>
-                    {patient?.profile?.gender || 'Nam'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.patientSubText}>Email: {patient?.email} • SĐT: {patient?.phone || 'Chưa cập nhật'}</Text>
-              
-              <View style={styles.metadataGrid}>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>MÃ BỆNH NHÂN</Text>
-                  <Text style={styles.metaValue}>NS-{patient?._id?.substring(18).toUpperCase() || 'N/A'}</Text>
-                </View>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>EMAIL</Text>
-                  <Text style={styles.metaValue}>{patient?.email || 'N/A'}</Text>
-                </View>
-                <View style={styles.metaCell}>
-                  <Text style={styles.metaLabel}>VAI TRÒ</Text>
-                  <Text style={[styles.metaValue, { color: Colors.success, fontWeight: 'bold' }]}>Bệnh nhân</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* 2. Bộ Tab chuyển màn hình */}
-          <View style={styles.tabsWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tabsScrollContent}
-            >
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'lab' && styles.activeTabButton]}
-                onPress={() => setActiveTab('lab')}
-              >
-                <FlaskConical size={16} color={activeTab === 'lab' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'lab' && styles.activeTabButtonText]}>
-                  Xét nghiệm LIS
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'vitals' && styles.activeTabButton]}
-                onPress={() => setActiveTab('vitals')}
-              >
-                <Activity size={16} color={activeTab === 'vitals' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'vitals' && styles.activeTabButtonText]}>
-                  Sinh hiệu
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'prescription' && styles.activeTabButton]}
-                onPress={() => setActiveTab('prescription')}
-              >
-                <Pill size={16} color={activeTab === 'prescription' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'prescription' && styles.activeTabButtonText]}>
-                  Toa thuốc
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'discharge' && styles.activeTabButton]}
-                onPress={() => setActiveTab('discharge')}
-              >
-                <FileText size={16} color={activeTab === 'discharge' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'discharge' && styles.activeTabButtonText]}>
-                  Giấy ra viện
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'transfer' && styles.activeTabButton]}
-                onPress={() => setActiveTab('transfer')}
-              >
-                <Share2 size={16} color={activeTab === 'transfer' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'transfer' && styles.activeTabButtonText]}>
-                  Chuyển tuyến
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'imaging' && styles.activeTabButton]}
-                onPress={() => setActiveTab('imaging')}
-              >
-                <Scan size={16} color={activeTab === 'imaging' ? '#FFFFFF' : '#64748B'} />
-                <Text style={[styles.tabButtonText, activeTab === 'imaging' && styles.activeTabButtonText]}>
-                  Phim MRI/CT
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
+          <PageContainer>
+          <PatientSafetyStrip patientId={patientId} />
           {/* 3. Nội dung TAB 1: SINH HIỆU */}
           {activeTab === 'vitals' && (
             <VitalsTab
@@ -1192,11 +1137,15 @@ const PatientDetailScreen = ({ route, navigation }) => {
               clinicalClassifications={clinicalClassifications}
               clinicalSafetyScore={clinicalSafetyScore}
               clinicalSafetyStatus={clinicalSafetyStatus}
+              clinicalEvaluationCoverage={clinicalEvaluationCoverage}
+              clinicalSources={clinicalSources}
               aiConsultationData={aiConsultationData}
               isConsultingAi={isConsultingAi}
               onConsultAi={handleConsultAi}
               overrideReason={overrideReason}
               setOverrideReason={setOverrideReason}
+              overrideCategory={overrideCategory}
+              setOverrideCategory={setOverrideCategory}
               prescriptionNote={prescriptionNote}
               setPrescriptionNote={setPrescriptionNote}
               handleSavePrescription={handleSavePrescription}
@@ -1260,6 +1209,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               handleSaveTransferForm={handleSaveTransferForm}
               isSavingTransfer={isSavingTransfer}
               labOrders={labOrders}
+              imagingResults={imagingResults}
             />
           )}
 
@@ -1271,6 +1221,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
             />
           )}
 
+          </PageContainer>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
@@ -1293,146 +1244,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 14,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#0891B2',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  patientProfileCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  avatarBig: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#ECFEFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: '#CFFAFE',
-  },
-  avatarBigText: {
-    color: '#0891B2',
-    fontWeight: 'bold',
-    fontSize: 24,
-  },
-  patientProfileDetails: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  patientNameText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginRight: 8,
-  },
-  genderBadge: {
-    backgroundColor: '#ECFEFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  genderBadgeText: {
-    fontSize: 11,
-    color: '#0891B2',
-    fontWeight: 'bold',
-  },
-  patientSubText: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  metadataGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 12,
-  },
-  metaCell: {
-    flex: 1,
-  },
-  metaLabel: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  metaValue: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  tabsWrapper: {
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingBottom: 8,
-  },
-  tabsScrollContent: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  activeTabButton: {
-    backgroundColor: '#0891B2',
-    borderColor: '#0891B2',
-  },
-  tabButtonText: {
-    fontSize: 14,
-    color: '#475569',
-    fontWeight: 'bold',
-  },
-  activeTabButtonText: {
-    color: '#FFFFFF',
-  },
+  scrollContainer: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: {
     flexDirection: 'row',
     gap: 20,
@@ -1473,7 +1285,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   metricLabelText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 2,
   },
@@ -1483,7 +1295,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   metricUnitText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
     fontWeight: 'normal',
   },
@@ -1543,7 +1355,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   legendText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
   },
   mobileChartFallback: {
@@ -1570,7 +1382,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderCol: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#64748B',
   },
@@ -1582,7 +1394,7 @@ const styles = StyleSheet.create({
   },
   tableRowCol: {
     flex: 1,
-    fontSize: 10,
+    fontSize: 12,
     color: '#334155',
   },
   formGroup: {
@@ -1610,7 +1422,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     height: 42,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1633,7 +1445,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectedOrderItem: {
-    borderColor: Colors.primary,
+    borderColor: Colors.brandGreen,
     backgroundColor: '#F0FDF4',
   },
   orderItemHeader: {
@@ -1651,12 +1463,12 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   orderBarcodeText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     fontFamily: 'monospace',
   },
   orderDateText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 2,
   },
@@ -1672,7 +1484,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   badgeTextSmall: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#166534',
   },
@@ -1694,7 +1506,7 @@ const styles = StyleSheet.create({
   actionBtnOutline: {
     height: 38,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.brandGreen,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1702,7 +1514,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    color: Colors.primary,
+    color: Colors.brandGreen,
     fontWeight: 'bold',
   },
   labReportSheet: {
@@ -1731,7 +1543,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   hospitalName: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#475569',
   },
   hospitalSub: {
@@ -1740,12 +1552,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   departmentName: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: 'bold',
   },
   barcodeLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#000000',
     fontFamily: 'monospace',
     fontWeight: 'bold',
@@ -1778,12 +1590,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   demoLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     width: '28%',
   },
   demoVal: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#0F172A',
     width: '22%',
@@ -1804,7 +1616,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   colHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#0F172A',
   },
@@ -1823,7 +1635,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   colCell: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#334155',
   },
   textAbnormalBold: {
@@ -1843,7 +1655,7 @@ const styles = StyleSheet.create({
   },
   alertIndicatorText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   pendingReportBox: {
@@ -1864,7 +1676,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pendingReportSubText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
     marginTop: 6,
@@ -1875,14 +1687,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   signatureTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#334155',
     textAlign: 'center',
     width: 180,
   },
   signatureSigned: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#10B981',
     fontWeight: 'bold',
     fontStyle: 'italic',
@@ -1924,9 +1736,9 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   badgeSimText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
-    color: Colors.primary,
+    color: Colors.brandGreen,
   },
   simActionsRow: {
     flexDirection: 'row',
@@ -1958,7 +1770,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   customSimHint: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 10,
     lineHeight: 16,
@@ -1970,7 +1782,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   validationText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   customSimRow: {
@@ -1978,7 +1790,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   smallLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#64748B',
     marginBottom: 4,
   },
@@ -1994,7 +1806,7 @@ const styles = StyleSheet.create({
   },
   customSendBtn: {
     height: 34,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2043,7 +1855,7 @@ const styles = StyleSheet.create({
   },
   autofillBtnText: {
     fontSize: 12,
-    color: Colors.primary,
+    color: Colors.brandGreen,
     fontWeight: '600',
   },
   manualLabGrid: {
@@ -2073,7 +1885,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   manualLabRangeHint: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 4,
   },
@@ -2105,7 +1917,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#047857',
     justifyContent: 'center',
     alignItems: 'center',
   },

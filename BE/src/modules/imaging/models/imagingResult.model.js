@@ -125,6 +125,8 @@ const imagingResultSchema = new Schema(
     model3dUrl: { type: String, default: null },                        // C.5: 3D GLTF model
     aiJobId: { type: Schema.Types.ObjectId, ref: 'AiJob', default: null }, // Liên kết AiJob
     isSigned: { type: Boolean, default: false },                        // Bác sĩ đã ký duyệt
+    storageFileId: { type: String, default: null },                     // ID tệp ảnh/DICOM trong StoredMedicalFile (Local/Drive)
+    storageReportFileId: { type: String, default: null },               // ID tệp báo cáo chẩn đoán trong StoredMedicalFile
     signedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     signedByDoctorId: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // [BUG-05 FIX] alias dùng trong scheduler
     signedAt: { type: Date, default: null },

@@ -21,6 +21,14 @@ const invoiceItemSchema = new Schema({
     patientCopayAmount: { type: Number, default: 0 },
     bhytDrugCode: { type: String, default: null }
   },
+  // Trạng thái xuất kho vật lý tại quầy dược (Physical Pharmacy Dispensing Status)
+  dispenseStatus: {
+    type: String,
+    enum: ['PENDING', 'DISPENSED', 'CANCELLED', 'PARTIALLY_DISPENSED'],
+    default: 'PENDING'
+  },
+  dispensedAt: { type: Date, default: null },
+  dispensedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   // Hoàn tiền từng phần (Partial Refund Tracking)
   isRefunded: { type: Boolean, default: false },
   refundedQuantity: { type: Number, default: 0 }
@@ -33,10 +41,21 @@ const invoiceSchema = new Schema(
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', index: true },
     items: [invoiceItemSchema],
     totalAmount: { type: Number, required: true },
-    status: { type: String, enum: ['chờ thanh toán', 'đã thanh toán', 'hoàn trả', 'hủy'], default: 'chờ thanh toán' },
+    status: { type: String, enum: ['chờ thanh toán', 'đang xử lý', 'đã thanh toán', 'hoàn trả', 'hủy'], default: 'chờ thanh toán' },
+    stockDeductionStatus: {
+      type: String,
+      enum: ['PENDING', 'DEDUCTED', 'SHORTAGE_FLAGGED', 'PERMANENT_ERROR_FLAGGED', 'EXCEEDED_MAX_RETRIES'],
+      default: 'PENDING'
+    },
+    dispenseStatus: {
+      type: String,
+      enum: ['PENDING', 'DISPENSED', 'CANCELLED', 'PARTIALLY_DISPENSED'],
+      default: 'PENDING'
+    },
     paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', 'vietqr', ''], default: '' },
     orderCode: { type: Number, unique: true, sparse: true },
     paidAt: { type: Date, default: null },
+    paymentNotes: { type: String, default: "" },
     // Phân loại thanh toán & Thử nghiệm lâm sàng (Clinical Trial)
     billingType: {
       type: String,
@@ -95,7 +114,10 @@ const invoiceSchema = new Schema(
     // R.2 — BHYT đồng chi trả & Quản lý trần thanh toán / Trái tuyến
     bhytInfo: {
       bhytId: { type: Schema.Types.ObjectId, ref: 'BhytInfo', default: null },
-      cardNumber: { type: String, default: null },        // Che số thẻ (4 ký tự cuối)
+      cardNumber: { type: String, default: null },        // Mã số thẻ BHYT (hoặc mã che 4 số cuối)
+      cardExpiryDate: { type: Date, default: null },      // Hạn sử dụng thẻ BHYT
+      isCardValid: { type: Boolean, default: true },      // Trạng thái thẻ qua cổng giám định BHXH
+      treatmentCode: { type: String, default: null },     // Mã đợt điều trị KCB BHYT
       coverageRate: { type: Number, default: 0 },        // % BHYT chi trả
       bhytAmount: { type: Number, default: 0 },          // Số tiền BHYT chi trả
       patientCopayAmount: { type: Number, default: 0 },  // Bệnh nhân đồng chi trả
@@ -104,6 +126,16 @@ const invoiceSchema = new Schema(
       isOutOfNetwork: { type: Boolean, default: false },  // Cờ khám chữa bệnh trái tuyến
       priorAuthorization: { type: String, default: null }, // Giấy phê duyệt điều trị đặc biệt (Bevacizumab)
     },
+    // Phê duyệt trợ cấp từ thiện có cấu trúc (Structured Charity Approval)
+    charityApproval: {
+      isApproved: { type: Boolean, default: false },
+      programCode: { type: String, default: null },       // Mã chương trình trợ cấp
+      approvedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      approvedAt: { type: Date, default: null },
+      documentRef: { type: String, default: null }
+    },
+    // Số lần webhook gửi lại (Webhook Retry Counter để chặn retry vô hạn)
+    webhookRetryCount: { type: Number, default: 0 },
     patientPayAmount: { type: Number, default: null },   // Thực tế bệnh nhân trả (sau BHYT)
   },
   { timestamps: true }

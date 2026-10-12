@@ -681,23 +681,59 @@ CÁCH TRẢ LỜI:
 // @access  Private (Admin only)
 export const saveChatbotConfig = async (req, res) => {
   try {
-    // Use env variable for portability; fallback to a sensible relative path
     const configPath = process.env.CHATBOT_CONFIG_PATH
       ? path.resolve(process.env.CHATBOT_CONFIG_PATH)
       : path.resolve(__dirname, "../../../MRIteam/chatbot_config.json");
-    const { blacklist, system_prompt } = req.body;
 
-    if (!blacklist || !Array.isArray(blacklist)) {
-      return res.status(400).json({ success: false, message: "Blacklist phải là một mảng chuỗi." });
+    let currentConfig = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        currentConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      } catch (e) {
+        console.warn("Đọc config hiện tại lỗi, ghi đè mới:", e.message);
+      }
     }
-    if (!system_prompt || typeof system_prompt !== "string") {
-      return res.status(400).json({ success: false, message: "System prompt không hợp lệ." });
+
+    const { 
+      blacklist, 
+      system_prompt,
+      ocrTemperature1,
+      ocrTemperature2,
+      translatorTemperature,
+      translatorMaxTokensK,
+      ragSearchDepth,
+      ragDocs,
+    } = req.body;
+
+    const defaultBlacklist = ["uống thuốc gì", "bao giờ chết", "tự tử", "đơn thuốc", "kê đơn", "sống được bao lâu"];
+    const effectiveBlacklist = Array.isArray(blacklist) 
+      ? blacklist 
+      : (currentConfig.blacklist || defaultBlacklist);
+
+    const effectivePrompt = (typeof system_prompt === "string" && system_prompt.trim().length > 0)
+      ? system_prompt
+      : (currentConfig.system_prompt || "Bạn là trợ lý chẩn đoán AI y tế chuyên nghiệp, hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
+
+    const updatedConfig = {
+      ...currentConfig,
+      blacklist: effectiveBlacklist,
+      system_prompt: effectivePrompt,
+      ocrTemperature1: ocrTemperature1 !== undefined ? Number(ocrTemperature1) : (currentConfig.ocrTemperature1 ?? 0.65),
+      ocrTemperature2: ocrTemperature2 !== undefined ? Number(ocrTemperature2) : (currentConfig.ocrTemperature2 ?? 0.40),
+      translatorTemperature: translatorTemperature !== undefined ? Number(translatorTemperature) : (currentConfig.translatorTemperature ?? 0.70),
+      translatorMaxTokensK: translatorMaxTokensK !== undefined ? Number(translatorMaxTokensK) : (currentConfig.translatorMaxTokensK ?? 4),
+      ragSearchDepth: ragSearchDepth !== undefined ? Number(ragSearchDepth) : (currentConfig.ragSearchDepth ?? 10),
+      ragDocs: Array.isArray(ragDocs) ? ragDocs : (currentConfig.ragDocs || []),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const dir = path.dirname(configPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
+    fs.writeFileSync(configPath, JSON.stringify(updatedConfig, null, 2), "utf8");
 
-    const config = { blacklist, system_prompt };
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
-
-    res.status(200).json({ success: true, config, message: "Lưu cấu hình chatbot thành công!" });
+    res.status(200).json({ success: true, config: updatedConfig, message: "Lưu cấu hình hệ thống AI thành công!" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

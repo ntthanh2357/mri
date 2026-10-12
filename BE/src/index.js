@@ -46,6 +46,8 @@ app.use(cors({
 // Phân hệ hình ảnh MRI / DICOM: Cho phép upload dữ liệu lát cắt lớn (đến 700MB)
 app.use("/api/v1/imaging", express.json({ limit: "700mb" }));
 app.use("/api/v1/imaging", express.urlencoded({ limit: "700mb", extended: true }));
+app.use("/api/v1/imaging-results", express.json({ limit: "700mb" }));
+app.use("/api/v1/imaging-results", express.urlencoded({ limit: "700mb", extended: true }));
 
 // Các API thông thường (Auth, EMR, Bệnh nhân...): Giới hạn 20mb để chống tấn công cạn kiệt RAM / JSON Bomb
 app.use(express.json({ limit: "20mb" }));

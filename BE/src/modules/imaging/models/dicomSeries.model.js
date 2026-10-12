@@ -36,6 +36,9 @@ const dicomSeriesSchema = new Schema(
     driveSeriesFolderId: { type: String, default: "" },
     driveSeriesFolderUrl: { type: String, default: "" },
     dicomFileUrls: [{ type: String }],                      // URL từng file .dcm trên Drive
+    // Local-First PACS storage
+    storageFolder: { type: String, default: "" },          // Đường dẫn cục bộ tới thư mục chuỗi xung
+    sliceFileIds: [{ type: String }],                      // Danh sách fileId trong StoredMedicalFile
     // Metadata kỹ thuật từ DICOM header
     metadata: {
       scanningSequence: { type: String, default: "" },      // Tag ScanningSequence

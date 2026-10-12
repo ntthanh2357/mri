@@ -98,7 +98,7 @@ router.post("/chatbot-config", requireSystemAdmin, saveChatbotConfig);
 router.get("/ai-training-stats", requireSystemAdmin, getAiTrainingStats);
 
 // ─── Hospital Operations Dashboard ───────────────────────────────────────────
-router.get("/dashboard", requireHospitalAdmin, getDashboardStats);
+router.get("/dashboard", checkRole(["admin", "system_admin", "hospital_admin", "doctor", "technician", "nurse"]), getDashboardStats);
 router.put("/hospital-pricing", requireHospitalAdmin, updateHospitalPricing);
 
 // ─── Custom monthly reports (Revenue and Drug reports) ──────────────────────

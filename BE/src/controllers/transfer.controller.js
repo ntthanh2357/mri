@@ -2,75 +2,66 @@ import crypto from "crypto";
 import { TransferForm } from "../models/transferForm.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { HospitalBed } from "../models/hospitalBed.model.js";
-import { Visit } from "../models/visit.model.js";
+import { User } from "../models/user.model.js";
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
+import { sendReferralPackageEmail } from "../services/email.service.js";
 
-// ─── F.1 — Kiểm tra khả năng tiếp nhận phẫu thuật & giường viện đích ─────────
-// @route POST /api/v1/transfers/check-capacity
-// @access Private (Doctor, Admin)
-export const checkSurgeryCapacity = async (req, res) => {
-  try {
-    const { targetHospitalId, departmentId = "KUTN-SURG" } = req.body;
-    if (!targetHospitalId) return errorResponse(res, "Thiếu ID bệnh viện đích (targetHospitalId).", 400);
-
-    const targetHospital = await Hospital.findById(targetHospitalId).lean();
-    if (!targetHospital || !targetHospital.isActive) {
-      return errorResponse(res, "Bệnh viện đích không tồn tại hoặc ngừng hoạt động.", 404);
-    }
-
-    // Đếm giường trống tại viện đích (Hỗ trợ chuyên khoa Ung Thư Não & tương thích ngược)
-    const bedQuery = {
-      hospitalId: targetHospitalId,
-      status: 'available'
-    };
-    if (departmentId && departmentId !== 'all') {
-      if (departmentId === 'KNT' || departmentId === 'KUTN-SURG') {
-        bedQuery.departmentId = { $in: ['KUTN-SURG', 'KNT'] };
-      } else if (departmentId === 'ICU' || departmentId === 'KUTN-ICU') {
-        bedQuery.departmentId = { $in: ['KUTN-ICU', 'ICU'] };
-      } else {
-        bedQuery.departmentId = departmentId;
-      }
-    }
-
-    const availableBeds = await HospitalBed.countDocuments(bedQuery);
-
-    const isAvailable = availableBeds > 0;
-
-    return successResponse(res, {
-      targetHospitalId,
-      targetHospitalName: targetHospital.name,
-      departmentId,
-      availableBeds,
-      canAccept: isAvailable,
-      message: isAvailable
-        ? `Bệnh viện ${targetHospital.name} có ${availableBeds} giường trống tại Khoa Ung Thư Não. Đủ năng lực tiếp nhận ca phẫu thuật / điều trị u não.`
-        : `Bệnh viện ${targetHospital.name} hiện hết giường trống chuyên khoa u não. Gợi ý chuyển tuyến khác.`
-    }, "Kiểm tra khả năng tiếp nhận thành công.");
-  } catch (err) {
-    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
-  }
+// Helper: Tự động gom dữ liệu chẩn đoán hình ảnh thành package snapshot
+const buildImagingPackageSnapshot = (imagingResult) => {
+  if (!imagingResult) return null;
+  return {
+    imagingResultId: imagingResult._id,
+    medicalId: imagingResult.medicalId || "",
+    procedure: imagingResult.procedure || "Chụp MRI sọ não",
+    technique: imagingResult.technique || "",
+    findings: imagingResult.findings || "",
+    conclusion: imagingResult.conclusion || "",
+    radiologist: imagingResult.radiologist || "",
+    orderDate: imagingResult.orderDate || null,
+    reportDate: imagingResult.reportDate || null,
+    isSigned: Boolean(imagingResult.isSigned),
+    signedAt: imagingResult.signedAt || null,
+    // DICOM archive (.zip)
+    dicom: {
+      zipUrl: imagingResult.dicomZipUrl || null,
+      sizeBytes: imagingResult.dicomZipSize || null,
+      filename: imagingResult.dicomZipFilename || null,
+      studyInstanceUID: imagingResult.dicomMetadata?.studyInstanceUID || "",
+    },
+    // Báo cáo AI chuyên biệt u não
+    aiReport: imagingResult.aiReport || null,
+    // 3D Model GLTF
+    model3dUrl: imagingResult.model3dUrl || null,
+    // Mặt cắt & phân đoạn
+    segmentationUrl: imagingResult.segmentationUrl || null,
+    top5SlicesUrls: Array.isArray(imagingResult.top5SlicesUrls) ? imagingResult.top5SlicesUrls : [],
+    representativeSliceUrl: imagingResult.representativeSliceUrl || null,
+  };
 };
 
-// ─── F.2 — Tạo yêu cầu chuyển viện + đóng gói dữ liệu ────────────────────────
+// ─── UC-DOC-10: Bác sĩ tạo gói chuyển viện thông minh ─────────────────────────
 // @route POST /api/v1/transfers
-// @access Private (Doctor, Admin)
+// @access Private (Doctor, Admin, Hospital Admin)
 export const createTransferRequest = async (req, res) => {
   try {
     if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
-      return errorResponse(res, "Chỉ bác sĩ mới có thể tạo yêu cầu chuyển viện.", 403);
+      return errorResponse(res, "Chỉ bác sĩ mới có quyền khởi tạo gói chuyển viện.", 403);
     }
 
     const hospitalId = req.user.hospitalId;
+    const rawPatientId = req.body.patient_id || req.body.patientId;
     const {
-      patient_id,
       visitId,
       imagingResultId,
       targetHospitalId,
       transferTo,
+      transferNo,
+      hospitalNo,
+      dateIn,
+      dateOut,
       clinicalSummary,
       labSummary,
       diagnosis,
@@ -79,399 +70,454 @@ export const createTransferRequest = async (req, res) => {
       patientStatus,
       reason = "1",
       reasonDetail,
-      transportation,
-      escort
+      treatmentDirection,
+      transportation = "Xe cấp cứu chuyên dụng",
+      escort,
+      isOneYearValid = "Không",
+      recipientEmail
     } = req.body;
 
-    if (!patient_id || !targetHospitalId) {
-      return errorResponse(res, "Thiếu patient_id hoặc targetHospitalId.", 400);
+    const patient_id = rawPatientId;
+
+    if (!patient_id || !diagnosis) {
+      return errorResponse(res, "Vui lòng cung cấp đầy đủ ID bệnh nhân và chẩn đoán bệnh chính.", 400);
     }
 
-    // Kiểm tra bệnh viện đích
-    const targetHospital = await Hospital.findById(targetHospitalId).lean();
-    if (!targetHospital) return errorResponse(res, "Không tìm thấy bệnh viện đích.", 404);
+    // 1. Tìm thông tin bệnh nhân để lấy email nhận hồ sơ
+    const patient = await User.findById(patient_id).lean();
+    if (!patient) {
+      return errorResponse(res, "Không tìm thấy hồ sơ bệnh nhân.", 404);
+    }
+    const finalRecipientEmail = (recipientEmail || patient.email || patient.profile?.email || "").trim();
 
-    // F.2 — Đóng gói zip URL (gói chuyển viện bao gồm DICOM/AI)
-    let transferPackageDriveUrl = "";
+    // 2. Tìm hoặc tự động phát hiện ca chụp MRI / CT mới nhất của bệnh nhân
+    let imagingDoc = null;
     if (imagingResultId) {
-      const imagingResult = await ImagingResult.findById(imagingResultId).lean();
-      transferPackageDriveUrl = imagingResult?.representativeSliceUrl || imagingResult?.segmentationUrl || "";
+      imagingDoc = await ImagingResult.findById(imagingResultId).lean();
+    }
+    if (!imagingDoc) {
+      imagingDoc = await ImagingResult.findOne({
+        $or: [
+          { patientId: patient_id },
+          { medicalId: patient.profile?.medicalId || "__no_match__" },
+          { patientName: patient.profile?.fullName || patient.profile?.name }
+        ]
+      })
+        .sort({ createdAt: -1 })
+        .lean();
     }
 
+    // 3. Đóng gói snapshot đầy đủ: DICOM, AI Report, 3D model, slices
+    const packageSnapshot = buildImagingPackageSnapshot(imagingDoc);
+
+    // Tên nơi tiếp nhận
+    let destinationName = transferTo || "";
+    if (!destinationName && targetHospitalId) {
+      const targetHosp = await Hospital.findById(targetHospitalId).lean();
+      if (targetHosp) destinationName = targetHosp.name;
+    }
+    if (!destinationName) {
+      destinationName = "Bệnh viện tuyến trên (Chuyên khoa Ngoại Thần Kinh)";
+    }
+
+    // 4. Tạo bản ghi TransferForm ở trạng thái 'draft' (chờ Lễ tân kiểm tra & gửi email)
     const transferForm = new TransferForm({
       hospitalId,
-      targetHospitalId,
+      targetHospitalId: targetHospitalId || null,
       patient_id,
       visitId: visitId || null,
-      imagingResultId: imagingResultId || null,
-      doctor_name: req.user.name || "Bác sĩ điều trị",
-      transferNo: `CV-${Date.now().toString().slice(-6)}`,
-      transferTo: transferTo || targetHospital.name,
+      imagingResultId: imagingDoc ? imagingDoc._id : null,
+      doctor_name: req.user.name || req.user.profile?.name || "Bác sĩ điều trị",
+      transferNo: transferNo || `CV-${Date.now().toString().slice(-6)}`,
+      hospitalNo: hospitalNo || `BA-${Date.now().toString().slice(-6)}`,
+      transferTo: destinationName,
+      dateIn: dateIn || new Date(),
+      dateOut: dateOut || new Date(),
       clinicalSummary: clinicalSummary || "",
       labSummary: labSummary || "",
       diagnosis: diagnosis || "",
       treatment: treatment || "",
       drugsUsed: drugsUsed || "",
-      patientStatus: patientStatus || "",
+      patientStatus: patientStatus || "Sinh hiệu ổn định lúc chuyển",
       reason,
-      reasonDetail: reasonDetail || "Không phù hợp khả năng chuyên môn",
-      transportation: transportation || "Xe cấp cứu",
+      reasonDetail: reasonDetail || "Vượt quá khả năng phẫu thuật thần kinh chuyên sâu tại cơ sở",
+      treatmentDirection: treatmentDirection || "Phẫu thuật bóc tách u não chuyên sâu / Hội chẩn can thiệp",
+      transportation,
       escort: escort || "",
-      transferPackageDriveUrl,
-      status: 'pending',
+      isOneYearValid,
+      packageSnapshot,
+      status: "draft", // Đẩy qua role Lễ tân gửi
+      recipientEmail: finalRecipientEmail,
+      sendAttempts: 0,
     });
+
     await transferForm.save();
 
-    // Thông báo cho admin/bác sĩ trực tại bệnh viện đích
+    // 5. Ghi Audit Log hành động tạo gói chuyển viện
     try {
-      await notifyTargetHospital(targetHospitalId, transferForm, req.user.id);
-    } catch (notifErr) {
-      console.warn("⚠️ Không thể gửi thông báo chuyển viện tới viện đích:", notifErr.message);
-    }
-
-    return successResponse(res, { transferForm }, "Tạo hồ sơ chuyển viện thành công. Đã gửi tới viện đích.", 201);
-  } catch (err) {
-    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
-  }
-};
-
-// ─── F.3 — Viện đích chấp nhận chuyển viện + tự động giữ chỗ giường ───────────
-// @route PUT /api/v1/transfers/:id/accept
-// @access Private (Doctor/Admin at Target Hospital)
-export const acceptTransferRequest = async (req, res) => {
-  try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-
-    // [BOLA/IDOR GUARD]: Chỉ nhân viên y tế thuộc bệnh viện đích (tiếp nhận) mới có thẩm quyền duyệt (Luật 15/2023 Điều 66)
-    if (req.user.role !== 'admin' && req.user.hospitalId?.toString() !== transfer.targetHospitalId?.toString()) {
-      return errorResponse(res, "Chỉ bác sĩ hoặc quản trị viên của bệnh viện tiếp nhận mới có quyền duyệt phiếu chuyển viện.", 403);
-    }
-
-    if (transfer.status !== 'pending') {
-      return errorResponse(res, `Yêu cầu này đã ở trạng thái: ${transfer.status}.`, 400);
-    }
-
-    // [P0 CONCURRENCY FIX]: Tự động giữ chỗ giường trống nguyên tử bằng findOneAndUpdate
-    // Ngăn chặn race condition khi 2 ca chuyển viện cấp cứu được duyệt đồng thời bị gán trùng 1 giường
-    const availableBed = await HospitalBed.findOneAndUpdate(
-      {
-        hospitalId: transfer.targetHospitalId,
-        $or: [
-          { status: 'available' },
-          { status: 'reserved', reservedUntil: { $lt: new Date() } }
-        ]
-      },
-      {
-        $set: {
-          status: 'reserved',
-          reservedUntil: new Date(Date.now() + 4 * 60 * 60 * 1000), // Giữ 4 tiếng
-          reserveReason: 'inter_hospital_transfer',
-          reservedForPatientId: transfer.patient_id,
-          reservedForVisitId: transfer.visitId || null,
-          reservedByUserId: req.user.id,
-          reservedAt: new Date()
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.REFERRAL_PACKAGE_CREATED,
+        entity: "TransferForm",
+        entityId: transferForm._id,
+        performedBy: req.user.id,
+        hospitalId,
+        details: `Bác sĩ ${transferForm.doctor_name} đã tạo gói chuyển viện ${transferForm.transferNo} cho bệnh nhân ${patient.profile?.fullName || patient.profile?.name || patient.email}`,
+        payload: {
+          transferId: transferForm._id,
+          patientId: patient._id,
+          hasDicom: Boolean(packageSnapshot?.dicom?.zipUrl),
+          hasAiReport: Boolean(packageSnapshot?.aiReport),
+          has3DModel: Boolean(packageSnapshot?.model3dUrl),
         }
-      },
-      { new: true }
-    );
-
-    if (availableBed) {
-      transfer.targetBedId = availableBed._id;
-      // Ghi audit log giữ chỗ giường chuyển viện
-      try {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.BED_RESERVED,
-          entity: "HospitalBed",
-          entityId: availableBed._id,
-          performedBy: req.user.id,
-          hospitalId: transfer.targetHospitalId,
-          details: `Tự động giữ chỗ giường ${availableBed.bedNumber} cho bệnh nhân chuyển viện ${transfer.patient_id}`,
-          payload: { transferId: transfer._id, bedId: availableBed._id }
-        });
-      } catch (_) {}
+      });
+    } catch (auditErr) {
+      console.warn("⚠️ Ghi audit log tạo gói chuyển viện thất bại:", auditErr.message);
     }
 
-    transfer.status = 'accepted';
-    transfer.acceptedByUserId = req.user.id;
-    transfer.acceptedAt = new Date();
-    await transfer.save();
-
-    // Thông báo lại viện gửi
+    // 6. Gửi thông báo nội bộ tới các nhân viên Lễ tân (Receptionist) cùng viện
     try {
-      const { User } = await import("../models/user.model.js");
-      const sourceAdmins = await User.find({ hospitalId: transfer.hospitalId, role: { $in: ['doctor', 'admin'] } }, "_id");
-      for (const admin of sourceAdmins) {
+      const receptionists = await User.find({
+        hospitalId,
+        role: "receptionist",
+        isLocked: false
+      }).select("_id").lean();
+
+      for (const rec of receptionists) {
         await createNotificationInternal({
-          hospitalId: transfer.hospitalId,
-          recipientId: admin._id,
+          hospitalId,
+          recipientId: rec._id,
           senderId: req.user.id,
-          type: "transfer_accepted",
-          title: "✅ Chuyển viện được chấp nhận",
-          message: `Viện đích đã duyệt nhận bệnh nhân. Giường số ${availableBed?.bedNumber || 'chưa xếp'} đã được giữ chỗ.`,
-          relatedId: transfer._id,
+          type: "transfer_draft",
+          title: "📋 Hồ sơ chuyển viện mới cần gửi",
+          message: `Bác sĩ ${transferForm.doctor_name} vừa tạo gói chuyển viện (Mã: ${transferForm.transferNo}) cho BN ${patient.profile?.fullName || patient.profile?.name || "Bệnh nhân"}. Vui lòng xác thực email và bấm gửi cho bệnh nhân.`,
+          relatedId: transferForm._id,
         });
       }
     } catch (notifErr) {
-      console.warn("⚠️ Lỗi gửi notif chuyển viện duyệt:", notifErr.message);
+      console.warn("⚠️ Gửi thông báo tới lễ tân thất bại:", notifErr.message);
     }
 
     return successResponse(res, {
-      transfer,
-      reservedBed: availableBed ? { bedNumber: availableBed.bedNumber, roomNumber: availableBed.roomNumber } : null
-    }, "Đã chấp nhận chuyển viện và giữ chỗ giường thành công.");
+      transferForm,
+      message: "Đã tạo gói chuyển viện thông minh thành công và chuyển sang bộ phận Lễ tân để gửi email cho bệnh nhân."
+    }, "Tạo gói chuyển viện thành công.", 201);
   } catch (err) {
+    console.error("Lỗi tạo gói chuyển viện:", err);
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
 
-// ─── Từ chối chuyển viện ──────────────────────────────────────────────────────
-// @route PUT /api/v1/transfers/:id/reject
-// @access Private (Doctor/Admin at Target Hospital)
-export const rejectTransferRequest = async (req, res) => {
+// ─── UC-DOC-10: Lễ tân gửi email hồ sơ chuyển viện cho bệnh nhân ──────────────
+// @route POST /api/v1/transfers/:id/send-email
+// @access Private (Receptionist, Doctor, Admin, Hospital Admin)
+export const sendTransferEmail = async (req, res) => {
   try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-
-    // [BOLA/IDOR GUARD]: Chỉ bệnh viện tiếp nhận được quyền từ chối
-    if (req.user.role !== 'admin' && req.user.hospitalId?.toString() !== transfer.targetHospitalId?.toString()) {
-      return errorResponse(res, "Chỉ bác sĩ hoặc quản trị viên của bệnh viện tiếp nhận mới có quyền từ chối phiếu chuyển viện.", 403);
+    if (!["receptionist", "doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+      return errorResponse(res, "Bạn không có quyền thực hiện gửi hồ sơ chuyển viện.", 403);
     }
 
-    const { reason } = req.body;
-    transfer.status = 'rejected';
-    transfer.rejectionReason = reason || "Bệnh viện quá tải";
+    const { id } = req.params;
+    const { overrideEmail } = req.body;
 
-    // Tự động thu hồi giường giữ chỗ viện đích nếu có
-    if (transfer.targetBedId) {
-      await HospitalBed.findOneAndUpdate(
-        { _id: transfer.targetBedId, status: 'reserved', reservedForPatientId: transfer.patient_id },
-        { $set: { status: 'available', reservedUntil: null, reservedForPatientId: null, reservedForVisitId: null, reserveReason: null } }
-      );
-      transfer.targetBedId = null;
+    const transfer = await TransferForm.findById(id).populate("patient_id").populate("hospitalId");
+    if (!transfer) {
+      return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
     }
 
-    // Tự động hủy token xem liên viện khi ca bị từ chối
-    if (transfer.crossHospitalToken) {
-      transfer.crossHospitalToken = null;
-      transfer.crossHospitalTokenExpiresAt = null;
-      transfer.crossHospitalTokenRevokedAt = new Date();
-      transfer.crossHospitalTokenRevokedBy = req.user.id;
+    // Kiểm tra quyền sở hữu viện
+    if (req.user.role !== "admin" && transfer.hospitalId?._id?.toString() !== req.user.hospitalId?.toString()) {
+      return errorResponse(res, "Không có quyền gửi hồ sơ của cơ sở y tế khác.", 403);
     }
 
-    await transfer.save();
+    const patient = transfer.patient_id;
+    const patientName = patient?.profile?.fullName || patient?.profile?.name || patient?.email || "Quý bệnh nhân";
+    const hospitalName = transfer.hospitalId?.name || "Bệnh viện Chuyên Khoa Ung Thư Não NeuroScan";
 
-    return successResponse(res, { transfer }, "Đã từ chối yêu cầu chuyển viện.");
+    const targetEmail = (overrideEmail || transfer.recipientEmail || patient?.email || patient?.profile?.email || "").trim();
+    if (!targetEmail || !targetEmail.includes("@")) {
+      return errorResponse(res, "Chưa có địa chỉ email hợp lệ của bệnh nhân. Vui lòng nhập email người nhận.", 400);
+    }
+
+    transfer.recipientEmail = targetEmail;
+    transfer.sendAttempts = (transfer.sendAttempts || 0) + 1;
+
+    // Gửi email đính kèm package (báo cáo AI, ảnh, 3D, DICOM)
+    const sendResult = await sendReferralPackageEmail({
+      to: targetEmail,
+      patientName,
+      hospitalName,
+      transfer,
+      snapshot: transfer.packageSnapshot || {}
+    });
+
+    if (sendResult.ok) {
+      transfer.status = "sent";
+      transfer.sentAt = new Date();
+      transfer.sentBy = req.user.id;
+      transfer.sendError = "";
+      await transfer.save();
+
+      // Ghi audit log
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.REFERRAL_PACKAGE_EMAILED,
+          entity: "TransferForm",
+          entityId: transfer._id,
+          performedBy: req.user.id,
+          hospitalId: transfer.hospitalId?._id || req.user.hospitalId,
+          details: `${req.user.role === "receptionist" ? "Lễ tân" : "Nhân viên y tế"} đã gửi email gói chuyển viện ${transfer.transferNo} tới ${targetEmail}`,
+          payload: {
+            transferId: transfer._id,
+            recipientEmail: targetEmail,
+            attached: sendResult.attached,
+            linked: sendResult.linked,
+            skipped: sendResult.skipped
+          }
+        });
+      } catch (auditErr) {
+        console.warn("⚠️ Lỗi ghi audit log gửi email chuyển viện:", auditErr.message);
+      }
+
+      // Thông báo cho bác sĩ điều trị
+      try {
+        const doctorUser = await User.findOne({
+          hospitalId: transfer.hospitalId?._id || req.user.hospitalId,
+          $or: [
+            { "profile.name": transfer.doctor_name },
+            { name: transfer.doctor_name },
+            { role: "doctor" }
+          ]
+        }).select("_id").lean();
+
+        if (doctorUser) {
+          await createNotificationInternal({
+            hospitalId: transfer.hospitalId?._id || req.user.hospitalId,
+            recipientId: doctorUser._id,
+            senderId: req.user.id,
+            type: "transfer_sent",
+            title: "✅ Hồ sơ chuyển viện đã gửi thành công",
+            message: `Bộ phận Lễ tân đã gửi email hồ sơ chuyển viện (Mã: ${transfer.transferNo}) tới bệnh nhân ${patientName} (${targetEmail}).`,
+            relatedId: transfer._id,
+          });
+        }
+      } catch (_) {}
+
+      return successResponse(res, {
+        transfer,
+        delivery: {
+          attached: sendResult.attached,
+          linked: sendResult.linked,
+          skipped: sendResult.skipped,
+        },
+        message: `Đã gửi thành công gói chuyển viện tới email ${targetEmail}`
+      }, "Gửi hồ sơ chuyển viện thành công.");
+    } else {
+      transfer.status = "failed";
+      transfer.sendError = sendResult.reason || "Lỗi máy chủ SMTP";
+      await transfer.save();
+
+      try {
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.REFERRAL_PACKAGE_EMAIL_FAILED,
+          entity: "TransferForm",
+          entityId: transfer._id,
+          performedBy: req.user.id,
+          hospitalId: transfer.hospitalId?._id || req.user.hospitalId,
+          details: `Gửi email hồ sơ chuyển viện ${transfer.transferNo} thất bại: ${sendResult.reason}`,
+          payload: { transferId: transfer._id, targetEmail, reason: sendResult.reason }
+        });
+      } catch (_) {}
+
+      return errorResponse(res, `Không thể gửi email hồ sơ chuyển viện: ${sendResult.reason || "Lỗi SMTP"}. Bạn có thể kiểm tra lại cấu hình hoặc thử lại.`, 502);
+    }
   } catch (err) {
+    console.error("Lỗi gửi email hồ sơ chuyển viện:", err);
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
 
-// ─── F.5 — Audit log danh sách chuyển viện ───────────────────────────────────
+// ─── Lấy danh sách gói chuyển viện ───────────────────────────────────────────
 // @route GET /api/v1/transfers
-// @access Private (Doctor, Nurse, Admin)
+// @access Private (Doctor, Nurse, Receptionist, Admin, Hospital Admin)
 export const getTransfers = async (req, res) => {
   try {
-    if (!["doctor", "nurse", "admin", "hospital_admin"].includes(req.user?.role)) {
+    if (!["doctor", "nurse", "admin", "hospital_admin", "receptionist"].includes(req.user?.role)) {
       return errorResponse(res, "Không có quyền xem danh sách chuyển viện của cơ sở y tế.", 403);
     }
 
     const hospitalId = req.user.hospitalId;
-    const { type = 'outgoing', status } = req.query;
+    const { status, search, type } = req.query;
 
-    const filter = type === 'incoming'
-      ? { targetHospitalId: hospitalId }
-      : { hospitalId };
+    const filter = {};
+    if (req.user.role !== "admin" && hospitalId) {
+      // Type incoming / outgoing để tương thích
+      if (type === "incoming") {
+        filter.targetHospitalId = hospitalId;
+      } else {
+        filter.hospitalId = hospitalId;
+      }
+    }
 
-    if (status) filter.status = status;
+    if (status && status !== "all") {
+      filter.status = status;
+    }
 
-    const transfers = await TransferForm.find(filter)
-      .populate("patient_id", "profile.name profile.fullName email")
+    let query = TransferForm.find(filter)
+      .populate("patient_id", "profile.name profile.fullName profile.phone profile.gender profile.dob email")
       .populate("hospitalId", "name code")
       .populate("targetHospitalId", "name code")
-      .populate("targetBedId", "bedNumber roomNumber")
+      .populate("imagingResultId")
+      .populate("sentBy", "profile.name email")
       .sort({ createdAt: -1 });
 
-    return successResponse(res, transfers, "Lấy danh sách chuyển viện thành công.");
+    const transfers = await query.lean();
+
+    // Lọc theo từ khóa tìm kiếm nếu có
+    const filtered = search
+      ? transfers.filter((t) => {
+          const s = search.toLowerCase();
+          const pt = t.patient_id?.profile?.fullName || t.patient_id?.profile?.name || t.patient_id?.email || "";
+          return (
+            (t.transferNo && t.transferNo.toLowerCase().includes(s)) ||
+            (t.transferTo && t.transferTo.toLowerCase().includes(s)) ||
+            (t.diagnosis && t.diagnosis.toLowerCase().includes(s)) ||
+            pt.toLowerCase().includes(s)
+          );
+        })
+      : transfers;
+
+    return successResponse(res, filtered, "Lấy danh sách chuyển viện thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
 
-// ─── F.5 — Cấp token xem bệnh án liên viện tạm thời (7 ngày) ───────────────────
-// @route POST /api/v1/transfers/:id/grant-cross-view
-// @access Private (Doctor, Admin at Target Hospital or Source Hospital)
-export const grantCrossHospitalView = async (req, res) => {
+// ─── Chi tiết một gói chuyển viện ─────────────────────────────────────────────
+// @route GET /api/v1/transfers/:id
+// @access Private (Doctor, Nurse, Receptionist, Admin, Hospital Admin)
+export const getTransferById = async (req, res) => {
   try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-
-    const userHosp = req.user.hospitalId?.toString();
-    const isAuthorized = req.user.role === 'admin' ||
-      userHosp === transfer.hospitalId?.toString() ||
-      userHosp === transfer.targetHospitalId?.toString();
-
-    if (!isAuthorized) {
-      return errorResponse(res, "Không có quyền cấp token xem chéo viện cho hồ sơ chuyển viện này.", 403);
-    }
-
-    if (transfer.status !== 'accepted') {
-      return errorResponse(res, "Chỉ có thể tạo token liên viện cho các ca đã được chấp nhận chuyển viện.", 400);
-    }
-
-    // Sử dụng crypto module tĩnh đã import ở đầu file
-    const accessToken = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 ngày
-
-    transfer.crossHospitalToken = accessToken;
-    transfer.crossHospitalTokenExpiresAt = expiresAt;
-    transfer.crossHospitalTokenRevokedAt = null;
-    transfer.crossHospitalTokenRevokedBy = null;
-    await transfer.save();
-
-    // Ghi vết audit log
-    try {
-      await recordAuditLog({
-        action: AUDIT_ACTIONS.CROSS_HOSPITAL_TOKEN_ISSUED,
-        entity: "TransferForm",
-        entityId: transfer._id,
-        performedBy: req.user.id,
-        hospitalId: transfer.hospitalId,
-        details: `Cấp mã token xem bệnh án liên viện 7 ngày cho ca chuyển viện ${transfer.transferNo}`,
-        payload: { transferId: transfer._id, expiresAt }
-      });
-    } catch (_) {}
-
-    return successResponse(res, {
-      transferId: transfer._id,
-      accessToken,
-      expiresAt,
-      viewUrl: `/api/v1/transfers/cross-view/${accessToken}`
-    }, "Cấp token xem bệnh án liên viện 7 ngày thành công (F.5).");
-  } catch (err) {
-    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
-  }
-};
-
-// ─── F.5 — Thu hồi token xem bệnh án liên viện trước thời hạn ─────────────────
-// @route POST /api/v1/transfers/:id/revoke-cross-view
-// @access Private (Doctor, Admin at Target Hospital or Source Hospital)
-export const revokeCrossHospitalView = async (req, res) => {
-  try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-
-    const userHosp = req.user.hospitalId?.toString();
-    const isAuthorized = req.user.role === 'admin' ||
-      userHosp === transfer.hospitalId?.toString() ||
-      userHosp === transfer.targetHospitalId?.toString();
-
-    if (!isAuthorized) {
-      return errorResponse(res, "Không có quyền thu hồi token cho hồ sơ chuyển viện này.", 403);
-    }
-
-    transfer.crossHospitalToken = null;
-    transfer.crossHospitalTokenExpiresAt = null;
-    transfer.crossHospitalTokenRevokedAt = new Date();
-    transfer.crossHospitalTokenRevokedBy = req.user.id;
-    await transfer.save();
-
-    try {
-      await recordAuditLog({
-        action: AUDIT_ACTIONS.CROSS_HOSPITAL_TOKEN_REVOKED,
-        entity: "TransferForm",
-        entityId: transfer._id,
-        performedBy: req.user.id,
-        hospitalId: transfer.hospitalId,
-        details: `Đã thu hồi token xem bệnh án liên viện của ca chuyển viện ${transfer.transferNo}`,
-        payload: { transferId: transfer._id, revokedBy: req.user.id }
-      });
-    } catch (_) {}
-
-    return successResponse(res, { transferId: transfer._id }, "Đã thu hồi quyền xem bệnh án liên viện thành công.");
-  } catch (err) {
-    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
-  }
-};
-
-// ─── F.5 — Đọc hồ sơ bệnh án liên viện thông qua Access Token ──────────────────
-// @route GET /api/v1/transfers/cross-view/:token
-// @access Token-Authorized (Doctor at Target Hospital)
-export const accessCrossHospitalView = async (req, res) => {
-  try {
-    const { token } = req.params;
-    if (!token) return errorResponse(res, "Thiếu mã token truy cập liên viện.", 400);
-
-    const transfer = await TransferForm.findOne({
-      crossHospitalToken: token,
-      status: 'accepted'
-    })
-      .populate("patient_id", "profile.name profile.fullName profile.dob profile.gender profile.phone")
-      .populate("hospitalId", "name code address")
+    const { id } = req.params;
+    const transfer = await TransferForm.findById(id)
+      .populate("patient_id", "profile.name profile.fullName profile.phone profile.gender profile.dob email")
+      .populate("hospitalId", "name code address phone")
       .populate("targetHospitalId", "name code address")
       .populate("imagingResultId")
+      .populate("sentBy", "profile.name email")
       .lean();
 
     if (!transfer) {
-      return errorResponse(res, "Mã token không hợp lệ hoặc ca chuyển viện chưa được chấp nhận/đã bị thu hồi.", 404);
+      return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
     }
 
-    // Kiểm tra thời hạn hiệu lực của Token
-    if (!transfer.crossHospitalTokenExpiresAt || new Date(transfer.crossHospitalTokenExpiresAt) < new Date()) {
-      return errorResponse(res, "Mã token xem bệnh án liên viện đã hết hạn hiệu lực.", 401);
-    }
-
-    // Ghi vết audit log truy cập theo TT 46/2018/TT-BYT Điều 18
-    try {
-      await recordAuditLog({
-        action: AUDIT_ACTIONS.CROSS_HOSPITAL_VIEW_ACCESSED,
-        entity: "TransferForm",
-        entityId: transfer._id,
-        performedBy: req.user?.id || "token_bearer",
-        hospitalId: transfer.targetHospitalId?._id || transfer.targetHospitalId,
-        details: `Bác sĩ truy cập hồ sơ bệnh án liên viện của bệnh nhân ${transfer.patient_id?._id} qua token an toàn.`,
-        payload: { transferId: transfer._id, patientId: transfer.patient_id?._id }
-      });
-    } catch (_) {}
-
-    return successResponse(res, {
-      transferNo: transfer.transferNo,
-      sourceHospital: transfer.hospitalId,
-      targetHospital: transfer.targetHospitalId,
-      patient: transfer.patient_id,
-      clinicalSummary: transfer.clinicalSummary,
-      labSummary: transfer.labSummary,
-      diagnosis: transfer.diagnosis,
-      treatment: transfer.treatment,
-      drugsUsed: transfer.drugsUsed,
-      patientStatus: transfer.patientStatus,
-      transferPackageDriveUrl: transfer.transferPackageDriveUrl,
-      imagingResult: transfer.imagingResultId,
-      expiresAt: transfer.crossHospitalTokenExpiresAt
-    }, "Truy xuất hồ sơ bệnh án chuyển viện thành công.");
+    return successResponse(res, transfer, "Lấy chi tiết hồ sơ chuyển viện thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
 
-// ─── Internal — Gửi notification tới viện đích ────────────────────────────────
-async function notifyTargetHospital(targetHospitalId, transferForm, senderId) {
-  const { User } = await import("../models/user.model.js");
-  const targetDoctors = await User.find({
-    hospitalId: targetHospitalId,
-    role: { $in: ['doctor', 'hospital_admin'] },
-    isLocked: false
-  }, "_id");
+// ─── Hủy / Xóa gói chuyển viện ở trạng thái draft ───────────────────────────
+// @route DELETE /api/v1/transfers/:id
+// @access Private (Doctor, Admin, Receptionist)
+export const deleteTransfer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const transfer = await TransferForm.findById(id);
+    if (!transfer) return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
 
-  for (const doc of targetDoctors) {
-    await createNotificationInternal({
-      hospitalId: targetHospitalId,
-      recipientId: doc._id,
-      senderId,
-      type: "transfer_incoming",
-      title: "🚑 Yêu cầu chuyển viện mới",
-      message: `Có yêu cầu chuyển viện mới (Mã: ${transferForm.transferNo}). Vui lòng xem xét duyệt.`,
-      relatedId: transferForm._id,
-    });
+    if (transfer.status === "sent" && req.user.role !== "admin") {
+      return errorResponse(res, "Hồ sơ đã được gửi email cho bệnh nhân, không thể hủy bỏ trực tiếp.", 400);
+    }
+
+    transfer.status = "cancelled";
+    await transfer.save();
+
+    try {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.REFERRAL_PACKAGE_CANCELLED,
+        entity: "TransferForm",
+        entityId: transfer._id,
+        performedBy: req.user.id,
+        hospitalId: transfer.hospitalId,
+        details: `Đã hủy gói chuyển viện ${transfer.transferNo}`,
+      });
+    } catch (_) {}
+
+    return successResponse(res, { id: transfer._id }, "Đã hủy gói chuyển viện thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
-}
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compatibility Stubs (Giữ lại để các module / test cũ không bị crash)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const checkSurgeryCapacity = async (req, res) => {
+  try {
+    const { targetHospitalId, departmentId = "KUTN-SURG" } = req.body;
+    if (!targetHospitalId) return errorResponse(res, "Thiếu ID bệnh viện đích.", 400);
+
+    const targetHospital = await Hospital.findById(targetHospitalId).lean();
+    if (!targetHospital || !targetHospital.isActive) {
+      return errorResponse(res, "Bệnh viện đích không tồn tại hoặc ngừng hoạt động.", 404);
+    }
+
+    const bedQuery = { hospitalId: targetHospitalId, status: "available" };
+    if (departmentId && departmentId !== "all") {
+      bedQuery.departmentId = { $in: ["KUTN-SURG", "KNT", "ICU", "KUTN-ICU"] };
+    }
+    const availableBeds = await HospitalBed.countDocuments(bedQuery);
+    return successResponse(res, {
+      targetHospitalId,
+      targetHospitalName: targetHospital.name,
+      availableBeds,
+      canAccept: availableBeds > 0,
+      message: availableBeds > 0
+        ? `Bệnh viện ${targetHospital.name} có ${availableBeds} giường trống.`
+        : `Bệnh viện ${targetHospital.name} hiện hết giường trống.`
+    });
+  } catch (err) {
+    return errorResponse(res, err.message, 500);
+  }
+};
+
+export const acceptTransferRequest = async (req, res) => {
+  try {
+    const transfer = await TransferForm.findById(req.params.id);
+    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
+    transfer.status = "accepted";
+    transfer.acceptedAt = new Date();
+    transfer.acceptedByUserId = req.user.id;
+    await transfer.save();
+    return successResponse(res, { transfer }, "Đã cập nhật trạng thái chấp nhận.");
+  } catch (err) {
+    return errorResponse(res, err.message, 500);
+  }
+};
+
+export const rejectTransferRequest = async (req, res) => {
+  try {
+    const transfer = await TransferForm.findById(req.params.id);
+    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
+    transfer.status = "rejected";
+    await transfer.save();
+    return successResponse(res, { transfer }, "Đã từ chối yêu cầu.");
+  } catch (err) {
+    return errorResponse(res, err.message, 500);
+  }
+};
+
+export const grantCrossHospitalView = async (req, res) => {
+  return successResponse(res, {
+    message: "Chức năng xem chéo liên viện đã chuyển đổi sang gửi email gói chuyển viện trực tiếp cho bệnh nhân."
+  });
+};
+
+export const revokeCrossHospitalView = async (req, res) => {
+  return successResponse(res, { message: "Quyền xem liên viện đã được thu hồi." });
+};
+
+export const accessCrossHospitalView = async (req, res) => {
+  return errorResponse(res, "Liên kết đã chuyển sang hệ thống gửi hồ sơ điện tử qua email.", 410);
+};

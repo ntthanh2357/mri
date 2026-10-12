@@ -4,6 +4,8 @@ import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
+import { ConsentForm } from "../models/consentForm.model.js";
+import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import {
   submitMriSafetyCheckService,
@@ -192,12 +194,15 @@ export const getMyQueue = async (req, res) => {
         { createdAt: { $gte: startOfDay }, hospitalId: req.user.hospitalId }
       ];
     } else if (role === "technician") {
+      filter.hospitalId = req.user.hospitalId;
       filter.$or = [
         { technicianId: id },
-        { technicianId: null },
-        { technicianId: { $exists: false } }
+        { 
+          technicianId: { $in: [null, undefined] },
+          status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật"] }
+        }
       ];
-      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] };
+      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
@@ -215,7 +220,18 @@ export const getMyQueue = async (req, res) => {
       .populate("nurseId", "profile.name")
       .populate("technicianId", "profile.name")
       .populate("invoiceId", "status totalAmount items paymentMethod paidAt")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // UC-PAT-06: kèm trạng thái phiếu đồng thuận cản quang (1 truy vấn cho cả danh sách)
+    const contrastVisitIds = visits.filter((v) => v.mriOrder?.withContrast).map((v) => v._id);
+    if (contrastVisitIds.length) {
+      const consents = await ConsentForm.find({ visitId: { $in: contrastVisitIds }, hospitalId, procedureName: CONTRAST_PROCEDURE })
+        .select("visitId patientChecklistAt patientSigned patientSignedAt patientSignature patientSignatureKind patientSignatureSvg riskLevel isBlockedByChecklist isDoctorOverridden doctorOverrideReason allergyChecklist")
+        .lean();
+      const byVisit = new Map(consents.map((c) => [String(c.visitId), c]));
+      for (const v of visits) if (v.mriOrder?.withContrast) v.contrastConsent = byVisit.get(String(v._id)) || null;
+    }
 
     res.status(200).json({ visits });
   } catch (error) {
@@ -258,7 +274,7 @@ export const updateVitals = async (req, res) => {
 // @access  Private (Doctor)
 export const createMriOrder = async (req, res) => {
   try {
-    const { technicianId, region, instructions, requestAiAnalysis } = req.body;
+    const { technicianId, region, instructions, requestAiAnalysis, withContrast } = req.body;
     const visit = await Visit.findById(req.params.id);
 
     if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
@@ -276,7 +292,7 @@ export const createMriOrder = async (req, res) => {
     }
 
     visit.technicianId = technicianId;
-    visit.mriOrder = { region, instructions, requestAiAnalysis, orderedAt: new Date() };
+    visit.mriOrder = { region, instructions, requestAiAnalysis, withContrast: Boolean(withContrast), orderedAt: new Date() };
     visit.status = "chờ chụp";
 
     // ── [THỰC TẾ BV: NGHỊCH LÝ 1] Lập hóa đơn viện phí tạm tính khi ra y lệnh MRI ──
@@ -314,6 +330,24 @@ export const createMriOrder = async (req, res) => {
 
     await visit.save();
 
+    // ── UC-PAT-06: chụp có tiêm cản quang → tạo phiếu đồng thuận, báo bệnh nhân ký trên app ──
+    if (withContrast) {
+      try {
+        await ensureContrastConsentForVisit(visit);
+        await createNotificationInternal({
+          hospitalId: visit.hospitalId,
+          recipientId: visit.patientId,
+          senderId: req.user.id,
+          type: "other",
+          title: "Phiếu đồng thuận cần ký",
+          message: "Bác sĩ chỉ định chụp MRI có tiêm thuốc cản quang. Vui lòng trả lời câu hỏi sàng lọc và ký phiếu đồng thuận trên ứng dụng trước khi chụp.",
+          relatedId: visit._id,
+        });
+      } catch (consentErr) {
+        console.warn("⚠️ Không thể tạo phiếu đồng thuận cản quang:", consentErr.message);
+      }
+    }
+
     // ── Gửi thông báo tới Kỹ thuật viên chụp MRI ─────────────────────────────
     if (technicianId) {
       try {
@@ -347,7 +381,7 @@ export const ALLOWED_TRANSITIONS = {
   'đang khám': ['chờ chụp', 'chờ chụp sau phẫu thuật', 'chờ hội chẩn', 'chờ nhập viện', 'hoàn tất', 'đã hủy'],
   'chờ chụp': ['đang chụp', 'chờ chụp lại', 'đang khám', 'đã hủy'],
   'chờ chụp sau phẫu thuật': ['đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'đang khám', 'đã hủy'],
-  'đang chụp': ['chờ kết quả AI', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
+  'đang chụp': ['chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
   'chờ kết quả AI': ['chờ bác sĩ đọc', 'chờ chụp lại', 'lỗi AI', 'đã hủy'],
   'lỗi AI': ['chờ bác sĩ đọc', 'chờ kết quả AI', 'chờ chụp lại', 'đang khám', 'đã hủy'],
   'chờ chụp lại': ['đang chụp', 'đang khám', 'đã hủy'],
@@ -386,6 +420,10 @@ export const updateStatus = async (req, res) => {
         return res.status(400).json({ 
           message: `Chuyển trạng thái không hợp lệ: Không thể chuyển từ '${visit.status}' sang '${status}'.` 
         });
+      }
+      // UC-PAT-06: chụp có tiêm cản quang phải có chữ ký đồng thuận của bệnh nhân
+      if (status === "đang chụp" && await contrastConsentPending(visit)) {
+        return res.status(409).json({ message: CONTRAST_UNSIGNED_MESSAGE });
       }
       oldStatus = visit.status;
       visit.status = status;
@@ -560,7 +598,10 @@ export const submitMriSafetyCheck = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Đã hoàn tất bảng kiểm an toàn MRI. Bệnh nhân đủ điều kiện vào buồng chụp.",
+      message: result.contrastConsentPending
+        ? "Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp."
+        : "Đã hoàn tất bảng kiểm an toàn MRI. Bệnh nhân đủ điều kiện vào buồng chụp.",
+      contrastConsentPending: result.contrastConsentPending,
       checklist: result.checklist,
       visit: result.visit
     });

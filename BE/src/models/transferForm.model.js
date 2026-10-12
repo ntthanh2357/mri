@@ -97,26 +97,25 @@ const transferFormSchema = new Schema({
     type: Date,
     default: Date.now
   },
-  // Module F — chuyển viện thông minh giữa các bệnh viện trong hệ thống
-  targetHospitalId: { type: Schema.Types.ObjectId, ref: "Hospital", default: null, index: true },
+  // Module F — Gói chuyển viện thông minh: bác sĩ lập (draft) → lễ tân gửi email cho bệnh nhân (sent)
+  targetHospitalId: { type: Schema.Types.ObjectId, ref: "Hospital", default: null, index: true }, // legacy (tenancy.util)
   visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null },
   imagingResultId: { type: Schema.Types.ObjectId, ref: "ImagingResult", default: null },
-  transferPackageDriveUrl: { type: String, default: "" }, // F.2: gói zip nén MRI + metadata
-  targetBedId: { type: Schema.Types.ObjectId, ref: "HospitalBed", default: null }, // F.3: giường được giữ chỗ viện đích
+  // Snapshot nội dung gói tại thời điểm lập: DICOM zip, báo cáo AI, 3D model, ảnh slice, kết luận
+  packageSnapshot: { type: Schema.Types.Mixed, default: null },
   status: {
     type: String,
-    enum: ["draft", "pending", "accepted", "rejected", "completed", "cancelled"],
+    // pending/accepted/rejected/completed: giữ lại để tương thích dữ liệu cũ
+    enum: ["draft", "sent", "failed", "pending", "accepted", "rejected", "completed", "cancelled"],
     default: "pending",
     index: true
   },
-  acceptedByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
-  acceptedAt: { type: Date, default: null },
-  rejectionReason: { type: String, default: "" },
-  // Vòng đời mã token xem bệnh án liên viện (F.5 & HIPAA / TT46)
-  crossHospitalToken: { type: String, default: null, index: true, sparse: true },
-  crossHospitalTokenExpiresAt: { type: Date, default: null },
-  crossHospitalTokenRevokedAt: { type: Date, default: null },
-  crossHospitalTokenRevokedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  // Thông tin gửi email cho bệnh nhân (lễ tân thực hiện)
+  recipientEmail: { type: String, default: "" },
+  sentAt: { type: Date, default: null },
+  sentBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  sendAttempts: { type: Number, default: 0 },
+  sendError: { type: String, default: "" },
 }, {
   timestamps: true
 });

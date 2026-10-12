@@ -186,17 +186,7 @@ export default function AdminDatasetsView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <Database className="w-4.5 h-4.5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900">Quản lý Dataset</h2>
-            <p className="text-slate-500 text-xs font-medium mt-0.5">Tạo, định giá và quản lý dữ liệu huấn luyện</p>
-          </div>
-        </div>
-
+      <div className="flex justify-end">
         <button
           onClick={handleOpenCreate}
           className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 flex items-center gap-2 hover:translate-y-[-1px] transition-all"

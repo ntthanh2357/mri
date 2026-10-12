@@ -38,6 +38,12 @@ const medicineReminderSchema = new Schema(
       type: String, // "HH:MM"
       required: true,
     },
+    // UC-PAT-13: khung Sáng/Trưa/Chiều/Tối để đổi giờ theo cài đặt của bệnh nhân ("" = lịch cũ, suy ra từ giờ)
+    slot: {
+      type: String,
+      enum: ["", "morning", "noon", "afternoon", "evening"],
+      default: "",
+    },
     status: {
       type: String,
       enum: ["pending", "done", "skipped"],
