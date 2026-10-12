@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { RecordShare } from "../models/recordShare.model.js";
+import { SHARE_SECTIONS } from "./sharedRecord.service.js";
 
 /**
  * UC-PAT-09 — Chia sẻ bệnh án qua QR.
@@ -14,13 +15,28 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 export const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
 const newToken = () => crypto.randomBytes(32).toString("base64url");
 
-export const createShare = async (patientId, hospitalId, now = new Date()) => {
+/** Nhóm bệnh nhân chọn → danh sách chuẩn (bỏ trùng, đúng thứ tự). Không gửi = chia sẻ tất cả. */
+export const normalizeSections = (input) => {
+  if (input === undefined || input === null) return [...SHARE_SECTIONS];
+  if (!Array.isArray(input)) throw httpError(400, "Danh sách nội dung chia sẻ không hợp lệ.");
+  const chosen = new Set(input.map(String));
+  if ([...chosen].some((s) => !SHARE_SECTIONS.includes(s))) throw httpError(400, "Nội dung chia sẻ không hợp lệ.");
+  const sections = SHARE_SECTIONS.filter((s) => chosen.has(s));
+  if (!sections.length) throw httpError(400, "Hãy chọn ít nhất 1 nội dung để chia sẻ.");
+  return sections;
+};
+
+const sectionsOf = (share) => (share.sections?.length ? share.sections : [...SHARE_SECTIONS]);
+
+export const createShare = async (patientId, hospitalId, now = new Date(), sections) => {
+  const chosen = normalizeSections(sections);
   const qrToken = newToken();
   const share = await RecordShare.create({
     patientId,
     hospitalId: hospitalId || null,
     qrTokenHash: hashToken(qrToken),
     qrExpiresAt: new Date(now.getTime() + QR_TTL_MS),
+    sections: chosen,
   });
   return { share, qrToken };
 };
@@ -34,6 +50,7 @@ export const listShares = async (patientId, now = new Date()) => {
       createdAt: s.createdAt,
       qrExpiresAt: s.qrExpiresAt,
       qrActive: new Date(s.qrExpiresAt) > now,
+      sections: sectionsOf(s),
       viewerCount: s.sessions.length,
       lastViewedAt: s.sessions.reduce((m, x) => (x.lastViewedAt && (!m || x.lastViewedAt > m) ? x.lastViewedAt : m), null),
       totalViews: s.sessions.reduce((n, x) => n + (x.viewCount || 0), 0),
@@ -73,5 +90,5 @@ export const resolveViewer = async (viewerToken, { now = new Date() } = {}) => {
     { _id: share._id, "sessions.viewerTokenHash": h },
     { $set: { "sessions.$.lastViewedAt": now }, $inc: { "sessions.$.viewCount": 1 } }
   );
-  return { patientId: share.patientId, shareId: share._id };
+  return { patientId: share.patientId, shareId: share._id, sections: sectionsOf(share) };
 };

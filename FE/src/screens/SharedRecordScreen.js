@@ -5,7 +5,7 @@ import Colors from '../constants/colors';
 import Config from '../constants/config';
 import VitalsChart from '../components/patient/VitalsChart';
 import { useSharedRecord } from '../controllers/useSharedRecord';
-import { assetUrl } from '../utils/recordShare';
+import { assetUrl, sectionsSummary, ALL_SECTION_KEYS } from '../utils/recordShare';
 
 // UC-PAT-09 — Trang công khai: bệnh án bệnh nhân chia sẻ qua QR (chỉ đọc, không cần đăng nhập).
 
@@ -61,6 +61,9 @@ const SharedRecordScreen = ({ route, navigation }) => {
     const p = data.patient;
     const age = ageOf(p.dateOfBirth);
     const s = data.safety;
+    const keys = data.sections || ALL_SECTION_KEYS;
+    const shown = (k) => keys.includes(k); // nhóm bệnh nhân không chọn: ẩn hẳn, không ghi "chưa có"
+    const partial = sectionsSummary(keys) !== 'Toàn bộ bệnh án';
     body = (
       <View style={styles.stack}>
         <View style={styles.card}>
@@ -68,69 +71,78 @@ const SharedRecordScreen = ({ route, navigation }) => {
           <Text style={styles.note}>
             {[GENDER[p.gender] || null, age !== null ? `${age} tuổi` : null, p.dateOfBirth ? `sinh ngày ${fmtDate(p.dateOfBirth)}` : null, p.medicalId ? `mã bệnh nhân ${p.medicalId}` : null].filter(Boolean).join(', ')}
           </Text>
-          {s.drugAllergies.length ? (
+          {partial ? <Text style={styles.note}>Bệnh nhân chọn chia sẻ: <Text style={styles.bold}>{sectionsSummary(keys)}</Text>.</Text> : null}
+          {!shown('safety') ? null : s.drugAllergies.length ? (
             <View style={styles.allergy} accessibilityRole="alert">
               <Feather name="alert-triangle" size={16} color={Colors.warningText} />
               <Text style={styles.allergyText}>Dị ứng thuốc: <Text style={styles.bold}>{s.drugAllergies.join(', ')}</Text></Text>
             </View>
           ) : <Text style={styles.note}>Bệnh nhân chưa khai báo dị ứng thuốc.</Text>}
-          {s.emergencyContact?.name || s.emergencyContact?.phone ? (
+          {shown('safety') && (s.emergencyContact?.name || s.emergencyContact?.phone) ? (
             <Text style={styles.note}>
               Liên hệ khẩn cấp: <Text style={styles.bold}>{[s.emergencyContact.name, s.emergencyContact.relation ? `(${s.emergencyContact.relation})` : null, s.emergencyContact.phone].filter(Boolean).join(' ')}</Text>
             </Text>
           ) : null}
         </View>
 
-        <Section icon="film" title="Phim MRI/CT" count={data.imaging.length || null}>
-          {data.imaging.length ? data.imaging.map((img) => (
-            <Item key={img._id} title={img.procedure || img.imagingType || 'Phim chụp'} sub={`Kết luận ngày ${fmtDate(img.reportDate)}${img.radiologist ? `, bác sĩ ${img.radiologist}` : ''}`}>
-              {img.images?.length ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.images}>
-                  {img.images.map((u, i) => (
-                    <Image key={i} source={{ uri: assetUrl(u, Config.API_URL) }} style={[styles.image, { width: thumb, height: thumb }]} resizeMode="cover" accessibilityLabel={`Ảnh phim ${i + 1}`} />
-                  ))}
-                </ScrollView>
-              ) : null}
-              <Field label="Mô tả" value={img.findings} />
-              <Field label="Kết luận" value={img.conclusion} />
-            </Item>
-          )) : <Text style={styles.note}>Chưa có phim đã có kết luận.</Text>}
-        </Section>
+        {shown('imaging') ? (
+          <Section icon="film" title="Phim MRI/CT" count={data.imaging.length || null}>
+            {data.imaging.length ? data.imaging.map((img) => (
+              <Item key={img._id} title={img.procedure || img.imagingType || 'Phim chụp'} sub={`Kết luận ngày ${fmtDate(img.reportDate)}${img.radiologist ? `, bác sĩ ${img.radiologist}` : ''}`}>
+                {img.images?.length ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.images}>
+                    {img.images.map((u, i) => (
+                      <Image key={i} source={{ uri: assetUrl(u, Config.API_URL) }} style={[styles.image, { width: thumb, height: thumb }]} resizeMode="cover" accessibilityLabel={`Ảnh phim ${i + 1}`} />
+                    ))}
+                  </ScrollView>
+                ) : null}
+                <Field label="Mô tả" value={img.findings} />
+                <Field label="Kết luận" value={img.conclusion} />
+              </Item>
+            )) : <Text style={styles.note}>Chưa có phim đã có kết luận.</Text>}
+          </Section>
+        ) : null}
 
-        {data.vitals.length ? <VitalsChart items={data.vitals} /> : null}
+        {shown('vitals') && data.vitals.length ? <VitalsChart items={data.vitals} /> : null}
 
-        <Section icon="clipboard" title="Lịch sử khám" count={data.visits.length || null}>
-          {data.visits.length ? data.visits.map((v, i) => (
-            <Item key={i} title={`${fmtDate(v.date)}${v.reason ? `: ${v.reason}` : ''}`} sub={[v.visitType, v.doctor ? `bác sĩ ${v.doctor}` : null, v.status].filter(Boolean).join(', ')}>
-              {v.vitals?.bloodPressure ? <Text style={styles.note}>Sinh hiệu: huyết áp {v.vitals.bloodPressure}, mạch {v.vitals.pulse}, SpO₂ {v.vitals.spo2}%{v.vitals.temperature ? `, nhiệt độ ${v.vitals.temperature} °C` : ''}</Text> : null}
-              {v.mriRegion ? <Text style={styles.note}>Chỉ định chụp MRI: {v.mriRegion}</Text> : null}
-            </Item>
-          )) : <Text style={styles.note}>Chưa có lượt khám.</Text>}
-        </Section>
+        {shown('visits') ? (
+          <Section icon="clipboard" title="Lịch sử khám" count={data.visits.length || null}>
+            {data.visits.length ? data.visits.map((v, i) => (
+              <Item key={i} title={`${fmtDate(v.date)}${v.reason ? `: ${v.reason}` : ''}`} sub={[v.visitType, v.doctor ? `bác sĩ ${v.doctor}` : null, v.status].filter(Boolean).join(', ')}>
+                {v.vitals?.bloodPressure ? <Text style={styles.note}>Sinh hiệu: huyết áp {v.vitals.bloodPressure}, mạch {v.vitals.pulse}, SpO₂ {v.vitals.spo2}%{v.vitals.temperature ? `, nhiệt độ ${v.vitals.temperature} °C` : ''}</Text> : null}
+                {v.mriRegion ? <Text style={styles.note}>Chỉ định chụp MRI: {v.mriRegion}</Text> : null}
+              </Item>
+            )) : <Text style={styles.note}>Chưa có lượt khám.</Text>}
+          </Section>
+        ) : null}
 
-        <Section icon="package" title="Đơn thuốc" count={data.prescriptions.length || null}>
-          {data.prescriptions.length ? data.prescriptions.map((p, i) => (
-            <Item key={i} title={`Đơn ngày ${fmtDate(p.recorded_at)}`} sub={[p.doctor_name ? `bác sĩ ${p.doctor_name}` : null, p.diagnosis ? `chẩn đoán ${p.diagnosis}` : null].filter(Boolean).join(', ')}>
-              {(p.drugs || []).map((d, j) => (
-                <Text key={j} style={styles.drug}>• <Text style={styles.bold}>{d.name}</Text>{d.quantity ? `, ${d.quantity} ${d.unit || ''}` : ''}{d.usage ? `: ${d.usage}` : ''}</Text>
-              ))}
-            </Item>
-          )) : <Text style={styles.note}>Chưa có đơn thuốc.</Text>}
-        </Section>
+        {shown('prescriptions') ? (
+          <Section icon="package" title="Đơn thuốc" count={data.prescriptions.length || null}>
+            {data.prescriptions.length ? data.prescriptions.map((p, i) => (
+              <Item key={i} title={`Đơn ngày ${fmtDate(p.recorded_at)}`} sub={[p.doctor_name ? `bác sĩ ${p.doctor_name}` : null, p.diagnosis ? `chẩn đoán ${p.diagnosis}` : null].filter(Boolean).join(', ')}>
+                {(p.drugs || []).map((d, j) => (
+                  <Text key={j} style={styles.drug}>• <Text style={styles.bold}>{d.name}</Text>{d.quantity ? `, ${d.quantity} ${d.unit || ''}` : ''}{d.usage ? `: ${d.usage}` : ''}</Text>
+                ))}
+              </Item>
+            )) : <Text style={styles.note}>Chưa có đơn thuốc.</Text>}
+          </Section>
+        ) : null}
 
-        <Section icon="droplet" title="Xét nghiệm" count={data.labs.length || null}>
-          {data.labs.length ? data.labs.map((l, i) => (
-            <Item key={i} title={`${l.category || 'Xét nghiệm'}, ngày ${fmtDate(l.resulted_at || l.ordered_at)}`} sub={l.status}>
-              {(l.results || []).map((r, j) => (
-                <Text key={j} style={[styles.drug, r.is_abnormal && styles.abnormal]}>
-                  • {r.biomarker_name}: <Text style={styles.bold}>{r.value_result} {r.unit}</Text>{r.reference_range_display ? ` (tham chiếu ${r.reference_range_display})` : ''}{r.is_abnormal ? (r.abnormal_direction === 'LOW' ? ', thấp' : ', cao') : ''}
-                </Text>
-              ))}
-            </Item>
-          )) : <Text style={styles.note}>Chưa có kết quả xét nghiệm.</Text>}
-        </Section>
+        {shown('labs') ? (
+          <Section icon="droplet" title="Xét nghiệm" count={data.labs.length || null}>
+            {data.labs.length ? data.labs.map((l, i) => (
+              <Item key={i} title={`${l.category || 'Xét nghiệm'}, ngày ${fmtDate(l.resulted_at || l.ordered_at)}`} sub={l.status}>
+                {(l.results || []).map((r, j) => (
+                  <Text key={j} style={[styles.drug, r.is_abnormal && styles.abnormal]}>
+                    • {r.biomarker_name}: <Text style={styles.bold}>{r.value_result} {r.unit}</Text>{r.reference_range_display ? ` (tham chiếu ${r.reference_range_display})` : ''}{r.is_abnormal ? (r.abnormal_direction === 'LOW' ? ', thấp' : ', cao') : ''}
+                  </Text>
+                ))}
+              </Item>
+            )) : <Text style={styles.note}>Chưa có kết quả xét nghiệm.</Text>}
+          </Section>
+        ) : null}
 
-        {data.inpatientRecords.length ? (
+        {shown('inpatient') && data.inpatientRecords.length ? (
           <Section icon="folder" title="Bệnh án nội trú" count={data.inpatientRecords.length}>
             {data.inpatientRecords.map((r) => (
               <Item key={r._id} title={`${r.department || 'Nội trú'}${r.diagnosis ? `: ${r.diagnosis}` : ''}`} sub={[r.doctorInCharge ? `bác sĩ ${r.doctorInCharge}` : null, r.status, r.dischargeDate ? `ra viện ${fmtDate(r.dischargeDate)}` : null].filter(Boolean).join(', ')}>
@@ -143,7 +155,7 @@ const SharedRecordScreen = ({ route, navigation }) => {
           </Section>
         ) : null}
 
-        {data.dischargePapers.length || data.transferForms.length ? (
+        {shown('papers') && (data.dischargePapers.length || data.transferForms.length) ? (
           <Section icon="file-text" title="Giấy ra viện, chuyển viện">
             {data.dischargePapers.map((d, i) => (
               <Item key={`d${i}`} title={`Giấy ra viện ${fmtDate(d.dateOut || d.recorded_at)}`} sub={d.diagnosis}>

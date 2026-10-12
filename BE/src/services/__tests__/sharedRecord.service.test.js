@@ -1,4 +1,45 @@
-import { toSharedEmr, toSharedImaging, toSharedSafety } from '../sharedRecord.service.js';
+import mongoose from 'mongoose';
+import { toSharedEmr, toSharedImaging, toSharedSafety, buildSharedRecord, SHARE_SECTIONS } from '../sharedRecord.service.js';
+import { User } from '../../models/user.model.js';
+import { Prescription } from '../../models/prescription.model.js';
+import { PatientProfile } from '../../models/patientProfile.model.js';
+
+describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã chọn', () => {
+  const pid = new mongoose.Types.ObjectId();
+
+  beforeAll(async () => {
+    const mongoUri = process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017/neuroscan_test_logic';
+    if (mongoose.connection.readyState === 0) await mongoose.connect(mongoUri);
+    // ghi thẳng collection (bỏ qua validate/tenancy) — chỉ cần dữ liệu tối thiểu
+    await User.collection.insertOne({ _id: pid, role: 'patient', email: `share-${pid}@test.local`, profile: { name: 'BN Test', gender: 'Nam' } });
+    await Prescription.collection.insertOne({ patient_id: pid, diagnosis: 'Đau đầu', drugs: [], recorded_at: new Date() });
+    await PatientProfile.collection.insertOne({ userId: pid, drugAllergies: ['Penicillin'] });
+  });
+
+  afterAll(async () => {
+    await User.collection.deleteOne({ _id: pid });
+    await Prescription.collection.deleteMany({ patient_id: pid });
+    await PatientProfile.collection.deleteMany({ userId: pid });
+  });
+
+  it('chỉ chọn Phim: không có đơn thuốc, dị ứng; thông tin cơ bản vẫn có', async () => {
+    const r = await buildSharedRecord(pid, ['imaging']);
+    expect(r.sections).toEqual(['imaging']);
+    expect(r.patient.name).toBe('BN Test');
+    expect(Array.isArray(r.imaging)).toBe(true);
+    for (const k of ['prescriptions', 'safety', 'visits', 'labs', 'vitals', 'inpatientRecords', 'dischargePapers', 'transferForms']) {
+      expect(k in r).toBe(false);
+    }
+    expect(JSON.stringify(r).includes('Penicillin')).toBe(false);
+  });
+
+  it('không truyền nhóm: đủ tất cả nhóm như trước', async () => {
+    const r = await buildSharedRecord(pid);
+    expect(r.sections).toEqual(SHARE_SECTIONS);
+    expect(r.prescriptions.length).toBe(1);
+    expect(r.safety.drugAllergies[0]).toBe('Penicillin');
+  });
+});
 
 describe('Bệnh án chia sẻ qua QR — lọc dữ liệu (UC-PAT-09)', () => {
   it('bệnh án nội trú: bỏ ghi chú tâm thần, HIV, di truyền và dữ liệu ký số nội bộ', () => {

@@ -15,13 +15,14 @@ const wrap = (fn) => async (req, res, next) => {
 
 // ── Bệnh nhân (đăng nhập) ────────────────────────────────────────────────────
 
-// POST /api/v1/patient/record-shares — tạo mã QR (mở được trong 5 phút)
+// POST /api/v1/patient/record-shares { sections? } — tạo mã QR (mở được trong 5 phút) cho các nhóm đã chọn
 export const createMine = wrap(async (req, res) => {
-  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId);
+  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId, new Date(), req.body?.sections);
   return successResponse(res, {
     shareId: share._id,
     qrToken,
     qrExpiresAt: share.qrExpiresAt,
+    sections: share.sections,
     ttlSeconds: shareService.QR_TTL_MS / 1000,
   }, "Đã tạo mã QR chia sẻ bệnh án.");
 });
@@ -49,7 +50,7 @@ export const redeem = wrap(async (req, res) => {
 export const view = wrap(async (req, res) => {
   const viewerToken = String(req.body?.viewerToken || "");
   if (!viewerToken) return errorResponse(res, "Thiếu mã xem.", 400);
-  const { patientId } = await shareService.resolveViewer(viewerToken);
+  const { patientId, sections } = await shareService.resolveViewer(viewerToken);
   res.set("Cache-Control", "no-store");
-  return successResponse(res, await buildSharedRecord(patientId));
+  return successResponse(res, await buildSharedRecord(patientId, sections));
 });

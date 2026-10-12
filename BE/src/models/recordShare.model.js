@@ -25,6 +25,8 @@ const recordShareSchema = new Schema(
     qrTokenHash: { type: String, required: true, unique: true },
     qrExpiresAt: { type: Date, required: true },
     revokedAt: { type: Date, default: null },
+    // Nhóm bệnh nhân chọn chia sẻ (SHARE_SECTIONS trong sharedRecord.service). Bản ghi cũ không có trường này = chia sẻ tất cả.
+    sections: { type: [String], default: undefined },
     sessions: { type: [viewerSessionSchema], default: [] },
   },
   { timestamps: true }

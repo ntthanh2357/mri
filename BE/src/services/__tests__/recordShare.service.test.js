@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { createShare, listShares, revokeShare, redeemQr, resolveViewer, hashToken, QR_TTL_MS } from '../recordShare.service.js';
+import { SHARE_SECTIONS } from '../sharedRecord.service.js';
 import { RecordShare } from '../../models/recordShare.model.js';
 
 const statusOf = async (fn) => { try { await fn(); return 200; } catch (e) { return e.status || 500; } };
@@ -69,5 +70,28 @@ describe('Chia sẻ bệnh án qua QR — mã QR 5 phút & phiên xem (UC-PAT-09
     expect(await statusOf(() => resolveViewer(viewerToken, { now: t0 }))).toBe(410);
     expect(await statusOf(() => redeemQr(qrToken, { now: t0 }))).toBe(410);
     expect((await listShares(me, t0)).length).toBe(0);
+  });
+
+  it('bệnh nhân chọn nhóm chia sẻ: lưu đúng nhóm, người xem nhận đúng nhóm, danh sách hiện nhóm', async () => {
+    const { share: s2, qrToken: q2 } = await createShare(me, hospitalId, t0, ['vitals', 'imaging', 'imaging']);
+    const { viewerToken } = await redeemQr(q2, { now: t0 });
+    const res = await resolveViewer(viewerToken, { now: t0 });
+    expect(res.sections).toEqual(['imaging', 'vitals']); // bỏ trùng, theo thứ tự chuẩn
+    const listed = (await listShares(me, t0)).find((x) => String(x._id) === String(s2._id));
+    expect(listed.sections).toEqual(['imaging', 'vitals']);
+  });
+
+  it('nhóm rỗng hoặc không hợp lệ bị từ chối (400)', async () => {
+    expect(await statusOf(() => createShare(me, hospitalId, t0, []))).toBe(400);
+    expect(await statusOf(() => createShare(me, hospitalId, t0, ['imaging', 'cccd']))).toBe(400);
+    expect(await statusOf(() => createShare(me, hospitalId, t0, 'imaging'))).toBe(400);
+  });
+
+  it('không gửi nhóm, hoặc lượt chia sẻ cũ chưa có trường nhóm → chia sẻ tất cả', async () => {
+    const { share: s3, qrToken: q3 } = await createShare(me, hospitalId, t0);
+    expect(s3.sections).toEqual(SHARE_SECTIONS);
+    await RecordShare.updateOne({ _id: s3._id }, { $unset: { sections: 1 } }); // giả lập bản ghi tạo trước khi có tính năng
+    const { viewerToken } = await redeemQr(q3, { now: t0 });
+    expect((await resolveViewer(viewerToken, { now: t0 })).sections).toEqual(SHARE_SECTIONS);
   });
 });

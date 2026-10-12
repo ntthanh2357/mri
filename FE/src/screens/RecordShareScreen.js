@@ -7,7 +7,7 @@ import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageContainer from '../components/layout/PageContainer';
 import Colors from '../constants/colors';
 import { useRecordShares } from '../controllers/useRecordShares';
-import { secondsLeft, fmtCountdown } from '../utils/recordShare';
+import { secondsLeft, fmtCountdown, sectionsSummary, SHARE_SECTIONS } from '../utils/recordShare';
 
 // UC-PAT-09 — Bệnh nhân tạo mã QR chia sẻ toàn bộ bệnh án. Mã chỉ mở được trong 5 phút;
 // ai quét kịp sẽ xem được lâu dài cho tới khi bệnh nhân dừng chia sẻ.
@@ -40,6 +40,7 @@ const QrPanel = ({ qr, onNew, onDone, busy }) => {
             <Feather name="clock" size={16} color={left <= 60 ? Colors.warningText : Colors.brandGreen} />
             <Text style={[styles.countdownText, left <= 60 && styles.countdownWarn]}>Còn {fmtCountdown(left)} để quét</Text>
           </View>
+          <Text style={styles.sharedWhat}>Chia sẻ: {sectionsSummary(qr.sections)}</Text>
           <Text style={styles.note}>Đưa mã này cho bác sĩ hoặc người bạn muốn chia sẻ quét bằng camera điện thoại. Không cần cài ứng dụng hay đăng nhập.</Text>
         </>
       )}
@@ -63,6 +64,7 @@ const ShareRow = ({ s, onRevoke }) => {
       <View style={styles.shareIcon}><Feather name="share-2" size={16} color={Colors.brandGreen} /></View>
       <View style={styles.grow}>
         <Text style={styles.shareTitle}>Chia sẻ lúc {fmtTime(s.createdAt)}</Text>
+        <Text style={styles.body}>{sectionsSummary(s.sections)}</Text>
         <Text style={styles.note}>
           {s.viewerCount > 0 ? `${s.viewerCount} người đã mở, ${s.totalViews} lượt xem` : 'Chưa có ai mở'}
           {s.lastViewedAt ? `, xem gần nhất ${fmtTime(s.lastViewedAt)}` : ''}
@@ -86,7 +88,8 @@ const ShareRow = ({ s, onRevoke }) => {
 };
 
 const RecordShareScreen = ({ navigation }) => {
-  const { loading, shares, error, qr, clearQr, create, revoke, reload } = useRecordShares();
+  const { loading, shares, error, qr, clearQr, create, revoke, reload, sections, toggleSection } = useRecordShares();
+  const none = sections.length === 0;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -109,11 +112,26 @@ const RecordShareScreen = ({ navigation }) => {
                 <QrPanel qr={qr} onNew={makeQr} onDone={clearQr} busy={busy} />
               ) : (
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Chia sẻ toàn bộ bệnh án qua mã QR</Text>
+                  <Text style={styles.cardTitle}>Chia sẻ bệnh án qua mã QR</Text>
                   <Text style={styles.body}>
-                    Người quét sẽ xem được: lịch sử khám, phim MRI/CT đã có kết luận, đơn thuốc, xét nghiệm, sinh hiệu, dị ứng thuốc, người liên hệ khẩn cấp và bệnh án nội trú.
-                    Số CCCD và thẻ BHYT không được chia sẻ.
+                    Chọn những phần bạn muốn chia sẻ. Họ tên, tuổi, giới tính và mã bệnh nhân luôn hiện để người xem biết bệnh án của ai.
+                    Số CCCD và thẻ BHYT không bao giờ được chia sẻ.
                   </Text>
+                  <View style={styles.checks}>
+                    {SHARE_SECTIONS.map((sec) => {
+                      const on = sections.includes(sec.key);
+                      return (
+                        <Pressable key={sec.key} onPress={() => toggleSection(sec.key)} accessibilityRole="checkbox" aria-checked={on}
+                          accessibilityLabel={sec.label}
+                          style={({ hovered }) => [styles.check, on && styles.checkOn, hovered && styles.checkHover]}>
+                          <Feather name={on ? 'check-square' : 'square'} size={20} color={on ? Colors.brandGreen : Colors.slateMuted} />
+                          <Feather name={sec.icon} size={16} color={Colors.slateMuted} />
+                          <Text style={styles.checkText}>{sec.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {none ? <Text style={styles.error}>Hãy chọn ít nhất 1 phần để chia sẻ.</Text> : null}
                   <View style={styles.points}>
                     {[
                       ['clock', 'Mã chỉ quét được trong 5 phút sau khi tạo.'],
@@ -127,8 +145,8 @@ const RecordShareScreen = ({ navigation }) => {
                     ))}
                   </View>
                   {msg ? <Text style={styles.error}>{msg}</Text> : null}
-                  <Pressable onPress={makeQr} disabled={busy} accessibilityRole="button"
-                    style={({ hovered }) => [styles.primaryBtn, hovered && styles.primaryBtnHover, busy && styles.disabled]}>
+                  <Pressable onPress={makeQr} disabled={busy || none} accessibilityRole="button"
+                    style={({ hovered }) => [styles.primaryBtn, hovered && !none && styles.primaryBtnHover, (busy || none) && styles.disabled]}>
                     {busy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryBtnText}>Tạo mã QR</Text>}
                   </Pressable>
                 </View>
@@ -163,6 +181,12 @@ const styles = StyleSheet.create({
   points: { gap: 8 },
   point: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   pointText: { flex: 1, fontSize: 14, lineHeight: 20, color: Colors.slateDark },
+  checks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  check: { flexGrow: 1, flexBasis: 260, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  checkOn: { borderColor: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft },
+  checkHover: { borderColor: Colors.brandGreen },
+  checkText: { flex: 1, fontSize: 15, color: Colors.slateDark },
+  sharedWhat: { fontSize: 14, lineHeight: 20, color: Colors.slateDark, textAlign: 'center' },
   qrCard: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 20, gap: 14, alignItems: 'center' },
   qrBox: { padding: 14, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: Colors.border },
   countdown: { flexDirection: 'row', alignItems: 'center', gap: 6 },

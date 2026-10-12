@@ -2,21 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { get, post, del } from '../services/api.service';
 import Config from '../constants/config';
-import { buildShareUrl, webOriginFrom } from '../utils/recordShare';
+import { buildShareUrl, shareOrigin, ALL_SECTION_KEYS, toggleSection } from '../utils/recordShare';
 
 const POLL_MS = 10000; // chưa có WebSocket: tải lại để thấy ai vừa quét mã
 
 // Địa chỉ trang web công khai để đưa vào QR (người quét mở bằng trình duyệt)
-const webOrigin = () => {
-  if (process.env.EXPO_PUBLIC_WEB_URL) return process.env.EXPO_PUBLIC_WEB_URL;
-  if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
-  return webOriginFrom(Config.API_URL);
-};
+const webOrigin = () => shareOrigin({
+  webUrl: process.env.EXPO_PUBLIC_WEB_URL,
+  location: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location : null,
+  lanIp: process.env.EXPO_PUBLIC_LAN_IP, // update-ip.js ghi vào .env.local mỗi lần npm start/web
+  apiUrl: Config.API_URL,
+});
 
 /** UC-PAT-09 — bệnh nhân tạo mã QR chia sẻ bệnh án (5 phút), xem ai đang xem, thu hồi. */
 export function useRecordShares() {
   const [state, setState] = useState({ loading: true, shares: [], error: null });
-  const [qr, setQr] = useState(null); // { shareId, url, expiresAt }
+  const [qr, setQr] = useState(null); // { shareId, url, expiresAt, sections }
+  const [sections, setSections] = useState(ALL_SECTION_KEYS); // mặc định chia sẻ tất cả, bệnh nhân bỏ tick nhóm không muốn
 
   const load = useCallback(async () => {
     try {
@@ -36,15 +38,15 @@ export function useRecordShares() {
 
   const create = useCallback(async () => {
     try {
-      const res = await post('/api/v1/patient/record-shares', {});
+      const res = await post('/api/v1/patient/record-shares', { sections });
       const d = res?.data;
-      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt });
+      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt, sections: d.sections });
       await load();
       return { ok: true };
     } catch (err) {
       return { ok: false, message: err?.message || 'Không tạo được mã QR. Vui lòng thử lại.' };
     }
-  }, [load]);
+  }, [load, sections]);
 
   const revoke = useCallback(async (shareId) => {
     try {
@@ -57,5 +59,8 @@ export function useRecordShares() {
     }
   }, [load]);
 
-  return { ...state, qr, clearQr: () => setQr(null), create, revoke, reload: load };
+  return {
+    ...state, qr, clearQr: () => setQr(null), create, revoke, reload: load,
+    sections, toggleSection: (key) => setSections((cur) => toggleSection(cur, key)),
+  };
 }

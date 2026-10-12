@@ -19,6 +19,9 @@ import { Consultation } from "../modules/emr/models/consultation.model.js";
  */
 
 const BYPASS = { bypassTenancy: true };
+
+/** Nhóm bệnh nhân chọn để chia sẻ (thông tin cơ bản: tên, tuổi, giới, mã BN luôn có). */
+export const SHARE_SECTIONS = ["visits", "imaging", "prescriptions", "labs", "vitals", "safety", "inpatient", "papers"];
 const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj?.[k] !== undefined).map((k) => [k, obj[k]]));
 
 const EMR_FIELDS = ["_id", "admissionType", "department", "diagnosis", "treatmentPlan", "status", "dischargeDate", "doctorInCharge",
@@ -42,21 +45,23 @@ export const toSharedSafety = (profile) => ({
   emergencyContact: pick(profile?.emergencyContact || {}, ["name", "relation", "phone"]),
 });
 
-export const buildSharedRecord = async (patientId) => {
+export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS) => {
   const user = await User.findById(patientId).select("profile").setOptions(BYPASS).lean();
   if (!user) throw Object.assign(new Error("Không tìm thấy bệnh nhân."), { status: 404 });
   const medicalId = user.profile?.medicalId || null;
+  const has = (s) => sections.includes(s);
+  const only = (s, query) => (has(s) ? query() : []); // nhóm không chọn: không truy vấn, không gửi
 
   const [profile, visits, vitals, labs, prescriptions, discharges, transfers, imaging, emrRecords] = await Promise.all([
     PatientProfile.findOne({ userId: patientId }).setOptions(BYPASS).lean(),
-    Visit.find({ patientId }).sort({ createdAt: -1 }).populate("doctorId", "profile.name").select("createdAt date reason visitType status priority vitals mriOrder.region doctorId").setOptions(BYPASS).lean(),
-    VitalSign.find({ patient_id: patientId }).sort({ recorded_at: 1 }).setOptions(BYPASS).lean(),
-    LabOrder.find({ patient_id: patientId }).sort({ ordered_at: -1 }).setOptions(BYPASS).lean(),
-    Prescription.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean(),
-    DischargePaper.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean(),
-    TransferForm.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean(),
-    medicalId ? ImagingResult.find({ medicalId, isSigned: true }).sort({ reportDate: -1 }).setOptions(BYPASS).lean() : [],
-    MedicalRecord.find({ patientId: { $in: [String(patientId), medicalId].filter(Boolean) } }).sort({ createdAt: -1 }).setOptions(BYPASS).lean(),
+    only("visits", () => Visit.find({ patientId }).sort({ createdAt: -1 }).populate("doctorId", "profile.name").select("createdAt date reason visitType status priority vitals mriOrder.region doctorId").setOptions(BYPASS).lean()),
+    only("vitals", () => VitalSign.find({ patient_id: patientId }).sort({ recorded_at: 1 }).setOptions(BYPASS).lean()),
+    only("labs", () => LabOrder.find({ patient_id: patientId }).sort({ ordered_at: -1 }).setOptions(BYPASS).lean()),
+    only("prescriptions", () => Prescription.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean()),
+    only("papers", () => DischargePaper.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean()),
+    only("papers", () => TransferForm.find({ patient_id: patientId }).sort({ recorded_at: -1 }).setOptions(BYPASS).lean()),
+    only("imaging", () => (medicalId ? ImagingResult.find({ medicalId, isSigned: true }).sort({ reportDate: -1 }).setOptions(BYPASS).lean() : [])),
+    only("inpatient", () => MedicalRecord.find({ patientId: { $in: [String(patientId), medicalId].filter(Boolean) } }).sort({ createdAt: -1 }).setOptions(BYPASS).lean()),
   ]);
 
   const emrIds = emrRecords.map((r) => r._id);
@@ -68,25 +73,31 @@ export const buildSharedRecord = async (patientId) => {
     : [[], []];
   const byRecord = (list, id) => list.filter((x) => String(x.medicalRecordId) === String(id));
 
-  return {
+  const out = {
+    sections,
     patient: {
       name: user.profile?.name || user.profile?.fullName || "Bệnh nhân",
       gender: profile?.gender || user.profile?.gender || "",
       dateOfBirth: profile?.dateOfBirth || user.profile?.dateOfBirth || null,
       medicalId,
     },
-    safety: toSharedSafety(profile),
-    visits: visits.map((v) => ({
-      date: v.date || v.createdAt, reason: v.reason, visitType: v.visitType, status: v.status, priority: v.priority,
-      doctor: v.doctorId?.profile?.name || "", vitals: v.vitals || null, mriRegion: v.mriOrder?.region || "",
-    })),
-    imaging: imaging.map(toSharedImaging).filter(Boolean),
-    vitals: vitals.map((v) => pick(v, ["recorded_at", "pulse", "blood_pressure", "spo2", "temperature", "weight", "height", "bmi"])),
-    labs: labs.map((l) => pick(l, ["category", "status", "ordered_at", "resulted_at", "results"])),
-    prescriptions: prescriptions.map((p) => pick(p, ["recorded_at", "doctor_name", "diagnosis", "drugs", "status", "note"])),
-    dischargePapers: discharges.map((d) => pick(d, ["recorded_at", "dischargeNo", "doctor_name", "diagnosis", "dateIn", "dateOut", "treatment", "note"])),
-    transferForms: transfers.map((t) => pick(t, ["recorded_at", "transferNo", "doctor_name", "diagnosis", "dateIn", "dateOut", "transferTo", "reason", "reasonDetail", "clinicalSummary", "labSummary", "drugsUsed", "patientStatus", "treatment", "treatmentDirection", "status"])),
-    inpatientRecords: emrRecords.map((r) => toSharedEmr(r, { careSheets: byRecord(careSheets, r._id), consultations: byRecord(consultations, r._id) })),
     generatedAt: new Date(),
   };
+  if (has("safety")) out.safety = toSharedSafety(profile);
+  if (has("visits")) {
+    out.visits = visits.map((v) => ({
+      date: v.date || v.createdAt, reason: v.reason, visitType: v.visitType, status: v.status, priority: v.priority,
+      doctor: v.doctorId?.profile?.name || "", vitals: v.vitals || null, mriRegion: v.mriOrder?.region || "",
+    }));
+  }
+  if (has("imaging")) out.imaging = imaging.map(toSharedImaging).filter(Boolean);
+  if (has("vitals")) out.vitals = vitals.map((v) => pick(v, ["recorded_at", "pulse", "blood_pressure", "spo2", "temperature", "weight", "height", "bmi"]));
+  if (has("labs")) out.labs = labs.map((l) => pick(l, ["category", "status", "ordered_at", "resulted_at", "results"]));
+  if (has("prescriptions")) out.prescriptions = prescriptions.map((p) => pick(p, ["recorded_at", "doctor_name", "diagnosis", "drugs", "status", "note"]));
+  if (has("papers")) {
+    out.dischargePapers = discharges.map((d) => pick(d, ["recorded_at", "dischargeNo", "doctor_name", "diagnosis", "dateIn", "dateOut", "treatment", "note"]));
+    out.transferForms = transfers.map((t) => pick(t, ["recorded_at", "transferNo", "doctor_name", "diagnosis", "dateIn", "dateOut", "transferTo", "reason", "reasonDetail", "clinicalSummary", "labSummary", "drugsUsed", "patientStatus", "treatment", "treatmentDirection", "status"]));
+  }
+  if (has("inpatient")) out.inpatientRecords = emrRecords.map((r) => toSharedEmr(r, { careSheets: byRecord(careSheets, r._id), consultations: byRecord(consultations, r._id) }));
+  return out;
 };

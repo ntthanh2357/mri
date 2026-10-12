@@ -19,7 +19,7 @@ import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
-import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, assetUrl } from '../utils/recordShare.js';
+import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, toggleSection, sectionsSummary } from '../utils/recordShare.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -409,6 +409,29 @@ it('buildShareUrl puts the QR token in the public viewer URL (encoded, no traili
 it('webOriginFrom maps the dev API port 3000 to the web port 8083, keeps proxied origins', () => {
   assert.strictEqual(webOriginFrom('http://192.168.1.5:3000'), 'http://192.168.1.5:8083');
   assert.strictEqual(webOriginFrom('https://api.neuroscan.vn'), 'https://api.neuroscan.vn');
+});
+
+it('share sections: same 8 keys as the backend, toggle keeps canonical order, summary reads naturally', () => {
+  assert.deepStrictEqual(ALL_SECTION_KEYS, ['visits', 'imaging', 'prescriptions', 'labs', 'vitals', 'safety', 'inpatient', 'papers']);
+  assert.ok(SHARE_SECTIONS.every((x) => x.label && x.icon));
+  assert.deepStrictEqual(toggleSection(['vitals'], 'imaging'), ['imaging', 'vitals']);
+  assert.deepStrictEqual(toggleSection(['imaging', 'vitals'], 'imaging'), ['vitals']);
+  assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS), 'Toàn bộ bệnh án');
+  assert.strictEqual(sectionsSummary(undefined), 'Toàn bộ bệnh án'); // lượt chia sẻ cũ
+  assert.strictEqual(sectionsSummary(['vitals', 'imaging']), 'Phim MRI/CT, Sinh hiệu');
+});
+
+it('shareOrigin: QR never points to localhost when the LAN IP is known (phones cannot open localhost)', () => {
+  const local = { protocol: 'http:', hostname: 'localhost', port: '8083', origin: 'http://localhost:8083' };
+  assert.strictEqual(shareOrigin({ location: local, lanIp: '192.168.1.214' }), 'http://192.168.1.214:8083');
+  assert.strictEqual(shareOrigin({ location: { ...local, hostname: '127.0.0.1' }, lanIp: '192.168.1.214' }), 'http://192.168.1.214:8083');
+  // đã mở bằng IP LAN / tên miền thật thì giữ nguyên
+  const lan = { protocol: 'http:', hostname: '192.168.1.214', port: '8083', origin: 'http://192.168.1.214:8083' };
+  assert.strictEqual(shareOrigin({ location: lan, lanIp: '10.0.0.2' }), 'http://192.168.1.214:8083');
+  // cấu hình EXPO_PUBLIC_WEB_URL luôn được ưu tiên
+  assert.strictEqual(shareOrigin({ webUrl: 'https://app.neuroscan.vn', location: local, lanIp: '192.168.1.214' }), 'https://app.neuroscan.vn');
+  // app điện thoại (không có window.location): suy từ địa chỉ API
+  assert.strictEqual(shareOrigin({ apiUrl: 'http://192.168.1.214:3000' }), 'http://192.168.1.214:8083');
 });
 
 it('countdown: seconds left never negative, formatted m:ss', () => {
