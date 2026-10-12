@@ -17,7 +17,7 @@ import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
-import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
+import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
 
 const colors = {
@@ -367,6 +367,36 @@ it('isReminderDue flags pending doses whose time has come, not done/skipped/futu
   assert.strictEqual(isReminderDue({ status: 'pending', time: '20:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'done', time: '08:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'skipped', time: '08:00' }, now), false);
+});
+
+// ── UC-PAT-12: biểu đồ diễn biến sinh hiệu ──
+it('temperatureStatus: bình thường, hơi cao, sốt, thấp; thiếu dữ liệu → null', () => {
+  assert.strictEqual(temperatureStatus(36.8).level, 'normal');
+  assert.strictEqual(temperatureStatus(37.6).level, 'elevated');
+  assert.strictEqual(temperatureStatus(38.5).level, 'high');
+  assert.strictEqual(temperatureStatus(34.8).level, 'low');
+  assert.strictEqual(temperatureStatus(null), null);
+});
+
+it('vitalSeries sorts old → new, skips records missing the metric, keeps the latest N', () => {
+  const items = [
+    { recorded_at: '2026-10-03', blood_pressure: { systolic: 130, diastolic: 85 }, pulse: 88, spo2: 97, temperature: 37.9 },
+    { recorded_at: '2026-10-01', blood_pressure: { systolic: 120, diastolic: 80 }, pulse: 72, spo2: 98 },
+    { recorded_at: '2026-10-02', blood_pressure: { systolic: 125, diastolic: 82 }, pulse: 80, spo2: 96, temperature: 37.1 },
+  ];
+  const bp = vitalSeries(items, 'bp');
+  assert.deepStrictEqual(bp.map((p) => p.values), [[120, 80], [125, 82], [130, 85]]);
+  assert.deepStrictEqual(vitalSeries(items, 'temperature').map((p) => p.values[0]), [37.1, 37.9]);
+  assert.deepStrictEqual(vitalSeries(items, 'pulse', 2).map((p) => p.values[0]), [80, 88]);
+  assert.strictEqual(vitalSeries([], 'bp').length, 0);
+  assert.ok(VITAL_METRICS.every((m) => m.key && m.label && m.unit && m.band));
+});
+
+it('chartRange covers both the data and the normal band, with padding', () => {
+  const r = chartRange([{ values: [97] }, { values: [91] }], { min: 95, max: 100 });
+  assert.ok(r.min < 91 && r.max > 100);
+  const flat = chartRange([{ values: [72] }], { min: 72, max: 72 });
+  assert.ok(flat.max > flat.min);
 });
 
 console.log(`\n======================================================================`);

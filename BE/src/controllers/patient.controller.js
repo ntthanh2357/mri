@@ -12,6 +12,7 @@ import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { assessPrescriptionSafety } from "../modules/pharmacy/services/drugSafety.service.js";
 import { scheduleFor, getReminderTimes } from "../services/medicineReminder.service.js";
+import { normalizeTemperature } from "../services/vitalSign.service.js";
 export { checkPatientTenancy };
 
 // Giờ nhắc theo số lần/ngày: dùng giờ bệnh nhân tự đặt (UC-PAT-13), chưa đặt thì giờ cố định mặc định
@@ -222,7 +223,7 @@ export const getPatientVitals = async (req, res) => {
 export const addPatientVitals = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { pulse, blood_pressure, spo2, weight, height, recorded_at } = req.body;
+    const { pulse, blood_pressure, spo2, weight, height, recorded_at, temperature } = req.body;
 
     if (!pulse || !blood_pressure || !spo2) {
       return errorResponse(res, "Thiếu thông tin mạch, huyết áp hoặc SpO2.", 400);
@@ -247,6 +248,7 @@ export const addPatientVitals = async (req, res) => {
       weight,
       height,
       bmi,
+      temperature: normalizeTemperature(temperature),
       recorded_at: recorded_at || new Date()
     });
 

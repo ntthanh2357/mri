@@ -31,9 +31,12 @@ const vitalSignSchema = new Schema({
   height: { 
     type: Number 
   }, // Chiều cao (cm)
-  bmi: { 
-    type: Number 
+  bmi: {
+    type: Number
   }, // Chỉ số BMI
+  // UC-PAT-12 — thân nhiệt (°C, tuỳ chọn) + lượt khám nguồn (mỗi lượt khám 1 bản ghi khi chép từ visit.vitals)
+  temperature: { type: Number, default: null },
+  visit_id: { type: Schema.Types.ObjectId, ref: "Visit", default: null, index: true },
   recorded_at: { 
     type: Date, 
     default: Date.now 
