@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { Readable } from 'stream';
 import {
   imageKind, scanDocument, listDocuments, saveDocument, deleteDocument, listSharedDocuments, getImage,
-  createImageToken, verifyImageToken, MAX_TEXT, MAX_TITLE, MAX_DOCS, MAX_SCANS_PER_DAY,
+  createImageToken, verifyImageToken, toPublicDoc, cleanFields, MAX_TEXT, MAX_TITLE, MAX_DOCS, MAX_SCANS_PER_DAY,
 } from '../scannedDocument.service.js';
 import { ScannedDocument, ScanUsage } from '../../models/scannedDocument.model.js';
 import { RecordShare } from '../../models/recordShare.model.js';
@@ -40,7 +40,8 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
   const other = new mongoose.Types.ObjectId();
   const heavy = new mongoose.Types.ObjectId();
   const racer = new mongoose.Types.ObjectId();
-  const everyone = [me, other, heavy, racer];
+  const fielder = new mongoose.Types.ObjectId();
+  const everyone = [me, other, heavy, racer, fielder];
   let storage;
 
   beforeAll(async () => {
@@ -76,6 +77,46 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     expect(stored.buffer.equals(NORMALIZED)).toBe(true);
     expect(stored.category).toBe('patient_upload');
     expect(stored.patientId).toBe(String(me));
+  });
+
+  it('thông tin AI tách (loại giấy, ngày, nơi khám, thuốc) được làm sạch trước khi lưu; bệnh nhân sửa lại được', async () => {
+    const seen = [];
+    const fieldsOcr = async (buffer, mime, opts) => {
+      seen.push(opts);
+      return {
+        ...(await okOcr()), cropped: true,
+        fields: {
+          docType: 'prescription', date: ' 10/10/2026 ', facility: 'PK An Bình', doctor: 'BS. Mẫu', diagnosis: 'Tăng huyết áp', hack: '<script>',
+          medications: [{ name: 'Amlodipin 5mg', quantity: '30 viên', usage: 'Sáng 1 viên', extra: 1 }, { name: '  ', quantity: '5' }, 'rác', null],
+        },
+      };
+    };
+    const scanned = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG, autocrop: false }, { ocr: fieldsOcr, storage });
+    expect(seen[0].autocrop).toBe(false);
+    expect(scanned.cropped).toBe(true);
+    const f = toPublicDoc(scanned.doc).fields;
+    expect(f).toEqual({
+      docType: 'prescription', date: '10/10/2026', facility: 'PK An Bình', doctor: 'BS. Mẫu', diagnosis: 'Tăng huyết áp',
+      medications: [{ name: 'Amlodipin 5mg', quantity: '30 viên', usage: 'Sáng 1 viên' }],
+    });
+
+    // bệnh nhân sửa: loại giấy lạ → "other", cắt độ dài, bỏ dòng thuốc trống, tối đa 30 thuốc
+    const saved = await saveDocument(fielder, scanned.doc._id, {
+      title: 'Đơn', text: 'x',
+      fields: { docType: 'virus', facility: 'F'.repeat(500), medications: Array.from({ length: 50 }, (_, i) => ({ name: `Thuốc ${i}`, usage: 'U'.repeat(900) })) },
+    });
+    const g = toPublicDoc(saved).fields;
+    expect(g.docType).toBe('other');
+    expect(g.facility.length).toBe(200);
+    expect(g.medications.length).toBe(30);
+    expect(g.medications[0].usage.length).toBe(300);
+    expect(g.date).toBe('');
+    // lưu mà không gửi fields (bản giao diện cũ) thì giữ nguyên thông tin đang có
+    const kept = await saveDocument(fielder, scanned.doc._id, { title: 'Đơn 2', text: 'y' });
+    expect(toPublicDoc(kept).fields.medications.length).toBe(30);
+    // giấy tờ cũ chưa có fields vẫn trả đủ khung rỗng cho giao diện
+    expect(toPublicDoc({ _id: new mongoose.Types.ObjectId(), title: 'cũ', text: '' }).fields).toEqual({ docType: 'other', date: '', facility: '', doctor: '', diagnosis: '', medications: [] });
+    for (const bad of [null, 'chuỗi', 5, []]) expect(cleanFields(bad).medications.length).toBe(0);
   });
 
   it('tên file trong kho là ngẫu nhiên, không trùng nhau dù quét cùng lúc (không ghi đè ảnh của người khác)', async () => {
@@ -159,6 +200,16 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     expect(await statusOf(() => getImage(verifyImageToken(createImageToken(doc._id, { shareId: foreign._id })), { storage }))).toBe(404);
     await RecordShare.updateOne({ _id: share._id }, { $set: { revokedAt: new Date() } });
     expect(await statusOf(() => getImage(payload, { storage }))).toBe(404);
+  });
+
+  it('link ảnh của người xem QR chỉ dùng được cho giấy tờ nằm trong lượt chia sẻ đó', async () => {
+    const [doc] = await listSharedDocuments(me);
+    const mk = (extra) => RecordShare.create({ patientId: me, qrTokenHash: `h-${Math.random()}`, qrExpiresAt: new Date(Date.now() + 60000), ...extra });
+    const viaShare = async (share) => statusOf(() => getImage(verifyImageToken(createImageToken(doc._id, { shareId: share._id })), { storage }));
+    expect(await viaShare(await mk({ sections: ['documents'], documentIds: [doc._id] }))).toBe(200);
+    expect(await viaShare(await mk({ sections: ['documents'], documentIds: [new mongoose.Types.ObjectId()] }))).toBe(404); // chia sẻ giấy tờ khác
+    expect(await viaShare(await mk({ sections: ['vitals'] }))).toBe(404); // lượt chia sẻ không gồm giấy tờ
+    expect(await viaShare(await mk({}))).toBe(404); // lượt chia sẻ cũ (không có nhóm) không gồm giấy tờ
   });
 
   it('không trả ảnh nếu file trong kho không thuộc đúng bệnh nhân hoặc không phải loại giấy tờ bệnh nhân tải lên', async () => {

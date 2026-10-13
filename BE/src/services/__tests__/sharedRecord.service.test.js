@@ -48,6 +48,13 @@ describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã ch
     expect(json.includes('file-ok') || json.includes('Bản nháp')).toBe(false);
   });
 
+  it('lượt chia sẻ đã chốt danh sách giấy tờ: chỉ trả đúng giấy tờ đó; bản nháp không lọt dù có trong danh sách', async () => {
+    const [ok, draft] = await Promise.all(['Đơn thuốc ngoài', 'Bản nháp'].map((title) => ScannedDocument.findOne({ patientId: pid, title }).lean()));
+    expect((await buildSharedRecord(pid, ['documents'], { documentIds: [ok._id] })).scannedDocuments.length).toBe(1);
+    expect((await buildSharedRecord(pid, ['documents'], { documentIds: [] })).scannedDocuments.length).toBe(0);
+    expect((await buildSharedRecord(pid, ['documents'], { documentIds: [draft._id] })).scannedDocuments.length).toBe(0);
+  });
+
   it('không truyền nhóm: đủ tất cả nhóm như trước', async () => {
     const r = await buildSharedRecord(pid);
     expect(r.sections).toEqual(SHARE_SECTIONS);

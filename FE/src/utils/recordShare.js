@@ -41,11 +41,48 @@ export const toggleSection = (keys, key) => {
   return ALL_SECTION_KEYS.filter((k) => next.includes(k));
 };
 
-/** "Toàn bộ bệnh án" hoặc danh sách nhóm đã chọn. Lượt chia sẻ cũ (không có nhóm) = toàn bộ. */
-export const sectionsSummary = (keys) => {
-  if (!keys || ALL_SECTION_KEYS.every((k) => keys.includes(k))) return 'Toàn bộ bệnh án';
-  return SHARE_SECTIONS.filter((x) => keys.includes(x.key)).map((x) => x.label).join(', ');
+/**
+ * "Toàn bộ bệnh án" hoặc danh sách nhóm đã chọn. Lượt chia sẻ cũ (không có nhóm) = toàn bộ.
+ * `documentCount`: số giấy tờ tự quét bệnh nhân chọn cho lượt đó (null = không rõ / tất cả).
+ */
+export const sectionsSummary = (keys, { documentCount = null } = {}) => {
+  const n = documentCount === null || documentCount === undefined ? '' : ` (${documentCount})`;
+  if (!keys) return 'Toàn bộ bệnh án';
+  if (ALL_SECTION_KEYS.every((k) => keys.includes(k))) return n ? `Toàn bộ bệnh án, gồm ${documentCount} giấy tờ tự quét` : 'Toàn bộ bệnh án';
+  return SHARE_SECTIONS.filter((x) => keys.includes(x.key)).map((x) => (x.key === 'documents' ? `${x.label}${n}` : x.label)).join(', ');
 };
+
+/** Nhóm thật sự gửi đi: nhóm "Giấy tờ tự quét" chỉ có nghĩa khi chọn ít nhất 1 giấy tờ. */
+export const effectiveSections = (keys, pickedDocIds) => keys.filter((k) => k !== 'documents' || pickedDocIds.length > 0);
+
+/** Loại giấy tờ tự quét — khớp DOC_TYPES ở BE (scannedDocument.service.js) và AI service (document_ocr.py). */
+export const SCAN_DOC_TYPES = [
+  { key: 'prescription', label: 'Đơn thuốc' },
+  { key: 'lab_result', label: 'Kết quả xét nghiệm' },
+  { key: 'imaging_result', label: 'Kết quả chụp chiếu' },
+  { key: 'discharge', label: 'Giấy ra viện' },
+  { key: 'referral', label: 'Giấy chuyển viện' },
+  { key: 'other', label: 'Khác' },
+];
+export const docTypeLabel = (key) => SCAN_DOC_TYPES.find((t) => t.key === key)?.label || 'Khác';
+
+// ── Nhân viên quét mã chia sẻ trong app ──
+const SHARE_LINK_RE = /^https?:\/\/[^/?#\s]+(?:\/[^?#\s]*)?\/xem-benh-an\/?\?(?:[^#\s]*&)?q=([A-Za-z0-9_-]{20,128})(?:[&#]|$)/;
+const SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{20,128}$/;
+
+/**
+ * Chữ đọc được từ mã QR (hoặc liên kết dán vào) → mã chia sẻ, hoặc null nếu không phải mã chia sẻ bệnh án.
+ * Chỉ lấy mã ra để gọi API của chính hệ thống; KHÔNG bao giờ mở địa chỉ nằm trong mã QR (tránh mã QR giả dẫn sang trang lạ).
+ */
+export const parseShareQr = (text) => {
+  const raw = String(text ?? '').trim();
+  if (SHARE_TOKEN_RE.test(raw)) return raw;
+  return SHARE_LINK_RE.exec(raw)?.[1] || null;
+};
+
+const STAFF_ROLE_LABELS = { doctor: 'Bác sĩ', nurse: 'Điều dưỡng', receptionist: 'Lễ tân', technician: 'Kỹ thuật viên' };
+/** Vai trò (do hệ thống ghi, nhân viên không tự sửa được) của người đã mở bệnh án bằng cách quét mã trong app. */
+export const staffRoleLabel = (role) => STAFF_ROLE_LABELS[role] || 'Nhân viên y tế';
 
 /** Số giây còn lại tới hạn (không âm). */
 export const secondsLeft = (expiresAt, now = new Date()) =>

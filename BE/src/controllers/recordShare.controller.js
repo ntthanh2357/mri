@@ -15,14 +15,15 @@ const wrap = (fn) => async (req, res, next) => {
 
 // ── Bệnh nhân (đăng nhập) ────────────────────────────────────────────────────
 
-// POST /api/v1/patient/record-shares { sections? } — tạo mã QR (mở được trong 5 phút) cho các nhóm đã chọn
+// POST /api/v1/patient/record-shares { sections?, documentIds? } — tạo mã QR (mở được trong 5 phút) cho các nhóm / giấy tờ đã chọn
 export const createMine = wrap(async (req, res) => {
-  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId, new Date(), req.body?.sections);
+  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId, new Date(), req.body?.sections, req.body?.documentIds);
   return successResponse(res, {
     shareId: share._id,
     qrToken,
     qrExpiresAt: share.qrExpiresAt,
     sections: share.sections,
+    documentCount: share.documentIds ? share.documentIds.length : null,
     ttlSeconds: shareService.QR_TTL_MS / 1000,
   }, "Đã tạo mã QR chia sẻ bệnh án.");
 });
@@ -40,17 +41,28 @@ export const revokeMine = wrap(async (req, res) => {
 
 // POST /api/v1/shared-records/redeem { qrToken } — quét QR trong 5 phút → nhận vé xem
 export const redeem = wrap(async (req, res) => {
-  const qrToken = String(req.body?.qrToken || "");
+  const qrToken = typeof req.body?.qrToken === "string" ? req.body.qrToken : "";
   if (!qrToken) return errorResponse(res, "Thiếu mã QR.", 400);
   const { viewerToken } = await shareService.redeemQr(qrToken, { userAgent: req.headers["user-agent"] || "" });
   return successResponse(res, { viewerToken });
 });
 
-// POST /api/v1/shared-records/view { viewerToken } — xem bệnh án (vé không hết hạn, trừ khi bị thu hồi)
+// POST /api/v1/shared-records/redeem-staff { qrToken } — nhân viên đang đăng nhập quét mã trong app:
+// giống redeem nhưng ghi tên + vai trò người mở (bệnh nhân thấy ở danh sách đang chia sẻ). Phân quyền role ở routes.
+export const redeemAsStaff = wrap(async (req, res) => {
+  const qrToken = typeof req.body?.qrToken === "string" ? req.body.qrToken : "";
+  if (!qrToken) return errorResponse(res, "Thiếu mã QR.", 400);
+  const viewer = await shareService.staffViewerOf(req.user);
+  const { viewerToken } = await shareService.redeemQr(qrToken, { userAgent: req.headers["user-agent"] || "", viewer });
+  return successResponse(res, { viewerToken });
+});
+
+// POST /api/v1/shared-records/view { viewerToken } — xem bệnh án (vé không hết hạn, trừ khi bị thu hồi).
+// Công khai, nhưng vé của nhân viên (đổi qua redeem-staff) cần đúng tài khoản đó đang đăng nhập.
 export const view = wrap(async (req, res) => {
-  const viewerToken = String(req.body?.viewerToken || "");
+  const viewerToken = typeof req.body?.viewerToken === "string" ? req.body.viewerToken : "";
   if (!viewerToken) return errorResponse(res, "Thiếu mã xem.", 400);
-  const { patientId, sections, shareId } = await shareService.resolveViewer(viewerToken);
+  const { patientId, sections, shareId, documentIds } = await shareService.resolveViewer(viewerToken, { userId: () => shareService.signedInUserId(req.headers.authorization) });
   res.set("Cache-Control", "no-store");
-  return successResponse(res, await buildSharedRecord(patientId, sections, { shareId }));
+  return successResponse(res, await buildSharedRecord(patientId, sections, { shareId, documentIds }));
 });

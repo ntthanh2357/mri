@@ -34,6 +34,8 @@ import MyHealthScreen from '../screens/MyHealthScreen';
 import ContrastConsentScreen from '../screens/ContrastConsentScreen';
 import QueueTicketScreen from '../screens/QueueTicketScreen';
 import RecordShareScreen from '../screens/RecordShareScreen';
+import SharedRecordScreen from '../screens/SharedRecordScreen';
+import ScanRecordQrScreen from '../screens/ScanRecordQrScreen';
 import PatientDetailScreen from '../screens/PatientDetailScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
@@ -72,6 +74,8 @@ export const staffLinkingConfig = {
       ContrastConsent: 'staff/consents',
       QueueTicket: 'staff/queue-ticket',
       RecordShare: 'staff/chia-se-benh-an',
+      ScanRecordQr: 'staff/quet-ma-benh-an',
+      SharedRecord: 'staff/xem-benh-an',
       PatientDetail: 'staff/patient-detail',
       Financials: 'staff/financials',
       Support: 'staff/support',
@@ -180,6 +184,8 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="ContrastConsent" component={ContrastConsentScreen} options={{ title: 'Phiếu đồng thuận', headerShown: false }} />
         <Stack.Screen name="QueueTicket" component={QueueTicketScreen} options={{ title: 'Lấy số khám', headerShown: false }} />
         <Stack.Screen name="RecordShare" component={RecordShareScreen} options={{ title: 'Chia sẻ bệnh án', headerShown: false }} />
+        <Stack.Screen name="ScanRecordQr" component={ScanRecordQrScreen} options={{ title: 'Quét mã bệnh án', headerShown: false }} />
+        <Stack.Screen name="SharedRecord" component={SharedRecordScreen} options={{ title: 'Bệnh án được chia sẻ', headerShown: false }} />
         <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: 'Chi tiết bệnh án', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />

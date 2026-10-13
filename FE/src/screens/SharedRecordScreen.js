@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator, StyleSheet, Linking, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, StyleSheet, Linking, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import Config from '../constants/config';
 import VitalsChart from '../components/patient/VitalsChart';
 import { useSharedRecord } from '../controllers/useSharedRecord';
-import { assetUrl, sectionsSummary, ALL_SECTION_KEYS } from '../utils/recordShare';
+import { assetUrl, sectionsSummary, docTypeLabel, ALL_SECTION_KEYS } from '../utils/recordShare';
 
 // UC-PAT-09 — Trang công khai: bệnh án bệnh nhân chia sẻ qua QR (chỉ đọc, không cần đăng nhập).
 
@@ -178,10 +178,27 @@ const SharedRecordScreen = ({ route, navigation }) => {
             {data.scannedDocuments.length ? data.scannedDocuments.map((d) => {
               const uri = assetUrl(d.imageUrl, Config.API_URL);
               return (
-                <Item key={d._id} title={d.title} sub={`Bệnh nhân chụp ngày ${fmtDate(d.createdAt)}`}>
+                <Item key={d._id} title={d.title} sub={`${docTypeLabel(d.fields?.docType)}, bệnh nhân chụp ngày ${fmtDate(d.createdAt)}`}>
                   <Image source={{ uri }} style={styles.docImage} resizeMode="contain" accessibilityLabel={`Ảnh giấy tờ: ${d.title}`} />
                   <Text accessibilityRole="link" onPress={() => Linking.openURL(uri)} style={styles.link}>Mở ảnh gốc cỡ lớn</Text>
-                  {d.text ? <Text style={styles.docText}>{d.text}</Text> : <Text style={styles.note}>Bệnh nhân không nhập phần chữ.</Text>}
+                  <Field label="Ngày ghi trên giấy" value={d.fields?.date} />
+                  <Field label="Nơi khám" value={d.fields?.facility} />
+                  <Field label="Bác sĩ" value={d.fields?.doctor} />
+                  <Field label="Chẩn đoán" value={d.fields?.diagnosis} />
+                  {d.fields?.medications?.length ? (
+                    <View>
+                      <Text style={[styles.field, styles.fieldLabel]}>Thuốc ({d.fields.medications.length}), máy đọc từ ảnh và bệnh nhân tự kiểm tra, hãy đối chiếu ảnh gốc</Text>
+                      {d.fields.medications.map((m, j) => (
+                        <Text key={j} style={styles.drug}>• <Text style={styles.bold}>{m.name}</Text>{m.quantity ? `, ${m.quantity}` : ''}{m.usage ? `: ${m.usage}` : ''}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+                  {d.text ? (
+                    <>
+                      <Text style={[styles.field, styles.fieldLabel]}>Toàn bộ chữ trên giấy</Text>
+                      <Text style={styles.docText}>{d.text}</Text>
+                    </>
+                  ) : <Text style={styles.note}>Bệnh nhân không nhập phần chữ.</Text>}
                 </Item>
               );
             }) : <Text style={styles.note}>Bệnh nhân chưa lưu giấy tờ nào.</Text>}
@@ -194,8 +211,15 @@ const SharedRecordScreen = ({ route, navigation }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.topbar}>
-        <Text style={styles.brand}>NeuroScan AI</Text>
-        <Text style={styles.topSub}>Bệnh án được chia sẻ</Text>
+        {navigation.canGoBack() ? (
+          <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại" hitSlop={8} style={styles.back}>
+            <Feather name="arrow-left" size={20} color="#FFFFFF" />
+          </Pressable>
+        ) : null}
+        <View>
+          <Text style={styles.brand}>NeuroScan AI</Text>
+          <Text style={styles.topSub}>Bệnh án được chia sẻ</Text>
+        </View>
       </View>
       <View style={styles.page}>
         <View style={styles.notice}>
@@ -210,7 +234,8 @@ const SharedRecordScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  topbar: { backgroundColor: Colors.brandNavy, paddingHorizontal: 20, paddingVertical: 16 },
+  topbar: { backgroundColor: Colors.brandNavy, paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   brand: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
   topSub: { fontSize: 13, color: Colors.brandMint, marginTop: 2 },
   page: { width: '100%', maxWidth: 820, alignSelf: 'center', padding: 16, paddingBottom: 48, gap: 16 },

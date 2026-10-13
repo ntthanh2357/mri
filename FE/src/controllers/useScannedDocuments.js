@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, del, postFormData } from '../services/api.service';
@@ -29,10 +29,13 @@ const pickOnNative = async (camera) => {
   return { uri: asset.uri, name: asset.fileName || `giay-to-${Date.now()}.jpg`, type: asset.mimeType || 'image/jpeg' };
 };
 
-/** UC-PAT-09 (mở rộng) — bệnh nhân chụp giấy tờ, AI đọc chữ, kiểm tra rồi lưu để chia sẻ qua QR. */
+/** UC-PAT-09 (mở rộng) — bệnh nhân chụp giấy tờ, AI tự cắt nền + đọc chữ + tách thông tin, kiểm tra rồi lưu để chia sẻ qua QR. */
 export function useScannedDocuments() {
   const [state, setState] = useState({ loading: true, docs: [], error: null });
   const [scanning, setScanning] = useState(false);
+  // Lần quét gần nhất trong phiên này: giữ ảnh gốc CÙNG mã giấy tờ của nó, để quét lại không tự cắt nếu máy cắt sai
+  const lastPart = useRef(null); // { part, docId }
+  const [lastScan, setLastScan] = useState(null); // { docId, cropped }
 
   const load = useCallback(async () => {
     try {
@@ -50,15 +53,14 @@ export function useScannedDocuments() {
     return () => clearInterval(timer);
   }, [load]);
 
-  /** Chụp (camera = true) hoặc chọn ảnh có sẵn → gửi lên để đọc chữ. Trả doc mới (chưa kiểm tra). */
-  const scan = useCallback(async (camera) => {
+  const upload = useCallback(async (part, autocrop) => {
+    setScanning(true);
     try {
-      const part = Platform.OS === 'web' ? await pickOnWeb(camera) : await pickOnNative(camera);
-      if (!part) return { ok: false, cancelled: true };
-      setScanning(true);
       const form = new FormData();
       form.append('file', part);
-      const res = await postFormData(BASE, form);
+      const res = await postFormData(autocrop ? BASE : `${BASE}?autocrop=0`, form);
+      lastPart.current = { part, docId: res?.data?._id };
+      setLastScan({ docId: res?.data?._id, cropped: !!res?.data?.cropped });
       await load();
       return { ok: true, doc: res?.data, message: res?.message };
     } catch (err) {
@@ -68,9 +70,34 @@ export function useScannedDocuments() {
     }
   }, [load]);
 
-  const save = useCallback(async (id, { title, text }) => {
+  /** Chụp (camera = true) hoặc chọn ảnh có sẵn → gửi lên để đọc chữ. Trả doc mới (chưa kiểm tra). */
+  const scan = useCallback(async (camera) => {
+    let part;
     try {
-      await put(`${BASE}/${id}`, { title, text });
+      part = Platform.OS === 'web' ? await pickOnWeb(camera) : await pickOnNative(camera);
+    } catch (err) {
+      return { ok: false, message: err?.message || 'Không mở được camera hoặc thư viện ảnh.' };
+    }
+    if (!part) return { ok: false, cancelled: true };
+    return upload(part, true);
+  }, [upload]);
+
+  /** Máy tự cắt sai (mất chữ): quét lại đúng ảnh vừa chụp nhưng giữ nguyên khung, thay cho giấy tờ `docId`. */
+  const rescanUncropped = useCallback(async (docId) => {
+    // chỉ quét lại đúng ảnh của chính giấy tờ này (tránh gửi nhầm ảnh khác rồi xoá nhầm giấy tờ)
+    if (lastPart.current?.docId !== docId) return { ok: false, message: 'Không còn giữ ảnh gốc của giấy tờ này. Hãy chụp lại.' };
+    const res = await upload(lastPart.current.part, false);
+    // bản mới chưa đọc được chữ thì giữ lại bản cũ (đang có chữ) cho bệnh nhân tự chọn
+    if (res.ok && !res.doc?.ocrFailed) {
+      await del(`${BASE}/${docId}`).catch(() => {}); // bỏ bản bị cắt sai
+      await load();
+    }
+    return res;
+  }, [upload, load]);
+
+  const save = useCallback(async (id, { title, text, fields }) => {
+    try {
+      await put(`${BASE}/${id}`, { title, text, fields });
       await load();
       return { ok: true };
     } catch (err) {
@@ -88,5 +115,5 @@ export function useScannedDocuments() {
     }
   }, [load]);
 
-  return { ...state, scanning, scan, save, remove, reload: load };
+  return { ...state, scanning, lastScan, scan, rescanUncropped, save, remove, reload: load };
 }

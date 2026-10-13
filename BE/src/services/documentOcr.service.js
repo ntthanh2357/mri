@@ -7,14 +7,15 @@ const aiBaseUrl = () =>
   (process.env.AI_SERVER_URL || "http://localhost:8000").replace(/\/predict\/?$/, "").replace(/\/+$/, "");
 
 /**
- * @returns {Promise<{ title: string, text: string, image: Buffer, failed: boolean }>} `failed` = ảnh hợp lệ nhưng chưa đọc được chữ.
+ * `autocrop`: để AI service tự dò mép giấy, cắt nền và nắn thẳng (OpenCV).
+ * @returns {Promise<{ title: string, text: string, fields: object, image: Buffer, failed: boolean, cropped: boolean }>} `failed` = ảnh hợp lệ nhưng chưa đọc được chữ.
  * Ném lỗi có `status: 400` khi AI service báo ảnh không hợp lệ; lỗi khác = AI service không dùng được.
  */
-export const ocrDocumentImage = async (buffer, mimeType, { timeoutMs = 45000 } = {}) => {
+export const ocrDocumentImage = async (buffer, mimeType, { timeoutMs = 45000, autocrop = true } = {}) => {
   const form = new FormData();
   form.append("file", new Blob([buffer], { type: mimeType }), `document.${mimeType.split("/")[1]}`);
 
-  const res = await fetch(`${aiBaseUrl()}/ocr_document`, { method: "POST", body: form, signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetch(`${aiBaseUrl()}/ocr_document?autocrop=${autocrop ? "true" : "false"}`, { method: "POST", body: form, signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`AI server trả về ${res.status}`);
   const data = await res.json();
   if (data?.code === "invalid_image") throw Object.assign(new Error("Ảnh không hợp lệ hoặc có kích thước quá lớn."), { status: 400 });
@@ -22,7 +23,9 @@ export const ocrDocumentImage = async (buffer, mimeType, { timeoutMs = 45000 } =
   return {
     title: String(data.title || ""),
     text: String(data.text || ""),
+    fields: data.fields,
     image: Buffer.from(String(data.image_jpeg_base64), "base64"),
     failed: Boolean(data.ocr_failed),
+    cropped: Boolean(data.cropped),
   };
 };

@@ -42,6 +42,7 @@ import {
   Heart,
   Ticket,
   QrCode,
+  ScanLine,
   Sliders,
 } from 'lucide-react';
 
@@ -203,6 +204,7 @@ const ResponsiveLayout = ({
           { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
@@ -215,6 +217,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -223,6 +226,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -232,6 +236,7 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Tiếp nhận bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },

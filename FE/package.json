@@ -12,6 +12,7 @@
     "expo-image-picker": "~17.0.11",
     "expo-status-bar": "~3.0.9",
     "firebase": "^12.14.0",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.546.0",
     "lucide-react-native": "^1.25.0",
     "react": "19.1.0",

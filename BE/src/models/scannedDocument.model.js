@@ -7,12 +7,27 @@ import { Schema, model } from "mongoose";
  * Không gắn tenancyPlugin (giống RecordShare): giấy tờ thuộc về bệnh nhân, trang xem công khai không có phiên đăng nhập;
  * service luôn lọc tường minh theo patientId.
  */
+// Thông tin AI tách từ giấy tờ, bệnh nhân kiểm tra và sửa được (làm sạch ở scannedDocument.service: cleanFields)
+const medicationSchema = new Schema({ name: String, quantity: String, usage: String }, { _id: false });
+const fieldsSchema = new Schema(
+  {
+    docType: { type: String, enum: ["prescription", "lab_result", "imaging_result", "discharge", "referral", "other"], default: "other" },
+    date: { type: String, default: "" }, // ngày ghi trên giấy, giữ nguyên cách viết
+    facility: { type: String, default: "" },
+    doctor: { type: String, default: "" },
+    diagnosis: { type: String, default: "" },
+    medications: { type: [medicationSchema], default: [] },
+  },
+  { _id: false }
+);
+
 const scannedDocumentSchema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     hospitalId: { type: Schema.Types.ObjectId, ref: "Hospital", default: null },
     title: { type: String, required: true },
     text: { type: String, default: "" },
+    fields: { type: fieldsSchema, default: () => ({}) },
     fileId: { type: String, required: true }, // StoredMedicalFile.fileId
     mimeType: { type: String, required: true },
     ocrStatus: { type: String, enum: ["done", "failed"], default: "done" },

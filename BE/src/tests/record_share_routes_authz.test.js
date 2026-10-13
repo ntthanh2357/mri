@@ -27,6 +27,18 @@ describe('Phân quyền chia sẻ bệnh án qua QR (/api/v1/patient/record-shar
   });
 });
 
+describe('Phân quyền nhân viên quét mã chia sẻ trong app (/api/v1/shared-records/redeem-staff)', () => {
+  it('chỉ bác sĩ, điều dưỡng, lễ tân, kỹ thuật viên; bệnh nhân và quản trị không dùng được; phải đăng nhập trước', async () => {
+    const { default: shared } = await import('../routes/sharedRecord.routes.js');
+    const { protect } = await import('../middlewares/auth.middleware.js');
+    const stack = shared.stack.find((l) => l.route && l.route.path === '/redeem-staff' && l.route.methods.post).route.stack;
+    expect(stack[0].handle).toBe(protect); // xác thực đứng trước
+    const authz = stack[1].handle;
+    for (const role of ['doctor', 'nurse', 'receptionist', 'technician']) expect(await run(authz, role)).toBe('next');
+    for (const role of ['patient', 'admin', 'hospital_admin']) expect(await run(authz, role)).toBe(403);
+  });
+});
+
 describe('Giới hạn tần suất của quét giấy tờ và ảnh chia sẻ', () => {
   // Gọi 1 middleware giới hạn tần suất với IP / tài khoản cho trước
   const hit = (mw, { ip, userId, baseUrl = '' }) => new Promise((resolve) => {

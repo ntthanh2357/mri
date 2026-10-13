@@ -26,6 +26,7 @@ export const linkingConfig = {
       QueueTicket: 'queue-ticket',
       RecordShare: 'chia-se-benh-an',
       SharedRecord: 'xem-benh-an',
+      ScanRecordQr: 'quet-ma-benh-an',
       PatientDetail: 'patient-detail',
       Financials: 'financials',
       Support: 'support',

@@ -17,6 +17,8 @@ export const MAX_SCANS_PER_DAY = 20; // mỗi bệnh nhân — mỗi lần quét
 export const MAX_TEXT = 20000;
 export const MAX_TITLE = 120;
 export const MAX_BYTES = 10 * 1024 * 1024;
+export const MAX_MEDICATIONS = 30;
+export const DOC_TYPES = ["prescription", "lab_result", "imaging_result", "discharge", "referral", "other"];
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const defaults = { ocr: ocrDocumentImage, storage: storageService };
 
@@ -32,8 +34,32 @@ export const imageKind = (buf) => {
 /** Mã sai định dạng coi như không tìm thấy (tránh CastError thành lỗi 500). */
 const assertId = (id) => { if (!mongoose.isValidObjectId(id)) throw httpError(404, "Không tìm thấy giấy tờ."); };
 const defaultTitle = (now = new Date()) => `Giấy tờ quét ngày ${now.toLocaleDateString("vi-VN")}`;
-const cleanTitle = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TITLE);
-const cleanText = (t) => String(t ?? "").replace(/\r\n/g, "\n").trim().slice(0, MAX_TEXT);
+// Cắt thô trước khi chạy regex: body JSON có thể tới 20 MB, không để 1 yêu cầu chiếm CPU của cả máy chủ.
+// Chỉ nhận chuỗi/số; kiểu khác (object, mảng) coi như rỗng thay vì để String() ném lỗi thành 500.
+const line = (v, max) => (typeof v === "string" || typeof v === "number" ? String(v).slice(0, max * 4).replace(/\s+/g, " ").trim().slice(0, max) : "");
+const cleanTitle = (t) => line(t, MAX_TITLE);
+const cleanText = (t) => (typeof t === "string" ? t.slice(0, MAX_TEXT * 2).replace(/\r\n/g, "\n").trim().slice(0, MAX_TEXT) : "");
+
+/**
+ * Thông tin có cấu trúc của giấy tờ → đúng khung, đúng độ dài. Dùng cho cả kết quả AI lẫn dữ liệu bệnh nhân gửi lên
+ * (không tin định dạng của bên nào); giấy tờ cũ chưa có fields cũng ra đủ khung rỗng.
+ */
+export const cleanFields = (raw) => {
+  const f = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const medications = (Array.isArray(f.medications) ? f.medications : [])
+    .slice(0, MAX_MEDICATIONS * 5) // giới hạn số phần tử phải duyệt
+    .map((m) => (m && typeof m === "object" ? { name: line(m.name, 200), quantity: line(m.quantity, 80), usage: line(m.usage, 300) } : null))
+    .filter((m) => m?.name)
+    .slice(0, MAX_MEDICATIONS);
+  return {
+    docType: DOC_TYPES.includes(f.docType) ? f.docType : "other",
+    date: line(f.date, 40),
+    facility: line(f.facility, 200),
+    doctor: line(f.doctor, 120),
+    diagnosis: line(f.diagnosis, 500),
+    medications,
+  };
+};
 
 // ── Link ảnh ngắn hạn (ảnh không nằm trong /uploads công khai) ──────────────
 const TOKEN_PURPOSE = "scanned-document-image";
@@ -55,6 +81,7 @@ export const toPublicDoc = (doc, { shareId = null } = {}) => ({
   _id: doc._id,
   title: doc.title,
   text: doc.text,
+  fields: cleanFields(doc.fields),
   ocrStatus: doc.ocrStatus,
   confirmedAt: doc.confirmedAt,
   createdAt: doc.createdAt,
@@ -82,7 +109,7 @@ const consumeScanQuota = async (patientId, now) => {
 const capError = () => httpError(409, `Bạn đã lưu tối đa ${MAX_DOCS} giấy tờ. Hãy xoá bớt giấy tờ cũ trước khi quét thêm.`);
 const aiDown = () => httpError(503, "Dịch vụ đọc chữ đang tạm ngưng. Vui lòng thử lại sau ít phút.");
 
-export const scanDocument = async ({ patientId, hospitalId, buffer }, opts = {}) => {
+export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = true }, opts = {}) => {
   const { ocr, storage, now } = { ...defaults, now: new Date(), ...opts };
   const kind = imageKind(buffer);
   if (!kind) throw httpError(400, "Chỉ nhận ảnh JPEG, PNG hoặc WEBP.");
@@ -94,7 +121,7 @@ export const scanDocument = async ({ patientId, hospitalId, buffer }, opts = {})
   // Không có bản chuẩn hoá thì không lưu: không cất file gốc chưa kiểm định vào kho.
   let read;
   try {
-    read = await ocr(buffer, kind.mime);
+    read = await ocr(buffer, kind.mime, { autocrop });
   } catch (err) {
     if (err.status === 400) throw err;
     console.error("[scanned-document] AI service không dùng được:", err.message);
@@ -121,13 +148,14 @@ export const scanDocument = async ({ patientId, hospitalId, buffer }, opts = {})
       hospitalId: hospitalId || null,
       title: cleanTitle(read.title) || defaultTitle(now),
       text: cleanText(read.text),
+      fields: cleanFields(read.fields),
       fileId: file.fileId,
       mimeType: "image/jpeg",
       ocrStatus: read.failed ? "failed" : "done",
     });
     // Nhiều yêu cầu chen nhau trong lúc chờ AI có thể cùng lọt qua bước đếm ở trên → đếm lại sau khi tạo
     if ((await ScannedDocument.countDocuments({ patientId })) > MAX_DOCS) throw capError();
-    return { doc, ocrFailed: Boolean(read.failed) };
+    return { doc, ocrFailed: Boolean(read.failed), cropped: Boolean(read.cropped) };
   } catch (err) {
     if (doc) await ScannedDocument.deleteOne({ _id: doc._id }).catch(() => {});
     await storage.deleteFile(file.fileId).catch(() => {}); // không để file mồ côi
@@ -138,15 +166,30 @@ export const scanDocument = async ({ patientId, hospitalId, buffer }, opts = {})
 export const listDocuments = async (patientId, { limit = MAX_DOCS } = {}) =>
   ScannedDocument.find({ patientId }).sort({ createdAt: -1 }).limit(Math.min(Math.max(Number(limit) || 1, 1), MAX_DOCS)).lean();
 
-/** Chỉ giấy tờ bệnh nhân đã kiểm tra và lưu mới được đưa vào bệnh án chia sẻ. */
-export const listSharedDocuments = async (patientId) =>
-  ScannedDocument.find({ patientId, confirmedAt: { $ne: null } }).sort({ createdAt: -1 }).limit(MAX_DOCS).lean();
+/** Chỉ giấy tờ bệnh nhân đã kiểm tra và lưu mới được đưa vào bệnh án chia sẻ; `ids` = danh sách lượt chia sẻ đã chốt. */
+export const listSharedDocuments = async (patientId, ids) =>
+  ScannedDocument.find({ patientId, confirmedAt: { $ne: null }, ...(ids ? { _id: { $in: ids } } : {}) }).sort({ createdAt: -1 }).limit(MAX_DOCS).lean();
 
-export const saveDocument = async (patientId, docId, { title, text }, now = new Date()) => {
+/**
+ * Chốt danh sách giấy tờ cho 1 lượt chia sẻ: chỉ nhận giấy tờ đã kiểm tra của chính bệnh nhân.
+ * Không gửi danh sách = tất cả giấy tờ đã kiểm tra lúc này. Trả mảng rỗng nếu không có giấy tờ nào.
+ */
+export const resolveShareDocumentIds = async (patientId, input) => {
+  const confirmed = await listSharedDocuments(patientId);
+  if (input === undefined || input === null) return confirmed.map((d) => d._id);
+  if (!Array.isArray(input) || input.length > MAX_DOCS || input.some((id) => typeof id !== "string")) throw httpError(400, "Danh sách giấy tờ chia sẻ không hợp lệ.");
+  const chosen = new Set(input);
+  const mine = new Set(confirmed.map((d) => String(d._id)));
+  if ([...chosen].some((id) => !mine.has(id))) throw httpError(400, "Giấy tờ được chọn không hợp lệ hoặc chưa được kiểm tra.");
+  return confirmed.filter((d) => chosen.has(String(d._id))).map((d) => d._id);
+};
+
+export const saveDocument = async (patientId, docId, { title, text, fields }, now = new Date()) => {
   assertId(docId);
   const doc = await ScannedDocument.findOneAndUpdate(
     { _id: docId, patientId },
-    { $set: { title: cleanTitle(title) || defaultTitle(now), text: cleanText(text), confirmedAt: now } },
+    // không gửi fields (bản giao diện cũ) thì giữ nguyên thông tin đang có
+    { $set: { title: cleanTitle(title) || defaultTitle(now), text: cleanText(text), confirmedAt: now, ...(fields === undefined ? {} : { fields: cleanFields(fields) }) } },
     { new: true }
   ).lean();
   if (!doc) throw httpError(404, "Không tìm thấy giấy tờ.");
@@ -172,10 +215,13 @@ export const getImage = async ({ did, sid }, { storage } = defaults) => {
   const doc = await ScannedDocument.findById(did).select("fileId mimeType patientId confirmedAt").lean();
   if (!doc) throw notFound();
   if (sid) {
-    // Link của người xem QR: lượt chia sẻ phải còn hiệu lực, đúng bệnh nhân, và giấy tờ đã được kiểm tra
-    const live = mongoose.isValidObjectId(sid) && doc.confirmedAt
-      && (await RecordShare.exists({ _id: sid, patientId: doc.patientId, revokedAt: null }));
-    if (!live) throw notFound();
+    // Link của người xem QR: lượt chia sẻ phải còn hiệu lực, đúng bệnh nhân, có nhóm giấy tờ và gồm đúng giấy tờ này
+    const share = mongoose.isValidObjectId(sid) && doc.confirmedAt
+      ? await RecordShare.findOne({ _id: sid, patientId: doc.patientId, revokedAt: null }).select("sections documentIds").lean()
+      : null;
+    const included = share?.sections?.includes("documents")
+      && (!share.documentIds || share.documentIds.some((id) => String(id) === String(doc._id)));
+    if (!included) throw notFound();
   }
   const { stream, file } = await storage.getFileStream(doc.fileId);
   // Phòng thủ nhiều lớp: file trong kho phải đúng loại và đúng chủ

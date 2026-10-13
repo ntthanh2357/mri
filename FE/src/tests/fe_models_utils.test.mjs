@@ -19,7 +19,7 @@ import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
-import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, toggleSection, sectionsSummary } from '../utils/recordShare.js';
+import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, toggleSection, sectionsSummary, effectiveSections, SCAN_DOC_TYPES, docTypeLabel, parseShareQr, staffRoleLabel } from '../utils/recordShare.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -422,6 +422,42 @@ it('share sections: same 9 keys as the backend, toggle keeps canonical order, su
   assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS), 'Toàn bộ bệnh án');
   assert.strictEqual(sectionsSummary(undefined), 'Toàn bộ bệnh án'); // lượt chia sẻ cũ
   assert.strictEqual(sectionsSummary(['vitals', 'imaging']), 'Phim MRI/CT, Sinh hiệu');
+});
+
+it('picking individual scanned documents: summary shows the count, empty pick drops the documents group', () => {
+  assert.strictEqual(sectionsSummary(['vitals', 'documents'], { documentCount: 2 }), 'Sinh hiệu, Giấy tờ tự quét (2)');
+  assert.strictEqual(sectionsSummary(['documents']), 'Giấy tờ tự quét'); // lượt chia sẻ cũ: không rõ số lượng
+  assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS, { documentCount: 3 }), 'Toàn bộ bệnh án, gồm 3 giấy tờ tự quét');
+  assert.deepStrictEqual(effectiveSections(['vitals', 'documents'], []), ['vitals']);
+  assert.deepStrictEqual(effectiveSections(['vitals', 'documents'], ['a']), ['vitals', 'documents']);
+  assert.deepStrictEqual(effectiveSections(['documents'], []), []);
+});
+
+it('scanned document types match the backend list and unknown types read as "Khác"', () => {
+  assert.deepStrictEqual(SCAN_DOC_TYPES.map((t) => t.key), ['prescription', 'lab_result', 'imaging_result', 'discharge', 'referral', 'other']);
+  assert.strictEqual(docTypeLabel('prescription'), 'Đơn thuốc');
+  assert.strictEqual(docTypeLabel('virus'), 'Khác');
+  assert.strictEqual(docTypeLabel(undefined), 'Khác');
+});
+
+it('parseShareQr: only our share links / tokens yield a token; anything else (other sites, viewer links) is rejected', () => {
+  const token = 'AbC-dEf_123456789012345678901234567890123';
+  assert.strictEqual(parseShareQr(buildShareUrl('http://192.168.1.214:8083', token)), token);
+  assert.strictEqual(parseShareQr(`  https://app.neuroscan.vn/xem-benh-an?q=${token}  `), token);
+  assert.strictEqual(parseShareQr(`https://app.neuroscan.vn/staff/xem-benh-an/?x=1&q=${token}&y=2`), token);
+  assert.strictEqual(parseShareQr(token), token);
+  for (const bad of [
+    '', null, undefined, 'xin chào', 'https://evil.example/login', `https://evil.example/?q=${token}`,
+    `https://app.neuroscan.vn/xem-benh-an?v=${token}`, // vé xem của người khác, không phải mã QR
+    `javascript:alert(1)//xem-benh-an?q=${token}`, 'https://app.neuroscan.vn/xem-benh-an?q=ngắn', `https://app.neuroscan.vn/xem-benh-an?q=${token}<script>`,
+    `https://app.neuroscan.vn/xem-benh-an-gia?q=${token}`, `ftp://x/xem-benh-an?q=${token}`,
+  ]) assert.strictEqual(parseShareQr(bad), null, String(bad));
+});
+
+it('staffRoleLabel: the role shown to the patient comes from the system role, unknown roles get a generic label', () => {
+  assert.strictEqual(staffRoleLabel('doctor'), 'Bác sĩ');
+  assert.strictEqual(staffRoleLabel('receptionist'), 'Lễ tân');
+  assert.strictEqual(staffRoleLabel('la'), 'Nhân viên y tế');
 });
 
 it('shareOrigin: QR never points to localhost when the LAN IP is known (phones cannot open localhost)', () => {

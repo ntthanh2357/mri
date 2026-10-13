@@ -48,7 +48,7 @@ export const toSharedSafety = (profile) => ({
   emergencyContact: pick(profile?.emergencyContact || {}, ["name", "relation", "phone"]),
 });
 
-export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { shareId = null } = {}) => {
+export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { shareId = null, documentIds } = {}) => {
   const user = await User.findById(patientId).select("profile").setOptions(BYPASS).lean();
   if (!user) throw Object.assign(new Error("Không tìm thấy bệnh nhân."), { status: 404 });
   const medicalId = user.profile?.medicalId || null;
@@ -103,6 +103,6 @@ export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { 
   }
   if (has("inpatient")) out.inpatientRecords = emrRecords.map((r) => toSharedEmr(r, { careSheets: byRecord(careSheets, r._id), consultations: byRecord(consultations, r._id) }));
   // Giấy tờ bệnh nhân tự chụp: chỉ bản đã kiểm tra; link ảnh ngắn hạn, gắn với lượt chia sẻ (dừng chia sẻ là hết xem)
-  if (has("documents")) out.scannedDocuments = (await listSharedDocuments(patientId)).map((d) => toPublicDoc(d, { shareId }));
+  if (has("documents")) out.scannedDocuments = (await listSharedDocuments(patientId, documentIds)).map((d) => toPublicDoc(d, { shareId }));
   return out;
 };

@@ -17,7 +17,7 @@ const webOrigin = () => shareOrigin({
 /** UC-PAT-09 — bệnh nhân tạo mã QR chia sẻ bệnh án (5 phút), xem ai đang xem, thu hồi. */
 export function useRecordShares() {
   const [state, setState] = useState({ loading: true, shares: [], error: null });
-  const [qr, setQr] = useState(null); // { shareId, url, expiresAt, sections }
+  const [qr, setQr] = useState(null); // { shareId, url, expiresAt, sections, documentCount }
   const [sections, setSections] = useState(ALL_SECTION_KEYS); // mặc định chia sẻ tất cả, bệnh nhân bỏ tick nhóm không muốn
 
   const load = useCallback(async () => {
@@ -36,17 +36,18 @@ export function useRecordShares() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const create = useCallback(async () => {
+  /** `sendSections`: nhóm thật sự gửi; `documentIds`: giấy tờ tự quét đã chọn (chỉ gửi khi có nhóm documents). */
+  const create = useCallback(async (sendSections, documentIds = []) => {
     try {
-      const res = await post('/api/v1/patient/record-shares', { sections });
+      const res = await post('/api/v1/patient/record-shares', { sections: sendSections, ...(sendSections.includes('documents') ? { documentIds } : {}) });
       const d = res?.data;
-      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt, sections: d.sections });
+      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt, sections: d.sections, documentCount: d.documentCount });
       await load();
       return { ok: true };
     } catch (err) {
       return { ok: false, message: err?.message || 'Không tạo được mã QR. Vui lòng thử lại.' };
     }
-  }, [load, sections]);
+  }, [load]);
 
   const revoke = useCallback(async (shareId) => {
     try {
