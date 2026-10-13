@@ -5,6 +5,7 @@ import QRCode from 'react-native-qrcode-svg';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageContainer from '../components/layout/PageContainer';
+import ScannedDocuments from '../components/patient/ScannedDocuments';
 import Colors from '../constants/colors';
 import { useRecordShares } from '../controllers/useRecordShares';
 import { secondsLeft, fmtCountdown, sectionsSummary, SHARE_SECTIONS } from '../utils/recordShare';
@@ -151,6 +152,8 @@ const RecordShareScreen = ({ navigation }) => {
                   </Pressable>
                 </View>
               )}
+
+              <ScannedDocuments />
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Đang chia sẻ</Text>

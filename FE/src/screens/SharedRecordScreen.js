@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Image, ActivityIndicator, StyleSheet, Linking, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import Config from '../constants/config';
@@ -171,6 +171,22 @@ const SharedRecordScreen = ({ route, navigation }) => {
             ))}
           </Section>
         ) : null}
+
+        {shown('documents') ? (
+          <Section icon="camera" title="Giấy tờ bệnh nhân tự quét" count={data.scannedDocuments.length || null}>
+            <Text style={styles.note}>Bệnh nhân tự chụp và tự kiểm tra phần chữ, chưa được bệnh viện xác nhận. Hãy đối chiếu với ảnh gốc.</Text>
+            {data.scannedDocuments.length ? data.scannedDocuments.map((d) => {
+              const uri = assetUrl(d.imageUrl, Config.API_URL);
+              return (
+                <Item key={d._id} title={d.title} sub={`Bệnh nhân chụp ngày ${fmtDate(d.createdAt)}`}>
+                  <Image source={{ uri }} style={styles.docImage} resizeMode="contain" accessibilityLabel={`Ảnh giấy tờ: ${d.title}`} />
+                  <Text accessibilityRole="link" onPress={() => Linking.openURL(uri)} style={styles.link}>Mở ảnh gốc cỡ lớn</Text>
+                  {d.text ? <Text style={styles.docText}>{d.text}</Text> : <Text style={styles.note}>Bệnh nhân không nhập phần chữ.</Text>}
+                </Item>
+              );
+            }) : <Text style={styles.note}>Bệnh nhân chưa lưu giấy tờ nào.</Text>}
+          </Section>
+        ) : null}
       </View>
     );
   }
@@ -218,6 +234,9 @@ const styles = StyleSheet.create({
   abnormal: { color: Colors.warningText },
   images: { gap: 8, paddingVertical: 6 },
   image: { borderRadius: 10, backgroundColor: '#0B1220' },
+  docImage: { width: '100%', height: 360, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, marginTop: 6 },
+  docText: { fontSize: 15, lineHeight: 23, color: Colors.slateDark, marginTop: 4 },
+  link: { fontSize: 14, fontWeight: '600', color: Colors.brandGreen, paddingVertical: 6 },
   note: { fontSize: 14, lineHeight: 20, color: Colors.slateMuted },
   state: { alignItems: 'center', gap: 10, paddingVertical: 56 },
   stateTitle: { fontSize: 16, fontWeight: '600', color: Colors.slateDark, textAlign: 'center', maxWidth: 420 },

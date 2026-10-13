@@ -50,7 +50,7 @@ export const redeem = wrap(async (req, res) => {
 export const view = wrap(async (req, res) => {
   const viewerToken = String(req.body?.viewerToken || "");
   if (!viewerToken) return errorResponse(res, "Thiếu mã xem.", 400);
-  const { patientId, sections } = await shareService.resolveViewer(viewerToken);
+  const { patientId, sections, shareId } = await shareService.resolveViewer(viewerToken);
   res.set("Cache-Control", "no-store");
-  return successResponse(res, await buildSharedRecord(patientId, sections));
+  return successResponse(res, await buildSharedRecord(patientId, sections, { shareId }));
 });

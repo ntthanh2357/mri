@@ -10,6 +10,7 @@ import { ImagingResult } from "../models/imagingResult.model.js";
 import { MedicalRecord } from "../modules/emr/models/medicalRecord.model.js";
 import { CareSheet } from "../modules/emr/models/careSheet.model.js";
 import { Consultation } from "../modules/emr/models/consultation.model.js";
+import { listSharedDocuments, toPublicDoc } from "./scannedDocument.service.js";
 
 /**
  * UC-PAT-09 — Gom bệnh án hoàn chỉnh của 1 bệnh nhân để người quét QR xem (chỉ đọc).
@@ -21,7 +22,9 @@ import { Consultation } from "../modules/emr/models/consultation.model.js";
 const BYPASS = { bypassTenancy: true };
 
 /** Nhóm bệnh nhân chọn để chia sẻ (thông tin cơ bản: tên, tuổi, giới, mã BN luôn có). */
-export const SHARE_SECTIONS = ["visits", "imaging", "prescriptions", "labs", "vitals", "safety", "inpatient", "papers"];
+export const SHARE_SECTIONS = ["visits", "imaging", "prescriptions", "labs", "vitals", "safety", "inpatient", "papers", "documents"];
+/** Lượt chia sẻ tạo trước khi có chọn nhóm: đúng 8 nhóm lúc đó — không tự thêm "documents" (bệnh nhân chưa từng đồng ý). */
+export const LEGACY_SHARE_SECTIONS = SHARE_SECTIONS.filter((s) => s !== "documents");
 const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj?.[k] !== undefined).map((k) => [k, obj[k]]));
 
 const EMR_FIELDS = ["_id", "admissionType", "department", "diagnosis", "treatmentPlan", "status", "dischargeDate", "doctorInCharge",
@@ -45,7 +48,7 @@ export const toSharedSafety = (profile) => ({
   emergencyContact: pick(profile?.emergencyContact || {}, ["name", "relation", "phone"]),
 });
 
-export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS) => {
+export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { shareId = null } = {}) => {
   const user = await User.findById(patientId).select("profile").setOptions(BYPASS).lean();
   if (!user) throw Object.assign(new Error("Không tìm thấy bệnh nhân."), { status: 404 });
   const medicalId = user.profile?.medicalId || null;
@@ -99,5 +102,7 @@ export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS) =>
     out.transferForms = transfers.map((t) => pick(t, ["recorded_at", "transferNo", "doctor_name", "diagnosis", "dateIn", "dateOut", "transferTo", "reason", "reasonDetail", "clinicalSummary", "labSummary", "drugsUsed", "patientStatus", "treatment", "treatmentDirection", "status"]));
   }
   if (has("inpatient")) out.inpatientRecords = emrRecords.map((r) => toSharedEmr(r, { careSheets: byRecord(careSheets, r._id), consultations: byRecord(consultations, r._id) }));
+  // Giấy tờ bệnh nhân tự chụp: chỉ bản đã kiểm tra; link ảnh ngắn hạn, gắn với lượt chia sẻ (dừng chia sẻ là hết xem)
+  if (has("documents")) out.scannedDocuments = (await listSharedDocuments(patientId)).map((d) => toPublicDoc(d, { shareId }));
   return out;
 };

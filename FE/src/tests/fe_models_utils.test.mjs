@@ -411,8 +411,11 @@ it('webOriginFrom maps the dev API port 3000 to the web port 8083, keeps proxied
   assert.strictEqual(webOriginFrom('https://api.neuroscan.vn'), 'https://api.neuroscan.vn');
 });
 
-it('share sections: same 8 keys as the backend, toggle keeps canonical order, summary reads naturally', () => {
-  assert.deepStrictEqual(ALL_SECTION_KEYS, ['visits', 'imaging', 'prescriptions', 'labs', 'vitals', 'safety', 'inpatient', 'papers']);
+it('share sections: same 9 keys as the backend, toggle keeps canonical order, summary reads naturally', () => {
+  assert.deepStrictEqual(ALL_SECTION_KEYS, ['visits', 'imaging', 'prescriptions', 'labs', 'vitals', 'safety', 'inpatient', 'papers', 'documents']);
+  // 8 nhóm cũ (không có giấy tờ tự quét) không còn được gọi là "toàn bộ"
+  assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS.filter((k) => k !== 'documents')).includes('Giấy tờ tự quét'), false);
+  assert.notStrictEqual(sectionsSummary(ALL_SECTION_KEYS.filter((k) => k !== 'documents')), 'Toàn bộ bệnh án');
   assert.ok(SHARE_SECTIONS.every((x) => x.label && x.icon));
   assert.deepStrictEqual(toggleSection(['vitals'], 'imaging'), ['imaging', 'vitals']);
   assert.deepStrictEqual(toggleSection(['imaging', 'vitals'], 'imaging'), ['vitals']);

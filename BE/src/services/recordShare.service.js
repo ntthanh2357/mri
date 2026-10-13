@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { RecordShare } from "../models/recordShare.model.js";
-import { SHARE_SECTIONS } from "./sharedRecord.service.js";
+import { SHARE_SECTIONS, LEGACY_SHARE_SECTIONS } from "./sharedRecord.service.js";
 
 /**
  * UC-PAT-09 — Chia sẻ bệnh án qua QR.
@@ -15,9 +15,12 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 export const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
 const newToken = () => crypto.randomBytes(32).toString("base64url");
 
-/** Nhóm bệnh nhân chọn → danh sách chuẩn (bỏ trùng, đúng thứ tự). Không gửi = chia sẻ tất cả. */
+/**
+ * Nhóm bệnh nhân chọn → danh sách chuẩn (bỏ trùng, đúng thứ tự).
+ * Không gửi = 8 nhóm gốc (bản giao diện cũ gửi body rỗng); "documents" chỉ được chia sẻ khi chọn rõ ràng.
+ */
 export const normalizeSections = (input) => {
-  if (input === undefined || input === null) return [...SHARE_SECTIONS];
+  if (input === undefined || input === null) return [...LEGACY_SHARE_SECTIONS];
   if (!Array.isArray(input)) throw httpError(400, "Danh sách nội dung chia sẻ không hợp lệ.");
   const chosen = new Set(input.map(String));
   if ([...chosen].some((s) => !SHARE_SECTIONS.includes(s))) throw httpError(400, "Nội dung chia sẻ không hợp lệ.");
@@ -26,7 +29,7 @@ export const normalizeSections = (input) => {
   return sections;
 };
 
-const sectionsOf = (share) => (share.sections?.length ? share.sections : [...SHARE_SECTIONS]);
+const sectionsOf = (share) => (share.sections?.length ? share.sections : [...LEGACY_SHARE_SECTIONS]);
 
 export const createShare = async (patientId, hospitalId, now = new Date(), sections) => {
   const chosen = normalizeSections(sections);

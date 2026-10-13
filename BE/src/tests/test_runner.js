@@ -175,6 +175,7 @@ async function runAllTests() {
     '../services/__tests__/vitalSign.service.test.js',
     '../services/__tests__/recordShare.service.test.js',
     '../services/__tests__/sharedRecord.service.test.js',
+    '../services/__tests__/scannedDocument.service.test.js',
     './tenancy_and_transaction.test.js',
     './clinical_workflow_e2e.test.js',
     './schedule_registration.test.js',

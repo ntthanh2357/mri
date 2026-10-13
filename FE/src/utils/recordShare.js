@@ -31,6 +31,7 @@ export const SHARE_SECTIONS = [
   { key: 'safety', label: 'Dị ứng thuốc & liên hệ khẩn cấp', icon: 'alert-triangle' },
   { key: 'inpatient', label: 'Bệnh án nội trú', icon: 'folder' },
   { key: 'papers', label: 'Giấy ra viện, chuyển viện', icon: 'file-text' },
+  { key: 'documents', label: 'Giấy tờ tự quét', icon: 'camera' },
 ];
 export const ALL_SECTION_KEYS = SHARE_SECTIONS.map((x) => x.key);
 

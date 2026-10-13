@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { createShare, listShares, revokeShare, redeemQr, resolveViewer, hashToken, QR_TTL_MS } from '../recordShare.service.js';
-import { SHARE_SECTIONS } from '../sharedRecord.service.js';
+import { SHARE_SECTIONS, LEGACY_SHARE_SECTIONS } from '../sharedRecord.service.js';
 import { RecordShare } from '../../models/recordShare.model.js';
 
 const statusOf = async (fn) => { try { await fn(); return 200; } catch (e) { return e.status || 500; } };
@@ -87,11 +87,15 @@ describe('Chia sẻ bệnh án qua QR — mã QR 5 phút & phiên xem (UC-PAT-09
     expect(await statusOf(() => createShare(me, hospitalId, t0, 'imaging'))).toBe(400);
   });
 
-  it('không gửi nhóm, hoặc lượt chia sẻ cũ chưa có trường nhóm → chia sẻ tất cả', async () => {
+  it('giấy tờ tự quét chỉ được chia sẻ khi chọn rõ ràng: không gửi nhóm (giao diện cũ) hay lượt chia sẻ cũ đều chỉ gồm 8 nhóm gốc', async () => {
     const { share: s3, qrToken: q3 } = await createShare(me, hospitalId, t0);
-    expect(s3.sections).toEqual(SHARE_SECTIONS);
+    expect(s3.sections).toEqual(LEGACY_SHARE_SECTIONS);
+    expect(SHARE_SECTIONS.includes('documents')).toBe(true);
+    expect((await createShare(me, hospitalId, t0, ['documents', 'vitals'])).share.sections).toEqual(['vitals', 'documents']);
     await RecordShare.updateOne({ _id: s3._id }, { $unset: { sections: 1 } }); // giả lập bản ghi tạo trước khi có tính năng
     const { viewerToken } = await redeemQr(q3, { now: t0 });
-    expect((await resolveViewer(viewerToken, { now: t0 })).sections).toEqual(SHARE_SECTIONS);
+    const legacy = (await resolveViewer(viewerToken, { now: t0 })).sections;
+    expect(legacy).toEqual(LEGACY_SHARE_SECTIONS);
+    expect(legacy.includes('documents')).toBe(false);
   });
 });

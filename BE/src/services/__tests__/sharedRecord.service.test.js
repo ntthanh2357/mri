@@ -3,6 +3,7 @@ import { toSharedEmr, toSharedImaging, toSharedSafety, buildSharedRecord, SHARE_
 import { User } from '../../models/user.model.js';
 import { Prescription } from '../../models/prescription.model.js';
 import { PatientProfile } from '../../models/patientProfile.model.js';
+import { ScannedDocument } from '../../models/scannedDocument.model.js';
 
 describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã chọn', () => {
   const pid = new mongoose.Types.ObjectId();
@@ -14,12 +15,17 @@ describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã ch
     await User.collection.insertOne({ _id: pid, role: 'patient', email: `share-${pid}@test.local`, profile: { name: 'BN Test', gender: 'Nam' } });
     await Prescription.collection.insertOne({ patient_id: pid, diagnosis: 'Đau đầu', drugs: [], recorded_at: new Date() });
     await PatientProfile.collection.insertOne({ userId: pid, drugAllergies: ['Penicillin'] });
+    await ScannedDocument.create([
+      { patientId: pid, title: 'Đơn thuốc ngoài', text: 'Amlodipin 5mg', fileId: 'file-ok', mimeType: 'image/jpeg', confirmedAt: new Date() },
+      { patientId: pid, title: 'Bản nháp', text: 'chưa kiểm tra', fileId: 'file-draft', mimeType: 'image/jpeg' },
+    ]);
   });
 
   afterAll(async () => {
     await User.collection.deleteOne({ _id: pid });
     await Prescription.collection.deleteMany({ patient_id: pid });
     await PatientProfile.collection.deleteMany({ userId: pid });
+    await ScannedDocument.deleteMany({ patientId: pid });
   });
 
   it('chỉ chọn Phim: không có đơn thuốc, dị ứng; thông tin cơ bản vẫn có', async () => {
@@ -27,15 +33,25 @@ describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã ch
     expect(r.sections).toEqual(['imaging']);
     expect(r.patient.name).toBe('BN Test');
     expect(Array.isArray(r.imaging)).toBe(true);
-    for (const k of ['prescriptions', 'safety', 'visits', 'labs', 'vitals', 'inpatientRecords', 'dischargePapers', 'transferForms']) {
+    for (const k of ['prescriptions', 'safety', 'visits', 'labs', 'vitals', 'inpatientRecords', 'dischargePapers', 'transferForms', 'scannedDocuments']) {
       expect(k in r).toBe(false);
     }
     expect(JSON.stringify(r).includes('Penicillin')).toBe(false);
   });
 
+  it('chọn Giấy tờ tự quét: chỉ giấy tờ đã kiểm tra, ảnh qua link ngắn hạn, không lộ mã file nội bộ', async () => {
+    const r = await buildSharedRecord(pid, ['documents']);
+    expect(r.scannedDocuments.length).toBe(1);
+    expect(r.scannedDocuments[0].title).toBe('Đơn thuốc ngoài');
+    expect(r.scannedDocuments[0].imageUrl.startsWith('/api/v1/shared-records/document-image/')).toBe(true);
+    const json = JSON.stringify(r);
+    expect(json.includes('file-ok') || json.includes('Bản nháp')).toBe(false);
+  });
+
   it('không truyền nhóm: đủ tất cả nhóm như trước', async () => {
     const r = await buildSharedRecord(pid);
     expect(r.sections).toEqual(SHARE_SECTIONS);
+    expect(r.scannedDocuments.length).toBe(1);
     expect(r.prescriptions.length).toBe(1);
     expect(r.safety.drugAllergies[0]).toBe('Penicillin');
   });

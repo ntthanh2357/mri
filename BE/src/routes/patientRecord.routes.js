@@ -4,6 +4,8 @@ import { uploadSingle } from "../middlewares/upload.middleware.js";
 import * as ctrl from "../controllers/patientRecord.controller.js";
 import * as consentCtrl from "../controllers/patientConsent.controller.js";
 import * as shareCtrl from "../controllers/recordShare.controller.js";
+import * as docCtrl from "../controllers/scannedDocument.controller.js";
+import { createRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
 
@@ -48,6 +50,15 @@ router.put("/consents/:id/sign", consentCtrl.signMyConsent);
 router.post("/record-shares", checkRole(["patient"]), shareCtrl.createMine);
 router.get("/record-shares", checkRole(["patient"]), shareCtrl.listMine);
 router.delete("/record-shares/:id", checkRole(["patient"]), shareCtrl.revokeMine);
+
+// Giấy tờ tự quét để chia sẻ qua QR (UC-PAT-09 mở rộng) — chỉ bệnh nhân, trên giấy tờ của chính mình
+// Mỗi lần quét tốn 1 lượt AI đọc chữ: giới hạn theo TÀI KHOẢN (không theo IP — header X-Forwarded-For giả được,
+// và nhiều bệnh nhân dùng chung Wi-Fi bệnh viện). Hạn mức theo ngày nằm ở scannedDocument.service.
+const scanLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 6, keyGenerator: (req) => `scan-document:${req.user?.id}`, message: "Bạn quét quá nhanh. Vui lòng đợi 1 phút rồi thử lại." });
+router.post("/scanned-documents", checkRole(["patient"]), scanLimiter, docCtrl.receiveImage, docCtrl.scanMine);
+router.get("/scanned-documents", checkRole(["patient"]), docCtrl.listMine);
+router.put("/scanned-documents/:id", checkRole(["patient"]), docCtrl.saveMine);
+router.delete("/scanned-documents/:id", checkRole(["patient"]), docCtrl.deleteMine);
 
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);
