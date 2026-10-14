@@ -53,6 +53,7 @@ import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
 import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
+import SlaReportScreen from '../screens/SlaReportScreen';
 
 export const staffLinkingConfig = {
   prefixes: ['/'],
@@ -91,6 +92,7 @@ export const staffLinkingConfig = {
       DrugManagement: 'staff/drug-management',
       PharmacyQueue: 'staff/pharmacy-queue',
       StaffScheduling: 'staff/staff-scheduling',
+      SlaReport: 'staff/sla-report',
     },
   },
 };
@@ -199,6 +201,7 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: false }} />
         <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: false }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
+        <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

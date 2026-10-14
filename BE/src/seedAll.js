@@ -1656,20 +1656,123 @@ const seedComprehensiveDatabase = async () => {
         { step: 8, title: "Thanh toán viện phí & Xuất hóa đơn VietQR", role: "receptionist", status: "pending", assignedTo: recep1._id },
       ];
 
+      // Timeline mẫu cho các bước đã hoàn tất (UC-HADM-12 — báo cáo SLA cần
+      // startedAt/completedAt): hành trình sampleVisit bắt đầu từ tiếp đón.
+      const sampleStart = new Date(now.getTime() - 3 * 3600000); // 3h trước
+      const stepTimeline = {
+        1: { start: 0, end: 14 },        // Tiếp đón ~14 phút
+        2: { start: 14, end: 51 },       // Khám lâm sàng ~37 phút
+        3: { start: 51, end: 58 },       // Chỉ định MRI ~7 phút
+        4: { start: 58, end: null },     // Đang chụp
+      };
+
       await Task.insertMany(
-        taskSteps.map((s) => ({
-          hospitalId: hospital._id,
-          visitId: sampleVisit._id,
-          patientId: sampleVisit.patientId,
-          stepNumber: s.step,
-          title: s.title,
-          roleRequired: s.role,
-          assignedToUserId: s.assignedTo,
-          status: s.status,
-          deadlineAt: new Date(now.getTime() + 4 * 3600000),
-        }))
+        taskSteps.map((s) => {
+          const tl = stepTimeline[s.step];
+          return {
+            hospitalId: hospital._id,
+            visitId: sampleVisit._id,
+            patientId: sampleVisit.patientId,
+            stepNumber: s.step,
+            title: s.title,
+            roleRequired: s.role,
+            assignedToUserId: s.assignedTo,
+            status: s.status,
+            deadlineAt: new Date(sampleStart.getTime() + (s.step + 3) * 3600000),
+            createdAt: new Date(sampleStart.getTime() + (tl ? tl.start : 60) * 60000),
+            startedAt: tl ? new Date(sampleStart.getTime() + tl.start * 60000) : null,
+            completedAt: tl && tl.end != null ? new Date(sampleStart.getTime() + tl.end * 60000) : null,
+          };
+        })
       );
       console.log(`✅ Seeded ${taskSteps.length} Kanban Tasks.`);
+
+      // ── STEP 18b: HÀNH TRÌNH HOÀN TẤT (UC-HADM-12 — dữ liệu cho Báo cáo SLA) ──
+      // 2 lượt khám đã đi hết chuỗi 8 bước trong 30 ngày qua:
+      //  - Hành trình A (pat1, 3 ngày trước): toàn bộ đúng hạn SLA.
+      //  - Hành trình B (pat2, 8 ngày trước): bước Đọc phim vượt hạn (quá tải
+      //    ca đọc phim) → demo báo cáo SLA < 100% + khâu chậm nhất.
+      console.log("\n📋 Step 18b: Seeding Completed Journey Tasks (SLA demo)...");
+      const closedVisits = await Visit.insertMany([
+        {
+          hospitalId: hospital._id,
+          patientId: pat1._id,
+          doctorId: doc1._id,
+          nurseId: nurse1._id,
+          status: "đã đóng",
+          priority: "trung bình",
+          reason: "Tái khám định kỳ u màng não — đã hoàn tất toàn bộ hành trình",
+          date: new Date(now.getTime() - 3 * 24 * 3600000),
+        },
+        {
+          hospitalId: hospital._id,
+          patientId: pat2._id,
+          doctorId: doc2._id,
+          nurseId: nurse2._id,
+          status: "đã đóng",
+          priority: "cao",
+          reason: "Khám cấp cứu đau đầu dữ dội — đã hoàn tất toàn bộ hành trình",
+          date: new Date(now.getTime() - 8 * 24 * 3600000),
+        },
+      ]);
+      const journeyMinutes = [
+        { step: 1, start: 0, end: 12 },    // Tiếp đón
+        { step: 2, start: 12, end: 47 },   // Khám lâm sàng
+        { step: 3, start: 47, end: 54 },   // Chỉ định MRI
+        { step: 4, start: 54, end: 132 },  // KTV chụp MRI (chờ slot + chụp)
+        { step: 5, start: 132, end: 141 }, // AI xử lý
+        { step: 6, start: 141, end: 246 }, // Bác sĩ CĐHA đọc phim
+        { step: 7, start: 246, end: 262 }, // Ký số hồ sơ
+        { step: 8, start: 262, end: 285 }, // Thanh toán
+      ];
+      const journeyAStart = new Date(now.getTime() - 3 * 24 * 3600000); // 3 ngày trước
+      const journeyBStart = new Date(now.getTime() - 8 * 24 * 3600000); // 8 ngày trước
+      const journeyTasks = [];
+      for (const [visitRef, jStart, readOverdue] of [
+        [closedVisits[0], journeyAStart, false],
+        [closedVisits[1], journeyBStart, true],
+      ]) {
+        for (const jm of journeyMinutes) {
+          // SLA từng bước: hạn chót = thời điểm bước mở + số phút chuẩn (bước
+          // đọc phim 6-7 được 120 phút; hành trình B cố tình vượt ở bước 6).
+          const slaMinutes = { 1: 20, 2: 60, 3: 20, 4: 120, 5: 20, 6: 120, 7: 30, 8: 30 }[jm.step];
+          const endMin = readOverdue && jm.step === 6 ? jm.end + 75 : jm.end; // +75 phút quá hạn
+          journeyTasks.push({
+            hospitalId: hospital._id,
+            visitId: visitRef._id,
+            patientId: visitRef.patientId,
+            stepNumber: jm.step,
+            title: taskSteps[jm.step - 1].title,
+            roleRequired: taskSteps[jm.step - 1].role,
+            assignedToUserId: taskSteps[jm.step - 1].assignedTo,
+            status: "completed",
+            createdAt: new Date(jStart.getTime() + jm.start * 60000),
+            startedAt: new Date(jStart.getTime() + jm.start * 60000),
+            completedAt: new Date(jStart.getTime() + endMin * 60000),
+            completedByUserId: taskSteps[jm.step - 1].assignedTo,
+            deadlineAt: new Date(jStart.getTime() + (jm.start + slaMinutes) * 60000),
+          });
+        }
+      }
+      await Task.insertMany(journeyTasks);
+      console.log(`✅ Seeded ${journeyTasks.length} Completed-Journey Tasks (2 hành trình, 1 có bước quá hạn SLA).`);
+
+      // ── STEP 18c: CASELOAD BÁC SĨ demo (UC-HADM-03 — Giám sát tải công việc) ──
+      // doc3 (bác sĩ đọc phim) đang quá tải 12/10 ca → cảnh báo quá mức trên
+      // báo cáo; doc1 tải 7/10; doc2 đang trực On-Call 5/10.
+      await User.updateOne(
+        { _id: doc1._id },
+        { $set: { "profile.currentCaseload": 7, "profile.maxCaseload": 10, "profile.isOnCall": true } }
+      );
+      await User.updateOne(
+        { _id: doc2._id },
+        { $set: { "profile.currentCaseload": 5, "profile.maxCaseload": 10, "profile.isOnCall": true } }
+      );
+      await User.updateOne(
+        { _id: doc3._id },
+        { $set: { "profile.currentCaseload": 12, "profile.maxCaseload": 10, "profile.isOnCall": false } }
+      );
+      console.log("✅ Seeded Doctor Caseload demo (doc3 quá tải 12/10).");
 
       // ── STEP 19: ASSIGNMENTS & PEER REVIEWS ──────────────────────────────────
       console.log("\n👨‍⚕️ Step 19: Seeding Assignments & Peer Reviews...");

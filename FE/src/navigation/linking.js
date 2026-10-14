@@ -44,6 +44,7 @@ export const linkingConfig = {
       DrugManagement: 'drug-management',
       PharmacyQueue: 'pharmacy-queue',
       StaffScheduling: 'staff-scheduling',
+      SlaReport: 'sla-report',
     },
   },
 };

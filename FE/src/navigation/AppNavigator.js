@@ -43,6 +43,7 @@ import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
 import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
+import SlaReportScreen from '../screens/SlaReportScreen';
 
 import linkingConfig from './linking';
 
@@ -129,6 +130,7 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: isNativeMobile }} />
         <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: isNativeMobile }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: isNativeMobile }} />
+        <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
