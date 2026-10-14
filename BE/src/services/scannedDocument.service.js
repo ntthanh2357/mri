@@ -13,7 +13,11 @@ import { ocrDocumentImage } from "./documentOcr.service.js";
  */
 
 export const MAX_DOCS = 30; // mỗi bệnh nhân
-export const MAX_SCANS_PER_DAY = 20; // mỗi bệnh nhân — mỗi lần quét tốn 1 lượt AI dùng chung với phần đọc phim
+// mỗi bệnh nhân — mỗi lần quét tốn 2 lượt AI (đọc + đọc kiểm tra chéo), nhiều hơn khi phải thử lại; dùng chung với phần đọc phim
+export const MAX_SCANS_PER_DAY = 20;
+// ảnh kém bị từ chối không tốn lượt AI nên được hoàn lượt quét, nhưng chỉ chừng này lần mỗi ngày:
+// AI service vẫn phải giải nén và đo ảnh, không để gửi lặp ảnh kém mà không bao giờ chạm hạn mức
+export const MAX_REFUNDS_PER_DAY = 20;
 export const MAX_TEXT = 20000;
 export const MAX_TITLE = 120;
 export const MAX_BYTES = 10 * 1024 * 1024;
@@ -76,8 +80,44 @@ export const verifyImageToken = (token) => {
   return payload;
 };
 
-/** Dữ liệu trả ra ngoài: không lộ fileId nội bộ, ảnh qua link ngắn hạn. */
-export const toPublicDoc = (doc, { shareId = null } = {}) => ({
+export const MAX_CHECKS = 30;
+const QUALITY_REASONS = {
+  blurry: "ảnh bị mờ (giữ chắc tay và chờ máy lấy nét)",
+  small: "chụp quá xa hoặc ảnh quá nhỏ (đưa máy lại gần để tờ giấy chiếm gần hết khung hình)",
+  dark: "ảnh thiếu sáng (ra chỗ sáng hơn, tránh để bóng tay che giấy)",
+};
+const knownReasons = (list) => (Array.isArray(list) ? list : []).filter((r) => typeof r === "string" && r in QUALITY_REASONS).slice(0, 3);
+
+/**
+ * Kết quả so 2 lần đọc của AI → đúng khung. `textLength`: độ dài phần chữ đã lưu, để vị trí không vượt ra ngoài.
+ * Không tin định dạng AI service trả về; giấy tờ cũ chưa có trường này = chưa kiểm tra chéo.
+ */
+export const cleanReview = (raw, textLength = Number.MAX_SAFE_INTEGER) => {
+  const r = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const pos = (v) => Math.min(Math.max(Number.isInteger(v) ? v : 0, 0), textLength);
+  const checks = (Array.isArray(r.checks) ? r.checks : [])
+    .slice(0, MAX_CHECKS * 5)
+    .filter((c) => c && typeof c === "object" && !Array.isArray(c))
+    .slice(0, MAX_CHECKS)
+    .map((c) => {
+      const start = pos(c.start);
+      return { start, end: Math.max(pos(c.end), start), primary: line(c.primary, 120), other: line(c.other, 120) };
+    });
+  return {
+    verified: r.verified === true,
+    tooMany: (r.tooMany ?? r.too_many) === true,
+    truncated: r.truncated === true,
+    quality: ["fair", "poor"].includes(r.quality) ? r.quality : "good",
+    qualityReasons: knownReasons(r.qualityReasons),
+    checks,
+  };
+};
+
+/**
+ * Dữ liệu trả ra ngoài: không lộ fileId nội bộ, ảnh qua link ngắn hạn.
+ * `withReview`: kèm kết quả so 2 lần đọc — chỉ cho chủ giấy tờ lúc kiểm tra, không gửi cho người xem qua QR.
+ */
+export const toPublicDoc = (doc, { shareId = null, withReview = false } = {}) => ({
   _id: doc._id,
   title: doc.title,
   text: doc.text,
@@ -86,6 +126,7 @@ export const toPublicDoc = (doc, { shareId = null } = {}) => ({
   confirmedAt: doc.confirmedAt,
   createdAt: doc.createdAt,
   imageUrl: `/api/v1/shared-records/document-image/${createImageToken(doc._id, { shareId })}`,
+  ...(withReview ? { review: cleanReview(doc.review?.toObject ? doc.review.toObject() : doc.review) } : {}),
 });
 
 // ── Hạn mức quét theo ngày ──────────────────────────────────────────────────
@@ -109,7 +150,7 @@ const consumeScanQuota = async (patientId, now) => {
 const capError = () => httpError(409, `Bạn đã lưu tối đa ${MAX_DOCS} giấy tờ. Hãy xoá bớt giấy tờ cũ trước khi quét thêm.`);
 const aiDown = () => httpError(503, "Dịch vụ đọc chữ đang tạm ngưng. Vui lòng thử lại sau ít phút.");
 
-export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = true }, opts = {}) => {
+export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = true, force = false }, opts = {}) => {
   const { ocr, storage, now } = { ...defaults, now: new Date(), ...opts };
   const kind = imageKind(buffer);
   if (!kind) throw httpError(400, "Chỉ nhận ảnh JPEG, PNG hoặc WEBP.");
@@ -121,8 +162,18 @@ export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = t
   // Không có bản chuẩn hoá thì không lưu: không cất file gốc chưa kiểm định vào kho.
   let read;
   try {
-    read = await ocr(buffer, kind.mime, { autocrop });
+    read = await ocr(buffer, kind.mime, { autocrop, force });
   } catch (err) {
+    if (err.code === "POOR_QUALITY") {
+      // Ảnh kém bị từ chối trước khi gọi model (không tốn lượt AI) → hoàn lượt quét để bệnh nhân chụp lại (có trần mỗi ngày)
+      await ScanUsage.updateOne(
+        { patientId, day: vnDay(now), count: { $gt: 0 }, rejected: { $not: { $gte: MAX_REFUNDS_PER_DAY } } },
+        { $inc: { count: -1, rejected: 1 } }
+      );
+      const reasons = knownReasons(err.reasons);
+      const why = reasons.map((r) => QUALITY_REASONS[r]).join("; ") || "ảnh không đủ rõ";
+      throw Object.assign(httpError(422, `Máy không đọc chính xác được ảnh này: ${why}. Hãy chụp lại.`), { code: "POOR_QUALITY", reasons });
+    }
     if (err.status === 400) throw err;
     console.error("[scanned-document] AI service không dùng được:", err.message);
     throw aiDown();
@@ -149,13 +200,19 @@ export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = t
       title: cleanTitle(read.title) || defaultTitle(now),
       text: cleanText(read.text),
       fields: cleanFields(read.fields),
+      review: cleanReview({
+        ...(read.review && typeof read.review === "object" ? read.review : {}),
+        truncated: read.truncated === true,
+        quality: read.quality?.level,
+        qualityReasons: read.quality?.reasons,
+      }, cleanText(read.text).length),
       fileId: file.fileId,
       mimeType: "image/jpeg",
       ocrStatus: read.failed ? "failed" : "done",
     });
     // Nhiều yêu cầu chen nhau trong lúc chờ AI có thể cùng lọt qua bước đếm ở trên → đếm lại sau khi tạo
     if ((await ScannedDocument.countDocuments({ patientId })) > MAX_DOCS) throw capError();
-    return { doc, ocrFailed: Boolean(read.failed), cropped: Boolean(read.cropped) };
+    return { doc, ocrFailed: Boolean(read.failed), cropped: Boolean(read.cropped), textOnly: Boolean(read.textOnly) };
   } catch (err) {
     if (doc) await ScannedDocument.deleteOne({ _id: doc._id }).catch(() => {});
     await storage.deleteFile(file.fileId).catch(() => {}); // không để file mồ côi
@@ -188,8 +245,17 @@ export const saveDocument = async (patientId, docId, { title, text, fields }, no
   assertId(docId);
   const doc = await ScannedDocument.findOneAndUpdate(
     { _id: docId, patientId },
-    // không gửi fields (bản giao diện cũ) thì giữ nguyên thông tin đang có
-    { $set: { title: cleanTitle(title) || defaultTitle(now), text: cleanText(text), confirmedAt: now, ...(fields === undefined ? {} : { fields: cleanFields(fields) }) } },
+    // không gửi fields (bản giao diện cũ) thì giữ nguyên thông tin đang có.
+    // Bỏ các đoạn của lần đọc thứ hai: chỉ dùng lúc kiểm tra, không giữ bản AI đọc gốc mà bệnh nhân có thể đã xoá khỏi phần chữ
+    {
+      $set: {
+        title: cleanTitle(title) || defaultTitle(now),
+        text: cleanText(text),
+        confirmedAt: now,
+        "review.checks": [],
+        ...(fields === undefined ? {} : { fields: cleanFields(fields) }),
+      },
+    },
     { new: true }
   ).lean();
   if (!doc) throw httpError(404, "Không tìm thấy giấy tờ.");

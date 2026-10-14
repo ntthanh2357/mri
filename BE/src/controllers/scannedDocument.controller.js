@@ -9,7 +9,8 @@ const wrap = (fn) => async (req, res, next) => {
   try {
     return await fn(req, res);
   } catch (err) {
-    if (err.status) return errorResponse(res, err.message, err.status);
+    // lỗi có mã riêng (vd. POOR_QUALITY) gửi kèm để giao diện xử lý đúng loại lỗi, không phải đoán theo câu chữ
+    if (err.status) return errorResponse(res, err.message, err.status, err.code === "POOR_QUALITY" ? { code: err.code, reasons: err.reasons } : null);
     next(err);
   }
 };
@@ -29,23 +30,26 @@ export const receiveImage = (req, res, next) =>
     next();
   });
 
-// POST /api/v1/patient/scanned-documents[?autocrop=0] (multipart "file") — chụp giấy tờ, AI tự cắt nền + đọc chữ + tách thông tin,
+// POST /api/v1/patient/scanned-documents[?autocrop=0][&force=1] (multipart "file") — chụp giấy tờ, AI tự cắt nền + đọc chữ + tách thông tin,
 // lưu ở trạng thái chưa kiểm tra. autocrop=0: giữ nguyên khung ảnh (dùng khi tự cắt bị sai)
 export const scanMine = wrap(async (req, res) => {
   const autocrop = !["0", "false"].includes(req.query.autocrop); // chỉ chuỗi "0"/"false" mới tắt tự cắt
-  const { doc, ocrFailed, cropped } = await docService.scanDocument({ patientId: req.user.id, hospitalId: req.user.hospitalId, buffer: req.file.buffer, autocrop });
-  return successResponse(res, { ...docService.toPublicDoc(doc), ocrFailed, cropped },
-    ocrFailed ? "Đã lưu ảnh nhưng chưa đọc được chữ tự động. Bạn có thể tự gõ nội dung." : "Đã đọc chữ trong ảnh. Hãy kiểm tra lại trước khi lưu.");
+  const force = ["1", "true"].includes(req.query.force); // bệnh nhân chọn "vẫn dùng ảnh này" dù ảnh kém
+  const { doc, ocrFailed, cropped, textOnly } = await docService.scanDocument({ patientId: req.user.id, hospitalId: req.user.hospitalId, buffer: req.file.buffer, autocrop, force });
+  const message = ocrFailed ? "Đã lưu ảnh nhưng chưa đọc được chữ tự động. Bạn có thể tự gõ nội dung."
+    : textOnly ? "Đã đọc phần chữ trong ảnh. Giấy tờ được lưu ở dạng chữ; hãy kiểm tra lại trước khi lưu."
+      : "Đã đọc chữ trong ảnh. Hãy kiểm tra lại trước khi lưu.";
+  return successResponse(res, { ...docService.toPublicDoc(doc, { withReview: true }), ocrFailed, cropped, textOnly }, message);
 });
 
 // GET /api/v1/patient/scanned-documents — giấy tờ của tôi (mới nhất trước)
 export const listMine = wrap(async (req, res) =>
-  successResponse(res, (await docService.listDocuments(req.user.id, { limit: req.query.limit })).map((d) => docService.toPublicDoc(d))));
+  successResponse(res, (await docService.listDocuments(req.user.id, { limit: req.query.limit })).map((d) => docService.toPublicDoc(d, { withReview: true }))));
 
 // PUT /api/v1/patient/scanned-documents/:id { title, text, fields? } — lưu sau khi kiểm tra
 export const saveMine = wrap(async (req, res) => {
   const doc = await docService.saveDocument(req.user.id, req.params.id, { title: req.body?.title, text: req.body?.text, fields: req.body?.fields });
-  return successResponse(res, docService.toPublicDoc(doc), "Đã lưu giấy tờ.");
+  return successResponse(res, docService.toPublicDoc(doc, { withReview: true }), "Đã lưu giấy tờ.");
 });
 
 // DELETE /api/v1/patient/scanned-documents/:id

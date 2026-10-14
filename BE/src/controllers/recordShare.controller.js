@@ -1,5 +1,5 @@
 import * as shareService from "../services/recordShare.service.js";
-import { buildSharedRecord } from "../services/sharedRecord.service.js";
+import { buildSharedRecord, buildShareCatalog } from "../services/sharedRecord.service.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
 // UC-PAT-09 — Chia sẻ bệnh án qua QR. Phân quyền role ở routes.
@@ -15,15 +15,22 @@ const wrap = (fn) => async (req, res, next) => {
 
 // ── Bệnh nhân (đăng nhập) ────────────────────────────────────────────────────
 
-// POST /api/v1/patient/record-shares { sections?, documentIds? } — tạo mã QR (mở được trong 5 phút) cho các nhóm / giấy tờ đã chọn
+// GET /api/v1/patient/record-shares/catalog — các mục trong bệnh án của tôi để chọn chia sẻ (tên, ngày, nguồn, từ khoá tìm kiếm)
+export const catalogMine = wrap(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  return successResponse(res, await buildShareCatalog(req.user.id));
+});
+
+// POST /api/v1/patient/record-shares { sections?, documentIds?, items? } — tạo mã QR (mở được trong 5 phút) cho các nhóm / mục đã chọn
 export const createMine = wrap(async (req, res) => {
-  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId, new Date(), req.body?.sections, req.body?.documentIds);
+  const { share, qrToken } = await shareService.createShare(req.user.id, req.user.hospitalId, new Date(), req.body?.sections, req.body?.documentIds, req.body?.items);
   return successResponse(res, {
     shareId: share._id,
     qrToken,
     qrExpiresAt: share.qrExpiresAt,
     sections: share.sections,
     documentCount: share.documentIds ? share.documentIds.length : null,
+    itemCounts: shareService.itemCountsOf(share),
     ttlSeconds: shareService.QR_TTL_MS / 1000,
   }, "Đã tạo mã QR chia sẻ bệnh án.");
 });
@@ -62,7 +69,7 @@ export const redeemAsStaff = wrap(async (req, res) => {
 export const view = wrap(async (req, res) => {
   const viewerToken = typeof req.body?.viewerToken === "string" ? req.body.viewerToken : "";
   if (!viewerToken) return errorResponse(res, "Thiếu mã xem.", 400);
-  const { patientId, sections, shareId, documentIds } = await shareService.resolveViewer(viewerToken, { userId: () => shareService.signedInUserId(req.headers.authorization) });
+  const { patientId, sections, shareId, documentIds, itemIds } = await shareService.resolveViewer(viewerToken, { userId: () => shareService.signedInUserId(req.headers.authorization) });
   res.set("Cache-Control", "no-store");
-  return successResponse(res, await buildSharedRecord(patientId, sections, { shareId, documentIds }));
+  return successResponse(res, await buildSharedRecord(patientId, sections, { shareId, documentIds, itemIds }));
 });

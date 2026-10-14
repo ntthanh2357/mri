@@ -23,6 +23,15 @@ const viewerSessionSchema = new Schema(
   { _id: true }
 );
 
+// Mục bệnh nhân chọn riêng trong từng nhóm (mã bản ghi dạng chuỗi; nhóm "safety" dùng "allergies" / "emergencyContact").
+// Nhóm không có danh sách = chia sẻ cả nhóm. Đã kiểm quyền sở hữu ở sharedRecord.service: resolveShareItems.
+const idList = { type: [String], default: undefined };
+const itemIdsSchema = new Schema(
+  { visits: idList, imaging: idList, prescriptions: idList, labs: idList, vitals: idList, safety: idList, inpatient: idList, papers: idList },
+  // nhóm lạ thì báo lỗi, không lặng lẽ bỏ (bỏ danh sách mục = thành chia sẻ cả nhóm)
+  { _id: false, strict: "throw" }
+);
+
 const recordShareSchema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -34,6 +43,7 @@ const recordShareSchema = new Schema(
     sections: { type: [String], default: undefined },
     // Giấy tờ tự quét bệnh nhân chọn cho lượt này (chốt lúc tạo). Không có trường này = mọi giấy tờ đã kiểm tra (lượt tạo trước 2026-10-13).
     documentIds: { type: [Schema.Types.ObjectId], default: undefined },
+    itemIds: { type: itemIdsSchema, default: undefined }, // chốt lúc tạo mã; không có = mọi nhóm đều chia sẻ cả nhóm
     sessions: { type: [viewerSessionSchema], default: [] },
   },
   { timestamps: true }

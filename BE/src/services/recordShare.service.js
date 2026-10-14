@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { RecordShare } from "../models/recordShare.model.js";
 import { User } from "../models/user.model.js";
 import { getJwtSecret } from "../config/jwt.config.js";
-import { SHARE_SECTIONS, LEGACY_SHARE_SECTIONS } from "./sharedRecord.service.js";
+import { SHARE_SECTIONS, LEGACY_SHARE_SECTIONS, resolveShareItems } from "./sharedRecord.service.js";
 import { resolveShareDocumentIds } from "./scannedDocument.service.js";
 
 /**
@@ -37,9 +37,27 @@ export const normalizeSections = (input) => {
 
 const sectionsOf = (share) => (share.sections?.length ? share.sections : [...LEGACY_SHARE_SECTIONS]);
 
-/** `documentIds`: giấy tờ tự quét bệnh nhân chọn (chỉ xét khi có nhóm "documents"); không gửi = tất cả giấy tờ đã kiểm tra. */
-export const createShare = async (patientId, hospitalId, now = new Date(), sections, documentIds) => {
+/** { nhóm: số mục } cho các nhóm chỉ chia sẻ một số mục. Nhận cả bản ghi Mongoose lẫn object thường (lean). */
+export const itemCountsOf = (share) => {
+  const raw = share.itemIds?.toObject ? share.itemIds.toObject() : (share.itemIds || {});
+  return Object.fromEntries(Object.entries(raw).filter(([, ids]) => Array.isArray(ids)).map(([k, ids]) => [k, ids.length]));
+};
+
+/**
+ * `documentIds`: giấy tờ tự quét bệnh nhân chọn (chỉ xét khi có nhóm "documents"); không gửi = tất cả giấy tờ đã kiểm tra.
+ * `items` { nhóm: [mã mục] }: chỉ chia sẻ các mục đó trong nhóm (nhóm không kèm danh sách = cả nhóm);
+ * `items.documents` tương đương `documentIds`.
+ */
+export const createShare = async (patientId, hospitalId, now = new Date(), sections, documentIds, items) => {
   let chosen = normalizeSections(sections);
+  let itemInput = items;
+  if (items && typeof items === "object" && !Array.isArray(items) && Object.prototype.hasOwnProperty.call(items, "documents")) {
+    const { documents, ...rest } = items;
+    if (!Array.isArray(documents)) throw httpError(400, "Danh sách giấy tờ chia sẻ không hợp lệ."); // không để giá trị sai dạng thành "mọi giấy tờ"
+    documentIds = documents;
+    itemInput = rest;
+  }
+  const itemIds = await resolveShareItems(patientId, chosen, itemInput);
   let docIds;
   if (chosen.includes("documents")) {
     docIds = await resolveShareDocumentIds(patientId, documentIds);
@@ -58,6 +76,7 @@ export const createShare = async (patientId, hospitalId, now = new Date(), secti
     qrExpiresAt: new Date(now.getTime() + QR_TTL_MS),
     sections: chosen,
     documentIds: docIds,
+    itemIds,
   });
   return { share, qrToken };
 };
@@ -73,6 +92,7 @@ export const listShares = async (patientId, now = new Date()) => {
       qrActive: new Date(s.qrExpiresAt) > now,
       sections: sectionsOf(s),
       documentCount: s.documentIds ? s.documentIds.length : null,
+      itemCounts: itemCountsOf(s), // nhóm chỉ chia sẻ một số mục → số mục
       viewerCount: s.sessions.length,
       lastViewedAt: s.sessions.reduce((m, x) => (x.lastViewedAt && (!m || x.lastViewedAt > m) ? x.lastViewedAt : m), null),
       totalViews: s.sessions.reduce((n, x) => n + (x.viewCount || 0), 0),
@@ -164,5 +184,5 @@ export const resolveViewer = async (viewerToken, { now = new Date(), userId = nu
     { _id: share._id, "sessions.viewerTokenHash": h },
     { $set: { "sessions.$.lastViewedAt": now }, $inc: { "sessions.$.viewCount": 1 } }
   );
-  return { patientId: share.patientId, shareId: share._id, sections: sectionsOf(share), documentIds: share.documentIds };
+  return { patientId: share.patientId, shareId: share._id, sections: sectionsOf(share), documentIds: share.documentIds, itemIds: share.itemIds };
 };

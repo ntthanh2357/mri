@@ -19,7 +19,8 @@ import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
-import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, toggleSection, sectionsSummary, effectiveSections, SCAN_DOC_TYPES, docTypeLabel, parseShareQr, staffRoleLabel } from '../utils/recordShare.js';
+import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, sectionsSummary, SCAN_DOC_TYPES, docTypeLabel, parseShareQr, staffRoleLabel, hasStructuredInfo, fitsKnownForm, clampHeight, lineOf, locateCheck, applyCheck } from '../utils/recordShare.js';
+import { foldText, prepareItems, filterItems, isFiltering, NO_FILTER, initialSelection, isItemOn, sectionState, toggleSectionAll, toggleItem, setItemsOn, sharePayload, countsOf, flattenSharedRecord, countBySection } from '../utils/shareCatalog.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -411,14 +412,12 @@ it('webOriginFrom maps the dev API port 3000 to the web port 8083, keeps proxied
   assert.strictEqual(webOriginFrom('https://api.neuroscan.vn'), 'https://api.neuroscan.vn');
 });
 
-it('share sections: same 9 keys as the backend, toggle keeps canonical order, summary reads naturally', () => {
+it('share sections: same 9 keys as the backend, summary reads naturally', () => {
   assert.deepStrictEqual(ALL_SECTION_KEYS, ['visits', 'imaging', 'prescriptions', 'labs', 'vitals', 'safety', 'inpatient', 'papers', 'documents']);
   // 8 nhóm cũ (không có giấy tờ tự quét) không còn được gọi là "toàn bộ"
   assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS.filter((k) => k !== 'documents')).includes('Giấy tờ tự quét'), false);
   assert.notStrictEqual(sectionsSummary(ALL_SECTION_KEYS.filter((k) => k !== 'documents')), 'Toàn bộ bệnh án');
   assert.ok(SHARE_SECTIONS.every((x) => x.label && x.icon));
-  assert.deepStrictEqual(toggleSection(['vitals'], 'imaging'), ['imaging', 'vitals']);
-  assert.deepStrictEqual(toggleSection(['imaging', 'vitals'], 'imaging'), ['vitals']);
   assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS), 'Toàn bộ bệnh án');
   assert.strictEqual(sectionsSummary(undefined), 'Toàn bộ bệnh án'); // lượt chia sẻ cũ
   assert.strictEqual(sectionsSummary(['vitals', 'imaging']), 'Phim MRI/CT, Sinh hiệu');
@@ -428,9 +427,118 @@ it('picking individual scanned documents: summary shows the count, empty pick dr
   assert.strictEqual(sectionsSummary(['vitals', 'documents'], { documentCount: 2 }), 'Sinh hiệu, Giấy tờ tự quét (2)');
   assert.strictEqual(sectionsSummary(['documents']), 'Giấy tờ tự quét'); // lượt chia sẻ cũ: không rõ số lượng
   assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS, { documentCount: 3 }), 'Toàn bộ bệnh án, gồm 3 giấy tờ tự quét');
-  assert.deepStrictEqual(effectiveSections(['vitals', 'documents'], []), ['vitals']);
-  assert.deepStrictEqual(effectiveSections(['vitals', 'documents'], ['a']), ['vitals', 'documents']);
-  assert.deepStrictEqual(effectiveSections(['documents'], []), []);
+  // nhóm chỉ chia sẻ một số mục: ghi rõ số mục, và không còn gọi là "toàn bộ"
+  assert.strictEqual(sectionsSummary(['prescriptions', 'labs'], { itemCounts: { prescriptions: 2 } }), 'Đơn thuốc (2 mục), Xét nghiệm');
+  assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS, { documentCount: 1, itemCounts: { vitals: 3 } }).includes('Toàn bộ'), false);
+  assert.strictEqual(sectionsSummary(ALL_SECTION_KEYS, { itemCounts: {} }), 'Toàn bộ bệnh án');
+});
+
+// ── Chọn từng mục, tìm kiếm và phân loại (utils/shareCatalog.js) ──
+const NOW = new Date('2026-10-13T08:00:00Z');
+const ago = (days) => new Date(NOW.getTime() - days * 24 * 3600 * 1000).toISOString();
+const CATALOG = prepareItems([
+  { section: 'prescriptions', id: 'rx1', title: 'Đơn thuốc', sub: 'Đau đầu, 1 thuốc', date: ago(400), source: 'hospital', keywords: 'đơn thuốc đau đầu bs an paracetamol 500mg' },
+  { section: 'prescriptions', id: 'rx2', title: 'Đơn thuốc', sub: 'Tăng huyết áp, 1 thuốc', date: ago(3), source: 'hospital', keywords: 'đơn thuốc tăng huyết áp bs bình amlodipin 5mg' },
+  { section: 'labs', id: 'lab1', title: 'Sinh hoá máu', sub: '1 chỉ số', date: ago(20), source: 'hospital', keywords: 'sinh hoá máu glucose' },
+  { section: 'safety', id: 'allergies', title: 'Dị ứng thuốc', sub: 'Penicillin', date: null, source: 'self', keywords: 'dị ứng thuốc penicillin' },
+  { section: 'documents', id: 'doc1', title: 'Đơn phòng khám tư', sub: 'Phòng khám Hoà Khánh', date: ago(100), source: 'self', keywords: 'losartan' },
+  { section: 'hack', id: 'x', title: 'nhóm lạ' }, null,
+]);
+const ids = (list) => list.map((x) => x.id);
+
+it('search ignores Vietnamese accents and case, every word must match', () => {
+  assert.strictEqual(foldText('  Đơn  THUỐC Hoà Khánh '), 'don thuoc hoa khanh');
+  assert.strictEqual(CATALOG.length, 5); // mục thuộc nhóm lạ / rỗng bị bỏ
+  assert.deepStrictEqual(ids(CATALOG), ['rx2', 'lab1', 'doc1', 'rx1', 'allergies']); // mới nhất trước, không ngày xếp cuối
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { query: 'tang huyet ap' }, NOW)), ['rx2']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { query: 'AMLODIPIN bình' }, NOW)), ['rx2']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { query: 'don thuoc' }, NOW)), ['rx2', 'rx1']); // tìm theo tên loại tài liệu
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { query: 'đơn' }, NOW)), ['rx2', 'doc1', 'rx1']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { query: 'khong co gi' }, NOW)), []);
+  assert.strictEqual(filterItems(CATALOG, NO_FILTER, NOW).length, 5);
+});
+
+it('filter by document type, time window and source; undated items survive the time filter', () => {
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { section: 'prescriptions' }, NOW)), ['rx2', 'rx1']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { period: '1m' }, NOW)), ['rx2', 'lab1', 'allergies']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { period: '6m' }, NOW)), ['rx2', 'lab1', 'doc1', 'allergies']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { source: 'self' }, NOW)), ['doc1', 'allergies']);
+  assert.deepStrictEqual(ids(filterItems(CATALOG, { source: 'hospital', period: '1m', query: 'glucose' }, NOW)), ['lab1']);
+  assert.strictEqual(isFiltering(NO_FILTER), false);
+  assert.strictEqual(isFiltering({ ...NO_FILTER, query: '  ' }), false);
+  assert.strictEqual(isFiltering({ ...NO_FILTER, period: '1y' }), true);
+  assert.deepStrictEqual(countBySection(CATALOG), { prescriptions: 2, labs: 1, documents: 1, safety: 1 });
+});
+
+it('picking items: everything ticked by default; group box is all / some / none', () => {
+  const rx1 = CATALOG.find((x) => x.id === 'rx1'); const rx2 = CATALOG.find((x) => x.id === 'rx2');
+  let sel = initialSelection();
+  assert.ok(CATALOG.every((it) => isItemOn(sel, it)));
+  assert.strictEqual(sectionState(sel, CATALOG, 'prescriptions'), 'all');
+  assert.strictEqual(sectionState(sel, CATALOG, 'visits'), 'all'); // nhóm chưa có mục nào vẫn bật được
+  sel = toggleItem(sel, CATALOG, rx1);
+  assert.strictEqual(sectionState(sel, CATALOG, 'prescriptions'), 'some');
+  assert.strictEqual(isItemOn(sel, rx1), false);
+  sel = toggleItem(sel, CATALOG, rx2); // bỏ nốt mục cuối → tắt cả nhóm
+  assert.strictEqual(sectionState(sel, CATALOG, 'prescriptions'), 'none');
+  assert.strictEqual(sel.sections.includes('prescriptions'), false);
+  sel = toggleItem(sel, CATALOG, rx2); // tick 1 mục của nhóm đang tắt → bật nhóm với đúng mục đó
+  assert.strictEqual(isItemOn(sel, rx2), true);
+  assert.strictEqual(isItemOn(sel, rx1), false);
+  assert.deepStrictEqual(sel.sections, initialSelection().sections); // giữ đúng thứ tự chuẩn
+  sel = toggleSectionAll(sel, CATALOG, 'prescriptions'); // đang chọn 1 phần → bấm ô nhóm = chọn hết
+  assert.strictEqual(sectionState(sel, CATALOG, 'prescriptions'), 'all');
+  sel = toggleSectionAll(sel, CATALOG, 'prescriptions'); // đang đủ → tắt nhóm
+  assert.strictEqual(sectionState(sel, CATALOG, 'prescriptions'), 'none');
+  // chọn / bỏ nhiều mục đang hiện sau khi lọc
+  sel = setItemsOn(initialSelection(), CATALOG, filterItems(CATALOG, { source: 'hospital' }, NOW), false);
+  assert.deepStrictEqual(ids(CATALOG.filter((it) => isItemOn(sel, it))), ['doc1', 'allergies']);
+  sel = setItemsOn(sel, CATALOG, filterItems(CATALOG, { query: 'glucose' }, NOW), true);
+  assert.deepStrictEqual(ids(CATALOG.filter((it) => isItemOn(sel, it))), ['lab1', 'doc1', 'allergies']);
+});
+
+it('share payload: whole groups send no ids, partial groups send exactly the ticked ids, empty groups are dropped', () => {
+  const rx1 = CATALOG.find((x) => x.id === 'rx1'); const doc1 = CATALOG.find((x) => x.id === 'doc1');
+  const all = sharePayload(initialSelection(), CATALOG);
+  assert.deepStrictEqual(all.sections, initialSelection().sections);
+  assert.deepStrictEqual(all.items, { documents: ['doc1'] }); // giấy tờ tự quét luôn gửi danh sách
+  const part = sharePayload(toggleItem(initialSelection(), CATALOG, rx1), CATALOG);
+  assert.deepStrictEqual(part.items, { prescriptions: ['rx2'], documents: ['doc1'] });
+  assert.deepStrictEqual(countsOf(part), { prescriptions: 1 });
+  const noDocs = sharePayload(toggleItem(initialSelection(), CATALOG, doc1), CATALOG);
+  assert.strictEqual(noDocs.sections.includes('documents'), false);
+  assert.strictEqual('documents' in noDocs.items, false);
+  // chưa có giấy tờ nào: nhóm giấy tờ không được gửi dù đang bật; nhóm khác chưa có mục vẫn gửi (chia sẻ mục phát sinh sau)
+  const empty = sharePayload(initialSelection(), []);
+  assert.strictEqual(empty.sections.includes('documents'), false);
+  assert.strictEqual(empty.sections.includes('labs'), true);
+  // mục đã chọn biến mất khỏi danh mục (vd. vừa xoá giấy tờ): không gửi nhóm rỗng lên máy chủ
+  const stale = { sections: ['labs', 'prescriptions'], excluded: ['prescriptions:rx1', 'prescriptions:rx2'] };
+  assert.deepStrictEqual(sharePayload(stale, CATALOG), { sections: ['labs'], items: {} });
+  assert.deepStrictEqual(sharePayload({ sections: [], excluded: [] }, CATALOG), { sections: [], items: {} });
+});
+
+it('viewer: shared record flattens into one searchable list, newest first, with source and type', () => {
+  const flat = flattenSharedRecord({
+    prescriptions: [{ recorded_at: ago(3), diagnosis: 'Tăng huyết áp', doctor_name: 'BS Bình', drugs: [{ name: 'Amlodipin 5mg', usage: 'Sáng 1 viên' }] }],
+    labs: [{ category: 'Sinh hoá máu', ordered_at: ago(20), results: [{ biomarker_name: 'Glucose' }] }],
+    vitals: [{ recorded_at: ago(1), blood_pressure: '120/80', pulse: 72 }],
+    safety: { shared: ['emergencyContact'], emergencyContact: { name: 'Trần Thị B', phone: '0900000001' } },
+    dischargePapers: [{ dateOut: ago(50), diagnosis: 'U màng não' }],
+    transferForms: [{ recorded_at: ago(55), transferTo: 'Bệnh viện Chợ Rẫy' }],
+    scannedDocuments: [{ _id: 'd1', title: 'Kết quả siêu âm', text: 'Gan nhiễm mỡ độ 1', createdAt: ago(2), fields: {} }],
+  });
+  assert.deepStrictEqual(flat.map((x) => x.kind), ['vitals', 'documents', 'prescriptions', 'labs', 'discharge', 'transfer', 'emergencyContact']);
+  assert.strictEqual(flat.some((x) => x.kind === 'allergies'), false); // phần bệnh nhân không chia sẻ thì không có trong danh sách
+  assert.deepStrictEqual(filterItems(flat, { query: 'amlodipin' }, NOW).map((x) => x.section), ['prescriptions']);
+  assert.deepStrictEqual(filterItems(flat, { query: 'nhiem mo' }, NOW).map((x) => x.title), ['Kết quả siêu âm']); // tìm trong chữ của giấy tờ tự quét
+  assert.deepStrictEqual(filterItems(flat, { section: 'papers' }, NOW).map((x) => x.kind), ['discharge', 'transfer']);
+  assert.deepStrictEqual(filterItems(flat, { source: 'self' }, NOW).map((x) => x.kind), ['documents', 'emergencyContact']);
+  assert.deepStrictEqual(filterItems(flat, { period: '1m' }, NOW).map((x) => x.kind), ['vitals', 'documents', 'prescriptions', 'labs', 'emergencyContact']);
+  assert.strictEqual(new Set(flat.map((x) => x.key)).size, flat.length); // khoá không trùng
+  assert.deepStrictEqual(flattenSharedRecord(null), []);
+  // lượt chia sẻ cũ không có `shared`: coi như chia sẻ cả 2 phần
+  assert.deepStrictEqual(flattenSharedRecord({ safety: { drugAllergies: ['Penicillin'], emergencyContact: {} } }).map((x) => x.kind), ['allergies', 'emergencyContact']);
 });
 
 it('scanned document types match the backend list and unknown types read as "Khác"', () => {
@@ -458,6 +566,55 @@ it('staffRoleLabel: the role shown to the patient comes from the system role, un
   assert.strictEqual(staffRoleLabel('doctor'), 'Bác sĩ');
   assert.strictEqual(staffRoleLabel('receptionist'), 'Lễ tân');
   assert.strictEqual(staffRoleLabel('la'), 'Nhân viên y tế');
+});
+
+it('a scanned document with no structured info is a plain-text document', () => {
+  const empty = { docType: 'other', date: '', facility: ' ', doctor: '', diagnosis: '', medications: [] };
+  assert.strictEqual(hasStructuredInfo(empty), false);
+  assert.strictEqual(hasStructuredInfo(undefined), false);
+  assert.strictEqual(hasStructuredInfo({}), false);
+  assert.strictEqual(hasStructuredInfo({ ...empty, docType: 'prescription' }), true);
+  assert.strictEqual(hasStructuredInfo({ ...empty, facility: 'PK An Bình' }), true);
+  assert.strictEqual(hasStructuredInfo({ ...empty, medications: [{ name: 'A' }] }), true);
+});
+
+it('documents of an unknown type default to plain text even when a hospital name or date was detected', () => {
+  assert.strictEqual(fitsKnownForm({ docType: 'other', facility: 'BV Mẫu', date: '1/1/2026', medications: [] }), false);
+  assert.strictEqual(fitsKnownForm(undefined), false);
+  assert.strictEqual(fitsKnownForm({ docType: 'lab_result' }), true);
+  assert.strictEqual(fitsKnownForm({ docType: 'other', medications: [{ name: 'A' }] }), true);
+});
+
+it('cross-check spots: found at their position, re-found after the patient edits the text, applied without breaking later spots', () => {
+  const text = 'ĐƠN THUỐC\nAmlodipin 5mg 30 viên\nMagnesi B6 60 viên';
+  const a = { start: 20, end: 23, primary: '5mg', other: '50mg' };
+  const b = { start: 43, end: 45, primary: '60', other: '80' };
+  assert.strictEqual(text.slice(a.start, a.end), '5mg');
+  assert.strictEqual(text.slice(b.start, b.end), '60');
+  assert.strictEqual(lineOf(text, a.start), 2);
+  assert.strictEqual(lineOf(text, b.start), 3);
+  assert.deepStrictEqual(locateCheck(text, a), { start: 20, end: 23 });
+  // bệnh nhân gõ thêm chữ ở đầu → vị trí lệch, vẫn tìm lại được đúng cụm chữ
+  const edited = 'PHÒNG KHÁM AN BÌNH\n' + text;
+  assert.deepStrictEqual(locateCheck(edited, a), { start: 39, end: 42 });
+  assert.strictEqual(locateCheck(text.replace('5mg', '10mg'), a), null); // bệnh nhân đã tự sửa chỗ đó: không còn gì để chọn
+  // đổi theo bản đọc thứ hai: chữ đổi đúng chỗ, chỗ phía sau dời vị trí theo và vẫn đúng
+  const r = applyCheck(text, [a, b], 0);
+  assert.strictEqual(r.text, 'ĐƠN THUỐC\nAmlodipin 50mg 30 viên\nMagnesi B6 60 viên');
+  assert.strictEqual(r.checks.length, 1);
+  assert.strictEqual(r.text.slice(r.checks[0].start, r.checks[0].end), '60');
+  // từ chỉ bản thứ hai thấy: chèn vào, có khoảng trắng
+  assert.strictEqual(applyCheck('Uống sáng 1 viên', [{ start: 16, end: 16, primary: '', other: 'sau ăn' }], 0).text, 'Uống sáng 1 viên sau ăn');
+  assert.strictEqual(applyCheck('Uống 1 viên', [{ start: 5, end: 5, primary: '', other: 'sáng' }], 0).text, 'Uống sáng 1 viên');
+  // bản thứ hai không thấy cụm chữ (other rỗng): không tự xoá chữ của bệnh nhân
+  assert.strictEqual(applyCheck('a b c', [{ start: 2, end: 3, primary: 'b', other: '' }], 0), null);
+});
+
+it('clampHeight: the text box grows with its content but stays between the limits', () => {
+  assert.strictEqual(clampHeight(120, 280, 520), 280);
+  assert.strictEqual(clampHeight(400.2, 280, 520), 401);
+  assert.strictEqual(clampHeight(5000, 280, 520), 520);
+  assert.strictEqual(clampHeight(undefined, 280, 520), 280);
 });
 
 it('shareOrigin: QR never points to localhost when the LAN IP is known (phones cannot open localhost)', () => {

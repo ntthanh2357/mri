@@ -35,6 +35,7 @@ export function useScannedDocuments() {
   const [scanning, setScanning] = useState(false);
   // Lần quét gần nhất trong phiên này: giữ ảnh gốc CÙNG mã giấy tờ của nó, để quét lại không tự cắt nếu máy cắt sai
   const lastPart = useRef(null); // { part, docId }
+  const rejectedPart = useRef(null); // ảnh vừa bị từ chối vì quá mờ/nhỏ/tối, giữ lại cho nút "vẫn dùng ảnh này"
   const [lastScan, setLastScan] = useState(null); // { docId, cropped }
 
   const load = useCallback(async () => {
@@ -53,22 +54,33 @@ export function useScannedDocuments() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const upload = useCallback(async (part, autocrop) => {
+  const upload = useCallback(async (part, autocrop, force = false) => {
     setScanning(true);
     try {
       const form = new FormData();
       form.append('file', part);
-      const res = await postFormData(autocrop ? BASE : `${BASE}?autocrop=0`, form);
+      const query = [autocrop ? null : 'autocrop=0', force ? 'force=1' : null].filter(Boolean).join('&');
+      const res = await postFormData(query ? `${BASE}?${query}` : BASE, form);
+      rejectedPart.current = null;
       lastPart.current = { part, docId: res?.data?._id };
       setLastScan({ docId: res?.data?._id, cropped: !!res?.data?.cropped });
       await load();
       return { ok: true, doc: res?.data, message: res?.message };
     } catch (err) {
-      return { ok: false, message: err?.message || 'Không quét được giấy tờ. Vui lòng thử lại.' };
+      // Ảnh quá mờ / nhỏ / tối: máy chủ từ chối đọc (máy dễ bịa nội dung). Giữ ảnh để bệnh nhân có thể chọn "vẫn dùng".
+      const poorQuality = err?.errors?.code === 'POOR_QUALITY';
+      rejectedPart.current = poorQuality ? part : null;
+      return { ok: false, poorQuality, message: err?.message || 'Không quét được giấy tờ. Vui lòng thử lại.' };
     } finally {
       setScanning(false);
     }
   }, [load]);
+
+  /** Bệnh nhân không chụp lại được: vẫn đọc ảnh vừa bị từ chối (giấy tờ sẽ mang cảnh báo ảnh kém). */
+  const scanAnyway = useCallback(async () => {
+    if (!rejectedPart.current) return { ok: false, message: 'Không còn giữ ảnh vừa chọn. Hãy chọn lại ảnh.' };
+    return upload(rejectedPart.current, true, true);
+  }, [upload]);
 
   /** Chụp (camera = true) hoặc chọn ảnh có sẵn → gửi lên để đọc chữ. Trả doc mới (chưa kiểm tra). */
   const scan = useCallback(async (camera) => {
@@ -115,5 +127,5 @@ export function useScannedDocuments() {
     }
   }, [load]);
 
-  return { ...state, scanning, lastScan, scan, rescanUncropped, save, remove, reload: load };
+  return { ...state, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove, reload: load };
 }

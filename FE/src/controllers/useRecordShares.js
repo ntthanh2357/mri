@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { get, post, del } from '../services/api.service';
 import Config from '../constants/config';
-import { buildShareUrl, shareOrigin, ALL_SECTION_KEYS, toggleSection } from '../utils/recordShare';
+import { buildShareUrl, shareOrigin } from '../utils/recordShare';
 
 const POLL_MS = 10000; // chưa có WebSocket: tải lại để thấy ai vừa quét mã
 
@@ -17,8 +17,7 @@ const webOrigin = () => shareOrigin({
 /** UC-PAT-09 — bệnh nhân tạo mã QR chia sẻ bệnh án (5 phút), xem ai đang xem, thu hồi. */
 export function useRecordShares() {
   const [state, setState] = useState({ loading: true, shares: [], error: null });
-  const [qr, setQr] = useState(null); // { shareId, url, expiresAt, sections, documentCount }
-  const [sections, setSections] = useState(ALL_SECTION_KEYS); // mặc định chia sẻ tất cả, bệnh nhân bỏ tick nhóm không muốn
+  const [qr, setQr] = useState(null); // { shareId, url, expiresAt, sections, documentCount, itemCounts }
 
   const load = useCallback(async () => {
     try {
@@ -36,12 +35,12 @@ export function useRecordShares() {
     return () => clearInterval(timer);
   }, [load]);
 
-  /** `sendSections`: nhóm thật sự gửi; `documentIds`: giấy tờ tự quét đã chọn (chỉ gửi khi có nhóm documents). */
-  const create = useCallback(async (sendSections, documentIds = []) => {
+  /** `payload` { sections, items }: nhóm được chia sẻ và các mục chọn riêng trong từng nhóm (utils/shareCatalog: sharePayload). */
+  const create = useCallback(async (payload) => {
     try {
-      const res = await post('/api/v1/patient/record-shares', { sections: sendSections, ...(sendSections.includes('documents') ? { documentIds } : {}) });
+      const res = await post('/api/v1/patient/record-shares', { sections: payload.sections, items: payload.items });
       const d = res?.data;
-      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt, sections: d.sections, documentCount: d.documentCount });
+      setQr({ shareId: d.shareId, url: buildShareUrl(webOrigin(), d.qrToken), expiresAt: d.qrExpiresAt, sections: d.sections, documentCount: d.documentCount, itemCounts: d.itemCounts });
       await load();
       return { ok: true };
     } catch (err) {
@@ -60,8 +59,5 @@ export function useRecordShares() {
     }
   }, [load]);
 
-  return {
-    ...state, qr, clearQr: () => setQr(null), create, revoke, reload: load,
-    sections, toggleSection: (key) => setSections((cur) => toggleSection(cur, key)),
-  };
+  return { ...state, qr, clearQr: () => setQr(null), create, revoke, reload: load };
 }

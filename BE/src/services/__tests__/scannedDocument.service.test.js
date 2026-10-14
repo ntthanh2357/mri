@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { Readable } from 'stream';
 import {
   imageKind, scanDocument, listDocuments, saveDocument, deleteDocument, listSharedDocuments, getImage,
-  createImageToken, verifyImageToken, toPublicDoc, cleanFields, MAX_TEXT, MAX_TITLE, MAX_DOCS, MAX_SCANS_PER_DAY,
+  createImageToken, verifyImageToken, toPublicDoc, cleanFields, cleanReview, MAX_TEXT, MAX_TITLE, MAX_DOCS, MAX_SCANS_PER_DAY, MAX_REFUNDS_PER_DAY,
 } from '../scannedDocument.service.js';
 import { ScannedDocument, ScanUsage } from '../../models/scannedDocument.model.js';
 import { RecordShare } from '../../models/recordShare.model.js';
@@ -41,7 +41,8 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
   const heavy = new mongoose.Types.ObjectId();
   const racer = new mongoose.Types.ObjectId();
   const fielder = new mongoose.Types.ObjectId();
-  const everyone = [me, other, heavy, racer, fielder];
+  const blurry = new mongoose.Types.ObjectId();
+  const everyone = [me, other, heavy, racer, fielder, blurry];
   let storage;
 
   beforeAll(async () => {
@@ -94,6 +95,14 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     const scanned = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG, autocrop: false }, { ocr: fieldsOcr, storage });
     expect(seen[0].autocrop).toBe(false);
     expect(scanned.cropped).toBe(true);
+    expect(scanned.textOnly).toBe(false);
+    // AI chỉ đọc được phần chữ (không tách được thông tin): vẫn lưu bình thường ở dạng chữ, báo cho giao diện biết
+    const plain = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG }, { ocr: async () => ({ title: '', text: 'I. HÀNH CHÍNH\no Họ và tên: ......', image: NORMALIZED, failed: false, textOnly: true }), storage });
+    expect(plain.textOnly).toBe(true);
+    expect(plain.ocrFailed).toBe(false);
+    expect(plain.doc.text.startsWith('I. HÀNH CHÍNH')).toBe(true);
+    expect(toPublicDoc(plain.doc).fields).toEqual({ docType: 'other', date: '', facility: '', doctor: '', diagnosis: '', medications: [] });
+    await ScannedDocument.deleteOne({ _id: plain.doc._id });
     const f = toPublicDoc(scanned.doc).fields;
     expect(f).toEqual({
       docType: 'prescription', date: '10/10/2026', facility: 'PK An Bình', doctor: 'BS. Mẫu', diagnosis: 'Tăng huyết áp',
@@ -117,6 +126,93 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     // giấy tờ cũ chưa có fields vẫn trả đủ khung rỗng cho giao diện
     expect(toPublicDoc({ _id: new mongoose.Types.ObjectId(), title: 'cũ', text: '' }).fields).toEqual({ docType: 'other', date: '', facility: '', doctor: '', diagnosis: '', medications: [] });
     for (const bad of [null, 'chuỗi', 5, []]) expect(cleanFields(bad).medications.length).toBe(0);
+  });
+
+  it('kết quả so 2 lần đọc: lưu gọn và sạch, chỉ chủ giấy tờ thấy, người xem qua QR không nhận', async () => {
+    const text = 'Amlodipin 5mg 30 viên';
+    const reviewOcr = async () => ({
+      ...(await okOcr()), text, truncated: true,
+      review: {
+        verified: true, too_many: false, hack: 'x',
+        checks: [
+          { start: 10, end: 13, primary: '5mg', other: '50mg', extra: { $ne: 1 } },
+          { start: -5, end: 'abc', primary: 'P'.repeat(500), other: ['mảng'] }, // sai kiểu, quá dài
+          { start: 99999, end: 3, primary: 'ngoài phạm vi', other: '' }, // vị trí vượt quá độ dài chữ, end < start
+          'rác', null,
+          ...Array.from({ length: 60 }, (_, i) => ({ start: i, end: i + 1, primary: 'a', other: 'b' })),
+        ],
+      },
+    });
+    const { doc } = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG }, { ocr: reviewOcr, storage });
+    const mine = toPublicDoc(doc, { withReview: true }).review;
+    expect(mine.verified).toBe(true);
+    expect(mine.tooMany).toBe(false);
+    expect(mine.truncated).toBe(true);
+    expect(mine.checks.length).toBe(30); // tối đa 30 chỗ
+    expect(mine.checks[0]).toEqual({ start: 10, end: 13, primary: '5mg', other: '50mg' });
+    expect(text.slice(mine.checks[0].start, mine.checks[0].end)).toBe('5mg');
+    expect(mine.checks[1]).toEqual({ start: 0, end: 0, primary: 'P'.repeat(120), other: '' });
+    expect(mine.checks[2]).toEqual({ start: text.length, end: text.length, primary: 'ngoài phạm vi', other: '' });
+    expect(JSON.stringify(mine).includes('hack') || JSON.stringify(mine).includes('$ne')).toBe(false);
+    // mặc định (dùng cho người xem qua QR) không kèm kết quả so sánh
+    expect('review' in toPublicDoc(doc)).toBe(false);
+    // giấy tờ cũ chưa có kết quả so sánh, hoặc AI không trả: coi như chưa kiểm tra chéo
+    expect(cleanReview(undefined)).toEqual({ verified: false, tooMany: false, truncated: false, quality: 'good', qualityReasons: [], checks: [] });
+    for (const bad of ['chuỗi', 5, [], { checks: 'x' }]) expect(cleanReview(bad).checks.length).toBe(0);
+    // lưu xong thì bỏ các đoạn của lần đọc thứ hai: không giữ bản AI đọc gốc mà bệnh nhân có thể đã xoá khỏi phần chữ
+    const kept = toPublicDoc(await saveDocument(fielder, doc._id, { title: 'Đơn', text }), { withReview: true }).review;
+    expect(kept.checks.length).toBe(0);
+    expect(kept.verified).toBe(true); // các cờ khác giữ nguyên
+    expect(kept.truncated).toBe(true);
+    await ScannedDocument.deleteOne({ _id: doc._id });
+  });
+
+  it('ảnh quá mờ / nhỏ / tối bị từ chối (422) kèm lý do, không lưu gì và KHÔNG tính vào hạn mức ngày', async () => {
+    const poorOcr = async () => { throw Object.assign(new Error('poor'), { status: 422, code: 'POOR_QUALITY', reasons: ['blurry', 'dark', 'hack<script>'] }); };
+    const usedBefore = (await ScanUsage.findOne({ patientId: fielder }).lean())?.count || 0;
+    const files = storage.files.size;
+    const docs = await ScannedDocument.countDocuments({ patientId: fielder });
+    let err;
+    try { await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG }, { ocr: poorOcr, storage }); } catch (e) { err = e; }
+    expect(err.status).toBe(422);
+    expect(err.code).toBe('POOR_QUALITY');
+    expect(err.reasons).toEqual(['blurry', 'dark']); // chỉ nhận lý do đã biết
+    expect(err.message.includes('mờ') && err.message.includes('thiếu sáng')).toBe(true);
+    expect((await ScanUsage.findOne({ patientId: fielder }).lean())?.count || 0).toBe(usedBefore); // đã hoàn lượt
+    expect(storage.files.size).toBe(files);
+    expect(await ScannedDocument.countDocuments({ patientId: fielder })).toBe(docs);
+  });
+
+  it(`ảnh kém chỉ được hoàn lượt ${MAX_REFUNDS_PER_DAY} lần mỗi ngày: gửi lặp ảnh kém không né được hạn mức quét`, async () => {
+    const poorOcr = async () => { throw Object.assign(new Error('poor'), { status: 422, code: 'POOR_QUALITY', reasons: ['blurry'] }); };
+    const used = async () => (await ScanUsage.findOne({ patientId: blurry }).lean())?.count || 0;
+    for (let i = 0; i < MAX_REFUNDS_PER_DAY; i += 1) {
+      expect(await statusOf(() => scanDocument({ patientId: blurry, hospitalId, buffer: JPEG }, { ocr: poorOcr, storage }))).toBe(422);
+    }
+    expect(await used()).toBe(0); // các lần đầu đều được hoàn
+    expect(await statusOf(() => scanDocument({ patientId: blurry, hospitalId, buffer: JPEG }, { ocr: poorOcr, storage }))).toBe(422);
+    expect(await used()).toBe(1); // hết lượt hoàn: ảnh kém bắt đầu tính vào hạn mức
+    for (let i = 1; i < MAX_SCANS_PER_DAY; i += 1) await statusOf(() => scanDocument({ patientId: blurry, hospitalId, buffer: JPEG }, { ocr: poorOcr, storage }));
+    expect(await used()).toBe(MAX_SCANS_PER_DAY);
+    let calls = 0;
+    expect(await statusOf(() => scanDocument({ patientId: blurry, hospitalId, buffer: JPEG }, { ocr: async () => { calls += 1; return okOcr(); }, storage }))).toBe(429);
+    expect(calls).toBe(0); // hết hạn mức thì không gọi AI service nữa
+  });
+
+  it('bệnh nhân chọn "vẫn dùng ảnh này": máy đọc, giấy tờ ghi nhận ảnh chất lượng kém để giao diện cảnh báo', async () => {
+    const seen = [];
+    const forcedOcr = async (buffer, mime, opts) => { seen.push(opts); return { ...(await okOcr()), quality: { level: 'poor', reasons: ['small', 'la'] }, review: { verified: true, checks: [] } }; };
+    const { doc } = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG, force: true }, { ocr: forcedOcr, storage });
+    expect(seen[0].force).toBe(true);
+    const review = toPublicDoc(doc, { withReview: true }).review;
+    expect(review.quality).toBe('poor');
+    expect(review.qualityReasons).toEqual(['small']);
+    // mặc định không ép; ảnh tốt thì quality = good
+    const normal = await scanDocument({ patientId: fielder, hospitalId, buffer: JPEG }, { ocr: async (b, m, opts) => { seen.push(opts); return okOcr(); }, storage });
+    expect(seen[1].force).toBe(false);
+    expect(toPublicDoc(normal.doc, { withReview: true }).review.quality).toBe('good');
+    expect(cleanReview({ quality: 'tuyệt vời', qualityReasons: 'x' }).quality).toBe('good');
+    await ScannedDocument.deleteMany({ _id: { $in: [doc._id, normal.doc._id] } });
   });
 
   it('tên file trong kho là ngẫu nhiên, không trùng nhau dù quét cùng lúc (không ghi đè ảnh của người khác)', async () => {

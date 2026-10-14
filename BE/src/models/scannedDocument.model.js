@@ -21,6 +21,20 @@ const fieldsSchema = new Schema(
   { _id: false }
 );
 
+// Kết quả so 2 lần đọc độc lập của AI (làm sạch ở scannedDocument.service: cleanReview). Chỉ trả cho chủ giấy tờ lúc kiểm tra.
+const checkSchema = new Schema({ start: Number, end: Number, primary: String, other: String }, { _id: false });
+const reviewSchema = new Schema(
+  {
+    verified: { type: Boolean, default: false }, // đã đọc được lần 2 và so với bản chính
+    tooMany: { type: Boolean, default: false }, // 2 bản khác nhau quá nhiều: cần so lại toàn bộ
+    truncated: { type: Boolean, default: false }, // giấy tờ dài hơn giới hạn của AI: phần chữ có thể thiếu đoạn cuối
+    quality: { type: String, enum: ["good", "fair", "poor"], default: "good" }, // chất lượng ảnh; "poor" = bệnh nhân đã chọn "vẫn dùng ảnh này"
+    qualityReasons: { type: [String], default: [] }, // "blurry" | "small" | "dark"
+    checks: { type: [checkSchema], default: [] }, // các chỗ 2 lần đọc khác nhau (vị trí trong text lúc AI trả về)
+  },
+  { _id: false }
+);
+
 const scannedDocumentSchema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -28,6 +42,7 @@ const scannedDocumentSchema = new Schema(
     title: { type: String, required: true },
     text: { type: String, default: "" },
     fields: { type: fieldsSchema, default: () => ({}) },
+    review: { type: reviewSchema, default: () => ({}) },
     fileId: { type: String, required: true }, // StoredMedicalFile.fileId
     mimeType: { type: String, required: true },
     ocrStatus: { type: String, enum: ["done", "failed"], default: "done" },
@@ -39,13 +54,14 @@ const scannedDocumentSchema = new Schema(
 export const ScannedDocument = model("ScannedDocument", scannedDocumentSchema, "scanned_documents");
 
 /**
- * Số lần quét của 1 bệnh nhân trong 1 ngày (mỗi lần quét tốn 1 lượt AI). Tách khỏi ScannedDocument để
+ * Số lần quét của 1 bệnh nhân trong 1 ngày (mỗi lần quét tốn lượt AI). Tách khỏi ScannedDocument để
  * xoá giấy tờ không được hoàn lượt. Bản ghi tự xoá sau vài ngày (TTL).
  */
 const scanUsageSchema = new Schema({
   patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   day: { type: String, required: true }, // YYYY-MM-DD theo giờ Việt Nam
   count: { type: Number, default: 0 },
+  rejected: { type: Number, default: 0 }, // số lần ảnh kém bị từ chối đã được hoàn lượt trong ngày (có trần)
   expireAt: { type: Date, required: true },
 });
 scanUsageSchema.index({ patientId: 1, day: 1 }, { unique: true });

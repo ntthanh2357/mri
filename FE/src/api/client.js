@@ -233,7 +233,9 @@ export const postFormData = async (endpoint, formData, isRetry = false) => {
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
-  if (!response.ok) throw new Error(data.message || `Upload failed with status ${response.status}`);
+  if (!response.ok) {
+    throw Object.assign(new Error(data.message || `Upload failed with status ${response.status}`), { status: response.status, errors: data.errors });
+  }
   return data;
 };
 

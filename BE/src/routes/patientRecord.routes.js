@@ -49,6 +49,8 @@ router.put("/consents/:id/sign", consentCtrl.signMyConsent);
 // Chia sẻ bệnh án qua QR (UC-PAT-09) — chỉ bệnh nhân, trên bệnh án của chính mình
 router.post("/record-shares", checkRole(["patient"]), shareCtrl.createMine);
 router.get("/record-shares", checkRole(["patient"]), shareCtrl.listMine);
+const catalogLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 30, keyGenerator: (req) => `share-catalog:${req.user?.id}`, message: "Bạn tải lại quá nhanh. Vui lòng đợi 1 phút." });
+router.get("/record-shares/catalog", checkRole(["patient"]), catalogLimiter, shareCtrl.catalogMine);
 router.delete("/record-shares/:id", checkRole(["patient"]), shareCtrl.revokeMine);
 
 // Giấy tờ tự quét để chia sẻ qua QR (UC-PAT-09 mở rộng) — chỉ bệnh nhân, trên giấy tờ của chính mình

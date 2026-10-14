@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Image, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, Image, Pressable, ActivityIndicator, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../../constants/colors';
 import Config from '../../constants/config';
-import { assetUrl, SCAN_DOC_TYPES } from '../../utils/recordShare';
+import ZoomableImage from './ZoomableImage';
+import ReadingReview from './ReadingReview';
+import { assetUrl, fitsKnownForm, hasStructuredInfo, clampHeight, applyCheck, lineOf, SCAN_DOC_TYPES } from '../../utils/recordShare';
 
 // UC-PAT-09 (mở rộng) — Bệnh nhân chụp giấy tờ khám nơi khác; máy tự cắt nền, đọc chữ và tách thông tin;
 // bệnh nhân kiểm tra rồi lưu. Chỉ giấy tờ đã lưu (đã kiểm tra) mới vào được bệnh án chia sẻ qua QR.
@@ -12,12 +14,21 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '');
 const imageOf = (doc) => ({ uri: assetUrl(doc.imageUrl, Config.API_URL) });
 const EMPTY_MED = { name: '', quantity: '', usage: '' };
 
-const Input = ({ label, style, ...input }) => {
+const TEXT_MIN = 280; // ô chữ đủ cao để đọc 1 đoạn, tự giãn theo nội dung
+const TEXT_MAX = 520; // nhưng không dài quá 1 màn hình; dài hơn thì cuộn trong ô
+// Web: chiều cao đo được đã gồm phần đệm của ô (cộng thêm nữa thì ô tự lớn dần tới mức tối đa); native thì chưa gồm
+const TEXT_PADDING = Platform.OS === 'web' ? 2 : 22; // web: chỉ bù 2px viền
+const TEXT_LINE = 22; // khớp lineHeight của ô chữ
+const SIDE_BY_SIDE = 1180; // màn hình từ cỡ này: ảnh và chữ đứng cạnh nhau để dễ so
+
+const Input = ({ label, style, inputRef, ...input }) => {
   const [focused, setFocused] = useState(false);
+  const [height, setHeight] = useState(TEXT_MIN);
   return (
-    <TextInput {...input} accessibilityLabel={label} placeholderTextColor={Colors.slateMuted}
+    <TextInput {...input} ref={inputRef} accessibilityLabel={label} placeholderTextColor={Colors.slateMuted}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      style={[styles.input, input.multiline && styles.textarea, focused && styles.inputFocus, style]} />
+      onContentSizeChange={input.multiline ? (e) => setHeight(clampHeight(e.nativeEvent.contentSize.height + TEXT_PADDING, TEXT_MIN, TEXT_MAX)) : undefined}
+      style={[styles.input, input.multiline && styles.textarea, input.multiline && { height }, focused && styles.inputFocus, style]} />
   );
 };
 
@@ -36,6 +47,27 @@ const DocEditor = ({ doc, cropNote, onSave, onDelete, onClose, onRescan }) => {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState(null);
+  // Thông tin chính là tuỳ chọn: chỉ tự mở với loại giấy đã có mẫu (đơn thuốc, xét nghiệm...); loại khác lưu ở dạng chữ
+  // (giấy tờ đã lưu mà bệnh nhân từng tự ghi thông tin thì vẫn mở, để lần lưu sau không làm mất)
+  const [showInfo, setShowInfo] = useState(fitsKnownForm(doc.fields) || (!!doc.confirmedAt && hasStructuredInfo(doc.fields)));
+  // Chỗ 2 lần đọc của máy khác nhau (chỉ cần khi giấy tờ chưa lưu). Vị trí dời theo các chỗ bệnh nhân đã đổi.
+  const [checks, setChecks] = useState(doc.review?.checks || []);
+  const [selection, setSelection] = useState(undefined);
+  const textRef = useRef(null);
+  const wide = useWindowDimensions().width >= SIDE_BY_SIDE;
+
+  // Bấm 1 chỗ cần kiểm tra → bôi chọn đúng cụm chữ đó trong ô chữ và cuộn tới
+  const selectInText = (range) => {
+    setSelection(range);
+    const node = textRef.current;
+    node?.focus?.();
+    if (Platform.OS === 'web' && node && 'scrollTop' in node) node.scrollTop = Math.max(0, (lineOf(text, range.start) - 4) * TEXT_LINE);
+  };
+  const applySecondReading = (index) => {
+    const next = applyCheck(text, checks, index);
+    if (next) { setText(next.text); setChecks(next.checks); }
+  };
+
   const meds = fields.medications || [];
   const set = (key) => (value) => setFields((f) => ({ ...f, [key]: value }));
   const setMed = (i, key) => (value) => setFields((f) => ({ ...f, medications: (f.medications || []).map((m, j) => (j === i ? { ...m, [key]: value } : m)) }));
@@ -51,7 +83,9 @@ const DocEditor = ({ doc, cropNote, onSave, onDelete, onClose, onRescan }) => {
 
   return (
     <View style={styles.editor}>
-      <Image source={imageOf(doc)} style={styles.preview} resizeMode="contain" accessibilityLabel={`Ảnh giấy tờ: ${doc.title}`} />
+      <View style={wide ? styles.compareWide : styles.compare}>
+      <View style={wide ? styles.colImage : styles.colStack}>
+      <ZoomableImage uri={imageOf(doc).uri} label={`Ảnh giấy tờ: ${doc.title}`} height={wide ? 600 : 360} />
       {cropNote ? (
         <View style={styles.cropNote}>
           <Feather name="crop" size={15} color={Colors.infoText} />
@@ -61,14 +95,32 @@ const DocEditor = ({ doc, cropNote, onSave, onDelete, onClose, onRescan }) => {
           </Pressable>
         </View>
       ) : null}
+      </View>
+      <View style={wide ? styles.colText : styles.colStack}>
       {doc.ocrStatus === 'failed' && !doc.text ? (
         <Text style={styles.warn}>Chưa đọc được chữ tự động. Bạn có thể tự gõ nội dung theo giấy gốc.</Text>
       ) : null}
 
       <Field label="Tên giấy tờ" value={title} onChangeText={setTitle} maxLength={120} placeholder="Ví dụ: Đơn thuốc ngày 10/10…" />
 
+      <Field label="Toàn bộ chữ đã đọc" hint="Phần chữ phải đúng với ảnh. So từng dòng và sửa chỗ sai; chỗ ghi [không đọc được] hãy tự điền."
+        value={text} onChangeText={setText} multiline maxLength={20000} placeholder="Gõ nội dung giấy tờ…"
+        inputRef={textRef} selection={selection} onSelectionChange={() => setSelection(undefined)} />
+
+      {!doc.confirmedAt && doc.text ? (
+        <ReadingReview review={doc.review || {}} checks={checks} text={text} onSelect={selectInText} onApply={applySecondReading} />
+      ) : null}
+      </View>
+      </View>
+
+      {showInfo ? (
       <View style={styles.group}>
-        <Text style={styles.groupTitle}>Thông tin chính</Text>
+        <View style={styles.groupHead}>
+          <Text style={styles.groupTitle}>Thông tin chính (không bắt buộc)</Text>
+          <Pressable onPress={() => setShowInfo(false)} accessibilityRole="button" style={styles.linkBtn}>
+            <Text style={styles.linkText}>Bỏ, chỉ lưu dạng chữ</Text>
+          </Pressable>
+        </View>
         <Text style={styles.note}>Máy điền sẵn theo giấy. So với giấy gốc và sửa chỗ sai; ô nào giấy không ghi thì để trống.</Text>
         <Text style={styles.label}>Loại giấy tờ</Text>
         <View style={styles.row} accessibilityRole="radiogroup">
@@ -111,12 +163,18 @@ const DocEditor = ({ doc, cropNote, onSave, onDelete, onClose, onRescan }) => {
           </Pressable>
         ) : null}
       </View>
-
-      <Field label="Toàn bộ chữ đã đọc" hint="So với giấy gốc và sửa chỗ đọc sai. Chỗ ghi [không đọc được] hãy tự điền."
-        value={text} onChangeText={setText} multiline maxLength={20000} placeholder="Gõ nội dung giấy tờ…" />
+      ) : (
+        <View style={styles.plainNote}>
+          <Feather name="file-text" size={15} color={Colors.slateMuted} />
+          <Text style={styles.plainText}>Giấy tờ này được lưu ở dạng chữ. Nếu muốn, bạn có thể ghi thêm loại giấy, ngày, nơi khám, thuốc.</Text>
+          <Pressable onPress={() => setShowInfo(true)} accessibilityRole="button" style={styles.linkBtn}>
+            <Text style={styles.linkText}>Thêm thông tin chính</Text>
+          </Pressable>
+        </View>
+      )}
       {err ? <Text style={styles.error}>{err}</Text> : null}
       <View style={styles.row}>
-        <Pressable onPress={() => run(() => onSave(doc._id, { title, text, fields }))} disabled={busy} accessibilityRole="button"
+        <Pressable onPress={() => run(() => onSave(doc._id, { title, text, fields: showInfo ? fields : {} }))} disabled={busy} accessibilityRole="button"
           style={({ hovered }) => [styles.saveBtn, hovered && styles.saveBtnHover, busy && styles.disabled]}>
           {busy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveBtnText}>Lưu giấy tờ</Text>}
         </Pressable>
@@ -164,13 +222,18 @@ const ScanButton = ({ icon, label, onPress, disabled }) => (
   </Pressable>
 );
 
-/** `state`: kết quả của hook useScannedDocuments, do màn hình giữ. */
-const ScannedDocuments = ({ state }) => {
-  const { loading, docs, error, scanning, lastScan, scan, rescanUncropped, save, remove } = state;
+/** `state`: kết quả của hook useScannedDocuments, do màn hình giữ. `onReviewing(bool)`: đang mở khung kiểm tra 1 giấy tờ. */
+const ScannedDocuments = ({ state, onReviewing }) => {
+  const { loading, docs, error, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove } = state;
   const [openId, setOpenId] = useState(null);
+  useEffect(() => { onReviewing?.(openId !== null); }, [openId, onReviewing]);
   const [msg, setMsg] = useState(null); // { tone: 'info' | 'error', text }
 
+  const [rejected, setRejected] = useState(null); // lời từ chối ảnh kém (kèm nút "vẫn dùng ảnh này")
+
   const opened = (res) => {
+    setRejected(res.poorQuality ? res.message : null);
+    if (res.poorQuality) { setMsg(null); return res; }
     if (!res.ok) { setMsg({ tone: 'error', text: res.message }); return res; }
     setOpenId(res.doc._id);
     setMsg({ tone: res.doc.ocrFailed ? 'error' : 'info', text: res.message });
@@ -179,6 +242,7 @@ const ScannedDocuments = ({ state }) => {
 
   const onScan = async (camera) => {
     setMsg(null);
+    setRejected(null);
     const res = await scan(camera);
     if (!res.cancelled) opened(res);
   };
@@ -199,8 +263,8 @@ const ScannedDocuments = ({ state }) => {
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Giấy tờ tự quét</Text>
       <Text style={styles.body}>
-        Chụp giấy tờ khám ở nơi khác như đơn thuốc, kết quả xét nghiệm, giấy ra viện. Ứng dụng tự cắt nền, đọc chữ và điền sẵn thông tin chính;
-        hãy kiểm tra lại rồi lưu. Chỉ giấy tờ đã lưu mới được chia sẻ qua mã QR.
+        Chụp giấy tờ khám ở nơi khác như đơn thuốc, kết quả xét nghiệm, giấy ra viện. Loại giấy tờ nào cũng lưu được ở dạng chữ; ứng dụng tự cắt nền, đọc chữ
+        và điền sẵn thông tin chính nếu có. Hãy kiểm tra lại rồi lưu. Chỉ giấy tờ đã lưu mới được chia sẻ qua mã QR.
       </Text>
       <View style={styles.point}>
         <Feather name="info" size={15} color={Colors.infoText} />
@@ -214,6 +278,18 @@ const ScannedDocuments = ({ state }) => {
         <View style={styles.point} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" color={Colors.brandGreen} />
           <Text style={styles.pointText}>Đang cắt nền và đọc chữ trong ảnh…</Text>
+        </View>
+      ) : null}
+      {rejected && !scanning ? (
+        <View style={styles.rejected} accessibilityRole="alert">
+          <Feather name="alert-triangle" size={16} color={Colors.errorText} />
+          <View style={styles.grow}>
+            <Text style={styles.rejectedText}>{rejected}</Text>
+            <Text style={styles.note}>Với ảnh như vậy máy dễ ghi sai, thậm chí tự bịa ra chữ và số. Tốt nhất là chụp lại.</Text>
+            <Pressable onPress={async () => opened(await scanAnyway())} accessibilityRole="button" style={styles.linkBtn}>
+              <Text style={styles.linkText}>Không chụp lại được, vẫn dùng ảnh này</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
       {msg ? <Text style={msg.tone === 'error' ? styles.error : styles.info} accessibilityLiveRegion="polite">{msg.text}</Text> : null}
@@ -259,13 +335,22 @@ const styles = StyleSheet.create({
   badgeWarn: { backgroundColor: Colors.warningBg },
   badgeText: { fontSize: 13, fontWeight: '600' },
   editor: { gap: 12, paddingBottom: 14 },
-  preview: { width: '100%', height: 360, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border },
+  compare: { gap: 12 },
+  compareWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  colStack: { gap: 12 },
+  colImage: { flex: 1, minWidth: 0, gap: 12 },
+  colText: { flex: 1, minWidth: 0, gap: 12 },
+  rejected: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 10, backgroundColor: Colors.errorBg },
+  rejectedText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: Colors.errorText },
   cropNote: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 10, borderRadius: 10, backgroundColor: Colors.infoBg },
   cropText: { flex: 1, minWidth: 200, fontSize: 14, lineHeight: 20, color: Colors.infoText },
   linkBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   linkText: { fontSize: 14, fontWeight: '600', color: Colors.brandGreen },
   group: { gap: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
   groupTitle: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  groupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  plainNote: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
+  plainText: { flex: 1, minWidth: 200, fontSize: 14, lineHeight: 20, color: Colors.slateDark },
   chip: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface },
   chipOn: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
   chipHover: { borderColor: Colors.brandGreen },
@@ -282,7 +367,7 @@ const styles = StyleSheet.create({
   field: { gap: 4 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.slateDark },
   input: { minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, lineHeight: 22, color: Colors.slateDark },
-  textarea: { minHeight: 200, textAlignVertical: 'top' },
+  textarea: { textAlignVertical: 'top' },
   inputFocus: { borderColor: Colors.brandGreen },
   saveBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, backgroundColor: Colors.brandGreen, alignItems: 'center', justifyContent: 'center' },
   saveBtnHover: { backgroundColor: Colors.brandGreenPressed },

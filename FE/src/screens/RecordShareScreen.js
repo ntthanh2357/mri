@@ -6,15 +6,17 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageContainer from '../components/layout/PageContainer';
 import ScannedDocuments from '../components/patient/ScannedDocuments';
+import ShareContentPicker from '../components/patient/ShareContentPicker';
 import Colors from '../constants/colors';
+import Layout from '../constants/layout';
 import { useRecordShares } from '../controllers/useRecordShares';
 import { useScannedDocuments } from '../controllers/useScannedDocuments';
-import { secondsLeft, fmtCountdown, sectionsSummary, effectiveSections, staffRoleLabel, SHARE_SECTIONS } from '../utils/recordShare';
+import { useShareCatalog } from '../controllers/useShareCatalog';
+import { secondsLeft, fmtCountdown, sectionsSummary, staffRoleLabel } from '../utils/recordShare';
 
 // UC-PAT-09 — Bệnh nhân tạo mã QR chia sẻ toàn bộ bệnh án. Mã chỉ mở được trong 5 phút;
 // ai quét kịp sẽ xem được lâu dài cho tới khi bệnh nhân dừng chia sẻ.
 
-const fmtDay = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '');
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '');
 
 const QrPanel = ({ qr, onNew, onDone, busy }) => {
@@ -43,7 +45,7 @@ const QrPanel = ({ qr, onNew, onDone, busy }) => {
             <Feather name="clock" size={16} color={left <= 60 ? Colors.warningText : Colors.brandGreen} />
             <Text style={[styles.countdownText, left <= 60 && styles.countdownWarn]}>Còn {fmtCountdown(left)} để quét</Text>
           </View>
-          <Text style={styles.sharedWhat}>Chia sẻ: {sectionsSummary(qr.sections, { documentCount: qr.documentCount })}</Text>
+          <Text style={styles.sharedWhat}>Chia sẻ: {sectionsSummary(qr.sections, { documentCount: qr.documentCount, itemCounts: qr.itemCounts })}</Text>
           <Text style={styles.note}>Đưa mã này cho bác sĩ hoặc người bạn muốn chia sẻ quét bằng camera điện thoại. Không cần cài ứng dụng hay đăng nhập.</Text>
         </>
       )}
@@ -67,7 +69,7 @@ const ShareRow = ({ s, onRevoke }) => {
       <View style={styles.shareIcon}><Feather name="share-2" size={16} color={Colors.brandGreen} /></View>
       <View style={styles.grow}>
         <Text style={styles.shareTitle}>Chia sẻ lúc {fmtTime(s.createdAt)}</Text>
-        <Text style={styles.body}>{sectionsSummary(s.sections, { documentCount: s.documentCount })}</Text>
+        <Text style={styles.body}>{sectionsSummary(s.sections, { documentCount: s.documentCount, itemCounts: s.itemCounts })}</Text>
         <Text style={styles.note}>
           {s.viewerCount > 0 ? `${s.viewerCount} người đã mở, ${s.totalViews} lượt xem` : 'Chưa có ai mở'}
           {s.lastViewedAt ? `, xem gần nhất ${fmtTime(s.lastViewedAt)}` : ''}
@@ -99,22 +101,21 @@ const ShareRow = ({ s, onRevoke }) => {
 };
 
 const RecordShareScreen = ({ navigation }) => {
-  const { loading, shares, error, qr, clearQr, create, revoke, reload, sections, toggleSection } = useRecordShares();
+  const { loading, shares, error, qr, clearQr, create, revoke, reload } = useRecordShares();
   const scanned = useScannedDocuments();
-  // Chọn từng giấy tờ: mặc định chia sẻ mọi giấy tờ đã lưu, bệnh nhân bỏ tick cái không muốn
-  const [excludedDocs, setExcludedDocs] = useState([]);
-  const savedDocs = scanned.docs.filter((d) => d.confirmedAt);
-  const pickedDocIds = savedDocs.filter((d) => !excludedDocs.includes(d._id)).map((d) => d._id);
-  const toggleDoc = (id) => setExcludedDocs((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
-  const docsOn = sections.includes('documents');
-  const sendSections = effectiveSections(sections, pickedDocIds);
-  const none = sendSections.length === 0;
+  // Danh mục để chọn từng mục; tải lại khi danh sách giấy tờ đã lưu thay đổi
+  const catalog = useShareCatalog(scanned.docs.filter((d) => d.confirmedAt).map((d) => d._id).join(','));
+  // Đang kiểm tra 1 giấy tờ: nới rộng trang để ảnh và chữ đứng cạnh nhau; các khối khác giữ bề ngang cũ
+  const [reviewing, setReviewing] = useState(false);
+  const none = catalog.payload.sections.length === 0;
+  // chưa có danh mục (đang tải hoặc tải lỗi) thì chưa biết sẽ chia sẻ những gì → chưa cho tạo mã
+  const waiting = !catalog.items.length && (catalog.loading || !!catalog.error);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
   const makeQr = async () => {
     setBusy(true);
-    const res = await create(sendSections, pickedDocIds);
+    const res = await create(catalog.payload);
     setBusy(false);
     setMsg(res.ok ? null : res.message);
   };
@@ -123,50 +124,22 @@ const RecordShareScreen = ({ navigation }) => {
     <ResponsiveLayout navigation={navigation} activeRoute="RecordShare">
       <View style={styles.container}>
         <PageHeader bar title="Chia sẻ bệnh án" subtitle="Tạo mã QR để bác sĩ nơi khác xem bệnh án của bạn, kể cả phim chụp."
-          actions={<HeaderAction icon="refresh-cw" label="Tải lại" onPress={() => { reload(); scanned.reload(); }} />} />
+          actions={<HeaderAction icon="refresh-cw" label="Tải lại" onPress={() => { reload(); scanned.reload(); catalog.reload(); }} />} />
         <ScrollView>
-          <PageContainer width="reading" style={styles.page}>
+          <PageContainer width={reviewing ? 'default' : 'reading'} style={styles.page}>
             <View style={styles.stack}>
+              <View style={reviewing ? styles.narrow : null}>
               {qr ? (
                 <QrPanel qr={qr} onNew={makeQr} onDone={clearQr} busy={busy} />
               ) : (
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Chia sẻ bệnh án qua mã QR</Text>
                   <Text style={styles.body}>
-                    Chọn những phần bạn muốn chia sẻ. Họ tên, tuổi, giới tính và mã bệnh nhân luôn hiện để người xem biết bệnh án của ai.
+                    Chọn cả nhóm, hoặc tick từng tài liệu bạn muốn chia sẻ. Họ tên, tuổi, giới tính và mã bệnh nhân luôn hiện để người xem biết bệnh án của ai.
                     Số CCCD và thẻ BHYT không bao giờ được chia sẻ.
                   </Text>
-                  <View style={styles.checks}>
-                    {SHARE_SECTIONS.map((sec) => {
-                      const on = sections.includes(sec.key);
-                      return (
-                        <Pressable key={sec.key} onPress={() => toggleSection(sec.key)} accessibilityRole="checkbox" aria-checked={on}
-                          accessibilityLabel={sec.label}
-                          style={({ hovered }) => [styles.check, on && styles.checkOn, hovered && styles.checkHover]}>
-                          <Feather name={on ? 'check-square' : 'square'} size={20} color={on ? Colors.brandGreen : Colors.slateMuted} />
-                          <Feather name={sec.icon} size={16} color={Colors.slateMuted} />
-                          <Text style={styles.checkText}>{sec.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {docsOn && savedDocs.length ? (
-                    <View style={styles.docPick}>
-                      <Text style={styles.docPickTitle}>Giấy tờ sẽ chia sẻ ({pickedDocIds.length}/{savedDocs.length})</Text>
-                      {savedDocs.map((d) => {
-                        const on = pickedDocIds.includes(d._id);
-                        return (
-                          <Pressable key={d._id} onPress={() => toggleDoc(d._id)} accessibilityRole="checkbox" aria-checked={on} accessibilityLabel={`Chia sẻ giấy tờ ${d.title}`}
-                            style={({ hovered }) => [styles.docPickRow, hovered && styles.docPickRowHover]}>
-                            <Feather name={on ? 'check-square' : 'square'} size={20} color={on ? Colors.brandGreen : Colors.slateMuted} />
-                            <Text style={styles.checkText}>{d.title}</Text>
-                            <Text style={styles.note}>{fmtDay(d.createdAt)}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                  {docsOn && !savedDocs.length && !scanned.loading ? (
+                  <ShareContentPicker catalog={catalog} />
+                  {catalog.selection.sections.includes('documents') && !catalog.loading && !catalog.items.some((it) => it.section === 'documents') ? (
                     <Text style={styles.note}>Bạn chưa có giấy tờ nào đã lưu nên phần "Giấy tờ tự quét" sẽ không được chia sẻ. Quét và lưu giấy tờ ở khung bên dưới.</Text>
                   ) : null}
                   {none ? <Text style={styles.error}>Hãy chọn ít nhất 1 phần để chia sẻ.</Text> : null}
@@ -183,16 +156,17 @@ const RecordShareScreen = ({ navigation }) => {
                     ))}
                   </View>
                   {msg ? <Text style={styles.error}>{msg}</Text> : null}
-                  <Pressable onPress={makeQr} disabled={busy || none} accessibilityRole="button"
-                    style={({ hovered }) => [styles.primaryBtn, hovered && !none && styles.primaryBtnHover, (busy || none) && styles.disabled]}>
+                  <Pressable onPress={makeQr} disabled={busy || none || waiting} accessibilityRole="button"
+                    style={({ hovered }) => [styles.primaryBtn, hovered && !none && styles.primaryBtnHover, (busy || none || waiting) && styles.disabled]}>
                     {busy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryBtnText}>Tạo mã QR</Text>}
                   </Pressable>
                 </View>
               )}
+              </View>
 
-              <ScannedDocuments state={scanned} />
+              <ScannedDocuments state={scanned} onReviewing={setReviewing} />
 
-              <View style={styles.card}>
+              <View style={[styles.card, reviewing && styles.narrow]}>
                 <Text style={styles.cardTitle}>Đang chia sẻ</Text>
                 {loading && !shares.length ? <ActivityIndicator size="small" color={Colors.brandGreen} /> : null}
                 {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -211,6 +185,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   page: { paddingTop: 20, paddingBottom: 40 },
   stack: { gap: 16 },
+  narrow: { width: '100%', maxWidth: Layout.maxWidth.reading - 2 * Layout.gutter.desktop, alignSelf: 'center' },
   grow: { flex: 1, minWidth: 0 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   card: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 18, gap: 12 },
@@ -221,15 +196,6 @@ const styles = StyleSheet.create({
   points: { gap: 8 },
   point: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   pointText: { flex: 1, fontSize: 14, lineHeight: 20, color: Colors.slateDark },
-  checks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  check: { flexGrow: 1, flexBasis: 260, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
-  checkOn: { borderColor: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft },
-  checkHover: { borderColor: Colors.brandGreen },
-  checkText: { flex: 1, fontSize: 15, color: Colors.slateDark },
-  docPick: { gap: 2, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
-  docPickTitle: { fontSize: 13, fontWeight: '600', color: Colors.slateDark, marginBottom: 4 },
-  docPickRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, borderRadius: 8 },
-  docPickRowHover: { backgroundColor: Colors.surface },
   viewerNames: { fontWeight: '600', color: Colors.slateDark },
   sharedWhat: { fontSize: 14, lineHeight: 20, color: Colors.slateDark, textAlign: 'center' },
   qrCard: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 20, gap: 14, alignItems: 'center' },

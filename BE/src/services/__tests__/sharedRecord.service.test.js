@@ -46,6 +46,7 @@ describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã ch
     expect(r.scannedDocuments[0].imageUrl.startsWith('/api/v1/shared-records/document-image/')).toBe(true);
     const json = JSON.stringify(r);
     expect(json.includes('file-ok') || json.includes('Bản nháp')).toBe(false);
+    expect('review' in r.scannedDocuments[0]).toBe(false); // kết quả so 2 lần đọc chỉ dành cho bệnh nhân lúc kiểm tra
   });
 
   it('lượt chia sẻ đã chốt danh sách giấy tờ: chỉ trả đúng giấy tờ đó; bản nháp không lọt dù có trong danh sách', async () => {
