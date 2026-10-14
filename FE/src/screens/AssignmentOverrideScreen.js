@@ -253,7 +253,9 @@ export default function AssignmentOverrideScreen({ navigation }) {
     return (
       <View style={styles.doctorList}>
         {caseloads.map((d) => {
-          const pct = Math.min(100, d.loadPercentage || 0);
+          // caseload-dashboard trả loadPercentage; clinical-view trả utilizationPercent —
+          // nhận cả hai kèm fallback tự tính để giữ bar đúng nếu đổi endpoint
+          const pct = Math.min(100, d.loadPercentage ?? d.utilizationPercent ?? Math.round(((d.currentCaseload || 0) / (d.maxCaseload || 10)) * 100));
           const overloaded = (d.currentCaseload || 0) > (d.maxCaseload || 10);
           const barColor = overloaded ? Colors.errorText : pct >= 80 ? '#B45309' : Colors.brandGreen;
           return (
@@ -319,7 +321,7 @@ export default function AssignmentOverrideScreen({ navigation }) {
     const canOverride = ['pending', 'acknowledged', 'in_progress'].includes(item.status);
     const patient = item.visitId?.patientId;
     return (
-      <View style={styles.card}>
+      <View key={item._id} style={styles.card}>
         <View style={styles.cardHead}>
           <View style={styles.typeBadge}>
             <TypeIcon size={16} color={Colors.brandGreen} />

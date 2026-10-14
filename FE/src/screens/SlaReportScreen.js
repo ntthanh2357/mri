@@ -248,7 +248,7 @@ export default function SlaReportScreen({ navigation }) {
           <Text style={styles.panelTitle}>Tải công việc bác sĩ (thời gian thực)</Text>
         </View>
         <Text style={styles.panelDesc}>
-          Số ca đang xử lý trên từng bác sĩ · định mức chuẩn {fmtNumber(caseloads.overloaded)} bác sĩ đang quá tải.
+          Số ca đang xử lý của từng bác sĩ so với định mức tối đa{caseloads.overloaded > 0 ? ` · ${fmtNumber(caseloads.overloaded)} bác sĩ đang vượt định mức` : ' · toàn bộ đang trong định mức'}.
         </Text>
         {caseloadList.length === 0 ? (
           <Text style={styles.emptyText}>Chưa có bác sĩ nào trong bệnh viện.</Text>
