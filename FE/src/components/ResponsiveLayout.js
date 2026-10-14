@@ -44,6 +44,8 @@ import {
   Sliders,
   Pill,
   Gauge,
+  FileSearch,
+  Shuffle,
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
@@ -257,9 +259,11 @@ const ResponsiveLayout = ({
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Quản lý nhân sự', route: 'StaffManagement', icon: Users },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Điều chuyển phân công ca', route: 'AssignmentOverride', icon: Shuffle },
           { label: 'Năng suất & SLA', route: 'SlaReport', icon: Gauge },
           { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Nhật ký kiểm toán lâm sàng', route: 'ClinicalAudit', icon: FileSearch },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];

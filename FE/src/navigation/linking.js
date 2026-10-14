@@ -45,6 +45,8 @@ export const linkingConfig = {
       PharmacyQueue: 'pharmacy-queue',
       StaffScheduling: 'staff-scheduling',
       SlaReport: 'sla-report',
+      ClinicalAudit: 'clinical-audit',
+      AssignmentOverride: 'assignment-override',
     },
   },
 };

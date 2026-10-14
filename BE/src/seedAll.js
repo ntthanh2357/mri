@@ -2002,12 +2002,20 @@ const seedComprehensiveDatabase = async () => {
 
       // ── STEP 23: CRYPTOGRAPHIC AUDIT LOGS (HIPAA / TT13 COMPLIANT) ────────────
       console.log("\n🔒 Step 23: Seeding Cryptographic Tamper-Evident Audit Logs...");
+      // UC-HADM-13 — resolves thêm nhân sự cho các entry nhạy cảm lâm sàng (recep1 đã có ở trên)
+      const adminBvbm = users.find((u) => u.email === "admin.bvbm@neuroscan.com");
       const auditEntries = [
         { action: "LOGIN", entity: "User", entityId: users[0]._id.toString(), performedBy: "admin@neuroscan.com", details: "Quản trị viên hệ thống đăng nhập thành công" },
         { action: "RECORD_VIEWED", entity: "MedicalRecord", entityId: medicalRecords[0]._id.toString(), performedBy: "doctor@neuroscan.com", details: "Bác sĩ Nguyễn Gia Huy xem hồ sơ bệnh án BN001" },
         { action: "STOCK_DEDUCTED", entity: "Drug", entityId: seededDrugs[0]._id.toString(), performedBy: "pharmacy_system", details: "Xuất kho 28 viên Depakine Chrono theo đơn thuốc" },
         { action: "PAYMENT_COMPLETED", entity: "Invoice", entityId: "100001", performedBy: "receptionist@neuroscan.com", details: "Thanh toán viện phí 1,850,000 VND qua VietQR" },
         { action: "BED_OCCUPIED", entity: "HospitalBed", entityId: "ICU-01", performedBy: "nurse@neuroscan.com", details: "Tiếp nhận bệnh nhân vào giường hồi sức cấp cứu u não" },
+        // ── UC-HADM-13: 5 thao tác nhạy cảm lâm sàng (Break-Glass · hủy ca · sửa chẩn đoán · hoàn tiền · điều chuyển ca)
+        { action: "BREAK_GLASS_EMERGENCY_ACCESSED", entity: "PatientRecord", entityId: visits[1]._id.toString(), performedBy: doc2._id.toString(), details: "Truy cập khẩn cấp Break-Glass hồ sơ bệnh án BN002 ngoài phân quyền thường quy — bệnh nhân tụt ý thức đột ngột trong giờ hóa trị; mở hồ sơ theo HIPAA §164.312(a)(2)(ii), truy vết bắt buộc sau đó." },
+        { action: "SOFT_DELETE_VISIT", entity: "Visit", entityId: visits[2]._id.toString(), performedBy: (recep1 || users[0])._id.toString(), details: "Hủy lượt khám (Soft Delete) tuân thủ TT 46/2018/TT-BYT. Trạng thái ca khám cũ: chờ khám — bệnh nhân đăng ký trùng lịch với buổi hóa trị, lễ tân hủy và hỗ trợ đặt lại buổi chiều." },
+        { action: "UPDATE_EMR_RECORD", entity: "MedicalRecord", entityId: medicalRecords[0]._id.toString(), performedBy: doc1._id.toString(), details: "Sửa kết luận chẩn đoán bệnh án BN001: bổ sung 'nghi ngờ u màng não thùy đỉnh phải' sau hội chẩn liên khoa Ung thư não — CĐHA; lưu diff before/after vào payloadHash." },
+        { action: "REFUND_APPROVED", entity: "Invoice", entityId: "100002", performedBy: (adminBvbm || users[0])._id.toString(), details: "Hoàn tiền hóa đơn viện phí 1.150.000 VND (chụp MRI có cản quang) — bệnh nhân có tiền sử dị ứng Gadolinium, bác sĩ chỉ định hủy trước khi thực hiện." },
+        { action: "ASSIGNMENT_OVERRIDDEN", entity: "Assignment", entityId: visits[4]._id.toString(), performedBy: (adminBvbm || users[0])._id.toString(), details: "Điều chuyển ca đọc phim từ BS.CKI Phạm Thanh Hải sang TS.BS.CKII Nguyễn Gia Huy. Lý do: bác sĩ phụ trách đột xuất nghỉ phép vì việc gia đình, ca CRITICAL cần đọc trong hạn 4 giờ." },
       ];
 
       let prevHash = "0000000000000000000000000000000000000000000000000000000000000000";

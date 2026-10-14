@@ -30,6 +30,9 @@ export const AUDIT_ACTIONS = {
   VISIT_STATUS_CHANGED: "VISIT_STATUS_CHANGED",
   FSM_TRANSITION: "FSM_TRANSITION",
 
+  // UC-HADM-04 — Can thiệp Điều chuyển Phân công (Smart Override): lý do bắt buộc
+  ASSIGNMENT_OVERRIDDEN: "ASSIGNMENT_OVERRIDDEN",
+
   // Phân hệ Quản lý Buồng giường & Chuyển viện Liên viện (Module 04 Concurrency & Patient Safety)
   BED_RESERVED: "BED_RESERVED",
   BED_OCCUPIED: "BED_OCCUPIED",

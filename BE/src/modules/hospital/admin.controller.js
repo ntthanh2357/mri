@@ -72,21 +72,58 @@ export const addDataset = async (req, res) => {
   }
 };
 
+// UC-HADM-13 — Nhóm thao tác nhạy cảm lâm sàng để lọc nhanh nhật ký kiểm toán
+export const CLINICAL_AUDIT_CATEGORIES = {
+  break_glass: ["BREAK_GLASS_EMERGENCY_ACCESSED"],
+  soft_delete: ["SOFT_DELETE_VISIT"],
+  emr_edit: ["UPDATE_EMR_RECORD", "ADDENDUM_CREATED", "SIGN_EMR_RECORD", "RECORD_LOCKED"],
+  refund: ["REFUND_REQUESTED", "REFUND_APPROVED"],
+  assignment: ["ASSIGNMENT_OVERRIDDEN"],
+};
+
 export const fetchAuditLogs = async (req, res) => {
   try {
     const userRole = req.user.role;
-    let logs;
-    
+
+    // Phạm vi truy vấn: hospital_admin bị khóa scope vào bệnh viện của chính mình
+    // (an toàn đa thuê bao — bỏ qua mọi ?hospitalId= truyền lên), admin hệ thống
+    // giữ hành vi cũ: lọc tùy chọn theo ?hospitalId= hoặc xem toàn hệ thống.
+    let scopeHospitalId;
     if (userRole === "hospital_admin") {
-      logs = await getAuditLogs(req.user.hospitalId);
+      if (!req.user.hospitalId) {
+        return res.status(400).json({ success: false, message: "Tài khoản quản lý bệnh viện chưa liên kết với bệnh viện nào." });
+      }
+      scopeHospitalId = req.user.hospitalId;
     } else if (userRole === "admin" || userRole === "system_admin") {
-      const filterHospitalId = req.query.hospitalId;
-      logs = await getAuditLogs(filterHospitalId);
+      scopeHospitalId = req.query.hospitalId || null;
     } else {
       return res.status(403).json({ success: false, message: "Không có quyền xem audit logs." });
     }
-    
-    res.status(200).json({ success: true, logs });
+
+    // Bộ lọc phía server (tương thích ngược: không truyền → trả về toàn bộ như cũ)
+    const { category, action, from, to, limit, page } = req.query;
+    const filters = {};
+    if (category && CLINICAL_AUDIT_CATEGORIES[category]) {
+      filters.actions = CLINICAL_AUDIT_CATEGORIES[category];
+    }
+    if (action) filters.action = String(action).trim();
+    if (from) {
+      const d = new Date(from);
+      if (!isNaN(d.getTime())) filters.from = d;
+    }
+    if (to) {
+      const d = new Date(to);
+      if (!isNaN(d.getTime())) filters.to = d;
+    }
+    const parsedLimit = parseInt(limit, 10);
+    filters.limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 1000) : 500;
+    const parsedPage = parseInt(page, 10);
+    filters.page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+    const { logs, total } = await getAuditLogs(scopeHospitalId, filters);
+    const totalPages = Math.max(1, Math.ceil(total / filters.limit));
+
+    res.status(200).json({ success: true, logs, total, page: filters.page, limit: filters.limit, totalPages });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

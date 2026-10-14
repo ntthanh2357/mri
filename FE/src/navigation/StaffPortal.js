@@ -54,6 +54,8 @@ import DrugManagementScreen from '../screens/DrugManagementScreen';
 import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 import SlaReportScreen from '../screens/SlaReportScreen';
+import ClinicalAuditScreen from '../screens/ClinicalAuditScreen';
+import AssignmentOverrideScreen from '../screens/AssignmentOverrideScreen';
 
 export const staffLinkingConfig = {
   prefixes: ['/'],
@@ -93,6 +95,8 @@ export const staffLinkingConfig = {
       PharmacyQueue: 'staff/pharmacy-queue',
       StaffScheduling: 'staff/staff-scheduling',
       SlaReport: 'staff/sla-report',
+      ClinicalAudit: 'staff/clinical-audit',
+      AssignmentOverride: 'staff/assignment-override',
     },
   },
 };
@@ -202,6 +206,8 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: false }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
         <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
+        <Stack.Screen name="ClinicalAudit" component={ClinicalAuditScreen} options={{ title: 'Nhật ký Kiểm toán Lâm sàng', headerShown: false }} />
+        <Stack.Screen name="AssignmentOverride" component={AssignmentOverrideScreen} options={{ title: 'Điều chuyển Phân công Ca', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
