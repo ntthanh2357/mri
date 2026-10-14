@@ -416,20 +416,37 @@ export const getDoctorCaseloads = async (req, res) => {
       hospitalId,
       role: "doctor",
       isLocked: false,
-    }).select("profile.name profile.specialty profile.isOnCall profile.currentCaseload profile.maxCaseload").lean();
+    }).select("profile.name profile.specialty profile.isOnCall profile.maxCaseload").lean();
 
-    const caseloads = doctors.map((d) => ({
-      doctorId: d._id,
-      name: d.profile?.name,
-      specialty: d.profile?.specialty,
-      isOnCall: d.profile?.isOnCall || false,
-      currentCaseload: d.profile?.currentCaseload || 0,
-      maxCaseload: d.profile?.maxCaseload || 10,
-      isOverloaded: (d.profile?.currentCaseload || 0) > (d.profile?.maxCaseload || 10),
-      utilizationPercent: d.profile?.maxCaseload
-        ? Math.round(((d.profile?.currentCaseload || 0) / d.profile.maxCaseload) * 100)
-        : 0,
-    }));
+    // Fix 0009 (UC-HADM-03): đếm caseload từ Assignment đang chạy — cùng nguồn
+    // dữ liệu với /assignments/caseload-dashboard. Trước đây đọc counter
+    // profile.currentCaseload (chỉ do seed gán giả lập) khiến 2 màn hình hiển
+    // thị 2 con số khác nhau về cùng một bác sĩ.
+    const activeCounts = await Assignment.aggregate([
+      {
+        $match: {
+          doctorId: { $in: doctors.map((d) => d._id) },
+          status: { $in: ["pending", "acknowledged", "in_progress"] },
+        },
+      },
+      { $group: { _id: "$doctorId", count: { $sum: 1 } } },
+    ]);
+    const countByDoctor = new Map(activeCounts.map((r) => [String(r._id), r.count]));
+
+    const caseloads = doctors.map((d) => {
+      const current = countByDoctor.get(String(d._id)) || 0;
+      const max = d.profile?.maxCaseload || 10;
+      return {
+        doctorId: d._id,
+        name: d.profile?.name,
+        specialty: d.profile?.specialty,
+        isOnCall: d.profile?.isOnCall || false,
+        currentCaseload: current,
+        maxCaseload: max,
+        isOverloaded: current > max,
+        utilizationPercent: max ? Math.round((current / max) * 100) : 0,
+      };
+    });
 
     const overloadedDoctors = caseloads.filter((d) => d.isOverloaded);
 

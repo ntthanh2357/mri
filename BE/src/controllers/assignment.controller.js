@@ -1,3 +1,4 @@
+import { isValidObjectId } from "mongoose";
 import { Assignment } from "../models/assignment.model.js";
 import { User } from "../models/user.model.js";
 import { Visit } from "../models/visit.model.js";
@@ -20,6 +21,14 @@ export const autoAssignDoctor = async (req, res) => {
     const { visitId, imagingResultId, assignmentType = 'read' } = req.body;
 
     if (!visitId) return errorResponse(res, "Thiếu visitId.", 400);
+
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(visitId)) {
+      return errorResponse(res, "visitId không hợp lệ.", 400);
+    }
+    if (imagingResultId && !isValidObjectId(imagingResultId)) {
+      return errorResponse(res, "imagingResultId không hợp lệ.", 400);
+    }
 
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
@@ -149,6 +158,11 @@ export const overrideAssignment = async (req, res) => {
       return errorResponse(res, "Chỉ trưởng khoa hoặc admin mới có quyền thay đổi phân công.", 403);
     }
 
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(req.params.id)) {
+      return errorResponse(res, "ID phân công không hợp lệ.", 400);
+    }
+
     const assignment = await Assignment.findOne({
       _id: req.params.id,
       hospitalId: req.user.hospitalId
@@ -164,6 +178,9 @@ export const overrideAssignment = async (req, res) => {
 
     const { newDoctorId, reason } = req.body;
     if (!newDoctorId) return errorResponse(res, "Thiếu ID bác sĩ mới.", 400);
+    if (!isValidObjectId(newDoctorId)) {
+      return errorResponse(res, "ID bác sĩ mới không hợp lệ.", 400);
+    }
 
     // UC-HADM-04: ghi log bắt buộc lý do điều chuyển — không lý do, không can thiệp
     const trimmedReason = (reason || "").trim();
@@ -290,6 +307,11 @@ export const getCaseloadDashboard = async (req, res) => {
 // @access Private (Doctor)
 export const acknowledgeAssignment = async (req, res) => {
   try {
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(req.params.id)) {
+      return errorResponse(res, "ID phân công không hợp lệ.", 400);
+    }
+
     const assignment = await Assignment.findOne({
       _id: req.params.id,
       doctorId: req.user.id,
@@ -340,6 +362,10 @@ export const getAllAssignments = async (req, res) => {
       return errorResponse(res, "Chỉ admin xem được tất cả phân công.", 403);
     }
     const { status, doctorId, limit = 20, page = 1, overridden } = req.query;
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (doctorId && !isValidObjectId(doctorId)) {
+      return errorResponse(res, "doctorId không hợp lệ.", 400);
+    }
     const filter = { hospitalId: req.user.hospitalId };
     // Hỗ trợ lọc nhiều trạng thái cùng lúc: ?status=pending,acknowledged,in_progress
     if (status) filter.status = status.includes(",") ? { $in: status.split(",").map((s) => s.trim()) } : status;
