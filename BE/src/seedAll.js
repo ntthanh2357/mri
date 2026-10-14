@@ -1385,6 +1385,12 @@ const seedComprehensiveDatabase = async () => {
 
       // [P1-PharmacyQueue] Đơn thuốc nguy cơ CRITICAL — đẩy vào hàng đợi Dược sĩ
       // để demo luồng Thẩm định kép (Dual-Sign) → Phát thuốc (UC-PHA-02 → 04).
+      // ⚠️ Thuốc kê PHẢI tồn tại trong danh mục 10 thuốc đã seed ở Step Drugs:
+      // payInvoice sẽ thêm dòng thuốc từ đơn này vào hóa đơn chờ thanh toán của
+      // pat3 rồi trừ kho FEFO — kê thuốc ngoài danh mục sẽ làm pay lỗi 400
+      // DRUG_NOT_FOUND (bug cũ khi kê "Dexamethasone 8mg"/"Phenytoin 100mg").
+      // Cặp thuốc demo: Dexamethasone 4mg/1ml (corticoid chống phù não, 450 ống)
+      // + Tegretol 200mg (carbamazepine — 2 lô, FEFO xuất lô LO-TEG-1125 trước).
       const presc3 = await Prescription.create({
         hospitalId: hospital._id,
         patient_id: pat3._id,
@@ -1393,15 +1399,15 @@ const seedComprehensiveDatabase = async () => {
         diagnosis: "Glioma ác tính độ 3 — phù não nặng, dự phòng động kinh",
         drugs: [
           {
-            name: "Dexamethasone 8mg",
+            name: "Dexamethasone 4mg/1ml",
             quantity: 30,
-            unit: "viên",
-            usage: "Uống 2 viên sáng, 1 viên chiều sau ăn no",
+            unit: "ống",
+            usage: "Tiêm bắp 2 ống sáng, 1 ống chiều sau ăn no",
             timesPerDay: 2,
             durationDays: 10,
           },
           {
-            name: "Phenytoin 100mg",
+            name: "Tegretol 200mg",
             quantity: 60,
             unit: "viên",
             usage: "Uống 1 viên sáng, 1 viên tối (uống nguyên viên)",
@@ -1419,12 +1425,12 @@ const seedComprehensiveDatabase = async () => {
             {
               severity: "CRITICAL",
               type: "DRUG_INTERACTION",
-              message: "Phenytoin + Dexamethasone: corticoid làm giảm nồng độ Phenytoin, nguy cơ mất kiểm soát động kinh; cần giám sát nồng độ thuốc trong máu.",
+              message: "Tegretol (carbamazepine) + Dexamethasone: thuốc chống co giật cảm ứng enzyme CYP3A4 làm tăng chuyển hóa Dexamethasone gấp 2-3 lần, làm mất hiệu quả chống phù não quanh khối u; cân nhắc tăng liều hoặc đổi sang Keppra (levetiracetam).",
             },
             {
               severity: "HIGH",
               type: "DOSAGE",
-              message: "Dexamethasone 8mg/ngày thuộc nhóm liều cao — theo dõi đường huyết, nguy cơ nhiễm trùng cơ hội và loét dạ dày.",
+              message: "Dexamethasone 12mg/ngày thuộc nhóm liều cao — theo dõi đường huyết, nguy cơ nhiễm trùng cơ hội và loét dạ dày.",
             },
           ],
           isOverridden: true,
@@ -1619,6 +1625,22 @@ const seedComprehensiveDatabase = async () => {
         },
       ]);
       console.log(`✅ Seeded ${visits.length} Clinical Visits with diverse lifecycle states.`);
+
+      // [FIX LINKAGE presc3] presc3 (kê ở Step 16) được tạo TRƯỚC visit ~9ms
+      // (thứ tự code Step 16 → Step 17) khiến truy vấn linkage theo mốc thời
+      // gian của payInvoice (createdAt >= visit.createdAt) luôn trượt → pay hóa
+      // đơn chờ thanh toán của pat3 KHÔNG BAO GIỜ thêm dòng thuốc → hóa đơn
+      // không có items.type='drug' → Dược sĩ kẹt ở bước phát thuốc ("Chưa có
+      // hóa đơn"). Dời createdAt presc3 sang SAU visit chỉ định MRI 5 phút
+      // (bác sĩ kê đơn chống phù não ngay tại lượt khám) để luồng demo
+      // pay → thêm thuốc + trừ kho FEFO → phát thuốc chạy trọn vẹn
+      // mà không phải chỉnh DB thủ công.
+      // ⚠️ Phải dùng .collection.updateOne: mongoose strip $set createdAt trên
+      // updateOne của schema có timestamps:true (đã verify empirically).
+      await Prescription.collection.updateOne(
+        { _id: presc3._id },
+        { $set: { createdAt: new Date(visits[2].createdAt.getTime() + 5 * 60000) } }
+      );
 
       // ── STEP 18: TASKS (KANBAN 8-STEP CLINICAL WORKFLOW) ─────────────────────
       console.log("\n📋 Step 18: Seeding Tasks (8-Step Clinical Kanban)...");

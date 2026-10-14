@@ -335,6 +335,25 @@ export const payInvoice = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
+    // [FIX BUG PAY-01] Chống thanh toán hóa đơn không còn ở trạng thái chờ:
+    // - "hoàn trả"/"hủy": pay lại sẽ set "đã thanh toán", thay toàn bộ dòng thuốc
+    //   mới (mất cờ isRefunded) và do stockDeductionStatus vẫn là DEDUCTED nên
+    //   deductStockForInvoice bỏ trừ kho → giao dịch bán ma trên kho đã hoàn vị.
+    // - "đã thanh toán": chặn double-pay (ghi sổ kép tiền + EMR version audit).
+    // - "đang xử lý": hóa đơn kẹt sau lỗi trừ kho VietQR/PayOS — phải đi luồng
+    //   resolveProcessingInvoice (Dược sĩ nhập kho bù / Thu ngân hoàn tiền).
+    if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
+      return res.status(400).json({ message: `Không thể thanh toán: hóa đơn đã ở trạng thái '${invoice.status}'.` });
+    }
+    if (invoice.status === "đã thanh toán") {
+      return res.status(400).json({ message: "Hóa đơn đã được thanh toán trước đó — không thể thanh toán lại." });
+    }
+    if (invoice.status === "đang xử lý") {
+      return res.status(400).json({
+        message: "Hóa đơn đang kẹt ở trạng thái 'đang xử lý' sau lỗi trừ kho giao dịch điện tử — vui lòng xử lý theo luồng hóa đơn kẹt (nhập kho bù hoặc hoàn tiền), không thanh toán lại.",
+      });
+    }
+
     // Cập nhật trạng thái lượt khám và tính toán lại tiền thuốc trước khi lưu hóa đơn
     const visit = await Visit.findById(invoice.visitId);
     let prescription = null;
@@ -1217,6 +1236,20 @@ export const refundInvoice = async (req, res) => {
 
     if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
       return res.status(400).json({ message: `Hóa đơn này đã ở trạng thái '${invoice.status}'.` });
+    }
+
+    // [FIX BUG REFUND-01] Chỉ được hoàn tiền hóa đơn ĐÃ THU TIỀN:
+    // - Hoàn cho hóa đơn "chờ thanh toán" sẽ ghi hoàn tiền cho tiền CHƯA TỪNG THU
+    //   (refundAmount + notes "[HOÀN TIỀN TOÀN BỘ]..." + audit REFUND_APPROVED đều sai)
+    //   và đánh isRefunded toàn bộ item, trong khi kho thì không bị ảnh hưởng —
+    //   tạo sổ kế toán lệch chuẩn giữa tiền và kho.
+    // - Hóa đơn "đang xử lý" (kẹt trừ kho VietQR/PayOS) phải đi luồng
+    //   resolveProcessingInvoice (nhập kho bù hoặc hoàn tiền), không dùng refund.
+    // Hóa đơn chưa thu tiền muốn bỏ → để nguyên / hủy, không hoàn tiền.
+    if (invoice.status !== "đã thanh toán") {
+      return res.status(400).json({
+        message: `Không thể hoàn tiền: hóa đơn đang ở trạng thái '${invoice.status}'. Chỉ hóa đơn ĐÃ thanh toán mới được hoàn tiền; hóa đơn chưa thu tiền vui lòng bỏ qua hoặc xử lý theo luồng hủy.`,
+      });
     }
 
     // 1. Phê duyệt 2 cấp cho hóa đơn giá trị cao (Dual Approval Workflow >= 10.000.000 VNĐ - Neuro-Oncology Protocol)
