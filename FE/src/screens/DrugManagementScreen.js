@@ -46,7 +46,7 @@ const CATEGORY_COLORS = {
   other: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0' },
 };
 
-export default function DrugManagementScreen({ navigation }) {
+export default function DrugManagementScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   // Màn rộng: cột co giãn theo chiều ngang (trước đây cột cố định → bảng chỉ dùng ~650px, chip phân nhóm xuống 3 dòng)
