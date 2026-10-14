@@ -304,16 +304,21 @@ export const signImagingReport = async (req, res) => {
       await visit.save();
 
       // H.6 — Gửi thông báo bệnh nhân (kết quả sẵn sàng)
+      // Fix 0011: call-site cũ truyền userId/body/data — createNotificationInternal
+      // yêu cầu recipientId/message/relatedId → validation fail âm thầm trong
+      // try/catch, notification KHÔNG BAO GIỜ đến bệnh nhân (DB: result_ready = 0).
       try {
         const { createNotificationInternal } = await import("./notification.controller.js");
-        await createNotificationInternal({
+        const sent = await createNotificationInternal({
           hospitalId: req.user.hospitalId,
-          userId: visit.patientId,
-          title: "Kết quả MRI của bạn đã sẵn sàng",
-          body: "Bác sĩ đã ký duyệt kết quả chụp MRI. Hãy đăng nhập để xem chi tiết.",
+          recipientId: visit.patientId,
+          senderId: req.user.id,
           type: "result_ready",
-          data: { visitId: visit._id, imagingResultId },
+          title: "Kết quả MRI của bạn đã sẵn sàng",
+          message: "Bác sĩ đã ký duyệt kết quả chụp MRI. Hãy đăng nhập để xem chi tiết.",
+          relatedId: imagingResultId,
         });
+        if (!sent) console.warn("[G.5 Sign] Notification result_ready chưa được tạo cho bệnh nhân", String(visit.patientId));
       } catch (notifErr) {
         console.warn("[G.5 Sign] Lỗi gửi notification bệnh nhân:", notifErr.message);
       }
