@@ -80,6 +80,10 @@ const WelcomeScreen = ({ navigation }) => {
   const [twoFactorEmail, setTwoFactorEmail] = useState('');
   const [resendingOtp, setResendingOtp] = useState(false);
 
+  // [FIX] OTP debug (ENABLE_DEBUG_OTP=true) hiển thị INLINE trong form OTP,
+  // không dùng modal chặn khiến nút "Xác nhận" không bấm được trên web.
+  const [debugOtp, setDebugOtp] = useState('');
+
   // Quên mật khẩu — modal luồng đầy đủ (email → OTP + mật khẩu mới)
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
@@ -124,7 +128,7 @@ const WelcomeScreen = ({ navigation }) => {
             : (data.user.role === 'hospital_admin' ? 'ClinicDashboard' : 'Home');
           navigation.reset({
             index: 0,
-            routes: [{ name: destination, params: { user: data.user } }],
+            routes: [{ name: destination }],
           });
           return;
         }
@@ -175,12 +179,16 @@ const WelcomeScreen = ({ navigation }) => {
       if (data.requiresVerification) {
         setVerificationEmail(email.trim());
         setShowVerification(true);
-        showAlert(
-          'info',
-          'Tài khoản chưa kích hoạt',
-          'Tài khoản bệnh nhân của bạn chưa được kích hoạt qua mã OTP. Một mã OTP mới đã được gửi tới email của bạn. Vui lòng nhập mã để kích hoạt và đăng nhập.' +
-          (data.debugOtp ? ` (Mã debug: ${data.debugOtp})` : '')
-        );
+        // [FIX] OTP debug hiển thị inline thay vì modal chặn form
+        if (data.debugOtp) {
+          setDebugOtp(data.debugOtp);
+        } else {
+          showAlert(
+            'info',
+            'Tài khoản chưa kích hoạt',
+            'Tài khoản bệnh nhân của bạn chưa được kích hoạt qua mã OTP. Một mã OTP mới đã được gửi tới email của bạn. Vui lòng nhập mã để kích hoạt và đăng nhập.'
+          );
+        }
         return;
       }
 
@@ -198,12 +206,9 @@ const WelcomeScreen = ({ navigation }) => {
       if (data.requires2FA) {
         setTwoFactorEmail((data.twoFactorEmail || email).trim());
         setShowTwoFactor(true);
-        showAlert(
-          'info',
-          'Xác thực 2 lớp',
-          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
-          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
-        );
+        // [FIX] form 2FA đã tự mô tả "mã đã được gửi tới email" — bỏ modal chặn,
+        // OTP debug (nếu có) hiển thị inline ngay trong form.
+        setDebugOtp(data.otp2FA || '');
         return;
       }
 
@@ -242,7 +247,7 @@ const WelcomeScreen = ({ navigation }) => {
         setVerificationCode('');
         navigation.reset({
           index: 0,
-          routes: [{ name: destination, params: { user: data.user } }],
+          routes: [{ name: destination }],
         });
       });
     } catch (error) {
@@ -328,12 +333,16 @@ const WelcomeScreen = ({ navigation }) => {
         setActiveForm('login');
         setEmail(email.trim());
         setPassword(password);
-        showAlert(
-          'success',
-          'Đăng ký thành công!',
-          'Tài khoản bệnh nhân đã được tạo. Vui lòng nhập mã OTP 6 chữ số vừa gửi đến email của bạn vào ô OTP xuất hiện ở form đăng nhập bên dưới để kích hoạt.' +
-          (data.debugOtp ? ` (Mã debug: ${data.debugOtp})` : '')
-        );
+        // [FIX] OTP debug hiển thị inline trong form OTP (không modal chặn)
+        if (data.debugOtp) {
+          setDebugOtp(data.debugOtp);
+        } else {
+          showAlert(
+            'success',
+            'Đăng ký thành công!',
+            'Tài khoản bệnh nhân đã được tạo. Vui lòng nhập mã OTP 6 chữ số vừa gửi đến email của bạn vào ô OTP xuất hiện ở form đăng nhập bên dưới để kích hoạt.'
+          );
+        }
       } else {
         showAlert('success', 'Đăng ký thành công', 'Tài khoản đã được tạo! Vui lòng đăng nhập.', () => {
           setActiveForm('login');
@@ -393,12 +402,16 @@ const WelcomeScreen = ({ navigation }) => {
     }
     try {
       const data = await post('/auth/resend-activation', { email: targetEmail });
-      showAlert(
-        'success',
-        'Gửi lại thành công',
-        'Mã xác thực mới đã được gửi tới email của bạn.' +
-        (data.debugOtp ? ` (Mã debug: ${data.debugOtp})` : '')
-      );
+      // [FIX] OTP debug hiển thị inline (mã mới) thay vì modal chặn form
+      if (data.debugOtp) {
+        setDebugOtp(data.debugOtp);
+      } else {
+        showAlert(
+          'success',
+          'Gửi lại thành công',
+          'Mã xác thực mới đã được gửi tới email của bạn.'
+        );
+      }
     } catch (error) {
       console.error('Resend activation error:', error);
       showAlert('error', 'Gửi lại thất bại', error.message || 'Không thể gửi lại mã xác thực. Vui lòng thử lại.');
@@ -459,7 +472,7 @@ const WelcomeScreen = ({ navigation }) => {
         setTwoFactorEmail('');
         navigation.reset({
           index: 0,
-          routes: [{ name: destination, params: { user: data.user } }],
+          routes: [{ name: destination }],
         });
       });
     } catch (error) {
@@ -475,12 +488,16 @@ const WelcomeScreen = ({ navigation }) => {
     setResendingOtp(true);
     try {
       const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
-      showAlert(
-        'info',
-        'Đã gửi lại mã',
-        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
-        (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
-      );
+      // [FIX] OTP debug hiển thị inline (mã mới) thay vì modal chặn form
+      if (data.otp2FA) {
+        setDebugOtp(data.otp2FA);
+      } else {
+        showAlert(
+          'info',
+          'Đã gửi lại mã',
+          (data.message || 'Mã OTP mới đã được gửi tới email của bạn.')
+        );
+      }
     } catch (error) {
       setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
     } finally {
@@ -519,12 +536,8 @@ const WelcomeScreen = ({ navigation }) => {
       if (data.requires2FA) {
         setTwoFactorEmail((data.twoFactorEmail || '').trim());
         setShowTwoFactor(true);
-        showAlert(
-          'info',
-          'Xác thực 2 lớp',
-          'Đăng nhập Google thành công. Mã OTP xác thực 2 lớp đã được gửi tới email của bạn. Vui lòng nhập mã để hoàn tất đăng nhập.' +
-          (data.otp2FA ? ` (Mã debug: ${data.otp2FA})` : '')
-        );
+        // [FIX] bỏ modal chặn — OTP debug hiển thị inline trong form 2FA
+        setDebugOtp(data.otp2FA || '');
         return;
       }
 
@@ -547,7 +560,7 @@ const WelcomeScreen = ({ navigation }) => {
       showAlert('success', 'Đăng nhập thành công', 'Đăng nhập bằng tài khoản Google thành công.', () => {
         navigation.reset({
           index: 0,
-          routes: [{ name: destination, params: { user: data.user } }],
+          routes: [{ name: destination }],
         });
       });
     } catch (error) {
@@ -669,6 +682,17 @@ const WelcomeScreen = ({ navigation }) => {
                     onSubmitEditing={handleVerify2Factor}
                   />
                   {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
+                  {debugOtp ? (
+                    <Text
+                      style={{
+                        fontSize: 12, fontWeight: '700', color: '#92400E',
+                        backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
+                        borderRadius: 8, marginTop: 10, textAlign: 'center',
+                      }}
+                    >
+                      (DEV) Mã OTP thử nghiệm: {debugOtp}
+                    </Text>
+                  ) : null}
 
                   <PressableScale
                     style={styles.formButton}
@@ -710,6 +734,7 @@ const WelcomeScreen = ({ navigation }) => {
                     onPress={() => {
                       setShowTwoFactor(false);
                       setTwoFactorCode('');
+                      setDebugOtp('');
                     }}
                   >
                     <Text style={styles.backButtonInlineText}>← Quay lại đăng nhập</Text>
@@ -835,6 +860,17 @@ const WelcomeScreen = ({ navigation }) => {
                         onSubmitEditing={handleLogin}
                       />
                       {verificationError ? <Text style={styles.inlineErrorText}>{verificationError}</Text> : null}
+                      {debugOtp ? (
+                        <Text
+                          style={{
+                            fontSize: 12, fontWeight: '700', color: '#92400E',
+                            backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
+                            borderRadius: 8, marginTop: 6, marginBottom: 8, textAlign: 'center',
+                          }}
+                        >
+                          (DEV) Mã OTP thử nghiệm: {debugOtp}
+                        </Text>
+                      ) : null}
 
                       <View style={[styles.resendRow, { justifyContent: 'flex-start', marginTop: -8, marginBottom: 0 }]}>
                         <Text style={styles.resendText}>Chưa nhận được mã? </Text>
@@ -1110,6 +1146,17 @@ const WelcomeScreen = ({ navigation }) => {
                     onSubmitEditing={handleVerify2Factor}
                   />
                   {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
+                  {debugOtp ? (
+                    <Text
+                      style={{
+                        fontSize: 12, fontWeight: '700', color: '#92400E',
+                        backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
+                        borderRadius: 8, marginTop: 10, textAlign: 'center',
+                      }}
+                    >
+                      (DEV) Mã OTP thử nghiệm: {debugOtp}
+                    </Text>
+                  ) : null}
 
                   <PressableScale
                     style={styles.formButton}
@@ -1151,6 +1198,7 @@ const WelcomeScreen = ({ navigation }) => {
                     onPress={() => {
                       setShowTwoFactor(false);
                       setTwoFactorCode('');
+                      setDebugOtp('');
                     }}
                   >
                     <Text style={styles.backButtonInlineText}>← Quay lại đăng nhập</Text>
@@ -1276,6 +1324,17 @@ const WelcomeScreen = ({ navigation }) => {
                         onSubmitEditing={handleLogin}
                       />
                       {verificationError ? <Text style={styles.inlineErrorText}>{verificationError}</Text> : null}
+                      {debugOtp ? (
+                        <Text
+                          style={{
+                            fontSize: 12, fontWeight: '700', color: '#92400E',
+                            backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
+                            borderRadius: 8, marginTop: 6, marginBottom: 8, textAlign: 'center',
+                          }}
+                        >
+                          (DEV) Mã OTP thử nghiệm: {debugOtp}
+                        </Text>
+                      ) : null}
 
                       <View style={[styles.resendRow, { justifyContent: 'flex-start', marginTop: -8, marginBottom: 0 }]}>
                         <Text style={styles.resendText}>Chưa nhận được mã? </Text>
