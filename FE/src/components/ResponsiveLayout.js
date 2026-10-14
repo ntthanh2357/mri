@@ -42,6 +42,7 @@ import {
   Heart,
   Ticket,
   Sliders,
+  Pill,
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
@@ -179,7 +180,8 @@ const ResponsiveLayout = ({
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
                     localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
                     localUser?.role === 'nurse' ? 'Điều dưỡng' : 
-                    localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 'Bệnh nhân';
+                    localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 
+                    localUser?.role === 'pharmacist' ? 'Dược sĩ Bệnh viện' : 'Bệnh nhân';
 
   // Menu items config - Tách riêng từng role hoàn chỉnh bám sát thực tế lâm sàng
   const getMenuItems = (role) => {
@@ -234,6 +236,15 @@ const ResponsiveLayout = ({
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'pharmacist':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Hàng đợi Khoa Dược', route: 'PharmacyQueue', icon: Package },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: Pill },
+          { label: 'Thuốc hết hạn', route: 'DrugManagement', params: { tab: 'expiry' }, icon: AlertTriangle },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];

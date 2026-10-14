@@ -51,6 +51,7 @@ import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
+import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 
 export const staffLinkingConfig = {
@@ -88,6 +89,7 @@ export const staffLinkingConfig = {
       StaffManagement: 'staff/staff-management',
       NursePatientDetail: 'staff/nurse-patient-detail',
       DrugManagement: 'staff/drug-management',
+      PharmacyQueue: 'staff/pharmacy-queue',
       StaffScheduling: 'staff/staff-scheduling',
     },
   },
@@ -195,6 +197,7 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: false }} />
+        <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: false }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>

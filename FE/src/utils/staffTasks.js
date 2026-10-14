@@ -14,7 +14,7 @@ const countStatus = (visits, statuses) => visits.filter(v => statuses.includes(v
 const task = (key, label, hint, count, route, params) => ({ key, label, hint, count, route, params });
 
 /** Danh sách việc theo role; việc còn tồn (count > 0) lên trước, giữ thứ tự ưu tiên trong từng nhóm. */
-export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [] } = {}) => {
+export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], prescriptions = [] } = {}) => {
   let list = [];
   if (role === 'doctor') {
     list = [
@@ -39,6 +39,14 @@ export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [] } =
       task('billing', 'Hóa đơn chờ thu', 'Thu tiền mặt, PayOS hoặc áp dụng BHYT', invoices.filter(i => i.status === 'chờ thanh toán').length, 'NurseReception', { tab: 'billing' }),
       task('today', 'Lượt tiếp đón hôm nay', 'Lượt khám đã tạo trong ngày', visits.length, 'NurseReception', { tab: 'myQueue' }),
     ];
+  } else if (role === 'pharmacist') {
+    // [P1-PharmacyQueue] Việc cần làm của Dược sĩ từ hàng đợi Khoa Dược (GET /api/drugs/queue)
+    const countDisp = (statuses) => prescriptions.filter(p => statuses.includes(p.dispenseStatus)).length;
+    list = [
+      task('verify', 'Đơn thuốc chờ thẩm định kép', 'Cảnh báo CRITICAL — rà soát liều, tương tác, dị ứng trước khi duyệt', countDisp(['AWAITING_PHARMACY_VERIFICATION']), 'PharmacyQueue', { tab: 'awaiting' }),
+      task('ready', 'Đơn sẵn sàng xuất phát', 'Đã thẩm định — chờ phát khi bệnh nhân nhận thuốc', countDisp(['READY']), 'PharmacyQueue', { tab: 'ready' }),
+      task('dispense', 'Đơn chờ phát thuốc', 'Kiểm tra thanh toán tiền thuốc rồi xuất kho cấp phát', countDisp(['PENDING_DISPENSE']), 'PharmacyQueue', { tab: 'pending' }),
+    ];
   }
   return [...list.filter(t => t.count > 0), ...list.filter(t => t.count === 0)];
 };
@@ -56,4 +64,33 @@ export const nextUpVisits = (role, visits = [], limit = 5) => {
   return [...list]
     .sort((a, b) => (b.priority === 'khẩn cấp') - (a.priority === 'khẩn cấp'))
     .slice(0, limit);
+};
+
+/** Đơn thuốc tiếp theo của Dược sĩ: CRITICAL/cấp cứu lên đầu, mới nhất trước. (P1-PharmacyQueue) */
+export const nextUpPrescriptions = (prescriptions = [], limit = 5) =>
+  [...prescriptions]
+    .sort((a, b) => {
+      const isCrit = (p) => p.clinicalSafety?.status === 'CRITICAL' || p.clinicalSafety?.overrideCategory === 'ACUTE_EMERGENCY';
+      if (isCrit(a) && !isCrit(b)) return -1;
+      if (!isCrit(a) && isCrit(b)) return 1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    })
+    .slice(0, limit)
+    .map(p => ({
+      _id: p._id,
+      patientId: p.patient_id,
+      reason: p.diagnosis || 'Đơn thuốc điện tử',
+      createdAt: p.createdAt,
+      priority: (p.clinicalSafety?.status === 'CRITICAL' || p.clinicalSafety?.overrideCategory === 'ACUTE_EMERGENCY') ? 'khẩn cấp' : 'thường',
+      status: PHARMACY_STATUS_VI[p.dispenseStatus] || p.dispenseStatus,
+    }));
+
+const PHARMACY_STATUS_VI = {
+  AWAITING_PHARMACY_VERIFICATION: 'Chờ thẩm định kép',
+  READY: 'Sẵn sàng phát thuốc',
+  PENDING_DISPENSE: 'Chờ phát thuốc',
+  PARTIALLY_DISPENSED: 'Phát từng phần',
+  DISPENSED: 'Đã phát thuốc',
+  REJECTED_BY_PHARMACY: 'Khoa Dược từ chối',
+  CANCELLED: 'Đã hủy',
 };

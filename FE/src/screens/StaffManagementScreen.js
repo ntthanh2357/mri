@@ -23,6 +23,7 @@ const ROLE_LABELS = {
   nurse: 'Điều dưỡng Hồi sức & Chăm sóc',
   technician: 'Kỹ thuật viên CĐHA & MRI',
   receptionist: 'Nhân viên Tiếp đón & Thu ngân',
+  pharmacist: 'Dược sĩ Bệnh viện (Khoa Dược)',
   hospital_admin: 'Ban Lãnh đạo Khoa / Quản lý',
 };
 

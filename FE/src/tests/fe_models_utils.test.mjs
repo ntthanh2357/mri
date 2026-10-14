@@ -17,6 +17,7 @@ import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
+import { daysLeftOf, expiryStatus, expiryStatusText, batchCountOf, earliestActiveBatch, displayExpiry } from '../utils/batchUtils.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
 
@@ -367,6 +368,52 @@ it('isReminderDue flags pending doses whose time has come, not done/skipped/futu
   assert.strictEqual(isReminderDue({ status: 'pending', time: '20:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'done', time: '08:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'skipped', time: '08:00' }, now), false);
+});
+
+// ── UC-PHA-07: tồn kho theo lô / FEFO — tiện ích hiển thị ──
+console.log(`${colors.cyan}${colors.bold}SUITE: Batch/Expiry Utilities (batchUtils.js — UC-PHA-07)${colors.reset}`);
+
+it('daysLeftOf đếm đúng số ngày tới hạn dùng (tròn ngày, không lệch timezone cục bộ)', () => {
+  const now = new Date(2026, 9, 14, 8, 0); // 14/10/2026 08:00 giờ chỗ
+  assert.strictEqual(daysLeftOf(new Date(2026, 9, 15, 8, 0), now), 1);
+  assert.strictEqual(daysLeftOf(new Date(2026, 10, 5, 8, 0), now), 22);
+  assert.strictEqual(daysLeftOf(new Date(2026, 8, 30, 8, 0), now), -14);
+  assert.strictEqual(daysLeftOf(null, now), null);
+});
+
+it('expiryStatus phân cấp expired / critical (≤7 ngày) / warning (≤30 ngày) / ok', () => {
+  assert.strictEqual(expiryStatus(-1), 'expired');
+  assert.strictEqual(expiryStatus(3), 'critical');
+  assert.strictEqual(expiryStatus(22), 'warning');
+  assert.strictEqual(expiryStatus(45), 'ok');
+  assert.strictEqual(expiryStatus(null), 'unknown');
+  assert.strictEqual(expiryStatusText('expired'), 'ĐÃ HẾT HẠN');
+  assert.strictEqual(expiryStatusText('critical'), 'SẮP HẾT HẠN');
+});
+
+it('earliestActiveBatch chọn lô còn hàng có hạn sớm nhất (nguyên tắc FEFO)', () => {
+  const drug = {
+    batches: [
+      { batchNumber: 'LO-B', quantity: 700, expiryDate: '2028-06-30' },
+      { batchNumber: 'LO-A', quantity: 500, expiryDate: '2027-04-30' },
+      { batchNumber: 'LO-EMPTY', quantity: 0, expiryDate: '2026-11-01' },
+    ],
+  };
+  assert.strictEqual(earliestActiveBatch(drug).batchNumber, 'LO-A');
+  assert.strictEqual(batchCountOf(drug), 3);
+  assert.strictEqual(earliestActiveBatch({ batches: [] }), null);
+  assert.strictEqual(earliestActiveBatch({}), null);
+});
+
+it('displayExpiry ưu tiên lô sớm nhất, fallback hạn dùng danh mục cũ (legacy)', () => {
+  const batched = {
+    expiryDate: '2028-06-30',
+    batches: [{ batchNumber: 'LO-A', quantity: 500, expiryDate: '2027-04-30' }],
+  };
+  assert.strictEqual(displayExpiry(batched), new Date('2027-04-30').toLocaleDateString('vi-VN'));
+  const legacy = { expiryDate: '2027-10-15' };
+  assert.strictEqual(displayExpiry(legacy), new Date('2027-10-15').toLocaleDateString('vi-VN'));
+  assert.strictEqual(displayExpiry({}), 'Không thời hạn');
 });
 
 console.log(`\n======================================================================`);

@@ -9,6 +9,7 @@ import { createNotificationInternal } from "../../controllers/notification.contr
 import { assessPrescriptionSafety } from "./services/drugSafety.service.js";
 import { generateRemindersForPrescription } from "../../controllers/patient.controller.js";
 import { deductStockForInvoice } from "../billing/invoice.controller.js";
+import { deductDrugStockFEFO, importDrugBatch, sortBatchesFEFO, sumBatches } from "./services/batchStock.service.js";
 
 // ── Helper: Lấy hospitalId từ user (Admin dùng query, hospital_admin dùng JWT) ─
 function resolveHospitalId(req) {
@@ -94,6 +95,36 @@ export const getDrugById = async (req, res) => {
 // POST /api/drugs
 // @access hospital_admin
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Helper: dựng mảng lô ban đầu cho thuốc mới (UC-PHA-07) ──
+// Caller truyền body.batches → chuẩn hoá; không truyền → tự sinh 1 lô ban đầu
+// từ expiryDate + stock.quantity để thuốc vào kho đã có sổ lô ngay từ đầu.
+function buildInitialBatches(body, { stockQuantity, expiryDate, manufacturer, performedBy }) {
+  const bodyBatches = Array.isArray(body?.batches) ? body.batches : null;
+  if (bodyBatches) {
+    return bodyBatches
+      .map((b, i) => ({
+        batchNumber: (b.batchNumber || `LO-${i + 1}`).trim(),
+        quantity: Number(b.quantity) || 0,
+        expiryDate: b.expiryDate ? new Date(b.expiryDate) : null,
+        supplier: (b.supplier || "").trim(),
+        receivedAt: new Date(),
+        receivedBy: performedBy || null,
+      }))
+      .filter((b) => b.quantity > 0);
+  }
+  if (Number(stockQuantity) > 0) {
+    return [{
+      batchNumber: "LO-INITIAL",
+      quantity: Number(stockQuantity),
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      supplier: (manufacturer || "").trim(),
+      receivedAt: new Date(),
+      receivedBy: performedBy || null,
+    }];
+  }
+  return [];
+}
+
 export const createDrug = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId; // Chỉ hospital_admin mới tạo → luôn dùng JWT
@@ -117,6 +148,15 @@ export const createDrug = async (req, res) => {
       return errorResponse(res, `Thuốc "${name}" đã tồn tại trong danh mục bệnh viện.`, 409);
     }
 
+    // Tồn kho theo lô (UC-PHA-07): body.batches → chuẩn hoá; không có → tự sinh
+    // lô ban đầu từ expiryDate + stock.quantity để thuốc mới vào kho đã có sổ lô.
+    const initialBatches = buildInitialBatches(req.body, {
+      stockQuantity: Number(stock?.quantity) || 0,
+      expiryDate,
+      manufacturer,
+      performedBy: req.user.id,
+    });
+
     const drug = new Drug({
       hospitalId,
       name: name.trim(),
@@ -134,8 +174,27 @@ export const createDrug = async (req, res) => {
         minStock: Number(stock?.minStock) || 10,
         lastUpdated: new Date(),
       },
+      batches: initialBatches,
       isActive: true,
     });
+
+    // Bất biến sổ sách: đã theo lô thì tổng kho = Σ lô (body.batches được ưu tiên)
+    if (initialBatches.length > 0 && Array.isArray(req.body.batches)) {
+      drug.stock.quantity = sumBatches(initialBatches);
+    }
+
+    // Nhật ký nhập kho ban đầu (TT46/2018 — mọi biến động kho phải có movement)
+    if (initialBatches.length > 0) {
+      drug.stockMovements.push({
+        type: "import",
+        quantity: sumBatches(initialBatches),
+        performedBy: req.user.id,
+        reason: "Nhập kho ban đầu khi tạo thuốc mới",
+        batchNumber: initialBatches.length === 1 ? initialBatches[0].batchNumber : null,
+        balanceAfter: sumBatches(initialBatches),
+        timestamp: new Date(),
+      });
+    }
 
     await drug.save();
     return successResponse(res, { drug }, "Thêm thuốc vào danh mục thành công!", 201);
@@ -225,9 +284,9 @@ export const deleteDrug = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DR-06: Cập nhật tồn kho (nhập thêm / xuất bớt)
+// DR-06: Cập nhật tồn kho — nhập lô mới / xuất FEFO / kiểm kê (UC-PHA-07)
 // POST /api/drugs/:id/stock
-// @access hospital_admin
+// @access hospital_admin, pharmacist, admin
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateStock = async (req, res) => {
   try {
@@ -244,49 +303,121 @@ export const updateStock = async (req, res) => {
       return errorResponse(res, "Bạn không có quyền cập nhật tồn kho thuốc này.", 403);
     }
 
-    const { action, quantity, unit, minStock } = req.body;
+    const { action, quantity, unit, minStock, batchNumber, expiryDate, supplier, reason: stockReason } = req.body;
 
-    if (!["set", "add", "subtract"].includes(action)) {
-      return errorResponse(res, "action phải là 'set', 'add' hoặc 'subtract'.", 400);
+    if (!["set", "add", "subtract", "import"].includes(action)) {
+      return errorResponse(res, "action phải là 'set', 'add', 'subtract' hoặc 'import'.", 400);
     }
 
     const qty = Number(quantity);
     if (isNaN(qty) || qty < 0) {
       return errorResponse(res, "Số lượng phải là số không âm.", 400);
     }
-
-    if (action === "set") {
-      drug.stock.quantity = qty;
-    } else if (action === "add") {
-      drug.stock.quantity += qty;
-    } else if (action === "subtract") {
-      if (drug.stock.quantity - qty < 0) {
-        return errorResponse(res, `Không đủ tồn kho. Hiện có: ${drug.stock.quantity} ${drug.stock.unit}.`, 400);
-      }
-      drug.stock.quantity -= qty;
+    if (qty === 0 && action !== "set") {
+      return errorResponse(res, "Số lượng phải lớn hơn 0.", 400);
     }
 
-    if (unit) drug.stock.unit = unit;
-    if (minStock !== undefined) drug.stock.minStock = Number(minStock);
-    drug.stock.lastUpdated = new Date();
+    const hasBatches = Array.isArray(drug.batches) && drug.batches.length > 0;
+    const now = new Date();
 
-    await drug.save();
+    if (action === "add" || action === "import") {
+      // ── NHẬP KHO THEO LÔ (UC-PHA-07): 'import' luôn tạo/gộp lô; 'add' khai báo
+      // số lô thì tạo/gộp lô; thuốc chưa theo lô và không khai báo lô → cộng tổng
+      // truyền thống (tương thích ngược).
+      if (action === "import" || batchNumber || hasBatches) {
+        const resImport = await importDrugBatch({
+          drugId: drug._id,
+          qty,
+          batchNumber: batchNumber || "",
+          expiryDate: expiryDate || null,
+          supplier: supplier || "",
+          performedBy: req.user.id,
+          reason: stockReason || (action === "import" ? "Nhập lô mới vào kho" : "Nhập thêm tồn kho"),
+          now,
+        });
+        if (!resImport.ok) {
+          return errorResponse(res, resImport.error, 400);
+        }
+      } else {
+        // Legacy: thuốc chưa chuyển sang quản lý theo lô
+        drug.stock.quantity += qty;
+        drug.stockMovements.push({
+          type: "import",
+          quantity: qty,
+          performedBy: req.user.id,
+          reason: stockReason || "Nhập thêm tồn kho",
+          batchNumber: null,
+          balanceAfter: drug.stock.quantity,
+          timestamp: now,
+        });
+      }
+    } else if (action === "subtract") {
+      // ── XUẤT KHO THEO FEFO: lô hết hạn sớm xuất trước; lô đã hết hạn bị loại
+      // khỏi mọi phép xuất (dead stock chờ tiêu hủy theo quy chế GPP).
+      const resDeduct = await deductDrugStockFEFO({
+        drugId: drug._id,
+        qty,
+        performedBy: req.user.id,
+        reason: stockReason || "Xuất kho / điều chỉnh giảm tồn kho (FEFO)",
+        type: "export",
+        now,
+      });
+      if (!resDeduct.ok) {
+        return errorResponse(res, resDeduct.error, 400);
+      }
+    } else if (action === "set") {
+      // ── KIỂM KÊ: đặt lại tổng. Thuốc đã theo lô → phân bổ lại giữ thứ tự FEFO
+      // (lột/bơm từ lô hết hạn sớm trước) để bất biến Σ lô = tổng luôn đúng.
+      const total = Number(drug.stock?.quantity) || 0;
+      if (hasBatches) {
+        const plain = drug.batches.map((b) => (b.toObject ? b.toObject() : { ...b }));
+        const sorted = sortBatchesFEFO(plain);
+        let remaining = qty;
+        drug.batches = sorted.map((b) => {
+          const orig = Number(b.quantity) || 0;
+          const take = Math.min(orig, remaining);
+          remaining -= take;
+          return { ...b, quantity: take };
+        });
+        drug.stock.quantity = sumBatches(drug.batches);
+      } else {
+        drug.stock.quantity = qty;
+      }
+      if (qty !== total) {
+        drug.stockMovements.push({
+          type: "adjustment",
+          quantity: Math.abs(qty - total),
+          performedBy: req.user.id,
+          reason: stockReason || `Kiểm kê điều chỉnh tồn kho ${total} -> ${qty}`,
+          batchNumber: hasBatches ? (drug.batches[0]?.batchNumber || null) : null,
+          balanceAfter: qty,
+          timestamp: now,
+        });
+      }
+    }
+
+    // Nạp lại bản mới nhất (service cập nhật nguyên tử thẳng DB), áp đơn vị/ngưỡng
+    const finalDrug = (await Drug.findById(drug._id)) || drug;
+    if (unit) finalDrug.stock.unit = unit;
+    if (minStock !== undefined) finalDrug.stock.minStock = Number(minStock);
+    finalDrug.stock.lastUpdated = new Date();
+    await finalDrug.save();
 
     // Kiểm tra ngưỡng cảnh báo sau khi cập nhật
-    const isLowStock = drug.stock.quantity < drug.stock.minStock;
+    const isLowStock = finalDrug.stock.quantity < finalDrug.stock.minStock;
 
-    // ── Gửi thông báo tới Hospital Admin khi hết thuốc / sắp hết thuốc ───────
+    // ── Gửi thông báo tới Hospital Admin khi hết thuốc / sắp hết thuốc ────────
     if (isLowStock) {
       try {
-        const admins = await User.find({ hospitalId: drug.hospitalId, role: "hospital_admin" }).lean();
+        const admins = await User.find({ hospitalId: finalDrug.hospitalId, role: "hospital_admin" }).lean();
         for (const admin of admins) {
           await createNotificationInternal({
-            hospitalId: drug.hospitalId,
+            hospitalId: finalDrug.hospitalId,
             recipientId: admin._id,
             type: "low_stock",
             title: "⚠️ Cảnh báo tồn kho dược phẩm",
-            message: `Thuốc "${drug.name}" trong kho chỉ còn ${drug.stock.quantity} ${drug.stock.unit} (dưới ngưỡng an toàn ${drug.stock.minStock}). Vui lòng lập kế hoạch nhập thêm.`,
-            relatedId: drug._id,
+            message: `Thuốc "${finalDrug.name}" trong kho chỉ còn ${finalDrug.stock.quantity} ${finalDrug.stock.unit} (dưới ngưỡng an toàn ${finalDrug.stock.minStock}). Vui lòng lập kế hoạch nhập thêm.`,
+            relatedId: finalDrug._id,
           });
         }
       } catch (notifErr) {
@@ -296,12 +427,12 @@ export const updateStock = async (req, res) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     return successResponse(res, {
-      drug,
+      drug: finalDrug,
       isLowStock,
       stockStatus: isLowStock ? "LOW" : "OK",
       message: isLowStock
-        ? `⚠️ Cảnh báo: Tồn kho "${drug.name}" chỉ còn ${drug.stock.quantity} ${drug.stock.unit} (dưới ngưỡng ${drug.stock.minStock}).`
-        : `✅ Cập nhật tồn kho thành công. Còn ${drug.stock.quantity} ${drug.stock.unit}.`,
+        ? `⚠️ Cảnh báo: Tồn kho "${finalDrug.name}" chỉ còn ${finalDrug.stock.quantity} ${finalDrug.stock.unit} (dưới ngưỡng ${finalDrug.stock.minStock}).`
+        : `✅ Cập nhật tồn kho thành công. Còn ${finalDrug.stock.quantity} ${finalDrug.stock.unit}.`,
     }, "Cập nhật tồn kho thành công!");
   } catch (error) {
     console.error("Lỗi updateStock:", error);
@@ -346,6 +477,90 @@ export const getLowStockAlerts = async (req, res) => {
   } catch (error) {
     console.error("Lỗi getLowStockAlerts:", error);
     return errorResponse(res, "Lỗi hệ thống.", 500);
+  }
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// DR-08: Cảnh báo thuốc sắp hết hạn THEO LÔ (UC-PHA-07)
+// GET /api/drugs/alerts/expiring?days=30
+// Liệt kê từng lô còn hàng có hạn dùng ≤ hôm nay + days, KỂ CẢ lô đã hết hạn
+// (để dược sĩ lập thủ tục kiểm định / tiêu hủy) — sắp xếp gấp nhất lên đầu.
+// @access pharmacist, hospital_admin, admin
+// ─────────────────────────────────────────────────────────────────────────────
+export const getExpiryAlerts = async (req, res) => {
+  try {
+    const hospitalId = resolveHospitalId(req);
+    if (!hospitalId) return errorResponse(res, "Không xác định được bệnh viện.", 400);
+
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const now = new Date();
+    const horizon = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    const hospOid = mongoose.Types.ObjectId.createFromHexString(hospitalId.toString());
+
+    // 1) Các lô đã quy đổi sang quản lý theo lô
+    const batched = await Drug.aggregate([
+      { $match: { hospitalId: { $eq: hospOid }, isActive: true } },
+      { $unwind: "$batches" },
+      { $match: { "batches.quantity": { $gt: 0 } } },
+      { $match: { "batches.expiryDate": { $ne: null, $lte: horizon } } },
+      {
+        $project: {
+          _id: 0,
+          drugId: "$_id",
+          name: 1,
+          category: 1,
+          unit: "$stock.unit",
+          totalStock: "$stock.quantity",
+          batchNumber: "$batches.batchNumber",
+          quantity: "$batches.quantity",
+          expiryDate: "$batches.expiryDate",
+          supplier: "$batches.supplier",
+        },
+      },
+    ]);
+
+    // 2) Thuốc chưa theo lô (legacy) — dùng hạn dùng danh mục cũ
+    const legacy = await Drug.find({
+      hospitalId: { $eq: hospOid },
+      isActive: true,
+      expiryDate: { $ne: null, $lte: horizon },
+      $or: [{ batches: { $exists: false } }, { batches: { $size: 0 } }],
+    })
+      .select("name category expiryDate stock.quantity stock.unit")
+      .lean();
+
+    const rows = [
+      ...batched,
+      ...legacy.map((d) => ({
+        drugId: d._id,
+        name: d.name,
+        category: d.category,
+        unit: d.stock?.unit,
+        totalStock: d.stock?.quantity,
+        batchNumber: null,
+        quantity: d.stock?.quantity,
+        expiryDate: d.expiryDate,
+        supplier: "",
+        legacy: true,
+      })),
+    ].map((r) => {
+      const daysLeft = Math.ceil((new Date(r.expiryDate).getTime() - now.getTime()) / 86400000);
+      return { ...r, daysLeft, isExpired: daysLeft < 0 };
+    }).sort((a, b) => a.daysLeft - b.daysLeft);
+
+    const summary = {
+      expired: rows.filter((r) => r.isExpired).length,
+      within7days: rows.filter((r) => !r.isExpired && r.daysLeft <= 7).length,
+      withinDays: rows.filter((r) => !r.isExpired).length,
+    };
+
+    return successResponse(
+      res,
+      { alerts: rows, total: rows.length, days, summary },
+      `Lấy danh sách lô thuốc sắp hết hạn (${days} ngày) thành công.`
+    );
+  } catch (error) {
+    console.error("Lỗi getExpiryAlerts:", error);
+    return errorResponse(res, "Lỗi hệ thống khi lấy cảnh báo hết hạn.", 500);
   }
 };
 
@@ -590,7 +805,23 @@ export const dispensePrescription = async (req, res) => {
         hospitalId: prescription.hospitalId,
         name: new RegExp(`^${escapedDrugName}$`, "i")
       });
-      if (drugDoc && drugDoc.expiryDate && new Date(drugDoc.expiryDate) < new Date()) {
+      if (!drugDoc) continue;
+      const itemBatches = Array.isArray(drugDoc.batches) ? drugDoc.batches : [];
+      if (itemBatches.length > 0) {
+        // Thuốc đã theo lô: FEFO tự loại lô hết hạn khỏi mọi phép xuất; chỉ chặn
+        // khi TOÀN BỘ tồn kho usable đã hết hạn (dead stock chờ tiêu hủy).
+        const usableQty = itemBatches.reduce((s, b) => {
+          const q = Number(b.quantity) || 0;
+          return s + (!b.expiryDate || new Date(b.expiryDate) >= now ? q : 0);
+        }, 0);
+        if (usableQty === 0) {
+          return errorResponse(
+            res,
+            `[CẢNH BÁO AN TOÀN DƯỢC] Thuốc '${item.name}' đã hết hạn sử dụng toàn bộ các lô còn tồn kho. Tuyệt đối cấm cấp phát cho người bệnh — đề nghị lập thủ tục tiêu hủy theo quy chế GPP!`,
+            400
+          );
+        }
+      } else if (drugDoc.expiryDate && new Date(drugDoc.expiryDate) < now) {
         return errorResponse(
           res, 
           `[CẢNH BÁO AN TOÀN DƯỢC] Thuốc '${item.name}' đã hết hạn sử dụng (Hạn dùng: ${new Date(drugDoc.expiryDate).toLocaleDateString("vi-VN")}). Tuyệt đối cấm cấp phát cho người bệnh!`, 
@@ -684,47 +915,23 @@ export const dispensePrescription = async (req, res) => {
         });
 
         if (drugDoc) {
-          const currentQty = drugDoc.stock?.quantity || 0;
-          const hasEnough = currentQty >= qty;
+          // Xuất kho THEO LÔ FEFO (lô hết hạn sớm trước, bỏ qua lô hết hạn).
+          // Thiếu kho cấp cứu: không chặn cứu người — xuất hết số usable đang có
+          // và bắn cảnh báo khẩn yêu cầu kiểm kê nhập bù (Emergency Variance).
+          const resDeduct = await deductDrugStockFEFO({
+            drugId: drugDoc._id,
+            qty,
+            performedBy: req.user.id,
+            reason: `[Cấp cứu khẩn cấp - Luật KCB] Xuất thuốc cấp cứu đơn ${prescription._id}`,
+            invoiceId: linkedInvoice?._id || null,
+            allowShortage: true,
+            now,
+          });
 
-          if (hasEnough) {
-            await Drug.findOneAndUpdate(
-              { _id: drugDoc._id, "stock.quantity": { $gte: qty } },
-              {
-                $inc: { "stock.quantity": -qty },
-                $set: { "stock.lastUpdated": new Date() },
-                $push: {
-                  stockMovements: {
-                    type: "dispense",
-                    quantity: qty,
-                    balanceAfter: currentQty - qty,
-                    invoiceId: linkedInvoice?._id || null,
-                    reason: `[Cấp cứu khẩn cấp - Luật KCB] Xuất thuốc cấp cứu đơn ${prescription._id}`,
-                    timestamp: new Date()
-                  }
-                }
-              }
-            );
-          } else {
-            // Thiếu tồn kho trong cấp cứu nguy kịch: Không chặn cứu người, xuất số hiện có và bắn cảnh báo khẩn cấp
-            console.error(`🚨 [CẤP CỨU THIẾU KHO SỔ SÁCH] Thuốc '${pDrug.name}' cần ${qty} nhưng kho chỉ có ${currentQty}.`);
-            await Drug.findOneAndUpdate(
-              { _id: drugDoc._id },
-              {
-                $set: { "stock.quantity": 0, "stock.lastUpdated": new Date() },
-                $push: {
-                  stockMovements: {
-                    type: "dispense",
-                    quantity: currentQty,
-                    balanceAfter: 0,
-                    invoiceId: linkedInvoice?._id || null,
-                    reason: `[Cấp cứu khẩn cấp - Lệch kho] Xuất ${currentQty}/${qty} hộp thuốc cấp cứu cứu người. Cần kiểm kê!`,
-                    timestamp: new Date()
-                  }
-                }
-              }
-            );
-
+          if (!resDeduct.ok) {
+            console.error(`⚠️ [EMERGENCY_DISPENSE_VARIANCE] Không trừ được kho cho thuốc '${pDrug.name}': ${resDeduct.error}`);
+          } else if (resDeduct.shortage > 0) {
+            console.error(`🚨 [CẤP CỨU THIẾU KHO SỔ SÁCH] Thuốc '${pDrug.name}' cần ${qty} nhưng chỉ xuất được ${resDeduct.dispensed}${resDeduct.expiredQty ? ` (${resDeduct.expiredQty} đơn vị kẹt trong lô hết hạn)` : ""}.`);
             try {
               const chiefs = await User.find({ hospitalId: prescription.hospitalId, role: { $in: ["hospital_admin", "admin", "pharmacist"] } });
               for (const chief of chiefs) {
@@ -733,7 +940,7 @@ export const dispensePrescription = async (req, res) => {
                   recipientId: chief._id,
                   type: "stock_shortage",
                   title: "🚨 Báo động lệch kho cấp cứu (Emergency Variance Alert)",
-                  message: `Thuốc cấp cứu '${pDrug.name}' (Đơn ${prescription._id}) đã được xuất phát cứu người bệnh nhưng sổ sách thiếu tồn kho (Yêu cầu: ${qty}, Thực tế có: ${currentQty}). Đề nghị Dược sĩ kiểm kê và nhập bù tồn kho gấp!`,
+                  message: `Thuốc cấp cứu '${pDrug.name}' (Đơn ${prescription._id}) đã được xuất phát cứu người bệnh nhưng sổ sách thiếu tồn kho (Yêu cầu: ${qty}, Thực tế xuất: ${resDeduct.dispensed}). Đề nghị Dược sĩ kiểm kê và nhập bù tồn kho gấp!`,
                   relatedId: prescription._id
                 });
               }

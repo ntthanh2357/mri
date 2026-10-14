@@ -19,7 +19,8 @@ import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
-import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package } from 'lucide-react';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package, Clock } from 'lucide-react';
+import { batchesOf, batchCountOf, daysLeftOf, displayExpiry, earliestActiveBatch, expiryStatus } from '../utils/batchUtils';
 
 const CATEGORY_LABELS = {
   chemotherapy: 'Hóa trị & Điều trị đích U Não',
@@ -52,10 +53,14 @@ export default function DrugManagementScreen({ navigation }) {
   const fluidTable = width >= Layout.wide;
   const col = (w, flex) => (fluidTable ? { flex, minWidth: w } : { width: w });
 
-  const [activeTab, setActiveTab] = useState('list'); // 'list' | 'alerts'
+  // Cho phép menu điều hướng thẳng tab (params.tab: 'alerts' | 'expiry')
+  const [activeTab, setActiveTab] = useState(['alerts', 'expiry'].includes(route?.params?.tab) ? route.params.tab : 'list'); // 'list' | 'alerts' | 'expiry'
   const [currentUser, setCurrentUser] = useState(null);
   const [drugs, setDrugs] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  // UC-PHA-07: lô sắp hết hạn & chi tiết lô đang mở rộng
+  const [expiring, setExpiring] = useState([]);
+  const [expandedDrugId, setExpandedDrugId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,6 +91,10 @@ export default function DrugManagementScreen({ navigation }) {
   const [stockDrug, setStockDrug] = useState(null);
   const [stockAction, setStockAction] = useState('add'); // 'add' | 'subtract' | 'set'
   const [stockQty, setStockQty] = useState('');
+  // UC-PHA-07: thông tin lô khi nhập kho
+  const [stockBatchNumber, setStockBatchNumber] = useState('');
+  const [stockExpiryDate, setStockExpiryDate] = useState('');
+  const [stockSupplier, setStockSupplier] = useState('');
 
   // Fetch Current User
   const fetchCurrentUser = async () => {
@@ -131,6 +140,18 @@ export default function DrugManagementScreen({ navigation }) {
     }
   };
 
+  // Fetch Expiry Alerts theo lô (UC-PHA-07)
+  const fetchExpiryAlerts = async () => {
+    try {
+      const res = await get('/api/drugs/alerts/expiring?days=30');
+      if (res && res.success) {
+        setExpiring(res.data?.alerts || []);
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh sách lô sắp hết hạn:', err);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -138,9 +159,14 @@ export default function DrugManagementScreen({ navigation }) {
   useEffect(() => {
     fetchDrugs();
     fetchAlerts();
+    fetchExpiryAlerts();
   }, [searchQuery, selectedCategory]);
 
+  // Phân quyền theo đặc tả vai trò (UC-PHA-07): dược sĩ điều chỉnh kho
+  // (nhập lô / xuất FEFO / kiểm kê); hospital_admin giữ CRUD danh mục thuốc.
   const isHospitalAdmin = currentUser?.role === 'hospital_admin';
+  const canManageCatalog = ['hospital_admin', 'admin', 'system_admin'].includes(currentUser?.role);
+  const canManageStock = canManageCatalog || currentUser?.role === 'pharmacist';
 
   // Handle Create or Update Drug
   const handleSaveDrug = async () => {
@@ -231,14 +257,24 @@ export default function DrugManagementScreen({ navigation }) {
       const res = await post(`/api/drugs/${stockDrug._id}/stock`, {
         action: stockAction,
         quantity: Number(stockQty),
+        // UC-PHA-07: khai báo lô khi nhập kho (để trống → hệ thống tự sinh lô mới)
+        ...(stockAction === 'add' && stockBatchNumber.trim() ? {
+          batchNumber: stockBatchNumber.trim(),
+          expiryDate: stockExpiryDate ? new Date(stockExpiryDate).toISOString() : undefined,
+          supplier: stockSupplier.trim() || undefined,
+        } : {}),
       });
 
       if (res && res.success) {
         Alert.alert('Thành công', res.message || 'Cập nhật tồn kho thành công.');
         setShowStockModal(false);
         setStockQty('');
+        setStockBatchNumber('');
+        setStockExpiryDate('');
+        setStockSupplier('');
         fetchDrugs();
         fetchAlerts();
+        fetchExpiryAlerts();
         // Update selected drug in view if applicable
         if (selectedDrug?._id === stockDrug._id) {
           setSelectedDrug(res.data?.drug);
@@ -291,6 +327,9 @@ export default function DrugManagementScreen({ navigation }) {
     setStockDrug(drug);
     setStockAction('add');
     setStockQty('');
+    setStockBatchNumber('');
+    setStockExpiryDate('');
+    setStockSupplier('');
     setShowStockModal(true);
   };
 
@@ -299,11 +338,11 @@ export default function DrugManagementScreen({ navigation }) {
       <SafeAreaView style={styles.container}>
         <PageHeader
           bar
-          title={isHospitalAdmin ? 'Kho thuốc' : 'Danh mục thuốc'}
-          subtitle={isHospitalAdmin
-            ? 'Danh mục thuốc, tồn kho, hạn dùng và tương tác thuốc của bệnh viện.'
+          title={canManageStock ? 'Kho thuốc' : 'Danh mục thuốc'}
+          subtitle={canManageStock
+            ? 'Danh mục thuốc, tồn kho theo lô (FEFO), hạn dùng và tương tác thuốc của bệnh viện.'
             : 'Tra cứu thuốc đang có, tồn kho và hạn dùng.'}
-          actions={isHospitalAdmin && !showForm && !isEditing ? (
+          actions={canManageCatalog && !showForm && !isEditing ? (
             <HeaderAction variant="primary" icon="plus" label="Thêm thuốc" onPress={() => { setActiveTab('list'); setShowForm(true); }} />
           ) : null}
           below={
@@ -311,6 +350,7 @@ export default function DrugManagementScreen({ navigation }) {
               tabs={[
                 { key: 'list', label: 'Danh mục và tồn kho' },
                 { key: 'alerts', label: 'Cảnh báo tồn kho thấp', count: alerts.length || null },
+                { key: 'expiry', label: 'Hết hạn theo lô', count: expiring.length || null },
               ]}
               value={activeTab}
               onChange={setActiveTab}
@@ -587,7 +627,7 @@ export default function DrugManagementScreen({ navigation }) {
                             <View style={[styles.tableHead, col(110, 0.9)]}>
                               <Text style={styles.tableHeadText}>Hạn dùng</Text>
                             </View>
-                            {isHospitalAdmin && (
+                            {canManageStock && (
                               <View style={[styles.tableHead, { width: 140, alignItems: 'flex-end' }]}>
                                 <Text style={styles.tableHeadText}>Thao tác</Text>
                               </View>
@@ -599,13 +639,28 @@ export default function DrugManagementScreen({ navigation }) {
                             const isLow = item.stock?.quantity < item.stock?.minStock;
                             const catStyle = CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other;
                             const priceStr = item.price ? item.price.toLocaleString('vi-VN') : '—';
-                            const dateStr = item.expiryDate
-                              ? new Date(item.expiryDate).toLocaleDateString('vi-VN')
-                              : 'Không thời hạn';
+                            // UC-PHA-07: hiển thị theo lô — đếm lô, lô sớm nhất, hạn dùng hiển thị
+                            const nBatches = batchCountOf(item);
+                            const earliest = earliestActiveBatch(item);
+                            const earliestDays = earliest?.expiryDate ? daysLeftOf(earliest.expiryDate) : null;
+                            const dateStr = displayExpiry(item);
+                            const isExpanded = expandedDrugId === item._id;
                             return (
-                              <View key={item._id} style={styles.tableTr}>
+                              <View key={item._id}>
+                              <View style={styles.tableTr}>
                                 <View style={[styles.tableCell, col(180, 2.2)]}>
-                                  <Text style={styles.drugNameText}>{item.name}</Text>
+                                  <TouchableOpacity
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                    onPress={() => setExpandedDrugId(isExpanded ? null : item._id)}
+                                    disabled={nBatches === 0}
+                                  >
+                                    <Text style={styles.drugNameText}>{item.name}</Text>
+                                    {nBatches > 0 && (
+                                      <View style={styles.batchCountTag}>
+                                        <Text style={styles.batchCountTagText}>{nBatches} lô {isExpanded ? '▲' : '▼'}</Text>
+                                      </View>
+                                    )}
+                                  </TouchableOpacity>
                                   {item.activeIngredient ? (
                                     <Text style={styles.ingredientText}>({item.activeIngredient})</Text>
                                   ) : null}
@@ -645,9 +700,21 @@ export default function DrugManagementScreen({ navigation }) {
                                   <Text style={styles.priceText}>{priceStr}đ</Text>
                                 </View>
                                 <View style={[styles.tableCell, col(110, 0.9)]}>
-                                  <Text style={styles.expiryText}>{dateStr}</Text>
+                                  <Text style={[styles.expiryText, earliestDays !== null && expiryStatus(earliestDays) === 'expired' && styles.expiryTextDanger]}>
+                                    {dateStr}
+                                  </Text>
+                                  {earliestDays !== null && earliestDays <= 30 && (
+                                    <Text style={[
+                                      styles.expiryCountdown,
+                                      expiryStatus(earliestDays) === 'expired' && styles.expiryCountdownExpired,
+                                      expiryStatus(earliestDays) === 'critical' && styles.expiryCountdownCritical,
+                                      expiryStatus(earliestDays) === 'warning' && styles.expiryCountdownWarn,
+                                    ]}>
+                                      {earliestDays < 0 ? `hết hạn ${Math.abs(earliestDays)} ngày` : `còn ${earliestDays} ngày`}
+                                    </Text>
+                                  )}
                                 </View>
-                                {isHospitalAdmin && (
+                                {canManageStock && (
                                   <View style={[styles.tableCell, { width: 140, flexDirection: 'row', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }]}>
                                     <TouchableOpacity
                                       onPress={() => openStockModal(item)}
@@ -656,20 +723,68 @@ export default function DrugManagementScreen({ navigation }) {
                                       <Text style={{ fontSize: 12 }}>➕</Text>
                                       <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity
-                                      onPress={() => startEdit(item)}
-                                      style={styles.tblBtnEdit}
-                                    >
-                                      <Text style={{ fontSize: 12 }}>✏️</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                      onPress={() => handleDeleteDrug(item._id, item.name)}
-                                      style={styles.tblBtnDel}
-                                    >
-                                      <Text style={{ fontSize: 12 }}>🗑️</Text>
-                                    </TouchableOpacity>
+                                    {canManageCatalog && (
+                                      <TouchableOpacity
+                                        onPress={() => startEdit(item)}
+                                        style={styles.tblBtnEdit}
+                                      >
+                                        <Text style={{ fontSize: 12 }}>✏️</Text>
+                                      </TouchableOpacity>
+                                    )}
+                                    {canManageCatalog && (
+                                      <TouchableOpacity
+                                        onPress={() => handleDeleteDrug(item._id, item.name)}
+                                        style={styles.tblBtnDel}
+                                      >
+                                        <Text style={{ fontSize: 12 }}>🗑️</Text>
+                                      </TouchableOpacity>
+                                    )}
                                   </View>
                                 )}
+                              </View>
+                              {isExpanded && nBatches > 0 && (
+                                <View style={styles.batchPanel}>
+                                  <Text style={styles.batchPanelTitle}>Tồn kho theo lô — xuất theo FEFO (hết hạn sớm trước)</Text>
+                                  {batchesOf(item).map((b, bi) => {
+                                    const dLeft = daysLeftOf(b.expiryDate);
+                                    const st = expiryStatus(dLeft);
+                                    const qty = Number(b.quantity) || 0;
+                                    return (
+                                      <View key={b.batchNumber || `batch-${bi}`} style={styles.batchRow}>
+                                        <View style={{ flex: 1.1 }}>
+                                          <Text style={styles.batchNumberText}>{b.batchNumber || 'Không rõ lô'}</Text>
+                                          <Text style={styles.batchSubText}>{b.supplier || '—'}</Text>
+                                        </View>
+                                        <View style={{ flex: 0.6, alignItems: 'flex-end' }}>
+                                          <Text style={[styles.batchQtyText, qty === 0 && { color: '#94A3B8' }]}>{qty} {item.stock?.unit}</Text>
+                                        </View>
+                                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                          <Text style={styles.batchExpiryText}>
+                                            {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString('vi-VN') : 'Không thời hạn'}
+                                          </Text>
+                                          {dLeft !== null && (
+                                            <View style={[
+                                              styles.expiryBadge,
+                                              st === 'expired' && styles.expiryBadgeExpired,
+                                              st === 'critical' && styles.expiryBadgeCritical,
+                                              st === 'warning' && styles.expiryBadgeWarn,
+                                            ]}>
+                                              <Text style={[
+                                                styles.expiryBadgeText,
+                                                st === 'expired' && styles.expiryBadgeTextExpired,
+                                                st === 'critical' && styles.expiryBadgeTextCritical,
+                                                st === 'warning' && styles.expiryBadgeTextWarn,
+                                              ]}>
+                                                {dLeft < 0 ? `ĐÃ HẾT HẠN ${Math.abs(dLeft)} ngày` : `còn ${dLeft} ngày`}
+                                              </Text>
+                                            </View>
+                                          )}
+                                        </View>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
                               </View>
                             );
                           })}
@@ -679,6 +794,81 @@ export default function DrugManagementScreen({ navigation }) {
                   )}
                 </View>
               </View>
+            </View>
+          ) : activeTab === 'expiry' ? (
+            // Expiry Tab (UC-PHA-07 — lô sắp hết hạn & đã hết hạn)
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Clock size={16} color="#B91C1C" />
+                <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Lô thuốc sắp hết hạn & đã hết hạn</Text>
+              </View>
+              <Text style={styles.cardSub}>
+                Các lô còn hàng có hạn dùng trong 30 ngày tới, kể cả lô đã hết hạn (dead stock chờ kiểm định / tiêu hủy theo quy chế GPP). Mọi lần xuất kho đều theo FEFO và tuyệt đối không cấp phát lô đã hết hạn.
+              </Text>
+
+              {expiring.length === 0 ? (
+                <View style={[styles.emptyBox, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 16 }}>✅</Text>
+                  <Text style={[styles.emptyText, { color: '#059669', marginBottom: 0 }]}>
+                    Không có lô nào sắp hết hạn trong 30 ngày tới.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.alertsList}>
+                  {expiring.map((row, idx) => {
+                    const st = expiryStatus(row.daysLeft);
+                    return (
+                      <View
+                        key={`${row.drugId}-${row.batchNumber || 'legacy'}-${idx}`}
+                        style={[styles.alertItem, !row.isExpired && { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.alertDrugName, !row.isExpired && { color: '#92400E' }]}>{row.name}</Text>
+                          <Text style={[styles.alertDetails, !row.isExpired && { color: '#A16207' }]}>
+                            Lô: <Text style={{ fontWeight: 'bold' }}>{row.batchNumber || 'Không rõ lô'}</Text> | Tồn lô:{' '}
+                            <Text style={{ fontWeight: 'bold' }}>{row.quantity} {row.unit}</Text>
+                            {row.supplier ? ` | NCC: ${row.supplier}` : ''}
+                          </Text>
+                          <Text style={[styles.alertStockText, !row.isExpired && { color: '#A16207' }]}>
+                            Hạn dùng: {row.expiryDate ? new Date(row.expiryDate).toLocaleDateString('vi-VN') : '—'}
+                            {row.legacy ? ' | (Thuốc chưa theo dõi lô — dùng hạn dùng danh mục)' : ''}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                          <View
+                            style={[
+                              styles.expiryBadge,
+                              st === 'expired' && styles.expiryBadgeExpired,
+                              st === 'critical' && styles.expiryBadgeCritical,
+                              st === 'warning' && styles.expiryBadgeWarn,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.expiryBadgeText,
+                                st === 'expired' && styles.expiryBadgeTextExpired,
+                                st === 'critical' && styles.expiryBadgeTextCritical,
+                                st === 'warning' && styles.expiryBadgeTextWarn,
+                              ]}
+                            >
+                              {row.isExpired ? `ĐÃ HẾT HẠN ${Math.abs(row.daysLeft)} ngày` : `còn ${row.daysLeft} ngày`}
+                            </Text>
+                          </View>
+                          {canManageStock && (
+                            <TouchableOpacity
+                              style={[styles.alertActionBtn, { backgroundColor: '#0E7490', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                              onPress={() => openStockModal(drugs.find(d => d._id === row.drugId) || { _id: row.drugId, name: row.name, stock: { unit: row.unit, quantity: row.totalStock } })}
+                            >
+                              <Plus size={12} color="#FFFFFF" />
+                              <Text style={styles.alertActionBtnText}>Nhập lô thay thế</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           ) : (
             // Alerts Tab
@@ -715,7 +905,7 @@ export default function DrugManagementScreen({ navigation }) {
                         <Text style={styles.alertStockText}>
                           Tồn kho hiện tại: {item.stock?.quantity} / Ngưỡng: {item.stock?.minStock}
                         </Text>
-                        {isHospitalAdmin && (
+                        {canManageStock && (
                           <TouchableOpacity
                             style={[styles.alertActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                             onPress={() => openStockModal(item)}
@@ -791,6 +981,52 @@ export default function DrugManagementScreen({ navigation }) {
                   onChangeText={setStockQty}
                 />
               </View>
+
+              {stockAction === 'add' && (
+                <View style={styles.batchFieldGroup}>
+                  <Text style={styles.batchFieldGroupLabel}>Nhập kho theo lô (UC-PHA-07) — điền số lô để truy vết hạn dùng</Text>
+                  <View style={styles.fieldRow}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.label}>Số lô</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="VD: LO-DPK-0326 (trống = tự sinh)"
+                        placeholderTextColor={Colors.secondary}
+                        value={stockBatchNumber}
+                        onChangeText={setStockBatchNumber}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Hạn dùng lô (YYYY-MM-DD)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="VD: 2028-06-30"
+                        placeholderTextColor={Colors.secondary}
+                        value={stockExpiryDate}
+                        onChangeText={setStockExpiryDate}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>Nhà cung cấp</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="VD: Sanofi Vietnam"
+                      placeholderTextColor={Colors.secondary}
+                      value={stockSupplier}
+                      onChangeText={setStockSupplier}
+                    />
+                  </View>
+                  <Text style={styles.batchHint}>
+                    Nhập cùng số lô đã có → cộng dồn vào lô đó (cập nhật hạn dùng nếu khai mới).
+                  </Text>
+                </View>
+              )}
+              {stockAction === 'subtract' && (
+                <Text style={styles.batchHint}>
+                  Hệ thống tự xuất theo nguyên tắc FEFO: lô hết hạn sớm nhất được xuất trước; lô đã hết hạn bị loại khỏi xuất kho (chờ tiêu hủy).
+                </Text>
+              )}
 
               <View style={styles.modalFooter}>
                 <TouchableOpacity
@@ -923,6 +1159,33 @@ const styles = StyleSheet.create({
   alertStockText: { fontSize: 12, color: '#7F1D1D' },
   alertActionBtn: { backgroundColor: '#B91C1C', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   alertActionBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
+
+  // UC-PHA-07: chip số lô + panel chi tiết lô trong bảng danh mục
+  batchCountTag: { backgroundColor: '#E0F2FE', paddingVertical: 1, paddingHorizontal: 5, borderRadius: 4 },
+  batchCountTagText: { color: '#0369A1', fontSize: 11, fontWeight: 'bold' },
+  expiryTextDanger: { color: '#B91C1C', fontWeight: 'bold' },
+  expiryCountdown: { fontSize: 11, marginTop: 2, color: '#64748B' },
+  expiryCountdownExpired: { color: '#B91C1C', fontWeight: 'bold' },
+  expiryCountdownCritical: { color: '#C2410C', fontWeight: 'bold' },
+  expiryCountdownWarn: { color: '#B45309' },
+  batchPanel: { backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingHorizontal: 14, paddingVertical: 10 },
+  batchPanelTitle: { fontSize: 10, fontWeight: 'bold', color: '#0369A1', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.3 },
+  batchRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  batchNumberText: { fontSize: 12, fontWeight: 'bold', color: '#0F2B46' },
+  batchSubText: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  batchQtyText: { fontSize: 12, fontWeight: 'bold', color: '#334155' },
+  batchExpiryText: { fontSize: 12, color: '#475569' },
+  expiryBadge: { paddingVertical: 2, paddingHorizontal: 6, borderRadius: 4, backgroundColor: '#F1F5F9', marginTop: 2 },
+  expiryBadgeExpired: { backgroundColor: '#FEE2E2' },
+  expiryBadgeCritical: { backgroundColor: '#FFEDD5' },
+  expiryBadgeWarn: { backgroundColor: '#FEF9C3' },
+  expiryBadgeText: { fontSize: 10, fontWeight: 'bold', color: '#475569' },
+  expiryBadgeTextExpired: { color: '#991B1B' },
+  expiryBadgeTextCritical: { color: '#C2410C' },
+  expiryBadgeTextWarn: { color: '#A16207' },
+  batchFieldGroup: { backgroundColor: '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD', borderRadius: 8, padding: 10, marginBottom: 14 },
+  batchFieldGroupLabel: { fontSize: 11, fontWeight: 'bold', color: '#0369A1', marginBottom: 8 },
+  batchHint: { fontSize: 11, color: '#64748B', marginBottom: 12, lineHeight: 15 },
   
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },

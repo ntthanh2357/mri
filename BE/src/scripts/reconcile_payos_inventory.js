@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { Invoice } from "../modules/billing/models/invoice.model.js";
 import { Drug } from "../modules/pharmacy/models/drug.model.js";
+import { deductDrugStockFEFO } from "../modules/pharmacy/services/batchStock.service.js";
 import { acquireDistributedLock, releaseDistributedLock } from "../models/systemLock.model.js";
 import payos from "../utils/payos.js";
 import { deductStockForInvoice } from "../modules/billing/invoice.controller.js";
@@ -98,33 +99,26 @@ export async function reconcilePayOSInventory({ dryRun = true } = {}) {
               continue;
             }
 
-            const updated = await Drug.findOneAndUpdate(
-              { _id: drug._id, "stock.quantity": { $gte: item.quantity } },
-              {
-                $inc: { "stock.quantity": -item.quantity },
-                $set: { "stock.lastUpdated": new Date() },
-                $push: {
-                  stockMovements: {
-                    type: "export",
-                    quantity: item.quantity,
-                    balanceAfter: drug.stock.quantity - item.quantity,
-                    invoiceId: inv._id,
-                    reason: `[Đối soát PayOS] Trừ bù tồn kho lịch sử cho hóa đơn ${inv._id} (Mã GD: ${inv.orderCode})`,
-                    timestamp: new Date()
-                  }
-                }
-              },
-              { new: true }
-            );
+            // Trừ bù THEO LÔ FEFO (UC-PHA-07) qua service dùng chung để bất biến
+            // Σ lô = tổng luôn đúng; lô hết hạn bị loại, thiếu usable → báo audit tay.
+            const deductRes = await deductDrugStockFEFO({
+              drugId: drug._id,
+              qty: item.quantity,
+              reason: `[Đối soát PayOS] Trừ bù tồn kho lịch sử cho hóa đơn ${inv._id} (Mã GD: ${inv.orderCode})`,
+              type: "export",
+              invoiceId: inv._id,
+            });
 
-            if (updated) {
+            if (deductRes.ok && deductRes.dispensed > 0) {
               await Invoice.findByIdAndUpdate(inv._id, {
                 $set: {
                   stockDeductionStatus: "DEDUCTED",
-                  paymentNotes: (inv.paymentNotes || "") + " | [Reconciled] Đã trừ bù tồn kho lịch sử."
+                  paymentNotes: (inv.paymentNotes || "") + " | [Reconciled] Đã trừ bù tồn kho lịch sử (FEFO theo lô)."
                 }
               });
-              console.log(`   ✅ Đã trừ bù ${item.quantity} ${drug.stock.unit} "${drug.name}". Tồn kho mới: ${updated.stock.quantity}`);
+              console.log(`   ✅ Đã trừ bù ${deductRes.dispensed} ${drug.stock.unit} "${drug.name}" theo lô ${(deductRes.breakdown || []).map(b => b.batchNumber || "legacy").join("+")}. Tồn kho mới: ${deductRes.balanceAfter}`);
+            } else {
+              console.error(`   ⚠️ KHÔNG TRỪ ĐƯỢC BÙ cho "${drug.name}": ${deductRes.ok ? "kho usable rỗng" : deductRes.error}. Cần dược sĩ kiểm kê đối soát tay!`);
             }
           }
         }

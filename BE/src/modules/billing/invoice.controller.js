@@ -7,6 +7,7 @@ import payos from "../../utils/payos.js";
 import { User } from "../auth/models/user.model.js";
 import { Drug } from "../pharmacy/models/drug.model.js";
 import { Prescription } from "../pharmacy/models/prescription.model.js";
+import { deductDrugStockFEFO, restockDrugBatch } from "../pharmacy/services/batchStock.service.js";
 import { executeWithTransaction } from "../../utils/transaction.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
@@ -16,8 +17,10 @@ import { tenantStorage } from "../../middlewares/tenant.middleware.js";
 /**
  * Hàm trừ kho dùng chung cho toàn bộ các luồng thanh toán (payInvoice, createAndPayInvoice, handlePayOSWebhook)
  * Đảm bảo:
- * 1. Trừ kho nguyên tử với điều kiện $gte (chống race condition, âm kho).
- * 2. Lấy giá trị sau cập nhật (new: true) để ghi nhận balanceAfter chính xác tuyệt đối.
+ * 1. Trừ kho THEO LÔ nguyên tắc FEFO (UC-PHA-07): lô hết hạn sớm xuất trước,
+ *    lô đã hết hạn bị loại khỏi xuất; guard đồng thời + thử lại trong service.
+ * 2. Ghi nguồn lô đã xuất lên từng dòng hóa đơn (item.batches) để hoàn tiền
+ *    trước khi phát thuốc hoàn vị về ĐÚNG lô cũ (UC-PHA-06).
  * 3. Hỗ trợ truyền session trong transaction ACID.
  */
 export const deductStockForInvoice = async ({ invoice, session = null, performedBy = null, reason = "" }) => {
@@ -32,7 +35,6 @@ export const deductStockForInvoice = async ({ invoice, session = null, performed
     return { success: true, deductedItems: [], isAlreadyDeducted: true };
   }
 
-  const sessOpts = session ? { session } : {};
   const deductedItems = [];
 
   for (const item of drugItems) {
@@ -60,47 +62,44 @@ export const deductStockForInvoice = async ({ invoice, session = null, performed
       };
     }
 
-    // 1. Trừ kho nguyên tử và trả về document sau update để lấy tồn kho tức thời (balanceAfter)
-    const updatedDrug = await Drug.findOneAndUpdate(
-      { _id: drugDoc._id, "stock.quantity": { $gte: qty } },
-      {
-        $inc: { "stock.quantity": -qty },
-        $set: { "stock.lastUpdated": new Date() }
-      },
-      { new: true, ...sessOpts }
-    );
+    // 1. Trừ kho theo LÔ nguyên tắc FEFO (UC-PHA-07): lô hết hạn sớm xuất trước,
+    //    lô đã hết hạn bị loại; guard đồng thời + vòng thử lại nằm trong service.
+    //    Đồng thời ghi nguồn lô đã xuất lên dòng hóa đơn (item.batches) để hoàn
+    //    tiền trước khi phát thuốc trả về ĐÚNG lô cũ (UC-PHA-06).
+    const deductRes = await deductDrugStockFEFO({
+      drugId: drugDoc._id,
+      qty,
+      performedBy,
+      reason: reason || `Xuất thuốc theo hóa đơn ${invoice._id}`,
+      type: "dispense",
+      invoiceId: invoice._id,
+      visitId: invoice.visitId || null,
+      session,
+    });
 
-    if (!updatedDrug) {
+    if (!deductRes.ok) {
       return {
         success: false,
-        code: "STOCK_SHORTAGE",
-        error: `Thuốc '${drugDoc.name}' thiếu tồn kho để xuất (Cần: ${qty}, Hiện có: ${drugDoc.stock?.quantity || 0}).`,
+        code: deductRes.code,
+        error: deductRes.code === "DRUG_NOT_FOUND"
+          ? `Thuốc '${item.drugName || item.description}' không tồn tại trong danh mục dược phẩm của bệnh viện.`
+          : deductRes.error,
         failedItem: item
       };
     }
 
-    // 2. Ghi nhận nhật ký biến động kho với running balance (balanceAfter) chính xác tuyệt đối
-    const balanceAfter = updatedDrug.stock.quantity;
-    await Drug.updateOne(
-      { _id: updatedDrug._id },
-      {
-        $push: {
-          stockMovements: {
-            type: "dispense",
-            quantity: qty,
-            balanceAfter: balanceAfter,
-            invoiceId: invoice._id,
-            visitId: invoice.visitId || null,
-            performedBy: performedBy || null,
-            reason: reason || `Xuất thuốc theo hóa đơn ${invoice._id}`,
-            timestamp: new Date()
-          }
-        }
-      },
-      sessOpts
-    );
+    // Ghi nguồn lô đã xuất lên dòng hóa đơn để hoàn vị đúng lô khi refund
+    if ((deductRes.breakdown || []).length > 0) {
+      item.batches = deductRes.breakdown.map((b) => ({ batchNumber: b.batchNumber, quantity: b.quantity }));
+    }
 
-    deductedItems.push({ drugId: updatedDrug._id, name: updatedDrug.name, quantity: qty, balanceAfter });
+    deductedItems.push({
+      drugId: drugDoc._id,
+      name: drugDoc.name,
+      quantity: qty,
+      balanceAfter: deductRes.balanceAfter,
+      batches: item.batches || [],
+    });
   }
 
   return { success: true, deductedItems };
@@ -201,7 +200,7 @@ export const createAndPayInvoice = async (req, res) => {
           existingInvoice.items = items;
           existingInvoice.totalAmount = totalAmount;
           existingInvoice.status = "đã thanh toán";
-          existingInvoice.stockDeductionStatus = "DEDUCTED";
+          // ⚠️ Không gán DEDUCTED trước — hàm trừ kho sẽ short-circuit
           existingInvoice.paymentMethod = mappedMethod;
           existingInvoice.paidAt = new Date();
           invoice = existingInvoice;
@@ -213,7 +212,7 @@ export const createAndPayInvoice = async (req, res) => {
             items,
             totalAmount,
             status: "đã thanh toán",
-            stockDeductionStatus: "DEDUCTED",
+            stockDeductionStatus: "PENDING",
             paymentMethod: mappedMethod,
             paidAt: new Date()
           });
@@ -230,6 +229,9 @@ export const createAndPayInvoice = async (req, res) => {
         if (!stockRes.success) {
           throw new Error(stockRes.error);
         }
+
+        // Chỉ phong cờ DEDUCTED sau khi trừ kho thành công (hoặc xác nhận đã trừ)
+        invoice.stockDeductionStatus = "DEDUCTED";
 
         await invoice.save(sessOpts);
 
@@ -345,6 +347,31 @@ export const payInvoice = async (req, res) => {
         isBilled: { $ne: true }
       });
 
+      // 1b. Fallback (UC-PHA-06 — độ bền linkage): hóa đơn thuốc được lập TRƯỚC
+      // khi visit chốt thời gian (đơn thuốc kê xong mới mở lượt khám, hoặc seed
+      // tạo prescription trước visit) khiến truy vấn theo mốc thời gian trượt và
+      // pay âm thầm bỏ mốc trừ kho. Khi đó đối chiếu theo chính các dòng thuốc
+      // của hóa đơn: khớp đơn chưa thanh toán của cùng bệnh nhân có thuốc trùng
+      // tên — bảo đảm FEFO vẫn chạy và item.batches được ghi cho hoàn vị sau này.
+      if (!prescription) {
+        const invDrugNames = (invoice.items || [])
+          .filter(it => it.type === "drug")
+          .map(it => (it.drugName || it.description || "").trim().toLowerCase())
+          .filter(Boolean);
+        if (invDrugNames.length > 0) {
+          const candidates = await Prescription.find({
+            patient_id: visit.patientId,
+            isBilled: { $ne: true },
+          }).sort({ createdAt: -1 });
+          prescription = candidates.find(p =>
+            (p.drugs || []).some(d => invDrugNames.includes((d.name || "").trim().toLowerCase()))
+          ) || null;
+          if (prescription) {
+            console.log(`[PayInvoice] Linkage fallback theo dòng thuốc hóa đơn — khớp đơn thuốc ${prescription._id} (truy vấn theo mốc thời gian không khớp).`);
+          }
+        }
+      }
+
       if (prescription && prescription.drugs && prescription.drugs.length > 0) {
         // Lọc bỏ tất cả các khoản thu loại "drug" cũ để tránh trùng lặp hoặc sai lệch khi chỉnh sửa đơn thuốc
         invoice.items = invoice.items.filter(item => item.type !== "drug");
@@ -389,7 +416,9 @@ export const payInvoice = async (req, res) => {
           mappedMethod = "chuyển khoản";
         }
         invoice.status = "đã thanh toán";
-        invoice.stockDeductionStatus = "DEDUCTED";
+        // ⚠️ stockDeductionStatus KHÔNG gán ở đây — phải gán SAU khi trừ kho
+        // thật sự (deductStockForInvoice short-circuit khi thấy DEDUCTED; gán trước
+        // khiến thanh toán âm thầm bỏ trừ kho → refund sau đó sinh tồn kho ma).
         invoice.paymentMethod = mappedMethod;
         invoice.paidAt = new Date();
 
@@ -406,6 +435,14 @@ export const payInvoice = async (req, res) => {
 
           if (!stockRes.success) {
             throw new Error(stockRes.error);
+          }
+
+          // Chỉ phong cờ DEDUCTED sau khi trừ kho thành công (hoặc xác nhận đã trừ)
+          invoice.stockDeductionStatus = "DEDUCTED";
+          if (stockRes.isAlreadyDeducted) {
+            console.log(`[PayInvoice] Hóa đơn ${invoice._id} đã trừ kho từ trước (idempotent) — không trừ lại.`);
+          } else if ((stockRes.deductedItems || []).length > 0) {
+            console.log(`[PayInvoice] Đã trừ kho ${(stockRes.deductedItems || []).length} dòng thuốc theo lô FEFO cho hóa đơn ${invoice._id}.`);
           }
 
           prescription.isBilled = true;
@@ -1326,27 +1363,21 @@ export const refundInvoice = async (req, res) => {
                 }
               });
             } else {
-              // Thuốc chưa xuất kho vật lý (bệnh nhân hủy thanh toán trước khi quầy dược phát thuốc) -> Hoàn lại kho cấp phát an toàn
+              // Thuốc chưa xuất kho vật lý (bệnh nhân hủy thanh toán trước khi quầy dược phát thuốc)
+              // → Hoàn vị về ĐÚNG lô đã xuất (UC-PHA-06): item.batches ghi nguồn lô tại
+              // thời điểm trừ kho; hóa đơn cũ không có breakdown → lô hết hạn sớm nhất.
               restockedCount++;
-              bulkOps.push({
-                updateOne: {
-                  filter: { _id: item.drugId, hospitalId: invoice.hospitalId },
-                  update: {
-                    $inc: { "stock.quantity": qty },
-                    $set: { "stock.lastUpdated": new Date() },
-                    $push: {
-                      stockMovements: {
-                        type: "cancel_restock",
-                        quantity: qty,
-                        invoiceId: invoice._id,
-                        performedBy: req.user.id,
-                        reason: `[Hủy trước khi phát thuốc] Hoàn kho cấp phát chính: ${refundReason || 'Hủy đơn thuốc'}`,
-                        timestamp: new Date()
-                      }
-                    }
-                  }
-                }
+              const restockRes = await restockDrugBatch({
+                drugId: item.drugId,
+                qty,
+                breakdown: Array.isArray(item.batches) && item.batches.length > 0 ? item.batches : null,
+                performedBy: req.user.id,
+                reason: `[Hủy trước khi phát thuốc] Hoàn kho cấp phát chính: ${refundReason || 'Hủy đơn thuốc'}`,
+                invoiceId: invoice._id,
               });
+              if (!restockRes.ok) {
+                console.error(`⚠️ [RefundInvoice] Hoàn vị kho thất bại cho thuốc '${item.drugName || item.description}': ${restockRes.error}`);
+              }
             }
           } else {
             // Fallback an toàn cho các hóa đơn cũ lưu dạng text description
@@ -1414,20 +1445,9 @@ export const refundInvoice = async (req, res) => {
       console.warn("⚠️ Lỗi ghi recordAuditLog cho refundInvoice:", auditErr.message);
     }
 
-    // 6. Ghi EMRVersion
-    try {
-      await EMRVersion.create({
-        hospitalId: req.user.hospitalId,
-        recordId: invoice._id,
-        recordType: "Invoice",
-        version: 2,
-        data: invoice.toObject(),
-        changedBy: req.user.id,
-        changeReason: `Hoàn tiền hóa đơn (${isPartial ? 'Một phần' : 'Toàn bộ'}): ${refundReason || 'Hủy ca/Thu sai'}`
-      });
-    } catch (auditErr) {
-      console.warn("⚠️ Lỗi ghi EMRVersion cho hoàn tiền hóa đơn:", auditErr.message);
-    }
+    // 6. (Đã dọn) Block EMRVersion cũ dùng sai schema (recordId/recordType không tồn tại
+    // trong model → mọi create đều fail validation từ trước). Vết kiểm toán hoàn tiền
+    // đã đầy đủ qua chuỗi hash recordAuditLog (REFUND_APPROVED) + invoice.notes phía trên.
 
     return res.status(200).json({
       status: "success",

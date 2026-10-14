@@ -354,7 +354,29 @@ const seedComprehensiveDatabase = async () => {
           profile: { name: "Phan Anh Tuấn (Điều phối viên Chuyển tuyến & Viện phí)", medicalId: "NV-003", address: "Hà Nội", specialty: "receptionist" },
         },
 
-        // 7. PATIENT (Bệnh nhân U Não)
+        // 7. PHARMACIST (Dược sĩ Bệnh viện — Khoa Dược) [P0-Mở khóa vai trò Dược sĩ]
+        {
+          email: "pharmacist@neuroscan.com",
+          phone: "+84888888893",
+          passwordHash,
+          role: "pharmacist",
+          hospitalId: hospital._id,
+          departmentId: "KD",
+          isVerified: true,
+          profile: { name: "DS.CKI Vũ Thu Trang (Dược sĩ Trưởng Khoa Dược Lâm sàng)", medicalId: "DS-001", address: "Hà Nội", specialty: "clinical_pharmacist" },
+        },
+        {
+          email: "pharmacist2@neuroscan.com",
+          phone: "+84888888894",
+          passwordHash,
+          role: "pharmacist",
+          hospitalId: hospital._id,
+          departmentId: "KD",
+          isVerified: true,
+          profile: { name: "DS. Trần Quốc Bảo (Dược sĩ Thẩm định Đơn thuốc & Cấp phát)", medicalId: "DS-002", address: "Hà Nội", specialty: "clinical_pharmacist" },
+        },
+
+        // 8. PATIENT (Bệnh nhân U Não)
         {
           email: "patient@neuroscan.com",
           phone: "+84901111111",
@@ -614,6 +636,12 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Sanofi",
           dosageInstructions: "Uống 1 viên/lần, 2 lần/ngày sau ăn. Không bẻ viên thuốc.",
           stock: { quantity: 1200, unit: "Viên", minStock: 200 },
+          // Tồn kho theo lô (UC-PHA-07) — 2 lô hạn dùng khác nhau: FEFO sẽ luôn xuất
+          // lô hết hạn sớm (2027-04-30) trước, demo “hai lô khác hạn dùng”.
+          batches: [
+            { batchNumber: "LO-DPK-0925", quantity: 500, expiryDate: new Date("2027-04-30"), supplier: "Sanofi Vietnam", receivedAt: new Date("2025-09-15") },
+            { batchNumber: "LO-DPK-0326", quantity: 700, expiryDate: new Date("2028-06-30"), supplier: "Sanofi Vietnam", receivedAt: new Date("2026-03-20") },
+          ],
           price: 5200,
           expiryDate: new Date("2028-06-30"),
           interactions: ["Lamotrigine", "Carbamazepine", "Aspirin"],
@@ -627,6 +655,11 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Novartis",
           dosageInstructions: "Uống 1 viên/lần x 2 lần/ngày, tăng liều dần theo chỉ định.",
           stock: { quantity: 180, unit: "Viên", minStock: 200 },
+          // Lô LO-TEG-1125 hết hạn 05/11/2026 (~3 tuần) → hiện trong tab Hết hạn (≤30 ngày).
+          batches: [
+            { batchNumber: "LO-TEG-1125", quantity: 80, expiryDate: new Date("2026-11-05"), supplier: "Novartis Vietnam", receivedAt: new Date("2025-11-10") },
+            { batchNumber: "LO-TEG-0426", quantity: 100, expiryDate: new Date("2027-10-15"), supplier: "Novartis Vietnam", receivedAt: new Date("2026-04-05") },
+          ],
           price: 3500,
           expiryDate: new Date("2027-10-15"),
           interactions: ["Sodium Valproate", "Phenobarbital"],
@@ -653,6 +686,12 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Pfizer",
           dosageInstructions: "Uống 1 viên vào 8h sáng sau ăn no để chống phù não.",
           stock: { quantity: 600, unit: "Viên", minStock: 100 },
+          // Lô LO-MED-1224 ĐÃ HẾT HẠN (30/09/2026) → dead stock: FEFO loại khỏi xuất,
+          // tab Hết hạn đánh dấu “ĐÃ HẾT HẠN” chờ thủ tục tiêu hủy theo GPP.
+          batches: [
+            { batchNumber: "LO-MED-1224", quantity: 50, expiryDate: new Date("2026-09-30"), supplier: "Pfizer Vietnam", receivedAt: new Date("2024-12-01") },
+            { batchNumber: "LO-MED-0626", quantity: 550, expiryDate: new Date("2027-11-20"), supplier: "Pfizer Vietnam", receivedAt: new Date("2026-06-15") },
+          ],
           price: 9000,
           expiryDate: new Date("2027-11-20"),
           interactions: ["NSAIDs", "Ketoconazole"],
@@ -731,6 +770,9 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Dược Hậu Giang",
           dosageInstructions: "Uống 1-2 viên mỗi 4-6 giờ khi đau đầu hoặc sốt > 38.5C.",
           stock: { quantity: 3000, unit: "Viên", minStock: 300 },
+          batches: [
+            { batchNumber: "LO-PARA-0526", quantity: 3000, expiryDate: new Date("2028-12-31"), supplier: "Dược Hậu Giang", receivedAt: new Date("2026-05-10") },
+          ],
           price: 1200,
           expiryDate: new Date("2028-12-31"),
           interactions: ["Rượu"],
@@ -1341,6 +1383,60 @@ const seedComprehensiveDatabase = async () => {
         },
       });
 
+      // [P1-PharmacyQueue] Đơn thuốc nguy cơ CRITICAL — đẩy vào hàng đợi Dược sĩ
+      // để demo luồng Thẩm định kép (Dual-Sign) → Phát thuốc (UC-PHA-02 → 04).
+      const presc3 = await Prescription.create({
+        hospitalId: hospital._id,
+        patient_id: pat3._id,
+        doctorId: doc3._id,
+        doctor_name: doc3.profile.name,
+        diagnosis: "Glioma ác tính độ 3 — phù não nặng, dự phòng động kinh",
+        drugs: [
+          {
+            name: "Dexamethasone 8mg",
+            quantity: 30,
+            unit: "viên",
+            usage: "Uống 2 viên sáng, 1 viên chiều sau ăn no",
+            timesPerDay: 2,
+            durationDays: 10,
+          },
+          {
+            name: "Phenytoin 100mg",
+            quantity: 60,
+            unit: "viên",
+            usage: "Uống 1 viên sáng, 1 viên tối (uống nguyên viên)",
+            timesPerDay: 2,
+            durationDays: 30,
+          },
+        ],
+        note: "Theo dõi đường huyết khi dùng corticoid liều cao; khám lại sau 7 ngày.",
+        dispenseStatus: "AWAITING_PHARMACY_VERIFICATION",
+        clinicalSafety: {
+          safetyScore: 41,
+          status: "CRITICAL",
+          evaluationCoverage: "FULL",
+          warnings: [
+            {
+              severity: "CRITICAL",
+              type: "DRUG_INTERACTION",
+              message: "Phenytoin + Dexamethasone: corticoid làm giảm nồng độ Phenytoin, nguy cơ mất kiểm soát động kinh; cần giám sát nồng độ thuốc trong máu.",
+            },
+            {
+              severity: "HIGH",
+              type: "DOSAGE",
+              message: "Dexamethasone 8mg/ngày thuộc nhóm liều cao — theo dõi đường huyết, nguy cơ nhiễm trùng cơ hội và loét dạ dày.",
+            },
+          ],
+          isOverridden: true,
+          overrideCategory: "CLINICAL_DISCRETION",
+          overrideReason: "Phù não quanh u tiến triển nhanh, hội chẩn thống nhất lợi ích vượt trội nguy cơ; cam kết theo dõi chặt.",
+          overriddenBy: doc3.profile.name,
+          overriddenAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+          requiresDualSign: true,
+          dualSignStatus: "PENDING_PHARMACY_VERIFICATION",
+        },
+      });
+
       await MedicineReminder.insertMany([
         {
           hospitalId: hospital._id,
@@ -1840,7 +1936,7 @@ const seedComprehensiveDatabase = async () => {
       console.log(`   - Transfer Forms:      1`);
       console.log(`   - Discharge Papers:    1`);
       console.log(`   - Lab Orders:          3`);
-      console.log(`   - Prescriptions:       2`);
+      console.log(`   - Prescriptions:       3`);
       console.log(`   - Reminders:           3`);
       console.log(`   - Clinical Visits:     ${visits.length} (including Visit at 'chờ chụp' for you to add MRI data)`);
       console.log(`   - Kanban Tasks:        ${taskSteps.length}`);

@@ -77,6 +77,8 @@ function roleLabel(role) {
       return 'Điều dưỡng Hồi sức & Chăm sóc U Não';
     case 'receptionist':
       return 'Nhân viên Tiếp đón & Thu ngân';
+    case 'pharmacist':
+      return 'Dược sĩ Bệnh viện (Khoa Dược)';
     default:
       return role;
   }
@@ -394,6 +396,7 @@ export default function AdminUsersView() {
           <option value="nurse">Điều dưỡng Hồi sức & Chăm sóc U Não</option>
           <option value="technician">Kỹ thuật viên CĐHA & MRI 3.0T</option>
           <option value="receptionist">Nhân viên Tiếp đón & Thu ngân</option>
+          <option value="pharmacist">Dược sĩ Bệnh viện (Khoa Dược)</option>
           <option value="hospital_admin">Ban Lãnh đạo Khoa / Quản lý BV</option>
           <option value="admin">Quản trị viên Hệ thống Y tế</option>
           <option value="patient">Bệnh nhân & Thân nhân</option>
@@ -500,6 +503,8 @@ export default function AdminUsersView() {
                               ? 'bg-teal-50 text-teal-700 border border-teal-100'
                               : user.role === 'receptionist'
                               ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                              : user.role === 'pharmacist'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-100'
                               : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
                           }`}>
                             {roleLabel(user.role)}

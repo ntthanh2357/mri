@@ -42,6 +42,7 @@ export const linkingConfig = {
       StaffManagement: 'staff-management',
       NursePatientDetail: 'nurse-patient-detail',
       DrugManagement: 'drug-management',
+      PharmacyQueue: 'pharmacy-queue',
       StaffScheduling: 'staff-scheduling',
     },
   },

@@ -41,6 +41,7 @@ import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
+import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 
 import linkingConfig from './linking';
@@ -126,6 +127,7 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ title: 'Quản lý tài khoản', headerShown: isNativeMobile }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ title: 'Chi tiết bệnh nhân', headerShown: false }} />
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: isNativeMobile }} />
+        <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: isNativeMobile }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: isNativeMobile }} />
       </Stack.Navigator>
     </NavigationContainer>
