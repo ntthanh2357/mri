@@ -2,6 +2,7 @@ import Config from '../constants/config.js';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goToPortalLogin } from '../utils/navigationRef.js';
+import { cancelScheduled } from '../services/localNotifications';
 
 // Helper functions for cross-platform token persistence (Web & Native Mobile)
 export const getToken = async () => {
@@ -68,6 +69,10 @@ export const setRefreshToken = async (refreshToken) => {
 
 export const setAuthToken = async (token, refreshToken = null) => {
   await setToken(token);
+  if (!token) {
+    // hết phiên trên máy này: huỷ thông báo nhắc thuốc / lịch khám đã hẹn (máy dùng chung không lộ thông tin người trước)
+    await cancelScheduled().catch((err) => console.warn('[client.js] Lỗi huỷ thông báo đã hẹn:', err?.message));
+  }
   if (refreshToken !== null) {
     await setRefreshToken(refreshToken);
   } else if (!token) {

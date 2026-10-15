@@ -23,6 +23,8 @@ export const linkingConfig = {
       PatientRecords: 'patient-records',
       MyHealth: 'my-health',
       ContrastConsent: 'consents',
+      MriPrep: 'mri-prep',
+      MyInvoices: 'invoices',
       QueueTicket: 'queue-ticket',
       RecordShare: 'chia-se-benh-an',
       SharedRecord: 'xem-benh-an',

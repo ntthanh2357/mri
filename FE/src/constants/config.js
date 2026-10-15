@@ -10,9 +10,14 @@ import { Platform } from 'react-native';
  *     Tự động trỏ sang Backend cổng 3000 (http://<hostname>:3000)
  * - Môi trường Mobile (Android/iOS): Ưu tiên EXPO_PUBLIC_API_URL (IP LAN) hoặc fallback localhost:3000
  */
+// Web mở từ Expo dev server: gọi API theo đúng tên máy của trang (localhost hoặc IP mà trình duyệt đang dùng).
+// Không dùng EXPO_PUBLIC_API_URL ở đây: update-ip.js ghi IP LAN lúc khởi động, IP đổi (DHCP) là web gọi IP cũ và treo.
+const isWebDevServer = () =>
+  Platform.OS === 'web' && typeof window !== 'undefined' && !!window.location && ['8081', '8083'].includes(window.location.port);
+
 const getBaseApiUrl = () => {
-  // 1. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL
-  if (process.env.EXPO_PUBLIC_API_URL) {
+  // 1. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (app điện thoại, bản build web sau proxy)
+  if (process.env.EXPO_PUBLIC_API_URL && !isWebDevServer()) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
   }
 

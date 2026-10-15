@@ -5,6 +5,7 @@ import * as ctrl from "../controllers/patientRecord.controller.js";
 import * as consentCtrl from "../controllers/patientConsent.controller.js";
 import * as shareCtrl from "../controllers/recordShare.controller.js";
 import * as docCtrl from "../controllers/scannedDocument.controller.js";
+import * as visitCtrl from "../controllers/patientVisit.controller.js";
 import { createRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
@@ -61,6 +62,14 @@ router.post("/scanned-documents", checkRole(["patient"]), scanLimiter, docCtrl.r
 router.get("/scanned-documents", checkRole(["patient"]), docCtrl.listMine);
 router.put("/scanned-documents/:id", checkRole(["patient"]), docCtrl.saveMine);
 router.delete("/scanned-documents/:id", checkRole(["patient"]), docCtrl.deleteMine);
+
+// Theo dõi lượt khám (UC-PAT-05) — chỉ bệnh nhân, lượt khám của chính mình
+router.get("/visit-progress", checkRole(["patient"]), visitCtrl.progressMine);
+// Chuẩn bị chụp MRI: hướng dẫn + bệnh nhân tự khai sàng lọc an toàn (KTV vẫn xác nhận lại tại buồng máy)
+router.get("/mri-prep", checkRole(["patient"]), visitCtrl.mriPrepMine);
+router.put("/mri-prep/:visitId/screening", checkRole(["patient"]), visitCtrl.saveScreeningMine);
+// Hóa đơn viện phí của chính bệnh nhân (chỉ xem)
+router.get("/invoices", checkRole(["patient"]), visitCtrl.invoicesMine);
 
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);

@@ -14,6 +14,7 @@ import MriCancelModal from '../components/MriCancelModal';
 import ContrastConsentReview from '../components/staff/ContrastConsentReview';
 import ReceptionQueueBoard from '../components/reception/ReceptionQueueBoard';
 import { consentStatus } from '../utils/signature';
+import { prefillFromScreening, screeningBadge } from '../utils/mriScreening';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
@@ -282,13 +283,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   // [THỰC TẾ BV: NGHỊCH LÝ 3] Mở bảng kiểm an toàn trước khi vào buồng chụp
   const openSafetyModal = (visit) => {
+    // Điền sẵn theo phiếu bệnh nhân tự khai trên app (nếu có); KTV vẫn phải hỏi lại và tự xác nhận
+    const pre = prefillFromScreening(visit.patientMriScreening);
     setSafetyVisit(visit);
-    setHasPacemakerOrMetal(false);
-    setHasClaustrophobia(false);
+    setHasPacemakerOrMetal(pre.hasPacemakerOrMetal);
+    setHasClaustrophobia(pre.hasClaustrophobia);
     setHasKidneyDisease(false);
-    setIsPregnant(false);
+    setIsPregnant(pre.isPregnant);
     setMetalDetails('');
-    setSafetyNotes('');
+    setSafetyNotes(pre.safetyNotes);
     setSafetyModal(true);
   };
 
@@ -313,6 +316,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         metalDetails,
         notes: safetyNotes,
         passed: true,
+        screeningDeclaredAt: safetyVisit.patientMriScreening?.declaredAt || null, // lời khai KTV đang xem
       });
 
       if (res && res.success && res.contrastConsentPending) {
@@ -329,7 +333,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         Alert.alert('Lỗi', res?.message || 'Không thể lưu bảng kiểm an toàn.');
       }
     } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Không thể lưu bảng kiểm an toàn.');
+      const msg = err.message || 'Không thể lưu bảng kiểm an toàn.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Lỗi', msg);
+      // bệnh nhân vừa sửa phiếu tự khai: đóng bảng kiểm, tải lại để KTV mở lại với lời khai mới nhất
+      if (/vừa cập nhật phiếu tự khai/.test(msg)) { setSafetyModal(false); fetchData(); }
     } finally {
       setSubmittingSafety(false);
     }
@@ -720,7 +727,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const safetyFlagOf = (v) => {
     if (v.mriSafetyChecklist?.passed) return { tone: 'success', icon: CheckCircle2, label: 'An toàn MRI: đạt' };
     if (v.mriSafetyChecklist?.isScreened) return { tone: 'danger', icon: XCircle, label: 'Chống chỉ định MRI' };
-    return null;
+    // KTV chưa kiểm tra: hiện lời khai của bệnh nhân trên app (nếu có)
+    const declared = screeningBadge(v.patientMriScreening);
+    return declared ? { ...declared, icon: declared.tone === 'info' ? ShieldCheck : AlertTriangle } : null;
   };
   const CONSENT_FLAG = {
     checklist: { tone: 'info', icon: Clock, label: 'Cản quang: chờ trả lời' },
@@ -986,6 +995,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 <XCircle size={12} color="#DC2626" strokeWidth={2.4} />
                 <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Chống chỉ định MRI</Text>
               </View>
+            ) : screeningBadge(v.patientMriScreening) ? (
+              <View style={[styles.declaredBadge, styles[`declared_${screeningBadge(v.patientMriScreening).tone}`]]}>
+                <AlertTriangle size={12} color={screeningBadge(v.patientMriScreening).tone === 'danger' ? Colors.errorText : screeningBadge(v.patientMriScreening).tone === 'warning' ? Colors.warningText : Colors.infoText} strokeWidth={2.4} />
+                <Text style={[styles.declaredText, styles[`declaredText_${screeningBadge(v.patientMriScreening).tone}`]]}>{screeningBadge(v.patientMriScreening).label}</Text>
+              </View>
             ) : null}
           </View>
         )}
@@ -1180,10 +1194,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             </View>
 
             {/* Ghi chú */}
-            <Text style={styles.fieldLabel}>Ghi chú cho KTV</Text>
+            <Text style={styles.fieldLabel}>Dặn thêm (KTV và bệnh nhân đều thấy)</Text>
             <TextInput
               style={styles.textArea}
-              placeholder="Lưu ý đặc biệt khi chụp, tư thế, độ tương phản..."
+              placeholder="Ví dụ: mang theo phim cũ, nhịn ăn 6 giờ, lưu ý tư thế khi chụp..."
               multiline
               numberOfLines={3}
               value={instructions}
@@ -1507,6 +1521,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         setIsPregnant={setIsPregnant}
         safetyNotes={safetyNotes}
         setSafetyNotes={setSafetyNotes}
+        patientScreening={safetyVisit?.patientMriScreening}
         onSubmit={handleSubmitSafety}
         submitting={submittingSafety}
       />
@@ -1547,6 +1562,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  // nhãn lời khai sàng lọc MRI của bệnh nhân (thẻ ca chụp trên điện thoại)
+  declaredBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  declared_danger: { backgroundColor: Colors.errorBg, borderColor: Colors.errorText },
+  declared_warning: { backgroundColor: Colors.warningBg, borderColor: Colors.warningText },
+  declared_info: { backgroundColor: Colors.infoBg, borderColor: Colors.infoBg },
+  declaredText: { fontSize: 12, fontWeight: '700' },
+  declaredText_danger: { color: Colors.errorText },
+  declaredText_warning: { color: Colors.warningText },
+  declaredText_info: { color: Colors.infoText },
   page: { paddingTop: 20, paddingBottom: 32 },
   toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   seg: { flexDirection: 'row', backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3, gap: 2 },

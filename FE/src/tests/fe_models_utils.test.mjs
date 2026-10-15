@@ -21,6 +21,8 @@ import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isRemin
 import { strokesToPath, consentStatus } from '../utils/signature.js';
 import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, sectionsSummary, SCAN_DOC_TYPES, docTypeLabel, parseShareQr, staffRoleLabel, hasStructuredInfo, fitsKnownForm, clampHeight, lineOf, locateCheck, applyCheck } from '../utils/recordShare.js';
 import { foldText, prepareItems, filterItems, isFiltering, NO_FILTER, initialSelection, isItemOn, sectionState, toggleSectionAll, toggleItem, setItemsOn, sharePayload, countsOf, flattenSharedRecord, countBySection } from '../utils/shareCatalog.js';
+import { SCREENING_LABELS, flaggedAnswers, prefillFromScreening, screeningBadge } from '../utils/mriScreening.js';
+import { atTime, reminderPlan, appointmentPlan, buildPlan, MAX_SCHEDULED } from '../utils/notificationPlan.js';
 
 const colors = {
   reset: "\x1b[0m",
@@ -642,6 +644,76 @@ it('assetUrl prefixes relative upload paths with the API base, keeps absolute UR
   assert.strictEqual(assetUrl('/uploads/a.jpg', 'http://x:3000'), 'http://x:3000/uploads/a.jpg');
   assert.strictEqual(assetUrl('https://drive.google.com/x', 'http://x:3000'), 'https://drive.google.com/x');
   assert.strictEqual(assetUrl('', 'http://x:3000'), '');
+});
+
+// ── Phiếu sàng lọc an toàn MRI bệnh nhân tự khai ──
+const NO_ALL = Object.fromEntries(Object.keys(SCREENING_LABELS).map((k) => [k, 'no']));
+
+it('MRI screening: staff prefill turns on the metal/device box for any dangerous yes/unsure answer', () => {
+  assert.strictEqual(Object.keys(SCREENING_LABELS).length, 10);
+  const unsure = { answers: { ...NO_ALL, metalFragments: 'unsure', claustrophobia: 'yes' }, details: 'Từng làm thợ hàn', declaredAt: '2026-10-15T02:00:00Z', level: 'danger' };
+  const pre = prefillFromScreening(unsure);
+  assert.strictEqual(pre.hasPacemakerOrMetal, true);
+  assert.strictEqual(pre.hasClaustrophobia, true);
+  assert.strictEqual(pre.isPregnant, false);
+  assert.ok(pre.safetyNotes.includes('Mảnh kim loại trong người (Không rõ)'));
+  assert.strictEqual(pre.safetyNotes.includes('Từng làm thợ hàn'), false); // chữ tự do của BN không vào ghi chú mang tên KTV
+  assert.deepStrictEqual(flaggedAnswers(unsure).map((f) => f.key), ['metalFragments', 'claustrophobia']); // câu nguy hiểm lên đầu
+  // dụng cụ cấy ghép thường (khớp, nẹp vít) không tự chặn, chỉ ghi chú
+  assert.strictEqual(prefillFromScreening({ answers: { ...NO_ALL, implants: 'yes' }, declaredAt: 'x', level: 'attention' }).hasPacemakerOrMetal, false);
+  // chưa khai: không điền gì, KTV hỏi từ đầu
+  assert.deepStrictEqual(prefillFromScreening(null), { hasPacemakerOrMetal: false, hasClaustrophobia: false, isPregnant: false, safetyNotes: '' });
+  assert.deepStrictEqual(prefillFromScreening({ answers: {}, declaredAt: null }).safetyNotes, '');
+});
+
+it('MRI screening: queue badge reflects what the patient declared', () => {
+  assert.strictEqual(screeningBadge(null), null);
+  assert.strictEqual(screeningBadge({ answers: NO_ALL, declaredAt: 'x', level: 'clear' }).tone, 'info');
+  assert.strictEqual(screeningBadge({ answers: NO_ALL, declaredAt: 'x', level: 'attention' }).tone, 'warning');
+  assert.strictEqual(screeningBadge({ answers: NO_ALL, declaredAt: 'x', level: 'danger' }).tone, 'danger');
+  assert.ok(prefillFromScreening({ answers: NO_ALL, declaredAt: 'x', level: 'clear' }).safetyNotes.includes('không có yếu tố nào'));
+});
+
+// ── Thông báo hẹn sẵn trên điện thoại ──
+it('local notifications: today\'s pending doses only, future times only, same-time drugs grouped', () => {
+  const now = new Date(2026, 9, 15, 9, 0); // 09:00 giờ máy
+  const plan = reminderPlan([
+    { _id: 'a', time: '08:00', drugName: 'Paracetamol 500mg', dosageText: '1 viên', status: 'pending' }, // đã qua
+    { _id: 'b', time: '12:00', drugName: 'Amlodipin 5mg', dosageText: '1 viên', status: 'pending' },
+    { _id: 'c', time: '12:00', drugName: 'Depakine 500mg', dosageText: '', status: 'pending' },
+    { _id: 'd', time: '20:00', drugName: 'Thuốc đã uống', status: 'done' },
+    { _id: 'e', time: '21:00', drugName: 'Thuốc bỏ qua', status: 'skipped' },
+    { _id: 'f', time: '25:99', drugName: 'Giờ hỏng', status: 'pending' },
+    { _id: 'g', time: '7:30', drugName: 'Sáng sớm', status: 'pending' }, // đã qua, viết thiếu số 0
+    null,
+  ], now);
+  assert.deepStrictEqual(plan.map((p) => p.title), ['Đến giờ uống thuốc 12:00']);
+  assert.strictEqual(plan[0].body, '2 loại thuốc. Mở ứng dụng để xem tên thuốc và liều.');
+  assert.strictEqual(plan[0].body.includes('Amlodipin'), false); // không lộ tên thuốc trên màn khoá
+  assert.strictEqual(plan[0].date.getHours(), 12);
+  assert.strictEqual(atTime(now, '24:00'), null);
+  assert.deepStrictEqual(reminderPlan(undefined, now), []);
+  const many = reminderPlan(['A', 'B', 'C', 'D', 'E'].map((n) => ({ time: '18:00', drugName: n, status: 'pending' })), now);
+  assert.strictEqual(many[0].body.startsWith('5 loại thuốc'), true);
+});
+
+it('local notifications: appointments 2 hours ahead, only active future visits, capped list', () => {
+  const now = new Date(2026, 9, 15, 9, 0);
+  const visits = [
+    { _id: 'v1', status: 'đang chờ', date: new Date(2026, 9, 16, 8, 30).toISOString(), mriOrder: { region: 'Sọ não' } },
+    { _id: 'v2', status: 'hoàn tất', date: new Date(2026, 9, 16, 8, 30).toISOString() }, // đã xong
+    { _id: 'v3', status: 'đang chờ', date: new Date(2026, 9, 15, 10, 0).toISOString() }, // còn 1 giờ: quá muộn để nhắc trước 2 giờ
+    { _id: 'v4', status: 'đang chờ' }, // không có giờ hẹn
+  ];
+  const plan = appointmentPlan(visits, now);
+  assert.deepStrictEqual(plan.map((p) => p.key), ['visit-v1']);
+  assert.strictEqual(plan[0].title, 'Sắp tới giờ chụp MRI');
+  assert.strictEqual(plan[0].date.getHours(), 6);
+  assert.ok(plan[0].body.includes('08:30'));
+  const meds = Array.from({ length: 40 }, (_, i) => ({ time: `${String(10 + Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`, drugName: `T${i}`, status: 'pending' }));
+  const all = buildPlan(meds, visits, now);
+  assert.strictEqual(all.length, MAX_SCHEDULED);
+  assert.ok(all.every((p, i) => i === 0 || all[i - 1].date <= p.date)); // theo thứ tự thời gian
 });
 
 console.log(`\n======================================================================`);

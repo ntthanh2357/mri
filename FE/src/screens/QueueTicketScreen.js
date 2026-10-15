@@ -6,6 +6,8 @@ import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageContainer from '../components/layout/PageContainer';
 import Colors from '../constants/colors';
 import { useQueueTicket } from '../controllers/useQueueTicket';
+import { useVisitProgress } from '../controllers/useVisitProgress';
+import VisitProgress from '../components/patient/VisitProgress';
 
 // UC-PAT-03 — Lấy số tiếp đón online trong ngày; theo dõi số đang gọi và giờ dự kiến tới lượt.
 
@@ -36,6 +38,7 @@ const Stat = ({ label, value }) => (
 
 const QueueTicketScreen = ({ navigation }) => {
   const { loading, data, hospitals, error, reload, take, cancel, hospitalId, setHospitalId } = useQueueTicket();
+  const visit = useVisitProgress(); // sau khi được tiếp nhận: theo dõi các bước của lượt khám
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -170,13 +173,18 @@ const QueueTicketScreen = ({ navigation }) => {
     <ResponsiveLayout navigation={navigation} activeRoute="QueueTicket">
       <View style={styles.container}>
         <PageHeader bar title="Lấy số khám" subtitle="Lấy số tiếp đón online và theo dõi lượt gọi trong ngày."
-          actions={<HeaderAction icon="refresh-cw" label="Tải lại" onPress={reload} />} />
+          actions={<HeaderAction icon="refresh-cw" label="Tải lại" onPress={() => { reload(); visit.reload(); }} />} />
         <ScrollView>
           <PageContainer width="reading" style={styles.page}>
             {msg && !msg.ok ? (
               <View style={[styles.banner, styles.msg, { backgroundColor: Colors.warningBg }]} accessibilityLiveRegion="polite">
                 <Feather name="alert-circle" size={16} color={Colors.warningText} />
                 <Text style={[styles.bannerText, { color: Colors.warningText }]}>{msg.message}</Text>
+              </View>
+            ) : null}
+            {visit.progress ? (
+              <View style={styles.visitBlock}>
+                <VisitProgress progress={visit.progress} onOpenConsent={() => navigation.navigate('ContrastConsent')} onOpenFilms={() => navigation.navigate('ImagingHistory')} onOpenPrep={() => navigation.navigate('MriPrep')} />
               </View>
             ) : null}
             {renderBody()}
@@ -188,6 +196,7 @@ const QueueTicketScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  visitBlock: { marginBottom: 16 },
   container: { flex: 1, backgroundColor: Colors.background },
   page: { paddingTop: 20, paddingBottom: 40 },
   stack: { gap: 16 },

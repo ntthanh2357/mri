@@ -16,7 +16,8 @@ const router = express.Router();
 
 router.get("/staff", protect, getStaff);
 router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "hospital_admin"]), createVisit);
-router.get("/my-queue", protect, getMyQueue);
+// chỉ nhân viên: hàng đợi chứa lượt khám của cả bệnh viện (trước đây bệnh nhân gọi được và thấy dữ liệu người khác)
+router.get("/my-queue", protect, checkRole(["doctor", "nurse", "technician", "receptionist", "admin", "hospital_admin", "system_admin"]), getMyQueue);
 router.put("/:id/vitals", protect, checkRole(["nurse", "receptionist", "doctor", "admin", "hospital_admin"]), updateVitals);
 router.put("/:id/mri-order", protect, checkRole(["doctor"]), createMriOrder);
 router.put("/:id/status", protect, checkRole(["doctor", "nurse", "receptionist", "technician", "admin", "hospital_admin"]), updateStatus);
