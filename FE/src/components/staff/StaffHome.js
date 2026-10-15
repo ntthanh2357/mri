@@ -124,7 +124,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
                     </View>
                     <View style={styles.grow}>
                       <Text style={[styles.taskLabel, done && styles.taskLabelDone]}>{t.label}</Text>
-                      <Text style={styles.sub}>{done ? 'Không còn việc tồn' : t.hint}</Text>
+                      <Text style={styles.sub}>{done ? 'Không còn việc tồn đọng' : t.hint}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={Colors.secondary} />
                   </Pressable>

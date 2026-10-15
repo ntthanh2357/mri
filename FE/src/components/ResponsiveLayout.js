@@ -387,9 +387,9 @@ const ResponsiveLayout = ({
               justifyContent: 'space-between',
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
               <AlertTriangle size={15} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 11 }} numberOfLines={1}>
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 11, flexShrink: 1 }} numberOfLines={1} ellipsizeMode="tail">
                 CẤP CỨU: {activeEmergency.patientName} ({activeEmergency.medicalId})
               </Text>
             </View>
@@ -655,7 +655,7 @@ const ResponsiveLayout = ({
             borderBottomWidth: 2,
             borderBottomColor: activeEmergency.level === 'RED' ? '#7F1D1D' : '#9A3412',
           }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
               <View style={{
                 backgroundColor: 'rgba(255,255,255,0.2)',
                 padding: 6,
@@ -663,11 +663,11 @@ const ResponsiveLayout = ({
               }}>
                 <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.5} />
               </View>
-              <View>
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+              <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1} ellipsizeMode="tail">
                   CẢNH BÁO CẤP CỨU [{activeEmergency.level}] - BỆNH NHÂN: {activeEmergency.patientName?.toUpperCase()} ({activeEmergency.medicalId})
                 </Text>
-                <Text style={{ color: '#FEE2E2', fontSize: 12 }}>
+                <Text style={{ color: '#FEE2E2', fontSize: 12 }} numberOfLines={1} ellipsizeMode="tail">
                   {activeEmergency.reason || 'Cần ưu tiên dời lịch & chuẩn bị phòng chụp MRI khẩn cấp!'}
                 </Text>
               </View>
