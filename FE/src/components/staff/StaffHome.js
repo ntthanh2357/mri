@@ -93,6 +93,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
               <>
                 Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
                 {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
+                {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
               </>
             ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
           </Text>

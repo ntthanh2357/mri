@@ -156,6 +156,13 @@ export default function DrugManagementScreen({ navigation, route }) {
     fetchCurrentUser();
   }, []);
 
+  // Menu điều hướng lại khi màn đã mở (React Navigation không remount cùng màn)
+  // — đồng bộ tab theo params mỗi khi params.tab đổi, kể cả khi quay về 'list'.
+  useEffect(() => {
+    const t = route?.params?.tab;
+    setActiveTab(['alerts', 'expiry'].includes(t) ? t : 'list');
+  }, [route?.params?.tab]);
+
   useEffect(() => {
     fetchDrugs();
     fetchAlerts();
@@ -334,7 +341,7 @@ export default function DrugManagementScreen({ navigation, route }) {
   };
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute="DrugManagement">
+    <ResponsiveLayout navigation={navigation} activeRoute={activeTab !== 'list' ? `DrugManagement_${activeTab}` : 'DrugManagement'}>
       <SafeAreaView style={styles.container}>
         <PageHeader
           bar

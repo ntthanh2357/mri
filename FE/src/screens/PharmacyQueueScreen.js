@@ -256,9 +256,11 @@ export default function PharmacyQueueScreen({ navigation, route }) {
           <View style={[styles.chip, { backgroundColor: safety.dualSignStatus === 'VERIFIED' ? '#ECFDF5' : '#FEF2F2', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
             {safety.dualSignStatus === 'VERIFIED'
               ? <CheckCircle2 size={11} color="#047857" />
-              : <AlertTriangle size={11} color="#B91C1C" />}
-            <Text style={[styles.chipText, { color: safety.dualSignStatus === 'VERIFIED' ? '#047857' : '#B91C1C' }]}>
-              {safety.dualSignStatus === 'VERIFIED' ? 'Đã ký kép' : 'Chờ Dual-Sign'}
+              : safety.dualSignStatus === 'REJECTED'
+                ? <XCircle size={11} color="#B91C1C" />
+                : <AlertTriangle size={11} color="#B45309" />}
+            <Text style={[styles.chipText, { color: safety.dualSignStatus === 'VERIFIED' ? '#047857' : safety.dualSignStatus === 'REJECTED' ? '#B91C1C' : '#B45309' }]}>
+              {safety.dualSignStatus === 'VERIFIED' ? 'Đã ký kép' : safety.dualSignStatus === 'REJECTED' ? 'Đã từ chối' : 'Chờ Dual-Sign'}
             </Text>
           </View>
         ) : null}
