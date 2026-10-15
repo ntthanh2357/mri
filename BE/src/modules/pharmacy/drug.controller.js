@@ -10,6 +10,32 @@ import { assessPrescriptionSafety } from "./services/drugSafety.service.js";
 import { generateRemindersForPrescription } from "../../controllers/patient.controller.js";
 import { deductStockForInvoice } from "../billing/invoice.controller.js";
 import { deductDrugStockFEFO, importDrugBatch, sortBatchesFEFO, sumBatches } from "./services/batchStock.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
+
+// ── Helper: Ghi nhật ký kiểm toán trung tâm cho thao tác Dược (chuỗi băm chống giả mạo
+// theo HIPAA §164.312(b) & TT 13/2025/TT-BYT). Bọc try/catch: audit lỗi KHÔNG được phép
+// làm hỏng nghiệp vụ chính — cùng pattern đã dùng ở invoice/bhyt/hospitalBed service.
+// Tên người thao tác cho chuỗi audit — req.user có thể thiếu profile/email (authCache đôi khi
+// cache bản select ngắn không có profile) nên fallback về vai trò + ID để log tự định danh.
+function performerLabel(req) {
+  return req.user?.profile?.name || req.user?.email || `${req.user?.role || "hệ thống"} (ID ${req.user?.id || "?"})`;
+}
+
+async function auditPharmacy({ action, entity, entityId, req, hospitalId, details, payload }) {
+  try {
+    await recordAuditLog({
+      action,
+      entity,
+      entityId: entityId ? entityId.toString() : "",
+      performedBy: req.user?.id || "system",
+      hospitalId: hospitalId || req.user?.hospitalId || null,
+      details: details || "",
+      payload: payload || null,
+    });
+  } catch (err) {
+    console.warn(`[Pharmacy AuditLog Warn] ${action}:`, err.message);
+  }
+}
 
 // ── Helper: Lấy hospitalId từ user (Admin dùng query, hospital_admin dùng JWT) ─
 function resolveHospitalId(req) {
@@ -197,6 +223,18 @@ export const createDrug = async (req, res) => {
     }
 
     await drug.save();
+
+    // Nhật ký kiểm toán trung tâm (tạo danh mục thuốc là quyết định quản trị — TT46/2018)
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.DRUG_CATALOG_CREATED,
+      entity: "Drug",
+      entityId: drug._id,
+      req,
+      hospitalId,
+      details: `Thêm thuốc "${drug.name}" vào danh mục (nhóm: ${drug.category}, giá: ${drug.price}đ, tồn ban đầu: ${drug.stock.quantity} ${drug.stock.unit}).`,
+      payload: { name: drug.name, category: drug.category, price: drug.price, initialStock: drug.stock.quantity, unit: drug.stock.unit, batchCount: initialBatches.length },
+    });
+
     return successResponse(res, { drug }, "Thêm thuốc vào danh mục thành công!", 201);
   } catch (error) {
     console.error("Lỗi createDrug:", error);
@@ -247,7 +285,20 @@ export const updateDrug = async (req, res) => {
     if (bmiWarningThreshold) drug.bmiWarningThreshold = bmiWarningThreshold;
     if (typeof isActive === "boolean") drug.isActive = isActive;
 
+    const changedFields = (drug.modifiedPaths && drug.modifiedPaths()) || [];
     await drug.save();
+
+    // Nhật ký kiểm toán trung tâm (sửa danh mục ảnh hưởng kê đơn & tính phí)
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.DRUG_CATALOG_UPDATED,
+      entity: "Drug",
+      entityId: drug._id,
+      req,
+      hospitalId: drug.hospitalId,
+      details: `Cập nhật thuốc "${drug.name}"${changedFields.length ? ` (các trường: ${changedFields.join(", ")})` : ""}.`,
+      payload: { name: drug.name, changedFields, price: drug.price, category: drug.category, isActive: drug.isActive },
+    });
+
     return successResponse(res, { drug }, "Cập nhật thông tin thuốc thành công!");
   } catch (error) {
     console.error("Lỗi updateDrug:", error);
@@ -276,6 +327,18 @@ export const deleteDrug = async (req, res) => {
     }
 
     await Drug.findByIdAndDelete(id);
+
+    // Nhật ký kiểm toán trung tâm (xóa danh mục — thao tác không thể hoàn tác)
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.DRUG_CATALOG_DELETED,
+      entity: "Drug",
+      entityId: id,
+      req,
+      hospitalId: drug.hospitalId,
+      details: `Xóa thuốc "${drug.name}" khỏi danh mục (tồn cuối: ${drug.stock?.quantity ?? 0} ${drug.stock?.unit ?? ""}).`,
+      payload: { name: drug.name, category: drug.category, price: drug.price, lastStock: drug.stock?.quantity ?? 0, unit: drug.stock?.unit ?? "" },
+    });
+
     return successResponse(res, { deletedId: id }, `Đã xóa thuốc "${drug.name}" khỏi danh mục.`);
   } catch (error) {
     console.error("Lỗi deleteDrug:", error);
@@ -425,6 +488,18 @@ export const updateStock = async (req, res) => {
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
+
+    // Nhật ký kiểm toán trung tâm — mọi biến động kho (nhập lô / xuất FEFO / kiểm kê)
+    // phải đi qua chuỗi băm kiểm toán theo GPP & TT46/2018 (UC-PHA-07)
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.DRUG_STOCK_ADJUSTED,
+      entity: "Drug",
+      entityId: finalDrug._id,
+      req,
+      hospitalId: finalDrug.hospitalId,
+      details: `${{ set: "Kiểm kê", add: "Nhập thêm", subtract: "Xuất kho (FEFO)", import: "Nhập lô" }[action] || action} ${qty} ${finalDrug.stock.unit} — thuốc "${finalDrug.name}"${batchNumber ? ` (lô ${batchNumber})` : ""}; lý do: ${stockReason || "(không ghi rõ)"}; tồn sau: ${finalDrug.stock.quantity} ${finalDrug.stock.unit}.`,
+      payload: { drugName: finalDrug.name, action, quantity: qty, unit: finalDrug.stock.unit, batchNumber: batchNumber || null, balanceAfter: finalDrug.stock.quantity, reason: stockReason || "" },
+    });
 
     return successResponse(res, {
       drug: finalDrug,
@@ -708,6 +783,17 @@ export const verifyPrescription = async (req, res) => {
 
     await prescription.save();
 
+    // Nhật ký kiểm toán trung tâm — xác nhận kép Dual-Sign là thao tác nhạy cảm an toàn thuốc
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.PRESCRIPTION_VERIFIED,
+      entity: "Prescription",
+      entityId: prescription._id,
+      req,
+      hospitalId: prescription.hospitalId,
+      details: `Dược sĩ ${performerLabel(req)} ký duyệt Dual-Sign đơn thuốc (chẩn đoán: ${prescription.diagnosis || "—"}); trạng thái ${prevStatus} → READY.`,
+      payload: { fromStatus: prevStatus, toStatus: "READY", note: note || "", diagnosis: prescription.diagnosis || "" },
+    });
+
     return successResponse(res, { prescription }, "Dược sĩ lâm sàng đã thẩm định và ký duyệt đơn thuốc thành công!");
   } catch (error) {
     console.error("Lỗi verifyPrescription:", error);
@@ -751,6 +837,17 @@ export const rejectPrescription = async (req, res) => {
     });
 
     await prescription.save();
+
+    // Nhật ký kiểm toán trung tâm — từ chối đơn thuốc là can thiệp chuyên môn ảnh hưởng phác đồ
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.PRESCRIPTION_REJECTED,
+      entity: "Prescription",
+      entityId: prescription._id,
+      req,
+      hospitalId: prescription.hospitalId,
+      details: `Dược sĩ ${performerLabel(req)} TỪ CHỐI đơn thuốc (chẩn đoán: ${prescription.diagnosis || "—"}); lý do: ${reason.trim()}`,
+      payload: { fromStatus: prevStatus, toStatus: "REJECTED_BY_PHARMACY", reason: reason.trim(), diagnosis: prescription.diagnosis || "" },
+    });
 
     // Gửi thông báo trả về cho Bác sĩ điều trị
     if (prescription.doctorId) {
@@ -1025,6 +1122,26 @@ export const dispensePrescription = async (req, res) => {
       await linkedInvoice.save();
     }
 
+    // 5b. Nhật ký kiểm toán trung tâm — phát thuốc là thao tác nhạy cảm nhất của Khoa Dược
+    // (chạm thuốc vật lý + tiền + kho); ghi đủ bối cảnh cấp cứu / phát từng phần.
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.PRESCRIPTION_DISPENSED,
+      entity: "Prescription",
+      entityId: prescription._id,
+      req,
+      hospitalId: prescription.hospitalId,
+      details: `Dược sĩ ${performerLabel(req)} xuất phát thuốc (${targetStatus})${isAcuteEmergency ? " — CẤP CỨU (phát trước, hậu kiểm 24h)" : ""}${partiallyDispensed ? " — phát từng phần" : ""}: ${(prescription.drugs || []).map(d => `${d.name} x${d.quantity || 1}`).join(", ") || "—"}. Hóa đơn: ${linkedInvoice?._id || "không liên kết"}.`,
+      payload: {
+        fromStatus: prevStatus,
+        toStatus: targetStatus,
+        isEmergency: Boolean(isAcuteEmergency),
+        partial: Boolean(partiallyDispensed),
+        drugs: (prescription.drugs || []).map(d => ({ name: d.name, quantity: d.quantity || 1 })),
+        invoiceId: linkedInvoice?._id?.toString() || null,
+        postHocReviewRequired: Boolean(prescription.postHocReviewRequired),
+      },
+    });
+
     // 6. TỰ ĐỘNG KÍCH HOẠT LỊCH NHẮC UỐNG THUỐC TẠI ĐÚNG THỜI ĐIỂM PHÁT THUỐC (Cách ly lỗi)
     try {
       await generateRemindersForPrescription(prescription);
@@ -1077,6 +1194,18 @@ export const postHocReviewPrescription = async (req, res) => {
     });
 
     await prescription.save();
+
+    // Nhật ký kiểm toán trung tâm — hậu kiểm 24h cho đơn cấp cứu (governance bắt buộc)
+    await auditPharmacy({
+      action: AUDIT_ACTIONS.PRESCRIPTION_POST_HOC_REVIEWED,
+      entity: "Prescription",
+      entityId: prescription._id,
+      req,
+      hospitalId: prescription.hospitalId,
+      details: `Dược sĩ ${performerLabel(req)} hậu kiểm 24h đơn thuốc cấp cứu — quyết định: ${decision || "APPROVED"}; ghi chú: ${prescription.postHocReviewNote}`,
+      payload: { decision: decision || "APPROVED", note: note || "" },
+    });
+
     return successResponse(res, { prescription }, "Đã hoàn tất hậu kiểm dược cho đơn thuốc cấp cứu.");
   } catch (error) {
     console.error("Lỗi postHocReviewPrescription:", error);

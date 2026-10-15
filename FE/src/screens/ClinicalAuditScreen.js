@@ -9,6 +9,8 @@
  *   - Sửa kết luận chẩn đoán / bệnh án điện tử (UPDATE_EMR_RECORD)
  *   - Hoàn tiền hóa đơn viện phí (REFUND_REQUESTED / REFUND_APPROVED)
  *   - Điều chuyển phân công ca (ASSIGNMENT_OVERRIDDEN — UC-HADM-04)
+ *   - Thao tác Khoa Dược (UC-PHA): Dual-Sign duyệt/từ chối, phát thuốc, hậu kiểm
+ *     24h, nhập/xuất/kiểm kê kho theo lô, CRUD danh mục thuốc
  *
  * Nguồn dữ liệu:
  *   GET /admin/audit-logs?category=&from=&limit=&page=
@@ -47,6 +49,7 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
+  Pill,
 } from 'lucide-react';
 
 // Khoảng thời gian tra cứu
@@ -63,6 +66,7 @@ const CATEGORIES = [
   { key: 'break_glass', label: 'Break-Glass', icon: ShieldAlert, color: '#B91C1C', bg: '#FEF2F2', actions: ['BREAK_GLASS_EMERGENCY_ACCESSED'] },
   { key: 'soft_delete', label: 'Hủy ca khám', icon: Trash2, color: '#B45309', bg: '#FFFBEB', actions: ['SOFT_DELETE_VISIT'] },
   { key: 'emr_edit', label: 'Sửa bệnh án', icon: FilePenLine, color: '#0369A1', bg: '#F0F9FF', actions: ['UPDATE_EMR_RECORD', 'ADDENDUM_CREATED', 'SIGN_EMR_RECORD', 'RECORD_LOCKED'] },
+  { key: 'pharmacy', label: 'Dược', icon: Pill, color: '#0F766E', bg: '#F0FDFA', actions: ['PRESCRIPTION_VERIFIED', 'PRESCRIPTION_REJECTED', 'PRESCRIPTION_DISPENSED', 'PRESCRIPTION_POST_HOC_REVIEWED', 'DRUG_CATALOG_CREATED', 'DRUG_CATALOG_UPDATED', 'DRUG_CATALOG_DELETED', 'DRUG_STOCK_ADJUSTED'] },
   { key: 'refund', label: 'Hoàn tiền', icon: Receipt, color: '#7C3AED', bg: '#F5F3FF', actions: ['REFUND_REQUESTED', 'REFUND_APPROVED'] },
   { key: 'assignment', label: 'Điều chuyển ca', icon: ArrowRightLeft, color: '#047857', bg: '#ECFDF5', actions: ['ASSIGNMENT_OVERRIDDEN'] },
 ];
@@ -86,6 +90,15 @@ const ACTION_LABELS = {
   BED_OCCUPIED: 'Tiếp nhận giường bệnh',
   VISIT_STATUS_CHANGED: 'Đổi trạng thái ca khám',
   FSM_TRANSITION: 'Chuyển bước quy trình ca khám',
+  // Khoa Dược — thao tác dược sĩ & quản trị danh mục (UC-PHA)
+  PRESCRIPTION_VERIFIED: 'Dược sĩ ký duyệt Dual-Sign đơn thuốc',
+  PRESCRIPTION_REJECTED: 'Dược sĩ từ chối đơn thuốc',
+  PRESCRIPTION_DISPENSED: 'Dược sĩ xuất phát thuốc cho người bệnh',
+  PRESCRIPTION_POST_HOC_REVIEWED: 'Hậu kiểm 24h đơn thuốc cấp cứu',
+  DRUG_CATALOG_CREATED: 'Thêm thuốc vào danh mục',
+  DRUG_CATALOG_UPDATED: 'Sửa thông tin thuốc',
+  DRUG_CATALOG_DELETED: 'Xóa thuốc khỏi danh mục',
+  DRUG_STOCK_ADJUSTED: 'Điều chỉnh tồn kho (nhập lô/xuất/kiểm kê)',
 };
 
 const PAGE_SIZE = 50;

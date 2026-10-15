@@ -79,6 +79,17 @@ export const CLINICAL_AUDIT_CATEGORIES = {
   emr_edit: ["UPDATE_EMR_RECORD", "ADDENDUM_CREATED", "SIGN_EMR_RECORD", "RECORD_LOCKED"],
   refund: ["REFUND_REQUESTED", "REFUND_APPROVED"],
   assignment: ["ASSIGNMENT_OVERRIDDEN"],
+  // Khoa Dược — Dual-Sign, phát thuốc, hậu kiểm 24h, kho & danh mục (UC-PHA)
+  pharmacy: [
+    "PRESCRIPTION_VERIFIED",
+    "PRESCRIPTION_REJECTED",
+    "PRESCRIPTION_DISPENSED",
+    "PRESCRIPTION_POST_HOC_REVIEWED",
+    "DRUG_CATALOG_CREATED",
+    "DRUG_CATALOG_UPDATED",
+    "DRUG_CATALOG_DELETED",
+    "DRUG_STOCK_ADJUSTED",
+  ],
 };
 
 export const fetchAuditLogs = async (req, res) => {
