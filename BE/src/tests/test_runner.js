@@ -176,6 +176,7 @@ async function runAllTests() {
     './clinical_workflow_e2e.test.js',
     './schedule_registration.test.js',
     './my_assignments.test.js',
+    './auth_session_rate_limit.test.js',
     './patient_routes_authz.test.js',
     './queue_ticket_routes_authz.test.js',
     './emergency_protocol.test.js',

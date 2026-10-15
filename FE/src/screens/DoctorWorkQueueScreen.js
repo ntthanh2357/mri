@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
+import { isRateLimitError } from '../utils/apiErrors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
 import Colors from '../constants/colors';
@@ -183,6 +184,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         .catch(err => {
           console.warn('[DoctorWorkQueueScreen] Lỗi xác thực người dùng:', err);
           if (isMountedRef.current) {
+            // [FIX 0014] 429 (hệ thống bận) không phải phiên hết hạn — không đá user đi đăng nhập lại
+            if (isRateLimitError(err)) {
+              Alert.alert(
+                'Hệ thống đang bận',
+                'Có quá nhiều yêu cầu cùng lúc. Vui lòng chờ vài giây rồi bấm Làm mới.',
+                [{ text: 'Đã hiểu' }]
+              );
+              return;
+            }
             Alert.alert(
               'Phiên làm việc hết hạn',
               'Không thể xác thực thông tin tài khoản hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',

@@ -16,6 +16,7 @@ import { extractMedications, extractOrders } from '../utils/clinicalText.js';
 import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
+import { isRateLimitError } from '../utils/apiErrors.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { daysLeftOf, expiryStatus, expiryStatusText, batchCountOf, earliestActiveBatch, displayExpiry } from '../utils/batchUtils.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
@@ -430,6 +431,36 @@ it('displayExpiry ưu tiên lô sớm nhất, fallback hạn dùng danh mục c�
   const legacy = { expiryDate: '2027-10-15' };
   assert.strictEqual(displayExpiry(legacy), new Date('2027-10-15').toLocaleDateString('vi-VN'));
   assert.strictEqual(displayExpiry({}), 'Không thời hạn');
+});
+
+// ── [FIX 0014] Phân loại lỗi API: 429 (hệ thống bận) vs 401/403 (phiên hết hạn) ──
+console.log('\n  ── FIX 0014: isRateLimitError (utils/apiErrors.js) ──');
+
+it('isRateLimitError nhận ra lỗi 429 qua err.status', () => {
+  assert.strictEqual(isRateLimitError({ status: 429, message: 'Quá nhiều lần thử' }), true);
+});
+
+it('isRateLimitError nhận ra lỗi qua err.code RATE_LIMIT_EXCEEDED', () => {
+  assert.strictEqual(isRateLimitError({ status: 500, code: 'RATE_LIMIT_EXCEEDED', message: 'x' }), true);
+});
+
+it('isRateLimitError nhận ra qua message tiếng Việt của BE (FE cũ không gắn status)', () => {
+  assert.strictEqual(isRateLimitError(new Error('Quá nhiều lần thử xác thực hoặc đăng nhập thất bại. Vui lòng thử lại sau 23 giây.')), true);
+  assert.strictEqual(isRateLimitError(new Error('Bạn đã thực hiện quá nhiều yêu cầu. Vui lòng thử lại sau.')), true);
+});
+
+it('isRateLimitError KHÔNG nhầm 401/403/lỗi mạng với rate limit', () => {
+  assert.strictEqual(isRateLimitError({ status: 401, message: 'Phiên làm việc đã hết hạn.' }), false);
+  assert.strictEqual(isRateLimitError({ status: 403, code: 'FORBIDDEN', message: 'Không có quyền' }), false);
+  assert.strictEqual(isRateLimitError(new Error('Request failed with status 500')), false);
+  assert.strictEqual(isRateLimitError(new Error('Network request failed')), false);
+});
+
+it('isRateLimitError an toàn với input null/undefined/đối tượng rỗng', () => {
+  assert.strictEqual(isRateLimitError(null), false);
+  assert.strictEqual(isRateLimitError(undefined), false);
+  assert.strictEqual(isRateLimitError({}), false);
+  assert.strictEqual(isRateLimitError({ message: 123 }), false);
 });
 
 console.log(`\n======================================================================`);
