@@ -19,7 +19,7 @@ import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
-import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package, Clock } from 'lucide-react';
+import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package, Clock, ChevronUp, ChevronDown } from 'lucide-react';
 import { batchesOf, batchCountOf, daysLeftOf, displayExpiry, earliestActiveBatch, expiryStatus } from '../utils/batchUtils';
 
 const CATEGORY_LABELS = {
@@ -367,7 +367,7 @@ export default function DrugManagementScreen({ navigation, route }) {
                 <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
                   <View style={styles.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                      <Text style={{ fontSize: 16 }}>{isEditing ? '✏️' : '➕'}</Text>
+                      {isEditing ? <Edit2 size={16} color={Colors.brandNavy} /> : <Plus size={16} color={Colors.brandNavy} />}
                       <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
                         {isEditing ? 'Cập nhật thông tin thuốc' : 'Thêm thuốc vào danh mục'}
                       </Text>
@@ -562,7 +562,7 @@ export default function DrugManagementScreen({ navigation, route }) {
                           onChangeText={setSearchQuery}
                         />
                         <View style={{ position: 'absolute', left: 12 }}>
-                          <Text style={{ fontSize: 14 }}>🔍</Text>
+                          <Search size={14} color={Colors.secondary} />
                         </View>
                       </View>
                       <View style={{ flex: 1, position: 'relative', zIndex: 20 }}>
@@ -656,8 +656,9 @@ export default function DrugManagementScreen({ navigation, route }) {
                                   >
                                     <Text style={styles.drugNameText}>{item.name}</Text>
                                     {nBatches > 0 && (
-                                      <View style={styles.batchCountTag}>
-                                        <Text style={styles.batchCountTagText}>{nBatches} lô {isExpanded ? '▲' : '▼'}</Text>
+                                      <View style={[styles.batchCountTag, { flexDirection: 'row', alignItems: 'center', gap: 2 }]}>
+                                        <Text style={styles.batchCountTagText}>{nBatches} lô</Text>
+                                        {isExpanded ? <ChevronUp size={11} color="#0369A1" /> : <ChevronDown size={11} color="#0369A1" />}
                                       </View>
                                     )}
                                   </TouchableOpacity>
@@ -720,15 +721,16 @@ export default function DrugManagementScreen({ navigation, route }) {
                                       onPress={() => openStockModal(item)}
                                       style={[styles.tblBtnStock, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     >
-                                      <Text style={{ fontSize: 12 }}>➕</Text>
+                                      <Plus size={12} color={Colors.brandGreenPressed} />
                                       <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
                                     {canManageCatalog && (
                                       <TouchableOpacity
                                         onPress={() => startEdit(item)}
-                                        style={styles.tblBtnEdit}
+                                        style={[styles.tblBtnEdit, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                       >
-                                        <Text style={{ fontSize: 12 }}>✏️</Text>
+                                        <Edit2 size={12} color="#475569" />
+                                        <Text style={styles.tblBtnEditText}>Sửa</Text>
                                       </TouchableOpacity>
                                     )}
                                     {canManageCatalog && (
@@ -736,7 +738,7 @@ export default function DrugManagementScreen({ navigation, route }) {
                                         onPress={() => handleDeleteDrug(item._id, item.name)}
                                         style={styles.tblBtnDel}
                                       >
-                                        <Text style={{ fontSize: 12 }}>🗑️</Text>
+                                        <Trash2 size={12} color="#991B1B" />
                                       </TouchableOpacity>
                                     )}
                                   </View>
@@ -808,7 +810,7 @@ export default function DrugManagementScreen({ navigation, route }) {
 
               {expiring.length === 0 ? (
                 <View style={[styles.emptyBox, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}>
-                  <Text style={{ fontSize: 16 }}>✅</Text>
+                  <CheckCircle2 size={14} color="#059669" />
                   <Text style={[styles.emptyText, { color: '#059669', marginBottom: 0 }]}>
                     Không có lô nào sắp hết hạn trong 30 ngày tới.
                   </Text>
@@ -874,7 +876,7 @@ export default function DrugManagementScreen({ navigation, route }) {
             // Alerts Tab
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Text style={{ fontSize: 16 }}>⚠️</Text>
+                <AlertTriangle size={16} color="#B45309" />
                 <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách thuốc cần nhập kho bổ sung</Text>
               </View>
               <Text style={styles.cardSub}>
@@ -883,7 +885,7 @@ export default function DrugManagementScreen({ navigation, route }) {
 
               {alerts.length === 0 ? (
                 <View style={[styles.emptyBox, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }]}>
-                  <Text style={{ fontSize: 16 }}>✅</Text>
+                  <CheckCircle2 size={14} color="#059669" />
                   <Text style={[styles.emptyText, { color: '#059669', marginBottom: 0 }]}>
                     Tuyệt vời! Hiện tại không có loại thuốc nào dưới ngưỡng an toàn.
                   </Text>

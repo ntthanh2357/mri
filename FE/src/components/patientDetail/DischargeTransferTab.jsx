@@ -638,7 +638,7 @@ const DischargeTransferTab = ({
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <Send size={16} color="#FFF" />
-                  <Text style={styles.smartSubmitButtonText}>⚡ Tạo Gói Chuyển Viện & Đẩy Sang Lễ Tân</Text>
+                  <Text style={styles.smartSubmitButtonText}>Tạo Gói Chuyển Viện & Đẩy Sang Lễ Tân</Text>
                 </View>
               )}
             </TouchableOpacity>

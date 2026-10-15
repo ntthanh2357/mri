@@ -28,7 +28,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { get, post, setAuthToken } from '../services/api.service';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import PressableScale from '../components/PressableScale';
@@ -222,7 +222,12 @@ const StaffLoginScreen = ({ navigation }) => {
   };
 
   const renderFieldError = (msg) =>
-    msg ? <Text style={styles.fieldError}>⚠ {msg}</Text> : null;
+    msg ? (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4 }}>
+        <AlertCircle size={12} color="#DC2626" />
+        <Text style={[styles.fieldError, { flex: 1 }]}>{msg}</Text>
+      </View>
+    ) : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flexOne}>

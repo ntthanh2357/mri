@@ -507,14 +507,14 @@ const EMRDashboardScreen = ({ navigation, route }) => {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 46/2018)</Text>
                 <TouchableOpacity onPress={() => setAddendumModal(false)}>
-                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
               <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
                 Bệnh nhân: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
               </Text>
               <Text style={{ fontSize: 12, color: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft, padding: 8, borderRadius: 8, marginBottom: 12 }}>
-                ℹ️ Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
+                Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
               </Text>
 
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>Tiêu đề phụ lục *</Text>
@@ -681,7 +681,7 @@ const NurseQueueTab = ({ navigation }) => {
                   style={[styles.primaryButton, { marginTop: 12, paddingVertical: 10, maxWidth: 160 }]} 
                   onPress={() => openVitalsModal(v)}
                 >
-                  <Text style={styles.primaryButtonText}>🩺 Nhập sinh hiệu</Text>
+                  <Text style={styles.primaryButtonText}>Nhập sinh hiệu</Text>
                 </TouchableOpacity>
               </View>
             ))
@@ -693,7 +693,7 @@ const NurseQueueTab = ({ navigation }) => {
       <Modal visible={vitalsModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { padding: 20 }]}>
-            <Text style={styles.modalTitle}>🩺 Nhập sinh hiệu cho bệnh nhân</Text>
+            <Text style={styles.modalTitle}>Nhập sinh hiệu cho bệnh nhân</Text>
             <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>
               Bệnh nhân: {selectedVisit?.patientId?.profile?.name || selectedVisit?.patientId?.profile?.fullName || selectedVisit?.patientId?.email}
             </Text>
@@ -1321,8 +1321,9 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
           <Text style={styles.signBtnText}>Ký số bệnh án</Text>
         </TouchableOpacity>
       ) : (
-        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6 }}>
-          <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>✓ Đã ký số</Text>
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#DCFCE7', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <CheckCircle2 size={11} color="#166534" />
+          <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>Đã ký số</Text>
         </View>
       )}
       <TouchableOpacity

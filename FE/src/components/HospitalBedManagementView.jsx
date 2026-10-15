@@ -580,22 +580,22 @@ export default function HospitalBedManagementView({ currentUser }) {
                                 <div className="flex flex-wrap items-center gap-1 mt-1.5">
                                   {(bed.hasIcpMonitor || bed.type === 'icu_neuro_icp') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                                      🧠 ICP Monitor
+                                      ICP Monitor
                                     </span>
                                   )}
                                   {(bed.hasEegMonitor || bed.type === 'icu_neuro_eeg') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
-                                      ⚡ EEG Monitor
+                                      EEG Monitor
                                     </span>
                                   )}
                                   {(bed.isIsolationRoom || bed.type === 'isolation') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-                                      🛡️ Buồng vô trùng
+                                      Buồng vô trùng
                                     </span>
                                   )}
                                   {bed.type === 'post_op_recovery' && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 font-semibold">
-                                      🩺 Hậu phẫu mở sọ
+                                      Hậu phẫu mở sọ
                                     </span>
                                   )}
                                 </div>

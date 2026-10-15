@@ -713,7 +713,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text style={styles.modalTitle}>Khai báo thẻ bảo hiểm y tế (BHYT)</Text>
                 <TouchableOpacity onPress={() => setShowBhytModal(false)}>
-                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                  <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.modalSub}>
@@ -779,18 +779,20 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                   style={[styles.checkRow, bhytIsOutOfNetwork && styles.checkRowActive]}
                   onPress={() => setBhytIsOutOfNetwork(!bhytIsOutOfNetwork)}
                 >
-                  <Text style={[styles.checkText, bhytIsOutOfNetwork && { color: '#B45309' }]}>
-                    {bhytIsOutOfNetwork ? '☑ Trái tuyến' : '☐ Trái tuyến'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Feather name={bhytIsOutOfNetwork ? 'check-square' : 'square'} size={14} color={bhytIsOutOfNetwork ? '#B45309' : '#64748B'} />
+                    <Text style={[styles.checkText, bhytIsOutOfNetwork && { color: '#B45309' }]}>Trái tuyến</Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.checkRow, bhytHasTransferForm && styles.checkRowActive]}
                   onPress={() => setBhytHasTransferForm(!bhytHasTransferForm)}
                 >
-                  <Text style={[styles.checkText, bhytHasTransferForm && { color: '#047857' }]}>
-                    {bhytHasTransferForm ? '☑ Có giấy chuyển tuyến' : '☐ Có giấy chuyển tuyến'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Feather name={bhytHasTransferForm ? 'check-square' : 'square'} size={14} color={bhytHasTransferForm ? '#047857' : '#64748B'} />
+                    <Text style={[styles.checkText, bhytHasTransferForm && { color: '#047857' }]}>Có giấy chuyển tuyến</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Info } from 'lucide-react';
 
 /**
  * Component: ClinicalDisclaimerBanner
@@ -37,11 +37,14 @@ export const ClinicalDisclaimerBanner = ({ isDoctor = true, compact = false }) =
         <Text style={styles.description}>
           Hệ thống NeuroScan AI hoạt động dưới vai trò <Text style={styles.bold}>Hệ thống Hỗ trợ Ra Quyết định Lâm sàng (CDSS)</Text> và trong phạm vi nghiên cứu nội bộ (Research Use Only). Bản đồ nhiệt Grad-CAM và Bounding Box khoanh vùng u não là kết quả phân tích tự động từ mô hình Deep Learning.
         </Text>
-        <Text style={[styles.description, { marginTop: 4 }]}>
-          {isDoctor
-            ? "⚠️ Kết quả AI KHÔNG THAY THẾ kết luận chuyên môn độc lập của Bác sĩ Chẩn đoán Hình ảnh. Bác sĩ vui lòng đối chiếu lâm sàng và thực hiện ký số xác nhận."
-            : "ℹ️ Kết quả này chưa phải là kết luận y khoa cuối cùng cho đến khi được Bác sĩ Chẩn đoán Hình ảnh thẩm định và đóng dấu ký số điện tử."}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
+          {isDoctor ? <AlertTriangle size={13} color="#B45309" style={{ marginTop: 2, flexShrink: 0 }} /> : <Info size={13} color="#0369A1" style={{ marginTop: 2, flexShrink: 0 }} />}
+          <Text style={[styles.description, { flex: 1, marginTop: 0 }]}>
+            {isDoctor
+              ? "Kết quả AI KHÔNG THAY THẾ kết luận chuyên môn độc lập của Bác sĩ Chẩn đoán Hình ảnh. Bác sĩ vui lòng đối chiếu lâm sàng và thực hiện ký số xác nhận."
+              : "Kết quả này chưa phải là kết luận y khoa cuối cùng cho đến khi được Bác sĩ Chẩn đoán Hình ảnh thẩm định và đóng dấu ký số điện tử."}
+          </Text>
+        </View>
       </View>
     </View>
   );

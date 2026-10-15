@@ -1285,14 +1285,14 @@ const FinancialsScreen = ({ navigation }) => {
               {refundHasPendingDrugs && (
                 <View style={styles.refundBranchGreen}>
                   <Text style={styles.refundBranchGreenText}>
-                    ✔ Thuốc CHƯA phát vật lý ({refundDrugItems.filter(it => it.dispenseStatus !== 'DISPENSED').length} dòng): hoàn vị về đúng lô đã xuất — tồn kho tăng tương ứng, không tạo tồn kho ma.
+                    Thuốc CHƯA phát vật lý ({refundDrugItems.filter(it => it.dispenseStatus !== 'DISPENSED').length} dòng): hoàn vị về đúng lô đã xuất — tồn kho tăng tương ứng, không tạo tồn kho ma.
                   </Text>
                 </View>
               )}
               {refundHasDispensedDrugs && (
                 <View style={styles.refundBranchRed}>
                   <Text style={styles.refundBranchRedText}>
-                    ⚠ Thuốc ĐÃ phát cho người bệnh ({refundDrugItems.filter(it => it.dispenseStatus === 'DISPENSED').length} dòng): chuyển vào Kho Biệt trữ (cách ly) chờ kiểm định / tiêu hủy theo quy chế GPP — không hoàn lại kho cấp phát.
+                    Lưu ý — Thuốc ĐÃ phát cho người bệnh ({refundDrugItems.filter(it => it.dispenseStatus === 'DISPENSED').length} dòng): chuyển vào Kho Biệt trữ (cách ly) chờ kiểm định / tiêu hủy theo quy chế GPP — không hoàn lại kho cấp phát.
                   </Text>
                 </View>
               )}

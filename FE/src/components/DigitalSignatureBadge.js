@@ -21,7 +21,7 @@ const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn, di
       <View style={styles.signedContainer}>
         <View style={styles.stampHeader}>
           <CheckCircle2 size={16} color="#059669" />
-          <Text style={styles.stampTitle}>✓ ĐÃ KÝ SỐ ĐIỆN TỬ BỞI BÁC SĨ CĐHA</Text>
+          <Text style={styles.stampTitle}>ĐÃ KÝ SỐ ĐIỆN TỬ BỞI BÁC SĨ CĐHA</Text>
         </View>
         <Text style={styles.stampText}>
           Bác sĩ ký duyệt: <Text style={styles.stampBold}>{radiologist || 'Bác sĩ CĐHA'}</Text>

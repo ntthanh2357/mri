@@ -16,7 +16,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SystemAdminScreen.styles';
 import { get, post } from '../services/api.service';
 import { isRateLimitError } from '../utils/apiErrors';
-import { AlertTriangle, FileText, MessageSquare, Folder, Zap } from 'lucide-react';
+import { AlertTriangle, FileText, MessageSquare, Folder, Zap, ChevronDown } from 'lucide-react';
 
 const METRICS_POLL_INTERVAL = 30000; // 30 giây
 
@@ -547,8 +547,9 @@ const SystemAdminScreen = ({ navigation }) => {
         </View>
 
         {/* View More Link */}
-        <TouchableOpacity style={styles.viewMoreLink} onPress={() => Alert.alert('Thông tin', 'Các tác nhân bổ sung: MRI Classifier, Segmentation Bot, Report Validator.')}>
-          <Text style={styles.viewMoreText}>Xem thêm 3 tác nhân khác ▼</Text>
+        <TouchableOpacity style={[styles.viewMoreLink, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => Alert.alert('Thông tin', 'Các tác nhân bổ sung: MRI Classifier, Segmentation Bot, Report Validator.')}>
+          <Text style={styles.viewMoreText}>Xem thêm 3 tác nhân khác</Text>
+          <ChevronDown size={12} color="#15803D" />
         </TouchableOpacity>
 
         {/* Hard cases training card */}

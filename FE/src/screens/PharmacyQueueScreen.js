@@ -253,15 +253,19 @@ export default function PharmacyQueueScreen({ navigation, route }) {
           </Text>
         </View>
         {safety.requiresDualSign ? (
-          <View style={[styles.chip, { backgroundColor: safety.dualSignStatus === 'VERIFIED' ? '#ECFDF5' : '#FEF2F2' }]}>
+          <View style={[styles.chip, { backgroundColor: safety.dualSignStatus === 'VERIFIED' ? '#ECFDF5' : '#FEF2F2', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            {safety.dualSignStatus === 'VERIFIED'
+              ? <CheckCircle2 size={11} color="#047857" />
+              : <AlertTriangle size={11} color="#B91C1C" />}
             <Text style={[styles.chipText, { color: safety.dualSignStatus === 'VERIFIED' ? '#047857' : '#B91C1C' }]}>
-              {safety.dualSignStatus === 'VERIFIED' ? '✓ Đã ký kép' : '⚠ Chờ Dual-Sign'}
+              {safety.dualSignStatus === 'VERIFIED' ? 'Đã ký kép' : 'Chờ Dual-Sign'}
             </Text>
           </View>
         ) : null}
         {isCritical(p) ? (
-          <View style={[styles.chip, { backgroundColor: '#B91C1C' }]}>
-            <Text style={[styles.chipText, { color: '#FFFFFF' }]}>🚨 ƯU TIÊN TUYỆT ĐỐI</Text>
+          <View style={[styles.chip, { backgroundColor: '#B91C1C', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            <AlertTriangle size={11} color="#FFFFFF" />
+            <Text style={[styles.chipText, { color: '#FFFFFF' }]}>ƯU TIÊN TUYỆT ĐỐI</Text>
           </View>
         ) : null}
       </View>
@@ -287,7 +291,7 @@ export default function PharmacyQueueScreen({ navigation, route }) {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
         <View style={[styles.chip, { backgroundColor: bg }]}>
-          <Text style={[styles.chipText, { color }]}>💳 {label}</Text>
+          <Text style={[styles.chipText, { color }]}>{label}</Text>
         </View>
       </View>
     );
