@@ -113,7 +113,9 @@ const FinancialsScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Export BHYT error:', err);
-      Alert.alert('Thông báo', 'Đã khởi tạo file giám định điện tử BHYT XML 4210 cho kỳ báo cáo.');
+      // Lỗi thật phải báo lỗi thật — trước đây catch lại hiển thị thông báo
+      // "thành công" khiến user tưởng đã xuất được file (BE trả 400 vẫn báo OK).
+      Alert.alert('Lỗi xuất BHYT', err?.message || 'Không thể xuất file giám định BHYT XML 4210. Vui lòng thử lại sau.');
     } finally {
       setExportingBhyt(false);
     }
