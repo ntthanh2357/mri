@@ -234,13 +234,16 @@ export const overrideAssignment = async (req, res) => {
 
     // Thông báo bác sĩ cũ và mới
     try {
+      // 0012: message theo đúng loại phân công (đọc phim / điều trị) thay vì
+      // hardcode "ca đọc phim" như cũ
+      const caseLabel = assignment.type === 'read' ? 'ca đọc phim' : 'ca điều trị';
       await createNotificationInternal({
         hospitalId: req.user.hospitalId,
         recipientId: newDoctorId,
         senderId: req.user.id,
         type: "assignment_override",
         title: "📋 Phân công mới (chuyển giao)",
-        message: `Bạn được chuyển giao ca đọc phim từ bác sĩ khác. Lý do: ${reason || 'Không có lý do'}.`,
+        message: `Bạn được chuyển giao ${caseLabel} từ bác sĩ khác. Lý do: ${reason || 'Không có lý do'}.`,
         relatedId: assignment._id,
       });
     } catch (notifErr) {

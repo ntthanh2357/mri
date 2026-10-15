@@ -209,11 +209,13 @@ export default function SlaReportScreen({ navigation }) {
             <Text style={styles.aiLabel}>Ca AI đã xử lý</Text>
           </View>
           <View style={styles.aiCell}>
-            <Text style={styles.aiValue}>{ai.successRatePercentage ?? '—'}%</Text>
+            {/* 0012: BE giờ trả null khi chưa có job — hiển thị "—" sạch, tránh "—%" */}
+            <Text style={styles.aiValue}>{ai.successRatePercentage != null ? `${ai.successRatePercentage}%` : '—'}</Text>
             <Text style={styles.aiLabel}>Tỷ lệ thành công</Text>
           </View>
           <View style={styles.aiCell}>
-            <Text style={styles.aiValue}>{fmtMinutes((ai.averageProcessingTimeSeconds || 0) / 60)}</Text>
+            {/* 0012: null-safe — không hiển thị "0 phút" khi chưa có job đo được */}
+            <Text style={styles.aiValue}>{fmtMinutes(ai.averageProcessingTimeSeconds != null ? ai.averageProcessingTimeSeconds / 60 : null)}</Text>
             <Text style={styles.aiLabel}>Thời gian xử lý TB</Text>
           </View>
           <View style={styles.aiCell}>

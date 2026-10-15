@@ -216,7 +216,20 @@ export const getAiPerformanceReport = async (req, res) => {
       AiJob.countDocuments({ hospitalId, status: 'failed' }),
     ]);
 
-    const successRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 100;
+    // 0012: không ép thành công 100% khi chưa có job nào — trả null để FE hiển thị "—"
+    const successRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : null;
+
+    // 0012: bỏ giá trị hardcode 145s — tính trung bình thật từ startedAt→completedAt
+    // của các AiJob đã hoàn tất (null khi chưa có job đo được, FE hiển thị "—")
+    const completedJobDocs = await AiJob.find({ hospitalId, status: 'completed' })
+      .select("startedAt completedAt")
+      .lean();
+    const durationsSec = completedJobDocs
+      .filter((j) => j.startedAt && j.completedAt)
+      .map((j) => Math.max(0, (new Date(j.completedAt) - new Date(j.startedAt)) / 1000));
+    const averageProcessingTimeSeconds = durationsSec.length
+      ? Math.round(durationsSec.reduce((s, v) => s + v, 0) / durationsSec.length)
+      : null;
 
     // Lấy các kết quả AI đã có
     const imagingResults = await ImagingResult.find({
@@ -239,7 +252,7 @@ export const getAiPerformanceReport = async (req, res) => {
       completedJobs,
       failedJobs,
       successRatePercentage: successRate,
-      averageProcessingTimeSeconds: 145, // Target < 300s (5 min)
+      averageProcessingTimeSeconds,
       tumorDistribution: tumorTypesCount,
     }, "Lấy báo cáo hoạt động AI thành công.");
   } catch (err) {

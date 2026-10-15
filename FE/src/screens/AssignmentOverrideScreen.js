@@ -97,7 +97,9 @@ const doctorName = (doc) =>
   doc?.profile?.name || doc?.profile?.fullName || doc?.email || '—';
 
 const priorityLabel = (p) => {
-  if (p === 1) return 'CRITICAL';
+  // 0012: đồng bộ ngôn ngữ tiếng Việt — trước đây priority 1 hiển thị "CRITICAL"
+  // lẫn tiếng Anh giữa "Ưu tiên cao" / "Thường"
+  if (p === 1) return 'KHẨN CẤP';
   if (p <= 3) return 'Ưu tiên cao';
   return 'Thường';
 };
@@ -590,8 +592,11 @@ const styles = StyleSheet.create({
   doctorBoxName: { fontWeight: '800', color: Colors.slateDark },
 
   metaRow: { flexDirection: 'row', gap: 14, marginTop: 10, flexWrap: 'wrap' },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 11.5, color: Colors.slateMuted, fontWeight: '600' },
+  // 0012: thêm minWidth:0 + flexShrink:1 + maxWidth:'100%' để chữ metadata
+  // (tên BS phụ trách, mã thực thể) co lại có dấu "..." trên màn hẹp thay vì
+  // bị cắt cụt xuyên qua mép thẻ
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 1, maxWidth: '100%' },
+  metaText: { fontSize: 11.5, color: Colors.slateMuted, fontWeight: '600', flexShrink: 1, minWidth: 0 },
 
   overriddenBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, backgroundColor: '#F5F3FF', borderRadius: 8, padding: 10 },
   overriddenText: { flex: 1, fontSize: 12, color: '#6D28D9', lineHeight: 17 },
@@ -606,7 +611,7 @@ const styles = StyleSheet.create({
   doctorCardOverloaded: { borderColor: '#FECACA', borderWidth: 2, backgroundColor: '#FFFBFB' },
   doctorHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   doctorAvatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  doctorName: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy, flexShrink: 1 },
+  doctorName: { fontSize: 14.5, fontWeight: '800', color: Colors.brandNavy, flexShrink: 1, minWidth: 0 },
   doctorSub: { fontSize: 11.5, color: Colors.slateMuted, marginTop: 2 },
   loadText: { fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
   loadSub: { fontSize: 10.5, color: Colors.slateMuted },
@@ -629,7 +634,7 @@ const styles = StyleSheet.create({
   radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: Colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   radioActive: { borderColor: Colors.brandGreen },
   radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.brandGreen },
-  pickName: { fontSize: 13.5, fontWeight: '700', color: Colors.slateDark, flexShrink: 1 },
+  pickName: { fontSize: 13.5, fontWeight: '700', color: Colors.slateDark, flexShrink: 1, minWidth: 0 },
   pickSub: { fontSize: 11.5, color: Colors.slateMuted, marginTop: 2 },
   suggestChip: { borderRadius: 999, backgroundColor: Colors.infoBg, paddingHorizontal: 8, paddingVertical: 3 },
   suggestText: { fontSize: 10.5, fontWeight: '700', color: Colors.infoText },

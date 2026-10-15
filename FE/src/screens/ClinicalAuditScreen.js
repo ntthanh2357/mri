@@ -403,8 +403,11 @@ const styles = StyleSheet.create({
   details: { fontSize: 13, color: Colors.slateDark, lineHeight: 19, marginTop: 10 },
 
   metaRow: { flexDirection: 'row', gap: 14, marginTop: 10, flexWrap: 'wrap' },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 11.5, color: Colors.slateMuted, fontWeight: '600' },
+  // 0012: thêm minWidth:0 + flexShrink:1 + maxWidth:'100%' để dòng người thực
+  // hiện / thực thể co lại có dấu "..." trên màn hẹp thay vì bị cắt cụt không
+  // ellipsis xuyên qua mép thẻ (báo lỗi trên mobile 390px)
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 1, maxWidth: '100%' },
+  metaText: { fontSize: 11.5, color: Colors.slateMuted, fontWeight: '600', flexShrink: 1, minWidth: 0 },
 
   hashBox: { marginTop: 10, backgroundColor: Colors.background, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10, gap: 3 },
   hashRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
