@@ -157,11 +157,13 @@ export default function DrugManagementScreen({ navigation, route }) {
   }, []);
 
   // Menu điều hướng lại khi màn đã mở (React Navigation không remount cùng màn)
-  // — đồng bộ tab theo params mỗi khi params.tab đổi, kể cả khi quay về 'list'.
+  // — đồng bộ tab theo params mỗi lần navigate. Phụ thuộc object params (không phải
+  // params.tab) vì cùng giá trị 'list' → 'list' không đổi → effect không chạy lại
+  // (bug: đứng tab 'Hết hạn theo lô' rồi bấm menu 'Danh mục thuốc' không về được).
   useEffect(() => {
     const t = route?.params?.tab;
     setActiveTab(['alerts', 'expiry'].includes(t) ? t : 'list');
-  }, [route?.params?.tab]);
+  }, [route?.params]);
 
   useEffect(() => {
     fetchDrugs();
@@ -406,7 +408,7 @@ export default function DrugManagementScreen({ navigation, route }) {
                       </View>
                     </View>
 
-                    <View style={styles.fieldRow}>
+                    <View style={[styles.fieldRow, { zIndex: 30 }]}>
                       <View style={{ flex: 1, marginRight: 8, position: 'relative', zIndex: 20 }}>
                         <Text style={styles.label}>Phân loại dược lý</Text>
                         <TouchableOpacity
@@ -1133,7 +1135,11 @@ const styles = StyleSheet.create({
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   cancelBtn: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
   cancelBtnText: { fontSize: 13, fontWeight: 'bold', color: '#64748B' },
-  listHeader: { marginBottom: 16 },
+  // RN-web 0.21: mọi View mặc định position:relative + zIndex:0 (stacking context).
+  // zIndex lồng sâu (20/50 trên wrapper/menu) KHÔNG thắng được sibling SAU nó trong
+  // DOM cùng z:0 → bảng thuốc vẽ đè lên dropdown đang mở. Fix: nâng zIndex tại
+  // CHÍNH sibling cạnh tranh (listHeader) để cả nhánh dropdown nổi trên bảng.
+  listHeader: { marginBottom: 16, zIndex: 30 },
   searchInput: { height: 38, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, fontSize: 12, backgroundColor: '#F8FAFC', color: Colors.brandNavy, outlineStyle: 'none' },
   loadingBox: { paddingVertical: 60, alignItems: 'center' },
   emptyBox: { paddingVertical: 60, alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 10 },
