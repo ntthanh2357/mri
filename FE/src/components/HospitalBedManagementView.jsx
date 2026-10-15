@@ -14,6 +14,7 @@ import {
   X,
   Lock,
   Sparkles,
+  Info,
 } from 'lucide-react';
 import { get, post, put } from '../services/api.service';
 import InpatientEmergencyModal from './InpatientEmergencyModal';
@@ -62,6 +63,9 @@ export default function HospitalBedManagementView({ currentUser }) {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchKeyword, setSearchKeyword] = useState('');
+  // True khi BE trả 403/404 vì tài khoản chưa gán bệnh viện (vd: system admin) —
+  // hiển thị banner giải thích thay vì sơ đồ giường toàn 0.
+  const [noHospitalScope, setNoHospitalScope] = useState(false);
 
   // Modals state
   const [activeModal, setActiveModal] = useState(null); // 'reserve' | 'occupy' | 'release' | 'transfer' | 'create'
@@ -115,6 +119,10 @@ export default function HospitalBedManagementView({ currentUser }) {
       }
     } catch (err) {
       console.error('Lỗi tải dữ liệu buồng giường:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -338,6 +346,19 @@ export default function HospitalBedManagementView({ currentUser }) {
   return (
     <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
       {dialog}
+      
+      {/* Cảnh báo phạm vi: tài khoản chưa gán bệnh viện → không có dữ liệu giường */}
+      {noHospitalScope && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <Info className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-amber-800">Chưa có dữ liệu giường bệnh theo bệnh viện</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              Tài khoản của bạn chưa được gán vào một bệnh viện cụ thể nên sơ đồ giường hiển thị bằng 0. Hãy gán bệnh viện cho tài khoản (Quản trị → Người dùng) hoặc đăng nhập bằng tài khoản quản lý bệnh viện để xem sơ đồ giường thật.
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* ── HEADER & CAPACITY ALERT ────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">

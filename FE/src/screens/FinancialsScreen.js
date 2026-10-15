@@ -39,6 +39,7 @@ import {
   FileText,
   Calculator,
   Undo2,
+  Info,
 } from 'lucide-react';
 
 const DRUG_SUGGESTIONS = [
@@ -58,6 +59,9 @@ const FinancialsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'invoices' | 'revenue' | 'drugs'
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // True khi BE trả 403/404 vì tài khoản chưa gán bệnh viện (vd: system admin) —
+  // hiển thị banner giải thích thay vì KPI toàn 0 gây hiểu nhầm.
+  const [noHospitalScope, setNoHospitalScope] = useState(false);
 
   // Hóa đơn & Hoàn tiền (UC-PHA-06)
   const [invoices, setInvoices] = useState([]);
@@ -253,6 +257,10 @@ const FinancialsScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Error fetching financial data:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -270,6 +278,10 @@ const FinancialsScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Error fetching hospital pricing:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     }
   };
 
@@ -544,6 +556,18 @@ const FinancialsScreen = ({ navigation }) => {
 
         <ScrollView>
           <PageContainer>
+          {/* Cảnh báo phạm vi: tài khoản chưa gán bệnh viện → dữ liệu tài chính theo bệnh viện không khả dụng */}
+          {noHospitalScope && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <Info size={18} color="#B45309" style={{ marginTop: 2 }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>Chưa có dữ liệu tài chính theo bệnh viện</Text>
+                <Text style={{ fontSize: 12.5, color: '#A16207', marginTop: 3, lineHeight: 18 }}>
+                  Tài khoản của bạn chưa được gán vào một bệnh viện cụ thể nên các chỉ số bên dưới hiển thị bằng 0 và bảng giá dịch vụ không áp dụng. Hãy gán bệnh viện cho tài khoản (Quản trị → Người dùng) hoặc đăng nhập bằng tài khoản quản lý bệnh viện để xem báo cáo tài chính thật.
+                </Text>
+              </View>
+            </View>
+          )}
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <View>
