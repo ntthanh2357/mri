@@ -47,6 +47,7 @@ import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
+import MyAssignmentsScreen from '../screens/MyAssignmentsScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
@@ -88,6 +89,7 @@ export const staffLinkingConfig = {
       NurseReception: 'staff/nurse-reception',
       ActivateAccount: 'staff/activate-account',
       DoctorWorkQueue: 'staff/doctor-work-queue',
+      MyAssignments: 'staff/my-assignments',
       HospitalOnboarding: 'staff/hospital-onboarding',
       StaffManagement: 'staff/staff-management',
       NursePatientDetail: 'staff/nurse-patient-detail',
@@ -199,6 +201,7 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="MyAssignments" component={MyAssignmentsScreen} options={{ title: 'Phân công của tôi', headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ headerShown: false }} />

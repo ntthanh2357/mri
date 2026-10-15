@@ -38,6 +38,7 @@ export const linkingConfig = {
       NurseReception: 'nurse-reception',
       ActivateAccount: 'activate-account',
       DoctorWorkQueue: 'doctor-work-queue',
+      MyAssignments: 'my-assignments',
       HospitalOnboarding: 'hospital-onboarding',
       StaffManagement: 'staff-management',
       NursePatientDetail: 'nurse-patient-detail',

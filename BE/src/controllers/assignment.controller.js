@@ -345,8 +345,15 @@ export const getMyAssignments = async (req, res) => {
     const filter = { doctorId: req.user.id, hospitalId: req.user.hospitalId };
     if (status) filter.status = status;
 
+    // 0013: populate 2 cấp để trả kèm TÊN BỆNH NHÂN (visitId → patientId → profile.name)
+    // trước đây chỉ populate "visitId" 1 cấp nên FE chỉ nhận ObjectId bệnh nhân, không hiển
+    // thị được tên trên màn "Phân công của tôi". Kèm reason/visitType cho ngữ cảnh lâm sàng.
     const assignments = await Assignment.find(filter)
-      .populate("visitId", "patientId status priority")
+      .populate({
+        path: "visitId",
+        select: "patientId status priority reason visitType facility",
+        populate: { path: "patientId", select: "profile.name profile.fullName" },
+      })
       .populate("imagingResultId", "procedure diagnosis aiReport representativeSliceUrl")
       .sort({ priority: 1, deadlineAt: 1, createdAt: -1 });
 

@@ -14,10 +14,13 @@ const countStatus = (visits, statuses) => visits.filter(v => statuses.includes(v
 const task = (key, label, hint, count, route, params) => ({ key, label, hint, count, route, params });
 
 /** Danh sách việc theo role; việc còn tồn (count > 0) lên trước, giữ thứ tự ưu tiên trong từng nhóm. */
-export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], prescriptions = [] } = {}) => {
+export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], prescriptions = [], assignments = [] } = {}) => {
   let list = [];
   if (role === 'doctor') {
     list = [
+      // [0013-MyAssignments] Ca phân công chờ xác nhận nhận bàn giao (ACK) — lên đầu
+      // vì BS chưa ACK thì hệ thống chưa thể theo dõi tiến độ đúng hạn chót.
+      task('assign', 'Ca phân công chờ xác nhận', 'Đọc phim / điều trị được giao, cần xác nhận nhận ca', assignments.filter(a => a.status === 'pending').length, 'MyAssignments', { tab: 'pending' }),
       task('exam', 'Bệnh nhân chờ khám', 'Đã tiếp nhận, chưa bắt đầu khám', countStatus(visits, ['đang chờ', 'chờ khám bệnh']), 'DoctorWorkQueue', { tab: 'examQueue' }),
       task('examining', 'Đang khám, chưa kết thúc', 'Kê đơn hoặc ra y lệnh rồi kết thúc ca', countStatus(visits, ['đang khám']), 'DoctorWorkQueue', { tab: 'examQueue' }),
       task('read', 'Phim chờ đọc kết quả', 'Đã chụp xong, chờ bác sĩ kết luận', countStatus(visits, ['chờ bác sĩ đọc', 'chờ kết quả AI']), 'DoctorWorkQueue', { tab: 'mriQueue' }),

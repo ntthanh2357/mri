@@ -46,6 +46,7 @@ import {
   Gauge,
   FileSearch,
   Shuffle,
+  ClipboardCheck,
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
@@ -202,6 +203,7 @@ const ResponsiveLayout = ({
       case 'doctor':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
           { label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
           { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },

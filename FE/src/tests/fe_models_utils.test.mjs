@@ -291,12 +291,28 @@ it('buildStaffTasks counts doctor work by status and puts pending tasks first', 
   const emr = [{ signStatus: 'Chưa duyệt' }, { signStatus: 'Đã ký' }];
   const tasks = buildStaffTasks('doctor', { visits, emr });
   const byKey = Object.fromEntries(tasks.map(t => [t.key, t.count]));
-  assert.deepStrictEqual(byKey, { exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
-  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'examining', 'scan']);
+  // [0013-MyAssignments] thêm task 'assign' (ca phân công chờ xác nhận) — mặc định 0 khi chưa tải assignments
+  assert.deepStrictEqual(byKey, { assign: 0, exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
+  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'assign', 'examining', 'scan']);
   // bác sĩ kiêm chụp MRI (BE my-queue trả cả ca chụp cho bác sĩ)
   const withScan = buildStaffTasks('doctor', { visits: [{ status: 'chờ chụp' }, { status: 'đang chụp' }] });
   assert.strictEqual(withScan.find(t => t.key === 'scan').count, 2);
   assert.deepStrictEqual(tasks[0].params, { tab: 'examQueue' });
+});
+
+// [0013-MyAssignments] task 'assign' đếm ca phân công pending và dẫn tới màn Phân công của tôi
+it('buildStaffTasks counts pending assignments for doctor and routes to MyAssignments first when present', () => {
+  const withAssign = buildStaffTasks('doctor', {
+    visits: [{ status: 'đang chờ' }],
+    emr: [],
+    assignments: [{ status: 'pending' }, { status: 'pending' }, { status: 'acknowledged' }, { status: 'completed' }],
+  });
+  assert.strictEqual(withAssign.find(t => t.key === 'assign').count, 2);
+  // Việc còn tồn lên trước: assign (2 ca chờ ACK) đứng đầu danh sách
+  assert.strictEqual(withAssign[0].key, 'assign');
+  assert.deepStrictEqual(withAssign[0].params, { tab: 'pending' });
+  // Role khác không có task assign
+  assert.strictEqual(buildStaffTasks('nurse', { assignments: [{ status: 'pending' }] }).find(t => t.key === 'assign'), undefined);
 });
 
 it('buildStaffTasks handles unknown role and missing data', () => {
