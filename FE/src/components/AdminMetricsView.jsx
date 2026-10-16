@@ -606,7 +606,7 @@ export default function AdminMetricsView({
 
               {/* Tile 1: Duyệt CCHN */}
               <button
-                onClick={() => onSelectTab?.('doctors')}
+                onClick={() => onSelectTab?.('users')}
                 className="p-4 rounded-xl border border-cyan-100/80 bg-cyan-50/20 hover:bg-cyan-50/45 text-left group transition-all duration-250 ease-out hover:translate-x-[2px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">

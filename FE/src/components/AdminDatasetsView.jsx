@@ -100,11 +100,17 @@ export default function AdminDatasetsView() {
   // ── Task 10.2 — Create dataset ───────────────────────────────────────────────
   const handleCreate = async () => {
     setFormError(null);
+    // [FIX 0022] validate tên rỗng phía FE — trước đây lỗi Mongoose tiếng Anh thô
+    // ("Dataset validation failed: name: Path `name` is required.") hiển thị cho người dùng
+    if (!formData.name || !formData.name.trim()) {
+      setFormError('Vui lòng nhập tên dataset.');
+      return;
+    }
     try {
       await apiRequest('/admin/datasets', {
         method: 'POST',
         body: JSON.stringify({
-          name: formData.name,
+          name: formData.name.trim(),
           description: formData.description,
           price: formData.priceVND,
           status: 'pending',

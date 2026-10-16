@@ -220,18 +220,23 @@ export default function AdminSaaSSuiteView() {
   // Send announcement
   const handleSendAnnouncement = async (e) => {
     e.preventDefault();
-    if (!annTitle || !annContent) return;
+    // [FIX 0022] validation rỗng phải có feedback — trước đây submit rỗng là no-op im lặng
+    if (!annTitle.trim() || !annContent.trim()) {
+      showToast('Vui lòng nhập tiêu đề và nội dung thông báo.', true);
+      return;
+    }
     try {
-      await apiRequest('/admin/announcements', {
+      const data = await apiRequest('/admin/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: annTitle, content: annContent, type: annType })
+        body: JSON.stringify({ title: annTitle.trim(), content: annContent.trim(), type: annType })
       });
-      showToast('Đã đăng thông báo khẩn cấp hệ thống thành công!');
+      // [FIX 0022] BE giờ fan-out Notification cho nhân sự — hiển thị số tài khoản nhận được
+      showToast(data?.message || 'Đã đăng thông báo khẩn cấp hệ thống thành công!');
       setAnnTitle('');
       setAnnContent('');
     } catch (err) {
-      showToast('Gửi thông báo thất bại', true);
+      showToast(err?.message || 'Gửi thông báo thất bại', true);
     }
   };
 
