@@ -55,8 +55,8 @@ describe('Chia sẻ bệnh án qua QR — chọn từng mục trong mỗi nhóm 
     await cleanup();
     // ghi thẳng collection (bỏ qua validate/tenancy): chỉ cần dữ liệu tối thiểu
     await User.collection.insertMany([
-      { _id: me, role: 'patient', email: `items-${me}@test.local`, profile: { name: 'BN Chọn Mục', medicalId: `MID-${me}` } },
-      { _id: other, role: 'patient', email: `items-${other}@test.local`, profile: { name: 'BN Khác', medicalId: `MID-${other}` } },
+      { _id: me, role: 'patient', hospitalId, email: `items-${me}@test.local`, profile: { name: 'BN Chọn Mục', medicalId: `MID-${me}` } },
+      { _id: other, role: 'patient', hospitalId, email: `items-${other}@test.local`, profile: { name: 'BN Khác', medicalId: `MID-${other}` } },
     ]);
     await PatientProfile.collection.insertOne({ userId: me, drugAllergies: ['Penicillin'], emergencyContact: { name: 'Trần Thị B', relation: 'Vợ', phone: '0900000001' } });
     await Prescription.collection.insertMany([
@@ -78,10 +78,10 @@ describe('Chia sẻ bệnh án qua QR — chọn từng mục trong mỗi nhóm 
       { _id: id.vital3, patient_id: me, pulse: 72, blood_pressure: '125/82', recorded_at: day(1) },
     ]);
     await ImagingResult.collection.insertMany([
-      { _id: id.film1, medicalId: `MID-${me}`, isSigned: true, procedure: 'MRI sọ não', conclusion: 'Không thấy bất thường', reportDate: day(15) },
-      { _id: id.film2, medicalId: `MID-${me}`, isSigned: true, procedure: 'CT ngực', conclusion: 'Nốt mờ nhỏ', reportDate: day(6) },
-      { _id: id.filmUnsigned, medicalId: `MID-${me}`, isSigned: false, procedure: 'MRI chưa ký', reportDate: day(1) },
-      { _id: id.filmForeign, medicalId: `MID-${other}`, isSigned: true, procedure: 'Phim của người khác', reportDate: day(1) },
+      { _id: id.film1, hospitalId, medicalId: `MID-${me}`, isSigned: true, procedure: 'MRI sọ não', conclusion: 'Không thấy bất thường', reportDate: day(15) },
+      { _id: id.film2, hospitalId, medicalId: `MID-${me}`, isSigned: true, procedure: 'CT ngực', conclusion: 'Nốt mờ nhỏ', reportDate: day(6) },
+      { _id: id.filmUnsigned, hospitalId, medicalId: `MID-${me}`, isSigned: false, procedure: 'MRI chưa ký', reportDate: day(1) },
+      { _id: id.filmForeign, hospitalId, medicalId: `MID-${other}`, isSigned: true, procedure: 'Phim của người khác', reportDate: day(1) },
     ]);
     await MedicalRecord.collection.insertMany([
       { _id: id.emr1, hospitalId, patientId: s(me), department: 'Ngoại thần kinh', diagnosis: 'U màng não', psychiatricNotes: 'KHÔNG ĐƯỢC LỘ', createdAt: day(60) },

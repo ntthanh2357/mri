@@ -58,8 +58,11 @@ export const toSharedSafety = (profile) => ({
  * Dùng chung cho: gom bệnh án chia sẻ, danh mục để bệnh nhân chọn, và kiểm tra mục được chọn có thuộc bệnh nhân không.
  * Mỗi nhóm trả 1 mảng truy vấn (nhóm "papers" gồm 2 loại giấy).
  */
-const sectionQueries = (patientId, medicalId) => {
+const sectionQueries = (patientId, medicalId, hospitalId) => {
   const only = (ids) => (ids ? { _id: { $in: ids } } : {});
+  // Mã bệnh nhân (BN001…) chỉ duy nhất trong 1 bệnh viện, và các truy vấn ở đây bỏ qua tenancy → tìm theo mã phải kèm bệnh viện
+  // của bệnh nhân, không thì lẫn phim / bệnh án của người trùng mã ở viện khác. Chưa gắn bệnh viện = không tìm theo mã.
+  const byCode = medicalId && hospitalId ? { medicalId, hospitalId } : null;
   return {
     visits: (ids) => [Visit.find({ patientId, ...only(ids) }).sort({ createdAt: -1 })],
     vitals: (ids) => [VitalSign.find({ patient_id: patientId, ...only(ids) }).sort({ recorded_at: -1 })],
@@ -70,8 +73,12 @@ const sectionQueries = (patientId, medicalId) => {
       TransferForm.find({ patient_id: patientId, ...only(ids) }).sort({ recorded_at: -1 }),
     ],
     // chưa có mã bệnh án thì không có phim nào để truy vấn
-    imaging: (ids) => (medicalId ? [ImagingResult.find({ medicalId, isSigned: true, ...only(ids) }).sort({ reportDate: -1 })] : []),
-    inpatient: (ids) => [MedicalRecord.find({ patientId: { $in: [String(patientId), medicalId].filter(Boolean) }, ...only(ids) }).sort({ createdAt: -1 })],
+    imaging: (ids) => (byCode ? [ImagingResult.find({ ...byCode, isSigned: true, ...only(ids) }).sort({ reportDate: -1 })] : []),
+    // bệnh án nội trú gắn theo mã tài khoản là của đúng người; gắn theo mã bệnh nhân thì chỉ lấy ở bệnh viện của bệnh nhân
+    inpatient: (ids) => [MedicalRecord.find({
+      $or: [{ patientId: String(patientId) }, ...(byCode ? [{ patientId: medicalId, hospitalId }] : [])],
+      ...only(ids),
+    }).sort({ createdAt: -1 })],
   };
 };
 const LIST_SECTIONS = ["visits", "vitals", "labs", "prescriptions", "papers", "imaging", "inpatient"];
@@ -88,7 +95,7 @@ const CATALOG_FIELDS = {
 };
 
 const patientOf = async (patientId) => {
-  const user = await User.findById(patientId).select("profile").setOptions(BYPASS).lean();
+  const user = await User.findById(patientId).select("profile hospitalId").setOptions(BYPASS).lean();
   if (!user) throw httpError(404, "Không tìm thấy bệnh nhân.");
   return user;
 };
@@ -107,7 +114,7 @@ export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { 
     if (list === undefined) return null;
     return Array.isArray(list) ? list : [];
   };
-  const q = sectionQueries(patientId, medicalId);
+  const q = sectionQueries(patientId, medicalId, user.hospitalId || null);
   // nhóm không chọn: không truy vấn, không gửi
   const load = (s, prepare = (query) => query) => (has(s) ? Promise.all(q[s](idsOf(s)).map((query) => prepare(query).setOptions(BYPASS).lean())) : Promise.resolve([[], []]));
 
@@ -201,7 +208,7 @@ export const resolveShareItems = async (patientId, sections, input) => {
   const listKeys = keys.filter((k) => k !== "safety");
   if (listKeys.length) {
     const user = await patientOf(patientId);
-    const q = sectionQueries(patientId, user.profile?.medicalId || null);
+    const q = sectionQueries(patientId, user.profile?.medicalId || null, user.hospitalId || null);
     await Promise.all(listKeys.map(async (key) => {
       const found = await Promise.all(q[key](chosen[key]).map((query) => query.select("_id").setOptions(BYPASS).lean()));
       if (found.flat().length !== chosen[key].length) throw invalidItems();
@@ -225,7 +232,7 @@ const entry = (section, doc, { title, sub = "", date = null, source = "hospital"
  */
 export const buildShareCatalog = async (patientId) => {
   const user = await patientOf(patientId);
-  const q = sectionQueries(patientId, user.profile?.medicalId || null);
+  const q = sectionQueries(patientId, user.profile?.medicalId || null, user.hospitalId || null);
   const load = (s, prepare = (query) => query) => Promise.all(q[s]().map((query) => prepare(query).select(CATALOG_FIELDS[s]).limit(CATALOG_LIMIT + 1).setOptions(BYPASS).lean()));
   const [profile, [visits = []], [vitals = []], [labs = []], [prescriptions = []], [discharges = [], transfers = []], [imaging = []], [emr = []], documents] = await Promise.all([
     PatientProfile.findOne({ userId: patientId }).setOptions(BYPASS).lean(),
