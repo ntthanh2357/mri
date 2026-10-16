@@ -120,7 +120,8 @@ const SharedRecordScreen = ({ route, navigation }) => {
             {[GENDER[p.gender] || null, age !== null ? `${age} tuổi` : null, p.dateOfBirth ? `sinh ngày ${fmtDate(p.dateOfBirth)}` : null, p.medicalId ? `mã bệnh nhân ${p.medicalId}` : null].filter(Boolean).join(', ')}
           </Text>
           {partial ? <Text style={styles.note}>Bệnh nhân chọn chia sẻ: <Text style={styles.bold}>{sectionsSummary(keys)}</Text>{partialKeys.length ? ' (một số nhóm chỉ gồm các mục bệnh nhân chọn)' : ''}.</Text> : null}
-          {!shown('safety') ? null : !safetyShared.includes('allergies') ? (
+          {/* bỏ cả nhóm hay chỉ bỏ dị ứng: vẫn báo để bác sĩ không hiểu nhầm là "không dị ứng" */}
+          {!shown('safety') || !safetyShared.includes('allergies') ? (
             <Text style={styles.note}>Bệnh nhân không chia sẻ thông tin dị ứng thuốc. Hãy hỏi trực tiếp bệnh nhân trước khi kê đơn.</Text>
           ) : allergies.length ? (
             <View style={styles.allergy} accessibilityRole="alert">
