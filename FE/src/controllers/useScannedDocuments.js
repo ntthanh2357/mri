@@ -5,6 +5,9 @@ import { get, put, del, postFormData } from '../services/api.service';
 
 const BASE = '/api/v1/patient/scanned-documents';
 const REFRESH_MS = 10 * 60 * 1000; // link ảnh sống 15 phút: tải lại danh sách trước khi hết hạn
+// Phiên bản nội dung khung xin đồng ý (components/patient/ScannedDocuments.js: ConsentBox). Sửa nội dung thì đổi cả ở đây
+// và SCAN_CONSENT_VERSION phía máy chủ, để bệnh nhân đồng ý đúng bản họ đã đọc.
+export const SCAN_CONSENT_VERSION = '2026-10-16';
 
 // Web: ô chọn file của trình duyệt (trên điện thoại, capture mở thẳng camera sau)
 const pickOnWeb = (camera) => new Promise((resolve) => {
@@ -37,6 +40,33 @@ export function useScannedDocuments() {
   const lastPart = useRef(null); // { part, docId }
   const rejectedPart = useRef(null); // ảnh vừa bị từ chối vì quá mờ/nhỏ/tối, giữ lại cho nút "vẫn dùng ảnh này"
   const [lastScan, setLastScan] = useState(null); // { docId, cropped }
+  // Đồng ý gửi ảnh tới dịch vụ AI đọc chữ (bắt buộc trước lần quét đầu, rút lại được)
+  const [consent, setConsent] = useState({ loading: true, granted: false, grantedAt: null, error: null });
+
+  const loadConsent = useCallback(async () => {
+    try {
+      const res = await get(`${BASE}/consent`);
+      setConsent({ loading: false, granted: !!res?.data?.granted, grantedAt: res?.data?.grantedAt || null, error: null });
+    } catch (err) {
+      console.error('Lỗi tải trạng thái đồng ý quét giấy tờ:', err);
+      setConsent((c) => ({ ...c, loading: false, error: 'Không tải được trạng thái đồng ý.' }));
+    }
+  }, []);
+
+  useEffect(() => { loadConsent(); }, [loadConsent]);
+
+  /** on = true: đồng ý; false: rút lại. */
+  const setConsentTo = useCallback(async (on) => {
+    try {
+      const res = on ? await put(`${BASE}/consent`, { version: SCAN_CONSENT_VERSION }) : await del(`${BASE}/consent`);
+      setConsent({ loading: false, granted: !!res?.data?.granted, grantedAt: res?.data?.grantedAt || null, error: null });
+      // rút lại: bỏ các ảnh đang giữ để không còn nút nào mời gửi lại ảnh
+      if (!on) { rejectedPart.current = null; lastPart.current = null; setLastScan(null); }
+      return { ok: true, message: res?.message };
+    } catch (err) {
+      return { ok: false, message: err?.message || (on ? 'Không ghi nhận được đồng ý. Vui lòng thử lại.' : 'Không rút lại được. Vui lòng thử lại.') };
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +99,8 @@ export function useScannedDocuments() {
     } catch (err) {
       // Ảnh quá mờ / nhỏ / tối: máy chủ từ chối đọc (máy dễ bịa nội dung). Giữ ảnh để bệnh nhân có thể chọn "vẫn dùng".
       const poorQuality = err?.errors?.code === 'POOR_QUALITY';
+      // đồng ý đã bị rút ở thiết bị khác (hoặc thông báo đã đổi): hiện lại khung xin đồng ý
+      if (err?.errors?.code === 'CONSENT_REQUIRED') setConsent((c) => ({ ...c, granted: false, grantedAt: null }));
       rejectedPart.current = poorQuality ? part : null;
       return { ok: false, poorQuality, message: err?.message || 'Không quét được giấy tờ. Vui lòng thử lại.' };
     } finally {
@@ -127,5 +159,5 @@ export function useScannedDocuments() {
     }
   }, [load]);
 
-  return { ...state, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove, reload: load };
+  return { ...state, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove, reload: load, consent, setConsentTo, reloadConsent: loadConsent };
 }

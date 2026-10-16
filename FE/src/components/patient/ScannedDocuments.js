@@ -222,9 +222,31 @@ const ScanButton = ({ icon, label, onPress, disabled }) => (
   </Pressable>
 );
 
+// Xin đồng ý trước lần quét đầu: ảnh giấy tờ khám bệnh là dữ liệu sức khoẻ (nhạy cảm) và được gửi ra dịch vụ bên ngoài
+const ConsentBox = ({ onAgree, busy }) => (
+  <View style={styles.consent}>
+    <Text style={styles.consentTitle}>Trước khi quét, bạn cần đồng ý</Text>
+    {[
+      'Ảnh giấy tờ được gửi tới dịch vụ AI Gemini của Google để đọc chữ. Giấy tờ khám bệnh có thông tin sức khoẻ, là dữ liệu cá nhân nhạy cảm.',
+      'NeuroScan gửi ảnh chỉ để đọc chữ cho bạn. Ứng dụng lưu bản ảnh đã bỏ thông tin vị trí chụp; chỉ bạn và người được bạn chia sẻ mã QR mới xem được.',
+      'Bạn có thể rút lại đồng ý bất cứ lúc nào. Khi rút lại, ảnh mới không được gửi đi nữa; giấy tờ đã lưu vẫn còn và bạn có thể xoá.',
+    ].map((t) => (
+      <View key={t} style={styles.consentPoint}>
+        <Feather name="check-circle" size={15} color={Colors.brandGreen} style={styles.consentIcon} />
+        <Text style={styles.pointText}>{t}</Text>
+      </View>
+    ))}
+    <Pressable onPress={onAgree} disabled={busy} accessibilityRole="button" accessibilityLabel="Tôi đồng ý gửi ảnh để đọc chữ"
+      style={({ hovered }) => [styles.saveBtn, styles.consentBtn, hovered && styles.saveBtnHover, busy && styles.disabled]}>
+      <Text style={styles.saveBtnText}>Tôi đồng ý, bắt đầu quét</Text>
+    </Pressable>
+  </View>
+);
+
 /** `state`: kết quả của hook useScannedDocuments, do màn hình giữ. `onReviewing(bool)`: đang mở khung kiểm tra 1 giấy tờ. */
 const ScannedDocuments = ({ state, onReviewing }) => {
-  const { loading, docs, error, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove } = state;
+  const { loading, docs, error, scanning, lastScan, scan, scanAnyway, rescanUncropped, save, remove, consent, setConsentTo, reloadConsent } = state;
+  const [consentBusy, setConsentBusy] = useState(false);
   const [openId, setOpenId] = useState(null);
   useEffect(() => { onReviewing?.(openId !== null); }, [openId, onReviewing]);
   const [msg, setMsg] = useState(null); // { tone: 'info' | 'error', text }
@@ -247,6 +269,15 @@ const ScannedDocuments = ({ state, onReviewing }) => {
     if (!res.cancelled) opened(res);
   };
 
+  const onConsent = async (on) => {
+    setConsentBusy(true);
+    setMsg(null);
+    const res = await setConsentTo(on);
+    setConsentBusy(false);
+    if (res.ok && !on) setRejected(null);
+    setMsg({ tone: res.ok ? 'info' : 'error', text: res.message });
+  };
+
   const onSave = async (id, patch) => {
     const res = await save(id, patch);
     if (res.ok) { setOpenId(null); setMsg({ tone: 'info', text: 'Đã lưu. Giấy tờ này có thể chia sẻ qua mã QR.' }); }
@@ -266,14 +297,28 @@ const ScannedDocuments = ({ state, onReviewing }) => {
         Chụp giấy tờ khám ở nơi khác như đơn thuốc, kết quả xét nghiệm, giấy ra viện. Loại giấy tờ nào cũng lưu được ở dạng chữ; ứng dụng tự cắt nền, đọc chữ
         và điền sẵn thông tin chính nếu có. Hãy kiểm tra lại rồi lưu. Chỉ giấy tờ đã lưu mới được chia sẻ qua mã QR.
       </Text>
-      <View style={styles.point}>
-        <Feather name="info" size={15} color={Colors.infoText} />
-        <Text style={styles.pointText}>Ảnh được gửi tới dịch vụ AI của Google để đọc chữ.</Text>
-      </View>
-      <View style={styles.row}>
-        <ScanButton icon="camera" label="Chụp ảnh giấy tờ" onPress={() => onScan(true)} disabled={scanning} />
-        <ScanButton icon="image" label="Chọn ảnh có sẵn" onPress={() => onScan(false)} disabled={scanning} />
-      </View>
+      {consent.loading ? <ActivityIndicator size="small" color={Colors.brandGreen} /> : consent.error ? (
+        <View style={styles.point}>
+          <Text style={styles.error}>{consent.error}</Text>
+          <Pressable onPress={reloadConsent} accessibilityRole="button" style={styles.linkBtn}><Text style={styles.linkText}>Thử lại</Text></Pressable>
+        </View>
+      ) : !consent.granted ? <ConsentBox onAgree={() => onConsent(true)} busy={consentBusy} /> : (
+        <>
+          <View style={styles.consentDone}>
+            <Feather name="info" size={15} color={Colors.infoText} />
+            <Text style={styles.pointText}>
+              Bạn đã đồng ý gửi ảnh tới dịch vụ AI Gemini của Google để đọc chữ{consent.grantedAt ? ` (ngày ${fmtDate(consent.grantedAt)})` : ''}.
+            </Text>
+            <Pressable onPress={() => onConsent(false)} disabled={consentBusy || scanning} accessibilityRole="button" style={styles.linkBtn}>
+              <Text style={styles.dangerLink}>Rút lại đồng ý</Text>
+            </Pressable>
+          </View>
+          <View style={styles.row}>
+            <ScanButton icon="camera" label="Chụp ảnh giấy tờ" onPress={() => onScan(true)} disabled={scanning} />
+            <ScanButton icon="image" label="Chọn ảnh có sẵn" onPress={() => onScan(false)} disabled={scanning} />
+          </View>
+        </>
+      )}
       {scanning ? (
         <View style={styles.point} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" color={Colors.brandGreen} />
@@ -321,6 +366,12 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   point: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  consent: { gap: 10, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
+  consentTitle: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
+  consentPoint: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  consentIcon: { marginTop: 2 },
+  consentBtn: { alignSelf: 'flex-start' },
+  consentDone: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8 },
   pointText: { flex: 1, fontSize: 14, lineHeight: 20, color: Colors.slateDark },
   scanBtn: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface },
   scanBtnHover: { backgroundColor: Colors.brandGreenSoft, borderColor: Colors.brandGreen },

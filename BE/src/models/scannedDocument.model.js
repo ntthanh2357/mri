@@ -46,6 +46,9 @@ const scannedDocumentSchema = new Schema(
     fileId: { type: String, required: true }, // StoredMedicalFile.fileId
     mimeType: { type: String, required: true },
     ocrStatus: { type: String, enum: ["done", "failed"], default: "done" },
+    // lần đồng ý gửi ảnh cho AI đã cho phép quét giấy tờ này (dấu vết, không đổi khi bệnh nhân đồng ý lại sau đó)
+    consentVersion: { type: String, default: null },
+    consentGrantedAt: { type: Date, default: null },
     confirmedAt: { type: Date, default: null }, // bệnh nhân đã xem lại và bấm lưu
   },
   { timestamps: true }
@@ -68,4 +71,19 @@ scanUsageSchema.index({ patientId: 1, day: 1 }, { unique: true });
 scanUsageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 export const ScanUsage = model("ScanUsage", scanUsageSchema, "scan_usages");
+
+/**
+ * Bệnh nhân đồng ý gửi ảnh giấy tờ tới dịch vụ AI bên ngoài (Google Gemini) để đọc chữ — dữ liệu sức khoẻ là dữ liệu
+ * cá nhân nhạy cảm (Nghị định 13/2023), phải có đồng ý rõ ràng trước lần quét đầu. 1 bản ghi/bệnh nhân = trạng thái hiện tại;
+ * rút lại thì ghi `revokedAt`. Dấu vết từng lần nằm ở mỗi giấy tờ (`consentVersion`, `consentGrantedAt`).
+ * `version` = bản thông báo bệnh nhân đã đọc; đổi nội dung thì hỏi lại.
+ */
+const scanConsentSchema = new Schema({
+  patientId: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+  version: { type: String, required: true },
+  grantedAt: { type: Date, required: true },
+  revokedAt: { type: Date, default: null },
+});
+
+export const ScanConsent = model("ScanConsent", scanConsentSchema, "scan_consents");
 export default ScannedDocument;

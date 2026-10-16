@@ -10,7 +10,10 @@ const wrap = (fn) => async (req, res, next) => {
     return await fn(req, res);
   } catch (err) {
     // lỗi có mã riêng (vd. POOR_QUALITY) gửi kèm để giao diện xử lý đúng loại lỗi, không phải đoán theo câu chữ
-    if (err.status) return errorResponse(res, err.message, err.status, err.code === "POOR_QUALITY" ? { code: err.code, reasons: err.reasons } : null);
+    if (err.status) {
+      const errors = err.code === "POOR_QUALITY" ? { code: err.code, reasons: err.reasons } : ["CONSENT_REQUIRED", "CONSENT_OUTDATED"].includes(err.code) ? { code: err.code } : null;
+      return errorResponse(res, err.message, err.status, errors);
+    }
     next(err);
   }
 };
@@ -41,6 +44,13 @@ export const scanMine = wrap(async (req, res) => {
       : "Đã đọc chữ trong ảnh. Hãy kiểm tra lại trước khi lưu.";
   return successResponse(res, { ...docService.toPublicDoc(doc, { withReview: true }), ocrFailed, cropped, textOnly }, message);
 });
+
+// GET / PUT {version} / DELETE /api/v1/patient/scanned-documents/consent — đồng ý gửi ảnh tới dịch vụ AI đọc chữ (xem / đồng ý / rút lại)
+export const consentMine = wrap(async (req, res) => successResponse(res, await docService.getScanConsent(req.user.id)));
+export const grantConsentMine = wrap(async (req, res) =>
+  successResponse(res, await docService.grantScanConsent(req.user.id, req.body?.version), "Đã ghi nhận bạn đồng ý. Bạn có thể quét giấy tờ."));
+export const revokeConsentMine = wrap(async (req, res) =>
+  successResponse(res, await docService.revokeScanConsent(req.user.id), "Đã rút lại đồng ý. Ảnh mới sẽ không được gửi đi; giấy tờ đã lưu vẫn còn."));
 
 // GET /api/v1/patient/scanned-documents — giấy tờ của tôi (mới nhất trước)
 export const listMine = wrap(async (req, res) =>

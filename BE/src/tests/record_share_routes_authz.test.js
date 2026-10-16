@@ -20,10 +20,16 @@ describe('Phân quyền chia sẻ bệnh án qua QR (/api/v1/patient/record-shar
   });
 
   it('giấy tờ tự quét: chỉ bệnh nhân được quét, xem, sửa, xoá — kiểm quyền trước khi nhận file', async () => {
-    for (const [m, p] of [['post', '/scanned-documents'], ['get', '/scanned-documents'], ['put', '/scanned-documents/:id'], ['delete', '/scanned-documents/:id']]) {
+    for (const [m, p] of [['post', '/scanned-documents'], ['get', '/scanned-documents'], ['put', '/scanned-documents/:id'], ['delete', '/scanned-documents/:id'],
+      ['get', '/scanned-documents/consent'], ['put', '/scanned-documents/consent'], ['delete', '/scanned-documents/consent']]) {
       expect(await run(authzOf(m, p), 'patient')).toBe('next');
       for (const role of ['doctor', 'nurse', 'receptionist', 'admin']) expect(await run(authzOf(m, p), role)).toBe(403);
     }
+  });
+
+  it('route "/scanned-documents/consent" đứng trước "/:id" (không thì "consent" bị hiểu là mã giấy tờ)', () => {
+    const at = (method, path) => router.stack.findIndex((l) => l.route && l.route.path === path && l.route.methods[method]);
+    for (const m of ['put', 'delete']) expect(at(m, '/scanned-documents/consent') < at(m, '/scanned-documents/:id')).toBe(true);
   });
 });
 

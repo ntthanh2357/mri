@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { ScannedDocument, ScanUsage } from "../models/scannedDocument.model.js";
+import { ScannedDocument, ScanUsage, ScanConsent } from "../models/scannedDocument.model.js";
 import { RecordShare } from "../models/recordShare.model.js";
 import { getJwtSecret } from "../config/jwt.config.js";
 import * as storageService from "./storage/storageService.js";
@@ -146,6 +146,34 @@ const consumeScanQuota = async (patientId, now) => {
   }
 };
 
+// ── Đồng ý gửi ảnh cho dịch vụ AI đọc chữ ──────────────────────────────────
+// Đổi khi nội dung thông báo trên màn quét đổi (nơi nhận ảnh, mục đích…) → bệnh nhân phải đồng ý lại
+export const SCAN_CONSENT_VERSION = "2026-10-16";
+
+const consentView = (row) => {
+  const granted = Boolean(row && !row.revokedAt && row.version === SCAN_CONSENT_VERSION);
+  return { granted, grantedAt: granted ? row.grantedAt : null, version: SCAN_CONSENT_VERSION };
+};
+
+export const getScanConsent = async (patientId) => consentView(await ScanConsent.findOne({ patientId }).lean());
+
+/** `version` = bản thông báo giao diện đã hiện cho bệnh nhân; khác bản hiện hành (app cũ) → 409, không ghi gì. */
+export const grantScanConsent = async (patientId, version, now = new Date()) => {
+  if (version !== SCAN_CONSENT_VERSION) {
+    throw Object.assign(httpError(409, "Nội dung xin đồng ý đã được cập nhật. Hãy tải lại trang (hoặc cập nhật ứng dụng) để đọc bản mới."), { code: "CONSENT_OUTDATED" });
+  }
+  return consentView(await ScanConsent.findOneAndUpdate(
+    { patientId },
+    { $set: { version: SCAN_CONSENT_VERSION, grantedAt: now, revokedAt: null } },
+    { upsert: true, new: true, lean: true },
+  ));
+};
+
+/** Rút lại: từ đó không quét được nữa; giấy tờ đã lưu vẫn còn (bệnh nhân tự xoá nếu muốn). */
+export const revokeScanConsent = async (patientId, now = new Date()) =>
+  consentView(await ScanConsent.findOneAndUpdate({ patientId, revokedAt: null }, { $set: { revokedAt: now } }, { new: true, lean: true })
+    || await ScanConsent.findOne({ patientId }).lean());
+
 // ── Nghiệp vụ ───────────────────────────────────────────────────────────────
 const capError = () => httpError(409, `Bạn đã lưu tối đa ${MAX_DOCS} giấy tờ. Hãy xoá bớt giấy tờ cũ trước khi quét thêm.`);
 const aiDown = () => httpError(503, "Dịch vụ đọc chữ đang tạm ngưng. Vui lòng thử lại sau ít phút.");
@@ -155,6 +183,10 @@ export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = t
   const kind = imageKind(buffer);
   if (!kind) throw httpError(400, "Chỉ nhận ảnh JPEG, PNG hoặc WEBP.");
   if (buffer.length > MAX_BYTES) throw httpError(400, "Ảnh quá lớn (tối đa 10 MB).");
+  const consent = await getScanConsent(patientId);
+  if (!consent.granted) {
+    throw Object.assign(httpError(403, "Bạn cần đồng ý gửi ảnh tới dịch vụ AI đọc chữ trước khi quét giấy tờ."), { code: "CONSENT_REQUIRED" });
+  }
   if ((await ScannedDocument.countDocuments({ patientId })) >= MAX_DOCS) throw capError();
   await consumeScanQuota(patientId, now);
 
@@ -209,6 +241,8 @@ export const scanDocument = async ({ patientId, hospitalId, buffer, autocrop = t
       fileId: file.fileId,
       mimeType: "image/jpeg",
       ocrStatus: read.failed ? "failed" : "done",
+      consentVersion: consent.version,
+      consentGrantedAt: consent.grantedAt,
     });
     // Nhiều yêu cầu chen nhau trong lúc chờ AI có thể cùng lọt qua bước đếm ở trên → đếm lại sau khi tạo
     if ((await ScannedDocument.countDocuments({ patientId })) > MAX_DOCS) throw capError();

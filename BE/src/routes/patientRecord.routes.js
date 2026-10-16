@@ -60,6 +60,10 @@ router.delete("/record-shares/:id", checkRole(["patient"]), shareCtrl.revokeMine
 const scanLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 6, keyGenerator: (req) => `scan-document:${req.user?.id}`, message: "Bạn quét quá nhanh. Vui lòng đợi 1 phút rồi thử lại." });
 router.post("/scanned-documents", checkRole(["patient"]), scanLimiter, docCtrl.receiveImage, docCtrl.scanMine);
 router.get("/scanned-documents", checkRole(["patient"]), docCtrl.listMine);
+// đặt trước "/:id" để "consent" không bị hiểu là mã giấy tờ
+router.get("/scanned-documents/consent", checkRole(["patient"]), docCtrl.consentMine);
+router.put("/scanned-documents/consent", checkRole(["patient"]), docCtrl.grantConsentMine);
+router.delete("/scanned-documents/consent", checkRole(["patient"]), docCtrl.revokeConsentMine);
 router.put("/scanned-documents/:id", checkRole(["patient"]), docCtrl.saveMine);
 router.delete("/scanned-documents/:id", checkRole(["patient"]), docCtrl.deleteMine);
 

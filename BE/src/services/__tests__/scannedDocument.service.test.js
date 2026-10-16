@@ -3,8 +3,9 @@ import { Readable } from 'stream';
 import {
   imageKind, scanDocument, listDocuments, saveDocument, deleteDocument, listSharedDocuments, getImage,
   createImageToken, verifyImageToken, toPublicDoc, cleanFields, cleanReview, MAX_TEXT, MAX_TITLE, MAX_DOCS, MAX_SCANS_PER_DAY, MAX_REFUNDS_PER_DAY,
+  getScanConsent, grantScanConsent, revokeScanConsent, SCAN_CONSENT_VERSION,
 } from '../scannedDocument.service.js';
-import { ScannedDocument, ScanUsage } from '../../models/scannedDocument.model.js';
+import { ScannedDocument, ScanUsage, ScanConsent } from '../../models/scannedDocument.model.js';
 import { RecordShare } from '../../models/recordShare.model.js';
 
 const statusOf = async (fn) => { try { await fn(); return 200; } catch (e) { return e.status || 500; } };
@@ -42,19 +43,24 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
   const racer = new mongoose.Types.ObjectId();
   const fielder = new mongoose.Types.ObjectId();
   const blurry = new mongoose.Types.ObjectId();
-  const everyone = [me, other, heavy, racer, fielder, blurry];
+  const newcomer = new mongoose.Types.ObjectId(); // chưa đồng ý gửi ảnh cho AI
+  const everyone = [me, other, heavy, racer, fielder, blurry, newcomer];
   let storage;
 
   beforeAll(async () => {
     const mongoUri = process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017/neuroscan_test_logic';
     if (mongoose.connection.readyState === 0) await mongoose.connect(mongoUri);
     await ScanUsage.init(); // cần chỉ mục duy nhất (patientId, day) cho hạn mức quét
+    await ScanConsent.init();
     storage = fakeStorage();
+    // các test quét bên dưới giả định bệnh nhân đã đồng ý gửi ảnh cho AI đọc chữ
+    for (const p of everyone.filter((x) => x !== newcomer)) await grantScanConsent(p, SCAN_CONSENT_VERSION);
   });
 
   afterAll(async () => {
     await ScannedDocument.deleteMany({ patientId: { $in: everyone } });
     await ScanUsage.deleteMany({ patientId: { $in: everyone } });
+    await ScanConsent.deleteMany({ patientId: { $in: everyone } });
     await RecordShare.deleteMany({ patientId: { $in: everyone } });
   });
 
@@ -65,6 +71,52 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     expect(imageKind(PDF)).toBeNull();
     expect(imageKind(Buffer.alloc(0))).toBeNull();
     expect(imageKind('not a buffer')).toBeNull();
+  });
+
+  it('chưa đồng ý gửi ảnh cho dịch vụ AI: không quét (403 CONSENT_REQUIRED), không gọi AI, không tính lượt', async () => {
+    let called = 0;
+    const ocr = async () => { called += 1; return okOcr(); };
+    expect(await getScanConsent(newcomer)).toEqual({ granted: false, grantedAt: null, version: SCAN_CONSENT_VERSION });
+    let err;
+    try { await scanDocument({ patientId: newcomer, hospitalId, buffer: JPEG }, { ocr, storage }); } catch (e) { err = e; }
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('CONSENT_REQUIRED');
+    expect(called).toBe(0);
+    expect(await ScanUsage.countDocuments({ patientId: newcomer })).toBe(0);
+    expect(await ScannedDocument.countDocuments({ patientId: newcomer })).toBe(0);
+  });
+
+  it('đồng ý thì quét được, có ghi thời điểm; rút lại thì dừng quét nhưng giấy tờ đã lưu vẫn còn; đồng ý lại được', async () => {
+    const t1 = new Date('2026-10-16T08:00:00Z');
+    const granted = await grantScanConsent(newcomer, SCAN_CONSENT_VERSION, t1);
+    expect(granted).toEqual({ granted: true, grantedAt: t1, version: SCAN_CONSENT_VERSION });
+    const { doc } = await scanDocument({ patientId: newcomer, hospitalId, buffer: JPEG }, { ocr: okOcr, storage });
+    // mỗi giấy tờ ghi lại lần đồng ý đã cho phép gửi ảnh (đồng ý lại sau này không xoá được dấu vết)
+    expect(doc.consentVersion).toBe(SCAN_CONSENT_VERSION);
+    expect(doc.consentGrantedAt.toISOString()).toBe(t1.toISOString());
+    expect((await revokeScanConsent(newcomer, new Date('2026-10-16T09:00:00Z'))).granted).toBe(false);
+    expect(await statusOf(() => scanDocument({ patientId: newcomer, hospitalId, buffer: JPEG }, { ocr: okOcr, storage }))).toBe(403);
+    expect(await ScannedDocument.countDocuments({ _id: doc._id })).toBe(1);
+    const row = await ScanConsent.findOne({ patientId: newcomer }).lean();
+    expect(row.revokedAt.toISOString()).toBe('2026-10-16T09:00:00.000Z'); // giữ dấu vết đã đồng ý / rút lại lúc nào
+    expect(row.grantedAt.toISOString()).toBe('2026-10-16T08:00:00.000Z');
+    expect((await grantScanConsent(newcomer, SCAN_CONSENT_VERSION)).granted).toBe(true);
+    expect((await ScanConsent.findOne({ patientId: newcomer }).lean()).revokedAt).toBe(null);
+  });
+
+  it('đồng ý theo bản thông báo cũ thì phải hỏi lại (nội dung thông báo đã đổi)', async () => {
+    await ScanConsent.updateOne({ patientId: newcomer }, { $set: { version: 'cu-hon' } });
+    expect((await getScanConsent(newcomer)).granted).toBe(false);
+    expect(await statusOf(() => scanDocument({ patientId: newcomer, hospitalId, buffer: JPEG }, { ocr: okOcr, storage }))).toBe(403);
+    // app cũ hiện nội dung cũ rồi gửi đồng ý: không được ghi thành đồng ý bản mới mà bệnh nhân chưa đọc
+    for (const v of ['cu-hon', undefined, { $gt: '' }]) {
+      let err;
+      try { await grantScanConsent(newcomer, v); } catch (e) { err = e; }
+      expect(err.status).toBe(409);
+      expect(err.code).toBe('CONSENT_OUTDATED');
+    }
+    expect((await ScanConsent.findOne({ patientId: newcomer }).lean()).version).toBe('cu-hon');
+    await grantScanConsent(newcomer, SCAN_CONSENT_VERSION);
   });
 
   it('quét: lưu BẢN ẢNH ĐÃ CHUẨN HOÁ (không phải file gốc còn EXIF/GPS) vào kho riêng, ở trạng thái chưa kiểm tra', async () => {
