@@ -101,23 +101,30 @@ export default function AdminMetricsView({
     return value.toLocaleString('vi-VN');
   };
 
-  // Line chart coordinates calculation
+  // Line chart coordinates — toạ độ % (0-100) theo CHIỀU NGANG LẪN DỌC của vùng plot,
+  // để đường SVG (vector-effect) và dot/tracking/tooltip overlay HTML dùng chung 1 hệ toạ độ
+  // → không còn méo tỷ lệ do preserveAspectRatio="none" (container giãn ngang ≠ giãn dọc)
   const maxScanValue = Math.max(...monthlyScans.map(m => m.value || 0), 10);
   const chartPoints = monthlyScans.map((m, idx) => {
-    const x = 5 + idx * (88 / Math.max(1, monthlyScans.length - 1));
+    const x = monthlyScans.length > 1 ? (idx / (monthlyScans.length - 1)) * 100 : 50;
     const pct = maxScanValue > 0 ? (m.value || 0) / maxScanValue : 0;
-    const y = 75 - pct * 55;
+    const y = (1 - pct) * 100;
     return { label: m.label, value: m.value || 0, x, y };
   });
 
   let linePath = "";
   if (chartPoints.length > 0) {
-    linePath = `M ${chartPoints[0].x},${chartPoints[0].y}`;
+    linePath = `M ${chartPoints[0].x.toFixed(2)},${chartPoints[0].y.toFixed(2)}`;
     for (let i = 1; i < chartPoints.length; i++) {
-      linePath += ` L ${chartPoints[i].x},${chartPoints[i].y}`;
+      linePath += ` L ${chartPoints[i].x.toFixed(2)},${chartPoints[i].y.toFixed(2)}`;
     }
   }
-  const areaPath = linePath ? `${linePath} L ${chartPoints[chartPoints.length - 1].x},75 L ${chartPoints[0].x},75 Z` : "";
+  const areaPath = linePath
+    ? `${linePath} L ${chartPoints[chartPoints.length - 1].x.toFixed(2)},100 L ${chartPoints[0].x.toFixed(2)},100 Z`
+    : "";
+  const hoveredPoint = chartPoints.find(m => m.label === hoveredMonth);
+  // Kẹp biên ngang để tooltip (min-w 100px) không tràn khỏi card ở mọi viewport
+  const tooltipLeftPct = hoveredPoint ? Math.min(84, Math.max(16, hoveredPoint.x)) : 50;
 
   // User distribution calculations
   const totalDist = userDistribution ? userDistribution.total : 0;
@@ -251,19 +258,11 @@ export default function AdminMetricsView({
                   </div>
                 </div>
 
-                {/* Curvaceous Graph Content */}
+                {/* Curvaceous Graph Content — toạ độ % thống nhất: trục Y, gridlines và điểm dữ liệu dùng chung 1 hệ trục */}
                 <div className="relative h-[240px] mt-6 select-none">
 
-                  {/* Backgrid grid-lines */}
-                  <div className="absolute inset-x-8 top-2 bottom-8 flex flex-col justify-between pointer-events-none">
-                    <div className="border-b border-slate-100/70 w-full h-px" />
-                    <div className="border-b border-slate-100/70 w-full h-px" />
-                    <div className="border-b border-slate-100/70 w-full h-px" />
-                    <div className="border-b border-slate-250 w-full h-px" />
-                  </div>
-
-                  {/* Y Axis Numeric Values */}
-                  <div className="absolute left-0 top-2 bottom-8 flex flex-col justify-between text-[10px] font-bold font-mono text-slate-400 w-6 text-right pr-1">
+                  {/* Y Axis Numeric Values — nằm đúng vùng dọc của plot (top 12% → bottom 18%) nên thẳng hàng với gridlines và điểm dữ liệu */}
+                  <div className="absolute left-0 w-[7%] top-[12%] bottom-[18%] flex flex-col justify-between text-[10px] font-bold font-mono text-slate-400 text-right pr-1 pointer-events-none">
                     <span>{formatScans(maxScanValue)}</span>
                     <span>{formatScans(Math.round(maxScanValue * 0.75))}</span>
                     <span>{formatScans(Math.round(maxScanValue * 0.5))}</span>
@@ -271,9 +270,18 @@ export default function AdminMetricsView({
                     <span>0</span>
                   </div>
 
-                  {/* SVG Area Line Chart Container */}
-                  <div className="absolute inset-y-0 left-8 right-2">
-                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
+                  {/* Gridlines — 5 kẻ ngang cấp số chia 25%, justify-between trên đúng vùng dọc của plot (bao gồm đường baseline 0) */}
+                  <div className="absolute left-[9%] right-[2%] top-[12%] bottom-[18%] flex flex-col justify-between pointer-events-none">
+                    {[0, 1, 2, 3, 4].map(i => (
+                      <div key={i} className={`w-full h-px ${i === 4 ? 'border-b border-slate-200' : 'border-b border-slate-100'}`} />
+                    ))}
+                  </div>
+
+                  {/* Plot area: SVG (đường + vùng tô) + overlay HTML (dot, tracking line, tooltip, vùng hover) dùng chung 1 hệ toạ độ % */}
+                  <div className="absolute left-[9%] right-[2%] top-[12%] bottom-[18%]">
+
+                    {/* SVG Line/Area — vector-effect="non-scaling-stroke" giữ độ dày nét cố định px ở mọi viewport, không méo khi container giãn ngang */}
+                    <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                       <defs>
                         <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.18" />
@@ -290,69 +298,64 @@ export default function AdminMetricsView({
                           d={linePath}
                           fill="none"
                           stroke="#14b8a6"
-                          strokeWidth="1.25"
+                          strokeWidth="2.5"
                           strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
                         />
                       ) : null}
-
-                      {/* Draw dashed vertical tracking line on hover item */}
-                      {hoveredMonth && chartPoints.length > 0 && chartPoints.find(m => m.label === hoveredMonth) && (
-                        <>
-                          <line 
-                            x1={chartPoints.find(m => m.label === hoveredMonth)?.x} 
-                            y1={chartPoints.find(m => m.label === hoveredMonth)?.y} 
-                            x2={chartPoints.find(m => m.label === hoveredMonth)?.x} 
-                            y2="75" 
-                            stroke="#14b8a6" 
-                            strokeWidth="0.5" 
-                            strokeDasharray="1,1" 
-                          />
-                          <circle 
-                            cx={chartPoints.find(m => m.label === hoveredMonth)?.x} 
-                            cy={chartPoints.find(m => m.label === hoveredMonth)?.y} 
-                            r="2" 
-                            fill="#ffffff" 
-                            stroke="#14b8a6" 
-                            strokeWidth="1.2" 
-                          />
-                        </>
-                      )}
                     </svg>
 
-                    {/* Absolutely positioned beautiful custom HTML tooltip */}
-                    {hoveredMonth && chartPoints.length > 0 && chartPoints.find(m => m.label === hoveredMonth) && (
-                      <div 
-                        className="absolute top-0 bg-white text-[#0f172a] rounded-lg p-3 shadow-xl border border-slate-200 pointer-events-none select-none z-10 text-left min-w-[100px] transform -translate-x-1/2 -translate-y-full mb-2"
-                        style={{ left: `${(chartPoints.find(m => m.label === hoveredMonth)?.x || 50)}%` }}
+                    {/* Vạch dọc đánh dấu tháng đang hover — HTML nên không bị méo tỷ lệ */}
+                    {hoveredPoint && (
+                      <div
+                        className="absolute w-0 border-l border-dashed border-[#14b8a6]/55 pointer-events-none"
+                        style={{ left: `${hoveredPoint.x}%`, top: `${hoveredPoint.y}%`, bottom: 0 }}
+                      />
+                    )}
+
+                    {/* Chấm đánh dấu tháng đang hover — HTML tròn chuẩn ở mọi viewport (trước đây circle SVG méo thành ellipse 30x12px) */}
+                    {hoveredPoint && (
+                      <div
+                        className="absolute w-3.5 h-3.5 rounded-full bg-white border-[2.5px] border-[#14b8a6] shadow-sm pointer-events-none"
+                        style={{ left: `${hoveredPoint.x}%`, top: `${hoveredPoint.y}%`, transform: 'translate(-50%, -50%)' }}
+                      />
+                    )}
+
+                    {/* Tooltip — neo TRONG vùng plot (không còn đè lên tiêu đề card), kẹp biên ngang chống tràn */}
+                    {hoveredPoint && (
+                      <div
+                        className="absolute top-1 bg-white text-[#0f172a] rounded-lg p-3 shadow-xl border border-slate-200 pointer-events-none select-none z-10 text-left min-w-[100px] whitespace-nowrap -translate-x-1/2"
+                        style={{ left: `${tooltipLeftPct}%` }}
                       >
                         <p className="text-[10px] font-bold text-slate-500 font-sans leading-none">{hoveredMonth}</p>
                         <p className="text-[11px] font-black font-mono mt-1 text-[#14b8a6]">
-                          {chartPoints.find(m => m.label === hoveredMonth)?.value.toLocaleString()} scans
+                          {hoveredPoint.value.toLocaleString()} scans
                         </p>
                       </div>
                     )}
 
-                    {/* Monthly Month Dots trigger points */}
-                    <div className="absolute inset-x-0 bottom-8 h-[50px] flex justify-between">
+                    {/* Vùng hover từng tháng — cột flex-1 thứ i ôm đúng điểm i (i/11 luôn nằm trong (i/12,(i+1)/12)) */}
+                    <div className="absolute inset-0 flex justify-between">
                       {chartPoints.map((m, idx) => (
                         <div
                           key={idx}
-                          className="flex-1 flex justify-center items-end group cursor-pointer relative"
+                          className="flex-1 group cursor-pointer relative"
                           onMouseEnter={() => setHoveredMonth(m.label)}
                           onMouseLeave={() => setHoveredMonth(null)}
                         >
                           {/* Anchor hover feedback circle */}
-                          <span className={`w-3 h-3 rounded-full bg-[#14b8a6] scale-0 group-hover:scale-100 transition-all absolute top-1 ${hoveredMonth === m.label ? 'scale-[0.6] opacity-35 animate-ping' : 'opacity-0'}`} />
+                          <span className={`w-3 h-3 rounded-full bg-[#14b8a6] scale-0 group-hover:scale-100 transition-all absolute bottom-0 left-1/2 ${hoveredMonth === m.label ? 'scale-[0.6] opacity-35 animate-ping' : 'opacity-0'}`} />
                         </div>
                       ))}
                     </div>
 
                   </div>
 
-                  {/* X Axis Labels */}
-                  <div className="absolute inset-x-8 bottom-0 flex justify-between text-[10px] font-bold text-slate-400 font-sans">
+                  {/* X Axis Labels — cùng biên ngang với plot; viewport hẹp ẩn mốc lẻ chống chật/chữ cắt */}
+                  <div className="absolute left-[9%] right-[2%] bottom-[1%] flex justify-between text-[10px] font-bold text-slate-400 font-sans pointer-events-none">
                     {chartPoints.map((m, i) => (
-                      <span key={i} className="flex-1 text-center truncate">{m.label}</span>
+                      <span key={i} className={`flex-1 text-center truncate ${i % 2 === 1 ? 'hidden sm:block' : ''}`}>{m.label}</span>
                     ))}
                   </div>
 
