@@ -3,6 +3,7 @@ import { registerRootComponent } from 'expo';
 import { Alert, Platform } from 'react-native';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
 
 // Custom high-fidelity Alert.alert Web Polyfill
 if (Platform.OS === 'web') {
@@ -99,5 +100,12 @@ if (Platform.OS === 'web') {
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
-registerRootComponent(AppNavigator);
+// Bộ bắt lỗi bọc ngoài cùng: 1 màn lỗi khi vẽ không làm trắng cả ứng dụng
+const Root = () => (
+  <AppErrorBoundary>
+    <AppNavigator />
+  </AppErrorBoundary>
+);
+
+registerRootComponent(Root);
 
