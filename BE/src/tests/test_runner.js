@@ -171,6 +171,7 @@ async function runAllTests() {
     './schedule_registration.test.js',
     './emergency_protocol.test.js',
     './referral_package_email.test.js',
+    './single_device_and_geoip.test.js',
   ];
 
   const startTime = Date.now();

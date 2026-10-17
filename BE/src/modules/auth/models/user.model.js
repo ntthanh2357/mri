@@ -92,6 +92,35 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Giám sát an ninh đăng nhập & Định vị địa lý IP (HIPAA & TT 13/2025/TT-BYT)
+    lastLoginIp: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    lastLoginLocation: {
+      country: { type: String, default: "" },
+      countryCode: { type: String, default: "" },
+      region: { type: String, default: "" },
+      city: { type: String, default: "" },
+      timezone: { type: String, default: "" },
+      lat: { type: Number, default: null },
+      lon: { type: Number, default: null },
+      isp: { type: String, default: "" },
+      displayLocation: { type: String, default: "" },
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    loginHistory: [
+      {
+        ip: { type: String, default: "" },
+        location: { type: String, default: "" },
+        device: { type: String, default: "" },
+        loggedInAt: { type: Date, default: Date.now },
+      },
+    ],
     wardId: {
       type: String,
       default: "",

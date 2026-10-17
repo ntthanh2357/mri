@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { authCache } from "../../utils/authCache.util.js";
 import { getJwtSecret, getRefreshSecret, generateSecureOtp } from "../../config/jwt.config.js";
 import { FEATURES } from "../../config/features.config.js";
+import { recordUserLoginSession } from "../../utils/geoIp.util.js";
 
 const hashPhone = (phone) => {
   if (!phone) return null;
@@ -365,6 +366,12 @@ export const login = async (req, res) => {
       }
     }
 
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    // Chỉ cấp token và ghi nhận phiên khi đã hoàn tất xác thực (không vướng verify hoặc 2FA)
+    if (!requiresVerification && !requires2FA) {
+      await recordUserLoginSession(user, req);
+    }
+
     const accessToken = requiresVerification || requires2FA ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = requiresVerification || requires2FA ? undefined : generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
@@ -480,11 +487,14 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    // OTP đúng → xoá mã, cấp token phiên đăng nhập
+    // OTP đúng → xoá mã
     user.otp2FACode = undefined;
     user.otp2FAExpires = undefined;
     user.otp2FAAttempts = 0;
-    await user.save({ validateBeforeSave: false });
+
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    // Tăng tokenVersion để hủy phiên cũ của tất cả máy khác, lưu IP và tọa độ/vị trí địa lý
+    await recordUserLoginSession(user, req);
 
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
@@ -1260,7 +1270,9 @@ export const phoneLoginVerify = async (req, res) => {
     // Clear OTP fields
     user.otpCode = undefined;
     user.otpExpires = undefined;
-    await user.save();
+
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    await recordUserLoginSession(user, req);
 
     // Generate tokens
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);

@@ -30,6 +30,16 @@ const auditLogSchema = new Schema(
       type: String,
       default: "",
     },
+    ipAddress: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    location: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     // Chuỗi băm mật mã chống giả mạo (Cryptographic Tamper-Evidence - HIPAA §164.312(b), TT 13/2025/TT-BYT & Luật 86/2015/QH13)
     sequenceNumber: {
       type: Number,
