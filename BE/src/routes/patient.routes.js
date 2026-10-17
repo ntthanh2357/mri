@@ -38,15 +38,15 @@ const checkSelfOrRoles = (allowedRoles) => {
 
 router.use(protect);
 
-// Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
-router.get("/", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatients);
+// Lấy danh sách bệnh nhân (nhân viên lâm sàng + lễ tân để tiếp nhận; controller lọc theo bệnh viện)
+router.get("/", checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getPatients);
 
 // Lấy chi tiết 1 bệnh nhân theo ID (cho phép xuyên viện để phục vụ chuyển tuyến)
 router.get("/:patientId", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatientById);
 
-// Quản lý sinh hiệu bệnh nhân (Bác sĩ, Điều dưỡng, Admin hoặc tự bệnh nhân xem/thêm)
+// Quản lý sinh hiệu bệnh nhân: bệnh nhân chỉ XEM của chính mình; chỉ nhân viên lâm sàng được THÊM
 router.get("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientVitals);
-router.post("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), addPatientVitals);
+router.post("/:patientId/vitals", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), addPatientVitals);
 
 // Quản lý chỉ định xét nghiệm của bệnh nhân (Bác sĩ, Điều dưỡng, Kỹ thuật viên, Admin hoặc tự bệnh nhân xem)
 router.get("/:patientId/lab-orders", checkSelfOrRoles(["doctor", "nurse", "technician", "admin", "hospital_admin"]), getPatientLabOrders);

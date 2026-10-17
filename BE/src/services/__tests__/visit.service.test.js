@@ -9,6 +9,8 @@ import { Visit } from '../../models/visit.model.js';
 import { Hospital } from '../../models/hospital.model.js';
 import { User } from '../../models/user.model.js';
 import { Invoice } from '../../models/invoice.model.js';
+import { ConsentForm } from '../../models/consentForm.model.js';
+import { ensureContrastConsentForVisit } from '../contrastConsent.service.js';
 
 describe('Unit Tests: Visit Service (visit.service.js)', () => {
   let mockHospitalId;
@@ -95,6 +97,30 @@ describe('Unit Tests: Visit Service (visit.service.js)', () => {
     expect(result.checklist.passed).toBe(true);
     expect(result.checklist.isScreened).toBe(true);
     expect(result.checklist.screenedBy).toBe('KTV. Lê Văn Bình');
+  });
+
+  test('2b. Có tiêm cản quang mà bệnh nhân chưa ký phiếu: lưu bảng kiểm nhưng KHÔNG tự chuyển "đang chụp" (UC-PAT-06)', async () => {
+    const visit = new Visit({
+      hospitalId: mockHospitalId,
+      patientId: mockPatientId,
+      doctorId: mockDoctorId,
+      status: 'chờ chụp',
+      mriOrder: { region: 'Não bộ', withContrast: true, orderedAt: new Date() },
+    });
+    await visit.save();
+    const consent = await ensureContrastConsentForVisit(visit);
+    const safe = { hasPacemakerOrMetal: false, hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, passed: true };
+
+    const first = await submitMriSafetyCheckService({ visitId: visit._id, hospitalId: mockHospitalId, user: mockTechnician, checklistData: safe });
+    expect(first.visit.status).toBe('chờ chụp');
+    expect(first.contrastConsentPending).toBe(true);
+    expect(first.checklist.passed).toBe(true);
+
+    await ConsentForm.updateOne({ _id: consent._id, hospitalId: mockHospitalId }, { $set: { patientSigned: true } });
+    const second = await submitMriSafetyCheckService({ visitId: visit._id, hospitalId: mockHospitalId, user: mockTechnician, checklistData: safe });
+    expect(second.visit.status).toBe('đang chụp');
+    expect(second.contrastConsentPending).toBe(false);
+    await ConsentForm.deleteMany({ hospitalId: mockHospitalId });
   });
 
   test('3. Ghi nhận yêu cầu chụp lại (Rescan) do nhiễu ảnh', async () => {

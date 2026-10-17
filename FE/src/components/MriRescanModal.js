@@ -1,4 +1,5 @@
 import React from 'react';
+import Colors from '../constants/colors';
 import {
   Modal, View, Text, TouchableOpacity,
   TextInput, ActivityIndicator, StyleSheet
@@ -30,7 +31,7 @@ const MriRescanModal = ({
         <View style={styles.modalBox}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
             <RotateCcw size={20} color="#C2410C" style={{ marginRight: 8 }} />
-            <Text style={[styles.modalTitle, { color: '#C2410C', marginBottom: 0 }]}>Yêu Cầu Chụp Lại Phim MRI</Text>
+            <Text style={[styles.modalTitle, { color: '#C2410C', marginBottom: 0 }]}>Yêu cầu chụp lại phim MRI</Text>
           </View>
           <Text style={styles.modalSub}>
             Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patientName || 'Bệnh nhân'}</Text>
@@ -43,7 +44,7 @@ const MriRescanModal = ({
                 key={reasonText}
                 style={[
                   styles.chip,
-                  rescanReason === reasonText && { backgroundColor: '#EA580C', borderColor: '#EA580C' }
+                  rescanReason === reasonText && { backgroundColor: '#C2410C', borderColor: '#C2410C' }
                 ]}
                 onPress={() => setRescanReason(reasonText)}
               >
@@ -69,7 +70,7 @@ const MriRescanModal = ({
               <Text style={styles.btnCancelText}>Hủy</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.btnConfirm, { backgroundColor: '#EA580C' }]}
+              style={[styles.btnConfirm, { backgroundColor: '#C2410C' }]}
               onPress={onConfirm}
               disabled={submitting}
             >
@@ -78,7 +79,7 @@ const MriRescanModal = ({
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <RotateCcw size={16} color="#fff" />
-                  <Text style={styles.btnConfirmText}>Xác Nhận Chụp Lại</Text>
+                  <Text style={styles.btnConfirmText}>Xác nhận chụp lại</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -92,13 +93,13 @@ const MriRescanModal = ({
 const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 4 },
   modalSub: { fontSize: 13, color: '#64748B', marginBottom: 16 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
   chipText: { fontSize: 13, color: '#475569', fontWeight: '500' },
-  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
+  textArea: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 13, color: Colors.brandNavy, minHeight: 70, textAlignVertical: 'top', backgroundColor: '#F8FAFC' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   btnCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },

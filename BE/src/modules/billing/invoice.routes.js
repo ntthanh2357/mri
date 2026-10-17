@@ -8,7 +8,6 @@ import {
   handlePayOSWebhook,
   paymentSuccess,
   paymentCancel,
-  createPremiumPayment,
   createPendingInvoice,
   refundInvoice,
   getStuckProcessingInvoices,
@@ -29,7 +28,6 @@ router.put("/:id/refund", protect, checkRole(["nurse", "admin", "receptionist", 
 // Cổng thanh toán trực tuyến PayOS (VietQR)
 router.post("/visit/:visitId/payos", protect, createPayOSPayment);
 router.post("/:visitId/payos", protect, createPayOSPayment);
-router.post("/premium-payment", protect, createPremiumPayment);
 router.post("/payos-webhook", handlePayOSWebhook);
 router.get("/payment/success", paymentSuccess);
 router.get("/payment/cancel", paymentCancel);

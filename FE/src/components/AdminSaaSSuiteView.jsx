@@ -257,7 +257,7 @@ export default function AdminSaaSSuiteView() {
             subTab === 'subscriptions' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <CreditCard className="w-3.5 h-3.5" /> Gói Dịch Vụ & Subscription
+          <CreditCard className="w-3.5 h-3.5" /> Gói dịch vụ & Subscription
         </button>
         <button
           onClick={() => setSubTab('sla')}
@@ -265,7 +265,7 @@ export default function AdminSaaSSuiteView() {
             subTab === 'sla' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <Zap className="w-3.5 h-3.5" /> Giám Sát SLA & Isolation
+          <Zap className="w-3.5 h-3.5" /> Giám sát SLA & Isolation
         </button>
         <button
           onClick={() => setSubTab('backup')}
@@ -281,7 +281,7 @@ export default function AdminSaaSSuiteView() {
             subTab === 'ai-models' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <Cpu className="w-3.5 h-3.5" /> Phiên Bản AI Models
+          <Cpu className="w-3.5 h-3.5" /> Phiên bản mô hình AI
         </button>
         <button
           onClick={() => setSubTab('announcements')}
@@ -289,7 +289,7 @@ export default function AdminSaaSSuiteView() {
             subTab === 'announcements' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <Bell className="w-3.5 h-3.5" /> Thông Báo Hệ Thống
+          <Bell className="w-3.5 h-3.5" /> Thông báo hệ thống
         </button>
       </div>
 
@@ -298,7 +298,7 @@ export default function AdminSaaSSuiteView() {
         <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Quản Lý Gói Dịch Vụ SaaS</h3>
+              <h3 className="text-sm font-bold text-slate-900">Quản lý gói dịch vụ SaaS</h3>
               <p className="text-xs text-slate-400 font-medium">Theo dõi thời hạn và cấu hình gói thuê bao của từng bệnh viện</p>
             </div>
             <button onClick={loadHospitals} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-bold flex items-center gap-1">
@@ -307,12 +307,12 @@ export default function AdminSaaSSuiteView() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
+            <table className="min-w-full w-max text-xs">
               <thead className="bg-[#f8fafc]">
                 <tr className="text-slate-500 uppercase tracking-wider text-[10.5px]">
                   <th className="text-left px-4 py-3">Mã BV</th>
-                  <th className="text-left px-4 py-3">Tên Bệnh Viện</th>
-                  <th className="text-left px-4 py-3">Gói Dịch Vụ</th>
+                  <th className="text-left px-4 py-3">Tên bệnh viện</th>
+                  <th className="text-left px-4 py-3">Gói dịch vụ</th>
                   <th className="text-left px-4 py-3">Thời Hạn</th>
                   <th className="text-left px-4 py-3">Trạng Thái</th>
                   <th className="text-center px-4 py-3">Thao Tác</th>
@@ -372,7 +372,7 @@ export default function AdminSaaSSuiteView() {
                 </div>
                 <form onSubmit={handleUpdateSubscription} className="space-y-4 text-xs font-medium text-slate-700">
                   <div className="space-y-1">
-                    <label className="block text-[11px]">Gói Dịch Vụ</label>
+                    <label className="block text-[11px]">Gói dịch vụ</label>
                     <select value={editPlan} onChange={e => setEditPlan(e.target.value)} className="w-full border p-2 rounded-xl">
                       <option value="trial">Trial (Thử nghiệm)</option>
                       <option value="basic">Basic (Tiêu chuẩn)</option>
@@ -408,7 +408,7 @@ export default function AdminSaaSSuiteView() {
           <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-4">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Giám Sát SLA & Uptime Dịch Vụ AI</h3>
+                <h3 className="text-sm font-bold text-slate-900">Giám sát SLA & Uptime dịch vụ AI</h3>
                 <p className="text-xs text-slate-400 font-medium">Uptime thực tế và độ trễ phản hồi của hệ thống Active Learning</p>
               </div>
               <button onClick={loadSlaMetrics} disabled={slaLoading} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-bold flex items-center gap-1">
@@ -449,7 +449,7 @@ export default function AdminSaaSSuiteView() {
 
           <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Xác Thực Tenant Isolation (Bảo Mật Dữ Liệu)</h3>
+              <h3 className="text-sm font-bold text-slate-900">Xác thực tenant isolation (Bảo mật dữ liệu)</h3>
               <p className="text-xs text-slate-400 font-medium">Chạy quy trình quét chéo hệ thống để chứng minh tính cách biệt dữ liệu an toàn</p>
             </div>
             
@@ -491,18 +491,18 @@ export default function AdminSaaSSuiteView() {
       {subTab === 'backup' && (
         <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-6">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Sao Lưu & Khôi Phục Dữ Liệu Theo Cơ Sở</h3>
+            <h3 className="text-sm font-bold text-slate-900">Sao lưu & khôi phục dữ liệu theo cơ sở</h3>
             <p className="text-xs text-slate-400 font-medium">Backup độc lập dữ liệu hồ sơ bệnh nhân, lượt khám và hóa đơn để tuân thủ an toàn</p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
+            <table className="min-w-full w-max text-xs">
               <thead className="bg-[#f8fafc]">
                 <tr className="text-slate-500 uppercase tracking-wider text-[10.5px]">
-                  <th className="text-left px-4 py-3">Tên Bệnh Viện</th>
+                  <th className="text-left px-4 py-3">Tên bệnh viện</th>
                   <th className="text-left px-4 py-3">Bản sao lưu gần nhất</th>
-                  <th className="text-center px-4 py-3">Thao Tác Backup</th>
-                  <th className="text-center px-4 py-3">Thao Tác Restore</th>
+                  <th className="text-center px-4 py-3">Thao tác backup</th>
+                  <th className="text-center px-4 py-3">Thao tác restore</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e8edf5]">
@@ -545,7 +545,7 @@ export default function AdminSaaSSuiteView() {
         <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Quản Lý Phiên Bản Mô Hình AI</h3>
+              <h3 className="text-sm font-bold text-slate-900">Quản lý phiên bản mô hình AI</h3>
               <p className="text-xs text-slate-400 font-medium">Theo dõi lịch sử huấn luyện Active Learning và cấu hình Rollback phiên bản</p>
             </div>
             <div className="text-right">
@@ -563,10 +563,10 @@ export default function AdminSaaSSuiteView() {
           {!aiLoading && (
             <div className="space-y-4">
               <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
+                <table className="min-w-full w-max text-xs">
                   <thead className="bg-[#f8fafc]">
                     <tr className="text-slate-500 uppercase tracking-wider text-[10.5px]">
-                      <th className="text-left px-4 py-3">Tên Phiên Bản AI</th>
+                      <th className="text-left px-4 py-3">Tên phiên bản AI</th>
                       <th className="text-left px-4 py-3">Độ chính xác (Accuracy)</th>
                       <th className="text-left px-4 py-3">Ngày Deployed</th>
                       <th className="text-left px-4 py-3">Trạng Thái</th>
@@ -611,7 +611,7 @@ export default function AdminSaaSSuiteView() {
       {subTab === 'announcements' && (
         <div className="bg-white rounded-2xl border border-[#e8edf5] shadow-3xs p-6 space-y-6">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Đăng Thông Báo Khẩn Cấp Hệ Thống</h3>
+            <h3 className="text-sm font-bold text-slate-900">Đăng thông báo khẩn cấp hệ thống</h3>
             <p className="text-xs text-slate-400 font-medium">Gửi tin nhắn khẩn cấp, thông tin bảo trì tới giao diện của tất cả các bệnh viện</p>
           </div>
 

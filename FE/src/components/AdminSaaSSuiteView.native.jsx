@@ -13,7 +13,7 @@ import Colors from '../constants/colors';
 import { apiRequest } from '../utils/apiClient';
 
 const SUB_TABS = [
-  { key: 'subscriptions', label: '💳 Gói Dịch Vụ' },
+  { key: 'subscriptions', label: '💳 Gói dịch vụ' },
   { key: 'sla', label: '⚡ SLA & Isolation' },
   { key: 'backup', label: '📂 Backup/Restore' },
   { key: 'ai-models', label: '🤖 AI Models' },
@@ -192,7 +192,7 @@ export default function AdminSaaSSuiteView() {
   };
 
   const planStyle = (plan) => {
-    if (plan === 'pro') return { bg: '#eef2ff', color: '#4338ca' };
+    if (plan === 'pro') return { bg: '#EEF3FA', color: Colors.brandNavy };
     if (plan === 'basic') return { bg: '#e0f2fe', color: '#0369a1' };
     return { bg: '#f1f5f9', color: '#475569' };
   };
@@ -201,7 +201,7 @@ export default function AdminSaaSSuiteView() {
     <View style={styles.wrap}>
       {toast && (
         <View style={[styles.toast, { backgroundColor: toast.isError ? '#fef2f2' : '#ecfdf5', borderColor: toast.isError ? '#fecdd3' : '#a7f3d0' }]}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: toast.isError ? '#e11d48' : '#059669' }}>{toast.msg}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: toast.isError ? '#e11d48' : '#047857' }}>{toast.msg}</Text>
         </View>
       )}
 
@@ -217,12 +217,12 @@ export default function AdminSaaSSuiteView() {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <View>
-              <Text style={styles.cardTitle}>Quản Lý Gói Dịch Vụ SaaS</Text>
+              <Text style={styles.cardTitle}>Quản lý gói dịch vụ SaaS</Text>
               <Text style={styles.cardSubtitle}>Theo dõi thời hạn thuê bao từng bệnh viện</Text>
             </View>
             <TouchableOpacity onPress={loadHospitals}><Text style={styles.refreshText}>🔄 Làm mới</Text></TouchableOpacity>
           </View>
-          {loading ? <ActivityIndicator color={Colors.primary} /> : hospitals.map((h) => {
+          {loading ? <ActivityIndicator color={Colors.brandGreen} /> : hospitals.map((h) => {
             const ps = planStyle(h.subscriptionPlan);
             return (
               <View key={h._id} style={styles.rowCard}>
@@ -231,10 +231,10 @@ export default function AdminSaaSSuiteView() {
                   <Text style={styles.rowSub}>{h.code}</Text>
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 5 }}>
                     <View style={[styles.pill, { backgroundColor: ps.bg }]}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: ps.color }}>{(h.subscriptionPlan || 'trial').toUpperCase()}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: ps.color }}>{(h.subscriptionPlan || 'trial').toUpperCase()}</Text>
                     </View>
                     <View style={[styles.pill, { backgroundColor: h.subscriptionStatus === 'active' ? '#ecfdf5' : '#fef2f2' }]}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: h.subscriptionStatus === 'active' ? '#059669' : '#e11d48' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: h.subscriptionStatus === 'active' ? '#047857' : '#e11d48' }}>
                         {h.subscriptionStatus === 'active' ? 'Hoạt động' : 'Hết hạn/Khóa'}
                       </Text>
                     </View>
@@ -276,7 +276,7 @@ export default function AdminSaaSSuiteView() {
                     <Text style={styles.rowSub}>{m.code}</Text>
                   </View>
                   <View style={[styles.pill, { backgroundColor: m.status === 'healthy' ? '#ecfdf5' : m.status === 'warning' ? '#fffbeb' : '#f1f5f9' }]}>
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: m.status === 'healthy' ? '#059669' : m.status === 'warning' ? '#b45309' : Colors.secondary }}>{m.status}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: m.status === 'healthy' ? '#047857' : m.status === 'warning' ? '#b45309' : Colors.secondary }}>{m.status}</Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
@@ -294,7 +294,7 @@ export default function AdminSaaSSuiteView() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Xác Thực Tenant Isolation</Text>
+            <Text style={styles.cardTitle}>Xác thực tenant isolation</Text>
             <Text style={styles.cardSubtitle}>Quét chéo hệ thống chứng minh cách biệt dữ liệu</Text>
             <TouchableOpacity style={styles.darkBtn} onPress={handleVerifyIsolation} disabled={verifyingIsolation}>
               <Text style={styles.darkBtnText}>{verifyingIsolation ? '⏳ Đang quét...' : '🛡️ Bắt đầu quét & xác thực'}</Text>
@@ -308,7 +308,7 @@ export default function AdminSaaSSuiteView() {
                 {isolationResults.verificationResults.map((r) => (
                   <View key={r.hospitalId} style={styles.isolationRow}>
                     <Text style={styles.rowTitle}>{r.name}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: r.status === 'isolated' ? '#059669' : '#dc2626' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: r.status === 'isolated' ? '#047857' : '#B91C1C' }}>
                       {r.status === 'isolated' ? 'Cách biệt an toàn' : `Rò rỉ: ${r.issuesCount}`}
                     </Text>
                   </View>
@@ -321,7 +321,7 @@ export default function AdminSaaSSuiteView() {
 
       {subTab === 'backup' && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sao Lưu & Khôi Phục Dữ Liệu</Text>
+          <Text style={styles.cardTitle}>Sao lưu & khôi phục dữ liệu</Text>
           <Text style={styles.cardSubtitle}>Backup độc lập theo từng bệnh viện</Text>
           {hospitals.map((h) => (
             <View key={h._id} style={styles.rowCard}>
@@ -330,7 +330,7 @@ export default function AdminSaaSSuiteView() {
                 <Text style={styles.rowSub} numberOfLines={1}>{backupFiles[h._id] || 'Chưa backup trong phiên này'}</Text>
               </View>
               <View style={{ gap: 6 }}>
-                <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: '#2563eb' }]} onPress={() => handleBackup(h._id)} disabled={backupLoading[h._id]}>
+                <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: Colors.brandGreen }]} onPress={() => handleBackup(h._id)} disabled={backupLoading[h._id]}>
                   <Text style={styles.smallActionText}>{backupLoading[h._id] ? '...' : '⬇ Backup'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -349,18 +349,18 @@ export default function AdminSaaSSuiteView() {
       {subTab === 'ai-models' && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Quản Lý Phiên Bản Mô Hình AI</Text>
-            <View style={[styles.pill, { backgroundColor: '#eff6ff' }]}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>{currentAiVersion}</Text>
+            <Text style={styles.cardTitle}>Quản lý phiên bản mô hình AI</Text>
+            <View style={[styles.pill, { backgroundColor: Colors.brandGreenSoft }]}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.brandGreenPressed }}>{currentAiVersion}</Text>
             </View>
           </View>
-          {aiLoading ? <ActivityIndicator color={Colors.primary} /> : aiVersions.map((v) => (
+          {aiLoading ? <ActivityIndicator color={Colors.brandGreen} /> : aiVersions.map((v) => (
             <View key={v.version} style={styles.rowCard}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{v.version}</Text>
                 <Text style={styles.rowSub}>Accuracy: {v.accuracy}% · {new Date(v.deployedAt).toLocaleDateString('vi-VN')}</Text>
                 <View style={[styles.pill, { backgroundColor: v.version === currentAiVersion ? '#ecfdf5' : '#f1f5f9', marginTop: 4, alignSelf: 'flex-start' }]}>
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: v.version === currentAiVersion ? '#059669' : Colors.secondary }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: v.version === currentAiVersion ? '#047857' : Colors.secondary }}>
                     {v.version === currentAiVersion ? 'Đang chạy' : 'Sẵn sàng rollback'}
                   </Text>
                 </View>
@@ -379,7 +379,7 @@ export default function AdminSaaSSuiteView() {
 
       {subTab === 'announcements' && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Đăng Thông Báo Khẩn Cấp Hệ Thống</Text>
+          <Text style={styles.cardTitle}>Đăng thông báo khẩn cấp hệ thống</Text>
           <Text style={styles.cardSubtitle}>Gửi tin nhắn khẩn cấp tới tất cả bệnh viện</Text>
           <View style={{ gap: 10, marginTop: 8 }}>
             <View>
@@ -413,7 +413,7 @@ export default function AdminSaaSSuiteView() {
             <Text style={styles.modalTitle}>Thay đổi gói: {selectedHospital?.name}</Text>
             <View style={{ gap: 10, marginTop: 10 }}>
               <View>
-                <Text style={styles.inputLabel}>Gói Dịch Vụ</Text>
+                <Text style={styles.inputLabel}>Gói dịch vụ</Text>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[{ v: 'trial', l: 'Trial' }, { v: 'basic', l: 'Basic' }, { v: 'pro', l: 'Pro' }].map((o) => (
                     <TouchableOpacity key={o.v} onPress={() => setEditPlan(o.v)} style={[styles.filterChip, editPlan === o.v && styles.filterChipActive]}>
@@ -440,7 +440,7 @@ export default function AdminSaaSSuiteView() {
                 <TouchableOpacity style={[styles.smallActionBtn, { flex: 1, backgroundColor: '#f1f5f9' }]} onPress={() => setSelectedHospital(null)}>
                   <Text style={[styles.smallActionText, { color: Colors.secondary }]}>Hủy</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.smallActionBtn, { flex: 1, backgroundColor: '#2563eb' }]} onPress={handleUpdateSubscription}>
+                <TouchableOpacity style={[styles.smallActionBtn, { flex: 1, backgroundColor: Colors.brandGreen }]} onPress={handleUpdateSubscription}>
                   <Text style={styles.smallActionText}>Lưu lại</Text>
                 </TouchableOpacity>
               </View>
@@ -456,22 +456,22 @@ const styles = StyleSheet.create({
   wrap: { gap: 10 },
   toast: { padding: 10, borderRadius: 10, borderWidth: 1 },
   subTabChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border },
-  subTabChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  subTabText: { fontSize: 11, fontWeight: '700', color: Colors.secondary },
+  subTabChipActive: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
+  subTabText: { fontSize: 12, fontWeight: '700', color: Colors.secondary },
   subTabTextActive: { color: Colors.white },
   card: { backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, padding: 14, gap: 8 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontSize: 13.5, fontWeight: '800', color: Colors.black },
-  cardSubtitle: { fontSize: 10.5, color: Colors.secondary },
-  refreshText: { fontSize: 11, fontWeight: '700', color: '#2563eb' },
+  cardSubtitle: { fontSize: 12, color: Colors.secondary },
+  refreshText: { fontSize: 12, fontWeight: '700', color: Colors.brandGreen },
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   rowTitle: { fontSize: 12.5, fontWeight: '700', color: Colors.black },
-  rowSub: { fontSize: 10.5, color: Colors.secondary, marginTop: 2 },
+  rowSub: { fontSize: 12, color: Colors.secondary, marginTop: 2 },
   pill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   editBtn: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 },
-  editBtnText: { fontSize: 10.5, fontWeight: '700', color: Colors.secondary },
+  editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.secondary },
   slaCard: { borderWidth: 1, borderColor: '#f1f5f9', borderRadius: 12, padding: 10, marginTop: 8 },
-  metricLabel: { fontSize: 9.5, color: Colors.secondary },
+  metricLabel: { fontSize: 12, color: Colors.secondary },
   metricValue: { fontSize: 13, fontWeight: '800', color: Colors.black, marginTop: 1 },
   darkBtn: { backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 11, alignItems: 'center', marginTop: 4 },
   darkBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },
@@ -479,14 +479,14 @@ const styles = StyleSheet.create({
   isolationHeader: { fontSize: 12, fontWeight: '800', color: Colors.black },
   isolationRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
   smallActionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  smallActionText: { fontSize: 10.5, fontWeight: '700', color: Colors.white },
-  inputLabel: { fontSize: 11, fontWeight: '700', color: Colors.secondary, marginBottom: 4 },
+  smallActionText: { fontSize: 12, fontWeight: '700', color: Colors.white },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondary, marginBottom: 4 },
   modalInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, color: Colors.black },
   filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  filterChipText: { fontSize: 11, fontWeight: '600', color: Colors.secondary },
+  filterChipActive: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: Colors.secondary },
   filterChipTextActive: { color: Colors.white },
-  sendBtn: { backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
+  sendBtn: { backgroundColor: Colors.brandGreen, borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
   sendBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },
   centerOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', padding: 20 },
   centerSheet: { backgroundColor: Colors.white, borderRadius: 18, padding: 18 },

@@ -63,6 +63,11 @@ const consentFormSchema = new Schema(
     doctorOverrideReason: { type: String, default: "" },
     doctorOverrideByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     signedAt: { type: Date, default: null },
+    // UC-PAT-06 — bệnh nhân tự trả lời bảng sàng lọc và ký trên app
+    patientChecklistAt: { type: Date, default: null },
+    patientSignatureKind: { type: String, enum: ['', 'drawn', 'typed'], default: '' },
+    patientSignatureSvg: { type: String, default: "" }, // đường SVG (viewBox 0 0 300 120) khi ký bằng tay
+    patientSignedAt: { type: Date, default: null },
     // Chuẩn hóa Chữ ký số y tế PKI / Cloud HSM / SmartCard theo NĐ 130/2018/NĐ-CP & TT 13/2025/TT-BYT (thay TT 46/2018)
     digitalSignatureMetadata: {
       signatureType: { type: String, enum: ['electronic', 'pki_token', 'cloud_hsm', 'smartcard'], default: 'electronic' },

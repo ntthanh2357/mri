@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -69,6 +71,14 @@ export default function InpatientEmergencyModal({
       }
     }
   }, [existingEvent]);
+
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
 
   if (!isOpen) return null;
 
@@ -154,7 +164,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã giải trừ báo động nhầm (Stand-down).');
+        await alert('Đã giải trừ báo động nhầm (Stand-down).');
         setShowCancelPrompt(false);
         if (onSuccess) onSuccess(res.data.event);
         onClose();
@@ -258,7 +268,7 @@ export default function InpatientEmergencyModal({
       });
       if (res && res.success) {
         setEventData(res.data.event);
-        alert('Đã đóng sự kiện cấp cứu thành công.');
+        await alert('Đã đóng sự kiện cấp cứu thành công.');
         if (onSuccess) onSuccess(res.data.event);
         onClose();
       }
@@ -278,6 +288,8 @@ export default function InpatientEmergencyModal({
   };
 
   return (
+    <Portal>
+      {dialog}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         
@@ -289,7 +301,7 @@ export default function InpatientEmergencyModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-wide uppercase">Báo Động Cấp Cứu Nội Viện</h2>
+                <h2 className="text-lg font-black tracking-wide uppercase">Báo động cấp cứu nội viện</h2>
                 <span className="px-2 py-0.5 bg-white/20 rounded-md text-xs font-bold uppercase tracking-wider">
                   {eventData?.level || 'RED'}
                 </span>
@@ -386,7 +398,7 @@ export default function InpatientEmergencyModal({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <CheckCircle2 className="w-3.5 h-3.5" /> Đóng Sự Kiện
+            <CheckCircle2 className="w-3.5 h-3.5" /> Đóng sự kiện
           </button>
         </div>
 
@@ -558,7 +570,7 @@ export default function InpatientEmergencyModal({
                       className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-left transition-all"
                     >
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
-                      <p className="text-xs font-bold text-slate-800">Đóng Sự Kiện</p>
+                      <p className="text-xs font-bold text-slate-800">Đóng sự kiện</p>
                       <p className="text-[10px] text-slate-500">Chốt Outcome & Audit</p>
                     </button>
                   </div>
@@ -856,7 +868,7 @@ export default function InpatientEmergencyModal({
                     onClick={handleCloseEvent}
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs"
                   >
-                    Xác Nhận Đóng Sự Kiện Cấp Cứu
+                    Xác Nhận Đóng sự kiện Cấp Cứu
                   </button>
                 </div>
               )}
@@ -878,5 +890,6 @@ export default function InpatientEmergencyModal({
 
       </div>
     </div>
+    </Portal>
   );
 }

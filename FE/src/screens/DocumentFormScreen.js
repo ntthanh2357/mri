@@ -116,23 +116,6 @@ const renderKhamBenh = (d, set) => (
       <F label="Tỉnh thành" value={d.tinhThanh} onChange={(v) => set('tinhThanh', v)} half />
     </Row>
     <F label="Yêu cầu / Lý do khám" value={d.yeuCau} onChange={(v) => set('yeuCau', v)} multi />
-    <SectionTitle>Sinh hiệu (Vital Signs)</SectionTitle>
-    <Row>
-      <F label="Mạch (lần/phút)" value={d.mach} onChange={(v) => set('mach', v)} half keyboard="decimal-pad" />
-      <F label="Huyết áp (mmHg)" value={d.huyetAp} onChange={(v) => set('huyetAp', v)} half />
-    </Row>
-    <Row>
-      <F label="Chiều cao (cm)" value={d.chieuCao} onChange={(v) => set('chieuCao', v)} half keyboard="decimal-pad" />
-      <F label="Cân nặng (kg)" value={d.canNang} onChange={(v) => set('canNang', v)} half keyboard="decimal-pad" />
-    </Row>
-    <Row>
-      <F label="Nhịp thở (lần/phút)" value={d.nhipTho} onChange={(v) => set('nhipTho', v)} half keyboard="decimal-pad" />
-      <F label="BMI" value={d.bmi} onChange={(v) => set('bmi', v)} half keyboard="decimal-pad" />
-    </Row>
-    <Row>
-      <F label="Nhiệt độ (°C)" value={d.nhietDo} onChange={(v) => set('nhietDo', v)} half keyboard="decimal-pad" />
-      <F label="SpO2 (%)" value={d.spo2} onChange={(v) => set('spo2', v)} half keyboard="decimal-pad" />
-    </Row>
   </>
 );
 

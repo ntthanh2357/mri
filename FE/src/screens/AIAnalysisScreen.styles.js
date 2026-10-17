@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
@@ -27,18 +28,18 @@ export default StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: Colors.brandNavy,
   },
   retryBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EEF3FA',
     borderWidth: 1,
     borderColor: '#BFDBFE',
     borderRadius: 6,
   },
   retryBtnText: {
-    color: '#2563EB',
+    color: Colors.brandNavy,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -51,6 +52,7 @@ export default StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  resultFirst: { flexDirection: 'column-reverse' },
   desktopRow: {
     flexDirection: 'row',
     gap: 20,
@@ -76,7 +78,7 @@ export default StyleSheet.create({
   },
   scanPreviewBox: {
     height: 400,
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#334155',
@@ -104,8 +106,8 @@ export default StyleSheet.create({
     left: '5%',
     right: '5%',
     height: 3,
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
+    backgroundColor: Colors.brandGreen,
+    shadowColor: Colors.brandGreen,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 10,
@@ -124,16 +126,16 @@ export default StyleSheet.create({
     marginBottom: 8,
   },
   stepItemActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-    shadowColor: '#3B82F6',
+    borderColor: Colors.brandNavy,
+    backgroundColor: '#EEF3FA',
+    shadowColor: Colors.brandNavy,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
   stepItemCompleted: {
-    borderColor: '#D1FAE5',
+    borderColor: Colors.brandGreenSoft,
     backgroundColor: '#F0FDF4',
   },
   stepStatusIcon: {
@@ -157,18 +159,18 @@ export default StyleSheet.create({
     fontWeight: 'bold',
   },
   stepTextCompleted: {
-    color: '#065F46',
+    color: Colors.brandGreenPressed,
   },
   stepDesc: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 2,
   },
   stepDescActive: {
-    color: '#3B82F6',
+    color: Colors.brandNavy,
   },
   stepDescCompleted: {
-    color: '#10B981',
+    color: Colors.brandGreen,
   },
 
   // Images
@@ -197,7 +199,7 @@ export default StyleSheet.create({
   },
   imgViewer: {
     height: 400,
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.brandNavy,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -263,7 +265,7 @@ export default StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   allProbTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#475569',
     marginBottom: 10,
@@ -290,13 +292,13 @@ export default StyleSheet.create({
 
   consensusBox: {
     marginTop: 16,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#EEF3FA',
     borderRadius: 10,
     padding: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#4F46E5',
+    borderLeftColor: Colors.brandNavy,
     borderWidth: 1,
-    borderColor: '#E0E7FF',
+    borderColor: '#DCE4EE',
   },
   consensusTitle: {
     fontSize: 12,
@@ -319,7 +321,7 @@ export default StyleSheet.create({
     borderColor: '#FFEDD5',
   },
   disclaimerText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#C2410C',
     fontStyle: 'italic',
     lineHeight: 16,
@@ -351,10 +353,10 @@ export default StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.brandGreen,
     borderRadius: 10,
     padding: 16,
-    shadowColor: '#10B981',
+    shadowColor: Colors.brandGreen,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -362,7 +364,7 @@ export default StyleSheet.create({
   },
   confirmBtnIcon: { fontSize: 24 },
   confirmBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-  confirmBtnSub: { color: '#D1FAE5', fontSize: 11, marginTop: 3, lineHeight: 15 },
+  confirmBtnSub: { color: Colors.brandGreenSoft, fontSize: 12, marginTop: 3, lineHeight: 15 },
 
   orDivider: {
     flexDirection: 'row',
@@ -371,7 +373,7 @@ export default StyleSheet.create({
     marginVertical: 20,
   },
   orLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
-  orText: { color: '#94A3B8', fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
+  orText: { color: '#94A3B8', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
 
   feedbackTitle: {
     color: '#475569',
@@ -395,10 +397,10 @@ export default StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.brandNavy,
     borderRadius: 10,
     padding: 16,
-    shadowColor: '#3B82F6',
+    shadowColor: Colors.brandNavy,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -406,7 +408,7 @@ export default StyleSheet.create({
   },
   wrongBtnIcon: { fontSize: 24 },
   wrongBtnTitle: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-  wrongBtnSub: { color: '#DBEAFE', fontSize: 11, marginTop: 3, lineHeight: 15 },
+  wrongBtnSub: { color: '#DBEAFE', fontSize: 12, marginTop: 3, lineHeight: 15 },
 
   btnDisabled: { opacity: 0.5 },
 
@@ -428,11 +430,11 @@ export default StyleSheet.create({
     elevation: 2,
   },
   errorIcon: { fontSize: 48, marginBottom: 12 },
-  errorTitle: { color: '#DC2626', fontSize: 20, fontWeight: 'bold' },
+  errorTitle: { color: '#B91C1C', fontSize: 20, fontWeight: 'bold' },
   errorMsg: { color: '#64748B', fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8 },
   retryBigBtn: {
     marginTop: 20,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.brandNavy,
     paddingVertical: 12,
     paddingHorizontal: 32,
     borderRadius: 8,

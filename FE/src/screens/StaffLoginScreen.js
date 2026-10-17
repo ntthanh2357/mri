@@ -31,6 +31,8 @@ import {
 import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
 import { get, post, setAuthToken } from '../services/api.service';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
+import PressableScale from '../components/PressableScale';
+import Colors from '../constants/colors';
 
 const StaffLoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -218,6 +220,8 @@ const StaffLoginScreen = ({ navigation }) => {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flexOne}>
       <ScrollView contentContainerStyle={[styles.container, !isDesktop && styles.containerMobile]} bounces={false}>
+        <View style={[styles.glow, styles.glowGreen]} pointerEvents="none" />
+        <View style={[styles.glow, styles.glowMint]} pointerEvents="none" />
         {/* ===== Branding nội bộ ===== */}
         <View style={styles.brandRow}>
           <Image
@@ -226,7 +230,7 @@ const StaffLoginScreen = ({ navigation }) => {
             resizeMode="cover"
           />
           <View>
-            <Text style={styles.brandText}>NEUROSCAN AI</Text>
+            <Text style={styles.brandText}>Neuro<Text style={styles.brandTextAccent}>Scan</Text> AI</Text>
             <Text style={styles.brandSub}>Hệ thống Quản lý Bệnh án & Chẩn đoán Hình ảnh</Text>
           </View>
         </View>
@@ -234,21 +238,21 @@ const StaffLoginScreen = ({ navigation }) => {
         <View style={[styles.card, !isDesktop && styles.cardMobile]}>
           {/* ===== Header ===== */}
           <View style={styles.headerRow}>
-            <ShieldCheck color="#22D3EE" size={26} />
+            <ShieldCheck color={Colors.brandMint} size={26} />
             <View style={styles.headerTextBox}>
-              <Text style={styles.headerTitle}>Cổng Nội Bộ</Text>
+              <Text style={styles.headerTitle}>Cổng nội bộ</Text>
               <Text style={styles.headerSub}>Dành riêng cho Nhân viên Y tế & Quản trị</Text>
             </View>
           </View>
 
           <View style={styles.secureBadge}>
-            <Lock size={12} color="#22D3EE" />
+            <Lock size={12} color={Colors.brandMint} />
             <Text style={styles.secureText}>Kết nối nội bộ · Xác thực 2 lớp bắt buộc · Phiên tự đóng sau 15 phút</Text>
           </View>
 
           {checkingAuth ? (
             <View style={styles.checkingBox}>
-              <ActivityIndicator color="#22D3EE" />
+              <ActivityIndicator color={Colors.brandMint} />
               <Text style={styles.checkingText}>Đang kiểm tra phiên làm việc…</Text>
             </View>
           ) : showTwoFactor ? (
@@ -258,7 +262,7 @@ const StaffLoginScreen = ({ navigation }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Nhập 6 chữ số"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={Colors.onDarkSubtle}
                 keyboardType="number-pad"
                 maxLength={6}
                 secureTextEntry
@@ -267,16 +271,16 @@ const StaffLoginScreen = ({ navigation }) => {
               />
               {renderFieldError(twoFactorError)}
               <Text style={styles.otpEmailHint}>
-                Mã được gửi tới: <Text style={{ fontWeight: '700', color: '#CBD5E1' }}>{twoFactorEmail}</Text>
+                Mã được gửi tới: <Text style={{ fontWeight: '700', color: Colors.onDarkText }}>{twoFactorEmail}</Text>
               </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleVerify2Factor} disabled={loading}>
-                {loading ? <ActivityIndicator color="#0B0F17" /> : <Text style={styles.primaryBtnText}>Xác nhận & Vào hệ thống</Text>}
-              </TouchableOpacity>
+              <PressableScale style={styles.primaryBtn} hoverStyle={styles.primaryBtnHover} focusStyle={styles.btnFocus} onPress={handleVerify2Factor} disabled={loading}>
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryBtnText}>Xác nhận & Vào hệ thống</Text>}
+              </PressableScale>
               <TouchableOpacity style={styles.resendBtn} onPress={handleResend2FA} disabled={resendingOtp || loading}>
                 {resendingOtp ? (
-                  <ActivityIndicator size="small" color="#22D3EE" />
+                  <ActivityIndicator size="small" color={Colors.brandMint} />
                 ) : (
-                  <RefreshCw size={13} color="#22D3EE" />
+                  <RefreshCw size={13} color={Colors.brandMint} />
                 )}
                 <Text style={styles.resendBtnText}>
                   {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
@@ -288,14 +292,14 @@ const StaffLoginScreen = ({ navigation }) => {
             </View>
           ) : (
             <View style={styles.formBox}>
-              <Text style={styles.formTitle}>Đăng nhập Nội bộ</Text>
-              <Text style={styles.formSub}>Sử dụng Mã nhân sự hoặc Email cơ quan (*.@neuroscan.com)</Text>
+              <Text style={styles.formTitle}>Đăng nhập</Text>
+              <Text style={styles.formSub}>Dùng mã nhân sự hoặc email cơ quan (@neuroscan.com).</Text>
 
               <Text style={styles.label}>Mã nhân sự / Email nội bộ *</Text>
               <TextInput
                 style={[styles.input, emailError ? styles.inputError : null]}
                 placeholder="vidu@neuroscan.com"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={Colors.onDarkSubtle}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -310,25 +314,27 @@ const StaffLoginScreen = ({ navigation }) => {
                 <TextInput
                   style={[styles.input, passwordError ? styles.inputError : null]}
                   placeholder="••••••••"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={Colors.onDarkSubtle}
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={(t) => { setPassword(t); setPasswordError(''); }}
                   onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff size={16} color="#94A3B8" /> : <Eye size={16} color="#94A3B8" />}
+                  {showPassword ? <EyeOff size={16} color={Colors.onDarkMuted} /> : <Eye size={16} color={Colors.onDarkMuted} />}
                 </TouchableOpacity>
               </View>
               {renderFieldError(passwordError)}
 
-              <TouchableOpacity
+              <PressableScale
                 style={[styles.primaryBtn, (loading || !email || !password) ? styles.btnDisabled : null]}
+                hoverStyle={styles.primaryBtnHover}
+                focusStyle={styles.btnFocus}
                 onPress={handleLogin}
                 disabled={loading}
               >
-                {loading ? <ActivityIndicator color="#0B0F17" /> : <Text style={styles.primaryBtnText}>Đăng nhập Nội bộ →</Text>}
-              </TouchableOpacity>
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryBtnText}>Đăng nhập nội bộ</Text>}
+              </PressableScale>
 
               <TouchableOpacity style={styles.forgotLinkBtn} onPress={() => setShowForgotPassword(true)}>
                 <Text style={styles.forgotLinkText}>Quên mật khẩu? Đặt lại qua mã OTP email</Text>
@@ -343,7 +349,7 @@ const StaffLoginScreen = ({ navigation }) => {
 
         {/* ===== Footer ===== */}
         <TouchableOpacity style={styles.backLink} onPress={goPatientPortal}>
-          <ArrowLeft size={13} color="#64748B" />
+          <ArrowLeft size={14} color={Colors.onDarkMuted} />
           <Text style={styles.backLinkText}>Về cổng bệnh nhân (cổng phổ thông)</Text>
         </TouchableOpacity>
         <Text style={styles.footerText}>© 2026 NeuroScan AI · Khu vực truy cập hạn chế — chỉ dành cho nhân viên được ủy quyền</Text>
@@ -367,71 +373,101 @@ const StaffLoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  flexOne: { flex: 1 },
+  flexOne: { flex: 1, backgroundColor: Colors.brandNavyDeep },
   container: {
-    flex: 1,
-    backgroundColor: '#0B0F17',
+    flexGrow: 1,
+    backgroundColor: Colors.brandNavyDeep,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
     minHeight: '100%',
+    overflow: 'hidden',
   },
-  containerMobile: { justifyContent: 'flex-start', paddingTop: 60 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 22 },
-  brandLogo: {
-    width: 42, height: 42, borderRadius: 12, borderWidth: 1, borderColor: '#1E293B',
-  },
-  brandText: { color: '#F1F5F9', fontSize: 15, fontWeight: '800', letterSpacing: 1.2 },
-  brandSub: { color: '#94A3B8', fontSize: 11 },
+  containerMobile: { justifyContent: 'flex-start', paddingTop: 56, paddingHorizontal: 16 },
+  glow: { position: 'absolute', borderRadius: 999 },
+  glowGreen: { width: 520, height: 520, top: -220, right: -160, backgroundColor: 'rgba(8, 168, 128, 0.18)', filter: 'blur(60px)' },
+  glowMint: { width: 420, height: 420, bottom: -200, left: -140, backgroundColor: 'rgba(164, 251, 229, 0.08)', filter: 'blur(60px)' },
+
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
+  brandLogo: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFFFFF' },
+  brandText: { color: Colors.onDarkText, fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  brandTextAccent: { color: Colors.brandGreenOnDark },
+  brandSub: { color: Colors.onDarkMuted, fontSize: 12, marginTop: 1 },
+
   card: {
-    width: 440, maxWidth: '100%', backgroundColor: '#111827',
-    borderRadius: 20, borderWidth: 1, borderColor: '#1E293B', padding: 28,
+    width: 440,
+    maxWidth: '100%',
+    backgroundColor: Colors.brandNavy,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.onDarkBorder,
+    padding: 28,
+    boxShadow: '0 24px 48px -24px rgba(0, 0, 0, 0.55)',
   },
   cardMobile: { padding: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  headerTitle: { color: '#F1F5F9', fontSize: 19, fontWeight: '800' },
-  headerSub: { color: '#94A3B8', fontSize: 12 },
+  headerTitle: { color: Colors.onDarkText, fontSize: 20, fontWeight: '800' },
+  headerSub: { color: Colors.onDarkMuted, fontSize: 13, marginTop: 1 },
   headerTextBox: { flex: 1 },
   secureBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0B0F17',
-    borderRadius: 10, borderWidth: 1, borderColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 8,
-    marginBottom: 18, flexWrap: 'wrap',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(164, 251, 229, 0.07)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.onDarkBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 20,
   },
-  secureText: { color: '#94A3B8', fontSize: 10.5, flex: 1 },
+  secureText: { color: Colors.onDarkMuted, fontSize: 12, lineHeight: 17, flex: 1 },
   checkingBox: { alignItems: 'center', paddingVertical: 40, gap: 10 },
-  checkingText: { color: '#94A3B8', fontSize: 12 },
+  checkingText: { color: Colors.onDarkMuted, fontSize: 13 },
   formBox: { width: '100%' },
-  formTitle: { color: '#F1F5F9', fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  formSub: { color: '#94A3B8', fontSize: 11.5, marginBottom: 18 },
-  label: { color: '#CBD5E1', fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
+  formTitle: { color: Colors.onDarkText, fontSize: 17, fontWeight: '700', marginBottom: 4 },
+  formSub: { color: Colors.onDarkMuted, fontSize: 13, lineHeight: 19, marginBottom: 18 },
+  label: { color: Colors.onDarkText, fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 6 },
   input: {
-    backgroundColor: '#0B0F17', borderWidth: 1, borderColor: '#1E293B', borderRadius: 12,
-    color: '#F1F5F9', fontSize: 14, paddingHorizontal: 14, paddingVertical: 12, width: '100%',
+    backgroundColor: Colors.brandNavyInput,
+    borderWidth: 1,
+    borderColor: Colors.onDarkBorder,
+    borderRadius: 10,
+    color: Colors.onDarkText,
+    fontSize: 15,
+    paddingHorizontal: 14,
+    height: 46,
+    width: '100%',
   },
-  inputError: { borderColor: '#DC2626' },
+  inputError: { borderColor: '#F87171' },
   passwordWrap: { position: 'relative', justifyContent: 'center' },
-  eyeBtn: { position: 'absolute', right: 12 },
-  fieldError: { color: '#F87171', fontSize: 11, marginTop: 5 },
+  eyeBtn: { position: 'absolute', right: 6, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  fieldError: { color: '#FCA5A5', fontSize: 12, marginTop: 6 },
   primaryBtn: {
-    backgroundColor: '#22D3EE', borderRadius: 12, paddingVertical: 13, alignItems: 'center',
-    marginTop: 16, marginBottom: 12,
+    backgroundColor: Colors.brandGreen,
+    borderRadius: 10,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    marginBottom: 10,
+    boxShadow: '0 10px 22px -12px rgba(6, 122, 94, 0.9)',
   },
-  btnDisabled: { opacity: 0.5 },
-  primaryBtnText: { color: '#0B0F17', fontSize: 14, fontWeight: '800' },
-  ghostBtn: { alignItems: 'center', paddingVertical: 8 },
-  ghostBtnText: { color: '#94A3B8', fontSize: 12 },
-  otpEmailHint: { color: '#64748B', fontSize: 10.5, textAlign: 'center', marginTop: 6 },
-  resendBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 6, marginBottom: 4,
-  },
-  resendBtnText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
-  forgotLinkBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2, marginBottom: 8 },
-  forgotLinkText: { color: '#22D3EE', fontSize: 12, fontWeight: '600' },
-  noteText: { color: '#64748B', fontSize: 10.5, textAlign: 'center', marginTop: 4, lineHeight: 15 },
-  backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20, padding: 6 },
-  backLinkText: { color: '#64748B', fontSize: 12 },
-  footerText: { color: '#475569', fontSize: 10, marginTop: 8, textAlign: 'center' },
+  primaryBtnHover: { backgroundColor: Colors.brandGreenPressed },
+  btnFocus: { outlineStyle: 'solid', outlineWidth: 2, outlineColor: Colors.brandMint, outlineOffset: 2 },
+  btnDisabled: { opacity: 0.55 },
+  primaryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  ghostBtn: { alignItems: 'center', paddingVertical: 10 },
+  ghostBtnText: { color: Colors.onDarkMuted, fontSize: 13 },
+  otpEmailHint: { color: Colors.onDarkSubtle, fontSize: 12, textAlign: 'center', marginTop: 8 },
+  resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, marginBottom: 2 },
+  resendBtnText: { color: Colors.brandMint, fontSize: 13, fontWeight: '600' },
+  forgotLinkBtn: { alignItems: 'center', paddingVertical: 8, marginBottom: 6 },
+  forgotLinkText: { color: Colors.brandMint, fontSize: 13, fontWeight: '600' },
+  noteText: { color: Colors.onDarkSubtle, fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 17 },
+  backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 22, padding: 8 },
+  backLinkText: { color: Colors.onDarkMuted, fontSize: 13 },
+  footerText: { color: Colors.onDarkSubtle, fontSize: 12, marginTop: 6, textAlign: 'center', maxWidth: 440, lineHeight: 17 },
 });
 
 export default StaffLoginScreen;

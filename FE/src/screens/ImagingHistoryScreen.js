@@ -1,148 +1,187 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  useWindowDimensions,
-} from 'react-native';
-import { get } from '../services/api.service';
+import React from 'react';
+import { View, Text, Image, Animated, ScrollView, SafeAreaView, useWindowDimensions } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import PressableScale from '../components/PressableScale';
+import PageHeroBanner from '../components/PageHeroBanner';
+import FadeIn from '../components/FadeIn';
+import Colors from '../constants/colors';
+import Config from '../constants/config';
+import { useImagingHistory } from '../controllers/useImagingHistory';
+import { useLoop } from '../controllers/useMotion';
 import styles from './ImagingHistoryScreen.styles';
-import { RotateCw, AlertTriangle, FolderOpen } from 'lucide-react';
+
+const formatDate = (iso) =>
+  iso ? new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+
+const thumbSource = (item) => {
+  const first = item?.images?.[0];
+  if (!first) return require('../../assets/nero3.png');
+  return { uri: first.startsWith('http') ? first : `${Config.API_URL}${first}` };
+};
+
+// Hướng dẫn chung trước khi chụp MRI (thông tin an toàn phổ biến, không phải chỉ định riêng cho từng người).
+const PREP_TIPS = [
+  'Tháo trang sức, kẹp tóc và đồ kim loại trước khi vào phòng chụp.',
+  'Báo bác sĩ nếu bạn có máy tạo nhịp tim, mảnh ghép kim loại hoặc đang mang thai.',
+  'Mang theo phim và kết quả cũ để bác sĩ so sánh với lần chụp mới.',
+];
+
+const SkeletonCard = ({ shimmer }) => {
+  const opacity = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.55, 1, 0.55] });
+  return (
+    <Animated.View style={[styles.card, { opacity }]}>
+      <View style={styles.cardInner}>
+        <View style={[styles.thumbWrap, styles.skeleton, { borderRadius: 0 }]} />
+        <View style={styles.cardBody}>
+          <View style={[styles.skeleton, { width: '35%', height: 12 }]} />
+          <View style={[styles.skeleton, { width: '85%', height: 18, marginTop: 10 }]} />
+          <View style={[styles.skeleton, { width: '100%', height: 40, marginTop: 10 }]} />
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
+
+const FilmCard = ({ item, index, onOpen }) => {
+  const isMRI = item.imagingType !== 'CT';
+  return (
+    <FadeIn delay={index * 80}>
+      <PressableScale
+        style={styles.card}
+        hoverStyle={styles.cardHover}
+        onPress={onOpen}
+        accessibilityRole="link"
+        accessibilityLabel={`${item.imagingType || 'Phim'} ngày ${formatDate(item.reportDate)}: ${item.procedure}`}
+      >
+        <View style={styles.cardInner}>
+          <View style={styles.thumbWrap}>
+            <Image source={thumbSource(item)} style={styles.thumb} resizeMode="cover" accessible={false} />
+            <View style={[styles.typeChip, isMRI ? styles.typeChipMri : styles.typeChipCt]}>
+              <Text style={styles.typeChipText}>{item.imagingType || 'MRI'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardBody}>
+            <Text style={styles.dateText}>{formatDate(item.reportDate || item.orderDate)}</Text>
+            <Text style={styles.procedureTitle}>{item.procedure || 'Chụp chẩn đoán hình ảnh'}</Text>
+            {item.conclusion ? (
+              <Text style={styles.conclusionText}>
+                <Text style={styles.conclusionLabel}>Kết luận: </Text>
+                {item.conclusion}
+              </Text>
+            ) : null}
+            <View style={styles.cardFooter}>
+              <Text style={styles.doctorText} numberOfLines={1}>
+                <Feather name="user" size={12} color={Colors.secondary} /> {item.radiologist || 'Bác sĩ chẩn đoán hình ảnh'}
+              </Text>
+              <View style={styles.openLink}>
+                <Text style={styles.openLinkText}>Xem kết quả</Text>
+                <Feather name="arrow-right" size={14} color={Colors.brandGreen} />
+              </View>
+            </View>
+          </View>
+        </View>
+      </PressableScale>
+    </FadeIn>
+  );
+};
+
+const PrepCard = ({ onAnalyze }) => (
+  <FadeIn delay={200} style={styles.prepCard}>
+    <Image source={require('../../assets/images/illus-films.png')} style={styles.prepIllus} resizeMode="contain" accessible={false} />
+    <Text style={styles.prepTitle}>Chuẩn bị cho lần chụp MRI tiếp theo</Text>
+    {PREP_TIPS.map((tip) => (
+      <View key={tip} style={styles.prepRow}>
+        <View style={styles.prepCheck}>
+          <Feather name="check" size={12} color={Colors.brandGreen} />
+        </View>
+        <Text style={styles.prepText}>{tip}</Text>
+      </View>
+    ))}
+    <View style={styles.prepDivider} />
+    <Text style={styles.prepHint}>Muốn đọc kết quả dễ hiểu hơn?</Text>
+    <PressableScale style={styles.prepBtn} hoverStyle={styles.prepBtnHover} onPress={onAnalyze} accessibilityRole="link">
+      <Feather name="cpu" size={15} color={Colors.brandGreen} />
+      <Text style={styles.prepBtnText}>Mở Phân tích AI</Text>
+    </PressableScale>
+  </FadeIn>
+);
 
 const ImagingHistoryScreen = ({ route, navigation }) => {
   const { patientMedicalId, patientName } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
-  
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const wideBanner = width > 980;
+  const { results, loading, error, refresh } = useImagingHistory(patientMedicalId);
+  const shimmer = useLoop(1200);
+  // Cột hướng dẫn chỉ dành cho bệnh nhân xem phim của chính mình (nhân viên xem hộ thì không cần).
+  const showPrep = !patientMedicalId;
 
-  const fetchHistory = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const endpoint = patientMedicalId
-        ? `/api/v1/imaging/patient/${patientMedicalId}`
-        : '/api/v1/imaging/my-results';
+  const title = patientName ? `Phim của ${patientName}` : 'Phim MRI & CT';
+  const subtitle = loading ? 'Đang tải…' : `${results.length} phim, mới nhất ở trên cùng.`;
 
-      const response = await get(endpoint);
-      if (response.success) {
-        setResults(response.data);
-      } else {
-        setError(response.message || 'Không thể tải lịch sử chẩn đoán hình ảnh.');
-      }
-    } catch (err) {
-      console.error('Fetch imaging history error:', err);
-      setError('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const openFilm = (item) => navigation.navigate('ImagingResult', { resultId: item._id, activeRoute: 'ImagingHistory' });
 
-  useEffect(() => {
-    fetchHistory();
-  }, [patientMedicalId]);
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} lúc ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  };
-
-  const renderItem = ({ item }) => {
-    const isMRI = item.imagingType === 'MRI';
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('ImagingResult', { resultId: item._id, activeRoute: 'ImagingHistory' })}
-      >
-        <View style={styles.cardHeader}>
-          <View style={[styles.badge, isMRI ? styles.mriBadge : styles.ctBadge]}>
-            <Text style={[styles.badgeText, isMRI ? styles.mriBadgeText : styles.ctBadgeText]}>
-              {item.imagingType}
-            </Text>
-          </View>
-          <Text style={styles.dateText}>{formatDate(item.reportDate)}</Text>
+  let listContent;
+  if (loading) {
+    listContent = [0, 1, 2].map((i) => <SkeletonCard key={i} shimmer={shimmer.value} />);
+  } else if (error) {
+    listContent = (
+      <View style={styles.stateBox}>
+        <View style={[styles.stateIcon, styles.stateIconWarn]}>
+          <Feather name="wifi-off" size={22} color="#B45309" />
         </View>
-
-        <Text style={styles.procedureTitle}>{item.procedure}</Text>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Bác sĩ chuyên khoa:</Text>
-          <Text style={styles.infoValue}>{item.radiologist}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Chẩn đoán lâm sàng:</Text>
-          <Text style={styles.infoValue}>{item.diagnosis || 'Chưa cập nhật'}</Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        <Text style={styles.conclusionLabel}>Kết luận:</Text>
-        <Text style={styles.conclusionText} numberOfLines={2}>
-          {item.conclusion}
-        </Text>
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.footerLink}>Xem chi tiết bệnh án & phim →</Text>
-        </View>
-      </TouchableOpacity>
+        <Text style={styles.stateTitle}>Không tải được danh sách phim</Text>
+        <Text style={styles.stateText}>{error}</Text>
+        <PressableScale style={styles.retryBtn} hoverStyle={styles.retryBtnHover} onPress={refresh}>
+          <Text style={styles.retryBtnText}>Thử lại</Text>
+        </PressableScale>
+      </View>
     );
-  };
+  } else if (results.length === 0) {
+    listContent = (
+      <View style={styles.stateBox}>
+        <Image source={require('../../assets/images/illus-films.png')} style={styles.stateIllus} resizeMode="contain" accessible={false} />
+        <Text style={styles.stateTitle}>Chưa có phim nào</Text>
+        <Text style={styles.stateText}>Phim MRI/CT sẽ hiện ở đây sau khi bệnh viện tải lên hệ thống.</Text>
+      </View>
+    );
+  } else {
+    // Mỗi bệnh nhân chỉ có vài phim — render thẳng trong ScrollView, không cần list ảo hoá.
+    listContent = results.map((item, index) => <FilmCard key={item._id} item={item} index={index} onOpen={() => openFilm(item)} />);
+  }
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="ImagingHistory">
       <SafeAreaView style={styles.container}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTitleRow}>
-            <TouchableOpacity style={styles.backArrowBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backArrowText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.title}>
-              {patientName ? `Lịch sử phim: ${patientName}` : 'Lịch sử Chẩn đoán Hình ảnh'}
-            </Text>
-          </View>
-          <TouchableOpacity style={[styles.refreshBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={fetchHistory}>
-            <RotateCw size={14} color="#15803D" />
-            <Text style={styles.refreshBtnText}>Làm mới</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView contentContainerStyle={[styles.page, isDesktop && styles.pageDesktop]}>
+          <PageHeroBanner
+            source={require('../../assets/images/patient-imaging-header.jpg')}
+            title={title}
+            subtitle={subtitle}
+            wide={wideBanner}
+          >
+            <PressableScale
+              style={[styles.refreshBtn, wideBanner && styles.refreshBtnOnDark]}
+              hoverStyle={wideBanner ? styles.refreshBtnOnDarkHover : styles.refreshBtnHover}
+              onPress={refresh}
+              accessibilityLabel="Tải lại danh sách phim"
+            >
+              <Feather name="rotate-cw" size={14} color={wideBanner ? Colors.brandMint : Colors.brandGreen} />
+              <Text style={[styles.refreshBtnText, wideBanner && styles.refreshBtnTextOnDark]}>Tải lại</Text>
+            </PressableScale>
+          </PageHeroBanner>
 
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#15803D" />
-            <Text style={styles.loadingText}>Đang tải lịch sử phim chụp...</Text>
+          <View style={[styles.columns, isDesktop && showPrep && styles.columnsDesktop]}>
+            <View style={[styles.list, isDesktop && showPrep && styles.listCol]}>{listContent}</View>
+            {showPrep && (
+              <View style={isDesktop ? styles.asideCol : null}>
+                <PrepCard onAnalyze={() => navigation.navigate('AIAnalysis')} />
+              </View>
+            )}
           </View>
-        ) : error ? (
-          <View style={styles.centerContainer}>
-            <AlertTriangle size={36} color="#D97706" style={{ marginBottom: 8 }} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchHistory}>
-              <Text style={styles.retryButtonText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
-        ) : results.length === 0 ? (
-          <View style={styles.centerContainer}>
-            <FolderOpen size={40} color="#94A3B8" style={{ marginBottom: 8 }} />
-            <Text style={styles.emptyText}>Chưa có kết quả chẩn đoán hình ảnh nào được lưu trữ cho bệnh án này.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={results}
-            keyExtractor={(item) => item._id}
-            renderItem={renderItem}
-            contentContainerStyle={[
-              styles.listContainer,
-              isDesktop && styles.listContainerDesktop
-            ]}
-          />
-        )}
+        </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
   );

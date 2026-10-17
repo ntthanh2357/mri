@@ -1,50 +1,10 @@
 import { StyleSheet } from 'react-native';
+import Colors from '../constants/colors';
 
 export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F1F5F9',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  backBtnText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  saveBtn: {
-    backgroundColor: '#15803D',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  saveBtnDisabled: {
-    backgroundColor: '#86EFAC',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 13,
   },
   scrollContainer: {
     padding: 16,
@@ -110,7 +70,7 @@ export default StyleSheet.create({
     paddingHorizontal: 12,
     height: 40,
     fontSize: 14,
-    color: '#0F172A',
+    color: Colors.brandNavy,
     backgroundColor: '#F8FAFC',
   },
   textArea: {
@@ -133,15 +93,15 @@ export default StyleSheet.create({
     alignItems: 'center',
   },
   activeGenderBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
+    borderColor: Colors.brandGreen,
+    backgroundColor: Colors.brandGreenSoft,
   },
   genderBtnText: {
     fontSize: 13,
     color: '#475569',
   },
   activeGenderBtnText: {
-    color: '#15803D',
+    color: Colors.brandGreen,
     fontWeight: 'bold',
   },
   typeRow: {
@@ -159,15 +119,15 @@ export default StyleSheet.create({
     alignItems: 'center',
   },
   activeTypeBtn: {
-    borderColor: '#15803D',
-    backgroundColor: '#DCFCE7',
+    borderColor: Colors.brandGreen,
+    backgroundColor: Colors.brandGreenSoft,
   },
   typeBtnText: {
     fontSize: 14,
     color: '#475569',
   },
   activeTypeBtnText: {
-    color: '#15803D',
+    color: Colors.brandGreen,
     fontWeight: 'bold',
   },
   divider: {
@@ -178,7 +138,7 @@ export default StyleSheet.create({
   imageCountText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#16A34A',
+    color: Colors.brandGreen,
     height: 40,
     lineHeight: 40,
   },
@@ -217,7 +177,7 @@ export default StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#B91C1C',
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -240,7 +200,7 @@ export default StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#15803D',
+    borderColor: Colors.brandGreen,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
@@ -248,26 +208,26 @@ export default StyleSheet.create({
   },
   uploadButtonDisabled: {
     backgroundColor: '#F1F5F9',
-    borderColor: '#94A3B8',
+    borderColor: Colors.secondary,
   },
   uploadButtonText: {
-    color: '#15803D',
+    color: Colors.brandGreen,
     fontSize: 13,
     fontWeight: 'bold',
   },
   uploadTipText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 8,
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: '#B91C1C',
     borderWidth: 1.5,
     backgroundColor: '#FEF2F2',
   },
   errorText: {
-    color: '#EF4444',
-    fontSize: 11,
+    color: '#B91C1C',
+    fontSize: 12,
     marginTop: 4,
     fontWeight: '600',
   },

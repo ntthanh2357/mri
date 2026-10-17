@@ -1,4 +1,22 @@
 const Colors = {
+  // Brand 2026 — lấy từ logo NeuroScan Neural Cross (navy "Neuro" + xanh lá "Scan").
+  // Màn hình mới/đã thiết kế lại dùng nhóm này; các màn cũ vẫn dùng `primary` teal bên dưới.
+  brandNavy: '#0B2A55',          // chữ "Neuro", nền hero tối
+  brandGreen: '#067A5E',         // nút chính, link (chữ trắng trên nền này 5.31:1)
+  brandGreenPressed: '#05634D',  // hover / nhấn
+  brandGreenSoft: '#E7F6F0',     // nền nhạt cho mục đang chọn
+  brandGreenLogo: '#08A880',     // đúng màu logo — chỉ trang trí / chữ lớn, không dùng cho chữ nhỏ trên nền trắng
+  brandGreenOnDark: '#3DDBA6',   // chữ xanh trên nền navy (8.05:1)
+  brandMint: '#A4FBE5',          // chữ nhấn trên nền navy (11.86:1)
+
+  // Bề mặt tối theo thương hiệu (cổng nội bộ /staff, hero, thẻ navy)
+  brandNavyDeep: '#061A36',      // nền trang tối
+  brandNavyInput: '#071F40',     // ô nhập trên thẻ navy
+  onDarkText: '#F1F5F9',         // chữ chính trên navy
+  onDarkMuted: '#B9C9E0',        // chữ phụ trên navy (≈8.6:1 trên brandNavy)
+  onDarkSubtle: '#8FA3C0',       // placeholder / ghi chú trên navy (≈5.6:1)
+  onDarkBorder: 'rgba(164, 251, 229, 0.16)', // viền mảnh màu mint
+
   // Clinical Teal / Cyan (Primary Brand)
   primary: '#0891B2',
   primaryFocus: '#0E7490',
@@ -35,6 +53,11 @@ const Colors = {
   successBg: '#ECFDF5',
   info: '#0284C7',
   infoBg: '#F0F9FF',
+  // Chữ/icon trạng thái đạt AA trên nền nhạt tương ứng (code mới dùng nhóm này cho chữ)
+  errorText: '#B91C1C',
+  warningText: '#B45309',
+  successText: '#047857',
+  infoText: '#0369A1',
 
   white: '#FFFFFF',
   black: '#0F172A',

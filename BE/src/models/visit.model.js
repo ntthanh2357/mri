@@ -55,6 +55,7 @@ const visitSchema = new Schema(
       brain_region: { type: String, default: null },
       instructions: { type: String, default: "" },
       requestAiAnalysis: { type: Boolean, default: false },
+      withContrast: { type: Boolean, default: false }, // UC-PAT-06: có tiêm cản quang Gadolinium → bệnh nhân ký phiếu trên app
       imagingResultId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
       orderedAt: { type: Date, default: null }
     },

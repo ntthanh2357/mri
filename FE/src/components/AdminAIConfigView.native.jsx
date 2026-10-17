@@ -11,7 +11,7 @@ import Colors from '../constants/colors';
 import { apiRequest } from '../utils/apiClient';
 
 const CLASS_META = {
-  glioma: { color: '#6366f1', label: 'U thần kinh đệm (Glioma)' },
+  glioma: { color: Colors.brandNavy, label: 'U thần kinh đệm (Glioma)' },
   meningioma: { color: '#10b981', label: 'U màng não (Meningioma)' },
   pituitary: { color: '#f59e0b', label: 'U tuyến yên (Pituitary)' },
   notumor: { color: '#64748b', label: 'Không có u (No Tumor)' },
@@ -21,7 +21,7 @@ const CLASS_META = {
 function ClassBar({ label, correct, corrected }) {
   const total = correct + corrected;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
-  const meta = CLASS_META[label] || { color: '#6366f1', label };
+  const meta = CLASS_META[label] || { color: Colors.brandNavy, label };
   return (
     <View style={{ marginBottom: 10 }}>
       <View style={styles.classBarTop}>
@@ -167,7 +167,7 @@ export default function AdminAIConfigView() {
         </View>
 
         {loadingStats ? (
-          <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 20 }} />
+          <ActivityIndicator color={Colors.brandGreen} style={{ paddingVertical: 20 }} />
         ) : statsError ? (
           <Text style={styles.errorText}>{statsError}</Text>
         ) : (
@@ -184,7 +184,7 @@ export default function AdminAIConfigView() {
             <View style={styles.statPairRow}>
               <View style={[styles.statBox, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
                 <Text style={{ fontSize: 18 }}>✅</Text>
-                <Text style={[styles.statBoxLabel, { color: '#059669' }]}>Duyệt đúng</Text>
+                <Text style={[styles.statBoxLabel, { color: '#047857' }]}>Duyệt đúng</Text>
                 <Text style={[styles.statBoxValue, { color: '#047857' }]}>{stats?.approved ?? 0}</Text>
               </View>
               <View style={[styles.statBox, { backgroundColor: '#fef2f2', borderColor: '#fecdd3' }]}>
@@ -231,8 +231,8 @@ export default function AdminAIConfigView() {
           </Text>
         </TouchableOpacity>
         {!!retrainMsg && (
-          <View style={[styles.msgBox, { backgroundColor: retrainMsg.startsWith('Lỗi') ? '#fef2f2' : '#eef2ff' }]}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: retrainMsg.startsWith('Lỗi') ? '#e11d48' : '#4338ca' }}>{retrainMsg}</Text>
+          <View style={[styles.msgBox, { backgroundColor: retrainMsg.startsWith('Lỗi') ? '#fef2f2' : '#EEF3FA' }]}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: retrainMsg.startsWith('Lỗi') ? '#e11d48' : Colors.brandNavy }}>{retrainMsg}</Text>
           </View>
         )}
       </View>
@@ -244,7 +244,7 @@ export default function AdminAIConfigView() {
           <TouchableOpacity onPress={fetchFeedback}><Text style={styles.refreshIcon}>🔄</Text></TouchableOpacity>
         </View>
         {loadingFeedback ? (
-          <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 20 }} />
+          <ActivityIndicator color={Colors.brandGreen} style={{ paddingVertical: 20 }} />
         ) : feedbackError ? (
           <Text style={styles.errorText}>{feedbackError}</Text>
         ) : feedback.length === 0 ? (
@@ -304,50 +304,50 @@ export default function AdminAIConfigView() {
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
   pageTitle: { fontSize: 16, fontWeight: '800', color: Colors.black },
-  pageSubtitle: { fontSize: 11, color: Colors.secondary, marginTop: -6 },
+  pageSubtitle: { fontSize: 12, color: Colors.secondary, marginTop: -6 },
   card: { backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, padding: 14, gap: 8 },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 13.5, fontWeight: '800', color: Colors.black },
   refreshIcon: { fontSize: 14 },
   errorText: { fontSize: 12, fontWeight: '700', color: '#e11d48' },
-  successText: { fontSize: 12, fontWeight: '700', color: '#059669' },
+  successText: { fontSize: 12, fontWeight: '700', color: '#047857' },
   accuracyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 },
   accuracyBadge: { width: 90, height: 90, borderRadius: 45, borderWidth: 6, alignItems: 'center', justifyContent: 'center' },
   accuracyValue: { fontSize: 18, fontWeight: '900' },
   accuracyLabel: { fontSize: 8, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase', marginTop: 2 },
-  totalLabel: { fontSize: 9, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase' },
+  totalLabel: { fontSize: 12, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase' },
   totalValue: { fontSize: 24, fontWeight: '900', color: Colors.black, marginTop: 2 },
-  totalSub: { fontSize: 9.5, color: Colors.secondary },
+  totalSub: { fontSize: 12, color: Colors.secondary },
   statPairRow: { flexDirection: 'row', gap: 10 },
   statBox: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 12, alignItems: 'center' },
-  statBoxLabel: { fontSize: 10, fontWeight: '700', marginTop: 4 },
+  statBoxLabel: { fontSize: 12, fontWeight: '700', marginTop: 4 },
   statBoxValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
-  subHeading: { fontSize: 10, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
-  mutedItalic: { fontSize: 11.5, color: Colors.secondary, fontStyle: 'italic' },
+  subHeading: { fontSize: 12, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
+  mutedItalic: { fontSize: 12, color: Colors.secondary, fontStyle: 'italic' },
   classBarTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  classLabel: { fontSize: 11, fontWeight: '600', color: Colors.black, flexShrink: 1 },
-  classValue: { fontSize: 10, color: Colors.secondary, fontFamily: 'monospace' },
+  classLabel: { fontSize: 12, fontWeight: '600', color: Colors.black, flexShrink: 1 },
+  classValue: { fontSize: 12, color: Colors.secondary, fontFamily: 'monospace' },
   classTrack: { height: 7, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' },
   classFill: { height: '100%', borderRadius: 4 },
   metaBox: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, alignItems: 'center' },
-  metaBoxLabel: { fontSize: 9.5, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center' },
+  metaBoxLabel: { fontSize: 12, color: Colors.secondary, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center' },
   metaBoxValue: { fontSize: 20, fontWeight: '900', color: Colors.black, marginTop: 4 },
   readyPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   readyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' },
-  readyText: { fontSize: 11, fontWeight: '700', color: '#059669' },
+  readyText: { fontSize: 12, fontWeight: '700', color: '#047857' },
   retrainBtn: { backgroundColor: '#0f172a', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   retrainBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },
   msgBox: { padding: 10, borderRadius: 10 },
   feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
-  feedbackIndex: { fontSize: 10, color: Colors.secondary, fontFamily: 'monospace', width: 20 },
-  feedbackFilename: { fontSize: 11.5, fontWeight: '700', color: Colors.black, fontFamily: 'monospace' },
-  feedbackBbox: { fontSize: 9.5, color: Colors.secondary, fontFamily: 'monospace', marginTop: 1 },
+  feedbackIndex: { fontSize: 12, color: Colors.secondary, fontFamily: 'monospace', width: 20 },
+  feedbackFilename: { fontSize: 12, fontWeight: '700', color: Colors.black, fontFamily: 'monospace' },
+  feedbackBbox: { fontSize: 12, color: Colors.secondary, fontFamily: 'monospace', marginTop: 1 },
   classPill: { backgroundColor: '#fef2f2', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  classPillText: { fontSize: 9, fontWeight: '800', color: '#be123c', textTransform: 'uppercase' },
-  inputLabel: { fontSize: 11.5, fontWeight: '700', color: Colors.black, marginBottom: 4 },
-  hintText: { fontSize: 9.5, color: Colors.secondary, marginTop: 3 },
+  classPillText: { fontSize: 12, fontWeight: '800', color: '#be123c', textTransform: 'uppercase' },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.black, marginBottom: 4 },
+  hintText: { fontSize: 12, color: Colors.secondary, marginTop: 3 },
   modalInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12.5, color: Colors.black, backgroundColor: '#f8fafc' },
-  saveBtn: { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
+  saveBtn: { backgroundColor: Colors.brandNavy, borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
   saveBtnText: { fontSize: 12, fontWeight: '700', color: Colors.white },
 });

@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     color: '#9ca3af',
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 1,
   },
   headerRight: {
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: Colors.white,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   onlineDot: {
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#f87171',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   tabBar: {
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   tabChipActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.brandGreen,
   },
   tabIcon: {
     fontSize: 12,

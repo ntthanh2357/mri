@@ -60,11 +60,13 @@ foundScreens.forEach(screenName => {
 // SUITE 3: URL Serialization & Deserialization (Bidirectional Navigation)
 console.log('\nSUITE 3: Bidirectional URL and Route State Conversion');
 
-// Welcome screen should map to root /
+// Trang chủ (Landing) ở root /, trang đăng nhập (Welcome) ở /dang-nhap
+const landingPath = getPathFromState({ routes: [{ name: 'Landing' }] }, linkingConfig.config);
+assert(landingPath === '/', `Landing screen serializes to "/" (got: "${landingPath}")`);
+const landingState = getStateFromPath('/', linkingConfig.config);
+assert(landingState?.routes[0]?.name === 'Landing', 'Root path "/" deserializes to Landing route');
 const welcomePath = getPathFromState({ routes: [{ name: 'Welcome' }] }, linkingConfig.config);
-assert(welcomePath === '/', `Welcome screen serializes to "/" (got: "${welcomePath}")`);
-const welcomeState = getStateFromPath('/', linkingConfig.config);
-assert(welcomeState?.routes[0]?.name === 'Welcome', 'Root path "/" deserializes to Welcome route');
+assert(welcomePath === '/dang-nhap', `Welcome screen serializes to "/dang-nhap" (got: "${welcomePath}")`);
 
 // ClinicDashboard screen
 const clinicPath = getPathFromState({ routes: [{ name: 'ClinicDashboard' }] }, linkingConfig.config);

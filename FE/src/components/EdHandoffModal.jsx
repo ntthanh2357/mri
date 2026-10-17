@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import Portal from './ui/Portal';
+import { useAppDialog } from './ui/AppDialog';
 import {
   FileText,
   AlertTriangle,
@@ -41,6 +43,14 @@ export default function EdHandoffModal({
   const [pacsAccessionNumber, setPacsAccessionNumber] = useState('');
 
   const [createdEvent, setCreatedEvent] = useState(null);
+
+  // Popup thay cho alert() của trình duyệt
+  const { dialog, notify } = useAppDialog();
+  const alert = (msg = '') => {
+    const m = String(msg);
+    const type = /thành công|^đã |đã (cập nhật|giải|xác nhận|hoàn tất)/i.test(m) ? 'success' : /^(vui lòng|bắt buộc)/i.test(m) ? 'info' : 'error';
+    return notify(type === 'success' ? 'Thành công' : type === 'info' ? 'Thông báo' : 'Có lỗi xảy ra', m, type);
+  };
 
   if (!isOpen) return null;
 
@@ -87,7 +97,7 @@ export default function EdHandoffModal({
     try {
       const res = await put(`/api/v1/emergency/ed-accept/${createdEvent._id}`, {});
       if (res && res.success) {
-        alert('Bác sĩ Ngoại Thần Kinh đã chấp thuận nhận bệnh. Trách nhiệm lâm sàng đã được chuyển giao chính thức sang Khoa Ung Thư Não!');
+        await alert('Bác sĩ Ngoại Thần Kinh đã chấp thuận nhận bệnh. Trách nhiệm lâm sàng đã được chuyển giao chính thức sang Khoa Ung Thư Não!');
         onClose();
       }
     } catch (err) {
@@ -98,6 +108,8 @@ export default function EdHandoffModal({
   };
 
   return (
+    <Portal>
+      {dialog}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
         
@@ -339,5 +351,6 @@ export default function EdHandoffModal({
 
       </div>
     </div>
+    </Portal>
   );
 }

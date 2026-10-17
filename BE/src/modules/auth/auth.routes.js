@@ -13,8 +13,6 @@ import {
   verifyOtp,
   phoneLoginRequest,
   phoneLoginVerify,
-  downgradeToBasic,
-  cancelPremiumRenew,
   updateProfile,
   verifyActivation,
   resendActivation,
@@ -47,9 +45,5 @@ router.post("/resend-activation", resendActivation);
 // Phone login endpoints
 router.post("/phone-login-request", phoneLoginRequest);
 router.post("/phone-login-verify", phoneLoginVerify);
-
-// Premium endpoints
-router.post("/premium/downgrade", protect, downgradeToBasic);
-router.post("/premium/cancel-renew", protect, cancelPremiumRenew);
 
 export default router;

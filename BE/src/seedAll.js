@@ -32,7 +32,6 @@ import { MedicineReminder } from "./models/medicineReminder.model.js";
 import { DrugReport } from "./models/drugReport.model.js";
 import { Invoice } from "./models/invoice.model.js";
 import { RevenueReport } from "./models/revenueReport.model.js";
-import { PremiumOrder } from "./models/premiumOrder.model.js";
 import { Task } from "./models/task.model.js";
 import { Assignment } from "./models/assignment.model.js";
 import { PeerReview } from "./models/peerReview.model.js";
@@ -93,7 +92,6 @@ const seedComprehensiveDatabase = async () => {
         DrugReport.deleteMany({}),
         Invoice.deleteMany({}),
         RevenueReport.deleteMany({}),
-        PremiumOrder.deleteMany({}),
         Task.deleteMany({}),
         Assignment.deleteMany({}),
         PeerReview.deleteMany({}),
@@ -1695,14 +1693,7 @@ const seedComprehensiveDatabase = async () => {
         author: users[3]._id, // hospital_admin
       });
 
-      await PremiumOrder.create({
-        userId: pat1._id,
-        amount: 2500000,
-        status: "completed",
-        orderCode: 990001,
-        paidAt: new Date(now.getTime() - 24 * 3600000),
-      });
-      console.log("✅ Seeded Invoices, Revenue Reports, and Premium Orders.");
+      console.log("✅ Seeded Invoices and Revenue Reports.");
 
       // ── STEP 22: ANNOUNCEMENTS, NOTIFICATIONS, TICKETS, DATASETS ──────────────
       console.log("\n📢 Step 22: Seeding Announcements, Notifications, Support, and Datasets...");

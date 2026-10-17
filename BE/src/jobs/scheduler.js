@@ -54,45 +54,6 @@ export const runMriReminderJob = async () => {
 };
 
 /**
- * U.2 — Scheduled Job Nhắc gia hạn Premium (7 ngày trước expiry)
- */
-export const runPremiumRenewalJob = async () => {
-  try {
-    const now = new Date();
-    const targetStart = new Date(now.getTime() + 6.5 * 24 * 60 * 60 * 1000);
-    const targetEnd = new Date(now.getTime() + 7.5 * 24 * 60 * 60 * 1000);
-
-    const expiringUsers = await User.find({
-      isPremium: true,
-      autoRenew: true,
-      premiumUntil: { $gte: targetStart, $lte: targetEnd },
-      renewalReminderSent: { $ne: true }
-    });
-
-    let count = 0;
-    for (const user of expiringUsers) {
-      await createNotificationInternal({
-        hospitalId: user.hospitalId || user._id,
-        recipientId: user._id,
-        senderId: user._id,
-        type: "system",
-        title: "💎 Nhắc gia hạn gói Premium",
-        message: `Gói Premium của bạn sẽ hết hạn vào ${new Date(user.premiumUntil).toLocaleDateString('vi-VN')}. Hệ thống sẽ tự động tạo link gia hạn.`,
-        relatedId: user._id,
-      });
-
-      user.renewalReminderSent = true;
-      await user.save();
-      count++;
-    }
-    return { success: true, remindedUsers: count };
-  } catch (err) {
-    console.error("❌ Lỗi runPremiumRenewalJob:", err.message);
-    return { success: false, error: err.message };
-  }
-};
-
-/**
  * P.2 — Scheduled Job Lấy mẫu ngẫu nhiên 5% ca đã ký để Bình duyệt QA (Peer Review)
  */
 export const runPeerReviewSamplingJob = async () => {
@@ -155,11 +116,6 @@ export const startBackgroundJobs = () => {
     runMriReminderJob();
   }, 60 * 60 * 1000);
 
-  // Chạy nhắc Premium mỗi 12 giờ
-  setInterval(() => {
-    runPremiumRenewalJob();
-  }, 12 * 60 * 60 * 1000);
-
   // Chạy Peer Review QA sampling mỗi 24 giờ
   setInterval(() => {
     runPeerReviewSamplingJob();
@@ -168,7 +124,6 @@ export const startBackgroundJobs = () => {
 
 export default {
   runMriReminderJob,
-  runPremiumRenewalJob,
   runPeerReviewSamplingJob,
   startBackgroundJobs
 };

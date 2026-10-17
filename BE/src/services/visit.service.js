@@ -5,6 +5,7 @@ import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import { contrastConsentPending } from "./contrastConsent.service.js";
 
 /**
  * Service: Lấy danh sách nhân sự (Bác sĩ, Điều dưỡng, KTV) kèm tải hàng đợi trong ngày
@@ -330,15 +331,17 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     throw err;
   }
 
-  // Nếu an toàn, tự động chuyển sang 'đang chụp'
-  if (isSafe && ['chờ chụp', 'chờ chụp lại'].includes(visit.status)) {
+  // Nếu an toàn, tự động chuyển sang 'đang chụp' — trừ khi có tiêm cản quang mà bệnh nhân chưa ký phiếu (UC-PAT-06)
+  const consentPending = await contrastConsentPending(visit);
+  if (isSafe && !consentPending && ['chờ chụp', 'chờ chụp lại'].includes(visit.status)) {
     visit.status = 'đang chụp';
   }
 
   await visit.save();
   return {
     checklist: visit.mriSafetyChecklist,
-    visit
+    visit,
+    contrastConsentPending: consentPending
   };
 };
 
