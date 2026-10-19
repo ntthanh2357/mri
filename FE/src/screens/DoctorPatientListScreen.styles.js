@@ -2,97 +2,6 @@ import { StyleSheet, Platform } from 'react-native';
 import Colors from '../constants/colors';
 
 export default StyleSheet.create({
-<<<<<<< HEAD
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 24, paddingVertical: 18,
-    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
-  headerSubtitle: { fontSize: 12, color: '#64748B', marginTop: 4 },
-  patientCount: {
-    alignItems: 'center', justifyContent: 'center', minWidth: 74,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8,
-    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#DCFCE7',
-  },
-  patientCountValue: { fontSize: 16, fontWeight: '700', color: '#166534' },
-  patientCountLabel: { fontSize: 10, color: '#15803D', marginTop: 1 },
-  content: { flex: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', paddingHorizontal: 24 },
-
-  searchContainer: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0',
-    borderRadius: 8, paddingHorizontal: 12, height: 44, marginBottom: 14,
-    marginTop: 16,
-  },
-  searchIcon: { fontSize: 14, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
-
-  list: { paddingBottom: 32 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 8,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(15,23,42,0.06)' },
-      default: { elevation: 1 },
-    }),
-  },
-  gridCard: { flexGrow: 1, minWidth: 240 },
-  threeColumnCard: { width: '31.5%' },
-  twoColumnCard: { width: '48%' },
-  oneColumnCard: { width: '100%' },
-  thumbnail: {
-    aspectRatio: 16 / 9,
-    width: '100%',
-    backgroundColor: '#E7F0EB',
-    borderRadius: 7,
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  thumbnailTop: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  thumbnailLabel: { fontSize: 9, color: '#475569', fontWeight: '700', letterSpacing: 0.5 },
-  thumbnailAvatar: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 3,
-    borderColor: '#C8DED0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumbnailAvatarText: { fontSize: 26, color: '#166534', fontWeight: '700' },
-  thumbnailId: { alignSelf: 'flex-start', fontSize: 11, color: '#334155', fontWeight: '700' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
-  statusText: { fontSize: 11, fontWeight: 'bold' },
-  cardContent: { paddingHorizontal: 4, paddingTop: 12, paddingBottom: 4, gap: 8 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
-  titleHit: { flex: 1 },
-  patientName: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: '#0F172A' },
-  patientMeta: { fontSize: 11, color: '#64748B' },
-  detailsBlock: { minHeight: 54, padding: 9, backgroundColor: '#F8FAFC', borderRadius: 6 },
-  infoLabel: { fontSize: 9, fontWeight: '700', color: '#64748B', marginBottom: 4, letterSpacing: 0.3 },
-  infoValue: { fontSize: 11, fontWeight: '600', color: '#1E293B', lineHeight: 16 },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', minHeight: 18 },
-  lastScan: { fontSize: 10, color: '#64748B' },
-  recordButton: {
-    minHeight: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#15803D',
-    borderRadius: 6,
-    paddingHorizontal: 14,
-  },
-  recordButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
-  actionBtnPrimary: { backgroundColor: '#15803D', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 7 },
-  actionBtnPrimaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-=======
   container: { flex: 1, backgroundColor: Colors.background },
   
 
@@ -145,5 +54,4 @@ export default StyleSheet.create({
   btnGhostText: { color: Colors.slateMuted, fontSize: 13, fontWeight: '600' },
   cardMeta: { fontSize: 13, color: Colors.slateMuted },
   cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
 });

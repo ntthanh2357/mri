@@ -12,6 +12,7 @@ import {
   requestMriRescanService,
   cancelMriOrderService
 } from "../services/visit.service.js";
+import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -239,12 +240,16 @@ export const getMyQueue = async (req, res) => {
   }
 };
 
-// @desc    Điều dưỡng cập nhật sinh hiệu
+// @desc    Điều dưỡng cập nhật sinh hiệu (UC-NUR-02)
 // @route   PUT /api/v1/visits/:id/vitals
-// @access  Private (Nurse)
+// @access  Private (Nurse, Doctor, Admin)
 export const updateVitals = async (req, res) => {
   try {
     const { vitals } = req.body;
+    if (!vitals) {
+      return res.status(400).json({ message: "Thiếu dữ liệu sinh hiệu (vitals)." });
+    }
+
     const visit = await Visit.findById(req.params.id);
 
     if (!visit) {
@@ -255,17 +260,65 @@ export const updateVitals = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
-    visit.vitals = { ...vitals, measuredAt: new Date() };
+    // Đánh giá 5 chỉ số sinh tồn và kiểm tra vượt ngưỡng an toàn
+    const evaluation = evaluateVitalSigns(vitals);
+
+    visit.vitals = {
+      ...vitals,
+      measuredAt: new Date(),
+      isAbnormal: evaluation.isAbnormal,
+      alerts: evaluation.alertMessages,
+      alertDetails: evaluation.alerts,
+      flags: evaluation.flags
+    };
     
+    // Nâng mức độ ưu tiên nếu có chỉ số nguy kịch (SpO2 thấp hoặc mạch/HA quá bất thường)
+    if (evaluation.isAbnormal) {
+      if (['thấp', 'trung bình'].includes(visit.priority)) {
+        visit.priority = 'cao';
+      }
+    }
+
     // Chỉ cập nhật trạng thái nếu bệnh nhân đang ở hàng chờ tiếp đón ban đầu
     if (visit.status === "đang chờ") {
       visit.status = "đang khám";
     }
 
     await visit.save();
-    res.status(200).json({ message: "Cập nhật sinh hiệu thành công", visit });
+
+    res.status(200).json({
+      message: evaluation.isAbnormal
+        ? "Cập nhật sinh hiệu thành công. CẢNH BÁO: Phát hiện chỉ số vượt ngưỡng an toàn!"
+        : "Cập nhật sinh hiệu thành công",
+      visit,
+      evaluation,
+      isAbnormal: evaluation.isAbnormal,
+      alerts: evaluation.alerts,
+      alertMessages: evaluation.alertMessages,
+      flags: evaluation.flags
+    });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Hàm kiểm tra ngưỡng an toàn sinh hiệu mà không lưu (UC-NUR-02)
+// @route   POST /api/v1/visits/check-vitals
+// @access  Private (Nurse, Doctor, Receptionist, Admin)
+export const checkVitalsSafety = async (req, res) => {
+  try {
+    const vitals = req.body.vitals || req.body;
+    const evaluation = evaluateVitalSigns(vitals);
+    return res.status(200).json({
+      success: true,
+      evaluation,
+      isAbnormal: evaluation.isAbnormal,
+      alerts: evaluation.alerts,
+      alertMessages: evaluation.alertMessages,
+      flags: evaluation.flags
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi kiểm tra sinh hiệu", error: error.message });
   }
 };
 

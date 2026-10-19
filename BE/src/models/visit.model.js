@@ -48,7 +48,11 @@ const visitSchema = new Schema(
       temperature: { type: Number, default: null },
       spo2: { type: Number, default: null },
       respiratoryRate: { type: Number, default: null },
-      measuredAt: { type: Date, default: null }
+      measuredAt: { type: Date, default: null },
+      isAbnormal: { type: Boolean, default: false },
+      alerts: { type: [String], default: [] },
+      alertDetails: { type: Schema.Types.Mixed, default: [] },
+      flags: { type: Schema.Types.Mixed, default: {} }
     },
     mriOrder: {
       region: { type: String, default: "" },

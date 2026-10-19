@@ -42,7 +42,15 @@ import {
   Calendar,
   FolderArchive,
   Inbox,
+  AlertTriangle,
+  Eye,
+  Droplets,
+  Activity,
+  Syringe,
+  Thermometer,
+  HeartPulse,
 } from 'lucide-react';
+import { evaluateVitalSigns } from '../utils/vitalSignsSafety.js';
 import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
 import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
@@ -187,13 +195,6 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   
   // Loading states
   const [loading, setLoading] = useState(false);
-
-<<<<<<< HEAD
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
-  const hideDoctorSidebar = localUser?.role === 'doctor' && (activeTab === 'beds' || activeTab === 'transfers');
-=======
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
 
   // Fetch medical records
   const fetchRecords = async () => {
@@ -369,113 +370,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
           below={<PageTabs tabs={emrTabs} value={activeTab} onChange={setActiveTab} />}
         />
 
-<<<<<<< HEAD
-        <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
-          {/* Sidebar for desktop */}
-          {isDesktop && !hideDoctorSidebar && (
-            <View style={styles.desktopSidebar}>
-              <Text style={styles.sidebarTitle}>EMR Management</Text>
-              <Text style={styles.sidebarSubtitle}>Quản lý Hồ sơ Bệnh Án</Text>
-              <View style={styles.sidebarNav}>
-                {localUser?.role === 'nurse' && (
-                  <SidebarItem
-                    icon={Stethoscope}
-                    label="Đo sinh hiệu"
-                    active={activeTab === 'nurseQueue'}
-                    onPress={() => setActiveTab('nurseQueue')}
-                  />
-                )}
-                <SidebarItem
-                  icon={FileText}
-                  label="Hồ sơ bệnh án"
-                  active={activeTab === 'records'}
-                  onPress={() => setActiveTab('records')}
-                />
-                <SidebarItem
-                  icon={ClipboardList}
-                  label="Phiếu chăm sóc"
-                  active={activeTab === 'care'}
-                  onPress={() => setActiveTab('care')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <>
-                    <SidebarItem
-                      icon={Activity}
-                      label="Hội chẩn"
-                      active={activeTab === 'consult'}
-                      onPress={() => setActiveTab('consult')}
-                    />
-                    <SidebarItem
-                      icon={PenTool}
-                      label="Giấy cam đoan"
-                      active={activeTab === 'consent'}
-                      onPress={() => setActiveTab('consent')}
-                    />
-                    <SidebarItem
-                      icon={Pill}
-                      label="Kê đơn thuốc"
-                      active={activeTab === 'prescriptions'}
-                      onPress={() => setActiveTab('prescriptions')}
-                    />
-                  </>
-                )}
-                <SidebarItem
-                  icon={History}
-                  label="Lịch sử sửa đổi"
-                  active={activeTab === 'versions'}
-                  onPress={() => setActiveTab('versions')}
-                />
-                {(localUser?.role === 'doctor' || localUser?.role === 'admin') && (
-                  <SidebarItem
-                    icon={Brain}
-                    label="Phim MRI & CT"
-                    active={activeTab === 'imaging'}
-                    onPress={() => setActiveTab('imaging')}
-                  />
-                )}
-                <SidebarItem
-                  icon={Building2}
-                  label="Giường Khoa U Não"
-                  active={activeTab === 'beds'}
-                  onPress={() => setActiveTab('beds')}
-                />
-                <SidebarItem
-                  icon={ArrowRightLeft}
-                  label="Chuyển viện Liên viện"
-                  active={activeTab === 'transfers'}
-                  onPress={() => setActiveTab('transfers')}
-                />
-              </View>
-              {selectedRecord && localUser?.role !== 'nurse' && (
-                <View style={styles.selectedRecordBox}>
-                  <Text style={styles.selectedRecordLabel}>Đang xem:</Text>
-                  <Text style={styles.selectedRecordName}>{selectedRecord.patientName}</Text>
-                  <TouchableOpacity
-                    style={styles.clearSelectionBtn}
-                    onPress={() => setSelectedRecord(null)}
-                  >
-                    <Text style={styles.clearSelectionText}>Xóa chọn</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {nurseSelectedPatient && localUser?.role === 'nurse' && (
-                <View style={[styles.selectedRecordBox, { borderColor: '#6EE7B7' }]}>
-                  <Text style={styles.selectedRecordLabel}>Bệnh nhân:</Text>
-                  <Text style={styles.selectedRecordName}>{nurseSelectedPatient.patientName}</Text>
-                  <TouchableOpacity
-                    style={styles.clearSelectionBtn}
-                    onPress={() => setNurseSelectedPatient(null)}
-                  >
-                    <Text style={styles.clearSelectionText}>← Quay lại</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
+        <View style={{ flex: 1 }}>
           {/* Main Content */}
-=======
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
           <View style={styles.mainContent}>
             {(selectedRecord && localUser?.role !== 'nurse') || (nurseSelectedPatient && localUser?.role === 'nurse') ? (
               <View style={styles.contextBar}>
@@ -515,11 +411,14 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                       setIsModalVisible(true);
                     }}
                     onViewRecord={(record) => {
+                      setSelectedRecord(record);
+                      fetchRecordDetails(record._id);
                       if (localUser?.role === 'nurse') {
-                        navigation.navigate('NursePatientDetail', { patient: record });
+                        navigation.navigate('NursePatientDetail', {
+                          patient: record,
+                          recordId: record._id,
+                        });
                       } else {
-                        setSelectedRecord(record);
-                        fetchRecordDetails(record._id);
                         Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
                       }
                     }}
@@ -600,6 +499,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
               </ScrollView>
             )}
           </View>
+        </View>
 
         <EMRModal
           isVisible={isModalVisible}
@@ -690,11 +590,41 @@ const NurseQueueTab = ({ navigation }) => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [vitalsModal, setVitalsModal] = useState(false);
   const [pulse, setPulse] = useState('');
-  const [bloodPressure, setBloodPressure] = useState('');
+  const [systolic, setSystolic] = useState('');
+  const [diastolic, setDiastolic] = useState('');
   const [spo2, setSpo2] = useState('');
   const [temperature, setTemperature] = useState('');
   const [respiratoryRate, setRespiratoryRate] = useState('');
   const [updating, setUpdating] = useState(false);
+
+  const pulseValue = pulse.trim() ? Number(pulse) : null;
+  const systolicValue = systolic.trim() ? Number(systolic) : null;
+  const diastolicValue = diastolic.trim() ? Number(diastolic) : null;
+  const spo2Value = spo2.trim() ? Number(spo2) : null;
+  const temperatureValue = temperature.trim() ? Number(temperature) : null;
+  const respiratoryRateValue = respiratoryRate.trim() ? Number(respiratoryRate) : null;
+  const vitalAlerts = [];
+
+  if (pulseValue !== null && Number.isFinite(pulseValue) && (pulseValue < 60 || pulseValue > 100)) {
+    vitalAlerts.push({ key: 'pulse', message: 'Mạch bất thường (ngưỡng tham khảo: 60–100 lần/phút).' });
+  }
+  if (systolicValue !== null && Number.isFinite(systolicValue) && (systolicValue < 90 || systolicValue > 140)) {
+    vitalAlerts.push({ key: 'systolic', message: 'Huyết áp tâm thu bất thường (ngưỡng tham khảo: 90–140 mmHg).' });
+  }
+  if (diastolicValue !== null && Number.isFinite(diastolicValue) && (diastolicValue < 60 || diastolicValue > 90)) {
+    vitalAlerts.push({ key: 'diastolic', message: 'Huyết áp tâm trương bất thường (ngưỡng tham khảo: 60–90 mmHg).' });
+  }
+  if (temperatureValue !== null && Number.isFinite(temperatureValue) && (temperatureValue < 36.0 || temperatureValue > 37.5)) {
+    vitalAlerts.push({ key: 'temperature', message: 'Thân nhiệt bất thường (ngưỡng an toàn: 36.0–37.5°C).' });
+  }
+  if (spo2Value !== null && Number.isFinite(spo2Value) && (spo2Value < 95 || spo2Value > 100)) {
+    vitalAlerts.push({ key: 'spo2', message: 'SpO₂ bất thường (ngưỡng tham khảo: 95–100%).' });
+  }
+  if (respiratoryRateValue !== null && Number.isFinite(respiratoryRateValue) && (respiratoryRateValue < 12 || respiratoryRateValue > 20)) {
+    vitalAlerts.push({ key: 'respiratoryRate', message: 'Nhịp thở bất thường (ngưỡng tham khảo: 12–20 lần/phút).' });
+  }
+
+  const hasVitalAlert = (key) => vitalAlerts.some((item) => item.key === key);
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -715,7 +645,9 @@ const NurseQueueTab = ({ navigation }) => {
   const openVitalsModal = (visit) => {
     setSelectedVisit(visit);
     setPulse(visit.vitals?.pulse?.toString() || '');
-    setBloodPressure(visit.vitals?.bloodPressure || '');
+    const [savedSystolic = '', savedDiastolic = ''] = String(visit.vitals?.bloodPressure || '').split('/');
+    setSystolic(savedSystolic.trim());
+    setDiastolic(savedDiastolic.trim());
     setSpo2(visit.vitals?.spo2?.toString() || '');
     setTemperature(visit.vitals?.temperature?.toString() || '');
     setRespiratoryRate(visit.vitals?.respiratoryRate?.toString() || '');
@@ -723,8 +655,14 @@ const NurseQueueTab = ({ navigation }) => {
   };
 
   const handleSaveVitals = async () => {
-    if (!pulse || !bloodPressure || !spo2 || !temperature) {
-      Alert.alert("Thông báo", "Vui lòng điền các chỉ số sinh hiệu bắt buộc.");
+    if (!pulse.trim() || !systolic.trim() || !diastolic.trim() || !spo2.trim() || !temperature.trim() || !respiratoryRate.trim()) {
+      Alert.alert("Thông báo", "Vui lòng điền đủ mạch, huyết áp tâm thu/tâm trương, thân nhiệt, SpO₂ và nhịp thở.");
+      return;
+    }
+
+    const requiredValues = [pulseValue, systolicValue, diastolicValue, spo2Value, temperatureValue, respiratoryRateValue];
+    if (requiredValues.some((value) => value === null || !Number.isFinite(value) || value <= 0)) {
+      Alert.alert("Thông báo", "Các chỉ số sinh hiệu phải là số lớn hơn 0.");
       return;
     }
 
@@ -732,14 +670,19 @@ const NurseQueueTab = ({ navigation }) => {
     try {
       await put(`/api/v1/visits/${selectedVisit._id}/vitals`, {
         vitals: {
-          pulse: parseInt(pulse),
-          bloodPressure,
-          spo2: parseInt(spo2),
-          temperature: parseFloat(temperature),
-          respiratoryRate: respiratoryRate ? parseInt(respiratoryRate) : undefined,
+          pulse: pulseValue,
+          bloodPressure: `${systolicValue}/${diastolicValue}`,
+          spo2: spo2Value,
+          temperature: temperatureValue,
+          respiratoryRate: respiratoryRateValue,
         }
       });
-      Alert.alert("Thành công", "Đã cập nhật sinh hiệu. Lượt khám chuyển sang Đang khám.");
+      Alert.alert(
+        vitalAlerts.length ? "Đã lưu sinh hiệu có cảnh báo" : "Thành công",
+        vitalAlerts.length
+          ? `Đã lưu sinh hiệu. Báo bác sĩ phụ trách để đánh giá:\n${vitalAlerts.map((item) => `• ${item.message}`).join('\n')}`
+          : "Đã cập nhật sinh hiệu. Lượt khám chuyển sang Đang khám."
+      );
       setVitalsModal(false);
       fetchQueue();
     } catch (err) {
@@ -812,19 +755,43 @@ const NurseQueueTab = ({ navigation }) => {
             </Text>
 
             <View style={{ gap: 12 }}>
-              <View>
-                <Text style={styles.fieldLabel}>Huyết áp (mmHg) *</Text>
-                <TextInput 
-                  style={styles.textInput} 
-                  placeholder="Ví dụ: 120/80" 
-                  value={bloodPressure}
-                  onChangeText={setBloodPressure}
-                />
+              {vitalAlerts.length > 0 && (
+                <View style={{ padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2', gap: 5 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <AlertTriangle size={16} color="#B91C1C" />
+                    <Text style={{ color: '#B91C1C', fontSize: 13, fontWeight: '700' }}>CẢNH BÁO SINH HIỆU</Text>
+                  </View>
+                  {vitalAlerts.map((item) => (
+                    <Text key={item.key} style={{ color: '#991B1B', fontSize: 12 }}>{item.message}</Text>
+                  ))}
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Tâm thu (mmHg) *</Text>
+                  <TextInput
+                    style={[styles.textInput, hasVitalAlert('systolic') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]}
+                    placeholder="Ví dụ: 120"
+                    keyboardType="numeric"
+                    value={systolic}
+                    onChangeText={setSystolic}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Tâm trương (mmHg) *</Text>
+                  <TextInput
+                    style={[styles.textInput, hasVitalAlert('diastolic') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]}
+                    placeholder="Ví dụ: 80"
+                    keyboardType="numeric"
+                    value={diastolic}
+                    onChangeText={setDiastolic}
+                  />
+                </View>
               </View>
               <View>
                 <Text style={styles.fieldLabel}>Mạch (lần/phút) *</Text>
                 <TextInput 
-                  style={styles.textInput} 
+                  style={[styles.textInput, hasVitalAlert('pulse') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]} 
                   placeholder="Ví dụ: 80" 
                   keyboardType="numeric"
                   value={pulse}
@@ -834,7 +801,7 @@ const NurseQueueTab = ({ navigation }) => {
               <View>
                 <Text style={styles.fieldLabel}>SpO2 (%) *</Text>
                 <TextInput 
-                  style={styles.textInput} 
+                  style={[styles.textInput, hasVitalAlert('spo2') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]} 
                   placeholder="Ví dụ: 98" 
                   keyboardType="numeric"
                   value={spo2}
@@ -844,7 +811,7 @@ const NurseQueueTab = ({ navigation }) => {
               <View>
                 <Text style={styles.fieldLabel}>Nhiệt độ (°C) *</Text>
                 <TextInput 
-                  style={styles.textInput} 
+                  style={[styles.textInput, hasVitalAlert('temperature') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]} 
                   placeholder="Ví dụ: 37" 
                   keyboardType="numeric"
                   value={temperature}
@@ -852,10 +819,10 @@ const NurseQueueTab = ({ navigation }) => {
                 />
               </View>
               <View>
-                <Text style={styles.fieldLabel}>Nhịp thở (lần/phút)</Text>
+                <Text style={styles.fieldLabel}>Nhịp thở (lần/phút) *</Text>
                 <TextInput 
-                  style={styles.textInput} 
-                  placeholder="Ví dụ: 18 (không bắt buộc)" 
+                  style={[styles.textInput, hasVitalAlert('respiratoryRate') && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]} 
+                  placeholder="Ví dụ: 18" 
                   keyboardType="numeric"
                   value={respiratoryRate}
                   onChangeText={setRespiratoryRate}
@@ -931,6 +898,14 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
   const doctor = patient?.doctorInCharge || '';
 
   const totalFee = feeItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+
+  const tabVitalEval = evaluateVitalSigns({
+    pulse: examPulse,
+    bloodPressure: examBP,
+    temperature: examTemp,
+    spo2: examSpo2,
+    respiratoryRate: examBreath
+  });
 
   const addOrderService = () => {
     const s = orderNewService.trim();
@@ -1080,25 +1055,46 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 16 }}>Patient Information Registration Form</Text>
 
               <Text style={{ fontWeight: '700', color: Colors.brandGreen, marginBottom: 8 }}>Sinh hiệu (Vital Signs)</Text>
+
+              {tabVitalEval.isAbnormal && (
+                <View style={{ backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#F87171', padding: 10, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#B91C1C' }}>⚠️ CẢNH BÁO: CHỈ SỐ VƯỢT NGƯỠNG AN TOÀN</Text>
+                  {tabVitalEval.alerts.map((al, idx) => (
+                    <Text key={idx} style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>• {al.message}</Text>
+                  ))}
+                </View>
+              )}
+
               {[
-                ['Mạch (lần/phút)', examPulse, setExamPulse, 'numeric', 'Ví dụ: 80'],
-                ['Huyết áp (mmHg)', examBP, setExamBP, 'default', 'Ví dụ: 120/80'],
-                ['Chiều cao (cm)', examHeight, setExamHeight, 'numeric', 'Ví dụ: 165'],
-                ['Cân nặng (kg)', examWeight, setExamWeight, 'numeric', 'Ví dụ: 60'],
-                ['Nhịp thở (lần/phút)', examBreath, setExamBreath, 'numeric', 'Ví dụ: 18'],
-                ['Nhiệt độ (°C)', examTemp, setExamTemp, 'numeric', 'Ví dụ: 37.0'],
-                ['SpO2 (%)', examSpo2, setExamSpo2, 'numeric', 'Ví dụ: 98'],
-              ].map(([label, val, setter, kbType, ph]) => (
-                <View key={label} style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>{label}</Text>
+                { key: 'pulse', label: 'Mạch (lần/phút)', val: examPulse, setter: setExamPulse, kbType: 'numeric', ph: 'Ví dụ: 80', isAbnormal: tabVitalEval.flags.pulse, alert: tabVitalEval.alerts.find(a => a.key === 'pulse') },
+                { key: 'bloodPressure', label: 'Huyết áp (mmHg)', val: examBP, setter: setExamBP, kbType: 'default', ph: 'Ví dụ: 120/80', isAbnormal: tabVitalEval.flags.bloodPressure, alert: tabVitalEval.alerts.find(a => a.key === 'systolic' || a.key === 'diastolic') },
+                { key: 'height', label: 'Chiều cao (cm)', val: examHeight, setter: setExamHeight, kbType: 'numeric', ph: 'Ví dụ: 165', isAbnormal: false },
+                { key: 'weight', label: 'Cân nặng (kg)', val: examWeight, setter: setExamWeight, kbType: 'numeric', ph: 'Ví dụ: 60', isAbnormal: false },
+                { key: 'respiratoryRate', label: 'Nhịp thở (lần/phút)', val: examBreath, setter: setExamBreath, kbType: 'numeric', ph: 'Ví dụ: 18', isAbnormal: tabVitalEval.flags.respiratoryRate, alert: tabVitalEval.alerts.find(a => a.key === 'respiratoryRate') },
+                { key: 'temperature', label: 'Nhiệt độ (°C)', val: examTemp, setter: setExamTemp, kbType: 'numeric', ph: 'Ví dụ: 37.0', isAbnormal: tabVitalEval.flags.temperature, alert: tabVitalEval.alerts.find(a => a.key === 'temperature') },
+                { key: 'spo2', label: 'SpO2 (%)', val: examSpo2, setter: setExamSpo2, kbType: 'numeric', ph: 'Ví dụ: 98', isAbnormal: tabVitalEval.flags.spo2, alert: tabVitalEval.alerts.find(a => a.key === 'spo2') },
+              ].map((item) => (
+                <View key={item.label} style={{ marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 13, color: item.isAbnormal ? '#B91C1C' : '#374151', fontWeight: item.isAbnormal ? '700' : '500' }}>{item.label}</Text>
+                    {item.isAbnormal && (
+                      <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '700' }}>⚠️ Vượt ngưỡng</Text>
+                    )}
+                  </View>
                   <TextInput
-                    style={styles.textInput}
-                    placeholder={ph}
+                    style={[
+                      styles.textInput,
+                      item.isAbnormal && { borderColor: '#DC2626', backgroundColor: '#FEF2F2', borderWidth: 1.5 }
+                    ]}
+                    placeholder={item.ph}
                     placeholderTextColor={Colors.secondary}
-                    keyboardType={kbType}
-                    value={val}
-                    onChangeText={setter}
+                    keyboardType={item.kbType}
+                    value={item.val}
+                    onChangeText={item.setter}
                   />
+                  {item.isAbnormal && item.alert && (
+                    <Text style={{ fontSize: 11, color: '#DC2626', marginTop: 2 }}>{item.alert.message}</Text>
+                  )}
                 </View>
               ))}
 
@@ -1454,7 +1450,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <FileText size={18} color={Colors.brandGreen} />
-        <Text style={styles.tabTitle}>Phiếu chăm sóc</Text>
+        <Text style={styles.tabTitle}>Phiếu chăm sóc Điều dưỡng</Text>
       </View>
       <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
         <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
@@ -1474,23 +1470,112 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
             <Text style={styles.emptyText}>Chưa có phiếu chăm sóc nào</Text>
           </View>
         ) : (
-          careSheets.map(cs => (
-            <View key={cs._id || cs.id} style={styles.itemCard}>
-              <Text style={styles.itemTitle}>Phiếu chăm sóc Cấp {cs.careLevel}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
-                <Calendar size={12} color="#64748B" />
-                <Text style={styles.itemSubtitle}>
-                  {new Date(cs.createdAt).toLocaleDateString('vi-VN')} • Y tá: {cs.nurse}
-                </Text>
+          careSheets.map(cs => {
+            const gcs = cs.glasgow;
+            const gcsCritical = gcs && gcs.totalScore <= 8;
+            const gcsMedium = gcs && gcs.totalScore > 8 && gcs.totalScore <= 12;
+            return (
+              <View key={cs._id || cs.id} style={[styles.itemCard, { borderLeftWidth: 4, borderLeftColor: gcsCritical ? '#DC2626' : gcsMedium ? '#F59E0B' : Colors.brandGreen }]}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={styles.itemTitle}>Phiếu chăm sóc Cấp {cs.careLevel}</Text>
+                  {gcsCritical && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                      <AlertTriangle size={11} color='#DC2626' />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>GCS NGUY KỊCH</Text>
+                    </View>
+                  )}
+                  {gcsMedium && !gcsCritical && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                      <AlertTriangle size={11} color='#D97706' />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706' }}>GCS HÔN MÊ VỪA</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Date & Nurse */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                  <Calendar size={12} color="#64748B" />
+                  <Text style={styles.itemSubtitle}>
+                    {new Date(cs.createdAt).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })} • Y tá: {cs.nurse}
+                  </Text>
+                </View>
+
+                {/* Vitals Row */}
+                <View style={[styles.vitalsRow, { marginBottom: 8 }]}>
+                  <Text style={styles.vitalText}>❤️ Mạch: {cs.pulse} bpm</Text>
+                  <Text style={styles.vitalText}>🩸 HA: {cs.bloodPressure}</Text>
+                  <Text style={styles.vitalText}>🌡️ {cs.temperature}°C</Text>
+                  <Text style={styles.vitalText}>💧 SpO2: {cs.spo2}%</Text>
+                </View>
+
+                {/* GCS Section */}
+                {gcs && (
+                  <View style={{ backgroundColor: gcsCritical ? '#FEF2F2' : '#F0FDF4', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Brain size={13} color={gcsCritical ? '#DC2626' : Colors.brandGreen} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: gcsCritical ? '#DC2626' : '#065F46' }}>
+                        Thang điểm Glasgow (GCS): {gcs.totalScore}/15
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>👁 Mắt: E{gcs.eye}</Text>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>🗣 Lời: V{gcs.verbal}</Text>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>💪 Vận động: M{gcs.motor}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: gcsCritical ? '#DC2626' : '#047857', fontStyle: 'italic', marginTop: 2 }}>
+                      {gcs.classification}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Pupil Reflex */}
+                {cs.pupils && (cs.pupils.leftSize || cs.pupils.rightSize) && (
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Eye size={13} color='#6366F1' />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#3730A3' }}>Phản xạ đồng tử</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>Trái: {cs.pupils.leftSize}mm ({cs.pupils.leftLightReflex})</Text>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>Phải: {cs.pupils.rightSize}mm ({cs.pupils.rightLightReflex})</Text>
+                    </View>
+                    {cs.pupils.shape && <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Hình dạng: {cs.pupils.shape}</Text>}
+                  </View>
+                )}
+
+                {/* Surgical Drainage */}
+                {cs.surgicalDrainage && cs.surgicalDrainage.site && (
+                  <View style={{ backgroundColor: '#FFFBEB', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Droplets size={13} color='#D97706' />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>Dịch dẫn lưu phẫu thuật sọ não</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#78350F' }}>Vị trí: {cs.surgicalDrainage.site}</Text>
+                    <Text style={{ fontSize: 11, color: '#78350F' }}>Thể tích: {cs.surgicalDrainage.volume} ml • Màu: {cs.surgicalDrainage.color}</Text>
+                    {cs.surgicalDrainage.condition && <Text style={{ fontSize: 11, color: '#78350F' }}>Chân dẫn lưu: {cs.surgicalDrainage.condition}</Text>}
+                  </View>
+                )}
+
+                {/* Fluid Infusions */}
+                {cs.fluidInfusions && cs.fluidInfusions.length > 0 && (
+                  <View style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Activity size={13} color='#2563EB' />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E3A8A' }}>Lịch truyền dịch ({cs.fluidInfusions.length} chai)</Text>
+                    </View>
+                    {cs.fluidInfusions.map((inf, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: inf.status === 'đang truyền' ? '#22C55E' : inf.status === 'tạm dừng' ? '#F59E0B' : '#94A3B8' }} />
+                        <Text style={{ fontSize: 11, color: '#1E40AF', flex: 1 }}>{inf.fluidName} {inf.volume}ml • {inf.rate}</Text>
+                        <Text style={{ fontSize: 10, color: '#64748B' }}>{inf.status}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
-              <View style={styles.vitalsRow}>
-                <Text style={styles.vitalText}>Mạch: {cs.pulse} bpm</Text>
-                <Text style={styles.vitalText}>HA: {cs.bloodPressure}</Text>
-                <Text style={styles.vitalText}>Nhiệt độ: {cs.temperature}°C</Text>
-                <Text style={styles.vitalText}>SpO2: {cs.spo2}%</Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
     )}
@@ -1976,53 +2061,119 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
   );
 };
 
+const SectionLabel = ({ icon: Icon, title, color = Colors.brandGreen }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+    <Icon size={15} color={color} />
+    <Text style={{ fontSize: 13, fontWeight: '700', color: color }}>{title}</Text>
+  </View>
+);
+
 const NewCareSheetForm = ({ onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    careLevel: 3,
-    pulse: '',
-    bloodPressure: '',
-    temperature: '',
-    respiratoryRate: '',
-    spo2: '',
-    progressNotes: '',
-    careActions: '',
-    nurse: '',
-  });
+  // ── Base vitals ──
+  const [careLevel, setCareLevel] = useState('1');
+  const [pulse, setPulse] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [respiratoryRate, setRespiratoryRate] = useState('');
+  const [spo2, setSpo2] = useState('');
+  const [nurse, setNurse] = useState('');
+  const [progressNotes, setProgressNotes] = useState('');
+  const [careActions, setCareActions] = useState('');
+
+  // ── UC-NUR-04: Glasgow Coma Scale (Khởi tạo trống) ──
+  const [gcsEye, setGcsEye] = useState('');    // E1-4
+  const [gcsVerbal, setGcsVerbal] = useState(''); // V1-5
+  const [gcsMotor, setGcsMotor] = useState('');   // M1-6
+  const hasGcs = (parseInt(gcsEye) || 0) > 0 || (parseInt(gcsVerbal) || 0) > 0 || (parseInt(gcsMotor) || 0) > 0;
+  const gcsTotal = (parseInt(gcsEye)||0) + (parseInt(gcsVerbal)||0) + (parseInt(gcsMotor)||0);
+  const gcsClassification = !hasGcs ? 'Chưa nhập điểm GCS' : gcsTotal <= 8 ? 'Hôn mê sâu / Nguy kịch ⚠️' : gcsTotal <= 12 ? 'Hôn mê vừa' : gcsTotal <= 14 ? 'Hôn mê nhẹ / Lú lẫn' : 'Tỉnh táo / Tri giác tốt';
+  const gcsCritical = hasGcs && gcsTotal <= 8;
+
+  // ── UC-NUR-04: Pupil Reflex (Khởi tạo trống) ──
+  const [pupilLeftSize, setPupilLeftSize] = useState('');
+  const [pupilRightSize, setPupilRightSize] = useState('');
+  const [pupilLeftReflex, setPupilLeftReflex] = useState('+');
+  const [pupilRightReflex, setPupilRightReflex] = useState('+');
+  const [pupilShape, setPupilShape] = useState('');
+
+  // ── UC-NUR-04: Surgical Drainage (Khởi tạo trống) ──
+  const [drainageSite, setDrainageSite] = useState('');
+  const [drainageVolume, setDrainageVolume] = useState('');
+  const [drainageColor, setDrainageColor] = useState('');
+  const [drainageCondition, setDrainageCondition] = useState('');
+
+  // ── UC-NUR-04: Fluid Infusions (Khởi tạo mảng trống) ──
+  const [fluidInfusions, setFluidInfusions] = useState([]);
+
+  const updateFluid = (idx, field, val) => {
+    setFluidInfusions(prev => prev.map((f, i) => i === idx ? { ...f, [field]: val } : f));
+  };
+  const addFluidRow = () => setFluidInfusions(prev => [...prev, { fluidName: '', volume: '', rate: '', status: 'đang truyền' }]);
+  const removeFluidRow = (idx) => setFluidInfusions(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = () => {
-    if (!formData.pulse || !formData.bloodPressure || !formData.temperature || !formData.respiratoryRate || !formData.spo2 || !formData.progressNotes || !formData.nurse) {
+    if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh!');
       return;
     }
-    onSubmit({
-      ...formData,
-      careLevel: Number(formData.careLevel),
-      pulse: Number(formData.pulse),
-      respiratoryRate: Number(formData.respiratoryRate),
-      spo2: Number(formData.spo2),
-      temperature: Number(formData.temperature),
-    });
+    const payload = {
+      careLevel: Number(careLevel) || 1,
+      pulse: Number(pulse),
+      bloodPressure,
+      temperature: Number(temperature),
+      respiratoryRate: Number(respiratoryRate),
+      spo2: Number(spo2),
+      nurse,
+      progressNotes,
+      careActions,
+      // UC-NUR-04 fields
+      glasgow: { eye: parseInt(gcsEye)||4, verbal: parseInt(gcsVerbal)||5, motor: parseInt(gcsMotor)||6 },
+      pupils: {
+        leftSize: parseFloat(pupilLeftSize)||2.5, rightSize: parseFloat(pupilRightSize)||2.5,
+        leftLightReflex: pupilLeftReflex, rightLightReflex: pupilRightReflex,
+        shape: pupilShape
+      },
+      surgicalDrainage: drainageSite ? {
+        site: drainageSite,
+        volume: Number(drainageVolume)||0,
+        color: drainageColor,
+        condition: drainageCondition
+      } : undefined,
+      fluidInfusions: fluidInfusions.filter(f => f.fluidName).map(f => ({
+        ...f, volume: Number(f.volume)||0
+      })),
+    };
+    onSubmit(payload);
   };
 
   const handleOcrFill = () => {
-    setFormData({
-      careLevel: 1,
-      pulse: '78',
-      bloodPressure: '125/80',
-      temperature: '36.8',
-      respiratoryRate: '18',
-      spo2: '98',
-      nurse: 'Đd. Lê Thị Hoa',
-      progressNotes: 'Bệnh nhân tỉnh táo (GCS 14đ), hậu phẫu mở sọ ngày thứ 2, đồng tử 2 bên đều 2mm, vết mổ khô, dẫn lưu EVD ra 40ml dịch não tủy hồng nhạt.',
-      careActions: 'Đầu cao 30 độ giảm phù não, sát trùng chân dẫn lưu EVD, tiêm Dexamethasone 4mg theo y lệnh, theo dõi tri giác và áp lực nội sọ mỗi 2h.',
-    });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền sinh hiệu và diễn biến chăm sóc hậu phẫu u não!');
+    // Simulate realistic post-op cranial surgery care sheet
+    setCareLevel('1'); setPulse('78'); setBloodPressure('125/80'); setTemperature('36.8');
+    setRespiratoryRate('18'); setSpo2('98'); setNurse('Đd. Lê Thị Hoa');
+    setProgressNotes('Bệnh nhân tỉnh táo (GCS 14đ E4V4M6), hậu phẫu mở sọ cắt u não ngày thứ 2, đồng tử 2 bên đều 2mm phản xạ ánh sáng tốt (+), vết mổ khô, dẫn lưu EVD ra 40ml dịch não tủy hồng nhạt/8h.');
+    setCareActions('Đầu cao 30° giảm phù não, thay băng vô trùng vết mổ, sát trùng chân dẫn lưu EVD, tiêm Dexamethasone 4mg TM theo y lệnh, truyền Mannitol 20% 250ml/30 phút, theo dõi tri giác và áp lực nội sọ mỗi 2h.');
+    // GCS 14 = E4V4M6
+    setGcsEye('4'); setGcsVerbal('4'); setGcsMotor('6');
+    // Pupils
+    setPupilLeftSize('2'); setPupilRightSize('2'); setPupilLeftReflex('+'); setPupilRightReflex('+'); setPupilShape('Tròn đều 2 bên');
+    // Drainage
+    setDrainageSite('EVD - Dẫn lưu não thất ngoài'); setDrainageVolume('40'); setDrainageColor('Hồng nhạt'); setDrainageCondition('Chân ống khô ráo, băng dính cố định tốt, không rỉ dịch');
+    // Fluid Infusions
+    setFluidInfusions([
+      { fluidName: 'Mannitol 20%', volume: '250', rate: '40 giọt/phút', status: 'đã hoàn thành' },
+      { fluidName: 'NaCl 0.9%', volume: '500', rate: '20 giọt/phút', status: 'đang truyền' },
+      { fluidName: 'Dexamethasone 4mg + NaCl', volume: '100', rate: 'Tiêm chậm TM', status: 'đã hoàn thành' },
+    ]);
+    Alert.alert('Giả lập OCR', '✅ Đã tự động điền đầy đủ phiếu chăm sóc hậu phẫu u não (GCS, đồng tử, EVD, truyền dịch)!');
   };
+
+  const REFLEX_OPTIONS = ['+', 'chậm', '-'];
+  const FLUID_STATUSES = ['đang truyền', 'đã hoàn thành', 'tạm dừng'];
 
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>Tạo Phiếu chăm sóc</Text>
+        <Text style={styles.modalTitle}>🏥 Phiếu Chăm sóc Điều dưỡng (UC-NUR-04)</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <X size={20} color="#64748B" />
         </TouchableOpacity>
@@ -2030,76 +2181,211 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
           <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
+          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động - Hậu phẫu U Não (Simulated OCR)</Text>
         </TouchableOpacity>
+
+        {/* ── SECTION 1: Sinh hiệu ── */}
+        <SectionLabel icon={HeartPulse} title="1. Sinh hiệu lâm sàng (Vital Signs)" color="#DC2626" />
+        <FormField label="Cấp chăm sóc (1-3)" placeholder="1" keyboardType="numeric" value={String(careLevel)} onChangeText={setCareLevel} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Mạch (lần/phút) *" placeholder="78" keyboardType="numeric" value={pulse} onChangeText={setPulse} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormField label="Huyết áp (mmHg) *" placeholder="120/80" value={bloodPressure} onChangeText={setBloodPressure} />
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Nhiệt độ (°C) *" placeholder="36.8" keyboardType="decimal-pad" value={temperature} onChangeText={setTemperature} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormField label="Nhịp thở (lần/phút) *" placeholder="18" keyboardType="numeric" value={respiratoryRate} onChangeText={setRespiratoryRate} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormField label="SpO2 (%) *" placeholder="98" keyboardType="numeric" value={spo2} onChangeText={setSpo2} />
+          </View>
+        </View>
+        <FormField label="Điều dưỡng thực hiện *" placeholder="Họ tên điều dưỡng" value={nurse} onChangeText={setNurse} />
+
+        {/* ── SECTION 2: GCS (Glasgow) ── */}
+        <SectionLabel icon={Brain} title="2. Tri giác — Thang điểm Hôn mê Glasgow (GCS)" color="#7C3AED" />
+        <View style={{ backgroundColor: gcsCritical ? '#FEF2F2' : '#F5F3FF', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#4C1D95', marginBottom: 4 }}>👁 Mở mắt (E) 1–4</Text>
+              <TextInput
+                style={[styles.textInput, { textAlign: 'center', fontWeight: 'bold' }]}
+                placeholder="4"
+                keyboardType="numeric"
+                value={gcsEye}
+                onChangeText={v => setGcsEye(v.replace(/[^1-4]/g, '').slice(0,1))}
+                maxLength={1}
+              />
+              <Text style={{ fontSize: 9, color: '#6D28D9', textAlign: 'center', marginTop: 2 }}>1=Không • 4=Tự nhiên</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#4C1D95', marginBottom: 4 }}>🗣 Lời nói (V) 1–5</Text>
+              <TextInput
+                style={[styles.textInput, { textAlign: 'center', fontWeight: 'bold' }]}
+                placeholder="5"
+                keyboardType="numeric"
+                value={gcsVerbal}
+                onChangeText={v => {
+                  const n = parseInt(v);
+                  if (!v) { setGcsVerbal(''); return; }
+                  if (n >= 1 && n <= 5) setGcsVerbal(String(n));
+                }}
+                maxLength={1}
+              />
+              <Text style={{ fontSize: 9, color: '#6D28D9', textAlign: 'center', marginTop: 2 }}>1=Không • 5=Định hướng</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#4C1D95', marginBottom: 4 }}>💪 Vận động (M) 1–6</Text>
+              <TextInput
+                style={[styles.textInput, { textAlign: 'center', fontWeight: 'bold' }]}
+                placeholder="6"
+                keyboardType="numeric"
+                value={gcsMotor}
+                onChangeText={v => {
+                  const n = parseInt(v);
+                  if (!v) { setGcsMotor(''); return; }
+                  if (n >= 1 && n <= 6) setGcsMotor(String(n));
+                }}
+                maxLength={1}
+              />
+              <Text style={{ fontSize: 9, color: '#6D28D9', textAlign: 'center', marginTop: 2 }}>1=Không • 6=Theo lệnh</Text>
+            </View>
+          </View>
+          <View style={{ backgroundColor: !hasGcs ? '#64748B' : gcsCritical ? '#DC2626' : '#7C3AED', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>Tổng GCS: {hasGcs ? `${gcsTotal} / 15` : '— / 15'}</Text>
+            <Text style={{ fontSize: 12, color: '#E9D5FF', marginTop: 2 }}>{gcsClassification}</Text>
+            {gcsCritical && <Text style={{ fontSize: 11, color: '#FCA5A5', marginTop: 4 }}>⚠️ Nguy kịch: GCS ≤ 8 — Cần thông báo Bác sĩ ngay!</Text>}
+          </View>
+        </View>
+
+        {/* ── SECTION 3: Phản xạ đồng tử ── */}
+        <SectionLabel icon={Eye} title="3. Phản xạ đồng tử" color="#0891B2" />
+        <View style={{ backgroundColor: '#F0F9FF', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0E7490', marginBottom: 6 }}>MẮT TRÁI</Text>
+              <Text style={{ fontSize: 11, color: '#0E7490', marginBottom: 3 }}>Kích thước (mm)</Text>
+              <TextInput style={styles.textInput} placeholder="2.5" keyboardType="decimal-pad" value={pupilLeftSize} onChangeText={setPupilLeftSize} />
+              <Text style={{ fontSize: 11, color: '#0E7490', marginBottom: 3, marginTop: 6 }}>Phản xạ ánh sáng</Text>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {REFLEX_OPTIONS.map(opt => (
+                  <TouchableOpacity key={opt} onPress={() => setPupilLeftReflex(opt)}
+                    style={{ flex: 1, paddingVertical: 6, borderRadius: 6, alignItems: 'center', backgroundColor: pupilLeftReflex === opt ? '#0E7490' : '#E0F2FE', borderWidth: 1, borderColor: pupilLeftReflex === opt ? '#0E7490' : '#BAE6FD' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: pupilLeftReflex === opt ? '#fff' : '#0E7490' }}>{opt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={{ width: 1, backgroundColor: '#BAE6FD' }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0E7490', marginBottom: 6 }}>MẮT PHẢI</Text>
+              <Text style={{ fontSize: 11, color: '#0E7490', marginBottom: 3 }}>Kích thước (mm)</Text>
+              <TextInput style={styles.textInput} placeholder="2.5" keyboardType="decimal-pad" value={pupilRightSize} onChangeText={setPupilRightSize} />
+              <Text style={{ fontSize: 11, color: '#0E7490', marginBottom: 3, marginTop: 6 }}>Phản xạ ánh sáng</Text>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {REFLEX_OPTIONS.map(opt => (
+                  <TouchableOpacity key={opt} onPress={() => setPupilRightReflex(opt)}
+                    style={{ flex: 1, paddingVertical: 6, borderRadius: 6, alignItems: 'center', backgroundColor: pupilRightReflex === opt ? '#0E7490' : '#E0F2FE', borderWidth: 1, borderColor: pupilRightReflex === opt ? '#0E7490' : '#BAE6FD' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: pupilRightReflex === opt ? '#fff' : '#0E7490' }}>{opt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+          <Text style={{ fontSize: 11, color: '#0E7490', marginBottom: 3 }}>Hình dạng đồng tử</Text>
+          <TextInput style={styles.textInput} placeholder="Tròn đều 2 bên / Không đều / Giãn" value={pupilShape} onChangeText={setPupilShape} />
+        </View>
+
+        {/* ── SECTION 4: Dịch dẫn lưu phẫu thuật sọ não ── */}
+        <SectionLabel icon={Droplets} title="4. Dịch dẫn lưu phẫu thuật sọ não" color="#D97706" />
+        <View style={{ backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+          <FormField label="Vị trí dẫn lưu" placeholder="VD: EVD não thất, Ngoài màng cứng, Hố mổ..." value={drainageSite} onChangeText={setDrainageSite} />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <FormField label="Thể tích (ml)" placeholder="40" keyboardType="numeric" value={drainageVolume} onChangeText={setDrainageVolume} />
+            </View>
+            <View style={{ flex: 2 }}>
+              <FormField label="Màu sắc / Tính chất" placeholder="Hồng nhạt / Trong / Đục vàng" value={drainageColor} onChangeText={setDrainageColor} />
+            </View>
+          </View>
+          <FormField label="Tình trạng chân dẫn lưu" placeholder="Chân ống khô ráo, cố định tốt" value={drainageCondition} onChangeText={setDrainageCondition} />
+        </View>
+
+        {/* ── SECTION 5: Lịch truyền dịch ── */}
+        <SectionLabel icon={Activity} title="5. Lịch truyền dịch" color="#2563EB" />
+        <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+          {fluidInfusions.length === 0 ? (
+            <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
+                Chưa có chai truyền dịch nào. Bấm nút "+ Thêm dịch truyền" bên dưới để nhập hoặc bấm "Giả lập Quét tự động".
+              </Text>
+            </View>
+          ) : (
+            fluidInfusions.map((inf, idx) => (
+            <View key={idx} style={{ marginBottom: 12, borderBottomWidth: idx < fluidInfusions.length - 1 ? 1 : 0, borderBottomColor: '#BFDBFE', paddingBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E3A8A' }}>Chai #{idx + 1}</Text>
+                {fluidInfusions.length > 1 && (
+                  <TouchableOpacity onPress={() => removeFluidRow(idx)}>
+                    <X size={14} color='#DC2626' />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <FormField label="Tên dịch / Thuốc" placeholder="Mannitol 20%, NaCl 0.9%, Ringer..." value={inf.fluidName} onChangeText={v => updateFluid(idx, 'fluidName', v)} />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <FormField label="Thể tích (ml)" placeholder="500" keyboardType="numeric" value={inf.volume} onChangeText={v => updateFluid(idx, 'volume', v)} />
+                </View>
+                <View style={{ flex: 2 }}>
+                  <FormField label="Tốc độ truyền" placeholder="40 giọt/phút hoặc 80ml/h" value={inf.rate} onChangeText={v => updateFluid(idx, 'rate', v)} />
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: '#1E40AF', marginBottom: 4 }}>Trạng thái</Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {FLUID_STATUSES.map(st => (
+                  <TouchableOpacity key={st} onPress={() => updateFluid(idx, 'status', st)}
+                    style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, backgroundColor: inf.status === st ? '#2563EB' : '#DBEAFE', borderWidth: 1, borderColor: inf.status === st ? '#2563EB' : '#93C5FD' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: inf.status === st ? '#fff' : '#1E40AF' }}>{st}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )))}
+          <TouchableOpacity onPress={addFluidRow} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#3B82F6', borderStyle: 'dashed' }}>
+            <Plus size={14} color='#2563EB' />
+            <Text style={{ fontSize: 12, color: '#2563EB', fontWeight: '600' }}>Thêm dịch truyền</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── SECTION 6: Diễn biến & Hành động ── */}
+        <SectionLabel icon={Stethoscope} title="6. Diễn biến & Hành động chăm sóc" color={Colors.brandGreen} />
         <FormField
-          label="Cấp chăm sóc (1-3)"
-          placeholder="3"
-          keyboardType="numeric"
-          value={String(formData.careLevel)}
-          onChangeText={(text) => setFormData({ ...formData, careLevel: text })}
-        />
-        <FormField
-          label="Mạch (lần/phút)"
-          placeholder="72"
-          keyboardType="numeric"
-          value={formData.pulse}
-          onChangeText={(text) => setFormData({ ...formData, pulse: text })}
-        />
-        <FormField
-          label="Huyết áp (mmHg)"
-          placeholder="120/80"
-          value={formData.bloodPressure}
-          onChangeText={(text) => setFormData({ ...formData, bloodPressure: text })}
-        />
-        <FormField
-          label="Nhiệt độ (°C)"
-          placeholder="36.5"
-          keyboardType="decimal-pad"
-          value={formData.temperature}
-          onChangeText={(text) => setFormData({ ...formData, temperature: text })}
-        />
-        <FormField
-          label="Nhịp thở (lần/phút)"
-          placeholder="18"
-          keyboardType="numeric"
-          value={formData.respiratoryRate}
-          onChangeText={(text) => setFormData({ ...formData, respiratoryRate: text })}
-        />
-        <FormField
-          label="SpO2 (%)"
-          placeholder="98"
-          keyboardType="numeric"
-          value={formData.spo2}
-          onChangeText={(text) => setFormData({ ...formData, spo2: text })}
-        />
-        <FormField
-          label="Y tá thực hiện"
-          placeholder="Tên y tá"
-          value={formData.nurse}
-          onChangeText={(text) => setFormData({ ...formData, nurse: text })}
-        />
-        <FormField
-          label="Diễn biến bệnh"
-          placeholder="Ghi nhận diễn biến..."
+          label="Diễn biến bệnh *"
+          placeholder="Mô tả diễn biến lâm sàng trong ca trực..."
           multiline
-          value={formData.progressNotes}
-          onChangeText={(text) => setFormData({ ...formData, progressNotes: text })}
+          value={progressNotes}
+          onChangeText={setProgressNotes}
         />
         <FormField
           label="Hành động chăm sóc"
-          placeholder="Các biện pháp đã thực hiện..."
+          placeholder="Các biện pháp điều dưỡng đã thực hiện..."
           multiline
-          value={formData.careActions}
-          onChangeText={(text) => setFormData({ ...formData, careActions: text })}
+          value={careActions}
+          onChangeText={setCareActions}
         />
       </ScrollView>
       <View style={styles.modalFooter}>
         <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
           <Text style={styles.cancelButtonText}>Hủy</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit}>
-          <Text style={styles.primaryButtonText}>Lưu phiếu</Text>
+        <TouchableOpacity style={[styles.primaryButton, gcsCritical && { backgroundColor: '#DC2626' }]} onPress={handleSubmit}>
+          <Text style={styles.primaryButtonText}>{gcsCritical ? '🚨 Lưu phiếu (GCS NGUY KỊCH)' : 'Lưu phiếu chăm sóc'}</Text>
         </TouchableOpacity>
       </View>
     </View>

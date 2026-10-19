@@ -7,10 +7,7 @@ import {
   SafeAreaView,
   TextInput,
   ActivityIndicator,
-<<<<<<< HEAD
-=======
   Pressable,
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
   useWindowDimensions,
 } from 'react-native';
 import { get } from '../services/api.service';
@@ -46,13 +43,12 @@ const calculateAge = (dob, birthYear) => {
 
 const DoctorPatientListScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
-  const columns = width >= 1200 ? 3 : width >= 760 ? 2 : 1;
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('ALL');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const { width } = useWindowDimensions();
   const wide = width >= Layout.wide;
 
   useEffect(() => {
@@ -72,23 +68,20 @@ const DoctorPatientListScreen = ({ navigation }) => {
           const lastVital = stats.last_vital;
 
           let status = 'Chưa theo dõi';
+          let statusCode = 'NONE';
           let badgeColor = '#F1F5F9';
           let textColor = '#94A3B8';
           if (lastVital) {
             status = 'Đang theo dõi';
+            statusCode = 'TRACKING';
             badgeColor = '#EFF6FF';
             textColor = '#0369A1';
           }
           if (completedOrders > 0) {
             status = 'Có kết quả XN';
-<<<<<<< HEAD
-            badgeColor = '#DCFCE7';
-            textColor = '#15803D';
-=======
             statusCode = 'XN';
             badgeColor = Colors.brandGreenSoft;
             textColor = Colors.brandGreen;
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
           }
 
           const age = calculateAge(p.profile?.dob, p.profile?.birthYear);
@@ -97,21 +90,12 @@ const DoctorPatientListScreen = ({ navigation }) => {
             id: p.profile?.medicalId || `NS-${p._id.substring(18).toUpperCase()}`,
             dbId: p._id,
             name: p.profile?.name || p.email,
-<<<<<<< HEAD
-            age: calculateAge(p.profile?.dob, p.profile?.birthYear), // [BUG-03 FIX]
-            gender: p.profile?.gender || 'N/A',
-            phone: p.phone || 'N/A',
-            diagnosis: diagnosisStr,
-            lastScan: lastVital
-              ? `${new Date(lastVital.recorded_at).getDate()}/${new Date(lastVital.recorded_at).getMonth() + 1}`
-              : 'Chưa có',
-=======
             gender: p.profile?.gender || '',
             genderAge: [p.profile?.gender, age !== 'N/A' ? `${age} tuổi` : null].filter(Boolean).join(', '),
             phone: p.phone || '',
             labText: totalOrders > 0 ? `${completedOrders}/${totalOrders} phiếu có kết quả` : 'Chưa có phiếu',
             vitalText: recorded ? `${recorded.getDate()}/${recorded.getMonth() + 1}` : 'Chưa đo',
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
+            statusCode,
             status,
             badgeColor,
             textColor,
@@ -133,18 +117,6 @@ const DoctorPatientListScreen = ({ navigation }) => {
     fetchPatients();
   }, []);
 
-<<<<<<< HEAD
-  const handlePatientPress = (patient) => {
-    navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' });
-  };
-
-  const filtered = patients.filter(
-    p =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.diagnosis.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toLowerCase().includes(search.toLowerCase())
-  );
-=======
   const filtered = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.id.toLowerCase().includes(search.toLowerCase());
@@ -158,7 +130,6 @@ const DoctorPatientListScreen = ({ navigation }) => {
   const totalCount = patients.length;
   const xnCount = patients.filter(p => p.statusCode === 'XN').length;
   const trackingCount = patients.filter(p => p.statusCode === 'TRACKING').length;
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
 
   const openDetail = (patient) => navigation.navigate('PatientDetail', { patientId: patient.dbId, activeRoute: 'DoctorPatientList' });
   const openFilms = (patient) => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name });
@@ -167,99 +138,6 @@ const DoctorPatientListScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
       <SafeAreaView style={styles.container}>
-<<<<<<< HEAD
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Danh sách bệnh nhân</Text>
-            <Text style={styles.headerSubtitle}>Theo dõi hồ sơ và hoạt động khám chữa bệnh</Text>
-          </View>
-          <View style={styles.patientCount}>
-            <Text style={styles.patientCountValue}>{filtered.length}</Text>
-            <Text style={styles.patientCountLabel}>bệnh nhân</Text>
-          </View>
-        </View>
-        <View style={styles.content}>
-          <View style={styles.searchContainer}>
-            <Search size={16} color="#64748B" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm theo tên, mã bệnh nhân hoặc chẩn đoán..."
-              placeholderTextColor="#94A3B8"
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-          {loading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#15803D" />
-              <Text style={{ color: '#64748B', marginTop: 10 }}>Đang tải danh sách bệnh nhân...</Text>
-            </View>
-          ) : error ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 }}>
-              <Text style={{ color: '#DC2626' }}>{error}</Text>
-              <TouchableOpacity onPress={fetchPatients} style={styles.actionBtnPrimary}>
-                <Text style={styles.actionBtnPrimaryText}>Thử lại</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filtered.length === 0 ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: '#64748B' }}>Không tìm thấy bệnh nhân nào.</Text>
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={styles.list}>
-              <View style={styles.grid}>
-                {filtered.map(patient => (
-                  <View
-                    key={patient.id}
-                    style={[
-                      styles.card,
-                      styles.gridCard,
-                      columns === 3 ? styles.threeColumnCard : columns === 2 ? styles.twoColumnCard : styles.oneColumnCard,
-                    ]}
-                  >
-                    <TouchableOpacity onPress={() => handlePatientPress(patient)} activeOpacity={0.85} style={styles.thumbnail}>
-                      <View style={styles.thumbnailTop}>
-                        <Text style={styles.thumbnailLabel}>HỒ SƠ BỆNH ÁN</Text>
-                        <View style={[styles.statusBadge, { backgroundColor: patient.badgeColor }]}>
-                          <Text style={[styles.statusText, { color: patient.textColor }]}>{patient.status}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.thumbnailAvatar}>
-                        <Text style={styles.thumbnailAvatarText}>{patient.name.charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <Text style={styles.thumbnailId}>{patient.id}</Text>
-                    </TouchableOpacity>
-                    <View style={styles.cardContent}>
-                      <View style={styles.cardTitleRow}>
-                        <TouchableOpacity onPress={() => handlePatientPress(patient)} style={styles.titleHit}>
-                          <Text style={styles.patientName} numberOfLines={2}>{patient.name}</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.patientMeta} numberOfLines={1}>
-                        {patient.gender} · {patient.age} tuổi · {patient.phone}
-                      </Text>
-                      <View style={styles.detailsBlock}>
-                        <Text style={styles.infoLabel}>HOẠT ĐỘNG GẦN ĐÂY</Text>
-                        <Text style={styles.infoValue} numberOfLines={2}>{patient.diagnosis}</Text>
-                      </View>
-                      <View style={styles.cardFooter}>
-                        <Text style={styles.lastScan}>Cập nhật {patient.lastScan}</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => navigation.navigate('PatientDetail', { patientId: patient.dbId, defaultTab: 'lab' })}
-                        style={styles.recordButton}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.recordButtonText}>Xem hồ sơ bệnh án</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-=======
         <PageHeader
           bar
           title="Bệnh nhân"
@@ -386,7 +264,6 @@ const DoctorPatientListScreen = ({ navigation }) => {
             )}
           </PageContainer>
         </ScrollView>
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
       </SafeAreaView>
     </ResponsiveLayout>
   );

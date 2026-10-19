@@ -6,6 +6,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { contrastConsentPending } from "./contrastConsent.service.js";
+import { evaluateVitalSigns } from "./vitalsSafety.service.js";
 
 /**
  * Service: Lấy danh sách nhân sự (Bác sĩ, Điều dưỡng, KTV) kèm tải hàng đợi trong ngày
@@ -203,13 +204,29 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
     throw err;
   }
 
-  visit.vitals = { ...vitals, measuredAt: new Date() };
+  const evaluation = evaluateVitalSigns(vitals);
+
+  visit.vitals = {
+    ...vitals,
+    measuredAt: new Date(),
+    isAbnormal: evaluation.isAbnormal,
+    alerts: evaluation.alertMessages,
+    alertDetails: evaluation.alerts,
+    flags: evaluation.flags
+  };
+
+  if (evaluation.isAbnormal && evaluation.alerts.some(a => a.severity === 'danger')) {
+    if (['thấp', 'trung bình'].includes(visit.priority)) {
+      visit.priority = 'cao';
+    }
+  }
+
   if (visit.status === "đang chờ") {
     visit.status = "đang khám";
   }
 
   await visit.save();
-  return visit;
+  return { visit, evaluation };
 };
 
 /**

@@ -317,54 +317,7 @@ export default function DrugManagementScreen({ navigation }) {
         />
 
         <ScrollView contentContainerStyle={styles.scroll}>
-<<<<<<< HEAD
-          {/* Header */}
-          <View style={styles.titleContainer}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={styles.title}>Quản lý kho dược phẩm & lâm sàng</Text>
-                <Text style={styles.subtitle}>
-                  Quản lý danh mục thuốc sử dụng tại bệnh viện, theo dõi tồn kho, hạn sử dụng và cấu hình tương tác lâm sàng.
-                </Text>
-              </View>
-                {alerts.length > 0 && (
-                  <View style={[styles.alertHeaderBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-                    <AlertTriangle size={12} color="#991B1B" />
-                    <Text style={styles.alertHeaderBadgeText}>{alerts.length} thuốc sắp hết</Text>
-                  </View>
-                )}
-            </View>
-          </View>
-
-          {/* Quick tab filters */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'list' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('list')}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Pill size={14} color={activeTab === 'list' ? '#15803D' : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
-                  Danh mục thuốc & Tồn kho
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === 'alerts' && styles.tabButtonActive]}
-              onPress={() => setActiveTab('alerts')}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <AlertTriangle size={14} color={activeTab === 'alerts' ? '#DC2626' : '#64748B'} />
-                <Text style={[styles.tabText, activeTab === 'alerts' && styles.tabTextActive]}>
-                  Cảnh báo tồn kho thấp ({alerts.length})
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-=======
           <PageContainer>
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
           {activeTab === 'list' ? (
             <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
               {/* Form / Edit Column (Only for hospital_admin) */}
@@ -407,7 +360,6 @@ export default function DrugManagementScreen({ navigation }) {
                     <View style={styles.fieldRow}>
                       <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={styles.label}>Phân loại dược lý</Text>
-<<<<<<< HEAD
                         <View style={styles.selectWrapper}>
                            <select
                              value={category}
@@ -424,16 +376,6 @@ export default function DrugManagementScreen({ navigation }) {
                                cursor: 'pointer',
                              }}
                            >
-=======
-                        <TouchableOpacity
-                          style={[styles.selectWrapper, { justifyContent: 'center', paddingHorizontal: 10 }]}
-                          onPress={() => setShowCategoryFormDropdown(!showCategoryFormDropdown)}
-                        >
-                          <Text style={{ fontSize: 13, color: Colors.brandNavy }}>{CATEGORY_LABELS[category]}</Text>
-                        </TouchableOpacity>
-                        {showCategoryFormDropdown && (
-                          <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]}>
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
                             {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
                               <option key={k} value={k}>{v}</option>
                             ))}
@@ -599,37 +541,11 @@ export default function DrugManagementScreen({ navigation }) {
                             cursor: 'pointer',
                           }}
                         >
-<<<<<<< HEAD
                           <option value="all">Tất cả phân nhóm</option>
                           {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
                             <option key={k} value={k}>{v}</option>
                           ))}
                         </select>
-=======
-                          <Text style={{ fontSize: 13, color: Colors.brandNavy }}>
-                            {selectedCategory === 'all' ? 'Tất cả phân nhóm' : CATEGORY_LABELS[selectedCategory]}
-                          </Text>
-                        </TouchableOpacity>
-                        {showCategoryFilterDropdown && (
-                          <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]}>
-                            <TouchableOpacity
-                              style={styles.dropdownOption}
-                              onPress={() => { setSelectedCategory('all'); setShowCategoryFilterDropdown(false); }}
-                            >
-                              <Text style={styles.dropdownOptionText}>Tất cả phân nhóm</Text>
-                            </TouchableOpacity>
-                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                              <TouchableOpacity
-                                key={k}
-                                style={styles.dropdownOption}
-                                onPress={() => { setSelectedCategory(k); setShowCategoryFilterDropdown(false); }}
-                              >
-                                <Text style={styles.dropdownOptionText}>{v}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        )}
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
                       </View>
                     </View>
                   </View>
@@ -730,11 +646,7 @@ export default function DrugManagementScreen({ navigation }) {
                                       onPress={() => openStockModal(item)}
                                       style={[styles.tblBtnStock, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     >
-<<<<<<< HEAD
                                       <Plus size={10} color="#166534" />
-=======
-                                      <Text style={{ fontSize: 12 }}>➕</Text>
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
                                       <Text style={styles.tblBtnStockText}>Kho</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -937,38 +849,7 @@ const styles = StyleSheet.create({
     outlineStyle: 'none',
     cursor: 'pointer',
   },
-<<<<<<< HEAD
   submitButton: { height: 40, backgroundColor: '#15803D', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-=======
-  dropdownMenu: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    zIndex: 50,
-  },
-  dropdownOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  dropdownOptionText: {
-    fontSize: 13,
-    color: Colors.brandNavy,
-  },
-  submitButton: { height: 40, backgroundColor: Colors.brandGreen, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
->>>>>>> 3ee9983d466bb32bdb50b350796e96ee5059bf65
   buttonDisabled: { opacity: 0.7 },
   submitButtonText: { fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' },
   cancelBtn: { height: 40, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },

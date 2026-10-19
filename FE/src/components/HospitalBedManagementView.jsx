@@ -335,6 +335,7 @@ export default function HospitalBedManagementView({ currentUser }) {
     return dept.departmentId === selectedDepartment;
   });
 
+  const isDoctor = currentUser?.role === 'doctor';
   const isHospitalAdmin = currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin';
 
   return (
@@ -711,18 +712,18 @@ export default function HospitalBedManagementView({ currentUser }) {
       </div>
 
       {/* ── MODALS FOR ACTIONS ─────────────────────────────────────────── */}
-<<<<<<< HEAD
       {!isDoctor && activeModal && (
-=======
-      {activeModal && (
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-lg font-bold text-slate-800">
                 {activeModal === 'reserve' && `Giữ Chỗ Giường ${selectedBed?.bedNumber} (Khóa 4h)`}
                 {activeModal === 'occupy' && `Nhập Viện Vào Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'release' && `Giải Phóng Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'transfer' && `Điều Chuyển Bệnh Nhân (Giường ${selectedBed?.bedNumber})`}
                 {activeModal === 'create' && 'Thêm giường bệnh mới'}
-              </h3>
+                </h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
