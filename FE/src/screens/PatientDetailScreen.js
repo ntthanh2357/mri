@@ -573,7 +573,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       if (isSmart) {
         await post('/api/v1/transfers', body);
         Alert.alert(
-          'Khởi tạo Gói Chuyển Viện Thành Công (UC-DOC-10)',
+          'Khởi tạo Gói Chuyển Viện Thành Công',
           'Hệ thống đã tự động đóng gói file DICOM nén, Báo cáo AI u não và Mô hình 3D khối u, đồng thời chuyển hồ sơ sang bàn Lễ tân để gửi email điện tử cho bệnh nhân!'
         );
       } else {

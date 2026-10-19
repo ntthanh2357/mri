@@ -4,6 +4,9 @@ import {
   createVisit,
   getMyQueue,
   updateVitals,
+  callPatientForVitals,
+  savePreScreening,
+  getPatientPreScreening,
   checkVitalsSafety,
   createMriOrder,
   updateStatus,
@@ -19,6 +22,11 @@ router.get("/staff", protect, getStaff);
 router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "hospital_admin"]), createVisit);
 router.get("/my-queue", protect, getMyQueue);
 router.post("/check-vitals", protect, checkVitalsSafety);
+// UC-NUR-01: gọi bệnh nhân vào phòng đo sinh hiệu — chỉ điều dưỡng
+router.put("/:id/call-vitals", protect, checkRole(["nurse"]), callPatientForVitals);
+// UC-NUR-03: sàng lọc dị ứng & chống chỉ định — điều dưỡng ghi, nhân sự lâm sàng đọc trong bệnh án
+router.put("/:id/pre-screening", protect, checkRole(["nurse"]), savePreScreening);
+router.get("/pre-screening/latest", protect, checkRole(["nurse", "doctor", "technician", "hospital_admin"]), getPatientPreScreening);
 router.put("/:id/vitals", protect, checkRole(["nurse", "receptionist", "doctor", "admin", "hospital_admin"]), updateVitals);
 router.put("/:id/mri-order", protect, checkRole(["doctor"]), createMriOrder);
 router.put("/:id/status", protect, checkRole(["doctor", "nurse", "receptionist", "technician", "admin", "hospital_admin"]), updateStatus);

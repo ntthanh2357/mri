@@ -54,6 +54,37 @@ const visitSchema = new Schema(
       alertDetails: { type: Schema.Types.Mixed, default: [] },
       flags: { type: Schema.Types.Mixed, default: {} }
     },
+    // UC-NUR-01: Điều dưỡng gọi bệnh nhân từ phòng tiếp đón vào phòng đo sinh hiệu
+    vitalsCall: {
+      status: { type: String, enum: ['none', 'called', 'missed'], default: 'none' },
+      callCount: { type: Number, default: 0 },
+      room: { type: String, default: "" },
+      calledAt: { type: Date, default: null },
+      calledBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
+    },
+    // UC-NUR-03: Sàng lọc sơ bộ dị ứng & chống chỉ định (hen phế quản, suy thận, phản ứng thuốc cản quang)
+    preScreening: {
+      screened: { type: Boolean, default: false },
+      asthma: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      renalFailure: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      contrastReaction: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      otherAllergies: { type: String, default: "" },
+      notes: { type: String, default: "" },
+      riskLevel: { type: String, enum: ['none', 'caution', 'high'], default: 'none' },
+      flags: { type: [String], default: [] },
+      screenedAt: { type: Date, default: null },
+      screenedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      screenedByName: { type: String, default: "" }
+    },
     mriOrder: {
       region: { type: String, default: "" },
       brain_region: { type: String, default: null },

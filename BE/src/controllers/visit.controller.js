@@ -13,6 +13,7 @@ import {
   cancelMriOrderService
 } from "../services/visit.service.js";
 import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
+import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -235,6 +236,146 @@ export const getMyQueue = async (req, res) => {
     }
 
     res.status(200).json({ visits });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Điều dưỡng gọi bệnh nhân vào phòng đo sinh hiệu / đánh dấu vắng mặt (UC-NUR-01)
+// @route   PUT /api/v1/visits/:id/call-vitals   body: { action: "call" | "missed", room? }
+// @access  Private (Nurse)
+export const callPatientForVitals = async (req, res) => {
+  try {
+    const { action = "call", room } = req.body || {};
+    if (!["call", "missed"].includes(action)) {
+      return res.status(400).json({ message: "Hành động không hợp lệ." });
+    }
+
+    const visit = await Visit.findById(req.params.id);
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    if (String(visit.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác lượt khám này." });
+    }
+    if (visit.status !== "đang chờ" || visit.vitals?.measuredAt) {
+      return res.status(400).json({ message: "Bệnh nhân này đã được đo sinh hiệu hoặc không còn ở hàng chờ tiếp đón." });
+    }
+
+    const call = visit.vitalsCall || {};
+    if (action === "call") {
+      visit.vitalsCall = {
+        status: "called",
+        callCount: (call.callCount || 0) + 1,
+        room: String(room || call.room || "Phòng đo sinh hiệu").trim(),
+        calledAt: new Date(),
+        calledBy: req.user.id,
+      };
+    } else {
+      visit.vitalsCall = { ...(call.toObject ? call.toObject() : call), status: "missed" };
+    }
+    await visit.save();
+
+    if (action === "call") {
+      try {
+        await createNotificationInternal({
+          hospitalId: visit.hospitalId,
+          recipientId: visit.patientId,
+          senderId: req.user.id,
+          type: "other",
+          title: "📣 Mời vào đo sinh hiệu",
+          message: `Mời bạn vào ${visit.vitalsCall.room} để đo sinh hiệu (mạch, huyết áp, nhiệt độ, SpO2).`,
+          relatedId: visit._id,
+        });
+      } catch (notifErr) {
+        console.warn("⚠️ Không thể gửi thông báo gọi bệnh nhân:", notifErr.message);
+      }
+    }
+
+    const populated = await Visit.findById(visit._id)
+      .populate("patientId", "email profile")
+      .populate("doctorId", "profile.name")
+      .lean();
+    res.status(200).json({
+      message: action === "call" ? "Đã gọi bệnh nhân vào đo sinh hiệu." : "Đã đánh dấu bệnh nhân vắng mặt.",
+      visit: populated,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Điều dưỡng ghi sàng lọc sơ bộ dị ứng & chống chỉ định cho bác sĩ (UC-NUR-03)
+// @route   PUT /api/v1/visits/:id/pre-screening
+// @access  Private (Nurse)
+export const savePreScreening = async (req, res) => {
+  try {
+    const visit = await Visit.findById(req.params.id);
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    if (String(visit.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác lượt khám này." });
+    }
+    if (["đã đóng", "đã hủy"].includes(visit.status)) {
+      return res.status(400).json({ message: "Lượt khám đã đóng, không thể sàng lọc." });
+    }
+
+    const data = sanitizePreScreening(req.body);
+    const evaluation = evaluatePreScreening(data);
+    const nurse = await User.findById(req.user.id).select("profile").lean();
+
+    visit.preScreening = {
+      ...data,
+      screened: true,
+      riskLevel: evaluation.riskLevel,
+      flags: evaluation.flags,
+      screenedAt: new Date(),
+      screenedBy: req.user.id,
+      screenedByName: nurse?.profile?.name || nurse?.profile?.fullName || "Điều dưỡng",
+    };
+    await visit.save();
+
+    // Có nguy cơ → báo bác sĩ phụ trách ngay để chú ý khi khám / chỉ định cản quang
+    if (evaluation.riskLevel !== "none" && visit.doctorId) {
+      try {
+        const patient = await User.findById(visit.patientId).select("profile").lean();
+        await createNotificationInternal({
+          hospitalId: visit.hospitalId,
+          recipientId: visit.doctorId,
+          senderId: req.user.id,
+          type: "other",
+          title: evaluation.riskLevel === "high" ? "⚠️ Cảnh báo chống chỉ định" : "Lưu ý dị ứng / tiền sử",
+          message: `Bệnh nhân ${patient?.profile?.name || patient?.profile?.fullName || ""}: ${evaluation.flags.join("; ")}.`,
+          relatedId: visit._id,
+        });
+      } catch (notifErr) {
+        console.warn("⚠️ Không thể báo bác sĩ về kết quả sàng lọc:", notifErr.message);
+      }
+    }
+
+    res.status(200).json({ message: "Đã lưu sàng lọc vào bệnh án.", preScreening: visit.preScreening });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Lấy kết quả sàng lọc gần nhất + lịch sử của 1 bệnh nhân (hiện trong bệnh án)
+// @route   GET /api/v1/visits/pre-screening/latest?patientId=
+// @access  Private (Nurse, Doctor, Technician, Hospital admin)
+export const getPatientPreScreening = async (req, res) => {
+  try {
+    const { patientId } = req.query;
+    if (!patientId || !mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({ message: "Thiếu hoặc sai mã bệnh nhân." });
+    }
+    const visits = await Visit.find({
+      hospitalId: req.user.hospitalId,
+      patientId,
+      "preScreening.screened": true,
+    })
+      .select("preScreening reason createdAt")
+      .sort({ "preScreening.screenedAt": -1 })
+      .limit(5)
+      .lean();
+    const history = visits.map((v) => ({ visitId: v._id, reason: v.reason, visitedAt: v.createdAt, ...v.preScreening }));
+    res.status(200).json({ latest: history[0] || null, history });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }

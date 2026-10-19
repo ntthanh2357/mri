@@ -36,6 +36,7 @@ export const linkingConfig = {
       CreateImagingResult: 'create-imaging-result',
       DoctorPatientList: 'doctor-patient-list',
       NurseReception: 'nurse-reception',
+      NurseTriage: 'nurse-triage',
       ActivateAccount: 'activate-account',
       DoctorWorkQueue: 'doctor-work-queue',
       HospitalOnboarding: 'hospital-onboarding',

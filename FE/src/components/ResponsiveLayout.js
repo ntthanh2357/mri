@@ -219,6 +219,7 @@ const ResponsiveLayout = ({
       case 'nurse':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Tiếp nhận', route: 'NurseTriage', icon: Users },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },

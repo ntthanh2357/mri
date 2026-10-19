@@ -73,6 +73,11 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   }, [route.params?.tab]);
 
+  // Từ trang "Tiếp nhận" (điều dưỡng): đã tiếp nhận số online → mở sẵn form tạo lượt khám cho bệnh nhân đó
+  useEffect(() => {
+    if (route.params?.queuePatient) serveFromQueue(route.params.queuePatient);
+  }, [route.params?.queuePatient]);
+
   // createVisit Tab State
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);

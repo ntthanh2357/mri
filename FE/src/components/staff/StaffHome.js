@@ -63,6 +63,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
 
   const openVisit = (v) => {
     if (role === 'receptionist') return navigation.navigate('NurseReception', { tab: 'myQueue' });
+    if (role === 'nurse') return navigation.navigate('NurseTriage');
     return navigation.navigate('DoctorWorkQueue', { tab: MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
   };
 

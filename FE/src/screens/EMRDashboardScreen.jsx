@@ -2173,7 +2173,7 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
   return (
     <View style={styles.formContainer}>
       <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>🏥 Phiếu Chăm sóc Điều dưỡng (UC-NUR-04)</Text>
+        <Text style={styles.modalTitle}>🏥 Phiếu Chăm sóc Điều dưỡng</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <X size={20} color="#64748B" />
         </TouchableOpacity>

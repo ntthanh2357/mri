@@ -31,7 +31,7 @@ export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [] } =
     ];
   } else if (role === 'nurse') {
     list = [
-      task('vitals', 'Chờ đo sinh hiệu', 'Bệnh nhân đã tiếp nhận, chưa có sinh hiệu', countStatus(visits, ['đang chờ']), 'DoctorWorkQueue', { tab: 'examQueue' }),
+      task('vitals', 'Chờ đo sinh hiệu', 'Bệnh nhân đã tiếp nhận, chưa có sinh hiệu', countStatus(visits, ['đang chờ']), 'NurseTriage'),
       task('inpatient', 'Bệnh nhân nội trú cần theo dõi', 'Ghi phiếu chăm sóc trong ca', emr.filter(r => r.admissionType === 'Nội trú').length, 'EMRDashboard', { tab: 'care' }),
     ];
   } else if (role === 'receptionist') {

@@ -455,7 +455,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
           : vitalEval.alerts.map(a => a.message)
         ).join('\n• ');
         Alert.alert(
-          "Cảnh báo sinh hiệu bất thường (UC-NUR-02)",
+          "Cảnh báo sinh hiệu bất thường",
           `Phiếu khám đã được lưu thành công vào hồ sơ.\n\n⚠️ CẢNH BÁO: Chỉ số vượt ngưỡng an toàn:\n• ${alertList}\n\nHệ thống đã tự động tô đỏ cảnh báo trên phiếu khám và chuyển lượt khám cho Bác sĩ xử lý.`
         );
       } else {
@@ -655,7 +655,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       };
 
       await post(`/emr/records/${recordId}/care-sheets`, payload);
-      Alert.alert("Thành công (UC-NUR-04)", "Đã lưu Phiếu Chăm sóc Điều dưỡng thành công vào hồ sơ bệnh án!");
+      Alert.alert("Thành công", "Đã lưu Phiếu Chăm sóc Điều dưỡng thành công vào hồ sơ bệnh án!");
       setShowCareSheetForm(false);
       handleResetCareSheetForm();
       fetchPatientCareSheets();
@@ -752,8 +752,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   const FORM_TABS = [
     { key: "info",  label: "Thông tin", Icon: User },
-    { key: "exam",  label: "Khám bệnh (UC-NUR-02)", Icon: Activity },
-    { key: "careSheet", label: "Phiếu chăm sóc (UC-NUR-04)", Icon: ClipboardList },
+    { key: "exam",  label: "Khám bệnh", Icon: Activity },
+    { key: "careSheet", label: "Phiếu chăm sóc", Icon: ClipboardList },
     { key: "order", label: "Chỉ định", Icon: FileText },
     { key: "fee",   label: "Viện phí", Icon: CreditCard },
   ];
@@ -835,7 +835,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   <Text style={s.guideTitle}>Quy trình điền hồ sơ (Dành cho Điều dưỡng)</Text>
                 </View>
                 <Text style={s.guideText}>
-                  {"1. Tab Khám bệnh (UC-NUR-02) → Ghi nhận 5 chỉ số sinh hiệu (Mạch, Huyết áp, Thân nhiệt, SpO₂, Nhịp thở) → Hệ thống tự động tô đỏ cảnh báo nếu chỉ số vượt ngưỡng an toàn.\n2. Tab Phiếu chăm sóc (UC-NUR-04) → Lập Phiếu Chăm sóc Điều dưỡng: Tri giác (Thang điểm Glasgow GCS), Phản xạ đồng tử 2 bên, Đo dịch dẫn lưu phẫu thuật sọ não (EVD), Lịch truyền dịch.\n3. Tab Chỉ định → Thêm chỉ định cận lâm sàng.\n4. Tab Viện phí → Xác nhận hóa đơn dịch vụ gửi quầy Thu ngân."}
+                  {"1. Tab Khám bệnh → Ghi nhận 5 chỉ số sinh hiệu (Mạch, Huyết áp, Thân nhiệt, SpO₂, Nhịp thở) → Hệ thống tự động tô đỏ cảnh báo nếu chỉ số vượt ngưỡng an toàn.\n2. Tab Phiếu chăm sóc → Lập Phiếu Chăm sóc Điều dưỡng: Tri giác (Thang điểm Glasgow GCS), Phản xạ đồng tử 2 bên, Đo dịch dẫn lưu phẫu thuật sọ não (EVD), Lịch truyền dịch.\n3. Tab Chỉ định → Thêm chỉ định cận lâm sàng.\n4. Tab Viện phí → Xác nhận hóa đơn dịch vụ gửi quầy Thu ngân."}
                 </Text>
               </View>
             </View>
@@ -880,7 +880,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <View style={s.vitalsAlertCard}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <AlertTriangle size={18} color="#DC2626" />
-                        <Text style={s.vitalsAlertTitle}>CẢNH BÁO SINH HIỆU VƯỢT NGƯỠNG AN TOÀN (UC-NUR-02)</Text>
+                        <Text style={s.vitalsAlertTitle}>CẢNH BÁO SINH HIỆU VƯỢT NGƯỠNG AN TOÀN</Text>
                       </View>
                       <Text style={s.vitalsAlertSubtitle}>
                         Phát hiện {vitalEval.alerts.length} chỉ số sinh hiệu vượt ngưỡng an toàn y tế. Hệ thống đã tự động tô đỏ cảnh báo để Điều dưỡng và Bác sĩ xử lý khẩn cấp.
@@ -979,7 +979,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       <View style={s.vitalsAlertCard}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <AlertTriangle size={16} color="#DC2626" />
-                          <Text style={s.vitalsAlertTitle}>CẢNH BÁO: CHỈ SỐ VƯỢT NGƯỠNG AN TOÀN (UC-NUR-02)</Text>
+                          <Text style={s.vitalsAlertTitle}>CẢNH BÁO: CHỈ SỐ VƯỢT NGƯỠNG AN TOÀN</Text>
                         </View>
                         <Text style={s.vitalsAlertSubtitle}>
                           Một hoặc nhiều chỉ số đang vượt ngưỡng an toàn y tế. Hệ thống tự động tô đỏ viền ô nhập để cảnh báo.
@@ -1066,7 +1066,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
               {/* Header section with Actions */}
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 240 }}>
-                  <Text style={s.sectionTitle}>Phiếu Chăm Sóc Điều Dưỡng (UC-NUR-04)</Text>
+                  <Text style={s.sectionTitle}>Phiếu Chăm Sóc Điều Dưỡng</Text>
                   <Text style={s.sectionSubtitle}>
                     Theo dõi diễn biến bệnh nhân nội trú: Tri giác (Glasgow), Phản xạ đồng tử, Dẫn lưu phẫu thuật sọ não, Lịch truyền dịch.
                   </Text>
@@ -1571,7 +1571,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       ) : (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <Save size={16} color="#fff" />
-                          <Text style={s.confirmBtnText}>Lưu Phiếu Chăm Sóc (UC-NUR-04)</Text>
+                          <Text style={s.confirmBtnText}>Lưu Phiếu Chăm Sóc</Text>
                         </View>
                       )}
                     </TouchableOpacity>

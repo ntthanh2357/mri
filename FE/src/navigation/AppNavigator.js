@@ -34,6 +34,7 @@ import ImagingResultScreen from '../screens/ImagingResultScreen';
 import CreateImagingResultScreen from '../screens/CreateImagingResultScreen';
 import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
+import NurseTriageScreen from '../screens/NurseTriageScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
@@ -120,6 +121,7 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: isNativeMobile }} />
+        <Stack.Screen name="NurseTriage" component={NurseTriageScreen} options={{ title: 'Tiếp nhận', headerShown: isNativeMobile }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ title: 'Kích hoạt tài khoản', headerShown: isNativeMobile }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ title: 'Hàng đợi khám', headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ title: 'Thông tin bệnh viện', headerShown: false }} />
