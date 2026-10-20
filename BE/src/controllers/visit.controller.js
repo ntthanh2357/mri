@@ -3,10 +3,12 @@ import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
+import { buildServiceItems, hasVitals } from "../modules/billing/servicePricing.util.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { ConsentForm } from "../models/consentForm.model.js";
 import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.js";
 import {
   submitMriSafetyCheckService,
   requestMriRescanService,
@@ -78,7 +80,7 @@ export const getStaff = async (req, res) => {
 // @access  Private (Receptionist)
 export const createVisit = async (req, res) => {
   try {
-    const { patientId, doctorId, nurseId, reason, visitType } = req.body;
+    const { patientId, doctorId, nurseId, reason, visitType, priority, clinicRoom } = req.body;
     const hospitalId = req.user.hospitalId;
 
     if (!hospitalId) {
@@ -88,9 +90,39 @@ export const createVisit = async (req, res) => {
     if (!patientId || !doctorId || !nurseId) {
       return res.status(400).json({ message: "Vui lòng cung cấp bệnh nhân, bác sĩ và điều dưỡng." });
     }
+    if (!String(reason || "").trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập lý do khám (bước 4) trước khi tạo lượt khám." });
+    }
+
+    // UC-REC-04: bệnh nhân phải có email để nhận thông báo lượt khám / dời lịch chụp / hoàn tiền (ca cấp cứu bổ sung sau)
+    const patientDoc = await User.findOne({ _id: patientId, role: "patient" }).select("email profile.name profile.fullName").lean();
+    if (!patientDoc) return res.status(404).json({ message: "Không tìm thấy bệnh nhân." });
+    if (priority !== "khẩn cấp" && !hasRealEmail(patientDoc.email)) {
+      return res.status(400).json({
+        code: "PATIENT_EMAIL_REQUIRED",
+        message: "Bệnh nhân chưa có email nhận thông báo. Vui lòng cập nhật email ở bước 1 trước khi tạo lượt khám.",
+      });
+    }
 
     // [TIMEZONE FIX]: Kiểm tra giới hạn bệnh nhân theo mốc ngày Việt Nam (GMT+7)
     const { startOfDay, endOfDay } = getDayRangeVN();
+
+    // Một bệnh nhân chỉ có 1 lượt khám đang xử lý: còn lượt chưa kết thúc (bất kể ngày nào) thì không tạo thêm
+    const openVisit = await Visit.findOne({
+      hospitalId,
+      patientId,
+      isDeleted: { $ne: true },
+      status: { $nin: ["hoàn tất", "đã đóng", "đã hủy", "no_show"] },
+    }).sort({ createdAt: 1 }).populate("doctorId", "profile.name").lean();
+    if (openVisit) {
+      const ticket = openVisit.queueNumber ? ` (số ${openVisit.priority === "khẩn cấp" ? "CC-" : "#"}${String(openVisit.queueNumber).padStart(3, "0")})` : "";
+      const at = new Date(openVisit.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
+      return res.status(409).json({
+        code: "PATIENT_ALREADY_IN_QUEUE",
+        message: `Bệnh nhân đang trong hàng chờ${ticket} — trạng thái "${openVisit.status}", tiếp nhận lúc ${at}${openVisit.doctorId?.profile?.name ? `, BS. ${openVisit.doctorId.profile.name}` : ""}. Không tạo thêm lượt khám — vui lòng tiếp tục xử lý lượt hiện tại.`,
+        activeVisitId: openVisit._id,
+      });
+    }
 
     const [visitCountToday, hospital] = await Promise.all([
       Visit.countDocuments({
@@ -106,6 +138,11 @@ export const createVisit = async (req, res) => {
       return res.status(400).json({ message: `Đã đạt số lượng bệnh nhân tối đa trong ngày (${maxPatients} bệnh nhân)!` });
     }
 
+    // Số phiếu = số lớn nhất đã cấp trong ngày + 1 (không dùng số lượt còn lại → tránh trùng khi có lượt bị hủy / xóa)
+    const lastTicket = await Visit.findOne({ hospitalId, createdAt: { $gte: startOfDay, $lte: endOfDay }, queueNumber: { $ne: null } })
+      .sort({ queueNumber: -1 }).select("queueNumber").lean();
+    const nextQueueNumber = (lastTicket?.queueNumber || 0) + 1;
+
     const visit = new Visit({
       hospitalId,
       patientId,
@@ -113,6 +150,10 @@ export const createVisit = async (req, res) => {
       nurseId,
       reason,
       visitType: visitType || "Ngoại trú",
+      // UC-REC-03: cờ ưu tiên (Thường / Cấp cứu) + phòng khám + số thứ tự trong ngày
+      priority: priority === "khẩn cấp" ? "khẩn cấp" : "trung bình",
+      clinicRoom: String(clinicRoom || "Phòng khám Chuyên khoa Thần kinh").trim(),
+      queueNumber: nextQueueNumber,
       status: "đang chờ"
     });
 
@@ -157,7 +198,19 @@ export const createVisit = async (req, res) => {
     }
     // ───────────────────────────────────────────────────────────────────────
 
-    res.status(201).json({ message: "Tạo lượt khám thành công", visit });
+    // Email xác nhận số thứ tự (không chặn phản hồi nếu gửi lỗi / chưa cấu hình SMTP)
+    const doctorDoc = await User.findById(doctorId).select("profile.name").lean().catch(() => null);
+    const emailSent = await sendVisitCreatedEmail({
+      toEmail: patientDoc.email,
+      patientName: patientDoc.profile?.name || patientDoc.profile?.fullName || "Quý bệnh nhân",
+      queueNumber: visit.queueNumber,
+      priority: visit.priority,
+      clinicRoom: visit.clinicRoom,
+      doctorName: doctorDoc?.profile?.name,
+      createdAt: visit.createdAt,
+    }).catch(() => false);
+
+    res.status(201).json({ message: "Tạo lượt khám thành công", visit, emailSent });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
@@ -209,7 +262,11 @@ export const getMyQueue = async (req, res) => {
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
     if (["receptionist", "admin", "system_admin", "hospital_admin"].includes(role) || req.query.today === "true") {
-      filter.createdAt = { $gte: startOfDay };
+      // Mọi lượt còn cần xử lý (bất kể ngày) + lượt đã kết thúc trong hôm nay
+      filter.$or = [
+        { createdAt: { $gte: startOfDay } },
+        { status: { $nin: ["hoàn tất", "đã đóng", "đã hủy", "no_show"] } },
+      ];
     }
 
     if (req.query.status) {
@@ -443,6 +500,67 @@ export const updateVitals = async (req, res) => {
   }
 };
 
+// @desc    Xem 1 lượt khám (màn phiếu khám lấy trạng thái đã đo sinh hiệu / đã chỉ định / đã lập phiếu thu)
+// @route   GET /api/v1/visits/:id
+// @access  Private (staff)
+export const getVisitById = async (req, res) => {
+  try {
+    const visit = await Visit.findById(req.params.id).lean();
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    if (!["admin", "system_admin"].includes(req.user.role) && String(visit.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền xem lượt khám này" });
+    }
+    const invoice = await Invoice.findOne({ visitId: visit._id, status: { $in: ["chờ thanh toán", "đã thanh toán"] } })
+      .select("items totalAmount status").lean();
+    // Danh sách viện phí dự kiến theo phiếu chỉ định & bảng giá (khi chưa lập phiếu thu)
+    let feeItems = [];
+    if (visit.serviceOrder?.services?.length) {
+      const hospital = await Hospital.findById(visit.hospitalId).lean();
+      feeItems = buildServiceItems(visit.serviceOrder.services, hospital?.pricing);
+    }
+    res.status(200).json({ visit, invoice, feeItems });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Lưu phiếu chỉ định dịch vụ cận lâm sàng (phải đo sinh hiệu trước) → trả về dòng viện phí theo bảng giá
+// @route   PUT /api/v1/visits/:id/service-order
+// @access  Private (Nurse, Doctor, Admin)
+export const saveServiceOrder = async (req, res) => {
+  try {
+    const visit = await Visit.findById(req.params.id);
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám" });
+    if (!["admin", "system_admin"].includes(req.user.role) && String(visit.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+    if (["đã đóng", "đã hủy"].includes(visit.status)) {
+      return res.status(400).json({ message: `Lượt khám đã ${visit.status}, không thể chỉ định thêm.` });
+    }
+    if (!hasVitals(visit)) {
+      return res.status(400).json({ message: "Chưa nhập sinh hiệu cho lượt khám này. Vui lòng hoàn thành tab Khám bệnh trước khi chỉ định dịch vụ." });
+    }
+    const services = [...new Set((req.body.services || []).map((s) => String(s).trim()).filter(Boolean))];
+    if (!services.length) return res.status(400).json({ message: "Vui lòng chỉ định ít nhất một dịch vụ." });
+    if (!String(req.body.diagnosis || "").trim()) return res.status(400).json({ message: "Vui lòng nhập chẩn đoán lâm sàng sơ bộ cho phiếu chỉ định." });
+
+    visit.serviceOrder = {
+      services,
+      diagnosis: String(req.body.diagnosis || "").trim(),
+      priority: req.body.priority === "Cấp cứu" ? "Cấp cứu" : "Thường",
+      orderedAt: new Date(),
+      orderedBy: req.user.id,
+    };
+    await visit.save();
+
+    const hospital = await Hospital.findById(visit.hospitalId).lean();
+    const feeItems = buildServiceItems(services, hospital?.pricing);
+    res.status(200).json({ message: "Đã lưu phiếu chỉ định.", serviceOrder: visit.serviceOrder, feeItems });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
 // @desc    Hàm kiểm tra ngưỡng an toàn sinh hiệu mà không lưu (UC-NUR-02)
 // @route   POST /api/v1/visits/check-vitals
 // @access  Private (Nurse, Doctor, Receptionist, Admin)
@@ -614,6 +732,16 @@ export const updateStatus = async (req, res) => {
         return res.status(400).json({ 
           message: `Chuyển trạng thái không hợp lệ: Không thể chuyển từ '${visit.status}' sang '${status}'.` 
         });
+      }
+      // UC-REC-10: chỉ được đóng lượt khám khi bệnh nhân đã thanh toán đủ công nợ
+      if (status === "đã đóng") {
+        const unpaid = await Invoice.findOne({ visitId: visit._id, status: "chờ thanh toán" }).lean();
+        if (unpaid) {
+          const owed = unpaid.patientPayAmount ?? (unpaid.totalAmount - (unpaid.bhytInfo?.bhytAmount || 0));
+          return res.status(400).json({
+            message: `Không thể đóng lượt khám: còn hóa đơn chưa thanh toán (${Math.round(owed).toLocaleString("vi-VN")}đ). Vui lòng thu viện phí trước.`,
+          });
+        }
       }
       // UC-PAT-06: chụp có tiêm cản quang phải có chữ ký đồng thuận của bệnh nhân
       if (status === "đang chụp" && await contrastConsentPending(visit)) {

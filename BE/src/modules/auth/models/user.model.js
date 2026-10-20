@@ -123,6 +123,12 @@ const userSchema = new Schema(
       birthYear: { type: Number, default: null },
       gender: { type: String, enum: ['Nam', 'Nữ', 'Khác', ''], default: '' },
       age: { type: Number, default: null },
+      // UC-REC-01 — Định danh bệnh nhân tại quầy tiếp đón
+      // CCCD lưu dạng băm HMAC (tra cứu chính xác) + 4 số cuối để hiển thị, không lưu bản rõ
+      cccdHash: { type: String, default: null, index: true },
+      cccdLast4: { type: String, default: '' },
+      phoneLast4: { type: String, default: '' },
+      registeredAtDeskBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       // Module O — bổ sung cho nhân viên y tế
       specialty: { type: String, default: '' }, // neuroradiologist | neurosurgeon | general
       isOnCall: { type: Boolean, default: false }, // Đang trực ca

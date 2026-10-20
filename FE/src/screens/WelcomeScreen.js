@@ -26,6 +26,7 @@ import PressableScale from '../components/PressableScale';
 import HeroScanOverlay from '../components/HeroScanOverlay';
 import useWelcomeAnimations from '../controllers/useWelcomeAnimations';
 import styles from './WelcomeScreen.styles';
+import { useDialogKeys } from '../utils/useDialogKeys';
 
 // Ảnh hero desktop (Welcome): banner thương hiệu + 2 ảnh tạo bằng Gemini (nguồn ở assets/brand-src).
 const HERO_SLIDES = [
@@ -101,6 +102,14 @@ const WelcomeScreen = ({ navigation }) => {
     message: '',
     onClose: null,
   });
+  // Đóng hộp thông báo (nút "Tiếp tục", phím Enter hoặc Esc)
+  const closeCustomAlert = () => {
+    setCustomAlert(prev => ({ ...prev, visible: false }));
+    if (customAlert.onClose) {
+      customAlert.onClose();
+    }
+  };
+  useDialogKeys(customAlert.visible, { onEnter: closeCustomAlert, onEscape: closeCustomAlert });
 
   const showAlert = (type, title, message, onClose = null) => {
     setCustomAlert({
@@ -1588,12 +1597,7 @@ const WelcomeScreen = ({ navigation }) => {
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
                 customAlert.type === 'info' && { backgroundColor: '#0090D0' },
               ]}
-              onPress={() => {
-                setCustomAlert(prev => ({ ...prev, visible: false }));
-                if (customAlert.onClose) {
-                  customAlert.onClose();
-                }
-              }}
+              onPress={closeCustomAlert}
             >
               <Text style={styles.alertButtonText}>Tiếp tục</Text>
             </TouchableOpacity>

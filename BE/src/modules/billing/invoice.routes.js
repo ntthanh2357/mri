@@ -10,6 +10,9 @@ import {
   paymentCancel,
   createPendingInvoice,
   refundInvoice,
+  syncInvoiceServices,
+  checkPayOSPayment,
+  recordBankTransfer,
   getStuckProcessingInvoices,
   resolveProcessingInvoice
 } from "./invoice.controller.js";
@@ -24,6 +27,11 @@ router.put("/:id/pay", protect, checkRole(["nurse", "admin", "receptionist", "ho
 router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createAndPayInvoice);
 router.post("/pending", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createPendingInvoice);
 router.put("/:id/refund", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), refundInvoice);
+// UC-REC-05: cập nhật dịch vụ phát sinh (tiền giường...) vào hóa đơn đang chờ
+router.post("/:id/sync", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), syncInvoiceServices);
+router.post("/:id/payos-check", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), checkPayOSPayment);
+// Ghi nhận chuyển khoản đối chiếu sao kê (tiền vào mã VietQR đã hủy / hết hạn, chuyển khoản trực tiếp)
+router.post("/:id/bank-transfer", protect, checkRole(["admin", "receptionist", "hospital_admin"]), recordBankTransfer);
 
 // Cổng thanh toán trực tuyến PayOS (VietQR)
 router.post("/visit/:visitId/payos", protect, createPayOSPayment);

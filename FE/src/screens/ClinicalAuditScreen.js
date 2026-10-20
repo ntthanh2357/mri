@@ -31,6 +31,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get } from '../services/api.service';
@@ -319,22 +320,6 @@ export default function ClinicalAuditScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="ClinicalAudit">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Nhật ký Kiểm toán Lâm sàng"
-          subtitle="Truy vết thao tác nhạy cảm: truy cập bệnh án Break-Glass, hủy ca khám, sửa kết luận chẩn đoán, hoàn tiền viện phí và điều chuyển ca (UC-HADM-13)."
-          actions={!loading ? (
-            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={refreshAll} />
-          ) : null}
-          below={
-            <PageTabs
-              tabs={RANGE_TABS}
-              value={days}
-              onChange={changeRange}
-            />
-          }
-        />
-
         <ScrollView
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -342,6 +327,25 @@ export default function ClinicalAuditScreen({ navigation }) {
           }
         >
           <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.doctorDesk}
+                tone="plum"
+                eyebrow="Kiểm toán lâm sàng"
+                title="Nhật ký Kiểm toán Lâm sàng"
+                subtitle="Truy vết thao tác nhạy cảm: truy cập bệnh án Break-Glass, hủy ca khám, sửa kết luận chẩn đoán, hoàn tiền viện phí và điều chuyển ca (UC-HADM-13)."
+              >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{!loading ? (
+            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={refreshAll} />
+          ) : null}</View>
+              </StaffBanner>
+              <PillTabs
+              tabs={RANGE_TABS}
+              value={days}
+              onChange={changeRange}
+            />
+            </View>
             {error ? (
               <View style={styles.errorBox}>
                 <ShieldAlert size={18} color={Colors.errorText} />
@@ -394,7 +398,7 @@ export default function ClinicalAuditScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingBottom: 40, paddingTop: 4 },
 
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.errorBg, borderRadius: 10, padding: 12, marginBottom: 12 },

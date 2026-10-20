@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import { Pill as TabList, AlertTriangle as TabAlert, CalendarX as TabExpiry, Plus as BtnAdd } from 'lucide-react';
 import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package, Clock, ChevronUp, ChevronDown } from 'lucide-react';
@@ -345,30 +345,44 @@ export default function DrugManagementScreen({ navigation, route }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab !== 'list' ? `DrugManagement_${activeTab}` : 'DrugManagement'}>
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title={canManageStock ? 'Kho thuốc' : 'Danh mục thuốc'}
-          subtitle={canManageStock
-            ? 'Danh mục thuốc, tồn kho theo lô (FEFO), hạn dùng và tương tác thuốc của bệnh viện.'
-            : 'Tra cứu thuốc đang có, tồn kho và hạn dùng.'}
-          actions={canManageCatalog && !showForm && !isEditing ? (
-            <HeaderAction variant="primary" icon="plus" label="Thêm thuốc" onPress={() => { setActiveTab('list'); setShowForm(true); }} />
-          ) : null}
-          below={
-            <PageTabs
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <PageContainer>
+          <View style={styles.bannerBlock}>
+            <StaffBanner
+              image={RECEPTION_IMAGES.tabletScan}
+              tone="teal"
+              eyebrow="Khoa Dược"
+              title={canManageStock ? 'Kho thuốc' : 'Danh mục thuốc'}
+              subtitle={canManageStock
+                ? 'Danh mục thuốc, tồn kho theo lô (FEFO), hạn dùng và tương tác thuốc của bệnh viện.'
+                : 'Tra cứu thuốc đang có, tồn kho và hạn dùng trước khi kê đơn.'}
+              right={(
+                <BannerStats items={[
+                  { icon: TabList, value: drugs.length, label: 'Loại thuốc' },
+                  { icon: TabAlert, value: alerts.length, label: 'Tồn kho thấp' },
+                  { icon: TabExpiry, value: expiring.length, label: 'Sắp hết hạn' },
+                ]} />
+              )}
+            >
+              {canManageCatalog && !showForm && !isEditing ? (
+                <View style={styles.bannerBtns}>
+                  <TouchableOpacity style={styles.bannerBtn} onPress={() => { setActiveTab('list'); setShowForm(true); }}>
+                    <BtnAdd size={16} color="#064E4A" />
+                    <Text style={styles.bannerBtnText}>Thêm thuốc</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </StaffBanner>
+            <PillTabs
               tabs={[
-                { key: 'list', label: 'Danh mục và tồn kho' },
-                { key: 'alerts', label: 'Cảnh báo tồn kho thấp', count: alerts.length || null },
-                { key: 'expiry', label: 'Hết hạn theo lô', count: expiring.length || null },
+                { key: 'list', label: 'Danh mục và tồn kho', icon: TabList },
+                { key: 'alerts', label: 'Cảnh báo tồn kho thấp', icon: TabAlert, count: alerts.length, warn: true },
+                { key: 'expiry', label: 'Hết hạn theo lô', icon: TabExpiry, count: expiring.length, warn: true },
               ]}
               value={activeTab}
               onChange={setActiveTab}
             />
-          }
-        />
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <PageContainer>
+          </View>
           {activeTab === 'list' ? (
             <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
               {/* Form / Edit Column (Only for hospital_admin) */}
@@ -1070,7 +1084,13 @@ export default function DrugManagementScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#064E4A', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  bannerBlock: { marginBottom: 18 },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },

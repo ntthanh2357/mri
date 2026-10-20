@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, ActivityIndicator, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, ActivityIndicator, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import Layout from '../constants/layout';
 import { get, put } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
-import PageContainer from '../components/layout/PageContainer';
+import { Hourglass, Volume2, UserX, BadgeCheck, RefreshCw } from 'lucide-react';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs, Avatar } from '../components/reception/ReceptionUI';
 import { useQueueDesk } from '../controllers/useQueueDesk';
 import PreScreeningModal from '../components/staff/PreScreeningModal';
 import { RISK_META } from '../utils/preScreening';
@@ -173,6 +172,7 @@ const NurseTriageScreen = ({ navigation }) => {
         <View style={[styles.ticket, st === 'called' && styles.ticketCalled]}>
           <Text style={[styles.ticketText, st === 'called' && { color: '#FFFFFF' }]}>{data.numberOf.get(v._id)}</Text>
         </View>
+        <Avatar name={nameOf(v.patientId)} size={40} />
         <View style={styles.grow}>
           <View style={styles.nameLine}>
             <Text style={styles.name} numberOfLines={1}>{nameOf(v.patientId)}</Text>
@@ -251,6 +251,7 @@ const NurseTriageScreen = ({ navigation }) => {
         <View style={[styles.ticket, st === 'called' && styles.ticketCalled]}>
           <Text style={[styles.ticketText, st === 'called' && { color: '#FFFFFF' }]}>{t.number}</Text>
         </View>
+        <Avatar name={nameOf(t.patientId)} size={40} />
         <View style={styles.grow}>
           <View style={styles.nameLine}>
             <Text style={styles.name} numberOfLines={1}>{nameOf(t.patientId)}</Text>
@@ -296,10 +297,35 @@ const NurseTriageScreen = ({ navigation }) => {
     );
   } else {
     body = (
-      <ScrollView style={styles.scroll}>
-        <PageContainer style={styles.page}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.pageContent}>
+          <StaffBanner
+            image={RECEPTION_IMAGES.waiting}
+            tone="teal"
+            eyebrow="Phòng đo sinh hiệu"
+            title="Tiếp nhận & gọi đo sinh hiệu"
+            subtitle="Gọi lần lượt bệnh nhân lễ tân đã tiếp nhận (và số lấy online) vào phòng đo sinh hiệu ban đầu."
+            right={(
+              <BannerStats items={[
+                { icon: Hourglass, value: lists.pending.length, label: 'Chờ gọi' },
+                { icon: Volume2, value: lists.called.length, label: 'Đang gọi' },
+                { icon: UserX, value: lists.missed.length, label: 'Vắng mặt' },
+                { icon: BadgeCheck, value: lists.measured.length, label: 'Đã đo hôm nay' },
+              ]} />
+            )}
+          >
+            <Pressable onPress={() => load()} style={({ hovered }) => [styles.bannerBtn, hovered && { opacity: 0.9 }]} accessibilityRole="button">
+              <RefreshCw size={15} color="#064E4A" />
+              <Text style={styles.bannerBtnText}>Làm mới danh sách</Text>
+            </Pressable>
+          </StaffBanner>
+
           {/* Bảng gọi duy nhất */}
           <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroBadge}><Volume2 size={14} color="#6FDDB2" /><Text style={styles.heroBadgeText}>BẢNG GỌI ĐO SINH HIỆU</Text></View>
+              <View style={styles.live}><View style={styles.liveDot} /><Text style={styles.liveText}>TRỰC TIẾP</Text></View>
+            </View>
+            <View style={styles.heroBody}>
             <View style={styles.grow}>
               <Text style={styles.heroLabel}>Số đang gọi</Text>
               <Text style={styles.heroNumber}>{nowCalling ? nowCalling.number : '---'}</Text>
@@ -321,13 +347,7 @@ const NurseTriageScreen = ({ navigation }) => {
                 <Text style={styles.callBtnText}>Gọi số tiếp theo</Text>
               </Pressable>
             </View>
-          </View>
-
-          <View style={[styles.stats, !wide && styles.statsWrap]}>
-            <Stat label="Chờ gọi" value={lists.pending.length} />
-            <Stat label="Đang gọi" value={lists.called.length} tone={Colors.successText} />
-            <Stat label="Vắng mặt" value={lists.missed.length} tone={Colors.warningText} />
-            <Stat label="Đã đo hôm nay" value={lists.measured.length} tone={Colors.infoText} />
+            </View>
           </View>
 
           <View style={[styles.roomRow, { zIndex: 20 }]}>
@@ -370,12 +390,13 @@ const NurseTriageScreen = ({ navigation }) => {
 
           <View style={styles.panel}>
             <View style={styles.panelHead}>
-              <PageTabs
+              <PillTabs
+                overlap={false}
                 tabs={[
-                  { key: 'pending', label: 'Chờ gọi', count: lists.pending.length || null },
-                  { key: 'called', label: 'Đang gọi', count: lists.called.length || null },
-                  { key: 'missed', label: 'Vắng mặt', count: lists.missed.length || null },
-                  { key: 'measured', label: 'Đã đo', count: lists.measured.length || null },
+                  { key: 'pending', label: 'Chờ gọi', icon: Hourglass, count: lists.pending.length, warn: true },
+                  { key: 'called', label: 'Đang gọi', icon: Volume2, count: lists.called.length },
+                  { key: 'missed', label: 'Vắng mặt', icon: UserX, count: lists.missed.length },
+                  { key: 'measured', label: 'Đã đo', icon: BadgeCheck, count: lists.measured.length },
                 ]}
                 value={tab}
                 onChange={setTab}
@@ -400,7 +421,6 @@ const NurseTriageScreen = ({ navigation }) => {
               </View>
             ) : shown.map(renderEntry)}
           </View>
-        </PageContainer>
       </ScrollView>
     );
   }
@@ -408,12 +428,6 @@ const NurseTriageScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="NurseTriage">
       <View style={styles.container}>
-        <PageHeader
-          bar
-          title="Tiếp nhận"
-          subtitle="Xem bệnh nhân đang chờ tại phòng tiếp đón và gọi vào phòng đo sinh hiệu ban đầu."
-          actions={isNurse ? <HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => load()} /> : null}
-        />
         {body}
         <PreScreeningModal
           visible={Boolean(screenVisit)}
@@ -427,22 +441,31 @@ const NurseTriageScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { flex: 1 },
-  page: { paddingTop: 20, paddingBottom: 40, gap: 16 },
+  pageContent: { padding: 28, paddingBottom: 56, maxWidth: 1320, width: '100%', alignSelf: 'center', gap: 20 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, marginTop: 18 },
+  bannerBtnText: { color: '#064E4A', fontWeight: '800', fontSize: 13 },
   grow: { flex: 1, minWidth: 0 },
   muted: { fontSize: 13, color: Colors.slateMuted, textAlign: 'center' },
   disabled: { opacity: 0.5 },
   state: { alignItems: 'center', gap: 10, paddingVertical: 40, paddingHorizontal: 16 },
   stateTitle: { fontSize: 18, fontWeight: '700', color: Colors.brandNavy },
 
-  hero: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 18, padding: 20, borderRadius: 14, backgroundColor: Colors.brandNavy },
-  heroLabel: { fontSize: 13, fontWeight: '600', color: Colors.brandMint },
-  heroNumber: { fontSize: 48, lineHeight: 56, fontWeight: '800', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+  hero: { padding: 22, borderRadius: 22, backgroundColor: '#0A1A33', gap: 14, borderWidth: 1, borderColor: '#13305A', ...(Platform.OS === 'web' ? { boxShadow: '0 24px 50px -28px rgba(10,26,51,0.8)' } : {}) },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 1.6 },
+  live: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(52,211,153,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#34D399' },
+  liveText: { color: '#6EE7B7', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  heroBody: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 18, backgroundColor: '#0F2445', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#1B3A66' },
+  heroLabel: { fontSize: 12, fontWeight: '800', color: '#94A3B8', letterSpacing: 1.4, textTransform: 'uppercase' },
+  heroNumber: { fontSize: 64, lineHeight: 72, fontWeight: '900', color: '#34D399', fontVariant: ['tabular-nums'], ...(Platform.OS === 'web' ? { textShadow: '0 0 24px rgba(52,211,153,0.55)' } : {}) },
   heroSub: { fontSize: 14, color: Colors.onDarkMuted },
   heroRight: { gap: 8, alignItems: 'flex-start' },
   heroHint: { fontSize: 13, color: Colors.onDarkMuted },
-  callBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 46, paddingHorizontal: 18, borderRadius: 10, backgroundColor: Colors.brandMint },
+  callBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 22, borderRadius: 999, backgroundColor: Colors.brandMint },
   callBtnHover: { backgroundColor: '#FFFFFF' },
   callBtnText: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
 
@@ -466,15 +489,15 @@ const styles = StyleSheet.create({
   msg: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10 },
   msgText: { flex: 1, fontSize: 14, fontWeight: '600' },
 
-  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, overflow: 'hidden' },
-  panelHead: { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingTop: 4, paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.borderStrong, borderRadius: 8, backgroundColor: Colors.background },
+  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 20, overflow: 'hidden', ...(Platform.OS === 'web' ? { boxShadow: '0 10px 30px -18px rgba(11,42,91,0.35)' } : {}) },
+  panelHead: { borderBottomWidth: 1, borderBottomColor: Colors.border, padding: 14, gap: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC' },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, minWidth: 260, flexGrow: 1, maxWidth: 420, paddingHorizontal: 14, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 999, backgroundColor: '#FFFFFF' },
   searchInput: { flex: 1, fontSize: 14, color: Colors.slateDark, outlineStyle: 'none' },
 
-  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 14, paddingVertical: 16, paddingHorizontal: 18 },
   rowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
-  rowUrgent: { backgroundColor: Colors.errorBg },
-  ticket: { width: 56, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.brandGreenSoft, alignItems: 'center' },
+  rowUrgent: { backgroundColor: '#FFF5F5', borderLeftWidth: 4, borderLeftColor: '#DC2626' },
+  ticket: { width: 58, paddingVertical: 8, borderRadius: 12, backgroundColor: '#E7F6F0', alignItems: 'center' },
   ticketCalled: { backgroundColor: Colors.brandGreen },
   ticketText: { fontSize: 16, fontWeight: '800', color: Colors.brandGreen, fontVariant: ['tabular-nums'] },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
@@ -492,7 +515,7 @@ const styles = StyleSheet.create({
   stageTextOk: { color: Colors.successText },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
 
-  btn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 8 },
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 999 },
   btnPrimary: { backgroundColor: Colors.brandGreen },
   btnPrimaryHover: { backgroundColor: Colors.brandGreenPressed },
   btnPrimaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },

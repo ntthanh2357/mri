@@ -4,6 +4,7 @@ import { PeerReview } from "../models/peerReview.model.js";
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { sendFcmNotification } from "../services/fcm.service.js";
+import { runPayOSReconcileJob } from "../modules/billing/payosReconcile.job.js";
 
 /**
  * A.6 — Scheduled Job Nhắc lịch chụp MRI 24h trước
@@ -115,6 +116,10 @@ export const startBackgroundJobs = () => {
   setInterval(() => {
     runMriReminderJob();
   }, 60 * 60 * 1000);
+
+  // Đối soát VietQR PayOS mỗi 5 phút (tiền về khi màn QR đã đóng / webhook không tới) + 1 lần sau khi khởi động
+  setTimeout(runPayOSReconcileJob, 30 * 1000);
+  setInterval(runPayOSReconcileJob, 5 * 60 * 1000);
 
   // Chạy Peer Review QA sampling mỗi 24 giờ
   setInterval(() => {

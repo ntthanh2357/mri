@@ -3,7 +3,7 @@ import { StyleSheet, Platform, Dimensions } from 'react-native';
 export default StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F7FC',
     height: Platform.OS === 'web' ? '100vh' : '100%',
   },
   scrollContainer: {

@@ -779,7 +779,7 @@ const DocumentFormScreen = ({ route, navigation }) => {
 /* ─── Styles ─── */
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   errContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errText: { color: '#DC2626', fontSize: 14 },
   header: {

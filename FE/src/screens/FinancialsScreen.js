@@ -19,6 +19,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { get, post, put } from '../services/api.service';
 import styles from './FinancialsScreen.styles';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageContainer from '../components/layout/PageContainer';
 import PageTabs from '../components/layout/PageTabs';
 import Config from '../constants/config';
@@ -524,24 +525,31 @@ const FinancialsScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout
       navigation={navigation}
-      activeRoute="ClinicDashboard"
+      activeRoute="Financials"
     >
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Báo cáo tài chính"
-          subtitle="Doanh thu, giao dịch và báo cáo thuốc của bệnh viện."
-          actions={
-            <HeaderAction
+        {loading && <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginVertical: 30 }} />}
+
+        <ScrollView>
+          <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.payment}
+                tone="amber"
+                eyebrow="Tài chính"
+                title="Báo cáo tài chính"
+                subtitle="Doanh thu, giao dịch và báo cáo thuốc của bệnh viện."
+              >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{<HeaderAction
               variant="primary"
               icon="file-text"
               label={exportingBhyt ? 'Đang xuất…' : 'Xuất BHYT XML 4210'}
               onPress={handleExportBhytXml}
               disabled={exportingBhyt}
-            />
-          }
-          below={
-            <PageTabs
+            />}</View>
+              </StaffBanner>
+              <PillTabs
               value={activeTab}
               onChange={setActiveTab}
               tabs={[
@@ -551,13 +559,7 @@ const FinancialsScreen = ({ navigation }) => {
                 { key: 'drugs', label: 'Báo cáo thuốc' },
               ]}
             />
-          }
-        />
-
-        {loading && <ActivityIndicator size="large" color={Colors.brandGreen} style={{ marginVertical: 30 }} />}
-
-        <ScrollView>
-          <PageContainer>
+            </View>
           {/* Cảnh báo phạm vi: tài khoản chưa gán bệnh viện → dữ liệu tài chính theo bệnh viện không khả dụng */}
           {noHospitalScope && (
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 12, padding: 14, marginBottom: 16 }}>

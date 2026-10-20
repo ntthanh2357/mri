@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
-import { RefreshCw, UserPlus, Hourglass, Stethoscope, Siren, Volume2, Inbox, Timer } from 'lucide-react';
-import { get } from '../../services/api.service';
+import { RefreshCw, UserPlus, Megaphone, Hourglass, Stethoscope, Siren, Volume2, Inbox, Timer, ScanLine, CalendarClock } from 'lucide-react';
+import { get, post } from '../../services/api.service';
+import { useAppDialog } from '../ui/AppDialog';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal } from '../ui/Motion';
 import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, personName } from './ReceptionUI';
@@ -14,15 +15,21 @@ const minutesSince = (date, now) => Math.max(0, Math.round((now - new Date(date)
 const formatWait = (m) => (m >= 60 ? `${Math.floor(m / 60)}g ${m % 60}p` : `${m} phút`);
 const pad = (n) => String(n).padStart(3, '0');
 const idOf = (ref) => ref?._id || ref;
+const fmtTime = (d) => (d ? new Date(d).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—');
+const CLOSED = ['hoàn tất', 'đã đóng', 'đã hủy'];
 
 // Màn hình "gọi số" dành cho lễ tân: mỗi bác sĩ một làn, kèm danh sách chờ theo số thứ tự
-const ReceptionQueueBoard = ({ navigation }) => {
+// role: 'receptionist' (mặc định) | 'nurse' — chỉ khác nút chính trên banner
+const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
+  const isNurse = role === 'nurse';
   const { width } = useWindowDimensions();
   const isWide = width > 1180;
   const [loading, setLoading] = useState(true);
   const [visits, setVisits] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [now, setNow] = useState(Date.now());
+  const [scheduling, setScheduling] = useState(null);
+  const { dialog, confirm, notify } = useAppDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,7 +55,9 @@ const ReceptionQueueBoard = ({ navigation }) => {
   const data = useMemo(() => {
     // Số thứ tự theo giờ tiếp nhận trong ngày
     const ordered = [...visits].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    const numberOf = new Map(ordered.map((v, i) => [v._id, pad(i + 1)]));
+    // Ưu tiên số thứ tự hệ thống cấp khi tạo lượt khám; dữ liệu cũ thì đánh số theo giờ tiếp nhận
+    // Lượt cũ (dữ liệu trước khi có số phiếu) không có số → hiện "—" để không trùng số của hôm nay
+    const numberOf = new Map(ordered.map((v) => [v._id, v.queueNumber ? (v.priority === 'khẩn cấp' ? 'CC-' : '') + pad(v.queueNumber) : '—']));
     const waiting = ordered
       .filter((v) => WAITING.includes(v.status))
       .sort((a, b) => (b.priority === 'khẩn cấp') - (a.priority === 'khẩn cấp') || new Date(a.createdAt) - new Date(b.createdAt));
@@ -59,11 +68,49 @@ const ReceptionQueueBoard = ({ navigation }) => {
       next: waiting.filter((v) => idOf(v.doctorId) === d._id).slice(0, 3),
       total: waiting.filter((v) => idOf(v.doctorId) === d._id).length,
     }));
-    const avgWait = waiting.length
-      ? Math.round(waiting.reduce((sum, v) => sum + minutesSince(v.createdAt, now), 0) / waiting.length)
+    // Thời gian chờ trung bình chỉ tính lượt trong ngày (lượt từ ngày trước làm sai lệch số liệu)
+    const waitingToday = waiting.filter((v) => minutesSince(v.createdAt, now) < 1440);
+    const avgWait = waitingToday.length
+      ? Math.round(waitingToday.reduce((sum, v) => sum + minutesSince(v.createdAt, now), 0) / waitingToday.length)
       : 0;
-    return { numberOf, waiting, inExam, lanes, avgWait };
+    const emergencies = ordered.filter((v) => v.priority === 'khẩn cấp' && !CLOSED.includes(v.status));
+    return { numberOf, waiting, inExam, lanes, avgWait, emergencies };
   }, [visits, doctors, now]);
+
+  // UC-REC-04: xếp lịch chụp MRI khẩn cho ca cấp cứu (tự chèn slot trống hoặc dời ca thường)
+  const scheduleEmergencyMri = async (v) => {
+    setScheduling(v._id);
+    try {
+      const res = await post('/api/v1/mri-rooms/schedule/emergency-override', { visitId: v._id });
+      const d = res?.data || {};
+      if (d.action === 'requires_reschedule_confirmation') {
+        const draft = d.draftNotification || {};
+        const ok = await confirm({
+          title: 'Phòng máy MRI đã kín lịch hôm nay',
+          message: `Nhường ca chụp của ${draft.patientName} lúc ${fmtTime(draft.originalStartTime)} (${draft.roomName}) cho ca cấp cứu ${personName(v.patientId)}?`,
+          note: `Lịch mới đề xuất cho ${draft.patientName}: ${draft.suggestedNewStartTime ? `${fmtTime(draft.suggestedNewStartTime)} · ${draft.suggestedRoomName}` : 'chưa tìm được, lễ tân sẽ liên hệ'}. Nội dung thông báo: "${draft.message}"`,
+          confirmText: 'Dời lịch & gửi thông báo',
+          type: 'info',
+        });
+        if (!ok) return;
+        const r2 = await post('/api/v1/mri-rooms/schedule/confirm-reschedule', { slotId: draft.originalSlotId, emergencyVisitId: v._id });
+        const ns = r2?.data?.newSlot;
+        notify(
+          'Đã xếp lịch chụp cấp cứu',
+          `Ca cấp cứu chụp lúc ${fmtTime(r2?.data?.slot?.startTime)}. ${draft.patientName} được dời sang ${ns ? fmtTime(ns.startTime) : 'thời điểm khác (cần liên hệ)'}${r2?.data?.emailSent ? ', đã gửi email thông báo' : ', đã gửi thông báo trong ứng dụng'}.`,
+        );
+      } else if (d.action === 'already_booked') {
+        notify('Thông báo', `Ca này đã có lịch chụp lúc ${fmtTime(d.slot?.startTime)}${d.slot?.roomId?.name ? ` tại ${d.slot.roomId.name}` : ''}.`, 'info');
+      } else {
+        notify('Đã xếp lịch chụp cấp cứu', d.message || res?.message || 'Đã chèn ca cấp cứu vào khung giờ trống.');
+      }
+      await load();
+    } catch (err) {
+      notify('Không xếp được lịch chụp', err.message || 'Xếp lịch MRI cấp cứu thất bại.', 'error');
+    } finally {
+      setScheduling(null);
+    }
+  };
 
   const openVisit = (v) => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } });
 
@@ -96,9 +143,13 @@ const ReceptionQueueBoard = ({ navigation }) => {
         )}
       >
         <View style={s.bannerActions}>
-          <TouchableOpacity style={s.bannerBtn} onPress={() => navigation.navigate('NurseReception', { tab: 'createVisit' })} dataSet={{ hover: 'glow' }}>
-            <UserPlus size={16} color="#082F49" />
-            <Text style={s.bannerBtnText}>Tiếp nhận bệnh nhân</Text>
+          <TouchableOpacity
+            style={s.bannerBtn}
+            onPress={() => (isNurse ? navigation.navigate('NurseTriage') : navigation.navigate('NurseReception', { tab: 'createVisit' }))}
+            dataSet={{ hover: 'glow' }}
+          >
+            {isNurse ? <Megaphone size={16} color="#082F49" /> : <UserPlus size={16} color="#082F49" />}
+            <Text style={s.bannerBtnText}>{isNurse ? 'Gọi bệnh nhân đo sinh hiệu' : 'Tiếp nhận bệnh nhân'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.bannerGhost} onPress={load}>
             <RefreshCw size={15} color="#FFFFFF" />
@@ -147,6 +198,46 @@ const ReceptionQueueBoard = ({ navigation }) => {
             </View>
           </Reveal>
 
+          {/* UC-REC-04: ca cấp cứu cần chụp MRI */}
+          {data.emergencies.length > 0 && (
+            <Reveal delay={60} style={[s.card, s.emergencyCard]}>
+              <View style={s.cardHead}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={s.emergencyIcon}><Siren size={18} color="#FFFFFF" /></View>
+                  <View>
+                    <Text style={s.cardTitle}>Ca cấp cứu cần chụp MRI</Text>
+                    <Text style={s.cardSub}>Hệ thống chèn vào khung giờ trống gần nhất; nếu kín lịch sẽ đề xuất dời một ca thường</Text>
+                  </View>
+                </View>
+              </View>
+              {data.emergencies.map((v) => {
+                const booked = v.status === 'chờ chụp';
+                return (
+                  <View key={v._id} style={s.row}>
+                    <View style={[s.ticketNo, { backgroundColor: '#DC2626' }]}>
+                      <Text style={[s.ticketNoText, { color: '#FFFFFF', fontSize: 13 }]}>{data.numberOf.get(v._id)}</Text>
+                    </View>
+                    <Avatar name={personName(v.patientId)} size={38} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowName} numberOfLines={1}>{personName(v.patientId)}</Text>
+                      <Text style={s.rowMeta} numberOfLines={1}>BS. {personName(v.doctorId)} · {v.reason || 'Cấp cứu'}</Text>
+                    </View>
+                    <ClinicalStatusBadge status={v.status} size="sm" />
+                    <TouchableOpacity
+                      style={[s.mriBtn, booked && s.mriBtnDone, scheduling === v._id && { opacity: 0.6 }]}
+                      onPress={() => scheduleEmergencyMri(v)}
+                      disabled={!!scheduling}
+                      dataSet={{ hover: 'glow' }}
+                    >
+                      {scheduling === v._id ? <ActivityIndicator size="small" color="#FFFFFF" /> : booked ? <CalendarClock size={14} color="#0369A1" /> : <ScanLine size={14} color="#FFFFFF" />}
+                      <Text style={[s.mriBtnText, booked && { color: '#0369A1' }]}>{booked ? 'Xem lịch chụp' : 'Xếp lịch chụp MRI'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </Reveal>
+          )}
+
           {/* Danh sách chờ */}
           <Reveal delay={120} style={s.card}>
             <View style={s.cardHead}>
@@ -182,7 +273,7 @@ const ReceptionQueueBoard = ({ navigation }) => {
                   )}
                   <View style={[s.wait, s[`wait_${level}`]]}>
                     <Timer size={12} color={level === 'high' ? '#DC2626' : level === 'mid' ? '#B45309' : '#0F9D6B'} />
-                    <Text style={[s.waitText, { color: level === 'high' ? '#DC2626' : level === 'mid' ? '#B45309' : '#0F9D6B' }]}>{formatWait(wait)}</Text>
+                    <Text style={[s.waitText, { color: level === 'high' ? '#DC2626' : level === 'mid' ? '#B45309' : '#0F9D6B' }]}>{wait >= 1440 ? new Date(v.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : formatWait(wait)}</Text>
                   </View>
                   <ClinicalStatusBadge status={v.status} size="sm" />
                 </TouchableOpacity>
@@ -191,6 +282,7 @@ const ReceptionQueueBoard = ({ navigation }) => {
           </Reveal>
         </>
       )}
+      {dialog}
     </ScrollView>
   );
 };
@@ -198,7 +290,7 @@ const ReceptionQueueBoard = ({ navigation }) => {
 const shadow = isWeb ? { boxShadow: '0 12px 30px -20px rgba(8,47,73,0.4)' } : { elevation: 2 };
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#F3F8FB' },
+  page: { flex: 1, backgroundColor: '#F3F7FC' },
   pageContent: { padding: 28, paddingBottom: 56, maxWidth: 1360, width: '100%', alignSelf: 'center', gap: 22 },
 
   bannerStats: { flexDirection: 'row', gap: 10 },
@@ -229,7 +321,7 @@ const s = StyleSheet.create({
   laneDivider: { height: 1, backgroundColor: '#12324F', marginVertical: 14 },
   laneEmpty: { color: '#475569', fontSize: 12, marginTop: 6 },
   nextRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  nextNumber: { color: '#FBBF24', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'], width: 44 },
+  nextNumber: { color: '#FBBF24', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'], minWidth: 44 },
   nextName: { color: '#E2E8F0', fontSize: 13, flex: 1 },
 
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', ...shadow },
@@ -250,6 +342,11 @@ const s = StyleSheet.create({
   wait_mid: { backgroundColor: '#FEF3C7' },
   wait_high: { backgroundColor: '#FEE2E2' },
   waitText: { fontSize: 11, fontWeight: '800' },
+  emergencyCard: { borderColor: '#FCA5A5', backgroundColor: '#FFFBFB' },
+  emergencyIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center' },
+  mriBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999 },
+  mriBtnDone: { backgroundColor: '#E0F2FE' },
+  mriBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
 });
 
 export default ReceptionQueueBoard;

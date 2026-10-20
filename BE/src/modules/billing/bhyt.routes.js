@@ -6,6 +6,8 @@ import {
   calculateCopay,
   applyBhytToInvoice,
   exportBhytClaims,
+  getActiveBhyt,
+  getActiveCards,
 } from "./bhyt.controller.js";
 
 const router = Router();
@@ -23,10 +25,14 @@ router.post("/export-claims", protect, exportBhytClaims);
 // R.2 — Áp dụng BHYT vào hóa đơn
 router.put("/apply-to-invoice/:invoiceId", protect, applyBhytToInvoice);
 
+// UC-REC-02 — Thẻ đang dùng
+router.get("/active-cards", protect, getActiveCards);
+router.get("/:patientId/active", protect, getActiveBhyt);
+
 // R.1 — Lưu thông tin thẻ BHYT (route tham số — đặt sau cùng)
 router.post("/:patientId", protect, saveBhytInfo);
 
-// R.1 — Xem thông tin BHYT (route tham số — đặt sau cùng)
+// R.1 — Xem thông tin BHYT (toàn bộ lịch sử thẻ)
 router.get("/:patientId", protect, getBhytInfo);
 
 export default router;

@@ -15,9 +15,25 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
-import PageContainer from '../components/layout/PageContainer';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import {
+  HeartPulse as TabVitals, FolderOpen as TabRecords, NotebookPen as TabCare, Users as TabConsult, FileSignature as TabConsent,
+  Pill as TabRx, History as TabHistory, ScanLine as TabImaging, BedDouble as TabBeds, ArrowRightLeft as TabTransfer, FileClock as TabUnsigned,
+} from 'lucide-react';
+
+// Banner đầu trang Bệnh án điện tử: ảnh, tông màu & mô tả đổi theo tab (cùng phong cách các trang lễ tân / điều dưỡng)
+const EMR_TAB_META = {
+  nurseQueue: { icon: TabVitals, image: 'tabletScan', tone: 'teal', title: 'Đo sinh hiệu', subtitle: 'Bệnh nhân chờ đo sinh hiệu ban đầu trong ngày.' },
+  records: { icon: TabRecords, image: 'doctorDesk', tone: 'navy', title: 'Hồ sơ bệnh án', subtitle: 'Tra cứu, ký số và lập phụ lục hồ sơ bệnh án điện tử theo TT 46/2018.' },
+  care: { icon: TabCare, image: 'tabletScan', tone: 'plum', title: 'Phiếu chăm sóc điều dưỡng', subtitle: 'Theo dõi người bệnh nội trú: sinh hiệu, tri giác Glasgow và diễn biến trong ca.' },
+  consult: { icon: TabConsult, image: 'mriDiscuss', tone: 'indigo', title: 'Hội chẩn', subtitle: 'Biên bản hội chẩn đa chuyên khoa cho ca bệnh khó.' },
+  consent: { icon: TabConsent, image: 'doctorDesk', tone: 'ocean', title: 'Giấy cam đoan', subtitle: 'Cam đoan phẫu thuật, thủ thuật và tiêm thuốc cản quang.' },
+  prescriptions: { icon: TabRx, image: 'doctorDesk', tone: 'teal', title: 'Kê đơn thuốc', subtitle: 'Đơn thuốc điện tử có kiểm tra tương tác & dị ứng.' },
+  versions: { icon: TabHistory, image: 'schedule', tone: 'amber', title: 'Lịch sử sửa đổi', subtitle: 'Mọi lần chỉnh sửa bệnh án đều được ghi vết để kiểm toán.' },
+  imaging: { icon: TabImaging, image: 'mriFilms', tone: 'indigo', title: 'Phim MRI & CT', subtitle: 'Kết quả chẩn đoán hình ảnh và phân tích AI của người bệnh.' },
+  beds: { icon: TabBeds, image: 'lobby', tone: 'ocean', title: 'Sơ đồ giường bệnh', subtitle: 'Phân bổ buồng giường nội trú Khoa Ung thư Não theo thời gian thực.' },
+  transfers: { icon: TabTransfer, image: 'corridor', tone: 'navy', title: 'Hồ sơ chuyển viện', subtitle: 'Đóng gói hồ sơ chuyển viện và gửi email cho người bệnh.' },
+};
 import Config from '../constants/config';
 import '../tailwind-built.css';
 import { apiRequest } from '../utils/apiClient.js';
@@ -236,6 +252,12 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     }
   };
 
+  // Số liệu banner (hồ sơ / nội trú / chưa ký) — tải nhẹ 1 lần, không ảnh hưởng nội dung tab đang mở
+  const [bannerRecords, setBannerRecords] = useState([]);
+  useEffect(() => {
+    get('/emr/records').then((res) => { if (Array.isArray(res?.data)) setBannerRecords(res.data); }).catch(() => {});
+  }, []);
+
   // Load records when tab changes
   useEffect(() => {
     if (activeTab === 'records') {
@@ -340,10 +362,27 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     }
   };
 
+  // SĐT / CCCD được lưu dạng băm nên không lọc tại chỗ được → tra trên máy chủ để lấy mã y tế khớp
+  const [serverMatchIds, setServerMatchIds] = useState([]);
+  useEffect(() => {
+    const digits = searchQuery.replace(/[\s.+-]/g, '');
+    if (!/^\d{2,12}$/.test(digits)) { setServerMatchIds([]); return undefined; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await get(`/api/patients?all=true&search=${encodeURIComponent(searchQuery.trim())}`);
+        setServerMatchIds((res?.data || []).map((p) => p.profile?.medicalId).filter(Boolean));
+      } catch {
+        setServerMatchIds([]);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Filter records for search
   const filteredRecords = records.filter(r =>
     (r.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (r.patientId || '').toLowerCase().includes(searchQuery.toLowerCase())
+    (r.patientId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    serverMatchIds.includes(r.patientId)
   );
 
   const isDoctorLike = localUser?.role === 'doctor' || localUser?.role === 'admin';
@@ -360,22 +399,41 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     { key: 'transfers', label: 'Chuyển viện' },
   ].filter(Boolean);
 
+  const tabMeta = EMR_TAB_META[activeTab] || EMR_TAB_META.records;
+  const statRecords = records.length ? records : bannerRecords;
+  const inpatientCount = statRecords.filter((r) => r.admissionType === 'Nội trú').length;
+  const unsignedCount = statRecords.filter((r) => r.signStatus === 'Chưa duyệt').length;
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Bệnh án điện tử"
-          subtitle="Hồ sơ nội trú, chăm sóc, hội chẩn và điều phối giường bệnh."
-          below={<PageTabs tabs={emrTabs} value={activeTab} onChange={setActiveTab} />}
-        />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.emrPage}>
+          <StaffBanner
+            compact
+            image={RECEPTION_IMAGES[tabMeta.image]}
+            tone={tabMeta.tone}
+            eyebrow="Bệnh án điện tử"
+            title={tabMeta.title}
+            subtitle={tabMeta.subtitle}
+            right={(
+              <BannerStats items={[
+                { icon: TabRecords, value: statRecords.length, label: 'Hồ sơ' },
+                { icon: TabBeds, value: inpatientCount, label: 'Nội trú' },
+                { icon: TabUnsigned, value: unsignedCount, label: 'Chưa ký duyệt' },
+              ]} />
+            )}
+          />
+          <PillTabs
+            tabs={emrTabs.map((t) => ({ ...t, icon: EMR_TAB_META[t.key]?.icon }))}
+            value={activeTab}
+            onChange={setActiveTab}
+          />
 
-        <View style={{ flex: 1 }}>
           {/* Main Content */}
           <View style={styles.mainContent}>
             {(selectedRecord && localUser?.role !== 'nurse') || (nurseSelectedPatient && localUser?.role === 'nurse') ? (
               <View style={styles.contextBar}>
-                <PageContainer style={styles.contextInner}>
+                <View style={styles.contextInner}>
                   <Text style={styles.contextText} numberOfLines={1}>
                     {localUser?.role === 'nurse' ? 'Bệnh nhân: ' : 'Đang xem bệnh án: '}
                     <Text style={styles.contextName}>{localUser?.role === 'nurse' ? nurseSelectedPatient.patientName : selectedRecord.patientName}</Text>
@@ -386,7 +444,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   >
                     <Text style={styles.contextAction}>{localUser?.role === 'nurse' ? 'Quay lại danh sách' : 'Bỏ chọn'}</Text>
                   </TouchableOpacity>
-                </PageContainer>
+                </View>
               </View>
             ) : null}
 
@@ -396,8 +454,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
               </View>
             ) : (
-              <ScrollView contentContainerStyle={styles.scrollContainer}>
-                <PageContainer>
+              <View style={styles.scrollContainer}>
                 {activeTab === 'nurseQueue' && (
                   <NurseQueueTab navigation={navigation} />
                 )}
@@ -495,11 +552,10 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 {activeTab === 'transfers' && (
                   <InterHospitalTransferView currentUser={localUser} />
                 )}
-                </PageContainer>
-              </ScrollView>
+              </View>
             )}
           </View>
-        </View>
+        </ScrollView>
 
         <EMRModal
           isVisible={isModalVisible}
@@ -1363,7 +1419,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
         <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Tìm kiếm theo tên bệnh nhân, mã hồ sơ..."
+          placeholder="Tìm theo tên, mã bệnh nhân (BN…), SĐT hoặc CCCD..."
           placeholderTextColor={Colors.secondary}
           value={searchQuery}
           onChangeText={onSearch}
@@ -2643,15 +2699,16 @@ const FormField = ({ label, placeholder, keyboardType, multiline, value, onChang
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F7FC',
   },
+  emrPage: { padding: 28, paddingBottom: 56, maxWidth: 1360, width: '100%', alignSelf: 'center', gap: 18 },
   mainContent: { flex: 1 },
-  contextBar: { backgroundColor: Colors.brandGreenSoft, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  contextInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10 },
+  contextBar: { backgroundColor: Colors.brandGreenSoft, borderWidth: 1, borderColor: '#BFE5D6', borderRadius: 14, marginBottom: 14 },
+  contextInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, paddingHorizontal: 16 },
   contextText: { flex: 1, fontSize: 14, color: Colors.slateMuted },
   contextName: { fontWeight: '700', color: Colors.brandNavy },
   contextAction: { fontSize: 14, fontWeight: '600', color: Colors.brandGreen },
-  scrollContainer: { paddingTop: 20, paddingBottom: 32 },
+  scrollContainer: { paddingTop: 4 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

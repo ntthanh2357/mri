@@ -8,11 +8,127 @@ import { TransferForm } from "../models/transferForm.model.js";
 import { Drug } from "../models/drug.model.js";
 import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { hasRealEmail } from "../services/email.service.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
+import { scheduleFor, getReminderTimes } from "../services/medicineReminder.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { assessPrescriptionSafety } from "../modules/pharmacy/services/drugSafety.service.js";
-import { scheduleFor, getReminderTimes } from "../services/medicineReminder.service.js";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+
+// ── UC-REC-01: băm định danh (cùng salt với auth.controller để khớp dữ liệu cũ) ──
+const hmac = (salt, value) => crypto.createHmac("sha256", salt).update(String(value)).digest("hex");
+const hashPhone = (phone) => hmac(process.env.PHONE_SALT || "neuroscan_phone_salt", phone);
+const hashCccd = (cccd) => hmac(process.env.CCCD_SALT || "neuroscan_cccd_salt", cccd);
+// SĐT có thể được lưu dạng 0xxx hoặc +84xxx → thử cả hai
+const phoneHashVariants = (raw) => {
+  const p = String(raw).replace(/[\s.-]/g, "");
+  const local = p.startsWith("+84") ? "0" + p.slice(3) : p.startsWith("84") && p.length >= 11 ? "0" + p.slice(2) : p;
+  const plain = [...new Set([p, local, "+84" + local.slice(1), "84" + local.slice(1)])];
+  // Tài khoản đăng ký qua app lưu SĐT dạng băm; dữ liệu cũ / seed lưu dạng thường → so khớp cả hai
+  return [...plain, ...plain.map(hashPhone)];
+};
+
+// @desc    UC-REC-01 — Tạo hồ sơ bệnh nhân mới tại quầy tiếp đón (bệnh nhân đến khám lần đầu)
+// @route   POST /api/patients
+// @access  Private (Receptionist, Nurse, Hospital Admin, Admin)
+export const createPatientAtDesk = async (req, res) => {
+  try {
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
+
+    // Ca cấp cứu: bệnh nhân có thể bất tỉnh / chưa rõ danh tính → cho tạo hồ sơ tạm, bổ sung giấy tờ sau
+    const emergency = req.body.emergency === true;
+    const name = String(req.body.name || "").trim() || (emergency ? `Bệnh nhân cấp cứu chưa rõ danh tính (${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })})` : "");
+    const phone = String(req.body.phone || "").replace(/[\s.-]/g, "");
+    const cccd = String(req.body.cccd || "").replace(/\s/g, "");
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const { gender = "", address = "" } = req.body;
+    const birthYear = req.body.birthYear ? Number(req.body.birthYear) : null;
+
+    if (!name) return errorResponse(res, "Vui lòng nhập họ tên bệnh nhân.", 400);
+    if (!emergency && !phone && !cccd) return errorResponse(res, "Vui lòng nhập ít nhất số điện thoại hoặc số CCCD để định danh bệnh nhân.", 400);
+    // UC-REC-04: email bắt buộc để gửi thông báo lượt khám / dời lịch chụp / hoàn tiền (ca cấp cứu được bổ sung sau)
+    if (!emergency && !email) return errorResponse(res, "Vui lòng nhập email của bệnh nhân để nhận thông báo lịch khám, dời lịch và hoàn tiền.", 400);
+    if (email && !hasRealEmail(email)) return errorResponse(res, "Email không hợp lệ.", 400);
+    if (phone && !/^(0|\+84)\d{9,10}$/.test(phone)) return errorResponse(res, "Số điện thoại không hợp lệ.", 400);
+    if (cccd && !/^\d{12}$/.test(cccd)) return errorResponse(res, "Số CCCD phải gồm đúng 12 chữ số.", 400);
+    if (birthYear && (birthYear < 1900 || birthYear > new Date().getFullYear())) return errorResponse(res, "Năm sinh không hợp lệ.", 400);
+
+    // Chống tạo trùng hồ sơ
+    if (phone && (await User.exists({ phone: { $in: phoneHashVariants(phone) } }))) {
+      return errorResponse(res, "Số điện thoại này đã có hồ sơ. Hãy tìm kiếm bệnh nhân thay vì tạo mới.", 409);
+    }
+    if (cccd && (await User.exists({ "profile.cccdHash": hashCccd(cccd) }))) {
+      return errorResponse(res, "Số CCCD này đã có hồ sơ. Hãy tìm kiếm bệnh nhân thay vì tạo mới.", 409);
+    }
+    if (email && (await User.exists({ email }))) {
+      return errorResponse(res, "Email này đã được sử dụng cho một tài khoản khác.", 409);
+    }
+
+    // Cấp mã y tế tiếp theo dạng BN### trong bệnh viện
+    const lastWithId = await User.find({ hospitalId, role: "patient", "profile.medicalId": /^BN\d+$/ })
+      .select("profile.medicalId").lean();
+    const maxNo = lastWithId.reduce((m, u) => Math.max(m, Number(u.profile.medicalId.slice(2)) || 0), 0);
+    const medicalId = `BN${String(maxNo + 1).padStart(3, "0")}`;
+
+    // Tài khoản cổng bệnh nhân: email thật nếu có, nếu không dùng email nội bộ theo mã y tế
+    const loginEmail = email || `${medicalId.toLowerCase()}.${String(hospitalId).slice(-6)}@benhnhan.neuroscan.local`;
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(12).toString("hex"), 10);
+
+    const patient = await User.create({
+      email: loginEmail,
+      phone: phone ? hashPhone(phone) : undefined,
+      passwordHash,
+      role: "patient",
+      hospitalId,
+      isVerified: !!email,
+      profile: {
+        name,
+        medicalId,
+        gender: ["Nam", "Nữ", "Khác"].includes(gender) ? gender : "",
+        birthYear,
+        address: String(address).trim(),
+        cccdHash: cccd ? hashCccd(cccd) : null,
+        cccdLast4: cccd ? cccd.slice(-4) : "",
+        phoneLast4: phone ? phone.slice(-4) : "",
+        registeredAtDeskBy: req.user.id,
+      },
+    });
+
+    const safe = patient.toObject();
+    delete safe.passwordHash;
+    return successResponse(res, safe, `Đã tạo hồ sơ bệnh nhân mới — mã y tế ${medicalId}.`, 201);
+  } catch (error) {
+    console.error("Lỗi tạo hồ sơ bệnh nhân tại quầy:", error);
+    return errorResponse(res, "Không thể tạo hồ sơ bệnh nhân: " + error.message, 500);
+  }
+};
 export { checkPatientTenancy };
+
+// @desc    UC-REC-04 — Cập nhật email nhận thông báo cho bệnh nhân (hồ sơ cũ / ca cấp cứu chưa có email)
+// @route   PUT /api/patients/:patientId/email
+// @access  Private (Receptionist, Nurse, Hospital Admin, Admin)
+export const updatePatientEmail = async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    if (!hasRealEmail(email)) return errorResponse(res, "Email không hợp lệ.", 400);
+    const patient = await User.findOne({ _id: req.params.patientId, role: "patient" });
+    if (!patient) return errorResponse(res, "Không tìm thấy bệnh nhân.", 404);
+    if (!["admin", "system_admin"].includes(req.user.role) && String(patient.hospitalId) !== String(req.user.hospitalId)) {
+      return errorResponse(res, "Không có quyền cập nhật bệnh nhân của bệnh viện khác.", 403);
+    }
+    if (await User.exists({ email, _id: { $ne: patient._id } })) {
+      return errorResponse(res, "Email này đã được dùng cho một tài khoản khác.", 409);
+    }
+    patient.email = email; // email cũng là tên đăng nhập cổng bệnh nhân
+    await patient.save();
+    return successResponse(res, { _id: patient._id, email: patient.email }, "Đã cập nhật email nhận thông báo.");
+  } catch (error) {
+    return errorResponse(res, "Không thể cập nhật email: " + error.message, 500);
+  }
+};
+
 
 // Giờ nhắc theo số lần/ngày: dùng giờ bệnh nhân tự đặt (UC-PAT-13), chưa đặt thì giờ cố định mặc định
 export const generateRemindersForPrescription = async (prescription) => {
@@ -90,6 +206,21 @@ export const getPatients = async (req, res) => {
         { "profile.name": searchRegex },
         { "profile.fullName": searchRegex }
       ];
+
+      // UC-REC-01: SĐT và CCCD được lưu dạng băm → chỉ tra cứu khớp tuyệt đối
+      const digits = req.query.search.replace(/[\s.+-]/g, "");
+
+      // SĐT trong DB lưu dạng +84xxxxxxxxx → đổi số 0 đầu (hoặc 84) thành +84 rồi so khớp tiền tố,
+      // nhờ vậy gõ "09", "0901"... là đã gợi ý được bệnh nhân
+      if (/^\d{2,12}$/.test(digits)) {
+        const rest = /^0/.test(digits) ? digits.slice(1) : /^84/.test(digits) ? digits.slice(2) : null;
+        searchConditions.push({ phone: rest !== null ? new RegExp(`^\\+84${rest}`) : new RegExp(digits) });
+      }
+
+      if (/^\d{9,12}$/.test(digits)) {
+        searchConditions.push({ phone: { $in: phoneHashVariants(req.query.search) } });
+        searchConditions.push({ "profile.cccdHash": hashCccd(digits) });
+      }
 
       if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: searchConditions }];

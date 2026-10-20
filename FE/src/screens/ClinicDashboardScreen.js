@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
+  Platform,
   View,
   Text,
   ScrollView,
@@ -17,6 +18,37 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, LiveClock } from '../components/reception/ReceptionUI';
+import { Users as HdUsers, RefreshCw as HdRefresh, Wallet as HdWallet, FolderOpen as HdFolder, Brain as HdBrain, Gauge as HdGauge, ShieldCheck as HdShield, ArrowRight as HdArrow } from 'lucide-react';
+
+const greetingOf = (d) => {
+  const h = d.getHours();
+  return h < 11 ? 'Chào buổi sáng' : h < 14 ? 'Chào buổi trưa' : h < 18 ? 'Chào buổi chiều' : 'Chào buổi tối';
+};
+const hdShadow = Platform.OS === 'web' ? { boxShadow: '0 10px 30px -18px rgba(11,42,91,0.35)' } : { elevation: 2 };
+const hd = StyleSheet.create({
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
+  bannerBtnText: { color: '#0B2A55', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  kpiRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginTop: 22 },
+  kpi: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', ...hdShadow },
+  kpiIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  kpiValue: { fontSize: 26, fontWeight: '800' },
+  kpiLabel: { fontSize: 13, color: '#475569', marginTop: 2, fontWeight: '600' },
+  kpiSub: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
+  kpiAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0B2A55', marginTop: 24, marginBottom: 12 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginBottom: 6 },
+  action: { borderRadius: 20, padding: 20, minHeight: 150, overflow: 'hidden', position: 'relative' },
+  actionBlob: { position: 'absolute', width: 170, height: 170, borderRadius: 85, right: -50, top: -60, opacity: 0.7 },
+  actionIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  actionTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  actionDesc: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
+  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
+  actionGoText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+});
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 
@@ -185,11 +217,25 @@ const ClinicDashboardScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         <ScrollView>
           <PageContainer style={styles.page}>
-            <PageHeader
-              title="Tổng quan bệnh viện"
-              subtitle={`Chào ${shortName(currentUser?.profile?.name) || 'bạn'} · tình hình vận hành hôm nay.`}
-              actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => { fetchDashboardData(); fetchHospitalStaff(); }} />}
-            />
+            <StaffBanner
+              image={RECEPTION_IMAGES.lobby}
+              tone="navy"
+              eyebrow={`${greetingOf(new Date())},`}
+              title={shortName(currentUser?.profile?.name) || 'Quản lý bệnh viện'}
+              subtitle="Tổng quan bệnh viện — tình hình tiếp nhận, doanh thu, nhân sự và AI trong ngày."
+              right={<LiveClock label="Đang vận hành" />}
+            >
+              <View style={hd.bannerBtns}>
+                <TouchableOpacity style={hd.bannerBtn} onPress={() => navigation.navigate('StaffManagement')} dataSet={{ hover: 'glow' }}>
+                  <HdUsers size={16} color="#0B2A55" />
+                  <Text style={hd.bannerBtnText}>Quản lý nhân sự</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={hd.bannerGhost} onPress={() => { fetchDashboardData(); fetchHospitalStaff(); }}>
+                  <HdRefresh size={15} color="#FFFFFF" />
+                  <Text style={hd.bannerGhostText}>Làm mới</Text>
+                </TouchableOpacity>
+              </View>
+            </StaffBanner>
 
             {/* [FIX 0014] Banner lỗi tải số liệu — thay vì hiển thị 0 im lặng */}
             {statsError ? (
@@ -206,31 +252,49 @@ const ClinicDashboardScreen = ({ navigation }) => {
             ) : null}
 
             {/* Chỉ số chính: 1 số nổi bật (tiếp nhận hôm nay), còn lại nhỏ hơn kèm ngữ cảnh */}
-            <View style={[styles.kpiStrip, !isWide && styles.kpiStripWrap]}>
+            <View style={hd.kpiRow}>
               {[
-                { key: 'today', label: 'Tiếp nhận hôm nay', value: totalPatientsToday || 0, sub: `${aiProcessedCount || 0} ca có phân tích AI`, main: true },
-                { key: 'revenue', label: 'Doanh thu hôm nay', value: fmtVnd(revenue.totalRevenue), sub: `Từ AI: ${fmtVnd(revenue.aiRevenue)}` },
-                { key: 'patients', label: 'Tổng bệnh nhân', value: totalPatients, sub: 'Đã có hồ sơ tại viện' },
-                { key: 'scans', label: 'Lượt quét AI', value: totalScans, sub: 'Tính từ khi triển khai' },
-              ].map((k, i) => (
-                <View
-                  key={k.key}
-                  style={[
-                    styles.kpi,
-                    isWide ? styles.kpiFill : styles.kpiHalf,
-                    k.main && styles.kpiMain,
-                    isWide ? i > 0 && styles.kpiBorderLeft : [i % 2 === 1 && styles.kpiBorderLeft, i > 1 && styles.kpiBorderTop],
-                  ]}
-                >
-                  <Text style={styles.kpiLabel}>{k.label}</Text>
-                  {loadingStats ? (
-                    <ActivityIndicator size="small" color={Colors.brandGreen} style={styles.kpiLoading} />
-                  ) : (
-                    <Text style={[styles.kpiValue, k.main && styles.kpiValueMain]} numberOfLines={1}>{k.value}</Text>
-                  )}
-                  <Text style={styles.kpiSub}>{k.sub}</Text>
-                </View>
-              ))}
+                { key: 'today', icon: HdUsers, color: '#067A5E', bg: '#E7F6F0', label: 'Tiếp nhận hôm nay', value: totalPatientsToday || 0, sub: `${aiProcessedCount || 0} ca có phân tích AI` },
+                { key: 'revenue', icon: HdWallet, color: '#D97706', bg: '#FEF3C7', label: 'Doanh thu hôm nay', value: fmtVnd(revenue.totalRevenue), sub: `Từ AI: ${fmtVnd(revenue.aiRevenue)}` },
+                { key: 'patients', icon: HdFolder, color: '#4F46E5', bg: '#EEF0FF', label: 'Tổng bệnh nhân', value: totalPatients, sub: 'Đã có hồ sơ tại viện' },
+                { key: 'scans', icon: HdBrain, color: '#7C3AED', bg: '#F3EEFF', label: 'Lượt quét AI', value: totalScans, sub: 'Tính từ khi triển khai' },
+              ].map((k) => {
+                const Icon = k.icon;
+                return (
+                  <View key={k.key} style={[hd.kpi, { width: isWide ? '23.6%' : '48.5%' }]} dataSet={{ hover: 'lift' }}>
+                    <View style={[hd.kpiIcon, { backgroundColor: k.bg }]}><Icon size={20} color={k.color} /></View>
+                    {loadingStats ? (
+                      <ActivityIndicator size="small" color={k.color} style={{ alignSelf: 'flex-start', marginVertical: 8 }} />
+                    ) : (
+                      <Text style={[hd.kpiValue, { color: k.color }]} numberOfLines={1}>{k.value}</Text>
+                    )}
+                    <Text style={hd.kpiLabel}>{k.label}</Text>
+                    <Text style={hd.kpiSub}>{k.sub}</Text>
+                    <View style={[hd.kpiAccent, { backgroundColor: k.color }]} />
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={hd.sectionTitle}>Quản lý nhanh</Text>
+            <View style={hd.actionRow}>
+              {[
+                { icon: HdUsers, title: 'Nhân sự', desc: 'Cấp & khóa tài khoản', bg: '#0B2A5B', shade: '#071E3D', route: 'StaffManagement' },
+                { icon: HdGauge, title: 'Năng suất & SLA', desc: 'Thời gian chờ từng khâu', bg: '#0F766E', shade: '#115E59', route: 'SlaReport' },
+                { icon: HdWallet, title: 'Tài chính', desc: 'Doanh thu & hóa đơn', bg: '#B45309', shade: '#92400E', route: 'Financials' },
+                { icon: HdShield, title: 'Kiểm toán lâm sàng', desc: 'Truy vết thao tác nhạy cảm', bg: '#7C3AED', shade: '#6D28D9', route: 'ClinicalAudit' },
+              ].map((a) => {
+                const Icon = a.icon;
+                return (
+                  <TouchableOpacity key={a.title} style={[hd.action, { backgroundColor: a.bg, width: isWide ? '23.9%' : '48.5%' }]} onPress={() => navigation.navigate(a.route)} dataSet={{ hover: 'lift' }}>
+                    <View style={[hd.actionBlob, { backgroundColor: a.shade }]} />
+                    <View style={hd.actionIcon}><Icon size={22} color="#FFFFFF" /></View>
+                    <Text style={hd.actionTitle}>{a.title}</Text>
+                    <Text style={hd.actionDesc}>{a.desc}</Text>
+                    <View style={hd.actionGo}><Text style={hd.actionGoText}>Mở</Text><HdArrow size={14} color="#FFFFFF" /></View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <View style={[styles.columns, isWide && styles.columnsWide]}>

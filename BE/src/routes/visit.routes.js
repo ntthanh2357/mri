@@ -14,6 +14,8 @@ import {
   submitMriSafetyCheck,
   requestMriRescan,
   cancelMriOrder,
+  getVisitById,
+  saveServiceOrder,
 } from "../controllers/visit.controller.js";
 
 const router = express.Router();
@@ -35,6 +37,10 @@ router.put("/:id/status", protect, checkRole(["doctor", "nurse", "receptionist",
 router.post("/:id/mri-safety-check", protect, checkRole(["technician", "nurse", "doctor", "admin", "hospital_admin"]), submitMriSafetyCheck);
 router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "admin", "hospital_admin"]), requestMriRescan);
 router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "admin", "hospital_admin"]), cancelMriOrder);
+
+// Phiếu chỉ định dịch vụ & xem 1 lượt khám (đặt sau các route cố định như /staff, /my-queue)
+router.put("/:id/service-order", protect, checkRole(["nurse", "doctor", "admin", "hospital_admin"]), saveServiceOrder);
+router.get("/:id", protect, checkRole(["nurse", "doctor", "receptionist", "technician", "admin", "hospital_admin"]), getVisitById);
 
 export default router;
 

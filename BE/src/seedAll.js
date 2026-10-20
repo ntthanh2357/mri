@@ -414,7 +414,7 @@ const seedComprehensiveDatabase = async () => {
           isVerified: true,
           profile: {
             name: "Bệnh nhân Quốc Bảo (U Tuyến Yên)",
-            bhytNumber: "SG4797932200789",
+            bhytNumber: "GD4797932200789",
             medicalId: "BN003",
             address: "Quận 1, TP. Hồ Chí Minh",
           },
@@ -531,7 +531,7 @@ const seedComprehensiveDatabase = async () => {
         {
           hospitalId: hospital._id,
           patientId: pat3._id,
-          cardNumber: "SG4797932200789",
+          cardNumber: "GD4797932200789",
           coverageRate: 80,
           expiresAt: new Date(now.getTime() + 200 * 24 * 3600000),
           registrationPlace: "Bệnh viện Chợ Rẫy",
