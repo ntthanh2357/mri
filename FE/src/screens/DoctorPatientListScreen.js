@@ -42,17 +42,17 @@ const calculateAge = (dob, birthYear) => {
 };
 
 const DoctorPatientListScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'XN' | 'TRACKING'
+  const [activeFilter, setActiveFilter] = useState('ALL');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const { width } = useWindowDimensions();
   const wide = width >= Layout.wide;
 
   useEffect(() => {
-    get('/auth/me').then(r => setUser(r.user)).catch(() => { });
+    get('/auth/me').then(r => setUser(r.user)).catch(() => {});
   }, []);
 
   const fetchPatients = async () => {
@@ -70,7 +70,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
           let status = 'Chưa theo dõi';
           let statusCode = 'NONE';
           let badgeColor = '#F1F5F9';
-          let textColor = '#64748B';
+          let textColor = '#94A3B8';
           if (lastVital) {
             status = 'Đang theo dõi';
             statusCode = 'TRACKING';
@@ -95,8 +95,8 @@ const DoctorPatientListScreen = ({ navigation }) => {
             phone: p.phone || '',
             labText: totalOrders > 0 ? `${completedOrders}/${totalOrders} phiếu có kết quả` : 'Chưa có phiếu',
             vitalText: recorded ? `${recorded.getDate()}/${recorded.getMonth() + 1}` : 'Chưa đo',
-            status,
             statusCode,
+            status,
             badgeColor,
             textColor,
           };

@@ -573,7 +573,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       if (isSmart) {
         await post('/api/v1/transfers', body);
         Alert.alert(
-          'Khởi tạo Gói Chuyển Viện Thành Công (UC-DOC-10)',
+          'Khởi tạo Gói Chuyển Viện Thành Công',
           'Hệ thống đã tự động đóng gói file DICOM nén, Báo cáo AI u não và Mô hình 3D khối u, đồng thời chuyển hồ sơ sang bàn Lễ tân để gửi email điện tử cho bệnh nhân!'
         );
       } else {
@@ -1029,21 +1029,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
 
-  const isStaffRole = currentUser?.role === 'doctor' || currentUser?.role === 'technician' || currentUser?.role === 'nurse' || currentUser?.role === 'receptionist';
-  const targetActiveRoute = route.params?.activeRoute || (isStaffRole ? 'DoctorPatientList' : 'PatientRecords');
-
-  const handleBackNavigation = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate(targetActiveRoute);
-    }
-  };
-
   return (
     <ResponsiveLayout
       navigation={navigation}
-      activeRoute={targetActiveRoute}
+      activeRoute="PatientRecords"
     >
       <SafeAreaView style={styles.container}>
         <PageHeader

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { MedicalRecord } from "./models/medicalRecord.model.js";
 import { CareSheet } from "./models/careSheet.model.js";
 import { Consultation } from "./models/consultation.model.js";
@@ -9,33 +10,62 @@ import { FEATURES } from "../../config/features.config.js";
 import { recordAuditLog } from "../../services/auditLog.service.js";
 import { calculateRetentionExpiry } from "../../utils/retention.util.js";
 import { segregateMedicalRecord } from "../../utils/dataSegregation.util.js";
+import { evaluateVitalSigns } from "../../services/vitalsSafety.service.js";
 
 // --- Medical Record (HSBA) Controllers ---
 
 export const getRecords = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, patientId, status } = req.query;
     const hospitalId = req.user?.hospitalId;
     if (!hospitalId) {
       return res.status(403).json({ message: "Không thể xác định bệnh viện của người dùng." });
     }
 
     let query = { hospitalId };
-    
+
+    if (patientId && patientId.trim()) {
+      const pidTrim = patientId.trim();
+      const pidEscaped = pidTrim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const orPatientConditions = [
+        { patientId: pidTrim },
+        { patientId: { $regex: `^${pidEscaped}$`, $options: "i" } }
+      ];
+      if (mongoose.Types.ObjectId.isValid(pidTrim)) {
+        orPatientConditions.push({ _id: pidTrim });
+      }
+      query.$or = orPatientConditions;
+    }
+
+    if (status && status.trim()) {
+      query.status = status.trim();
+    }
+
     if (search && search.trim()) {
       // [BUG-09 FIX]: Chống tấn công ReDoS bằng cách giới hạn độ dài và escape ký tự đặc biệt Regex
       const safeSearch = search.trim().substring(0, 100);
       const escaped = safeSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$and = [
-        { hospitalId },
-        {
-          $or: [
-            { patientName: { $regex: escaped, $options: "i" } },
-            { patientId: { $regex: escaped, $options: "i" } },
-            { diagnosis: { $regex: escaped, $options: "i" } },
-          ]
-        }
+      const orConditions = [
+        { patientName: { $regex: escaped, $options: "i" } },
+        { patientId: { $regex: escaped, $options: "i" } },
+        { diagnosis: { $regex: escaped, $options: "i" } },
       ];
+      if (mongoose.Types.ObjectId.isValid(safeSearch)) {
+        orConditions.push({ _id: safeSearch });
+      }
+      if (query.$or) {
+        query.$and = [
+          { hospitalId },
+          { $or: query.$or },
+          { $or: orConditions }
+        ];
+        delete query.$or;
+      } else {
+        query.$and = [
+          { hospitalId },
+          { $or: orConditions }
+        ];
+      }
     }
 
     const records = await MedicalRecord.find(query).sort({ createdAt: -1 }).lean();
@@ -403,21 +433,70 @@ export const createCareSheet = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền truy cập hồ sơ bệnh án này." });
     }
 
-    const { careLevel, pulse, bloodPressure, temperature, respiratoryRate, spo2, progressNotes, careActions, nurse } = req.body;
-
-    if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
-      return res.status(400).json({ message: "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh." });
-    }
-
-    const newCareSheet = new CareSheet({
-      hospitalId: record.hospitalId || req.user?.hospitalId,
-      medicalRecordId: req.params.id,
+    const {
       careLevel,
       pulse,
       bloodPressure,
       temperature,
       respiratoryRate,
       spo2,
+      glasgow,
+      pupils,
+      surgicalDrainage,
+      fluidInfusions,
+      progressNotes,
+      careActions,
+      nurse
+    } = req.body;
+
+    if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
+      return res.status(400).json({ message: "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh." });
+    }
+
+    // Tính điểm và phân loại thang điểm hôn mê Glasgow (UC-NUR-04)
+    let calculatedGlasgow = undefined;
+    if (glasgow) {
+      const eye = Math.max(1, Math.min(4, Number(glasgow.eye) || 4));
+      const verbal = Math.max(1, Math.min(5, Number(glasgow.verbal) || 5));
+      const motor = Math.max(1, Math.min(6, Number(glasgow.motor) || 6));
+      const totalScore = eye + verbal + motor;
+      let classification = "Tỉnh táo / Tri giác tốt";
+      if (totalScore <= 8) classification = "Hôn mê sâu / Nguy kịch (Cảnh báo)";
+      else if (totalScore <= 12) classification = "Hôn mê vừa";
+      else if (totalScore <= 14) classification = "Hôn mê nhẹ / Lú lẫn";
+
+      calculatedGlasgow = {
+        eye,
+        verbal,
+        motor,
+        totalScore,
+        classification
+      };
+    }
+
+    // Đánh giá ngưỡng an toàn sinh hiệu
+    const vitalsEvaluation = evaluateVitalSigns({
+      pulse,
+      bloodPressure,
+      temperature,
+      spo2,
+      respiratoryRate
+    });
+
+    const newCareSheet = new CareSheet({
+      hospitalId: record.hospitalId || req.user?.hospitalId,
+      medicalRecordId: req.params.id,
+      careLevel: careLevel || 3,
+      pulse: Number(pulse),
+      bloodPressure: String(bloodPressure).trim(),
+      temperature: Number(temperature),
+      respiratoryRate: Number(respiratoryRate),
+      spo2: Number(spo2),
+      glasgow: calculatedGlasgow,
+      pupils: pupils || undefined,
+      surgicalDrainage: surgicalDrainage || undefined,
+      fluidInfusions: Array.isArray(fluidInfusions) ? fluidInfusions : undefined,
+      vitalsEvaluation,
       progressNotes,
       careActions,
       nurse,

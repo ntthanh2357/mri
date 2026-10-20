@@ -45,6 +45,7 @@ import ImagingResultScreen from '../screens/ImagingResultScreen';
 import CreateImagingResultScreen from '../screens/CreateImagingResultScreen';
 import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
+import NurseTriageScreen from '../screens/NurseTriageScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
 import MyAssignmentsScreen from '../screens/MyAssignmentsScreen';
@@ -87,6 +88,7 @@ export const staffLinkingConfig = {
       CreateImagingResult: 'staff/create-imaging-result',
       DoctorPatientList: 'staff/doctor-patient-list',
       NurseReception: 'staff/nurse-reception',
+      NurseTriage: 'staff/nurse-triage',
       ActivateAccount: 'staff/activate-account',
       DoctorWorkQueue: 'staff/doctor-work-queue',
       MyAssignments: 'staff/my-assignments',
@@ -199,6 +201,7 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
+        <Stack.Screen name="NurseTriage" component={NurseTriageScreen} options={{ title: 'Tiếp nhận', headerShown: false }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
         <Stack.Screen name="MyAssignments" component={MyAssignmentsScreen} options={{ title: 'Phân công của tôi', headerShown: false }} />
