@@ -40,6 +40,11 @@ const AdminBackofficeScreen = ({ navigation, route }) => {
     navigation.setParams({ tab });
   };
 
+  // [FIX 0022] Phòng thủ crash trắng màn: nếu activeTab nhận giá trị ngoài
+  // ADMIN_TABS (do shortcut truyền sai tên tab) thì ADMIN_HEADERS[tab] là undefined
+  // → TypeError khi đọc [0] → React unmount toàn bộ app không error boundary.
+  const safeTab = ADMIN_TABS.includes(activeTab) ? activeTab : 'metrics';
+
   if (Platform.OS !== 'web') {
     return (
       <View style={styles.nativeContainer}>
@@ -49,17 +54,17 @@ const AdminBackofficeScreen = ({ navigation, route }) => {
   }
 
   return (
-    <ResponsiveLayout navigation={navigation} activeRoute={`AdminBackoffice_${activeTab}`}>
+    <ResponsiveLayout navigation={navigation} activeRoute={`AdminBackoffice_${safeTab}`}>
       <ScrollView style={styles.scroll}>
         <PageContainer style={styles.page}>
-          <PageHeader title={ADMIN_HEADERS[activeTab][0]} subtitle={ADMIN_HEADERS[activeTab][1]} style={styles.header} />
-          {activeTab === 'metrics' && <AdminMetricsView onSelectTab={selectTab} />}
-          {activeTab === 'users' && <AdminUsersView />}
-          {activeTab === 'hospitals' && <AdminHospitalsView />}
-          {activeTab === 'datasets' && <AdminDatasetsView />}
-          {activeTab === 'audit-logs' && <AdminAuditLogsView />}
-          {activeTab === 'saas-suite' && <AdminSaaSSuiteView />}
-          {activeTab === 'ai-config' && <AdminAIConfigView />}
+          <PageHeader title={ADMIN_HEADERS[safeTab][0]} subtitle={ADMIN_HEADERS[safeTab][1]} style={styles.header} />
+          {safeTab === 'metrics' && <AdminMetricsView onSelectTab={selectTab} />}
+          {safeTab === 'users' && <AdminUsersView />}
+          {safeTab === 'hospitals' && <AdminHospitalsView />}
+          {safeTab === 'datasets' && <AdminDatasetsView />}
+          {safeTab === 'audit-logs' && <AdminAuditLogsView />}
+          {safeTab === 'saas-suite' && <AdminSaaSSuiteView />}
+          {safeTab === 'ai-config' && <AdminAIConfigView />}
         </PageContainer>
       </ScrollView>
     </ResponsiveLayout>

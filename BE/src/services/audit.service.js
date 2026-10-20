@@ -3,12 +3,35 @@ import { User } from "../models/user.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 
-export const getAuditLogs = async (hospitalId = null) => {
+/**
+ * Lấy nhật ký kiểm toán (UC-HADM-13) — hỗ trợ lọc nhóm hành động lâm sàng nhạy cảm,
+ * khoảng thời gian và phân trang. Tương thích ngược: gọi không truyền filters
+ * (hoặc filters rỗng) trả về toàn bộ như hành vi cũ.
+ */
+export const getAuditLogs = async (hospitalId = null, filters = {}) => {
   const query = {};
   if (hospitalId) {
     query.hospitalId = hospitalId;
   }
-  const logs = await AuditLog.find(query).sort({ createdAt: -1 }).lean();
+  if (Array.isArray(filters.actions) && filters.actions.length) {
+    query.action = { $in: filters.actions };
+  } else if (filters.action) {
+    query.action = filters.action;
+  }
+  if (filters.from || filters.to) {
+    query.createdAt = {};
+    if (filters.from) query.createdAt.$gte = filters.from;
+    if (filters.to) query.createdAt.$lte = filters.to;
+  }
+
+  const total = await AuditLog.countDocuments(query);
+  const limit = filters.limit || 0; // 0 = không giới hạn (hành vi cũ)
+  const page = filters.page || 1;
+  let logsQuery = AuditLog.find(query).sort({ createdAt: -1 }).lean();
+  if (limit > 0) {
+    logsQuery = logsQuery.skip((page - 1) * limit).limit(limit);
+  }
+  const logs = await logsQuery;
 
   const userIds = logs.map(l => l.performedBy).filter(id => mongoose.Types.ObjectId.isValid(id));
   const users = await User.find({ _id: { $in: userIds } }).select("profile.name email").lean();
@@ -18,16 +41,19 @@ export const getAuditLogs = async (hospitalId = null) => {
   const hospitals = await Hospital.find({ _id: { $in: hospitalIds } }).select("name").lean();
   const hospitalMap = new Map(hospitals.map(h => [h._id.toString(), h]));
 
-  return logs.map(log => {
-    const user = userMap.get(log.performedBy);
-    const hospitalObj = log.hospitalId ? hospitalMap.get(log.hospitalId.toString()) : null;
-    return {
-      ...log,
-      performedByName: user?.profile?.name || user?.email || log.performedBy || "Hệ thống",
-      performedByEmail: user?.email || "",
-      hospitalName: hospitalObj?.name || "Hệ thống"
-    };
-  });
+  return {
+    total,
+    logs: logs.map(log => {
+      const user = userMap.get(log.performedBy);
+      const hospitalObj = log.hospitalId ? hospitalMap.get(log.hospitalId.toString()) : null;
+      return {
+        ...log,
+        performedByName: user?.profile?.name || user?.email || log.performedBy || "Hệ thống",
+        performedByEmail: user?.email || "",
+        hospitalName: hospitalObj?.name || "Hệ thống"
+      };
+    }),
+  };
 };
 
 /**

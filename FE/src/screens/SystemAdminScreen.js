@@ -15,7 +15,8 @@ import {
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import styles from './SystemAdminScreen.styles';
 import { get, post } from '../services/api.service';
-import { AlertTriangle, FileText, MessageSquare, Folder, Zap } from 'lucide-react';
+import { isRateLimitError } from '../utils/apiErrors';
+import { AlertTriangle, FileText, MessageSquare, Folder, Zap, ChevronDown } from 'lucide-react';
 
 const METRICS_POLL_INTERVAL = 30000; // 30 giây
 
@@ -63,6 +64,15 @@ const SystemAdminScreen = ({ navigation }) => {
       .catch((err) => {
         if (!isMounted) return;
         setAuthorized(false);
+        // [FIX 0014] 429 (hệ thống bận) không phải phiên hết hạn — không đá user đi đăng nhập lại
+        if (isRateLimitError(err)) {
+          Alert.alert(
+            'Hệ thống đang bận',
+            'Có quá nhiều yêu cầu cùng lúc. Vui lòng chờ vài giây rồi tải lại trang.',
+            [{ text: 'Đã hiểu' }]
+          );
+          return;
+        }
         Alert.alert(
           'Phiên làm việc hết hạn',
           'Vui lòng đăng nhập với tài khoản Quản trị viên để truy cập.',
@@ -537,8 +547,9 @@ const SystemAdminScreen = ({ navigation }) => {
         </View>
 
         {/* View More Link */}
-        <TouchableOpacity style={styles.viewMoreLink} onPress={() => Alert.alert('Thông tin', 'Các tác nhân bổ sung: MRI Classifier, Segmentation Bot, Report Validator.')}>
-          <Text style={styles.viewMoreText}>Xem thêm 3 tác nhân khác ▼</Text>
+        <TouchableOpacity style={[styles.viewMoreLink, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => Alert.alert('Thông tin', 'Các tác nhân bổ sung: MRI Classifier, Segmentation Bot, Report Validator.')}>
+          <Text style={styles.viewMoreText}>Xem thêm 3 tác nhân khác</Text>
+          <ChevronDown size={12} color="#15803D" />
         </TouchableOpacity>
 
         {/* Hard cases training card */}

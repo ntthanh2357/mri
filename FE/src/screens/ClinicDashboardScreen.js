@@ -23,7 +23,7 @@ import Layout from '../constants/layout';
 // "PGS.TS Vũ Đình Hoàng (Giám đốc …)" → "PGS.TS Vũ Đình Hoàng"
 const shortName = (name = '') => String(name).replace(/\s*\(.*\)\s*$/, '').trim();
 const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
-import { Stethoscope, HeartPulse, Microscope, Briefcase, UserPlus, List, Save, X } from 'lucide-react';
+import { Stethoscope, HeartPulse, Microscope, Briefcase, UserPlus, List, Save, X, AlertTriangle } from 'lucide-react';
 
 const getRoleBadgeStyle = (role) => {
   switch (role) {
@@ -88,6 +88,9 @@ const ClinicDashboardScreen = ({ navigation }) => {
     { name: 'Nhi khoa', value: 0, color: '#CBD5E1' },
   ]);
   const [loadingStats, setLoadingStats] = useState(true);
+  // [FIX 0014] Lỗi tải số liệu hiện banner + nút thử lại — trước đây fetch fail
+  // (429/304/mạng) để nguyên KPI = 0 im lặng, staff có thể đọc nhầm là "không có dữ liệu".
+  const [statsError, setStatsError] = useState(null);
 
   // New hospital operations statistics
   const [totalPatientsToday, setTotalPatientsToday] = useState(0);
@@ -107,6 +110,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
       // 2. Fetch hospital-specific stats
       const statsRes = await get('/admin/dashboard');
       if (statsRes && statsRes.success) {
+        setStatsError(null);
         setTotalPatients(statsRes.totalPatients ?? 0);
         setTotalScans(statsRes.totalScans ?? 0);
         setTotalPatientsToday(statsRes.totalPatientsToday ?? 0);
@@ -123,6 +127,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Lỗi khi tải thông tin tổng quan phòng khám:', err);
+      setStatsError('Không tải được số liệu tổng quan từ hệ thống. Các chỉ số bên dưới có thể thiếu chính xác.');
     } finally {
       setLoadingStats(false);
     }
@@ -185,6 +190,20 @@ const ClinicDashboardScreen = ({ navigation }) => {
               subtitle={`Chào ${shortName(currentUser?.profile?.name) || 'bạn'} · tình hình vận hành hôm nay.`}
               actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => { fetchDashboardData(); fetchHospitalStaff(); }} />}
             />
+
+            {/* [FIX 0014] Banner lỗi tải số liệu — thay vì hiển thị 0 im lặng */}
+            {statsError ? (
+              <View style={styles.statsErrorBanner}>
+                <AlertTriangle size={18} color="#B45309" style={{ flexShrink: 0 }} />
+                <Text style={styles.statsErrorText}>{statsError}</Text>
+                <TouchableOpacity
+                  style={styles.statsErrorRetry}
+                  onPress={() => { setStatsError(null); fetchDashboardData(); }}
+                >
+                  <Text style={styles.statsErrorRetryText}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {/* Chỉ số chính: 1 số nổi bật (tiếp nhận hôm nay), còn lại nhỏ hơn kèm ngữ cảnh */}
             <View style={[styles.kpiStrip, !isWide && styles.kpiStripWrap]}>

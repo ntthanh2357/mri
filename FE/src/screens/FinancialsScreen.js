@@ -37,7 +37,9 @@ import {
   ArrowRight,
   Pill,
   FileText,
-  Calculator
+  Calculator,
+  Undo2,
+  Info,
 } from 'lucide-react';
 
 const DRUG_SUGGESTIONS = [
@@ -54,9 +56,18 @@ const FinancialsScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'revenue' | 'drugs'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'invoices' | 'revenue' | 'drugs'
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // True khi BE trả 403/404 vì tài khoản chưa gán bệnh viện (vd: system admin) —
+  // hiển thị banner giải thích thay vì KPI toàn 0 gây hiểu nhầm.
+  const [noHospitalScope, setNoHospitalScope] = useState(false);
+
+  // Hóa đơn & Hoàn tiền (UC-PHA-06)
+  const [invoices, setInvoices] = useState([]);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
 
   // Statistics & Transactions
   const [stats, setStats] = useState({
@@ -102,7 +113,9 @@ const FinancialsScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Export BHYT error:', err);
-      Alert.alert('Thông báo', 'Đã khởi tạo file giám định điện tử BHYT XML 4210 cho kỳ báo cáo.');
+      // Lỗi thật phải báo lỗi thật — trước đây catch lại hiển thị thông báo
+      // "thành công" khiến user tưởng đã xuất được file (BE trả 400 vẫn báo OK).
+      Alert.alert('Lỗi xuất BHYT', err?.message || 'Không thể xuất file giám định BHYT XML 4210. Vui lòng thử lại sau.');
     } finally {
       setExportingBhyt(false);
     }
@@ -146,6 +159,8 @@ const FinancialsScreen = ({ navigation }) => {
       fetchRevenueReports();
     } else if (activeTab === 'drugs') {
       fetchDrugReports();
+    } else if (activeTab === 'invoices') {
+      fetchFinancialData();
     }
   }, [activeTab]);
 
@@ -240,9 +255,14 @@ const FinancialsScreen = ({ navigation }) => {
           };
         });
         setRecentTransactions(txs);
+        setInvoices(invoices);
       }
     } catch (err) {
       console.error('Error fetching financial data:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -260,6 +280,10 @@ const FinancialsScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Error fetching hospital pricing:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     }
   };
 
@@ -451,6 +475,52 @@ const FinancialsScreen = ({ navigation }) => {
     setDetailsModalVisible(true);
   };
 
+  // ── UC-PHA-06: Hoàn tiền hóa đơn thuốc — hoàn vị kho theo đúng phân nhánh ──
+  const canRefund = currentUserRole => ['hospital_admin', 'admin'].includes(currentUserRole);
+
+  const handleRefundInvoice = async () => {
+    if (!refundReason.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do hoàn tiền để lưu vết kiểm toán (TT46/2018).');
+      return;
+    }
+    setRefunding(true);
+    try {
+      const res = await put(`/api/v1/invoices/${refundTarget._id}/refund`, {
+        refundReason: refundReason.trim(),
+      });
+      if (res && res.status === 'success') {
+        const amt = (res.data?.refundedAmount || 0).toLocaleString('vi-VN');
+        const restockInfo = refundHasPendingDrugs
+          ? 'Thuốc chưa phát đã hoàn vị về đúng lô đã xuất (tồn kho tăng tương ứng).'
+          : 'Thuốc đã phát vật lý được chuyển vào Kho Biệt trữ chờ kiểm định / tiêu hủy.';
+        Alert.alert('Hoàn tiền thành công', `Đã hoàn ${amt}đ cho bệnh nhân. ${restockInfo}`);
+        setRefundTarget(null);
+        setRefundReason('');
+        fetchFinancialData();
+      } else {
+        Alert.alert('Lỗi', (res && (res.message || res.error)) || 'Không thể hoàn tiền hóa đơn.');
+      }
+    } catch (err) {
+      console.error('Refund invoice error:', err);
+      Alert.alert('Không hoàn tiền được', err.message || 'Lỗi kết nối máy chủ.');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
+  // Thông tin phân nhánh hoàn vị kho cho modal hoàn tiền
+  const refundDrugItems = (refundTarget?.items || []).filter(it => it.type === 'drug');
+  const refundHasDispensedDrugs = refundDrugItems.some(it => it.dispenseStatus === 'DISPENSED') || refundTarget?.dispenseStatus === 'DISPENSED';
+  const refundHasPendingDrugs = refundDrugItems.some(it => it.dispenseStatus !== 'DISPENSED');
+
+  // Vai trò hiện tại để phân quyền nút hoàn tiền
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+  useEffect(() => {
+    get('/auth/me').then(res => {
+      if (res && res.user) setCurrentUserRole(res.user.role);
+    }).catch(() => {});
+  }, []);
+
   return (
     <ResponsiveLayout
       navigation={navigation}
@@ -476,6 +546,7 @@ const FinancialsScreen = ({ navigation }) => {
               onChange={setActiveTab}
               tabs={[
                 { key: 'overview', label: 'Tổng quan chung' },
+                { key: 'invoices', label: 'Hóa đơn & Hoàn tiền' },
                 { key: 'revenue', label: 'Báo cáo doanh thu' },
                 { key: 'drugs', label: 'Báo cáo thuốc' },
               ]}
@@ -487,6 +558,18 @@ const FinancialsScreen = ({ navigation }) => {
 
         <ScrollView>
           <PageContainer>
+          {/* Cảnh báo phạm vi: tài khoản chưa gán bệnh viện → dữ liệu tài chính theo bệnh viện không khả dụng */}
+          {noHospitalScope && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <Info size={18} color="#B45309" style={{ marginTop: 2 }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>Chưa có dữ liệu tài chính theo bệnh viện</Text>
+                <Text style={{ fontSize: 12.5, color: '#A16207', marginTop: 3, lineHeight: 18 }}>
+                  Tài khoản của bạn chưa được gán vào một bệnh viện cụ thể nên các chỉ số bên dưới hiển thị bằng 0 và bảng giá dịch vụ không áp dụng. Hãy gán bệnh viện cho tài khoản (Quản trị → Người dùng) hoặc đăng nhập bằng tài khoản quản lý bệnh viện để xem báo cáo tài chính thật.
+                </Text>
+              </View>
+            </View>
+          )}
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <View>
@@ -701,6 +784,71 @@ const FinancialsScreen = ({ navigation }) => {
                   )}
                 />
               </View>
+            </View>
+          )}
+
+          {/* TAB: HÓA ĐƠN & HOÀN TIỀN (UC-PHA-06) */}
+          {activeTab === 'invoices' && (
+            <View>
+              <View style={styles.recentHeaderRow}>
+                <Text style={styles.sectionTitle}>Danh sách hóa đơn bệnh viện</Text>
+                <TouchableOpacity onPress={fetchFinancialData} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <RefreshCw size={12} color={Colors.brandGreen} />
+                  <Text style={styles.viewAllText}>Làm mới</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.invSub}>
+                Hoàn tiền trước khi phát thuốc sẽ tự động hoàn vị kho về đúng lô đã xuất (UC-PHA-06); thuốc đã phát vật lý được chuyển vào Kho Biệt trữ chờ kiểm định / tiêu hủy theo quy chế GPP — không bao giờ hoàn lại kho cấp phát.
+              </Text>
+
+              {invoices.length === 0 ? (
+                <View style={styles.invEmpty}>
+                  <Text style={{ color: Colors.secondary, fontSize: 13 }}>Chưa có hóa đơn nào được phát sinh.</Text>
+                </View>
+              ) : (
+                <View style={styles.transactionsCard}>
+                  {invoices.map((inv, idx) => {
+                    const code = `#${(inv._id || '').toString().slice(-6).toUpperCase()}`;
+                    const patientName = inv.patientId?.profile?.name || 'Bệnh nhân';
+                    const d = new Date(inv.updatedAt || inv.createdAt);
+                    const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                    const drugItems = (inv.items || []).filter(it => it.type === 'drug');
+                    const anyDispensed = drugItems.some(it => it.dispenseStatus === 'DISPENSED') || inv.dispenseStatus === 'DISPENSED';
+                    const refunded = inv.status === 'hoàn trả';
+                    const paid = inv.status === 'đã thanh toán';
+                    const canRefundThis = paid && !inv.isPartialRefund && ['hospital_admin', 'admin'].includes(currentUserRole);
+                    return (
+                      <View key={inv._id} style={[styles.invRow, idx === invoices.length - 1 && styles.lastTxRow]}>
+                        <View style={styles.txLeft}>
+                          <Text style={styles.txId}>Hóa đơn {code} — {patientName}</Text>
+                          <Text style={styles.txDate}>
+                            {dateStr} · {(inv.items || []).length} dòng{drugItems.length > 0 ? ` · ${drugItems.length} thuốc` : ''}
+                            {drugItems.length > 0 ? (anyDispensed ? ' · đã phát thuốc' : ' · chưa phát thuốc') : ''}
+                            {inv.isPartialRefund ? ' · hoàn một phần' : ''}
+                          </Text>
+                        </View>
+                        <View style={styles.txRight}>
+                          <Text style={styles.txAmount}>{inv.totalAmount.toLocaleString('vi-VN')}đ</Text>
+                          <View style={[styles.statusBadge, refunded ? styles.statusRefunded : paid ? styles.statusSuccess : styles.statusPending]}>
+                            <Text style={[styles.statusText, refunded ? styles.statusRefundedText : paid ? styles.statusSuccessText : styles.statusPendingText]}>
+                              {refunded ? 'HOÀN TRẢ' : paid ? 'ĐÃ THANH TOÁN' : 'CHỜ THANH TOÁN'}
+                            </Text>
+                          </View>
+                          {canRefundThis && (
+                            <TouchableOpacity
+                              style={styles.btnRefund}
+                              onPress={() => { setRefundTarget(inv); setRefundReason(''); }}
+                            >
+                              <Undo2 size={11} color="#B91C1C" />
+                              <Text style={styles.btnRefundText}>Hoàn tiền</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 
@@ -1129,6 +1277,94 @@ const FinancialsScreen = ({ navigation }) => {
                   onPress={() => setBhytExportModal(false)}
                 >
                   <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── MODAL HOÀN TIỀN HÓA ĐƠN (UC-PHA-06) ── */}
+        <Modal
+          visible={!!refundTarget}
+          transparent
+          animationType="fade"
+          onRequestClose={() => !refunding && setRefundTarget(null)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '100%', maxWidth: 520, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Undo2 size={20} color="#B91C1C" />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#B91C1C' }}>Xác nhận hoàn tiền hóa đơn</Text>
+                </View>
+                <TouchableOpacity onPress={() => !refunding && setRefundTarget(null)}>
+                  <X size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 14 }}>
+                Hóa đơn <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>#{(refundTarget?._id || '').toString().slice(-6).toUpperCase()}</Text> —{' '}
+                <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{refundTarget?.patientId?.profile?.name || 'Bệnh nhân'}</Text> · Tổng:{' '}
+                <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{(refundTarget?.totalAmount || 0).toLocaleString('vi-VN')}đ</Text>
+              </Text>
+
+              {refundHasPendingDrugs && (
+                <View style={styles.refundBranchGreen}>
+                  <Text style={styles.refundBranchGreenText}>
+                    Thuốc CHƯA phát vật lý ({refundDrugItems.filter(it => it.dispenseStatus !== 'DISPENSED').length} dòng): hoàn vị về đúng lô đã xuất — tồn kho tăng tương ứng, không tạo tồn kho ma.
+                  </Text>
+                </View>
+              )}
+              {refundHasDispensedDrugs && (
+                <View style={styles.refundBranchRed}>
+                  <Text style={styles.refundBranchRedText}>
+                    Lưu ý — Thuốc ĐÃ phát cho người bệnh ({refundDrugItems.filter(it => it.dispenseStatus === 'DISPENSED').length} dòng): chuyển vào Kho Biệt trữ (cách ly) chờ kiểm định / tiêu hủy theo quy chế GPP — không hoàn lại kho cấp phát.
+                  </Text>
+                </View>
+              )}
+              {refundDrugItems.length === 0 && (
+                <View style={styles.refundBranchGreen}>
+                  <Text style={styles.refundBranchGreenText}>
+                    Hóa đơn không có dòng thuốc — hoàn tiền thuần túy, không ảnh hưởng tồn kho dược phẩm.
+                  </Text>
+                </View>
+              )}
+
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 6 }}>Lý do hoàn tiền *</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, fontSize: 13, minHeight: 70, backgroundColor: '#F8FAFC', color: Colors.brandNavy, textAlignVertical: 'top', outlineStyle: 'none', marginBottom: 6 }}
+                multiline
+                numberOfLines={3}
+                placeholder="VD: Bệnh nhân hủy đơn thuốc trước khi nhận thuốc tại quầy Dược..."
+                placeholderTextColor={Colors.secondary}
+                value={refundReason}
+                onChangeText={setRefundReason}
+              />
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>
+                Lý do được ghi vào chuỗi kiểm toán hash-chain (TT46/2018/TT-BYT) kèm EMRVersion lưu vết.
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#E2E8F0', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => !refunding && setRefundTarget(null)}
+                  disabled={refunding}
+                >
+                  <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Hủy bỏ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1.4, backgroundColor: '#B91C1C', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                  onPress={handleRefundInvoice}
+                  disabled={refunding}
+                >
+                  {refunding ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Undo2 size={15} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>Xác nhận hoàn tiền</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

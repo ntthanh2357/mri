@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { get, put } from '../services/api.service';
 import { portalLoginRoute } from '../utils/navigationRef';
+import { isRateLimitError } from '../utils/apiErrors';
 import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PatientHome from '../components/patient/PatientHome';
@@ -34,6 +35,10 @@ const HomeScreen = ({ route, navigation }) => {
   const [user, setUser] = useState(validParamUser);
   const [loading, setLoading] = useState(!validParamUser);
   const [error, setError] = useState(null);
+  // [FIX 0014] Phân biệt lỗi 429 (hệ thống bận — mời thử lại) với lỗi phiên hết hạn
+  // (đăng nhập lại). Trước đây mọi lỗi /auth/me đều báo "Phiên hết hạn" và đá user ra.
+  const [isBusyError, setIsBusyError] = useState(false);
+  const [profileRetry, setProfileRetry] = useState(0);
 
   // Profile edit states
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -89,14 +94,22 @@ const HomeScreen = ({ route, navigation }) => {
         setUser(data.user);
       } catch (err) {
         console.error('Fetch profile error:', err);
-        setError('Phiên đăng nhập đã hết hạn hoặc không tìm thấy người dùng.');
+        // [FIX 0014] 429/limit tạm thời KHÔNG phải phiên hết hạn — giữ user ở lại,
+        // hiển thị nút "Thử lại" thay vì "Quay lại trang chủ" (đăng xuất).
+        if (isRateLimitError(err)) {
+          setIsBusyError(true);
+          setError('Hệ thống đang xử lý quá nhiều yêu cầu. Vui lòng chờ vài giây rồi bấm thử lại.');
+        } else {
+          setIsBusyError(false);
+          setError('Phiên đăng nhập đã hết hạn hoặc không tìm thấy người dùng.');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, []);
+  }, [profileRetry]);
 
   useEffect(() => {
     if (user) {
@@ -144,11 +157,17 @@ const HomeScreen = ({ route, navigation }) => {
   if (error || !user) {
     return (
       <View style={styles.errorContainer}>
-        <AlertCircle size={48} color="#B91C1C" style={{ marginBottom: 16 }} />
+        <AlertCircle size={48} color={isBusyError ? '#B45309' : '#B91C1C'} style={{ marginBottom: 16 }} />
         <Text style={styles.errorText}>{error || 'Không tìm thấy thông tin người dùng.'}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={handleLogout}>
-          <Text style={styles.retryButtonText}>Quay lại trang chủ</Text>
-        </TouchableOpacity>
+        {isBusyError ? (
+          <TouchableOpacity style={styles.retryButton} onPress={() => setProfileRetry((c) => c + 1)}>
+            <Text style={styles.retryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.retryButton} onPress={handleLogout}>
+            <Text style={styles.retryButtonText}>Quay lại trang chủ</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }

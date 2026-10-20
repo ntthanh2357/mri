@@ -272,6 +272,8 @@ export default function StaffSchedulingScreen({ navigation }) {
   useEffect(() => {
     fetchCurrentUser();
     fetchStaffList();
+    // Tải ngay phiếu đăng ký của người dùng để đếm KPI / badge tab chính xác khi vào màn
+    fetchRegistrations();
   }, []);
 
   useEffect(() => {
@@ -645,13 +647,23 @@ export default function StaffSchedulingScreen({ navigation }) {
   };
 
   // KPI Metrics Calculation
+  // Nhân viên thường: đếm theo phiếu đăng ký của CHÍNH MÌNH (BE đã lọc staffId)
+  // — trước đây đếm theo toàn bệnh viện khiến staff hiểu nhầm là lịch của cá nhân mình.
   const kpiStats = useMemo(() => {
+    if (!isHospitalAdmin) {
+      return {
+        totalWeekly: registrations.length,
+        confirmedCount: registrations.filter((s) => s.status === 'confirmed').length,
+        pendingCount: registrations.filter((s) => s.status === 'pending').length,
+        swapCount: swapRequests.filter((r) => r.status === 'pending').length,
+      };
+    }
     const totalWeekly = weeklySchedules.length;
     const confirmedCount = weeklySchedules.filter((s) => s.status === 'confirmed').length;
     const pendingCount = weeklySchedules.filter((s) => s.status === 'pending').length;
     const swapCount = swapRequests.filter((r) => r.status === 'pending').length;
     return { totalWeekly, confirmedCount, pendingCount, swapCount };
-  }, [weeklySchedules, swapRequests]);
+  }, [weeklySchedules, registrations, swapRequests, isHospitalAdmin]);
 
   // Lễ tân: tab "Lịch của tôi" hiển thị dải 7 ngày riêng (dinhhuyhoang)
   const isReceptionistUser = currentUser?.role === 'receptionist';

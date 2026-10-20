@@ -42,7 +42,8 @@ export const register = async (req, res) => {
       return;
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"];
+    // [P0-Pharmacist] Thêm "pharmacist" vào danh sách role hợp lệ khi đăng ký/level tài khoản
+    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"];
     if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
@@ -53,9 +54,10 @@ export const register = async (req, res) => {
     //   1. Chỉ được tạo doctor, nurse, technician — không được tạo admin/hospital_admin
     //   2. hospitalId bắt buộc = hospitalId của chính họ (không tin client)
     if (req.user && req.user.role === "hospital_admin") {
-      const staffOnlyRoles = ["doctor", "nurse", "technician", "receptionist"];
+      // [P0-Pharmacist] hospital_admin được cấp thêm tài khoản Dược sĩ Khoa Dược
+      const staffOnlyRoles = ["doctor", "nurse", "technician", "receptionist", "pharmacist"];
       if (!staffOnlyRoles.includes(role)) {
-        res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên, lễ tân." });
+        res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên, lễ tân, dược sĩ." });
         return;
       }
       // Override hospitalId từ JWT, không tin dữ liệu client
@@ -329,7 +331,9 @@ export const login = async (req, res) => {
       }
     }
 
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "hospital_admin"];
+    // [P0-Pharmacist] Bổ sung "receptionist" + "pharmacist": nhân viên Khoa Dược
+    // (và lễ tân) tạo bởi hospital_admin cũng phải kích hoạt OTP ở lần đăng nhập đầu.
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     let otpCode;
@@ -1246,7 +1250,8 @@ export const phoneLoginVerify = async (req, res) => {
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
     // Staff roles created by hospital admin must activate on first login
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "hospital_admin"];
+    // [P0-Pharmacist] Thêm "pharmacist": tài khoản Dược sĩ mới cấp cũng chạy luồng kích hoạt OTP.
+    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({

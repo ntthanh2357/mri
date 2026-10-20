@@ -1,3 +1,4 @@
+import { isValidObjectId } from "mongoose";
 import { Assignment } from "../models/assignment.model.js";
 import { User } from "../models/user.model.js";
 import { Visit } from "../models/visit.model.js";
@@ -20,6 +21,14 @@ export const autoAssignDoctor = async (req, res) => {
     const { visitId, imagingResultId, assignmentType = 'read' } = req.body;
 
     if (!visitId) return errorResponse(res, "Thiếu visitId.", 400);
+
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(visitId)) {
+      return errorResponse(res, "visitId không hợp lệ.", 400);
+    }
+    if (imagingResultId && !isValidObjectId(imagingResultId)) {
+      return errorResponse(res, "imagingResultId không hợp lệ.", 400);
+    }
 
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
@@ -140,7 +149,7 @@ export const autoAssignDoctor = async (req, res) => {
   }
 };
 
-// ─── D.3 — Override thủ công (trưởng khoa thay đổi phân công) ──────────────
+// ─── D.3 — Override thủ công (UC-HADM-04 Smart Override — trưởng khoa thay đổi phân công) ─
 // @route PUT /api/v1/assignments/:id/override
 // @access Private (Admin, Hospital_admin)
 export const overrideAssignment = async (req, res) => {
@@ -149,17 +158,44 @@ export const overrideAssignment = async (req, res) => {
       return errorResponse(res, "Chỉ trưởng khoa hoặc admin mới có quyền thay đổi phân công.", 403);
     }
 
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(req.params.id)) {
+      return errorResponse(res, "ID phân công không hợp lệ.", 400);
+    }
+
     const assignment = await Assignment.findOne({
       _id: req.params.id,
       hospitalId: req.user.hospitalId
     });
     if (!assignment) return errorResponse(res, "Không tìm thấy phân công.", 404);
 
+    // Chỉ được điều chuyển ca còn đang hoạt động — ca đã hoàn tất/đã bị điều chuyển
+    // thì mọi can thiệp phải đi luồng nghiệp vụ khác (bổ sung, peer-review), tránh
+    // ghi đè lịch sử phân công đã chốt.
+    if (!["pending", "acknowledged", "in_progress"].includes(assignment.status)) {
+      return errorResponse(res, `Chỉ được điều chuyển ca đang hoạt động. Phân công này đang ở trạng thái "${assignment.status}".`, 400);
+    }
+
     const { newDoctorId, reason } = req.body;
     if (!newDoctorId) return errorResponse(res, "Thiếu ID bác sĩ mới.", 400);
+    if (!isValidObjectId(newDoctorId)) {
+      return errorResponse(res, "ID bác sĩ mới không hợp lệ.", 400);
+    }
+
+    // UC-HADM-04: ghi log bắt buộc lý do điều chuyển — không lý do, không can thiệp
+    const trimmedReason = (reason || "").trim();
+    if (!trimmedReason) {
+      return errorResponse(res, "Lý do điều chuyển là bắt buộc để ghi nhật ký kiểm toán.", 400);
+    }
+    if (trimmedReason.length < 10) {
+      return errorResponse(res, "Lý do điều chuyển cần cụ thể (tối thiểu 10 ký tự).", 400);
+    }
 
     const newDoctor = await User.findOne({ _id: newDoctorId, hospitalId: req.user.hospitalId, role: "doctor" });
     if (!newDoctor) return errorResponse(res, "Không tìm thấy bác sĩ mới.", 404);
+    if (String(newDoctor._id) === String(assignment.doctorId)) {
+      return errorResponse(res, "Bác sĩ mới trùng với bác sĩ đang phụ trách ca này.", 400);
+    }
 
     // Ghi nhận override
     const prevDoctorId = assignment.doctorId;
@@ -167,7 +203,7 @@ export const overrideAssignment = async (req, res) => {
     assignment.doctorId = newDoctorId;
     assignment.isOverridden = true;
     assignment.overriddenBy = req.user.id;
-    assignment.overrideReason = reason || "";
+    assignment.overrideReason = trimmedReason;
     assignment.overriddenAt = new Date();
     assignment.status = 'pending'; // Reset cho bác sĩ mới
     assignment.acknowledgedAt = null;
@@ -177,15 +213,37 @@ export const overrideAssignment = async (req, res) => {
     await User.updateOne({ _id: prevDoctorId }, { $inc: { "profile.currentCaseload": -1 } });
     await User.updateOne({ _id: newDoctorId }, { $inc: { "profile.currentCaseload": 1 } });
 
+    // UC-HADM-13 — ghi vết kiểm toán cho thao tác nhạy cảm (hash-chain)
+    try {
+      const { recordAuditLog, AUDIT_ACTIONS } = await import("../services/auditLog.service.js");
+      const [prevDoctor, assignedDoctor] = await Promise.all([
+        User.findById(prevDoctorId).select("profile.name profile.fullName email").lean(),
+        User.findById(newDoctorId).select("profile.name profile.fullName email").lean(),
+      ]);
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.ASSIGNMENT_OVERRIDDEN,
+        entity: "Assignment",
+        entityId: assignment._id.toString(),
+        performedBy: req.user.id,
+        hospitalId: req.user.hospitalId,
+        details: `Điều chuyển ${assignment.type === 'read' ? 'ca đọc phim' : 'ca điều trị'} từ BS ${prevDoctor?.profile?.name || prevDoctor?.profile?.fullName || prevDoctor?.email || prevDoctorId} sang BS ${assignedDoctor?.profile?.name || assignedDoctor?.profile?.fullName || assignedDoctor?.email || newDoctorId}. Lý do: ${trimmedReason}`,
+      });
+    } catch (auditErr) {
+      console.warn("Lỗi ghi audit log khi điều chuyển phân công:", auditErr.message);
+    }
+
     // Thông báo bác sĩ cũ và mới
     try {
+      // 0012: message theo đúng loại phân công (đọc phim / điều trị) thay vì
+      // hardcode "ca đọc phim" như cũ
+      const caseLabel = assignment.type === 'read' ? 'ca đọc phim' : 'ca điều trị';
       await createNotificationInternal({
         hospitalId: req.user.hospitalId,
         recipientId: newDoctorId,
         senderId: req.user.id,
         type: "assignment_override",
         title: "📋 Phân công mới (chuyển giao)",
-        message: `Bạn được chuyển giao ca đọc phim từ bác sĩ khác. Lý do: ${reason || 'Không có lý do'}.`,
+        message: `Bạn được chuyển giao ${caseLabel} từ bác sĩ khác. Lý do: ${reason || 'Không có lý do'}.`,
         relatedId: assignment._id,
       });
     } catch (notifErr) {
@@ -252,6 +310,11 @@ export const getCaseloadDashboard = async (req, res) => {
 // @access Private (Doctor)
 export const acknowledgeAssignment = async (req, res) => {
   try {
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (!isValidObjectId(req.params.id)) {
+      return errorResponse(res, "ID phân công không hợp lệ.", 400);
+    }
+
     const assignment = await Assignment.findOne({
       _id: req.params.id,
       doctorId: req.user.id,
@@ -282,8 +345,15 @@ export const getMyAssignments = async (req, res) => {
     const filter = { doctorId: req.user.id, hospitalId: req.user.hospitalId };
     if (status) filter.status = status;
 
+    // 0013: populate 2 cấp để trả kèm TÊN BỆNH NHÂN (visitId → patientId → profile.name)
+    // trước đây chỉ populate "visitId" 1 cấp nên FE chỉ nhận ObjectId bệnh nhân, không hiển
+    // thị được tên trên màn "Phân công của tôi". Kèm reason/visitType cho ngữ cảnh lâm sàng.
     const assignments = await Assignment.find(filter)
-      .populate("visitId", "patientId status priority")
+      .populate({
+        path: "visitId",
+        select: "patientId status priority reason visitType facility",
+        populate: { path: "patientId", select: "profile.name profile.fullName" },
+      })
       .populate("imagingResultId", "procedure diagnosis aiReport representativeSliceUrl")
       .sort({ priority: 1, deadlineAt: 1, createdAt: -1 });
 
@@ -301,15 +371,29 @@ export const getAllAssignments = async (req, res) => {
     if (!["admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin xem được tất cả phân công.", 403);
     }
-    const { status, doctorId, limit = 20, page = 1 } = req.query;
+    const { status, doctorId, limit = 20, page = 1, overridden } = req.query;
+    // Fix 0009: chặn ObjectId sai định dạng sớm — tránh 500 CastError lộ message Mongoose
+    if (doctorId && !isValidObjectId(doctorId)) {
+      return errorResponse(res, "doctorId không hợp lệ.", 400);
+    }
     const filter = { hospitalId: req.user.hospitalId };
-    if (status) filter.status = status;
+    // Hỗ trợ lọc nhiều trạng thái cùng lúc: ?status=pending,acknowledged,in_progress
+    if (status) filter.status = status.includes(",") ? { $in: status.split(",").map((s) => s.trim()) } : status;
     if (doctorId) filter.doctorId = doctorId;
+    // UC-HADM-04 — tab "Đã chuyển ca": override ghi in-place (status reset pending,
+    // isOverridden=true) nên lọc theo cờ isOverridden thay vì status enum.
+    if (overridden === "true") filter.isOverridden = true;
 
     const total = await Assignment.countDocuments(filter);
     const assignments = await Assignment.find(filter)
       .populate("doctorId", "profile.name profile.fullName profile.specialty")
-      .populate("visitId", "patientId status priority")
+      .populate("previousDoctorId", "profile.name profile.fullName")
+      .populate("overriddenBy", "profile.name profile.fullName")
+      .populate({
+        path: "visitId",
+        select: "patientId status priority",
+        populate: { path: "patientId", select: "profile.name" },
+      })
       .sort({ priority: 1, createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));

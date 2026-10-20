@@ -28,7 +28,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { get, post, setAuthToken } from '../services/api.service';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import PressableScale from '../components/PressableScale';
@@ -53,6 +53,9 @@ const StaffLoginScreen = ({ navigation }) => {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [twoFactorEmail, setTwoFactorEmail] = useState('');
   const [resendingOtp, setResendingOtp] = useState(false);
+  // [FIX] OTP debug (ENABLE_DEBUG_OTP=true) hiển thị INLINE trong form 2FA,
+  // không dùng modal chặn khiến nút "Xác nhận" không bấm được trên web.
+  const [debugOtp, setDebugOtp] = useState('');
 
   // Quên mật khẩu — modal luồng đầy đủ (email → OTP + mật khẩu mới)
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -124,9 +127,9 @@ const StaffLoginScreen = ({ navigation }) => {
       if (data.requires2FA) {
         setTwoFactorEmail((data.twoFactorEmail || email).trim());
         setShowTwoFactor(true);
-        showAlert('info', 'Xác thực 2 lớp',
-          'Mật khẩu chính xác. Mã OTP xác thực 2 lớp đã được gửi tới email cơ quan của bạn. Vui lòng kiểm tra và nhập mã để tiếp tục.' +
-          (data.otp2FA ? `\n(Mã debug: ${data.otp2FA})` : ''));
+        // [FIX] form 2FA đã tự mô tả "mã đã được gửi tới email cơ quan" — bỏ modal chặn,
+        // OTP debug (nếu có) hiển thị inline ngay trong form.
+        setDebugOtp(data.otp2FA || '');
       } else {
         // Dự phòng: server không yêu cầu 2FA (đã kích hoạt qua luồng khác)
         await setAuthToken(data.accessToken, data.refreshToken);
@@ -196,9 +199,13 @@ const StaffLoginScreen = ({ navigation }) => {
     try {
       const data = await post('/auth/resend-2fa', { email: twoFactorEmail });
       setTwoFactorError('');
-      showAlert('info', 'Đã gửi lại mã',
-        (data.message || 'Mã OTP mới đã được gửi tới email của bạn.') +
-        (data.otp2FA ? `\n(Mã debug: ${data.otp2FA})` : ''));
+      // [FIX] OTP debug hiển thị inline (mã mới) thay vì modal chặn form
+      if (data.otp2FA) {
+        setDebugOtp(data.otp2FA);
+      } else {
+        showAlert('info', 'Đã gửi lại mã',
+          (data.message || 'Mã OTP mới đã được gửi tới email của bạn.'));
+      }
     } catch (error) {
       setTwoFactorError(error.message || 'Không thể gửi lại mã. Vui lòng thử lại sau.');
     } finally {
@@ -215,7 +222,12 @@ const StaffLoginScreen = ({ navigation }) => {
   };
 
   const renderFieldError = (msg) =>
-    msg ? <Text style={styles.fieldError}>⚠ {msg}</Text> : null;
+    msg ? (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4 }}>
+        <AlertCircle size={12} color="#DC2626" />
+        <Text style={[styles.fieldError, { flex: 1 }]}>{msg}</Text>
+      </View>
+    ) : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flexOne}>
@@ -270,6 +282,17 @@ const StaffLoginScreen = ({ navigation }) => {
                 onChangeText={setTwoFactorCode}
               />
               {renderFieldError(twoFactorError)}
+              {debugOtp ? (
+                <Text
+                  style={{
+                    fontSize: 12, fontWeight: '700', color: '#92400E',
+                    backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
+                    borderRadius: 8, marginBottom: 10, textAlign: 'center',
+                  }}
+                >
+                  (DEV) Mã OTP thử nghiệm: {debugOtp}
+                </Text>
+              ) : null}
               <Text style={styles.otpEmailHint}>
                 Mã được gửi tới: <Text style={{ fontWeight: '700', color: Colors.onDarkText }}>{twoFactorEmail}</Text>
               </Text>
@@ -286,7 +309,7 @@ const StaffLoginScreen = ({ navigation }) => {
                   {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.ghostBtn} onPress={() => { setShowTwoFactor(false); setTwoFactorCode(''); setTwoFactorError(''); }}>
+              <TouchableOpacity style={styles.ghostBtn} onPress={() => { setShowTwoFactor(false); setTwoFactorCode(''); setTwoFactorError(''); setDebugOtp(''); }}>
                 <Text style={styles.ghostBtnText}>← Quay lại đăng nhập</Text>
               </TouchableOpacity>
             </View>

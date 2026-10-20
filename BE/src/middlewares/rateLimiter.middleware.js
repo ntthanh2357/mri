@@ -94,10 +94,24 @@ export const createRateLimiter = ({
 };
 
 // 1. Giới hạn đăng nhập & OTP: tối đa 10 lần/phút/IP
+// [FIX 0014] Bỏ qua 2 endpoint phiên làm việc ĐÃ XÁC THỰC khỏi giới hạn:
+//  - GET /auth/me: FE gọi 3 lần mỗi lần chuyển màn hình → ngưỡng 10/phút/IP sẽ đá
+//    user đang thao tác bình thường (429 → màn báo sai "Phiên hết hạn", dashboard
+//    hiển thị 0 im lặng). Endpoint này đã được bảo vệ bằng JWT (middleware protect).
+//  - POST /auth/refresh: làm mới token định kỳ, đã được bảo vệ bằng refreshToken hợp lệ.
+// Rate limit chỉ mang ý nghĩa chống brute-force trên các route đoán mật khẩu/OTP:
+// login, verify-2fa, resend-2fa, forgot-password, phone-login-*, firebase-login, sso —
+// tất cả vẫn bị giới hạn như cũ.
 export const authRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 10,
   message: "Quá nhiều lần thử xác thực hoặc đăng nhập thất bại.",
+  skip: (req) => {
+    const p = (req.path || "").replace(/\/+$/, "");
+    if (req.method === "GET" && p === "/me") return true;
+    if (req.method === "POST" && p === "/refresh") return true;
+    return false;
+  },
 });
 
 // 2. Giới hạn tra cứu cổng bệnh nhân B2C: tối đa 30 lần/phút/IP

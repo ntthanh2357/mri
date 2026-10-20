@@ -1,27 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get } from '../services/api.service';
-import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks';
+import { buildStaffTasks, nextUpVisits, nextUpPrescriptions } from '../utils/staffTasks';
 
-/** Dữ liệu trang chủ nhân viên: hàng đợi, bệnh án, hóa đơn (lễ tân), ca trực hôm nay. */
+/** Dữ liệu trang chủ nhân viên: hàng đợi, bệnh án, hóa đơn (lễ tân), ca trực hôm nay.
+ *  [P1-PharmacyQueue] Dược sĩ load hàng đợi Khoa Dược (GET /api/drugs/queue)
+ *  thay vì my-queue — đúng nghiệp vụ "tiếp nhận đơn thuốc điện tử" (UC-PHA-01).
+ *  [0013-MyAssignments] Bác sĩ load thêm ca phân công của mình (GET /api/v1/assignments/my)
+ *  để đếm số ca chờ xác nhận nhận bàn giao (ACK) ngay trên trang chủ. */
 const useStaffHome = (user) => {
-  const [data, setData] = useState({ loading: true, visits: [], emr: [], invoices: [], schedule: null });
+  const [data, setData] = useState({ loading: true, visits: [], emr: [], invoices: [], prescriptions: [], assignments: [], schedule: null });
 
   const load = useCallback(async () => {
     if (!user) return;
     setData(d => ({ ...d, loading: true }));
-    const [queueRes, emrRes, schedRes, invRes] = await Promise.all([
-      get('/api/v1/visits/my-queue').catch(() => null),
+    const isPharmacist = user.role === 'pharmacist';
+    const isDoctor = user.role === 'doctor';
+    const [queueRes, pharmRes, emrRes, schedRes, invRes, assignRes] = await Promise.all([
+      isPharmacist ? null : get('/api/v1/visits/my-queue').catch(() => null),
+      isPharmacist ? get('/api/drugs/queue').catch(() => null) : null,
       get('/emr/records').catch(() => null),
       get('/api/v1/schedules/my-schedule').catch(() => null),
       user.role === 'receptionist' ? get('/api/v1/invoices').catch(() => null) : null,
+      isDoctor ? get('/api/v1/assignments/my').catch(() => null) : null,
     ]);
     const schedules = schedRes?.data?.schedules;
     const today = new Date().toDateString();
     setData({
       loading: false,
       visits: queueRes?.visits || [],
+      prescriptions: pharmRes?.data?.prescriptions || [],
       emr: emrRes?.status === 'success' && Array.isArray(emrRes.data) ? emrRes.data : [],
       invoices: invRes?.invoices || [],
+      assignments: assignRes?.data || [],
       schedule: Array.isArray(schedules) ? schedules.find(s => new Date(s.date).toDateString() === today) || null : null,
     });
   }, [user]);
@@ -31,7 +41,9 @@ const useStaffHome = (user) => {
   return {
     ...data,
     tasks: buildStaffTasks(user?.role, data),
-    nextUp: nextUpVisits(user?.role, data.visits),
+    nextUp: user?.role === 'pharmacist'
+      ? nextUpPrescriptions(data.prescriptions)
+      : nextUpVisits(user?.role, data.visits),
     reload: load,
   };
 };

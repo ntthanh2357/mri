@@ -13,6 +13,12 @@ const invoiceItemSchema = new Schema({
   unit: { type: String, default: 'Viên' },
   dosage: { type: String, default: null },
   batchNumber: { type: String, default: null },
+  // Nguồn lô thực tế đã xuất kho theo FEFO (UC-PHA-06/07): [{batchNumber, quantity}]
+  // Ghi tại thời điểm trừ kho để hoàn tiền trước khi phát thuốc trả ĐÚNG lô cũ.
+  batches: {
+    type: [{ batchNumber: { type: String, default: null }, quantity: { type: Number, default: 0 } }],
+    default: [],
+  },
   // BHYT phân bổ cấp mặt hàng
   insuranceCoverage: {
     isCovered: { type: Boolean, default: false },

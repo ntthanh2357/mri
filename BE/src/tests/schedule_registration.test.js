@@ -49,8 +49,12 @@ describe('Đăng ký lịch làm việc & Phân ca nhân sự (Work Schedule Reg
 
     expect(mondayDateStr).toBe('2026-09-28');
     expect(sundayDateStr).toBe('2026-10-04');
-    expect(start.getHours()).toBe(0);
-    expect(end.getHours()).toBe(23);
+    // 0012: assert theo thời điểm tuyệt đối (ISO) thay vì getHours() phụ thuộc
+    // múi giờ máy chạy — Thứ 2 00:00 VN (GMT+7) = Chủ nhật 17:00Z ngày trước,
+    // Chủ nhật 23:59:59.999 VN = 16:59:59.999Z cùng ngày. Test trước fail trên
+    // môi trường UTC/CI (getHours() trả 17 thay vì 0) dù thuật toán đúng.
+    expect(start.toISOString()).toBe('2026-09-27T17:00:00.000Z');
+    expect(end.toISOString()).toBe('2026-10-04T16:59:59.999Z');
 
     // Thử với Chủ Nhật lúc 23:30 tối tại VN (16:30Z cùng ngày)
     const sundayNight = new Date('2026-10-04T16:30:00Z');

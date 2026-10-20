@@ -488,10 +488,14 @@ export const edAccept = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 export const acknowledgeByRole = async (req, res) => {
   try {
-    const { id } = req.params;
+    // Fix 0011: route chuẩn PUT /ack/:id và route legacy PUT /alerts/:alertId/acknowledge
+    // dùng chung handler này nhưng tên param khác nhau — đọc cả hai để route legacy
+    // không bị 404 (alertId === undefined khi gọi qua /ack/:id và ngược lại).
+    const { id, alertId } = req.params;
+    const eventId = id || alertId;
     const { role } = req.body; // 'neurosurgeon' | 'neuro_icu' | 'nurse_lead' | 'radiology_tech'
 
-    const event = await EmergencyAlert.findOne({ _id: id, hospitalId: req.user.hospitalId });
+    const event = await EmergencyAlert.findOne({ _id: eventId, hospitalId: req.user.hospitalId });
     if (!event) return errorResponse(res, "Không tìm thấy sự kiện cấp cứu.", 404);
     if (['closed', 'cancelled_false_alarm'].includes(event.status)) {
       return errorResponse(res, "Sự kiện cấp cứu này đã kết thúc hoặc bị hủy.", 400);

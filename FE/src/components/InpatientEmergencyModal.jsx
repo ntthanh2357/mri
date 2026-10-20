@@ -422,7 +422,7 @@ export default function InpatientEmergencyModal({
                 onClick={handleOneTouchTrigger}
                 className="px-8 py-3.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-sm font-black tracking-wide shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2 mx-auto"
               >
-                🚨 PHÁT LỆNH BÁO ĐỘNG CẤP CỨU NGAY (1-CHẠM)
+                PHÁT LỆNH BÁO ĐỘNG CẤP CỨU NGAY (1-CHẠM)
               </button>
               <p className="text-[11px] text-slate-500 italic">
                 Hotline cấp cứu nội bộ kíp trực: <b>Ext 102 / 115</b> (Dự phòng khi rớt mạng)
@@ -581,7 +581,7 @@ export default function InpatientEmergencyModal({
               {activeTab === 'enrich' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-900">
-                    💡 <b>Bổ sung thông số lâm sàng:</b> Giúp kíp trực nắm rõ mức độ tri giác và dấu hiệu thần kinh khu trú.
+                    <b>Bổ sung thông số lâm sàng:</b> Giúp kíp trực nắm rõ mức độ tri giác và dấu hiệu thần kinh khu trú.
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -670,7 +670,7 @@ export default function InpatientEmergencyModal({
               {activeTab === 'verbal_order' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
-                    ⚠️ <b>Quy chế Y lệnh miệng cấp cứu (Verbal Order):</b> Bác sĩ ra lệnh tại chỗ, Điều dưỡng đọc lại (Read-Back) xác nhận và thực hiện ngay. Bác sĩ chịu trách nhiệm ký số bổ sung EMR trong vòng 24 giờ.
+                    <b>Quy chế Y lệnh miệng cấp cứu (Verbal Order):</b> Bác sĩ ra lệnh tại chỗ, Điều dưỡng đọc lại (Read-Back) xác nhận và thực hiện ngay. Bác sĩ chịu trách nhiệm ký số bổ sung EMR trong vòng 24 giờ.
                   </div>
 
                   <div>
@@ -710,7 +710,7 @@ export default function InpatientEmergencyModal({
               {activeTab === 'mri_gate' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 leading-relaxed">
-                    🛑 <b>Checklist An toàn trước chụp MRI 3.0T (Pre-MRI Safety Gate):</b> Bệnh nhân u não nguy kịch chỉ được vào buồng MRI khi sinh hiệu đã được kiểm soát và vượt qua sàng lọc vật liệu cấy ghép từ tính.
+                    <b>Checklist An toàn trước chụp MRI 3.0T (Pre-MRI Safety Gate):</b> Bệnh nhân u não nguy kịch chỉ được vào buồng MRI khi sinh hiệu đã được kiểm soát và vượt qua sàng lọc vật liệu cấy ghép từ tính.
                   </div>
 
                   <div className="space-y-2.5">
@@ -780,7 +780,7 @@ export default function InpatientEmergencyModal({
               {activeTab === 'icu_bed' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-900 leading-relaxed">
-                    🏥 <b>Đề xuất giữ giường Hồi sức U Não (Neuro-ICU):</b> Hệ thống gửi yêu cầu sang Bác sĩ trực Đơn nguyên Hồi sức Cấp cứu U Não để phê duyệt giữ giường tạm thời trong 4 giờ.
+                    <b>Đề xuất giữ giường Hồi sức U Não (Neuro-ICU):</b> Hệ thống gửi yêu cầu sang Bác sĩ trực Đơn nguyên Hồi sức Cấp cứu U Não để phê duyệt giữ giường tạm thời trong 4 giờ.
                   </div>
 
                   <div>
@@ -834,7 +834,7 @@ export default function InpatientEmergencyModal({
               {activeTab === 'closure' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 leading-relaxed">
-                    ✅ <b>Đóng sự kiện cấp cứu:</b> Ghi nhận kết cục lâm sàng chính thức và hoàn tất hồ sơ sự cố.
+                    <b>Đóng sự kiện cấp cứu:</b> Ghi nhận kết cục lâm sàng chính thức và hoàn tất hồ sơ sự cố.
                   </div>
 
                   <div>

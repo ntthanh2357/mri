@@ -36,12 +36,17 @@ import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
+import MyAssignmentsScreen from '../screens/MyAssignmentsScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
+import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
+import SlaReportScreen from '../screens/SlaReportScreen';
+import ClinicalAuditScreen from '../screens/ClinicalAuditScreen';
+import AssignmentOverrideScreen from '../screens/AssignmentOverrideScreen';
 
 import linkingConfig from './linking';
 
@@ -122,11 +127,16 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: isNativeMobile }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ title: 'Kích hoạt tài khoản', headerShown: isNativeMobile }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ title: 'Hàng đợi khám', headerShown: false }} />
+        <Stack.Screen name="MyAssignments" component={MyAssignmentsScreen} options={{ title: 'Phân công của tôi', headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ title: 'Thông tin bệnh viện', headerShown: false }} />
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ title: 'Quản lý tài khoản', headerShown: isNativeMobile }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ title: 'Chi tiết bệnh nhân', headerShown: false }} />
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: isNativeMobile }} />
+        <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: isNativeMobile }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: isNativeMobile }} />
+        <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
+        <Stack.Screen name="ClinicalAudit" component={ClinicalAuditScreen} options={{ title: 'Nhật ký Kiểm toán Lâm sàng', headerShown: false }} />
+        <Stack.Screen name="AssignmentOverride" component={AssignmentOverrideScreen} options={{ title: 'Điều chuyển Phân công Ca', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

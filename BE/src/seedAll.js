@@ -354,7 +354,29 @@ const seedComprehensiveDatabase = async () => {
           profile: { name: "Phan Anh Tuấn (Điều phối viên Chuyển tuyến & Viện phí)", medicalId: "NV-003", address: "Hà Nội", specialty: "receptionist" },
         },
 
-        // 7. PATIENT (Bệnh nhân U Não)
+        // 7. PHARMACIST (Dược sĩ Bệnh viện — Khoa Dược) [P0-Mở khóa vai trò Dược sĩ]
+        {
+          email: "pharmacist@neuroscan.com",
+          phone: "+84888888893",
+          passwordHash,
+          role: "pharmacist",
+          hospitalId: hospital._id,
+          departmentId: "KD",
+          isVerified: true,
+          profile: { name: "DS.CKI Vũ Thu Trang (Dược sĩ Trưởng Khoa Dược Lâm sàng)", medicalId: "DS-001", address: "Hà Nội", specialty: "clinical_pharmacist" },
+        },
+        {
+          email: "pharmacist2@neuroscan.com",
+          phone: "+84888888894",
+          passwordHash,
+          role: "pharmacist",
+          hospitalId: hospital._id,
+          departmentId: "KD",
+          isVerified: true,
+          profile: { name: "DS. Trần Quốc Bảo (Dược sĩ Thẩm định Đơn thuốc & Cấp phát)", medicalId: "DS-002", address: "Hà Nội", specialty: "clinical_pharmacist" },
+        },
+
+        // 8. PATIENT (Bệnh nhân U Não)
         {
           email: "patient@neuroscan.com",
           phone: "+84901111111",
@@ -614,6 +636,12 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Sanofi",
           dosageInstructions: "Uống 1 viên/lần, 2 lần/ngày sau ăn. Không bẻ viên thuốc.",
           stock: { quantity: 1200, unit: "Viên", minStock: 200 },
+          // Tồn kho theo lô (UC-PHA-07) — 2 lô hạn dùng khác nhau: FEFO sẽ luôn xuất
+          // lô hết hạn sớm (2027-04-30) trước, demo “hai lô khác hạn dùng”.
+          batches: [
+            { batchNumber: "LO-DPK-0925", quantity: 500, expiryDate: new Date("2027-04-30"), supplier: "Sanofi Vietnam", receivedAt: new Date("2025-09-15") },
+            { batchNumber: "LO-DPK-0326", quantity: 700, expiryDate: new Date("2028-06-30"), supplier: "Sanofi Vietnam", receivedAt: new Date("2026-03-20") },
+          ],
           price: 5200,
           expiryDate: new Date("2028-06-30"),
           interactions: ["Lamotrigine", "Carbamazepine", "Aspirin"],
@@ -627,6 +655,11 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Novartis",
           dosageInstructions: "Uống 1 viên/lần x 2 lần/ngày, tăng liều dần theo chỉ định.",
           stock: { quantity: 180, unit: "Viên", minStock: 200 },
+          // Lô LO-TEG-1125 hết hạn 05/11/2026 (~3 tuần) → hiện trong tab Hết hạn (≤30 ngày).
+          batches: [
+            { batchNumber: "LO-TEG-1125", quantity: 80, expiryDate: new Date("2026-11-05"), supplier: "Novartis Vietnam", receivedAt: new Date("2025-11-10") },
+            { batchNumber: "LO-TEG-0426", quantity: 100, expiryDate: new Date("2027-10-15"), supplier: "Novartis Vietnam", receivedAt: new Date("2026-04-05") },
+          ],
           price: 3500,
           expiryDate: new Date("2027-10-15"),
           interactions: ["Sodium Valproate", "Phenobarbital"],
@@ -653,6 +686,12 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Pfizer",
           dosageInstructions: "Uống 1 viên vào 8h sáng sau ăn no để chống phù não.",
           stock: { quantity: 600, unit: "Viên", minStock: 100 },
+          // Lô LO-MED-1224 ĐÃ HẾT HẠN (30/09/2026) → dead stock: FEFO loại khỏi xuất,
+          // tab Hết hạn đánh dấu “ĐÃ HẾT HẠN” chờ thủ tục tiêu hủy theo GPP.
+          batches: [
+            { batchNumber: "LO-MED-1224", quantity: 50, expiryDate: new Date("2026-09-30"), supplier: "Pfizer Vietnam", receivedAt: new Date("2024-12-01") },
+            { batchNumber: "LO-MED-0626", quantity: 550, expiryDate: new Date("2027-11-20"), supplier: "Pfizer Vietnam", receivedAt: new Date("2026-06-15") },
+          ],
           price: 9000,
           expiryDate: new Date("2027-11-20"),
           interactions: ["NSAIDs", "Ketoconazole"],
@@ -731,6 +770,9 @@ const seedComprehensiveDatabase = async () => {
           manufacturer: "Dược Hậu Giang",
           dosageInstructions: "Uống 1-2 viên mỗi 4-6 giờ khi đau đầu hoặc sốt > 38.5C.",
           stock: { quantity: 3000, unit: "Viên", minStock: 300 },
+          batches: [
+            { batchNumber: "LO-PARA-0526", quantity: 3000, expiryDate: new Date("2028-12-31"), supplier: "Dược Hậu Giang", receivedAt: new Date("2026-05-10") },
+          ],
           price: 1200,
           expiryDate: new Date("2028-12-31"),
           interactions: ["Rượu"],
@@ -1341,6 +1383,66 @@ const seedComprehensiveDatabase = async () => {
         },
       });
 
+      // [P1-PharmacyQueue] Đơn thuốc nguy cơ CRITICAL — đẩy vào hàng đợi Dược sĩ
+      // để demo luồng Thẩm định kép (Dual-Sign) → Phát thuốc (UC-PHA-02 → 04).
+      // ⚠️ Thuốc kê PHẢI tồn tại trong danh mục 10 thuốc đã seed ở Step Drugs:
+      // payInvoice sẽ thêm dòng thuốc từ đơn này vào hóa đơn chờ thanh toán của
+      // pat3 rồi trừ kho FEFO — kê thuốc ngoài danh mục sẽ làm pay lỗi 400
+      // DRUG_NOT_FOUND (bug cũ khi kê "Dexamethasone 8mg"/"Phenytoin 100mg").
+      // Cặp thuốc demo: Dexamethasone 4mg/1ml (corticoid chống phù não, 450 ống)
+      // + Tegretol 200mg (carbamazepine — 2 lô, FEFO xuất lô LO-TEG-1125 trước).
+      const presc3 = await Prescription.create({
+        hospitalId: hospital._id,
+        patient_id: pat3._id,
+        doctorId: doc3._id,
+        doctor_name: doc3.profile.name,
+        diagnosis: "Glioma ác tính độ 3 — phù não nặng, dự phòng động kinh",
+        drugs: [
+          {
+            name: "Dexamethasone 4mg/1ml",
+            quantity: 30,
+            unit: "ống",
+            usage: "Tiêm bắp 2 ống sáng, 1 ống chiều sau ăn no",
+            timesPerDay: 2,
+            durationDays: 10,
+          },
+          {
+            name: "Tegretol 200mg",
+            quantity: 60,
+            unit: "viên",
+            usage: "Uống 1 viên sáng, 1 viên tối (uống nguyên viên)",
+            timesPerDay: 2,
+            durationDays: 30,
+          },
+        ],
+        note: "Theo dõi đường huyết khi dùng corticoid liều cao; khám lại sau 7 ngày.",
+        dispenseStatus: "AWAITING_PHARMACY_VERIFICATION",
+        clinicalSafety: {
+          safetyScore: 41,
+          status: "CRITICAL",
+          evaluationCoverage: "FULL",
+          warnings: [
+            {
+              severity: "CRITICAL",
+              type: "DRUG_INTERACTION",
+              message: "Tegretol (carbamazepine) + Dexamethasone: thuốc chống co giật cảm ứng enzyme CYP3A4 làm tăng chuyển hóa Dexamethasone gấp 2-3 lần, làm mất hiệu quả chống phù não quanh khối u; cân nhắc tăng liều hoặc đổi sang Keppra (levetiracetam).",
+            },
+            {
+              severity: "HIGH",
+              type: "DOSAGE",
+              message: "Dexamethasone 12mg/ngày thuộc nhóm liều cao — theo dõi đường huyết, nguy cơ nhiễm trùng cơ hội và loét dạ dày.",
+            },
+          ],
+          isOverridden: true,
+          overrideCategory: "CLINICAL_DISCRETION",
+          overrideReason: "Phù não quanh u tiến triển nhanh, hội chẩn thống nhất lợi ích vượt trội nguy cơ; cam kết theo dõi chặt.",
+          overriddenBy: doc3.profile.name,
+          overriddenAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+          requiresDualSign: true,
+          dualSignStatus: "PENDING_PHARMACY_VERIFICATION",
+        },
+      });
+
       await MedicineReminder.insertMany([
         {
           hospitalId: hospital._id,
@@ -1524,6 +1626,22 @@ const seedComprehensiveDatabase = async () => {
       ]);
       console.log(`✅ Seeded ${visits.length} Clinical Visits with diverse lifecycle states.`);
 
+      // [FIX LINKAGE presc3] presc3 (kê ở Step 16) được tạo TRƯỚC visit ~9ms
+      // (thứ tự code Step 16 → Step 17) khiến truy vấn linkage theo mốc thời
+      // gian của payInvoice (createdAt >= visit.createdAt) luôn trượt → pay hóa
+      // đơn chờ thanh toán của pat3 KHÔNG BAO GIỜ thêm dòng thuốc → hóa đơn
+      // không có items.type='drug' → Dược sĩ kẹt ở bước phát thuốc ("Chưa có
+      // hóa đơn"). Dời createdAt presc3 sang SAU visit chỉ định MRI 5 phút
+      // (bác sĩ kê đơn chống phù não ngay tại lượt khám) để luồng demo
+      // pay → thêm thuốc + trừ kho FEFO → phát thuốc chạy trọn vẹn
+      // mà không phải chỉnh DB thủ công.
+      // ⚠️ Phải dùng .collection.updateOne: mongoose strip $set createdAt trên
+      // updateOne của schema có timestamps:true (đã verify empirically).
+      await Prescription.collection.updateOne(
+        { _id: presc3._id },
+        { $set: { createdAt: new Date(visits[2].createdAt.getTime() + 5 * 60000) } }
+      );
+
       // ── STEP 18: TASKS (KANBAN 8-STEP CLINICAL WORKFLOW) ─────────────────────
       console.log("\n📋 Step 18: Seeding Tasks (8-Step Clinical Kanban)...");
       const sampleVisit = visits[2]; // Visit with MRI Order
@@ -1538,20 +1656,123 @@ const seedComprehensiveDatabase = async () => {
         { step: 8, title: "Thanh toán viện phí & Xuất hóa đơn VietQR", role: "receptionist", status: "pending", assignedTo: recep1._id },
       ];
 
+      // Timeline mẫu cho các bước đã hoàn tất (UC-HADM-12 — báo cáo SLA cần
+      // startedAt/completedAt): hành trình sampleVisit bắt đầu từ tiếp đón.
+      const sampleStart = new Date(now.getTime() - 3 * 3600000); // 3h trước
+      const stepTimeline = {
+        1: { start: 0, end: 14 },        // Tiếp đón ~14 phút
+        2: { start: 14, end: 51 },       // Khám lâm sàng ~37 phút
+        3: { start: 51, end: 58 },       // Chỉ định MRI ~7 phút
+        4: { start: 58, end: null },     // Đang chụp
+      };
+
       await Task.insertMany(
-        taskSteps.map((s) => ({
-          hospitalId: hospital._id,
-          visitId: sampleVisit._id,
-          patientId: sampleVisit.patientId,
-          stepNumber: s.step,
-          title: s.title,
-          roleRequired: s.role,
-          assignedToUserId: s.assignedTo,
-          status: s.status,
-          deadlineAt: new Date(now.getTime() + 4 * 3600000),
-        }))
+        taskSteps.map((s) => {
+          const tl = stepTimeline[s.step];
+          return {
+            hospitalId: hospital._id,
+            visitId: sampleVisit._id,
+            patientId: sampleVisit.patientId,
+            stepNumber: s.step,
+            title: s.title,
+            roleRequired: s.role,
+            assignedToUserId: s.assignedTo,
+            status: s.status,
+            deadlineAt: new Date(sampleStart.getTime() + (s.step + 3) * 3600000),
+            createdAt: new Date(sampleStart.getTime() + (tl ? tl.start : 60) * 60000),
+            startedAt: tl ? new Date(sampleStart.getTime() + tl.start * 60000) : null,
+            completedAt: tl && tl.end != null ? new Date(sampleStart.getTime() + tl.end * 60000) : null,
+          };
+        })
       );
       console.log(`✅ Seeded ${taskSteps.length} Kanban Tasks.`);
+
+      // ── STEP 18b: HÀNH TRÌNH HOÀN TẤT (UC-HADM-12 — dữ liệu cho Báo cáo SLA) ──
+      // 2 lượt khám đã đi hết chuỗi 8 bước trong 30 ngày qua:
+      //  - Hành trình A (pat1, 3 ngày trước): toàn bộ đúng hạn SLA.
+      //  - Hành trình B (pat2, 8 ngày trước): bước Đọc phim vượt hạn (quá tải
+      //    ca đọc phim) → demo báo cáo SLA < 100% + khâu chậm nhất.
+      console.log("\n📋 Step 18b: Seeding Completed Journey Tasks (SLA demo)...");
+      const closedVisits = await Visit.insertMany([
+        {
+          hospitalId: hospital._id,
+          patientId: pat1._id,
+          doctorId: doc1._id,
+          nurseId: nurse1._id,
+          status: "đã đóng",
+          priority: "trung bình",
+          reason: "Tái khám định kỳ u màng não — đã hoàn tất toàn bộ hành trình",
+          date: new Date(now.getTime() - 3 * 24 * 3600000),
+        },
+        {
+          hospitalId: hospital._id,
+          patientId: pat2._id,
+          doctorId: doc2._id,
+          nurseId: nurse2._id,
+          status: "đã đóng",
+          priority: "cao",
+          reason: "Khám cấp cứu đau đầu dữ dội — đã hoàn tất toàn bộ hành trình",
+          date: new Date(now.getTime() - 8 * 24 * 3600000),
+        },
+      ]);
+      const journeyMinutes = [
+        { step: 1, start: 0, end: 12 },    // Tiếp đón
+        { step: 2, start: 12, end: 47 },   // Khám lâm sàng
+        { step: 3, start: 47, end: 54 },   // Chỉ định MRI
+        { step: 4, start: 54, end: 132 },  // KTV chụp MRI (chờ slot + chụp)
+        { step: 5, start: 132, end: 141 }, // AI xử lý
+        { step: 6, start: 141, end: 246 }, // Bác sĩ CĐHA đọc phim
+        { step: 7, start: 246, end: 262 }, // Ký số hồ sơ
+        { step: 8, start: 262, end: 285 }, // Thanh toán
+      ];
+      const journeyAStart = new Date(now.getTime() - 3 * 24 * 3600000); // 3 ngày trước
+      const journeyBStart = new Date(now.getTime() - 8 * 24 * 3600000); // 8 ngày trước
+      const journeyTasks = [];
+      for (const [visitRef, jStart, readOverdue] of [
+        [closedVisits[0], journeyAStart, false],
+        [closedVisits[1], journeyBStart, true],
+      ]) {
+        for (const jm of journeyMinutes) {
+          // SLA từng bước: hạn chót = thời điểm bước mở + số phút chuẩn (bước
+          // đọc phim 6-7 được 120 phút; hành trình B cố tình vượt ở bước 6).
+          const slaMinutes = { 1: 20, 2: 60, 3: 20, 4: 120, 5: 20, 6: 120, 7: 30, 8: 30 }[jm.step];
+          const endMin = readOverdue && jm.step === 6 ? jm.end + 75 : jm.end; // +75 phút quá hạn
+          journeyTasks.push({
+            hospitalId: hospital._id,
+            visitId: visitRef._id,
+            patientId: visitRef.patientId,
+            stepNumber: jm.step,
+            title: taskSteps[jm.step - 1].title,
+            roleRequired: taskSteps[jm.step - 1].role,
+            assignedToUserId: taskSteps[jm.step - 1].assignedTo,
+            status: "completed",
+            createdAt: new Date(jStart.getTime() + jm.start * 60000),
+            startedAt: new Date(jStart.getTime() + jm.start * 60000),
+            completedAt: new Date(jStart.getTime() + endMin * 60000),
+            completedByUserId: taskSteps[jm.step - 1].assignedTo,
+            deadlineAt: new Date(jStart.getTime() + (jm.start + slaMinutes) * 60000),
+          });
+        }
+      }
+      await Task.insertMany(journeyTasks);
+      console.log(`✅ Seeded ${journeyTasks.length} Completed-Journey Tasks (2 hành trình, 1 có bước quá hạn SLA).`);
+
+      // ── STEP 18c: CASELOAD BÁC SĨ demo (UC-HADM-03 — Giám sát tải công việc) ──
+      // doc3 (bác sĩ đọc phim) đang quá tải 12/10 ca → cảnh báo quá mức trên
+      // báo cáo; doc1 tải 7/10; doc2 đang trực On-Call 5/10.
+      await User.updateOne(
+        { _id: doc1._id },
+        { $set: { "profile.currentCaseload": 7, "profile.maxCaseload": 10, "profile.isOnCall": true } }
+      );
+      await User.updateOne(
+        { _id: doc2._id },
+        { $set: { "profile.currentCaseload": 5, "profile.maxCaseload": 10, "profile.isOnCall": true } }
+      );
+      await User.updateOne(
+        { _id: doc3._id },
+        { $set: { "profile.currentCaseload": 12, "profile.maxCaseload": 10, "profile.isOnCall": false } }
+      );
+      console.log("✅ Seeded Doctor Caseload demo (doc3 quá tải 12/10).");
 
       // ── STEP 19: ASSIGNMENTS & PEER REVIEWS ──────────────────────────────────
       console.log("\n👨‍⚕️ Step 19: Seeding Assignments & Peer Reviews...");
@@ -1781,12 +2002,20 @@ const seedComprehensiveDatabase = async () => {
 
       // ── STEP 23: CRYPTOGRAPHIC AUDIT LOGS (HIPAA / TT13 COMPLIANT) ────────────
       console.log("\n🔒 Step 23: Seeding Cryptographic Tamper-Evident Audit Logs...");
+      // UC-HADM-13 — resolves thêm nhân sự cho các entry nhạy cảm lâm sàng (recep1 đã có ở trên)
+      const adminBvbm = users.find((u) => u.email === "admin.bvbm@neuroscan.com");
       const auditEntries = [
         { action: "LOGIN", entity: "User", entityId: users[0]._id.toString(), performedBy: "admin@neuroscan.com", details: "Quản trị viên hệ thống đăng nhập thành công" },
         { action: "RECORD_VIEWED", entity: "MedicalRecord", entityId: medicalRecords[0]._id.toString(), performedBy: "doctor@neuroscan.com", details: "Bác sĩ Nguyễn Gia Huy xem hồ sơ bệnh án BN001" },
         { action: "STOCK_DEDUCTED", entity: "Drug", entityId: seededDrugs[0]._id.toString(), performedBy: "pharmacy_system", details: "Xuất kho 28 viên Depakine Chrono theo đơn thuốc" },
         { action: "PAYMENT_COMPLETED", entity: "Invoice", entityId: "100001", performedBy: "receptionist@neuroscan.com", details: "Thanh toán viện phí 1,850,000 VND qua VietQR" },
         { action: "BED_OCCUPIED", entity: "HospitalBed", entityId: "ICU-01", performedBy: "nurse@neuroscan.com", details: "Tiếp nhận bệnh nhân vào giường hồi sức cấp cứu u não" },
+        // ── UC-HADM-13: 5 thao tác nhạy cảm lâm sàng (Break-Glass · hủy ca · sửa chẩn đoán · hoàn tiền · điều chuyển ca)
+        { action: "BREAK_GLASS_EMERGENCY_ACCESSED", entity: "PatientRecord", entityId: visits[1]._id.toString(), performedBy: doc2._id.toString(), details: "Truy cập khẩn cấp Break-Glass hồ sơ bệnh án BN002 ngoài phân quyền thường quy — bệnh nhân tụt ý thức đột ngột trong giờ hóa trị; mở hồ sơ theo HIPAA §164.312(a)(2)(ii), truy vết bắt buộc sau đó." },
+        { action: "SOFT_DELETE_VISIT", entity: "Visit", entityId: visits[2]._id.toString(), performedBy: (recep1 || users[0])._id.toString(), details: "Hủy lượt khám (Soft Delete) tuân thủ TT 46/2018/TT-BYT. Trạng thái ca khám cũ: chờ khám — bệnh nhân đăng ký trùng lịch với buổi hóa trị, lễ tân hủy và hỗ trợ đặt lại buổi chiều." },
+        { action: "UPDATE_EMR_RECORD", entity: "MedicalRecord", entityId: medicalRecords[0]._id.toString(), performedBy: doc1._id.toString(), details: "Sửa kết luận chẩn đoán bệnh án BN001: bổ sung 'nghi ngờ u màng não thùy đỉnh phải' sau hội chẩn liên khoa Ung thư não — CĐHA; lưu diff before/after vào payloadHash." },
+        { action: "REFUND_APPROVED", entity: "Invoice", entityId: "100002", performedBy: (adminBvbm || users[0])._id.toString(), details: "Hoàn tiền hóa đơn viện phí 1.150.000 VND (chụp MRI có cản quang) — bệnh nhân có tiền sử dị ứng Gadolinium, bác sĩ chỉ định hủy trước khi thực hiện." },
+        { action: "ASSIGNMENT_OVERRIDDEN", entity: "Assignment", entityId: visits[4]._id.toString(), performedBy: (adminBvbm || users[0])._id.toString(), details: "Điều chuyển ca đọc phim từ BS.CKI Phạm Thanh Hải sang TS.BS.CKII Nguyễn Gia Huy. Lý do: bác sĩ phụ trách đột xuất nghỉ phép vì việc gia đình, ca CRITICAL cần đọc trong hạn 4 giờ." },
       ];
 
       let prevHash = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -1840,7 +2069,7 @@ const seedComprehensiveDatabase = async () => {
       console.log(`   - Transfer Forms:      1`);
       console.log(`   - Discharge Papers:    1`);
       console.log(`   - Lab Orders:          3`);
-      console.log(`   - Prescriptions:       2`);
+      console.log(`   - Prescriptions:       3`);
       console.log(`   - Reminders:           3`);
       console.log(`   - Clinical Visits:     ${visits.length} (including Visit at 'chờ chụp' for you to add MRI data)`);
       console.log(`   - Kanban Tasks:        ${taskSteps.length}`);

@@ -2,6 +2,10 @@ import './src/tailwind-built.css';
 import { registerRootComponent } from 'expo';
 import { Alert, Platform } from 'react-native';
 
+// Font icon Feather nhúng base64 cho web — phải nạp TRƯỚC khi app render
+// (xem src/utils/embedFeatherFont.web.js để hiểu vì sao cần thiết).
+import './src/utils/embedFeatherFont';
+
 import AppNavigator from './src/navigation/AppNavigator';
 
 // Custom high-fidelity Alert.alert Web Polyfill

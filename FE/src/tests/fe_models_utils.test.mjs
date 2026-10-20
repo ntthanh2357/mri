@@ -16,7 +16,9 @@ import { extractMedications, extractOrders } from '../utils/clinicalText.js';
 import { parseSimpleMarkdown } from '../utils/simpleMarkdown.js';
 import { initialsOf } from '../utils/initials.js';
 import { isStaffPortalPath } from '../utils/portalPath.js';
+import { isRateLimitError } from '../utils/apiErrors.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
+import { daysLeftOf, expiryStatus, expiryStatusText, batchCountOf, earliestActiveBatch, displayExpiry } from '../utils/batchUtils.js';
 import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue } from '../utils/myHealth.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
 
@@ -290,12 +292,28 @@ it('buildStaffTasks counts doctor work by status and puts pending tasks first', 
   const emr = [{ signStatus: 'Chưa duyệt' }, { signStatus: 'Đã ký' }];
   const tasks = buildStaffTasks('doctor', { visits, emr });
   const byKey = Object.fromEntries(tasks.map(t => [t.key, t.count]));
-  assert.deepStrictEqual(byKey, { exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
-  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'examining', 'scan']);
+  // [0013-MyAssignments] thêm task 'assign' (ca phân công chờ xác nhận) — mặc định 0 khi chưa tải assignments
+  assert.deepStrictEqual(byKey, { assign: 0, exam: 2, examining: 0, read: 1, scan: 0, sign: 1 });
+  assert.deepStrictEqual(tasks.map(t => t.key), ['exam', 'read', 'sign', 'assign', 'examining', 'scan']);
   // bác sĩ kiêm chụp MRI (BE my-queue trả cả ca chụp cho bác sĩ)
   const withScan = buildStaffTasks('doctor', { visits: [{ status: 'chờ chụp' }, { status: 'đang chụp' }] });
   assert.strictEqual(withScan.find(t => t.key === 'scan').count, 2);
   assert.deepStrictEqual(tasks[0].params, { tab: 'examQueue' });
+});
+
+// [0013-MyAssignments] task 'assign' đếm ca phân công pending và dẫn tới màn Phân công của tôi
+it('buildStaffTasks counts pending assignments for doctor and routes to MyAssignments first when present', () => {
+  const withAssign = buildStaffTasks('doctor', {
+    visits: [{ status: 'đang chờ' }],
+    emr: [],
+    assignments: [{ status: 'pending' }, { status: 'pending' }, { status: 'acknowledged' }, { status: 'completed' }],
+  });
+  assert.strictEqual(withAssign.find(t => t.key === 'assign').count, 2);
+  // Việc còn tồn lên trước: assign (2 ca chờ ACK) đứng đầu danh sách
+  assert.strictEqual(withAssign[0].key, 'assign');
+  assert.deepStrictEqual(withAssign[0].params, { tab: 'pending' });
+  // Role khác không có task assign
+  assert.strictEqual(buildStaffTasks('nurse', { assignments: [{ status: 'pending' }] }).find(t => t.key === 'assign'), undefined);
 });
 
 it('buildStaffTasks handles unknown role and missing data', () => {
@@ -367,6 +385,82 @@ it('isReminderDue flags pending doses whose time has come, not done/skipped/futu
   assert.strictEqual(isReminderDue({ status: 'pending', time: '20:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'done', time: '08:00' }, now), false);
   assert.strictEqual(isReminderDue({ status: 'skipped', time: '08:00' }, now), false);
+});
+
+// ── UC-PHA-07: tồn kho theo lô / FEFO — tiện ích hiển thị ──
+console.log(`${colors.cyan}${colors.bold}SUITE: Batch/Expiry Utilities (batchUtils.js — UC-PHA-07)${colors.reset}`);
+
+it('daysLeftOf đếm đúng số ngày tới hạn dùng (tròn ngày, không lệch timezone cục bộ)', () => {
+  const now = new Date(2026, 9, 14, 8, 0); // 14/10/2026 08:00 giờ chỗ
+  assert.strictEqual(daysLeftOf(new Date(2026, 9, 15, 8, 0), now), 1);
+  assert.strictEqual(daysLeftOf(new Date(2026, 10, 5, 8, 0), now), 22);
+  assert.strictEqual(daysLeftOf(new Date(2026, 8, 30, 8, 0), now), -14);
+  assert.strictEqual(daysLeftOf(null, now), null);
+});
+
+it('expiryStatus phân cấp expired / critical (≤7 ngày) / warning (≤30 ngày) / ok', () => {
+  assert.strictEqual(expiryStatus(-1), 'expired');
+  assert.strictEqual(expiryStatus(3), 'critical');
+  assert.strictEqual(expiryStatus(22), 'warning');
+  assert.strictEqual(expiryStatus(45), 'ok');
+  assert.strictEqual(expiryStatus(null), 'unknown');
+  assert.strictEqual(expiryStatusText('expired'), 'ĐÃ HẾT HẠN');
+  assert.strictEqual(expiryStatusText('critical'), 'SẮP HẾT HẠN');
+});
+
+it('earliestActiveBatch chọn lô còn hàng có hạn sớm nhất (nguyên tắc FEFO)', () => {
+  const drug = {
+    batches: [
+      { batchNumber: 'LO-B', quantity: 700, expiryDate: '2028-06-30' },
+      { batchNumber: 'LO-A', quantity: 500, expiryDate: '2027-04-30' },
+      { batchNumber: 'LO-EMPTY', quantity: 0, expiryDate: '2026-11-01' },
+    ],
+  };
+  assert.strictEqual(earliestActiveBatch(drug).batchNumber, 'LO-A');
+  assert.strictEqual(batchCountOf(drug), 3);
+  assert.strictEqual(earliestActiveBatch({ batches: [] }), null);
+  assert.strictEqual(earliestActiveBatch({}), null);
+});
+
+it('displayExpiry ưu tiên lô sớm nhất, fallback hạn dùng danh mục cũ (legacy)', () => {
+  const batched = {
+    expiryDate: '2028-06-30',
+    batches: [{ batchNumber: 'LO-A', quantity: 500, expiryDate: '2027-04-30' }],
+  };
+  assert.strictEqual(displayExpiry(batched), new Date('2027-04-30').toLocaleDateString('vi-VN'));
+  const legacy = { expiryDate: '2027-10-15' };
+  assert.strictEqual(displayExpiry(legacy), new Date('2027-10-15').toLocaleDateString('vi-VN'));
+  assert.strictEqual(displayExpiry({}), 'Không thời hạn');
+});
+
+// ── [FIX 0014] Phân loại lỗi API: 429 (hệ thống bận) vs 401/403 (phiên hết hạn) ──
+console.log('\n  ── FIX 0014: isRateLimitError (utils/apiErrors.js) ──');
+
+it('isRateLimitError nhận ra lỗi 429 qua err.status', () => {
+  assert.strictEqual(isRateLimitError({ status: 429, message: 'Quá nhiều lần thử' }), true);
+});
+
+it('isRateLimitError nhận ra lỗi qua err.code RATE_LIMIT_EXCEEDED', () => {
+  assert.strictEqual(isRateLimitError({ status: 500, code: 'RATE_LIMIT_EXCEEDED', message: 'x' }), true);
+});
+
+it('isRateLimitError nhận ra qua message tiếng Việt của BE (FE cũ không gắn status)', () => {
+  assert.strictEqual(isRateLimitError(new Error('Quá nhiều lần thử xác thực hoặc đăng nhập thất bại. Vui lòng thử lại sau 23 giây.')), true);
+  assert.strictEqual(isRateLimitError(new Error('Bạn đã thực hiện quá nhiều yêu cầu. Vui lòng thử lại sau.')), true);
+});
+
+it('isRateLimitError KHÔNG nhầm 401/403/lỗi mạng với rate limit', () => {
+  assert.strictEqual(isRateLimitError({ status: 401, message: 'Phiên làm việc đã hết hạn.' }), false);
+  assert.strictEqual(isRateLimitError({ status: 403, code: 'FORBIDDEN', message: 'Không có quyền' }), false);
+  assert.strictEqual(isRateLimitError(new Error('Request failed with status 500')), false);
+  assert.strictEqual(isRateLimitError(new Error('Network request failed')), false);
+});
+
+it('isRateLimitError an toàn với input null/undefined/đối tượng rỗng', () => {
+  assert.strictEqual(isRateLimitError(null), false);
+  assert.strictEqual(isRateLimitError(undefined), false);
+  assert.strictEqual(isRateLimitError({}), false);
+  assert.strictEqual(isRateLimitError({ message: 123 }), false);
 });
 
 console.log(`\n======================================================================`);

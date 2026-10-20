@@ -20,14 +20,16 @@ const router = Router();
 router.use(protect);
 
 // ── Shift Registrations & Approval Inbox ──────────────────────────────────────
+// Dược sĩ là nhân viên y tế trực kíp như các role khác — trước đây bị thiếu trong
+// checkRole khiến form "Đăng ký ca làm" của dược sĩ luôn nhận 403.
 router.post(
   "/register",
-  checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]),
+  checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]),
   registerSchedule
 );
 router.get(
   "/registrations",
-  checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]),
+  checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]),
   getShiftRegistrations
 );
 router.put(
@@ -37,19 +39,19 @@ router.put(
 );
 router.delete(
   "/registrations/:id",
-  checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]),
+  checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]),
   cancelMyRegistration
 );
 
 // ── Swap Requests ────────────────────────────────────────────────────────────
-router.post("/swap-requests", checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin"]), createSwapRequest);
-router.get("/swap-requests", checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]), getSwapRequests);
+router.post("/swap-requests", checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"]), createSwapRequest);
+router.get("/swap-requests", checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]), getSwapRequests);
 router.put("/swap-requests/:id", checkRole(["hospital_admin", "admin"]), reviewSwapRequest);
 
 // ── Weekly & Personal Schedules ────────────────────────────────────────────────
-router.get("/me", checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]), getMySchedules);
-router.get("/my-schedule", checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]), getMySchedules);
-router.get("/", checkRole(["doctor", "nurse", "technician", "receptionist", "hospital_admin", "admin"]), getWeeklySchedules);
+router.get("/me", checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]), getMySchedules);
+router.get("/my-schedule", checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]), getMySchedules);
+router.get("/", checkRole(["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin", "admin"]), getWeeklySchedules);
 
 // ── CRUD schedules (Admin) ───────────────────────────────────────────────────
 router.post("/", checkRole(["hospital_admin", "admin"]), createSchedule);

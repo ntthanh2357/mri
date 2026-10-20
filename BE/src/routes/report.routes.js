@@ -4,7 +4,8 @@ import {
   getRevenueReport,
   getAiPerformanceReport,
   getDepartmentOperationReport,
-  getClinicalAnalyticsDashboard
+  getClinicalAnalyticsDashboard,
+  getSlaReport
 } from "../controllers/report.controller.js";
 
 const router = Router();
@@ -14,5 +15,6 @@ router.get("/revenue", getRevenueReport);
 router.get("/ai-performance", getAiPerformanceReport);
 router.get("/department-operation", getDepartmentOperationReport);
 router.get("/clinical-analytics", getClinicalAnalyticsDashboard);
+router.get("/sla", getSlaReport);
 
 export default router;

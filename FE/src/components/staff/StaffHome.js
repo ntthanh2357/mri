@@ -14,6 +14,7 @@ const ROLE_LABEL = {
   technician: 'Kỹ thuật viên chẩn đoán hình ảnh',
   nurse: 'Điều dưỡng',
   receptionist: 'Tiếp đón & thu ngân',
+  pharmacist: 'Dược sĩ Bệnh viện',
 };
 // 1 hành động chính mỗi role — phần còn lại đã có ở menu bên trái
 const PRIMARY_ACTION = {
@@ -21,12 +22,14 @@ const PRIMARY_ACTION = {
   technician: { label: 'Nhập kết quả chụp', icon: 'upload-cloud', route: 'CreateImagingResult' },
   nurse: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
   receptionist: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
+  pharmacist: { label: 'Mở hàng đợi Khoa Dược', icon: 'package', route: 'PharmacyQueue' },
 };
 const NEXT_TITLE = {
   doctor: 'Bệnh nhân tiếp theo',
   technician: 'Ca chụp tiếp theo',
   nurse: 'Chờ đo sinh hiệu',
   receptionist: 'Lượt khám đang mở',
+  pharmacist: 'Đơn thuốc cần xử lý',
 };
 const MRI_STATUSES = ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'];
 
@@ -63,6 +66,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
 
   const openVisit = (v) => {
     if (role === 'receptionist') return navigation.navigate('NurseReception', { tab: 'myQueue' });
+    if (role === 'pharmacist') return navigation.navigate('PharmacyQueue');
     return navigation.navigate('DoctorWorkQueue', { tab: MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
   };
 
@@ -89,6 +93,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
               <>
                 Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
                 {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
+                {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
               </>
             ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
           </Text>
@@ -120,7 +125,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
                     </View>
                     <View style={styles.grow}>
                       <Text style={[styles.taskLabel, done && styles.taskLabelDone]}>{t.label}</Text>
-                      <Text style={styles.sub}>{done ? 'Không còn việc tồn' : t.hint}</Text>
+                      <Text style={styles.sub}>{done ? 'Không còn việc tồn đọng' : t.hint}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={Colors.secondary} />
                   </Pressable>
