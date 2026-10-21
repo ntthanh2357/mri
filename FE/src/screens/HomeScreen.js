@@ -18,6 +18,8 @@ import performLogout from '../utils/logout';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PatientHome from '../components/patient/PatientHome';
 import StaffHome from '../components/staff/StaffHome';
+import NurseHome from '../components/staff/NurseHome';
+import DoctorHome from '../components/staff/DoctorHome';
 import ReceptionistHome from '../components/reception/ReceptionistHome';
 import Colors from '../constants/colors';
 import styles from './HomeScreen.styles';
@@ -189,6 +191,18 @@ const HomeScreen = ({ route, navigation }) => {
         ) : user.role === 'receptionist' ? (
           // Lễ tân: bàn làm việc tiếp đón & thu ngân riêng (dinhhuyhoang)
           <ReceptionistHome user={user} navigation={navigation} />
+        ) : user.role === 'pharmacist' ? (
+          // Dược sĩ: cùng bố cục trang chủ nhân viên, tông xanh ngọc Khoa Dược
+          <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} variant="pharmacist" />
+        ) : user.role === 'technician' ? (
+          // Kỹ thuật viên MRI: cùng bố cục trang chủ bác sĩ, tông xanh biển
+          <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} variant="technician" />
+        ) : user.role === 'doctor' ? (
+          // Bác sĩ: bàn làm việc cùng phong cách các trang nhân viên, tông chàm riêng
+          <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} />
+        ) : user.role === 'nurse' ? (
+          // Điều dưỡng: bàn làm việc cùng phong cách trang chủ Lễ tân
+          <NurseHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} />
         ) : (
           <StaffHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} />
         )}

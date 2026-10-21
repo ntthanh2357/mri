@@ -10,6 +10,12 @@ import { Prescription } from "../pharmacy/models/prescription.model.js";
 import { deductDrugStockFEFO, restockDrugBatch } from "../pharmacy/services/batchStock.service.js";
 import { executeWithTransaction } from "../../utils/transaction.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
+import { buildServiceItems, hasVitals } from "./servicePricing.util.js";
+import { sendRefundEmail } from "../../services/email.service.js";
+import { autoApplyBhytIfEligible, reconcileBhytAfterTotalChange } from "./bhytApply.service.js";
+import { syncPrescriptionDrugs, dispenseAndCloseVisit, finalizeReceivedPayment } from "./prescriptionBilling.service.js";
+import { BhytInfo } from "./models/bhytInfo.model.js";
+import { releasePayOSLink, getPayOSLink, allOrderCodes, setLinkStatus, inFlightMessage, markInvoicePaidByPayOS, MONEY_IN_FLIGHT, PAYOS_LINK_TTL_MINUTES } from "./payosLink.util.js";
 
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { tenantStorage } from "../../middlewares/tenant.middleware.js";
@@ -324,6 +330,7 @@ export const getInvoices = async (req, res) => {
 // @route   PUT /api/v1/invoices/:id/pay
 // @access  Private (Receptionist, Admin)
 export const payInvoice = async (req, res) => {
+  let lockedId = null; // khóa chống thu 2 lần cùng lúc
   try {
     const { id } = req.params;
     const { paymentMethod } = req.body;
@@ -331,175 +338,116 @@ export const payInvoice = async (req, res) => {
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn" });
 
+    // Chỉ thu tiền hóa đơn đang chờ (đã thanh toán / đã hoàn trả / đã hủy thì không thu lại)
+    if (invoice.status === "đang xử lý") {
+      return res.status(400).json({
+        message: "Hóa đơn đã nhận tiền nhưng đang kẹt ở trạng thái 'đang xử lý' (lỗi trừ kho) — vui lòng xử lý theo luồng hóa đơn kẹt (nhập kho bù hoặc hoàn tiền), không thu lại.",
+      });
+    }
+    if (invoice.status !== "chờ thanh toán") {
+      return res.status(400).json({ message: `Hóa đơn đang ở trạng thái "${invoice.status}" — không thể thu tiền.` });
+    }
+    // Khóa nguyên tử: chỉ 1 yêu cầu thu tiền được xử lý tại một thời điểm (khóa tự hết sau 60 giây nếu lỗi giữa chừng)
+    const lock = await Invoice.updateOne(
+      { _id: invoice._id, status: "chờ thanh toán", $or: [{ payLock: null }, { payLock: { $lt: new Date(Date.now() - 60 * 1000) } }] },
+      { $set: { payLock: new Date() } }
+    );
+    if (!lock.modifiedCount) {
+      return res.status(409).json({ message: "Hóa đơn đang được xử lý thanh toán ở một yêu cầu khác. Vui lòng tải lại để xem trạng thái." });
+    }
+    lockedId = invoice._id;
+
+    // Bệnh nhân có thẻ BHYT hợp lệ mà hóa đơn chưa áp (hoặc áp trên tổng cũ) → tự áp trước khi thu
+    if (invoice.status === "chờ thanh toán" && (["admin", "system_admin"].includes(req.user.role) || String(invoice.hospitalId) === String(req.user.hospitalId))) {
+      const auto = await autoApplyBhytIfEligible(invoice);
+      if (auto.code === "PAID_BEFORE_BHYT" || auto.code === "PAYOS_IN_FLIGHT") {
+        return res.status(409).json({ code: auto.code, message: auto.reason });
+      }
+      if (auto.applied && paymentMethod !== "bhyt") {
+        return res.status(409).json({
+          code: "BHYT_AUTO_APPLIED",
+          message: auto.patientCopayAmount > 0
+            ? `Hệ thống vừa tự áp BHYT (${auto.coverageRate}%): bệnh nhân chỉ còn trả ${auto.patientCopayAmount.toLocaleString("vi-VN")}đ. Kiểm tra lại số tiền rồi thu.`
+            : `Hệ thống vừa tự áp BHYT (${auto.coverageRate}%): BHYT chi trả toàn bộ, bệnh nhân không phải trả tiền.`,
+          bhyt: auto,
+        });
+      }
+    }
+
+    // BHYT chi trả 100%: bệnh nhân không phải trả gì → ghi nhận "đã thanh toán" bằng BHYT (không thu tiền mặt / QR)
+    // Hóa đơn 0đ nhờ BHYT (kể cả khi lễ tân bấm "thu tiền mặt") → ghi nhận bằng BHYT, không ghi là tiền mặt
+    const owedNow = invoice.patientPayAmount ?? (invoice.totalAmount - (invoice.bhytInfo?.bhytAmount || 0));
+    const coveredByBhyt = paymentMethod === "bhyt" || (owedNow <= 0 && (invoice.bhytInfo?.bhytAmount || 0) > 0);
+    if (coveredByBhyt) {
+      const owed = invoice.patientPayAmount ?? (invoice.totalAmount - (invoice.bhytInfo?.bhytAmount || 0));
+      if (!(invoice.bhytInfo?.bhytAmount > 0) || owed > 0) {
+        return res.status(400).json({ message: "Chỉ hóa đơn được BHYT chi trả 100% (bệnh nhân trả 0đ) mới được xác nhận thanh toán bằng BHYT." });
+      }
+    }
+
+    // Hóa đơn từng tạo mã VietQR: kiểm tra trước khi thu bằng cách khác để không thu trùng
+    if (invoice.status === "chờ thanh toán" && invoice.orderCode) {
+      const current = await getPayOSLink(invoice.orderCode);
+      setLinkStatus(invoice, invoice.orderCode, current.status);
+      if (current.status === "PAID") {
+        await markInvoicePaidByPayOS(invoice, "Check", invoice.orderCode, current.amountPaid);
+        return res.status(409).json({ message: "Hóa đơn này đã được thanh toán qua VietQR trước đó. Hệ thống đã cập nhật trạng thái 'Đã thanh toán' — không thu thêm.", alreadyPaid: true });
+      }
+      if (MONEY_IN_FLIGHT.includes(current.status)) {
+        await invoice.save();
+        return res.status(409).json({ code: "PAYOS_IN_FLIGHT", message: inFlightMessage(current.status) });
+      }
+      // Mã còn chờ (hoặc không kiểm tra được): lễ tân phải hỏi bệnh nhân đã chuyển khoản chưa rồi mới thu
+      if (["PENDING", "UNKNOWN"].includes(current.status) && req.body.confirmNoTransfer !== true && !coveredByBhyt) {
+        const entry = (invoice.payosLinks || []).find((l) => Number(l.orderCode) === Number(invoice.orderCode));
+        const at = entry?.createdAt ? new Date(entry.createdAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }) : "trước đó";
+        return res.status(409).json({
+          code: "PAYOS_LINK_PENDING",
+          message: `Hóa đơn đang có mã VietQR tạo lúc ${at} chờ thanh toán. Hãy hỏi bệnh nhân đã chuyển khoản theo mã này chưa trước khi thu tiền mặt.`,
+        });
+      }
+      await releasePayOSLink(invoice, coveredByBhyt ? "Hóa đơn được BHYT chi trả 100%" : "Đã thu tiền tại quầy");
+    }
+
     if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId.toString() !== req.user.hospitalId) {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
-    // [FIX BUG PAY-01] Chống thanh toán hóa đơn không còn ở trạng thái chờ:
-    // - "hoàn trả"/"hủy": pay lại sẽ set "đã thanh toán", thay toàn bộ dòng thuốc
-    //   mới (mất cờ isRefunded) và do stockDeductionStatus vẫn là DEDUCTED nên
-    //   deductStockForInvoice bỏ trừ kho → giao dịch bán ma trên kho đã hoàn vị.
-    // - "đã thanh toán": chặn double-pay (ghi sổ kép tiền + EMR version audit).
-    // - "đang xử lý": hóa đơn kẹt sau lỗi trừ kho VietQR/PayOS — phải đi luồng
-    //   resolveProcessingInvoice (Dược sĩ nhập kho bù / Thu ngân hoàn tiền).
-    if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
-      return res.status(400).json({ message: `Không thể thanh toán: hóa đơn đã ở trạng thái '${invoice.status}'.` });
+    // Đồng bộ tiền thuốc theo đơn trước khi thu — số tiền thu phải khớp với số lễ tân đang thấy trên hóa đơn
+    const drugSync = await syncPrescriptionDrugs(invoice);
+    if (drugSync.shortages.length) {
+      return res.status(400).json({ code: "DRUG_SHORTAGE", message: drugSync.shortages.join(" ") });
     }
-    if (invoice.status === "đã thanh toán") {
-      return res.status(400).json({ message: "Hóa đơn đã được thanh toán trước đó — không thể thanh toán lại." });
-    }
-    if (invoice.status === "đang xử lý") {
-      return res.status(400).json({
-        message: "Hóa đơn đang kẹt ở trạng thái 'đang xử lý' sau lỗi trừ kho giao dịch điện tử — vui lòng xử lý theo luồng hóa đơn kẹt (nhập kho bù hoặc hoàn tiền), không thanh toán lại.",
-      });
-    }
-
-    // Cập nhật trạng thái lượt khám và tính toán lại tiền thuốc trước khi lưu hóa đơn
-    const visit = await Visit.findById(invoice.visitId);
-    let prescription = null;
-    
-    if (visit) {
-      // 1. Tìm đơn thuốc chưa thanh toán của lượt khám này
-      prescription = await Prescription.findOne({
-        patient_id: visit.patientId,
-        createdAt: { $gte: visit.createdAt },
-        isBilled: { $ne: true }
-      });
-
-      // 1b. Fallback (UC-PHA-06 — độ bền linkage): hóa đơn thuốc được lập TRƯỚC
-      // khi visit chốt thời gian (đơn thuốc kê xong mới mở lượt khám, hoặc seed
-      // tạo prescription trước visit) khiến truy vấn theo mốc thời gian trượt và
-      // pay âm thầm bỏ mốc trừ kho. Khi đó đối chiếu theo chính các dòng thuốc
-      // của hóa đơn: khớp đơn chưa thanh toán của cùng bệnh nhân có thuốc trùng
-      // tên — bảo đảm FEFO vẫn chạy và item.batches được ghi cho hoàn vị sau này.
-      if (!prescription) {
-        const invDrugNames = (invoice.items || [])
-          .filter(it => it.type === "drug")
-          .map(it => (it.drugName || it.description || "").trim().toLowerCase())
-          .filter(Boolean);
-        if (invDrugNames.length > 0) {
-          const candidates = await Prescription.find({
-            patient_id: visit.patientId,
-            isBilled: { $ne: true },
-          }).sort({ createdAt: -1 });
-          prescription = candidates.find(p =>
-            (p.drugs || []).some(d => invDrugNames.includes((d.name || "").trim().toLowerCase()))
-          ) || null;
-          if (prescription) {
-            console.log(`[PayInvoice] Linkage fallback theo dòng thuốc hóa đơn — khớp đơn thuốc ${prescription._id} (truy vấn theo mốc thời gian không khớp).`);
-          }
-        }
-      }
-
-      if (prescription && prescription.drugs && prescription.drugs.length > 0) {
-        // Lọc bỏ tất cả các khoản thu loại "drug" cũ để tránh trùng lặp hoặc sai lệch khi chỉnh sửa đơn thuốc
-        invoice.items = invoice.items.filter(item => item.type !== "drug");
-
-        const drugNames = prescription.drugs.map(d => new RegExp(`^${d.name.trim()}$`, "i"));
-        const dbDrugs = await Drug.find({
-          hospitalId: req.user.hospitalId,
-          name: { $in: drugNames }
-        });
-        for (const pDrug of prescription.drugs) {
-          const pDrugRegex = new RegExp(`^${pDrug.name.trim()}$`, "i");
-          const dbDrug = dbDrugs.find(d => pDrugRegex.test(d.name));
-
-          if (dbDrug && dbDrug.stock && dbDrug.stock.quantity < pDrug.quantity) {
-            return res.status(400).json({
-              message: `Thuốc '${pDrug.name}' không đủ tồn kho (Hiện có: ${dbDrug.stock.quantity}, Cần: ${pDrug.quantity}).`
-            });
-          }
-
-          const unitPrice = dbDrug ? dbDrug.price : 0;
-          const totalDrugPrice = unitPrice * pDrug.quantity;
-
-          invoice.items.push({
-            description: `Thuốc: ${pDrug.name} (SL: ${pDrug.quantity} ${pDrug.unit || 'Viên'})`,
-            amount: totalDrugPrice,
-            type: "drug",
-            drugId: dbDrug ? dbDrug._id : null,
-            drugName: pDrug.name,
-            quantity: pDrug.quantity,
-            unitPrice: unitPrice,
-            unit: pDrug.unit || dbDrug?.stock?.unit || 'Viên',
-            dosage: pDrug.dosage || null
-          });
-        }
-
-        // Cập nhật lại tổng tiền hóa đơn
-        invoice.totalAmount = invoice.items.reduce((sum, item) => sum + item.amount, 0);
-
-        // Map payment method to database enum (tiền mặt / chuyển khoản)
-        let mappedMethod = "tiền mặt";
-        if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
-          mappedMethod = "chuyển khoản";
-        }
-        invoice.status = "đã thanh toán";
-        // ⚠️ stockDeductionStatus KHÔNG gán ở đây — phải gán SAU khi trừ kho
-        // thật sự (deductStockForInvoice short-circuit khi thấy DEDUCTED; gán trước
-        // khiến thanh toán âm thầm bỏ trừ kho → refund sau đó sinh tồn kho ma).
-        invoice.paymentMethod = mappedMethod;
-        invoice.paidAt = new Date();
-
-        await executeWithTransaction(async (session) => {
-          const sessOpts = session ? { session } : {};
-
-          // Trừ kho nguyên tử bằng hàm dùng chung với balanceAfter chuẩn xác
-          const stockRes = await deductStockForInvoice({
-            invoice,
-            session,
-            performedBy: req.user.id,
-            reason: `Thanh toán đơn thuốc hóa đơn ${invoice._id}`
-          });
-
-          if (!stockRes.success) {
-            throw new Error(stockRes.error);
-          }
-
-          // Chỉ phong cờ DEDUCTED sau khi trừ kho thành công (hoặc xác nhận đã trừ)
-          invoice.stockDeductionStatus = "DEDUCTED";
-          if (stockRes.isAlreadyDeducted) {
-            console.log(`[PayInvoice] Hóa đơn ${invoice._id} đã trừ kho từ trước (idempotent) — không trừ lại.`);
-          } else if ((stockRes.deductedItems || []).length > 0) {
-            console.log(`[PayInvoice] Đã trừ kho ${(stockRes.deductedItems || []).length} dòng thuốc theo lô FEFO cho hóa đơn ${invoice._id}.`);
-          }
-
-          prescription.isBilled = true;
-          prescription.invoiceId = invoice._id;
-          await prescription.save(sessOpts);
-
-          visit.status = "đã đóng";
-          await visit.save(sessOpts);
-
-          await invoice.save(sessOpts);
-        });
-      } else {
-        // Có visit nhưng không có đơn thuốc
-        visit.status = "đã đóng";
-        invoice.status = "đã thanh toán";
-        let mappedMethod = "tiền mặt";
-        if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
-          mappedMethod = "chuyển khoản";
-        }
-        invoice.paymentMethod = mappedMethod;
-        invoice.paidAt = new Date();
-
-        await executeWithTransaction(async (session) => {
-          const sessOpts = session ? { session } : {};
-          await visit.save(sessOpts);
-          await invoice.save(sessOpts);
-        });
-      }
-    } else {
-      // Không có visit liên kết
-      invoice.status = "đã thanh toán";
-      let mappedMethod = "tiền mặt";
-      if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
-        mappedMethod = "chuyển khoản";
-      }
-      invoice.paymentMethod = mappedMethod;
-      invoice.paidAt = new Date();
+    if (drugSync.changed) {
       await invoice.save();
+      await reconcileBhytAfterTotalChange(invoice); // tổng mới → tính lại phần BHYT (nếu có thẻ hợp lệ)
+      const owedAfter = invoice.patientPayAmount ?? (invoice.totalAmount - (invoice.bhytInfo?.bhytAmount || 0));
+      return res.status(409).json({
+        code: "DRUGS_ADDED",
+        message: `Đơn thuốc vừa được cộng vào hóa đơn: tổng mới ${invoice.totalAmount.toLocaleString("vi-VN")}đ, bệnh nhân trả ${owedAfter.toLocaleString("vi-VN")}đ. Kiểm tra lại số tiền rồi thu.`,
+      });
+    }
+
+    let mappedMethod = coveredByBhyt ? "BHYT chi trả" : "tiền mặt";
+    if (paymentMethod === "transfer" || paymentMethod === "chuyển khoản") {
+      mappedMethod = "chuyển khoản";
+    }
+    invoice.status = "đã thanh toán";
+    invoice.paymentMethod = mappedMethod;
+    invoice.paidAt = new Date();
+
+    // Trừ kho thuốc theo lô FEFO + đóng lượt khám + lưu hóa đơn trong cùng một giao dịch.
+    // Chưa nhận tiền nên thiếu kho → dừng, không thu (lễ tân báo dược sĩ / bác sĩ đổi thuốc)
+    try {
+      await executeWithTransaction(async (session) => {
+        await dispenseAndCloseVisit(invoice, { userId: req.user.id, session, reason: `Thanh toán hóa đơn ${invoice._id} (${mappedMethod})` });
+        await invoice.save(session ? { session } : {});
+      });
+    } catch (stockErr) {
+      if (["STOCK_SHORTAGE", "DRUG_NOT_FOUND"].includes(stockErr.code)) {
+        return res.status(400).json({ code: "DRUG_SHORTAGE", message: stockErr.message });
+      }
+      throw stockErr;
     }
 
     // ── Ghi nhận Lịch sử sửa đổi bệnh án (Audit Trail / EMR Version) ──
@@ -552,6 +500,8 @@ export const payInvoice = async (req, res) => {
     res.status(200).json({ message: "Thanh toán hóa đơn thành công", invoice });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  } finally {
+    if (lockedId) await Invoice.updateOne({ _id: lockedId }, { $set: { payLock: null } }).catch(() => {});
   }
 };
 // @desc    Điều dưỡng tạo hóa đơn chờ thanh toán (từ phiếu thu viện phí)
@@ -559,37 +509,75 @@ export const payInvoice = async (req, res) => {
 // @access  Private (Nurse, Admin)
 export const createPendingInvoice = async (req, res) => {
   try {
-    const { patientId, visitId, items, totalAmount, notes } = req.body;
+    const { visitId, notes } = req.body;
 
-    if (!patientId || !items || !totalAmount) {
-      return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
+    // Phiếu thu luôn gắn với 1 lượt khám và chỉ lập khi đã đo sinh hiệu + đã chỉ định dịch vụ
+    if (!visitId) {
+      return res.status(400).json({ message: "Phiếu thu phải gắn với một lượt khám. Vui lòng mở bệnh nhân từ Hàng chờ / Lượt khám hôm nay." });
+    }
+    const visit = await Visit.findById(visitId);
+    if (!visit) return res.status(404).json({ message: "Không tìm thấy lượt khám." });
+    if (!["admin", "system_admin"].includes(req.user.role) && String(visit.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác lượt khám này." });
+    }
+    if (!hasVitals(visit)) {
+      return res.status(400).json({ message: "Chưa nhập sinh hiệu. Vui lòng hoàn thành tab Khám bệnh trước khi lập phiếu thu." });
+    }
+    const services = visit.serviceOrder?.services || [];
+    if (!services.length) {
+      return res.status(400).json({ message: "Chưa có phiếu chỉ định. Vui lòng hoàn thành tab Chỉ định trước khi lập phiếu thu." });
     }
 
-    // Build items array from nurse's service selections
-    const invoiceItems = (items || []).map(item => ({
-      description: item.description || item.name,
-      amount: Number(item.amount) || 0,
-      type: 'other'
-    }));
+    // Giá tính theo bảng giá bệnh viện (bỏ qua số tiền gửi từ màn hình)
+    const hospital = await Hospital.findById(visit.hospitalId).lean();
+    const serviceItems = buildServiceItems(services, hospital?.pricing);
 
-    const invoice = new Invoice({
-      hospitalId: req.user.hospitalId,
-      patientId,
-      visitId: visitId || null,
-      items: invoiceItems,
-      totalAmount: Number(totalAmount),
-      status: 'chờ thanh toán',
-      paymentMethod: '',
-      paidAt: null
-    });
-
+    // Mỗi lượt khám chỉ 1 hóa đơn chờ thu: đã có thì cập nhật phần dịch vụ, giữ nguyên thuốc / giường / MRI do hệ thống thêm
+    const existingPaid = await Invoice.findOne({ visitId: visit._id, status: "đã thanh toán" }).lean();
+    if (existingPaid) {
+      return res.status(409).json({ message: "Lượt khám này đã được thanh toán. Dịch vụ phát sinh thêm cần lập hóa đơn bổ sung ở quầy thu ngân." });
+    }
+    let invoice = await Invoice.findOne({ visitId: visit._id, status: "chờ thanh toán" });
+    if (invoice) {
+      // Số tiền sắp thay đổi → mã VietQR cũ (nếu có) không còn đúng
+      const link = await releasePayOSLink(invoice, "Hóa đơn được cập nhật dịch vụ");
+      if (link.status === "PAID") {
+        return res.status(409).json({ message: "Hóa đơn này đã được thanh toán qua VietQR. Dịch vụ phát sinh thêm cần lập hóa đơn bổ sung ở quầy thu ngân." });
+      }
+      const kept = invoice.items.filter((it) => ["drug", "bed"].includes(it.type)
+        || (["mri", "ai"].includes(it.type) && !serviceItems.some((s) => s.type === it.type)));
+      invoice.items = [...serviceItems, ...kept];
+    } else {
+      invoice = new Invoice({
+        hospitalId: visit.hospitalId,
+        patientId: visit.patientId,
+        visitId: visit._id,
+        items: serviceItems,
+        status: "chờ thanh toán",
+        paymentMethod: "",
+        paidAt: null,
+      });
+    }
+    invoice.totalAmount = invoice.items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    if (notes !== undefined) invoice.notes = String(notes || "");
+    // Giữ thông tin BHYT cũ (nếu có) để bước tự áp bên dưới tính lại đúng theo tổng mới mà không cộng dồn lũy kế 2 lần
     await invoice.save();
+
+    // Gắn hóa đơn vào lượt khám để luồng y lệnh MRI / hoàn tất ca không lập thêm hóa đơn trùng
+    if (!visit.invoiceId || String(visit.invoiceId) !== String(invoice._id)) {
+      visit.invoiceId = invoice._id;
+      await visit.save();
+    }
 
     const populated = await Invoice.findById(invoice._id)
       .populate('patientId', 'email profile')
       .populate('visitId', 'reason status');
 
-    res.status(201).json({ message: "Đã tạo hóa đơn chờ thanh toán.", invoice: populated });
+    // Bệnh nhân có BHYT hợp lệ → tự áp ngay để quầy thu ngân & mã VietQR dùng đúng số tiền sau BHYT
+    const bhytAuto = await reconcileBhytAfterTotalChange(invoice);
+    const finalInvoice = await Invoice.findById(invoice._id).populate('patientId', 'email profile').populate('visitId', 'reason status');
+
+    res.status(201).json({ message: "Đã gửi phiếu thu sang quầy thu ngân.", invoice: finalInvoice, bhytAuto });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
@@ -616,6 +604,11 @@ export const createPayOSPayment = async (req, res) => {
 
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn ở trạng thái chờ thanh toán" });
 
+    // UC-REC-08: báo rõ khi máy chủ chưa cấu hình cổng PayOS
+    if (!process.env.PAYOS_CLIENT_ID || !process.env.PAYOS_API_KEY || !process.env.PAYOS_CHECKSUM_KEY) {
+      return res.status(503).json({ message: "Cổng thanh toán PayOS chưa được cấu hình trên máy chủ (thiếu PAYOS_CLIENT_ID / PAYOS_API_KEY / PAYOS_CHECKSUM_KEY). Vui lòng thu tiền mặt hoặc liên hệ quản trị." });
+    }
+
     // Kiểm tra quyền (phải là lễ tân, admin, điều dưỡng hoặc chính bệnh nhân)
     const isPatient = invoice.patientId.toString() === req.user.id.toString();
     const isClinicStaff = req.user.hospitalId && invoice.hospitalId.toString() === req.user.hospitalId.toString();
@@ -624,11 +617,66 @@ export const createPayOSPayment = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền thanh toán cho hóa đơn này" });
     }
 
+    // Cộng tiền thuốc theo đơn (nếu có) trước khi tính số tiền in lên mã QR
+    const drugSync = await syncPrescriptionDrugs(invoice);
+    if (drugSync.shortages.length) {
+      return res.status(400).json({ code: "DRUG_SHORTAGE", message: drugSync.shortages.join(" ") });
+    }
+    if (drugSync.changed) await invoice.save();
+
+    // Tự áp BHYT (nếu có thẻ hợp lệ) trước khi tính số tiền in lên mã QR
+    const bhytAuto = await reconcileBhytAfterTotalChange(invoice);
+    if (bhytAuto.code === "PAID_BEFORE_BHYT" || bhytAuto.code === "PAYOS_IN_FLIGHT") {
+      return res.status(409).json({ code: bhytAuto.code, message: bhytAuto.reason });
+    }
+
+    // UC-REC-06: chỉ thu phần bệnh nhân phải trả sau khi đã khấu trừ BHYT
+    const amountDue = Math.round(invoice.patientPayAmount ?? (invoice.totalAmount - (invoice.bhytInfo?.bhytAmount || 0)));
+    if (amountDue <= 0) {
+      return res.status(400).json({ message: "Hóa đơn này bệnh nhân không phải trả tiền (BHYT chi trả 100%). Bấm 'Xác nhận BHYT chi trả' thay vì tạo mã VietQR." });
+    }
+
+    // Mã cũ của hóa đơn: đã trả / đang xử lý → dừng; còn hạn & đúng số tiền → DÙNG LẠI (không tạo mã thứ 2)
+    if (invoice.orderCode) {
+      const old = await getPayOSLink(invoice.orderCode);
+      setLinkStatus(invoice, invoice.orderCode, old.status);
+      if (old.status === "PAID") {
+        await markInvoicePaidByPayOS(invoice, "Check", invoice.orderCode, old.amountPaid);
+        return res.status(409).json({ message: "Hóa đơn này đã được thanh toán qua VietQR trước đó. Hệ thống đã cập nhật trạng thái 'Đã thanh toán'.", alreadyPaid: true });
+      }
+      if (MONEY_IN_FLIGHT.includes(old.status) || old.status === "UNKNOWN") {
+        await invoice.save();
+        return res.status(409).json({ code: "PAYOS_IN_FLIGHT", message: inFlightMessage(old.status) });
+      }
+      const entry = (invoice.payosLinks || []).find((l) => Number(l.orderCode) === Number(invoice.orderCode));
+      const stillValid = entry?.qrCode && entry.expiresAt && new Date(entry.expiresAt).getTime() - Date.now() > 60 * 1000;
+      if (old.status === "PENDING" && Number(old.amount) === amountDue && stillValid) {
+        await invoice.save();
+        return res.status(200).json({
+          message: "Hiển thị lại mã VietQR đang chờ thanh toán (không tạo mã mới).",
+          reused: true,
+          checkoutUrl: entry.checkoutUrl,
+          qrCode: entry.qrCode,
+          amount: amountDue,
+          orderCode: invoice.orderCode,
+          expiresAt: entry.expiresAt,
+          invoice,
+        });
+      }
+      // Hết hạn / sai số tiền / không còn chuỗi QR → hủy mã cũ (nếu còn chờ) rồi tạo mã mới
+      const released = await releasePayOSLink(invoice, "Tạo mã VietQR mới thay thế");
+      if (released.status === "PAID") {
+        await markInvoicePaidByPayOS(invoice, "Check");
+        return res.status(409).json({ message: "Hóa đơn này đã được thanh toán qua VietQR trước đó. Hệ thống đã cập nhật trạng thái 'Đã thanh toán'.", alreadyPaid: true });
+      }
+      if (MONEY_IN_FLIGHT.includes(released.status) || released.status === "UNKNOWN") {
+        await invoice.save();
+        return res.status(409).json({ code: "PAYOS_IN_FLIGHT", message: inFlightMessage(released.status) });
+      }
+    }
+
     // Tạo mã orderCode duy nhất dạng số nguyên cho PayOS (9 chữ số cuối của timestamp + số ngẫu nhiên)
     const orderCode = Number(String(Date.now()).slice(-9)) + Math.floor(Math.random() * 1000);
-    invoice.orderCode = orderCode;
-    invoice.paymentMethod = "vietqr";
-    await invoice.save();
 
     // Chuẩn bị dữ liệu gửi lên PayOS
     const hostname = req.get("host");
@@ -637,25 +685,47 @@ export const createPayOSPayment = async (req, res) => {
     const returnUrl = `${protocol}://${hostname}/api/v1/invoices/payment/success?invoiceId=${invoice._id}`;
     const cancelUrl = `${protocol}://${hostname}/api/v1/invoices/payment/cancel?invoiceId=${invoice._id}`;
 
+    const hasBhyt = (invoice.bhytInfo?.bhytAmount || 0) > 0;
+    const expiresAt = new Date(Date.now() + PAYOS_LINK_TTL_MINUTES * 60 * 1000);
     const paymentBody = {
       orderCode,
-      amount: invoice.totalAmount,
+      amount: amountDue,
       description: `Thanh toan HD ${orderCode}`,
-      items: invoice.items.map(item => ({
-        name: item.description,
-        quantity: 1,
-        price: item.amount
-      })),
+      items: hasBhyt
+        ? [{ name: "Vien phi dong chi tra sau BHYT", quantity: 1, price: amountDue }]
+        : invoice.items.map(item => ({
+            name: item.description,
+            quantity: 1,
+            price: item.amount
+          })),
       returnUrl,
-      cancelUrl
+      cancelUrl,
+      // Mã hết hiệu lực sau PAYOS_LINK_TTL_MINUTES (15) phút để không treo "chờ thanh toán" trên PayOS
+      expiredAt: Math.floor(expiresAt.getTime() / 1000),
     };
 
     const paymentLinkData = await payos.paymentRequests.create(paymentBody);
 
+    // Lưu mã hiện tại + lịch sử mã (không ghi đè mất mã cũ)
+    invoice.orderCode = orderCode;
+    invoice.payosLinks = [...(invoice.payosLinks || []), {
+      orderCode,
+      amount: amountDue,
+      qrCode: paymentLinkData.qrCode || "",
+      checkoutUrl: paymentLinkData.checkoutUrl || "",
+      expiresAt,
+      status: "PENDING",
+      createdAt: new Date(),
+    }];
+    await invoice.save();
+
     res.status(200).json({
       message: "Tạo link thanh toán thành công",
       checkoutUrl: paymentLinkData.checkoutUrl,
+      qrCode: paymentLinkData.qrCode || null, // UC-REC-08: chuỗi VietQR để hiển thị mã ngay tại quầy
+      amount: amountDue,
       orderCode,
+      expiresAt,
       invoice
     });
   } catch (error) {
@@ -663,207 +733,86 @@ export const createPayOSPayment = async (req, res) => {
   }
 };
 
+// Ghi nhận hóa đơn lượt khám đã thanh toán qua PayOS (dùng chung cho webhook và kiểm tra chủ động)
+
+// @desc    UC-REC-08 — Hỏi PayOS trạng thái MỌI mã VietQR của hóa đơn (dự phòng khi webhook không tới / đối soát thu trùng)
+// @route   POST /api/v1/invoices/:id/payos-check
+// @access  Private (Receptionist, Nurse, Hospital Admin, Admin)
+export const checkPayOSPayment = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn" });
+    if (!["admin", "system_admin"].includes(req.user.role) && String(invoice.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+    const codes = allOrderCodes(invoice);
+    if (!codes.length) return res.status(200).json({ status: invoice.status, paid: ["đã thanh toán", "đang xử lý"].includes(invoice.status), payosStatus: null, invoice });
+
+    // Dò cả mã cũ: tiền về muộn cho mã đã thay thế vẫn được ghi nhận (hoặc gắn cờ thu trùng)
+    let currentStatus = null;
+    for (const code of codes) {
+      const link = await getPayOSLink(code);
+      if (Number(code) === Number(invoice.orderCode)) currentStatus = link.status;
+      if (link.status === "PAID") await markInvoicePaidByPayOS(invoice, "Check", code, link.amountPaid);
+      else setLinkStatus(invoice, code, link.status);
+    }
+    await invoice.save();
+    return res.status(200).json({
+      status: invoice.status,
+      paid: ["đã thanh toán", "đang xử lý"].includes(invoice.status),
+      payosStatus: currentStatus,
+      duplicate: invoice.duplicatePayment?.flagged ? invoice.duplicatePayment : null,
+      invoice,
+    });
+  } catch (error) {
+    return res.status(502).json({ message: "Không kiểm tra được trạng thái thanh toán từ PayOS", error: error.message });
+  }
+};
+
 // @desc    Webhook tiếp nhận kết quả thanh toán từ PayOS
 // @route   POST /api/v1/invoices/payos-webhook
 // @access  Public
-// @route   POST /api/v1/invoices/payos-webhook
-// @access  Public
 export const handlePayOSWebhook = async (req, res) => {
+  let verifiedData;
   try {
-    const webhookData = req.body;
-
     // Xác thực chữ ký dữ liệu từ PayOS để chống giả mạo
-    const verifiedData = payos.webhooks.verify(webhookData);
-
-    if (verifiedData.code === "00") {
-      const orderCode = Number(verifiedData.orderCode);
-
-      // 1. Cập nhật trạng thái có điều kiện nguyên tử: Chỉ khóa nếu status là "chờ thanh toán"
-      // Vì là Webhook công khai từ PayOS (chưa có store), truy vấn qua bypassTenancy tường minh và hẹp
-      const invoice = await Invoice.findOneAndUpdate(
-        { orderCode, status: "chờ thanh toán" },
-        { 
-          $set: { 
-            status: "đang xử lý",
-            paymentMethod: "vietqr",
-            paidAt: new Date()
-          } 
-        },
-        { new: true, bypassTenancy: true }
-      );
-
-      if (invoice) {
-        // GẮN CHẶT NGỮ CẢNH TENANT: Mọi thao tác tiếp theo (trừ kho, cập nhật đơn thuốc, thông báo)
-        // PHẢI chạy trong tenant context của chính bệnh viện sở hữu hóa đơn đó (an toàn với hóa đơn cũ thiếu hospitalId)
-        const targetHospitalId = invoice.hospitalId ? invoice.hospitalId.toString() : null;
-        return await tenantStorage.run({ hospitalId: targetHospitalId, bypassTenancy: !targetHospitalId }, async () => {
-          let stockDeductionSuccess = false;
-          let stockDeductionError = "";
-          let stockDeductionCode = null;
-
-          // Chạy trừ kho trong Transaction ACID
-          try {
-            await executeWithTransaction(async (session) => {
-              const sessOpts = session ? { session } : {};
-
-              const stockRes = await deductStockForInvoice({
-                invoice,
-                session,
-                performedBy: null,
-                reason: `Thanh toán trực tuyến PayOS VietQR mã GD ${orderCode}`
-              });
-
-              if (!stockRes.success) {
-                // Ném lỗi có mã lỗi có cấu trúc để phân loại ngoài transaction
-                const err = new Error(stockRes.error || "Thiếu tồn kho dược phẩm");
-                err.code = stockRes.code || "STOCK_SHORTAGE";
-                throw err;
-              }
-
-              // Trừ kho thành công -> Chuyển trạng thái sang "đã thanh toán" TRONG TRANSACTION
-              const invInSession = await Invoice.findById(invoice._id).session(session);
-              invInSession.status = "đã thanh toán";
-              invInSession.stockDeductionStatus = "DEDUCTED";
-              await invInSession.save(sessOpts);
-
-              // Cập nhật lượt khám trong cùng transaction
-              if (invInSession.visitId) {
-                const visit = await Visit.findById(invInSession.visitId).session(session);
-                if (visit) {
-                  visit.invoiceId = invInSession._id;
-                  visit.status = "đã đóng";
-                  await visit.save(sessOpts);
-                }
-              }
-
-              // Cập nhật đơn thuốc liên quan trong cùng transaction
-              const prescription = await Prescription.findOne({
-                patient_id: invInSession.patientId,
-                $or: [
-                  { visitId: invInSession.visitId },
-                  { invoiceId: invInSession._id }
-                ]
-              }).session(session);
-
-              if (prescription) {
-                prescription.isBilled = true;
-                prescription.invoiceId = invInSession._id;
-                await prescription.save(sessOpts);
-              }
-
-              stockDeductionSuccess = true;
-            });
-          } catch (txErr) {
-            stockDeductionSuccess = false;
-            stockDeductionError = txErr.message;
-            stockDeductionCode = txErr.code;
-          }
-
-          // XỬ LÝ NGOÀI TRANSACTION KHI THIẾU KHO HOẶC LỖI HẠ TẦNG:
-          if (!stockDeductionSuccess) {
-            const isShortage = stockDeductionCode === "STOCK_SHORTAGE";
-
-            // Phân biệt lỗi hạ tầng có thể thử lại (Transient/Retryable) vs Lỗi vĩnh viễn (Permanent)
-            const isTransientError = 
-              stockDeductionCode === "ETIMEDOUT" ||
-              stockDeductionCode === "ECONNRESET" ||
-              stockDeductionCode === 112 || // MongoDB WriteConflict
-              (stockDeductionError && (
-                stockDeductionError.includes("WriteConflict") ||
-                stockDeductionError.includes("timed out") ||
-                stockDeductionError.includes("MongoNetworkError") ||
-                stockDeductionError.includes("TransientTransactionError")
-              ));
-
-            if (isTransientError) {
-              const currentRetries = (invoice.webhookRetryCount || 0) + 1;
-              if (currentRetries < 5) {
-                // Lỗi hạ tầng tạm thời: Khôi phục trạng thái về 'chờ thanh toán' để PayOS tự động gửi lại
-                try {
-                  await Invoice.findByIdAndUpdate(invoice._id, {
-                    status: "chờ thanh toán",
-                    webhookRetryCount: currentRetries,
-                    paymentNotes: `Lỗi hạ tầng tạm thời khi xử lý webhook (${stockDeductionCode || 'INFRA_ERROR'}, lần ${currentRetries}/5): ${stockDeductionError}. Đang chờ PayOS gửi lại.`
-                  });
-                } catch (revertErr) {
-                  console.error("[PayOS Webhook] Không thể khôi phục trạng thái chờ thanh toán do lỗi DB:", revertErr.message);
-                }
-                console.error(`[PayOS Webhook LỖI HẠ TẦNG TẠM THỜI] Trả HTTP 500 (lần ${currentRetries}/5): ${stockDeductionError}`);
-                return res.status(500).json({ 
-                  message: "Lỗi hạ tầng cơ sở dữ liệu tạm thời, yêu cầu retry webhook.", 
-                  errorCode: stockDeductionCode || "INFRA_ERROR",
-                  retryCount: currentRetries,
-                  error: stockDeductionError 
-                });
-              } else {
-                // Đã vượt quá 5 lần retry: Chặn retry loop vô hạn
-                console.error(`[PayOS Webhook VƯỢT QUÁ RETRY] Hóa đơn ${invoice._id} đã thử lại ${currentRetries} lần thất bại.`);
-                await Invoice.findByIdAndUpdate(invoice._id, {
-                  status: "đang xử lý",
-                  stockDeductionStatus: "EXCEEDED_MAX_RETRIES",
-                  webhookRetryCount: currentRetries,
-                  paymentNotes: `Thanh toán VietQR ${orderCode} thành công nhưng hệ thống gặp lỗi hạ tầng lặp lại ${currentRetries} lần: ${stockDeductionError}. Đã chuyển sang hàng đợi đối soát IT.`
-                });
-                return res.status(200).json({ success: true, message: "Đã đạt trần retry. Hóa đơn được chuyển sang hàng đợi đối soát IT." });
-              }
-            }
-
-            // Xử lý lỗi vĩnh viễn (Permanent Error) hoặc Thiếu kho (Stock Shortage):
-            // Tuyệt đối KHÔNG trả về 500 hay quay lại 'chờ thanh toán' vì tiền người bệnh đã trừ thành công!
-            const flagStatus = isShortage ? "SHORTAGE_FLAGGED" : "PERMANENT_ERROR_FLAGGED";
-            console.error(`[PayOS Webhook LỖI ${flagStatus}] Hóa đơn ${invoice._id}: ${stockDeductionError}`);
-
-            await Invoice.findByIdAndUpdate(invoice._id, {
-              status: "đang xử lý",
-              stockDeductionStatus: flagStatus,
-              paymentNotes: `Thanh toán PayOS ${orderCode} thành công nhưng phát sinh sự cố (${flagStatus}): ${stockDeductionError}`
-            });
-
-            // Gửi thông báo khẩn cấp tới Quản trị viên & Dược sĩ
-            try {
-              const admins = await User.find({ role: { $in: ["hospital_admin", "admin", "pharmacist"] } });
-              for (const admin of admins) {
-                await createNotificationInternal({
-                  hospitalId: invoice.hospitalId,
-                  recipientId: admin._id,
-                  type: isShortage ? "stock_shortage" : "system_alert",
-                  title: isShortage 
-                    ? "🚨 Báo động thiếu tồn kho sau khi bệnh nhân đã thanh toán PayOS"
-                    : "🚨 Báo động lỗi dữ liệu khi ghi nhận hóa đơn PayOS",
-                  message: `Hóa đơn mã GD ${orderCode} (ID: ${invoice._id}) đã nhận tiền VietQR nhưng gặp sự cố (${flagStatus}): ${stockDeductionError}. Hóa đơn được giữ trạng thái 'đang xử lý'. Đề nghị can thiệp thủ công!`,
-                  relatedId: invoice._id
-                });
-              }
-            } catch (notifErr) {
-              console.error("[PayOS Webhook Notif Error]", notifErr.message);
-            }
-
-            return res.status(200).json({ success: true, message: `Đã ghi nhận thanh toán và gắn cờ ${flagStatus}.` });
-          } else {
-            console.log(`[PayOS Webhook] Thanh toán & trừ tồn kho thành công cho hóa đơn: ${invoice._id}, orderCode: ${orderCode}`);
-            return res.status(200).json({ success: true, message: "Thanh toán và trừ tồn kho thành công." });
-          }
-        });
-      } else {
-        // Kiểm tra xem hóa đơn này đã được thanh toán hoặc đang xử lý trước đó chưa (Idempotent response)
-        const existingInvoice = await Invoice.findOne({ orderCode }, null, { bypassTenancy: true });
-        if (existingInvoice) {
-          if (existingInvoice.status === "đã thanh toán") {
-            console.log(`[PayOS Webhook Idempotent] Hóa đơn ${existingInvoice._id} đã được xử lý thanh toán trước đó.`);
-            return res.status(200).json({ success: true, message: "Hóa đơn đã được xử lý thanh toán (idempotent)." });
-          }
-          if (existingInvoice.status === "đang xử lý") {
-            console.log(`[PayOS Webhook Idempotent] Hóa đơn ${existingInvoice._id} đang trong trạng thái xử lý/thiếu kho.`);
-            return res.status(200).json({ success: true, message: "Hóa đơn đang được xử lý (idempotent)." });
-          }
-        }
-      }
-    }
-
-    return res.status(200).json({ success: true, message: "Webhook nhận thành công nhưng không phải trạng thái thành công 00." });
+    // SDK @payos/node v2: verify() là hàm bất đồng bộ — thiếu await thì verifiedData là Promise và webhook không bao giờ được xử lý
+    verifiedData = await payos.webhooks.verify(req.body);
   } catch (error) {
     console.error("[PayOS Webhook Error]", error.message);
     return res.status(400).json({ message: "Lỗi xác thực webhook", error: error.message });
+  }
+
+  try {
+    if (verifiedData.code !== "00") {
+      return res.status(200).json({ success: true, message: "Webhook nhận thành công nhưng không phải trạng thái thành công 00." });
+    }
+    const orderCode = Number(verifiedData.orderCode);
+
+    // Tìm theo mã hiện tại hoặc mã cũ trong lịch sử (tiền về muộn cho mã đã thay thế).
+    // Webhook từ PayOS không có ngữ cảnh bệnh viện → bỏ qua plugin tenancy (an toàn vì chữ ký đã được xác thực ở trên)
+    const invoice = await Invoice.findOne({ $or: [{ orderCode }, { "payosLinks.orderCode": orderCode }] }).setOptions({ bypassTenancy: true });
+    if (!invoice) {
+      console.warn(`[PayOS Webhook] Không tìm thấy hóa đơn cho mã ${orderCode}.`);
+      return res.status(200).json({ success: true, message: "Không có hóa đơn khớp mã giao dịch." });
+    }
+
+    // Ghi nhận thanh toán + trừ kho FEFO + đóng lượt khám (nguyên tử, idempotent, phát hiện thu trùng)
+    const result = await markInvoicePaidByPayOS(invoice, "Webhook", orderCode, verifiedData.amount);
+    if (result === "retry") {
+      // Lỗi hạ tầng tạm thời: trả 500 để PayOS gửi lại (tác vụ đối soát 5 phút/lần cũng sẽ thử lại)
+      return res.status(500).json({ message: "Lỗi hạ tầng tạm thời, yêu cầu gửi lại webhook.", retryCount: invoice.webhookRetryCount });
+    }
+    const messages = {
+      true: "Thanh toán và trừ tồn kho thành công.",
+      false: "Hóa đơn đã được xử lý thanh toán trước đó (idempotent).",
+      duplicate: "Hóa đơn đã thanh toán trước đó — gắn cờ THU TRÙNG.",
+      flagged: "Đã ghi nhận thanh toán nhưng chưa xuất được kho — hóa đơn chuyển 'đang xử lý'.",
+    };
+    return res.status(200).json({ success: true, message: messages[String(result)] || "Đã xử lý." });
+  } catch (error) {
+    console.error("[PayOS Webhook Error]", error.message);
+    return res.status(500).json({ message: "Lỗi xử lý webhook", error: error.message });
   }
 };
 
@@ -910,18 +859,15 @@ export const resolveProcessingInvoice = async (req, res) => {
       // Dược sĩ đã nhập thêm thuốc vào kho, thử trừ kho lại
       await executeWithTransaction(async (session) => {
         const sessOpts = session ? { session } : {};
-        const stockRes = await deductStockForInvoice({
-          invoice,
+        // Trừ kho FEFO + đánh dấu đơn thuốc đã tính tiền + đóng lượt khám (giống luồng thanh toán bình thường)
+        await dispenseAndCloseVisit(invoice, {
+          userId: req.user.id,
           session,
-          performedBy: req.user.id,
-          reason: `Trừ kho bù sau khi bổ sung tồn kho (Người duyệt: ${req.user.email})`
+          reason: `Trừ kho bù sau khi bổ sung tồn kho (Người duyệt: ${req.user.email})`,
         });
 
-        if (!stockRes.success) {
-          throw new Error(stockRes.error || "Kho vẫn chưa đủ số lượng thuốc");
-        }
-
         invoice.status = "đã thanh toán";
+        invoice.dispenseWarning = "";
         invoice.stockDeductionStatus = "DEDUCTED";
         invoice.paymentNotes = note || "Đã bổ sung thuốc và trừ kho thành công.";
         await invoice.save(sessOpts);
@@ -1237,6 +1183,10 @@ export const refundInvoice = async (req, res) => {
     if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
       return res.status(400).json({ message: `Hóa đơn này đã ở trạng thái '${invoice.status}'.` });
     }
+    // Chỉ hoàn tiền hóa đơn bệnh nhân đã thực sự thanh toán
+    if (invoice.status !== "đã thanh toán") {
+      return res.status(400).json({ message: "Hóa đơn chưa được thanh toán nên không có tiền để hoàn trả." });
+    }
 
     // [FIX BUG REFUND-01] Chỉ được hoàn tiền hóa đơn ĐÃ THU TIỀN:
     // - Hoàn cho hóa đơn "chờ thanh toán" sẽ ghi hoàn tiền cho tiền CHƯA TỪNG THU
@@ -1320,6 +1270,11 @@ export const refundInvoice = async (req, res) => {
     const isPartial = Array.isArray(itemsToRefund) && itemsToRefund.length > 0;
     let targetDrugItems = [];
     let refundedAmount = 0;
+    let grossRefundedNow = 0; // tổng giá trị (chưa tách BHYT) các dòng hoàn trong lần này
+    // Chỉ hoàn phần bệnh nhân đã thực trả: phần BHYT chi trả không phải tiền của bệnh nhân (BHXH không thanh toán dịch vụ đã hủy)
+    const totalForShare = invoice.totalAmount || 0;
+    const patientPaid = invoice.patientPayAmount ?? (totalForShare - (invoice.bhytInfo?.bhytAmount || 0));
+    const patientShare = totalForShare > 0 ? Math.max(0, Math.min(1, patientPaid / totalForShare)) : 1;
 
     if (isPartial) {
       invoice.items.forEach((item, index) => {
@@ -1331,8 +1286,9 @@ export const refundInvoice = async (req, res) => {
         if (matchRefund && !item.isRefunded) {
           item.isRefunded = true;
           item.refundedQuantity = matchRefund.quantity || item.quantity;
-          const itemRefundPrice = (item.amount / item.quantity) * item.refundedQuantity;
-          refundedAmount += itemRefundPrice;
+          const itemRefundPrice = (item.amount / (item.quantity || 1)) * item.refundedQuantity;
+          grossRefundedNow += itemRefundPrice;
+          refundedAmount += Math.round(itemRefundPrice * patientShare); // chỉ phần bệnh nhân đồng chi trả của dòng này
           if (item.type === "drug") {
             targetDrugItems.push({ ...item.toObject ? item.toObject() : item, refundQuantity: item.refundedQuantity });
           }
@@ -1343,16 +1299,36 @@ export const refundInvoice = async (req, res) => {
       const allItemsRefunded = invoice.items.every(i => i.isRefunded);
       invoice.status = allItemsRefunded ? "hoàn trả" : "đã thanh toán";
     } else {
-      // Full refund
-      refundedAmount = invoice.totalAmount;
+      // Hoàn toàn bộ: trả lại đúng số bệnh nhân đã thanh toán (không gồm phần BHYT)
+      refundedAmount = Math.round(patientPaid);
       invoice.items.forEach(item => {
         item.isRefunded = true;
         item.refundedQuantity = item.quantity;
       });
       targetDrugItems = (invoice.items || []).filter(item => item.type === "drug");
       invoice.isPartialRefund = false;
-      invoice.refundAmount = invoice.totalAmount;
+      invoice.refundAmount = refundedAmount;
       invoice.status = "hoàn trả";
+    }
+
+    // 3b. Phần BHYT của dịch vụ bị hoàn sẽ không được BHXH thanh toán → trả lại lũy kế cho thẻ & giảm phần BHYT trên hóa đơn
+    const bhytOnInvoice = invoice.bhytInfo?.bhytAmount || 0;
+    if (bhytOnInvoice > 0) {
+      const bhytReleased = isPartial
+        ? Math.min(bhytOnInvoice, Math.round(grossRefundedNow * (1 - patientShare)))
+        : bhytOnInvoice;
+      if (bhytReleased > 0 && invoice.bhytInfo?.bhytId) {
+        try {
+          const card = await BhytInfo.findById(invoice.bhytInfo.bhytId);
+          if (card) {
+            card.usedThisYear = Math.max(0, (card.usedThisYear || 0) - bhytReleased);
+            await card.save();
+          }
+        } catch (bhytErr) {
+          console.warn("⚠️ Không cập nhật được lũy kế BHYT khi hoàn tiền:", bhytErr.message);
+        }
+        invoice.bhytInfo.bhytAmount = bhytOnInvoice - bhytReleased;
+      }
     }
 
     // 4. [BUG-08 REFACTOR] Hoàn trả tồn kho dược phẩm: CHỈ hoàn trả nếu kho ĐÃ TỪNG BỊ KHẤU TRỪ (stockDeductionStatus === 'DEDUCTED')
@@ -1482,10 +1458,26 @@ export const refundInvoice = async (req, res) => {
     // trong model → mọi create đều fail validation từ trước). Vết kiểm toán hoàn tiền
     // đã đầy đủ qua chuỗi hash recordAuditLog (REFUND_APPROVED) + invoice.notes phía trên.
 
+    // UC-REC-04/09: gửi email thông báo hoàn tiền cho bệnh nhân
+    let emailSent = false;
+    try {
+      const patientDoc = await User.findById(invoice.patientId).select("email profile.name profile.fullName").lean();
+      emailSent = await sendRefundEmail({
+        toEmail: patientDoc?.email,
+        patientName: patientDoc?.profile?.name || patientDoc?.profile?.fullName || "Quý bệnh nhân",
+        amount: refundedAmount,
+        reason: refundReason,
+        invoiceCode: String(invoice._id).slice(-8).toUpperCase(),
+        isPartial,
+      });
+    } catch (mailErr) {
+      console.warn("⚠️ Không gửi được email hoàn tiền:", mailErr.message);
+    }
+
     return res.status(200).json({
       status: "success",
       message: isPartial ? "Hoàn tiền một phần thành công." : "Hoàn tiền toàn bộ hóa đơn thành công.",
-      data: { invoice, refundedAmount, isPartial }
+      data: { invoice, refundedAmount, isPartial, emailSent }
     });
   } catch (error) {
     console.error("Lỗi refundInvoice:", error);
@@ -1494,3 +1486,169 @@ export const refundInvoice = async (req, res) => {
 };
 
 
+
+// @desc    UC-REC-05 — Cập nhật dịch vụ phát sinh vào hóa đơn đang chờ (hiện tại: tiền giường nội trú)
+// @route   POST /api/v1/invoices/:id/sync
+// @access  Private (Receptionist, Nurse, Hospital Admin, Admin)
+export const syncInvoiceServices = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
+    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId.toString() !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
+    }
+    if (invoice.status !== "chờ thanh toán") {
+      return res.status(400).json({ message: "Chỉ cập nhật được hóa đơn đang chờ thanh toán." });
+    }
+
+    const { HospitalBed } = await import("../hospital/models/hospitalBed.model.js");
+    const hospital = await Hospital.findById(invoice.hospitalId).lean();
+    const bedFee = hospital?.pricing?.bedFee ?? 300000;
+
+    // Giường đang được bệnh nhân của lượt khám này sử dụng
+    const bed = await HospitalBed.findOne({
+      hospitalId: invoice.hospitalId,
+      status: "occupied",
+      $or: [{ currentVisitId: invoice.visitId }, { currentPatientId: invoice.patientId }],
+    }).lean();
+
+    const changes = [];
+
+    // Thuốc theo đơn của bác sĩ (chưa tính tiền) → đưa vào hóa đơn để quầy thu đủ
+    const drugSync = await syncPrescriptionDrugs(invoice);
+    if (drugSync.changed) changes.push("tiền thuốc theo đơn");
+    const others = invoice.items.filter((it) => it.type !== "bed");
+    let items = others;
+    if (bed) {
+      const since = bed.admittedAt || bed.occupiedAt || invoice.createdAt;
+      const days = Math.max(1, Math.ceil((Date.now() - new Date(since).getTime()) / 86400000));
+      items = [...others, {
+        description: `Giường bệnh ${bed.bedNumber} (${days} ngày × ${bedFee.toLocaleString("vi-VN")}đ)`,
+        amount: days * bedFee,
+        type: "bed",
+        quantity: days,
+        unitPrice: bedFee,
+        unit: "ngày",
+      }];
+      changes.push(`Tiền giường ${bed.bedNumber}: ${days} ngày`);
+    }
+
+    invoice.items = items;
+    invoice.totalAmount = items.reduce((sum, it) => sum + (it.amount || 0), 0);
+
+    await invoice.save();
+
+    // Tổng tiền có thể vừa đổi / hóa đơn chưa áp BHYT → tính lại phần BHYT theo thẻ hợp lệ của bệnh nhân
+    const bhytAuto = await reconcileBhytAfterTotalChange(invoice);
+    if (bhytAuto.applied) changes.push(`tự áp BHYT ${bhytAuto.coverageRate}%`);
+
+    return res.status(200).json({
+      success: true,
+      message: changes.length ? `Đã cập nhật: ${changes.join(", ")}.` : "Không có dịch vụ phát sinh mới.",
+      invoice,
+      bhytAuto,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi cập nhật dịch vụ phát sinh", error: error.message });
+  }
+};
+
+// @desc    Lễ tân ghi nhận khoản chuyển khoản đối chiếu được trên sao kê ngân hàng
+//          (tiền vào mã VietQR đã hủy / hết hạn mà PayOS không ghi nhận, hoặc bệnh nhân chuyển khoản trực tiếp)
+// @route   POST /api/v1/invoices/:id/bank-transfer
+// @access  Private (Receptionist, Hospital Admin, Admin)
+export const recordBankTransfer = async (req, res) => {
+  let lockedId = null;
+  try {
+    const reference = String(req.body.reference || "").trim();
+    const amount = Math.round(Number(req.body.amount));
+    const note = String(req.body.note || "").trim();
+    if (!reference) return res.status(400).json({ message: "Vui lòng nhập mã giao dịch / số bút toán trên sao kê ngân hàng." });
+    if (!(amount > 0)) return res.status(400).json({ message: "Số tiền chuyển khoản không hợp lệ." });
+
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
+    if (!["admin", "system_admin"].includes(req.user.role) && String(invoice.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác hóa đơn này." });
+    }
+    // Một giao dịch ngân hàng chỉ được ghi nhận cho một hóa đơn
+    const usedRef = await Invoice.findOne({ hospitalId: invoice.hospitalId, "bankTransfers.reference": reference }).select("_id").lean();
+    if (usedRef) {
+      return res.status(409).json({ message: `Mã giao dịch "${reference}" đã được ghi nhận cho ${String(usedRef._id) === String(invoice._id) ? "hóa đơn này" : "một hóa đơn khác"}.` });
+    }
+    const entry = { reference, amount, note, recordedBy: req.user.id, recordedAt: new Date() };
+
+    // Hóa đơn đã thanh toán / đã hoàn mà sao kê có thêm tiền → bệnh nhân trả trùng, cần hoàn khoản dư
+    if (invoice.status !== "chờ thanh toán") {
+      invoice.bankTransfers.push(entry);
+      invoice.duplicatePayment = {
+        flagged: true,
+        detectedAt: new Date(),
+        orderCode: null,
+        amount,
+        note: `Sao kê ghi nhận thêm ${amount.toLocaleString("vi-VN")}đ (mã GD ${reference}) trong khi hóa đơn đã ${invoice.status} (${invoice.paymentMethod || "—"}) → cần hoàn khoản dư cho bệnh nhân.`,
+      };
+      await invoice.save();
+      return res.status(200).json({ message: "Đã ghi nhận chuyển khoản và gắn cờ THU TRÙNG — cần hoàn tiền cho bệnh nhân.", duplicate: true, invoice });
+    }
+
+    const lock = await Invoice.updateOne(
+      { _id: invoice._id, status: "chờ thanh toán", $or: [{ payLock: null }, { payLock: { $lt: new Date(Date.now() - 60 * 1000) } }] },
+      { $set: { payLock: new Date() } }
+    );
+    if (!lock.modifiedCount) return res.status(409).json({ message: "Hóa đơn đang được xử lý thanh toán ở một yêu cầu khác. Vui lòng tải lại." });
+    lockedId = invoice._id;
+
+    // Số tiền phải trả hiện tại (đã gồm thuốc theo đơn & BHYT)
+    const drugSync = await syncPrescriptionDrugs(invoice);
+    if (drugSync.changed) { await invoice.save(); await reconcileBhytAfterTotalChange(invoice); }
+    const owed = Math.round(invoice.patientPayAmount ?? (invoice.totalAmount - (invoice.bhytInfo?.bhytAmount || 0)));
+    if (amount < owed) {
+      return res.status(400).json({ message: `Số tiền trên sao kê (${amount.toLocaleString("vi-VN")}đ) ít hơn số bệnh nhân phải trả (${owed.toLocaleString("vi-VN")}đ). Thu thêm phần còn thiếu trước khi ghi nhận.` });
+    }
+
+    // Mã VietQR còn chờ → hủy để không thu thêm lần nữa; mã đó cũng đã được trả → ghi nhận VietQR, khoản sao kê là thu trùng
+    const released = await releasePayOSLink(invoice, "Đã nhận chuyển khoản (đối chiếu sao kê)");
+    if (released.status === "PAID") {
+      await markInvoicePaidByPayOS(invoice, "Check");
+      invoice.bankTransfers.push(entry);
+      invoice.duplicatePayment = {
+        flagged: true,
+        detectedAt: new Date(),
+        orderCode: null,
+        amount,
+        note: `Hóa đơn đã được trả qua VietQR, sao kê ghi nhận thêm ${amount.toLocaleString("vi-VN")}đ (mã GD ${reference}) → cần hoàn khoản dư cho bệnh nhân.`,
+      };
+      await invoice.save();
+      return res.status(200).json({ message: "Hóa đơn đã được trả qua VietQR — khoản chuyển khoản này được gắn cờ THU TRÙNG.", duplicate: true, invoice });
+    }
+    invoice.bankTransfers.push(entry);
+    invoice.status = "đã thanh toán";
+    invoice.paymentMethod = "chuyển khoản";
+    invoice.paidAt = new Date();
+    if (amount > owed) {
+      invoice.duplicatePayment = {
+        flagged: true,
+        detectedAt: new Date(),
+        orderCode: null,
+        amount: amount - owed,
+        note: `Bệnh nhân chuyển ${amount.toLocaleString("vi-VN")}đ, nhiều hơn số phải trả ${owed.toLocaleString("vi-VN")}đ → cần hoàn ${(amount - owed).toLocaleString("vi-VN")}đ.`,
+      };
+    }
+    // Tiền đã về → trừ kho FEFO & đóng lượt khám; thiếu kho thì chuyển "đang xử lý" + báo dược sĩ thay vì chặn
+    const result = await finalizeReceivedPayment(invoice, { userId: req.user.id, reason: `Chuyển khoản theo sao kê mã GD ${reference}`, label: `chuyển khoản ${reference}` });
+    if (result === "retry") {
+      return res.status(503).json({ message: "Lỗi hạ tầng tạm thời khi ghi nhận — vui lòng bấm ghi nhận lại sau ít giây." });
+    }
+    return res.status(200).json({
+      message: result === "flagged"
+        ? "Đã ghi nhận chuyển khoản nhưng chưa xuất được kho thuốc — hóa đơn chuyển 'đang xử lý', đã báo dược sĩ."
+        : "Đã ghi nhận chuyển khoản, hóa đơn chuyển sang \"Đã thanh toán\".",
+      invoice,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi ghi nhận chuyển khoản", error: error.message });
+  } finally {
+    if (lockedId) await Invoice.updateOne({ _id: lockedId }, { $set: { payLock: null } }).catch(() => {});
+  }
+};

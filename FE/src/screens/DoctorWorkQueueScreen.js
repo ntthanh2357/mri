@@ -18,6 +18,8 @@ import { consentStatus } from '../utils/signature';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import { Hourglass as QStatWait, ScanLine as QStatMri, Siren as QStatEmergency, LayoutList as QStatAll, RefreshCw as QBtnRefresh } from 'lucide-react';
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 import { 
@@ -1073,11 +1075,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
 
-  // Lễ tân: bảng gọi số ca khám riêng (chỉ xem, không thao tác lâm sàng) — dinhhuyhoang
-  if (isReceptionist) {
+  // Lễ tân & điều dưỡng: cùng một bảng gọi số ca khám (giao diện nhất quán giữa 2 vai trò)
+  if (isReceptionist || isNurse) {
     return (
       <ResponsiveLayout navigation={navigation} title="Hàng chờ ca khám" user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-        <ReceptionQueueBoard navigation={navigation} />
+        <ReceptionQueueBoard navigation={navigation} role={user?.role} />
       </ResponsiveLayout>
     );
   }
@@ -1086,26 +1088,40 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-      <PageHeader
-        bar
-        title={screenTitle}
-        subtitle="Ca cấp cứu luôn nằm đầu danh sách."
-        actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={fetchData} />}
-        below={
-          <PageTabs
-            tabs={[
-              { key: 'all', label: 'Tất cả', count: examActiveCount + mriActiveCount },
-              { key: 'examQueue', label: 'Khám lâm sàng', count: examActiveCount },
-              { key: 'mriQueue', label: 'Chụp MRI', count: mriActiveCount },
-            ]}
-            value={currentMode}
-            onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
-          />
-        }
-      />
-
       <ScrollView>
         <PageContainer style={styles.page}>
+          <View style={styles.bannerBlock}>
+            <StaffBanner
+              image={isTechnician ? RECEPTION_IMAGES.mriFilms : currentMode === 'mriQueue' ? RECEPTION_IMAGES.mriFilms : RECEPTION_IMAGES.mriDiscuss}
+              tone="indigo"
+              eyebrow={isTechnician ? 'Phòng chụp MRI' : 'Hàng đợi bác sĩ'}
+              title={screenTitle}
+              subtitle="Ca cấp cứu luôn nằm đầu danh sách. Bấm thao tác ở cuối mỗi dòng để khám, kê đơn hoặc đọc kết quả phim."
+              right={(
+                <BannerStats items={[
+                  { icon: QStatWait, value: examActiveCount, label: 'Khám lâm sàng' },
+                  { icon: QStatMri, value: mriActiveCount, label: 'Chụp MRI' },
+                  { icon: QStatEmergency, value: emergencyCount, label: 'Ca cấp cứu' },
+                ]} />
+              )}
+            >
+              <View style={styles.bannerBtns}>
+                <Pressable style={styles.bannerGhost} onPress={fetchData}>
+                  <QBtnRefresh size={15} color="#FFFFFF" />
+                  <Text style={styles.bannerGhostText}>Làm mới</Text>
+                </Pressable>
+              </View>
+            </StaffBanner>
+            <PillTabs
+              tabs={[
+                { key: 'all', label: 'Tất cả', icon: QStatAll, count: examActiveCount + mriActiveCount },
+                { key: 'examQueue', label: 'Khám lâm sàng', icon: QStatWait, count: examActiveCount },
+                { key: 'mriQueue', label: 'Chụp MRI', icon: QStatMri, count: mriActiveCount },
+              ]}
+              value={currentMode}
+              onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
+            />
+          </View>
           <View style={styles.toolbar}>
             <View style={styles.seg}>
               {[
@@ -1557,6 +1573,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#1E1B4B', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  bannerBlock: { marginBottom: 18 },
   page: { paddingTop: 20, paddingBottom: 32 },
   toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   seg: { flexDirection: 'row', backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3, gap: 2 },

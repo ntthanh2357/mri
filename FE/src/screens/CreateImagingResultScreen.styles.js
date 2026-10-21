@@ -4,7 +4,7 @@ import Colors from '../constants/colors';
 export default StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F3F7FC',
   },
   scrollContainer: {
     padding: 16,

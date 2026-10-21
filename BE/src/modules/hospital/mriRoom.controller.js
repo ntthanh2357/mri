@@ -5,6 +5,54 @@ import { User } from "../auth/models/user.model.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { getDayRangeVN } from "../../utils/date.util.js";
+import { sendMriRescheduleEmail } from "../../services/email.service.js";
+
+const fmtVN = (d) => new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
+
+/**
+ * UC-REC-04 — Tìm khung giờ chụp trống gần nhất (không cần slot tạo sẵn).
+ * Duyệt từng ngày (tối đa maxDays) và từng phòng MRI đang hoạt động theo giờ mở cửa,
+ * bỏ qua giờ đã qua và các khung trùng với slot đã đặt / đang chụp.
+ */
+const findFreeWindow = async (hospitalId, fromDate, maxDays = 1, { dayStartMin = 0, dayEndMin = 1440 } = {}) => {
+  const rooms = await MriRoom.find({ hospitalId, status: 'active' }).lean();
+  if (!rooms.length) return null;
+  const earliest = Math.max(Date.now(), new Date(fromDate).getTime());
+  for (let d = 0; d < maxDays; d++) {
+    const { startOfDay } = getDayRangeVN(new Date(new Date(fromDate).getTime() + d * 86400000));
+    let best = null;
+    for (const room of rooms) {
+      const dayEnd = startOfDay.getTime() + 86400000;
+      const taken = await MriSlot.find({
+        roomId: room._id,
+        startTime: { $gte: startOfDay, $lt: new Date(dayEnd) },
+        status: { $in: ['booked', 'in_progress'] },
+      }).select('startTime endTime').lean();
+      // Phòng đã đủ số ca tối đa trong ngày thì bỏ qua
+      if (taken.length >= (room.maxSlotsPerDay || 16)) continue;
+      const toMin = (hhmm, fallback) => {
+        const [hh, mm] = String(hhmm || fallback).split(":").map(Number);
+        return hh * 60 + (mm || 0);
+      };
+      // Duyệt từ giờ mở cửa đến giờ đóng cửa (phòng cấp cứu có thể mở 00:00 – 24:00)
+      const openMin = toMin(room.operatingHours?.start, "07:00");
+      const closeMin = toMin(room.operatingHours?.end, "17:00");
+      const dur = room.slotDurationMinutes || 30;
+      for (let t = openMin; t + dur <= closeMin; t += dur) {
+        const s = startOfDay.getTime() + t * 60000;
+        const e = s + dur * 60000;
+        if (s < earliest) continue;
+        // Giới hạn khung giờ trong ngày (VD lịch dời cho bệnh nhân thường chỉ trong 07:00–20:00)
+        if (t < dayStartMin || t + dur > dayEndMin) continue;
+        if (taken.some((t) => s < new Date(t.endTime).getTime() && e > new Date(t.startTime).getTime())) continue;
+        if (!best || s < best.start.getTime()) best = { room, start: new Date(s), end: new Date(e) };
+        break;
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+};
 
 // ─── A.1 — Lấy danh sách phòng MRI ───────────────────────────────────────────
 export const getRooms = async (req, res) => {
@@ -147,6 +195,7 @@ export const autoScheduleSlot = async (req, res) => {
     for (let i = 0; i < bestRoom.maxSlotsPerDay; i++) {
       const candidateStartMs = searchDate.getTime() + (startH * 60 + startM + i * bestRoom.slotDurationMinutes) * 60000;
       const candidateEndMs = candidateStartMs + bestRoom.slotDurationMinutes * 60000;
+      if (candidateStartMs < Date.now()) continue; // UC-REC-04: không đặt lịch vào giờ đã qua
 
       // Kiểm tra xem khung giờ này có bị trùng với slot nào đã đặt không (chống đè slot khi có ca hủy ở giữa)
       const isConflict = existingSlots.some(s => {
@@ -267,46 +316,53 @@ export const handleEmergencyOverride = async (req, res) => {
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
 
-    const { startOfDay: searchDate, endOfDay } = getDayRangeVN(preferredDate || new Date());
-
-    // Tìm slot trống ngay bây giờ hoặc sắp tới
     const now = new Date();
-    const emptySlot = await MriSlot.findOne({
-      hospitalId,
-      startTime: { $gte: now, $lte: endOfDay },
-      status: 'available'
-    }).sort({ startTime: 1 });
 
-    if (emptySlot) {
-      // Có slot trống — đặt ngay
-      emptySlot.visitId = visit._id;
-      emptySlot.patientId = visit.patientId;
-      emptySlot.status = 'booked';
-      emptySlot.priority = 1;
-      await emptySlot.save();
+    // 1. Ca cấp cứu đã có lịch chụp thì không xếp thêm
+    const alreadyBooked = await MriSlot.findOne({ hospitalId, visitId: visit._id, status: { $in: ['booked', 'in_progress'] } })
+      .populate("roomId", "name").lean();
+    if (alreadyBooked) {
+      return successResponse(res, { slot: alreadyBooked, action: 'already_booked' }, "Ca cấp cứu này đã có lịch chụp MRI.");
+    }
 
+    // 2. Còn khung giờ trống trong ngày (tính theo giờ hoạt động thực tế của phòng máy) → đặt ngay, ưu tiên 1
+    const window = await findFreeWindow(hospitalId, now, 1);
+    if (window) {
+      const slot = await MriSlot.create({
+        hospitalId,
+        roomId: window.room._id,
+        visitId: visit._id,
+        patientId: visit.patientId,
+        startTime: window.start,
+        endTime: window.end,
+        status: 'booked',
+        priority: 1,
+      });
       visit.status = 'chờ chụp';
       visit.priority = 'khẩn cấp';
       await visit.save();
-
       return successResponse(res, {
-        slot: emptySlot,
+        slot: { ...slot.toObject(), roomId: { _id: window.room._id, name: window.room.name } },
         action: 'booked_empty_slot',
-        message: "Đã đặt slot trống cho ca cấp cứu."
+        message: `Đã xếp ca cấp cứu vào ${window.room.name} lúc ${fmtVN(window.start)}.`
       }, "Xử lý cấp cứu thành công.");
     }
 
-    // Không có slot trống — tìm slot bệnh nhân thường gần nhất để dời
+    // 3. Hết chỗ trong ngày — chọn slot bệnh nhân thường gần nhất để nhường cho cấp cứu
     const normalSlot = await MriSlot.findOne({
       hospitalId,
       startTime: { $gte: now },
       status: 'booked',
       priority: { $gt: 1 } // Không phải cấp cứu
-    }).sort({ startTime: 1 }).populate("patientId", "profile.name email");
+    }).sort({ startTime: 1 }).populate("patientId", "profile.name profile.fullName email").populate("roomId", "name");
 
     if (!normalSlot) {
-      return errorResponse(res, "Không tìm được slot nào để dời. Liên hệ quản lý phòng máy.", 400);
+      return errorResponse(res, "Phòng máy đã kín lịch và không có ca thường nào để dời. Liên hệ quản lý phòng máy.", 400);
     }
+
+    // Gợi ý khung giờ trống mới cho bệnh nhân bị dời (tìm từ ngày hôm sau, tối đa 7 ngày)
+    const { endOfDay: todayEnd } = getDayRangeVN(now);
+    const suggestion = await findFreeWindow(hospitalId, new Date(todayEnd.getTime() + 1), 7, { dayStartMin: 7 * 60, dayEndMin: 20 * 60 });
 
     // Soạn bản nháp thông báo dời lịch (chưa gửi — lễ tân phải xác nhận)
     const draftNotification = {
@@ -314,8 +370,11 @@ export const handleEmergencyOverride = async (req, res) => {
       patientEmail: normalSlot.patientId?.email,
       originalSlotId: normalSlot._id,
       originalStartTime: normalSlot.startTime,
+      roomName: normalSlot.roomId?.name || '',
       emergencyVisitId: visit._id,
-      message: `Kính gửi quý bệnh nhân, do có ca cấp cứu cần ưu tiên, lịch chụp MRI của bạn lúc ${normalSlot.startTime.toLocaleString('vi-VN')} cần được dời sang thời điểm khác. Xin lỗi vì sự bất tiện này.`,
+      suggestedNewStartTime: suggestion?.start || null,
+      suggestedRoomName: suggestion?.room?.name || null,
+      message: `Kính gửi quý bệnh nhân, do có ca cấp cứu cần ưu tiên, lịch chụp MRI của bạn lúc ${fmtVN(normalSlot.startTime)} được dời sang ${suggestion ? fmtVN(suggestion.start) : 'thời điểm khác (lễ tân sẽ liên hệ)'}. Xin lỗi vì sự bất tiện này.`,
       requiresConfirmation: true, // Lễ tân phải bấm xác nhận
     };
 
@@ -360,23 +419,50 @@ export const confirmReschedule = async (req, res) => {
       await emergencyVisit.save();
     }
 
-    // Gửi thông báo cho bệnh nhân bị dời (qua notification system)
+    // UC-REC-04: tự động xếp lịch mới cho bệnh nhân bị dời rồi thông báo (in-app + email)
+    let newSlot = null;
+    let emailSent = false;
     if (originalVisitId) {
       try {
-        const originalVisit = await Visit.findById(originalVisitId);
+        const originalVisit = await Visit.findById(originalVisitId).populate("patientId", "email profile.name profile.fullName");
+        const { endOfDay: todayEnd } = getDayRangeVN(new Date());
+        const win = await findFreeWindow(req.user.hospitalId, new Date(todayEnd.getTime() + 1), 7, { dayStartMin: 7 * 60, dayEndMin: 20 * 60 });
+        if (win && originalVisit) {
+          newSlot = await MriSlot.create({
+            hospitalId: req.user.hospitalId,
+            roomId: win.room._id,
+            visitId: originalVisit._id,
+            patientId: originalVisit.patientId?._id || originalVisit.patientId,
+            startTime: win.start,
+            endTime: win.end,
+            status: 'booked',
+            priority: 5,
+            rescheduledFrom: originalStartTime,
+            rescheduledReason: "Dời lịch do nhường slot cho ca cấp cứu",
+          });
+        }
         if (originalVisit?.patientId) {
+          const patientName = originalVisit.patientId.profile?.name || originalVisit.patientId.profile?.fullName || "Quý bệnh nhân";
           await createNotificationInternal({
             hospitalId: req.user.hospitalId,
-            recipientId: originalVisit.patientId,
+            recipientId: originalVisit.patientId._id || originalVisit.patientId,
             senderId: req.user.id,
             type: "slot_rescheduled",
             title: "📅 Lịch chụp MRI đã được dời",
-            message: "Do có ca cấp cứu cần ưu tiên, lịch chụp MRI của bạn đã được dời. Vui lòng liên hệ lễ tân để đặt lại lịch.",
+            message: newSlot
+              ? `Do có ca cấp cứu cần ưu tiên, lịch chụp MRI lúc ${fmtVN(originalStartTime)} đã được dời sang ${fmtVN(newSlot.startTime)} (${win.room.name}).`
+              : "Do có ca cấp cứu cần ưu tiên, lịch chụp MRI của bạn đã được dời. Lễ tân sẽ liên hệ để sắp xếp lại.",
             relatedId: originalVisitId,
+          });
+          emailSent = await sendMriRescheduleEmail({
+            toEmail: originalVisit.patientId.email,
+            patientName,
+            oldTime: originalStartTime,
+            newTime: newSlot?.startTime || null,
           });
         }
       } catch (notifErr) {
-        console.warn("⚠️ Không thể gửi thông báo dời lịch cho bệnh nhân:", notifErr.message);
+        console.warn("⚠️ Không thể xếp lại lịch / thông báo cho bệnh nhân bị dời:", notifErr.message);
       }
     }
 
@@ -397,7 +483,13 @@ export const confirmReschedule = async (req, res) => {
       }
     }
 
-    return successResponse(res, { slot }, "Đã xác nhận dời lịch và đặt slot cho ca cấp cứu.");
+    return successResponse(
+      res,
+      { slot, newSlot, emailSent },
+      newSlot
+        ? `Đã nhường slot cho ca cấp cứu và dời bệnh nhân thường sang ${fmtVN(newSlot.startTime)}.`
+        : "Đã nhường slot cho ca cấp cứu. Chưa tìm được khung giờ mới trong 7 ngày — vui lòng liên hệ bệnh nhân."
+    );
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

@@ -18,6 +18,7 @@ import { post, setAuthToken, get } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
 import styles from './LoginScreen.styles';
 import { Eye, EyeOff, Check, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useDialogKeys } from '../utils/useDialogKeys';
 
 const LoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -64,6 +65,14 @@ const LoginScreen = ({ navigation }) => {
     message: '',
     onClose: null,
   });
+  // Đóng hộp thông báo (nút "Tiếp tục", phím Enter hoặc Esc)
+  const closeCustomAlert = () => {
+    setCustomAlert(prev => ({ ...prev, visible: false }));
+    if (customAlert.onClose) {
+      customAlert.onClose();
+    }
+  };
+  useDialogKeys(customAlert.visible, { onEnter: closeCustomAlert, onEscape: closeCustomAlert });
 
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -1344,12 +1353,7 @@ const LoginScreen = ({ navigation }) => {
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
                 customAlert.type === 'info' && { backgroundColor: '#2563EB' },
               ]}
-              onPress={() => {
-                setCustomAlert(prev => ({ ...prev, visible: false }));
-                if (customAlert.onClose) {
-                  customAlert.onClose();
-                }
-              }}
+              onPress={closeCustomAlert}
             >
               <Text style={styles.alertButtonText}>Tiếp tục</Text>
             </TouchableOpacity>

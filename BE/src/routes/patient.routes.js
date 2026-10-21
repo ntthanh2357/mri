@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
   getPatients,
+  createPatientAtDesk,
+  updatePatientEmail,
   getPatientById,
   getPatientVitals,
   addPatientVitals,
@@ -38,8 +40,12 @@ const checkSelfOrRoles = (allowedRoles) => {
 
 router.use(protect);
 
-// Lấy danh sách bệnh nhân (nhân viên lâm sàng + lễ tân để tiếp nhận; controller lọc theo bệnh viện)
+// Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
 router.get("/", checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getPatients);
+// UC-REC-01: tạo hồ sơ bệnh nhân mới tại quầy tiếp đón
+router.post("/", checkRole(["receptionist", "nurse", "admin", "hospital_admin"]), createPatientAtDesk);
+// UC-REC-04: cập nhật email nhận thông báo (lượt khám, dời lịch chụp, hoàn tiền)
+router.put("/:patientId/email", checkRole(["receptionist", "nurse", "admin", "hospital_admin"]), updatePatientEmail);
 
 // Lấy chi tiết 1 bệnh nhân theo ID (cho phép xuyên viện để phục vụ chuyển tuyến)
 router.get("/:patientId", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatientById);

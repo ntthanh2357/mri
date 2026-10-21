@@ -50,6 +50,12 @@ const hospitalSchema = new Schema(
       examFee: { type: Number, default: 150000 },
       mriFee: { type: Number, default: 1500000 },
       aiFee: { type: Number, default: 200000 },
+      bedFee: { type: Number, default: 300000 }, // UC-REC-05: tiền giường nội trú / ngày
+      // Bảng giá dịch vụ cận lâm sàng — phiếu thu tính giá ở máy chủ, không lấy số từ màn hình
+      labFee: { type: Number, default: 150000 },        // Xét nghiệm
+      ultrasoundFee: { type: Number, default: 250000 }, // Siêu âm
+      xrayFee: { type: Number, default: 150000 },       // X-quang
+      serviceFee: { type: Number, default: 150000 },    // Dịch vụ khác chưa có giá riêng
       maxPatients: { type: Number, default: 50 },
     },
 

@@ -13,10 +13,13 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { ReceptionWeekStrip } from '../components/reception/ReceptionSchedule';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import {
+  CalendarDays as TabWeek, CalendarCheck as TabMine, ClipboardList as TabReg, Repeat as TabSwap,
+  PlusCircle as BtnRegister, RefreshCw as BtnRefresh, Hourglass as StatPending, BadgeCheck as StatConfirmed,
+} from 'lucide-react';
 import { get, post, put, del } from '../services/api.service';
 import {
   User,
@@ -665,52 +668,58 @@ export default function StaffSchedulingScreen({ navigation }) {
     return { totalWeekly, confirmedCount, pendingCount, swapCount };
   }, [weeklySchedules, registrations, swapRequests, isHospitalAdmin]);
 
-  // Lễ tân: tab "Lịch của tôi" hiển thị dải 7 ngày riêng (dinhhuyhoang)
-  const isReceptionistUser = currentUser?.role === 'receptionist';
+  // Lễ tân & điều dưỡng: tab "Lịch của tôi" hiển thị dải 7 ngày (giao diện nhất quán giữa 2 vai trò)
+  const isReceptionistUser = ['receptionist', 'nurse'].includes(currentUser?.role);
   const findMine = (date) => (currentUser ? findSchedules(currentUser.id, date) : []);
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffScheduling">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Lịch làm việc"
-          subtitle={isHospitalAdmin
-            ? 'Xếp ca, duyệt đăng ký ca và yêu cầu đổi ca của nhân sự.'
-            : 'Lịch trực của bạn và của khoa. Đăng ký thêm ca hoặc xin đổi ca tại đây.'}
-          actions={
-            <>
-              <HeaderAction
-                icon="refresh-cw"
-                label="Làm mới"
-                onPress={() => {
-                  fetchWeeklySchedules();
-                  fetchRegistrations();
-                  fetchSwapRequests();
-                }}
-              />
-              <HeaderAction variant="primary" icon="plus-circle" label="Đăng ký ca làm" onPress={() => handleOpenSelfRegister(new Date())} />
-            </>
-          }
-          below={
-            <PageTabs
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <PageContainer spaced>
+          <View>
+            <StaffBanner
+              image={RECEPTION_IMAGES.schedule}
+              tone="plum"
+              eyebrow="Lịch trực"
+              title="Lịch làm việc"
+              subtitle={isHospitalAdmin
+                ? 'Xếp ca, duyệt đăng ký ca và yêu cầu đổi ca của nhân sự.'
+                : 'Lịch trực của bạn và của khoa. Đăng ký thêm ca hoặc xin đổi ca tại đây.'}
+              right={(
+                <BannerStats items={[
+                  { icon: TabWeek, value: kpiStats.totalWeekly, label: 'Ca tuần này' },
+                  { icon: StatConfirmed, value: kpiStats.confirmedCount, label: 'Đã duyệt' },
+                  { icon: StatPending, value: kpiStats.pendingCount, label: 'Chờ duyệt' },
+                  { icon: TabSwap, value: kpiStats.swapCount, label: 'Xin đổi ca' },
+                ]} />
+              )}
+            >
+              <View style={styles.bannerBtns}>
+                <TouchableOpacity style={styles.bannerBtn} onPress={() => handleOpenSelfRegister(new Date())} dataSet={{ hover: 'glow' }}>
+                  <BtnRegister size={16} color="#3B0764" />
+                  <Text style={styles.bannerBtnText}>Đăng ký ca làm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bannerGhost}
+                  onPress={() => { fetchWeeklySchedules(); fetchRegistrations(); fetchSwapRequests(); }}
+                >
+                  <BtnRefresh size={15} color="#FFFFFF" />
+                  <Text style={styles.bannerGhostText}>Làm mới</Text>
+                </TouchableOpacity>
+              </View>
+            </StaffBanner>
+            <PillTabs
               tabs={[
-                { key: 'weekly', label: 'Thời khóa biểu toàn khoa' },
-                { key: 'my-schedule', label: 'Lịch của tôi' },
-                { key: 'registrations', label: isHospitalAdmin ? 'Duyệt đăng ký ca' : 'Đăng ký ca của tôi', count: kpiStats.pendingCount || null },
-                { key: 'swap', label: 'Đổi ca trực', count: kpiStats.swapCount || null },
+                { key: 'weekly', label: 'Thời khóa biểu toàn khoa', icon: TabWeek },
+                { key: 'my-schedule', label: 'Lịch của tôi', icon: TabMine },
+                { key: 'registrations', label: isHospitalAdmin ? 'Duyệt đăng ký ca' : 'Đăng ký ca của tôi', icon: TabReg, count: kpiStats.pendingCount, warn: true },
+                { key: 'swap', label: 'Đổi ca trực', icon: TabSwap, count: kpiStats.swapCount, warn: true },
               ]}
               value={activeTab}
               onChange={setActiveTab}
             />
-          }
-        />
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <PageContainer spaced>
-          <Text style={styles.weekSummary}>
-            Tuần này có <Text style={styles.weekSummaryStrong}>{kpiStats.totalWeekly} ca</Text>: {kpiStats.confirmedCount} đã duyệt, {kpiStats.pendingCount} chờ duyệt.
-          </Text>
+          </View>
 
           {/* TAB 1: WEEKLY GRID */}
           {activeTab === 'weekly' && (
@@ -1955,8 +1964,13 @@ const isSameDay = (d1, d2) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scroll: { paddingTop: 20, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
+  scroll: { paddingTop: 4, paddingBottom: 40 },
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#3B0764', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   weekSummary: { fontSize: 14, color: Colors.slateMuted },
   weekSummaryStrong: { fontWeight: '700', color: Colors.brandNavy },
 

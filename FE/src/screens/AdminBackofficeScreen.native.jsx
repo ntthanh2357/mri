@@ -138,7 +138,7 @@ const AdminBackofficeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F3F7FC',
   },
   header: {
     flexDirection: 'row',

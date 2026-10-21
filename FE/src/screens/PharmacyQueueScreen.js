@@ -31,6 +31,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, post } from '../services/api.service';
@@ -551,16 +552,6 @@ export default function PharmacyQueueScreen({ navigation, route }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="PharmacyQueue">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Hàng đợi Khoa Dược"
-          subtitle="Tiếp nhận đơn thuốc điện tử, thẩm định Dual-Sign, kiểm tra thanh toán và xuất kho cấp phát (UC-PHA-01 → 04)."
-          actions={!loading ? (
-            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => fetchQueue()} />
-          ) : null}
-          below={<PageTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />}
-        />
-
         <ScrollView
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -572,6 +563,21 @@ export default function PharmacyQueueScreen({ navigation, route }) {
           }
         >
           <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.tabletScan}
+                tone="teal"
+                eyebrow="Khoa Dược"
+                title="Hàng đợi Khoa Dược"
+                subtitle="Tiếp nhận đơn thuốc điện tử, thẩm định Dual-Sign, kiểm tra thanh toán và xuất kho cấp phát (UC-PHA-01 → 04)."
+              >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{!loading ? (
+            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => fetchQueue()} />
+          ) : null}</View>
+              </StaffBanner>
+              <PillTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />
+            </View>
             {loading ? (
               <View style={styles.emptyBox}>
                 <ActivityIndicator size="large" color={Colors.brandGreen} />
@@ -601,7 +607,7 @@ export default function PharmacyQueueScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingBottom: 40, paddingTop: 4 },
 
   queueList: { gap: 14 },

@@ -25,8 +25,7 @@ import {
   Info,
 } from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader from '../components/layout/PageHeader';
-import PageContainer from '../components/layout/PageContainer';
+import { PatientPage, PatientHero, SideCard, PATIENT_ILLUS, P } from '../components/patient/PatientUI';
 import FadeIn from '../components/FadeIn';
 import { usePatientRecords } from '../controllers/usePatientRecords';
 import styles from './PatientRecordsScreen.styles';
@@ -219,6 +218,7 @@ const VisitCard = ({ visit, expanded, onToggle, onDocPress }) => {
 const PatientRecordsScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const isWide = width > 1100;
   const [search, setSearch] = useState('');
   const [expandedVisit, setExpandedVisit] = useState(null);
 
@@ -268,105 +268,123 @@ const PatientRecordsScreen = ({ navigation }) => {
     );
   }
 
+  const completeness = totalSlots > 0 ? Math.round((savedCount / totalSlots) * 100) : 0;
+  // Độ đầy đủ theo từng nhóm giấy tờ (trên tất cả lượt khám)
+  const groupStats = Object.entries(ALL_DOCS).map(([key, slots]) => {
+    const keys = new Set(slots.map((sl) => sl.docKey));
+    const saved = visits.reduce((sum, v) => sum + new Set((v.documents || []).filter((d) => keys.has(d.docKey)).map((d) => d.docKey)).size, 0);
+    const total = visits.length * slots.length;
+    return { key, ...GROUP_META[key], saved, total, pct: total ? Math.round((saved / total) * 100) : 0 };
+  });
+
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="PatientRecords">
-      <SafeAreaView style={styles.container}>
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <PageContainer width="reading">
-          <PageHeader
-            title="Lịch sử khám"
-            subtitle="Giấy tờ bệnh viện gửi cho bạn sau mỗi lượt khám. Dùng khi tái khám, chuyển viện hoặc làm thủ tục BHYT."
-            style={styles.pageHeader}
-          />
+      <PatientPage>
+        <PatientHero
+          illustration={PATIENT_ILLUS.passport}
+          eyebrow="Sổ sức khỏe cá nhân"
+          title={identity?.name || 'Chưa cập nhật họ tên'}
+          subtitle={`Sinh ngày ${identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'} · Giấy tờ bệnh viện gửi sau mỗi lượt khám, dùng khi tái khám, chuyển viện hoặc làm thủ tục BHYT.`}
+          stats={[
+            { value: visits.length, label: 'lượt khám' },
+            { value: savedCount, label: 'tài liệu đã lưu' },
+            { value: `${completeness}%`, label: 'đầy đủ' },
+          ]}
+        />
 
-          <FadeIn style={styles.passportCard}>
-            <View style={styles.passportGlow} />
-            <View style={styles.passportSpine} />
-            <View style={styles.passportRow}>
-            <View style={styles.passportMain}>
-            <Text style={styles.passportEyebrow}>Sổ sức khỏe cá nhân</Text>
-            <Text style={styles.passportName}>{identity?.name || 'Chưa cập nhật họ tên'}</Text>
-            <Text style={styles.passportDob}>
-              Sinh ngày {identity?.dateOfBirth ? new Date(identity.dateOfBirth).toLocaleDateString('vi-VN') : '—'}
-            </Text>
-            <View style={styles.passportDivider} />
-            <View style={styles.passportSummaryRow}>
-              <Text style={styles.passportSummaryStrong}>{visits.length}</Text>
-              <Text style={styles.passportSummaryText}>lượt khám</Text>
-              <Text style={styles.passportSummaryDot}>·</Text>
-              <Text style={styles.passportSummaryStrong}>{savedCount}</Text>
-              <Text style={styles.passportSummaryText}>tài liệu đã lưu</Text>
-              <Text style={styles.passportSummaryDot}>·</Text>
-              <Text style={styles.passportSummaryStrong}>
-                {totalSlots > 0 ? Math.round((savedCount / totalSlots) * 100) : 0}%
-              </Text>
-              <Text style={styles.passportSummaryText}>đầy đủ</Text>
+        <View style={[recStyles.columns, isWide && recStyles.columnsWide]}>
+          <View style={[recStyles.mainCol, isWide && { flex: 1.6 }]}>
+            <View style={styles.searchContainer}>
+              <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
+                placeholderTextColor={Colors.secondary}
+                value={search}
+                onChangeText={setSearch}
+              />
             </View>
-            </View>
-            <Image
-              source={require('../../assets/images/illus-health-passport.png')}
-              style={[styles.passportIllus, !isDesktop && styles.passportIllusMobile]}
-              resizeMode="contain"
-              accessible={false}
-            />
-            </View>
-          </FadeIn>
 
-          <View style={styles.searchContainer}>
-            <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm theo cơ sở y tế, chẩn đoán, ngày..."
-              placeholderTextColor={Colors.secondary}
-              value={search}
-              onChangeText={setSearch}
-            />
+            <View>
+              <Text style={styles.sectionTitle}>Lịch sử khám</Text>
+              <Text style={styles.sectionSub}>{filtered.length} lượt khám, theo thứ tự gần nhất trước</Text>
+            </View>
+
+            {filtered.length === 0 && (
+              <View style={styles.emptyState}>
+                <Image source={PATIENT_ILLUS.records} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
+                <Text style={styles.emptyText}>
+                  {visits.length === 0
+                    ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
+                    : 'Không tìm thấy lượt khám phù hợp.'}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.timelineContainer}>
+              {filtered.map((visit, index) => (
+                <FadeIn key={visit._id} delay={120 + index * 90} style={styles.timelineItem}>
+                  <View style={styles.timelineBar}>
+                    <View style={[styles.timelineDot, (visit.visitType === 'noi_tru' || visit.visitType === 'Nội trú') ? styles.dotInpatient : styles.dotOutpatient]} />
+                    {index < filtered.length - 1 && <View style={styles.timelineLine} />}
+                  </View>
+                  <View style={styles.timelineCard}>
+                    <VisitCard
+                      visit={visit}
+                      expanded={expandedVisit === visit._id}
+                      onToggle={() => setExpandedVisit(expandedVisit === visit._id ? null : visit._id)}
+                      onDocPress={handleDocPress}
+                    />
+                  </View>
+                </FadeIn>
+              ))}
+            </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Lịch sử khám</Text>
-          <Text style={styles.sectionSub}>{filtered.length} lượt khám, theo thứ tự gần nhất trước</Text>
-
-          {filtered.length === 0 && (
-            <View style={styles.emptyState}>
-              <Image source={require('../../assets/images/illus-records.png')} style={styles.emptyIllus} resizeMode="contain" accessible={false} />
-              <Text style={styles.emptyText}>
-                {visits.length === 0
-                  ? 'Chưa có lượt khám nào được bệnh viện cập nhật.'
-                  : 'Không tìm thấy lượt khám phù hợp.'}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.timelineContainer}>
-            {filtered.map((visit, index) => (
-              <FadeIn key={visit._id} delay={120 + index * 90} style={styles.timelineItem}>
-                <View style={styles.timelineBar}>
-                  <View style={[styles.timelineDot, (visit.visitType === 'noi_tru' || visit.visitType === 'Nội trú') ? styles.dotInpatient : styles.dotOutpatient]} />
-                  {index < filtered.length - 1 && <View style={styles.timelineLine} />}
+          <View style={[recStyles.sideCol, isWide && { flex: 1 }]}>
+            <SideCard icon={FolderArchive} title="Độ đầy đủ hồ sơ" subtitle={`${savedCount}/${totalSlots} giấy tờ trên ${visits.length} lượt khám`}>
+              {groupStats.map((g) => (
+                <View key={g.key} style={recStyles.group}>
+                  <View style={recStyles.groupHead}>
+                    <View style={[recStyles.groupIcon, { backgroundColor: `${g.accent}14` }]}>
+                      <g.Icon size={15} color={g.accent} />
+                    </View>
+                    <Text style={recStyles.groupLabel}>{g.label}</Text>
+                    <Text style={[recStyles.groupPct, { color: g.accent }]}>{g.saved}/{g.total}</Text>
+                  </View>
+                  <View style={recStyles.bar}><View style={[recStyles.barFill, { width: `${g.pct}%`, backgroundColor: g.accent }]} /></View>
                 </View>
-                <View style={styles.timelineCard}>
-                  <VisitCard
-                    visit={visit}
-                    expanded={expandedVisit === visit._id}
-                    onToggle={() => setExpandedVisit(expandedVisit === visit._id ? null : visit._id)}
-                    onDocPress={handleDocPress}
-                  />
-                </View>
-              </FadeIn>
-            ))}
-          </View>
+              ))}
+            </SideCard>
 
-          <View style={styles.infoNote}>
-            <Info size={16} color={Colors.brandGreen} style={{ marginTop: 2, marginRight: 8 }} />
-            <Text style={styles.infoNoteText}>
-              Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện. Chỉ xem — không thay thế EMR và không dùng để kê toa hay chẩn đoán.
-            </Text>
+            <SideCard icon={Info} title="Kho hồ sơ dùng để làm gì?" tone="navy">
+              <Text style={recStyles.navyText}>
+                Kho hồ sơ lưu bản sao tài liệu nhận từ bệnh viện để bạn mang theo khi tái khám, chuyển viện hoặc làm thủ tục BHYT.
+              </Text>
+              <Text style={recStyles.navyText}>
+                Chỉ để xem — không thay thế bệnh án điện tử và không dùng để kê toa hay chẩn đoán.
+              </Text>
+            </SideCard>
           </View>
-          </PageContainer>
-        </ScrollView>
-      </SafeAreaView>
+        </View>
+      </PatientPage>
     </ResponsiveLayout>
   );
+};
+
+const recStyles = {
+  columns: { gap: 20 },
+  columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  mainCol: { gap: 16 },
+  sideCol: { gap: 16 },
+  group: { gap: 8 },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  groupIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  groupLabel: { flex: 1, fontSize: 13, fontWeight: '700', color: P.ink },
+  groupPct: { fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  bar: { height: 8, borderRadius: 4, backgroundColor: '#EEF2F7', overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 4 },
+  navyText: { fontSize: 13, lineHeight: 20, color: '#C9D6EA' },
 };
 
 export default PatientRecordsScreen;

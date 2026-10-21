@@ -4,7 +4,7 @@ import { tenancyPlugin } from "../../../plugins/tenancy.plugin.js";
 const invoiceItemSchema = new Schema({
   description: { type: String, required: true },
   amount: { type: Number, required: true },
-  type: { type: String, enum: ['exam', 'mri', 'ai', 'drug', 'other', 'clinical_trial'], default: 'other' },
+  type: { type: String, enum: ['exam', 'mri', 'ai', 'drug', 'bed', 'other', 'clinical_trial'], default: 'other' },
   // Khóa ngoại Dược phẩm có cấu trúc chuẩn hóa (Khắc phục hạn chế của Regex Parsing)
   drugId: { type: Schema.Types.ObjectId, ref: 'Drug', default: null, index: true },
   drugName: { type: String, default: null },
@@ -58,8 +58,41 @@ const invoiceSchema = new Schema(
       enum: ['PENDING', 'DISPENSED', 'CANCELLED', 'PARTIALLY_DISPENSED'],
       default: 'PENDING'
     },
-    paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', 'vietqr', ''], default: '' },
-    orderCode: { type: Number, unique: true, sparse: true },
+    paymentMethod: { type: String, enum: ['tiền mặt', 'chuyển khoản', 'vietqr', 'BHYT chi trả', ''], default: '' }, // 'BHYT chi trả': BHYT trả 100%, bệnh nhân 0đ
+    orderCode: { type: Number, unique: true, sparse: true }, // Mã VietQR PayOS đang dùng
+    // Lịch sử mọi mã VietQR từng tạo cho hóa đơn — để tiền về muộn cho mã cũ vẫn khớp được đúng hóa đơn
+    payosLinks: [
+      {
+        orderCode: { type: Number, required: true },
+        amount: { type: Number, default: 0 },
+        qrCode: { type: String, default: "" },
+        checkoutUrl: { type: String, default: "" },
+        expiresAt: { type: Date, default: null },
+        status: { type: String, default: "PENDING" }, // PENDING | PAID | CANCELLED | EXPIRED | PROCESSING | UNDERPAID
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    paidOrderCode: { type: Number, default: null }, // Mã VietQR thực sự nhận tiền cho hóa đơn
+    // Chuyển khoản lễ tân ghi nhận tay theo sao kê ngân hàng (vd. tiền chuyển vào mã VietQR đã hủy / hết hạn)
+    bankTransfers: [
+      {
+        reference: { type: String, required: true }, // Mã giao dịch / số bút toán trên sao kê
+        amount: { type: Number, required: true },
+        note: { type: String, default: "" },
+        recordedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        recordedAt: { type: Date, default: Date.now },
+      },
+    ],
+    dispenseWarning: { type: String, default: "" }, // Cảnh báo xuất kho thuốc (vd. trả VietQR nhưng kho không đủ)
+    payLock: { type: Date, default: null }, // Khóa tạm khi đang thu tiền → chống bấm thu 2 lần cùng lúc
+    // Phát hiện bệnh nhân trả 2 lần (tiền VietQR về sau khi hóa đơn đã được thu) → cần hoàn khoản dư
+    duplicatePayment: {
+      flagged: { type: Boolean, default: false },
+      detectedAt: { type: Date, default: null },
+      orderCode: { type: Number, default: null },
+      amount: { type: Number, default: 0 },
+      note: { type: String, default: "" },
+    },
     paidAt: { type: Date, default: null },
     paymentNotes: { type: String, default: "" },
     // Phân loại thanh toán & Thử nghiệm lâm sàng (Clinical Trial)
@@ -131,6 +164,8 @@ const invoiceSchema = new Schema(
       usedThisYear: { type: Number, default: 0 },        // Lũy kế BHYT đã chi trả trong năm
       isOutOfNetwork: { type: Boolean, default: false },  // Cờ khám chữa bệnh trái tuyến
       priorAuthorization: { type: String, default: null }, // Giấy phê duyệt điều trị đặc biệt (Bevacizumab)
+      appliedOnTotal: { type: Number, default: null },   // Tổng chi phí tại thời điểm áp BHYT (đổi dịch vụ → tính lại)
+      autoApplied: { type: Boolean, default: false },    // Hệ thống tự áp khi phiếu thu chuyển sang quầy
     },
     // Phê duyệt trợ cấp từ thiện có cấu trúc (Structured Charity Approval)
     charityApproval: {

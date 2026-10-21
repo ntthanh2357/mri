@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
-import PageContainer from '../components/layout/PageContainer';
+import { HeartPulse, FlaskConical, Pill, IdCard, RefreshCw, Gauge, CalendarCheck } from 'lucide-react';
+import { PatientPage, PatientHero, PatientTabs, HeroButton, SideCard, PATIENT_IMAGES, P } from '../components/patient/PatientUI';
+
+// Mức tham khảo cho người lớn — trình bày bình tĩnh, chỉ để người bệnh hiểu con số của mình
+const RANGES = [
+  { label: 'Huyết áp', value: 'Dưới 120/80 mmHg' },
+  { label: 'Mạch', value: '60 – 100 lần/phút' },
+  { label: 'SpO₂', value: 'Từ 95% trở lên' },
+  { label: 'BMI', value: '18,5 – 22,9 (người châu Á)' },
+];
 import Colors from '../constants/colors';
 import { useMyHealth } from '../controllers/useMyHealth';
 import IdentityForm from '../components/patient/IdentityForm';
@@ -196,30 +203,41 @@ const MyHealthScreen = ({ navigation, route }) => {
   const [tab, setTab] = useState(initial);
   const { vitals, labs, prescriptions, reload, identity, reloadIdentity, saveIdentity } = useMyHealth();
   const reloadAll = () => { reload(); reloadIdentity(); };
+  const { width } = useWindowDimensions();
+  const isWide = width > 1100;
+  const lastVital = vitals.items.length ? vitals.items[vitals.items.length - 1] : null;
+  const pendingLabs = labs.items.filter((o) => o.status !== 'COMPLETED').length;
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="MyHealth">
-      <View style={styles.container}>
-        <PageHeader
-          bar
-          title="Sức khỏe của tôi"
-          subtitle="Sinh hiệu, xét nghiệm, đơn thuốc từ các lần khám và hồ sơ cá nhân của bạn."
-          actions={<HeaderAction icon="refresh-cw" label="Tải lại" onPress={reloadAll} />}
-          below={
-            <PageTabs
-              tabs={[
-                { key: 'vitals', label: 'Sinh hiệu' },
-                { key: 'labs', label: 'Xét nghiệm', count: labs.items.length || null },
-                { key: 'prescriptions', label: 'Đơn thuốc', count: prescriptions.items.length || null },
-                { key: 'profile', label: 'Hồ sơ & BHYT' },
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
-          }
+      <PatientPage>
+        <PatientHero
+          image={PATIENT_IMAGES.tabletScan}
+          eyebrow="Sức khỏe của tôi"
+          title="Theo dõi sức khỏe mỗi ngày"
+          subtitle="Sinh hiệu, xét nghiệm, đơn thuốc từ các lần khám và hồ sơ cá nhân của bạn — tất cả ở một nơi."
+          stats={[
+            { value: vitals.items.length, label: 'lần đo sinh hiệu' },
+            { value: labs.items.length, label: 'phiếu xét nghiệm' },
+            { value: prescriptions.items.length, label: 'đơn thuốc' },
+          ]}
+        >
+          <HeroButton icon={RefreshCw} label="Tải lại" onPress={reloadAll} ghost />
+        </PatientHero>
+
+        <PatientTabs
+          tabs={[
+            { key: 'vitals', label: 'Sinh hiệu', icon: HeartPulse },
+            { key: 'labs', label: 'Xét nghiệm', icon: FlaskConical, count: labs.items.length },
+            { key: 'prescriptions', label: 'Đơn thuốc', icon: Pill, count: prescriptions.items.length },
+            { key: 'profile', label: 'Hồ sơ & BHYT', icon: IdCard },
+          ]}
+          value={tab}
+          onChange={setTab}
         />
-        <ScrollView>
-          <PageContainer width="reading" style={styles.page}>
+
+        <View style={[styles.columns, isWide && styles.columnsWide]}>
+          <View style={[styles.mainCol, isWide && { flex: 1.7 }]}>
             {tab === 'vitals' && <VitalsTab state={vitals} onRetry={reload} />}
             {tab === 'labs' && <LabsTab state={labs} onRetry={reload} />}
             {tab === 'prescriptions' && (
@@ -229,24 +247,59 @@ const MyHealthScreen = ({ navigation, route }) => {
               </View>
             )}
             {tab === 'profile' && <IdentityForm state={identity} onSave={saveIdentity} onRetry={reloadIdentity} />}
-          </PageContainer>
-        </ScrollView>
-      </View>
+          </View>
+
+          <View style={[styles.sideCol, isWide && { flex: 1 }]}>
+            <SideCard icon={Gauge} title="Hiểu chỉ số của bạn" subtitle="Mức tham khảo cho người lớn" tone="navy">
+              {RANGES.map((r) => (
+                <View key={r.label} style={styles.rangeRow}>
+                  <Text style={styles.rangeLabel}>{r.label}</Text>
+                  <Text style={styles.rangeValue}>{r.value}</Text>
+                </View>
+              ))}
+            </SideCard>
+            <SideCard icon={CalendarCheck} title="Tóm tắt gần đây" tone="mint">
+              <View style={styles.sumRow}>
+                <Text style={styles.sumLabel}>Lần đo sinh hiệu gần nhất</Text>
+                <Text style={styles.sumValue}>{lastVital ? fmtDate(lastVital.recorded_at) : '—'}</Text>
+              </View>
+              <View style={styles.sumRow}>
+                <Text style={styles.sumLabel}>Xét nghiệm đang chờ kết quả</Text>
+                <Text style={styles.sumValue}>{pendingLabs}</Text>
+              </View>
+              <View style={styles.sumRow}>
+                <Text style={styles.sumLabel}>Đơn thuốc đã nhận</Text>
+                <Text style={styles.sumValue}>{prescriptions.items.length}</Text>
+              </View>
+              <Text style={styles.sumNote}>Lo lắng về chỉ số nào? Hãy hỏi bác sĩ điều trị ở lần tái khám tới.</Text>
+            </SideCard>
+          </View>
+        </View>
+      </PatientPage>
     </ResponsiveLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  page: { paddingTop: 20, paddingBottom: 40 },
+  columns: { gap: 20 },
+  columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  mainCol: { gap: 16 },
+  sideCol: { gap: 16 },
+  rangeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)' },
+  rangeLabel: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  rangeValue: { fontSize: 13, color: P.mint, fontWeight: '600', textAlign: 'right', flexShrink: 1 },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 6 },
+  sumLabel: { fontSize: 13, color: '#334155', flexShrink: 1 },
+  sumValue: { fontSize: 14, fontWeight: '800', color: P.navy, fontVariant: ['tabular-nums'] },
+  sumNote: { fontSize: 12, lineHeight: 18, color: P.muted, marginTop: 4 },
   stack: { gap: 16 },
   grow: { flex: 1, minWidth: 0 },
-  card: { backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, padding: 18, gap: 4 },
+  card: { backgroundColor: Colors.surface, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 20, gap: 4 },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
   cardTitle: { fontSize: 17, fontWeight: '700', color: Colors.brandNavy },
   cardSub: { fontSize: 14, color: Colors.secondary, marginBottom: 8 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
-  metric: { flexGrow: 1, flexBasis: 128, gap: 6, padding: 14, borderRadius: 12, backgroundColor: Colors.background },
+  metric: { flexGrow: 1, flexBasis: 128, gap: 6, padding: 16, borderRadius: 16, backgroundColor: '#F4F7FB', borderWidth: 1, borderColor: '#E8EEF6' },
   metricLabel: { fontSize: 14, color: Colors.slateMuted },
   metricValue: { fontSize: 24, fontWeight: '700', color: Colors.brandNavy, fontVariant: ['tabular-nums'] },
   metricUnit: { fontSize: 14, fontWeight: '500', color: Colors.secondary },

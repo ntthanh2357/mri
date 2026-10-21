@@ -30,6 +30,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get } from '../services/api.service';
@@ -291,16 +292,6 @@ export default function SlaReportScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="SlaReport">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Năng suất & Thời gian Chờ"
-          subtitle="Thời gian chờ trung bình qua từng khâu khám, tỷ lệ hoàn thành đúng hạn (SLA), hiệu năng AI và tải công việc bác sĩ (UC-HADM-12 · 11 · 03)."
-          actions={!loading ? (
-            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => fetchAll()} />
-          ) : null}
-          below={<PageTabs tabs={RANGE_TABS} value={days} onChange={setDays} />}
-        />
-
         <ScrollView
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -312,6 +303,21 @@ export default function SlaReportScreen({ navigation }) {
           }
         >
           <PageContainer spaced>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.corridor}
+                tone="teal"
+                eyebrow="Báo cáo vận hành"
+                title="Năng suất & Thời gian Chờ"
+                subtitle="Thời gian chờ trung bình qua từng khâu khám, tỷ lệ hoàn thành đúng hạn (SLA), hiệu năng AI và tải công việc bác sĩ (UC-HADM-12 · 11 · 03)."
+              >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{!loading ? (
+            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={() => fetchAll()} />
+          ) : null}</View>
+              </StaffBanner>
+              <PillTabs tabs={RANGE_TABS} value={days} onChange={setDays} />
+            </View>
             {loading ? (
               <View style={styles.emptyBox}>
                 <ActivityIndicator size="large" color={Colors.brandGreen} />
@@ -339,7 +345,7 @@ export default function SlaReportScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingBottom: 40, paddingTop: 4 },
 
   // ── Thẻ tổng quan hành trình ──

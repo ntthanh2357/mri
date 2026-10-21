@@ -307,17 +307,16 @@ export const updateRecord = async (req, res) => {
       }
     });
 
-    // Ghi nhận phiên bản nếu phát hiện thay đổi
+    // Chuẩn bị bản ghi phiên bản nếu có thay đổi — chỉ lưu SAU KHI cập nhật bệnh án thành công
+    let emrVersion = null;
     if (hasChanges) {
       const nextVersion = (record.currentVersion || 1) + 1;
-      const emrVersion = new EMRVersion({
+      emrVersion = new EMRVersion({
         medicalRecordId: record._id,
         version: record.currentVersion || 1, // Lưu trạng thái hiện tại trước khi lên ver mới
         modifiedBy: req.user?.profile?.name || "Bác sĩ điều trị",
         changes,
       });
-      await emrVersion.save();
-      
       updates.currentVersion = nextVersion;
     }
 
@@ -353,6 +352,8 @@ export const updateRecord = async (req, res) => {
       });
     }
 
+    if (emrVersion) await emrVersion.save();
+
     // Ghi nhận chuỗi băm nhật ký kiểm toán
     try {
       await recordAuditLog({
@@ -370,6 +371,11 @@ export const updateRecord = async (req, res) => {
 
     res.status(200).json({ status: "success", data: updatedRecord });
   } catch (error) {
+    // Dữ liệu không hợp lệ (thiếu trường bắt buộc...) → báo rõ trường nào thay vì lỗi 500 chung chung
+    if (error.name === "ValidationError") {
+      const fields = Object.values(error.errors || {}).map((e) => e.path === "diagnosis" ? "chẩn đoán" : e.path);
+      return res.status(400).json({ message: `Thiếu hoặc sai thông tin bắt buộc của bệnh án: ${fields.join(", ")}.` });
+    }
     console.error("Lỗi cập nhật bệnh án:", error);
     res.status(500).json({ message: "Không thể cập nhật bệnh án." });
   }

@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     height: '100%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F7FC',
   },
   bellBtn: {
     padding: 8,

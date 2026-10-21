@@ -41,6 +41,9 @@ const visitSchema = new Schema(
       default: 'đang chờ'
     },
     priority: { type: String, enum: ['thấp', 'trung bình', 'cao', 'khẩn cấp'], default: 'trung bình' },
+    // UC-REC-03 — Số thứ tự gọi khám trong ngày (cấp khi tạo lượt khám) & phòng khám được phân luồng
+    queueNumber: { type: Number, default: null },
+    clinicRoom: { type: String, default: '' },
     reason: { type: String, default: "" },
     vitals: {
       pulse: { type: Number, default: null },
@@ -84,6 +87,14 @@ const visitSchema = new Schema(
       screenedAt: { type: Date, default: null },
       screenedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       screenedByName: { type: String, default: "" }
+    },
+    // Phiếu chỉ định dịch vụ cận lâm sàng của điều dưỡng (bước giữa sinh hiệu và phiếu thu)
+    serviceOrder: {
+      services: [{ type: String }],
+      diagnosis: { type: String, default: "" },
+      priority: { type: String, default: "Thường" },
+      orderedAt: { type: Date, default: null },
+      orderedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
     },
     mriOrder: {
       region: { type: String, default: "" },

@@ -34,9 +34,11 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import { Hourglass as TabPending, Loader as TabDoing, CheckCircle2 as TabDone, ListChecks as TabAll, RefreshCw as BtnRefresh } from 'lucide-react';
+
+const ASSIGN_TAB_ICON = { pending: TabPending, active: TabDoing, done: TabDone, all: TabAll };
 import { get, put } from '../services/api.service';
 import {
   ClipboardCheck,
@@ -376,22 +378,6 @@ export default function MyAssignmentsScreen({ navigation, route }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="MyAssignments">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Phân công của tôi"
-          subtitle="Ca đọc phim và ca điều trị được giao cho bạn — xác nhận nhận ca ngay khi có thể để hệ thống theo dõi tiến độ đúng hạn chót."
-          actions={!loading ? (
-            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={refreshAll} />
-          ) : null}
-          below={
-            <PageTabs
-              tabs={tabsWithCount}
-              value={statusKey}
-              onChange={setStatusKey}
-            />
-          }
-        />
-
         <ScrollView
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -399,6 +385,30 @@ export default function MyAssignmentsScreen({ navigation, route }) {
           }
         >
           <PageContainer>
+            <View style={styles.bannerBlock}>
+              <StaffBanner
+                image={RECEPTION_IMAGES.mriDiscuss}
+                tone="indigo"
+                eyebrow="Ca được giao"
+                title="Phân công của tôi"
+                subtitle="Ca đọc phim và ca điều trị được giao cho bạn — xác nhận nhận ca ngay để hệ thống theo dõi tiến độ đúng hạn chót."
+                right={(
+                  <BannerStats items={tabsWithCount.map((t) => ({ icon: ASSIGN_TAB_ICON[t.key], value: t.count, label: t.label }))} />
+                )}
+              >
+                <View style={styles.bannerBtns}>
+                  <TouchableOpacity style={styles.bannerGhost} onPress={refreshAll}>
+                    <BtnRefresh size={15} color="#FFFFFF" />
+                    <Text style={styles.bannerGhostText}>Làm mới</Text>
+                  </TouchableOpacity>
+                </View>
+              </StaffBanner>
+              <PillTabs
+                tabs={tabsWithCount.map((t) => ({ ...t, icon: ASSIGN_TAB_ICON[t.key], warn: t.key === 'pending' }))}
+                value={statusKey}
+                onChange={setStatusKey}
+              />
+            </View>
             {error ? (
               <View style={styles.errorBox}>
                 <AlertTriangle size={18} color={Colors.errorText} />
@@ -465,7 +475,13 @@ export default function MyAssignmentsScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#1E1B4B', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  bannerBlock: { marginBottom: 18 },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingBottom: 40, paddingTop: 4 },
 
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.errorBg, borderRadius: 10, padding: 12, marginBottom: 12 },

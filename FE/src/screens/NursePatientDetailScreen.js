@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, Alert, StyleSheet, SafeAreaView, Platform
+  TextInput, ActivityIndicator, StyleSheet, SafeAreaView, Platform
 } from "react-native";
 import ResponsiveLayout from "../components/ResponsiveLayout";
 import Colors from "../constants/colors";
 import PatientSafetyStrip from "../components/staff/PatientSafetyStrip";
 import { get, post, put } from "../services/api.service";
 import safeStorage from "../utils/safeStorage.js";
+import { useAppDialog } from "../components/ui/AppDialog";
 import {
   User,
   ClipboardList,
@@ -23,6 +24,7 @@ import {
   Building2,
   Activity,
   Plus,
+  Lock,
   AlertTriangle,
   AlertCircle,
   Brain,
@@ -61,12 +63,15 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const department   = patient.department  || "Khoa Ung Thư Não";
   const doctor       = patient.doctorInCharge || "Bác sĩ điều trị";
 
+  const { dialog, notify } = useAppDialog();
   // Medical Record ID (chống duplicate hồ sơ bệnh án khi lập phiếu)
   const initialRecordId = route?.params?.recordId || patient.recordId || patient.medicalRecordId || (isRecordObj ? patient._id : null);
   const [resolvedRecordId, setResolvedRecordId] = useState(initialRecordId);
 
   // Active Visit ID state
   const [effectiveVisitId, setEffectiveVisitId] = useState(patient.visitId || null);
+  // Lượt khám đang thao tác: truyền từ màn trước, hoặc tự tìm trong hàng chờ khi mở từ nơi khác
+  const activeVisitId = effectiveVisitId || patient.visitId || null;
 
   // Navigation / Tabs state
   const [activeForm, setActiveForm] = useState("info");
@@ -93,12 +98,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const [orderServices,   setOrderServices]   = useState(["Chụp MRI sọ não"]);
   const [orderNewService, setOrderNewService] = useState("");
 
-  // ── Phiếu thu viện phí (Fee Items) ──
-  const [feeItems,    setFeeItems]    = useState([
-    { name: "Khám chuyên khoa Ung Thư Não", amount: "150000" }
-  ]);
-  const [feeNewName,  setFeeNewName]  = useState("");
-  const [feeNewAmt,   setFeeNewAmt]   = useState("");
+  // ── Phiếu thu viện phí (Fee Items) — trống cho tới khi lưu phiếu chỉ định ──
+  const [feeItems,    setFeeItems]    = useState([]);
   const [feeNote,     setFeeNote]     = useState("");
   const [submitting,  setSubmitting]  = useState(false);
   const [invoiceDone, setInvoiceDone] = useState(false);
@@ -219,11 +220,15 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     loadUser();
   }, []);
 
+  // Bản nháp phiếu gắn với từng LƯỢT KHÁM (không phải bệnh nhân): bệnh nhân cũ đến khám lại sẽ có phiếu trống mới
+  const formKey = activeVisitId ? `emr_detail_visit_${activeVisitId}` : (patient._id ? `emr_detail_${patient._id}` : null);
+
   // 2. Load Patient-Specific Form Cache from safeStorage
   useEffect(() => {
-    if (!patient._id) return;
+    if (!formKey) return;
+    setIsLoaded(false);
     try {
-      const savedData = safeStorage.getItem(`emr_detail_${patient._id}`);
+      const savedData = safeStorage.getItem(formKey);
       if (savedData) {
         const data = typeof savedData === 'string' ? JSON.parse(savedData) : savedData;
         
@@ -264,11 +269,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         setOrderDiagnosis("");
         setOrderServices(["Chụp MRI sọ não lát cắt mỏng", "Xét nghiệm máu"]);
         
-        setFeeItems([
-          { name: "Khám chuyên khoa thần kinh", amount: "150000" },
-          { name: "Chụp MRI sọ não lát cắt mỏng", amount: "1500000" },
-          { name: "Xét nghiệm tổng phân tích tế bào máu", amount: "150000" }
-        ]);
+        setFeeItems([]); // Viện phí chỉ sinh ra từ phiếu chỉ định đã lưu
         setFeeNote("");
         setInvoiceDone(false);
       }
@@ -277,11 +278,49 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     } finally {
       setIsLoaded(true);
     }
-  }, [patient._id]);
+  }, [formKey]);
+
+  // 2b. Trạng thái thật của lượt khám lấy từ máy chủ (bản nháp trên trình duyệt chỉ để giữ chữ đang gõ dở)
+  useEffect(() => {
+    if (!isLoaded || !activeVisitId) return;
+    let alive = true;
+    get(`/api/v1/visits/${activeVisitId}`)
+      .then((res) => {
+        if (!alive || !res?.visit) return;
+        const v = res.visit;
+        const vt = v.vitals || {};
+        const vitalsSaved = vt.pulse != null && !!vt.bloodPressure && vt.temperature != null && vt.spo2 != null;
+        setExamDone(vitalsSaved);
+        if (vitalsSaved) {
+          setExamPulse((x) => x || String(vt.pulse));
+          setExamBP((x) => x || vt.bloodPressure);
+          setExamTemp((x) => x || String(vt.temperature));
+          setExamSpo2((x) => x || String(vt.spo2));
+          if (vt.respiratoryRate != null) setExamBreath((x) => x || String(vt.respiratoryRate));
+        }
+        const services = v.serviceOrder?.services || [];
+        setOrderDone(services.length > 0);
+        if (services.length) {
+          setOrderServices(services);
+          if (v.serviceOrder.diagnosis) setOrderDiagnosis(v.serviceOrder.diagnosis);
+          if (v.serviceOrder.priority) setOrderPriority(v.serviceOrder.priority);
+        }
+        if (res.invoice?.items?.length) {
+          setFeeItems(res.invoice.items.map((i) => ({ name: i.description, amount: String(i.amount) })));
+        } else if (res.feeItems?.length) {
+          setFeeItems(res.feeItems.map((i) => ({ name: i.description, amount: String(i.amount) })));
+        } else if (!services.length) {
+          setFeeItems([]); // bỏ danh sách phí cũ còn sót trong bản nháp khi chưa có chỉ định
+        }
+        setInvoiceDone(!!res.invoice);
+      })
+      .catch(() => { /* không lấy được thì giữ bản nháp */ });
+    return () => { alive = false; };
+  }, [isLoaded, formKey]);
 
   // 3. Auto-Save Patient-Specific Form Cache to safeStorage when state changes
   useEffect(() => {
-    if (!patient._id || !isLoaded) return;
+    if (!formKey || !isLoaded) return;
     try {
       const cacheData = {
         examDone,
@@ -302,12 +341,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         feeNote,
         invoiceDone
       };
-      safeStorage.setItem(`emr_detail_${patient._id}`, JSON.stringify(cacheData));
+      safeStorage.setItem(formKey, JSON.stringify(cacheData));
     } catch (e) {
       console.log("Error caching patient form data:", e);
     }
   }, [
-    patient._id,
+    formKey,
     isLoaded,
     examDone,
     examPulse,
@@ -333,13 +372,6 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     if (!s) return;
     setOrderServices(p => [...p, s]);
     setOrderNewService("");
-  };
-
-  const addFeeItem = () => {
-    if (!feeNewName.trim() || !feeNewAmt.trim()) return;
-    setFeeItems(p => [...p, { name: feeNewName.trim(), amount: feeNewAmt.trim() }]);
-    setFeeNewName(""); 
-    setFeeNewAmt("");
   };
 
   const getOrCreateMedicalRecordId = async () => {
@@ -409,7 +441,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   // 4. Save Clinical Exam (Vitals) to Backend EMR (UC-NUR-02)
   const handleSaveExamToBackend = async () => {
     if (!examPulse || !examBP || !examTemp || !examSpo2) {
-      Alert.alert("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu chính (Mạch, Huyết áp, Thân nhiệt, SpO₂).");
+      notify("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu chính (Mạch, Huyết áp, Thân nhiệt, SpO₂).");
       return;
     }
     setSubmitting(true);
@@ -454,24 +486,31 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
           ? backendAlerts.map(a => typeof a === 'string' ? a : a.message)
           : vitalEval.alerts.map(a => a.message)
         ).join('\n• ');
-        Alert.alert(
-          "Cảnh báo sinh hiệu bất thường",
-          `Phiếu khám đã được lưu thành công vào hồ sơ.\n\n⚠️ CẢNH BÁO: Chỉ số vượt ngưỡng an toàn:\n• ${alertList}\n\nHệ thống đã tự động tô đỏ cảnh báo trên phiếu khám và chuyển lượt khám cho Bác sĩ xử lý.`
+        notify("Cảnh báo sinh hiệu bất thường", `Phiếu khám đã được lưu thành công vào hồ sơ.\n\n⚠️ CẢNH BÁO: Chỉ số vượt ngưỡng an toàn:\n• ${alertList}\n\nHệ thống đã tự động tô đỏ cảnh báo trên phiếu khám và chuyển lượt khám cho Bác sĩ xử lý.`
         );
       } else {
-        Alert.alert("Thành công", "Phiếu khám lâm sàng và sinh hiệu đã được lưu thành công vào hồ sơ bệnh án!");
+        notify("Thành công", "Phiếu khám lâm sàng và sinh hiệu đã được lưu thành công vào hồ sơ bệnh án!");
       }
     } catch (err) {
-      Alert.alert("Lỗi", err?.message || "Không thể lưu thông tin phiếu khám lên hệ thống.");
+      notify("Lỗi", err?.message || "Không thể lưu thông tin phiếu khám lên hệ thống.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 5. Save Service Order (Chỉ định) to Backend EMR
+  // 5. Save Service Order (Chỉ định) — lưu vào lượt khám, máy chủ trả về danh sách viện phí theo bảng giá
   const handleSaveOrderToBackend = async () => {
+    if (!examDone) {
+      notify("Chưa đo sinh hiệu", "Vui lòng hoàn thành và lưu tab Khám bệnh trước khi chỉ định dịch vụ.");
+      return;
+    }
     if (orderServices.length === 0) {
-      Alert.alert("Thông báo", "Vui lòng chỉ định ít nhất một dịch vụ.");
+      notify("Thông báo", "Vui lòng chỉ định ít nhất một dịch vụ.");
+      return;
+    }
+    // Phiếu chỉ định cận lâm sàng bắt buộc ghi chẩn đoán sơ bộ (hồ sơ bệnh án cũng yêu cầu trường này)
+    if (!orderDiagnosis.trim()) {
+      notify("Thiếu chẩn đoán sơ bộ", "Vui lòng nhập chẩn đoán lâm sàng sơ bộ trước khi lưu phiếu chỉ định.");
       return;
     }
     setSubmitting(true);
@@ -479,72 +518,55 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       const recordId = await getOrCreateMedicalRecordId();
       // Update MedicalRecord diagnosis and treatment plan
       await put(`/emr/records/${recordId}`, {
-        diagnosis: orderDiagnosis,
+        diagnosis: orderDiagnosis.trim(),
         treatmentPlan: `Chỉ định dịch vụ cận lâm sàng: ${orderServices.join(", ")}`
       });
 
-      // Synchronize services to Viện phí ONLY upon clicking confirm in Chỉ định
-      const baseFees = [];
-      const hasExamFee = orderServices.some(svc => svc.toLowerCase().includes("khám") || svc.toLowerCase().includes("kham"));
-      if (!hasExamFee) {
-        baseFees.push({ name: "Khám chuyên khoa thần kinh", amount: "150000" });
+      if (activeVisitId) {
+        const res = await put(`/api/v1/visits/${activeVisitId}/service-order`, {
+          services: orderServices,
+          diagnosis: orderDiagnosis,
+          priority: orderPriority,
+        });
+        setFeeItems((res?.feeItems || []).map((i) => ({ name: i.description, amount: String(i.amount) })));
+      } else {
+        setFeeItems([]);
       }
 
-      const orderedFees = orderServices.map(svc => {
-        let amt = "150000";
-        const lower = svc.toLowerCase();
-        if (lower.includes("mri") || lower.includes("cộng hưởng từ")) {
-          amt = "1500000";
-        } else if (lower.includes("ai") || lower.includes("phân tích")) {
-          amt = "200000";
-        } else if (lower.includes("khám") || lower.includes("kham")) {
-          amt = "150000";
-        } else if (lower.includes("siêu âm")) {
-          amt = "250000";
-        } else if (lower.includes("x-quang") || lower.includes("xquang")) {
-          amt = "150000";
-        }
-        return { name: svc, amount: amt };
-      });
-      setFeeItems([...baseFees, ...orderedFees]);
-
       setOrderDone(true);
-      Alert.alert("Thành công", "Đã lưu phiếu chỉ định và đồng bộ hóa danh sách sang viện phí thành công!");
+      notify("Thành công", activeVisitId
+        ? "Đã lưu phiếu chỉ định. Danh sách viện phí đã được tính theo bảng giá bệnh viện ở tab Viện phí."
+        : "Đã lưu chỉ định vào hồ sơ bệnh án. Để lập phiếu thu, vui lòng mở bệnh nhân từ Hàng chờ / Lượt khám hôm nay.");
     } catch (err) {
-      Alert.alert("Lỗi", err?.message || "Không thể lưu phiếu chỉ định lên hệ thống.");
+      notify("Lỗi", err?.message || "Không thể lưu phiếu chỉ định lên hệ thống.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 6. Save Invoice to Backend (Chuyển quầy Thu Ngân)
+  // 6. Gửi phiếu thu sang quầy Thu Ngân — máy chủ tự lập dòng phí từ phiếu chỉ định & bảng giá
   const handleConfirmFee = async () => {
-    if (feeItems.length === 0) { 
-      Alert.alert("Thông báo", "Vui lòng thêm ít nhất một dịch vụ."); 
-      return; 
+    if (!activeVisitId) {
+      notify("Thông báo", "Phiếu thu phải gắn với một lượt khám. Vui lòng mở bệnh nhân từ Hàng chờ / Lượt khám hôm nay.");
+      return;
+    }
+    if (!examDone || !orderDone) {
+      notify("Chưa đủ thông tin", "Cần lưu tab Khám bệnh và tab Chỉ định trước khi gửi phiếu thu.");
+      return;
     }
     setSubmitting(true);
     try {
-      const items = feeItems.map(i => ({ description: i.name, amount: parseFloat(i.amount) || 0 }));
-      const pid = patient._id || patient.patientId;
-      const vid = patient.visitId || undefined;
-      
-      await post("/api/v1/invoices/pending", { 
-        patientId: pid, 
-        visitId: vid, 
-        items, 
-        totalAmount: totalFee, 
-        notes: feeNote 
-      });
-      
+      const res = await post("/api/v1/invoices/pending", { visitId: activeVisitId, notes: feeNote });
+      const inv = res?.invoice;
+      if (inv?.items) setFeeItems(inv.items.map((i) => ({ name: i.description, amount: String(i.amount) })));
       setInvoiceDone(true);
-      Alert.alert(
-        "Xác nhận thành công",
-        `Phiếu thu của ${patientName} đã được gửi sang quầy Thu Ngân.\nTổng thu: ${totalFee.toLocaleString("vi-VN")} VNĐ`,
-        [{ text: "OK", onPress: () => navigation.goBack() }]
+      await notify(
+        "Đã gửi sang Thu Ngân",
+        `Phiếu thu của ${patientName} đã chuyển sang quầy Thu Ngân.\nTổng thu: ${(inv?.totalAmount ?? totalFee).toLocaleString("vi-VN")} VNĐ`,
       );
+      navigation.goBack();
     } catch (err) {
-      Alert.alert("Lỗi", err?.message || "Không thể tạo hóa đơn chờ thanh toán.");
+      notify("Lỗi", err?.message || "Không thể tạo hóa đơn chờ thanh toán.");
     } finally {
       setSubmitting(false);
     }
@@ -615,7 +637,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   const handleSaveCareSheet = async () => {
     if (!csPulse || !csBP || !csTemp || !csBreath || !csSpo2 || !csProgressNotes) {
-      Alert.alert("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh nhân.");
+      notify("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh nhân.");
       return;
     }
     setCsSubmitting(true);
@@ -655,12 +677,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       };
 
       await post(`/emr/records/${recordId}/care-sheets`, payload);
-      Alert.alert("Thành công", "Đã lưu Phiếu Chăm sóc Điều dưỡng thành công vào hồ sơ bệnh án!");
+      notify("Thành công", "Đã lưu Phiếu Chăm sóc Điều dưỡng thành công vào hồ sơ bệnh án!");
       setShowCareSheetForm(false);
       handleResetCareSheetForm();
       fetchPatientCareSheets();
     } catch (err) {
-      Alert.alert("Lỗi", err?.message || "Không thể lưu phiếu chăm sóc.");
+      notify("Lỗi", err?.message || "Không thể lưu phiếu chăm sóc.");
     } finally {
       setCsSubmitting(false);
     }
@@ -693,7 +715,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     ]);
     setCsProgressNotes("Bệnh nhân tỉnh táo (GCS 14 điểm E4V4M6), hậu phẫu mở sọ cắt u não ngày thứ 2. Tiếp xúc tốt, không liệt khu trú. Đồng tử 2 bên đều 2.5mm phản xạ ánh sáng (+). Dẫn lưu não thất EVD ra 45ml dịch não tủy hồng nhạt/8h, áp lực cột nước dao động bình thường.");
     setCsCareActions("Nằm đầu cao 30° chống phù não. Theo dõi tri giác (GCS) và phản xạ đồng tử mỗi 2 giờ. Sát trùng và thay băng vô trùng chân dẫn lưu não thất EVD. Truyền Mannitol 20% 250ml theo y lệnh bác sĩ, theo dõi cân bằng dịch vào ra.");
-    Alert.alert("Quét tự động OCR", "✅ Đã tự động điền đầy đủ phiếu chăm sóc hậu phẫu sọ não (GCS, Đồng tử, Dẫn lưu EVD, Lịch truyền dịch)!");
+    notify("Quét tự động OCR", "✅ Đã tự động điền đầy đủ phiếu chăm sóc hậu phẫu sọ não (GCS, Đồng tử, Dẫn lưu EVD, Lịch truyền dịch)!");
   };
 
   // Helper: Number to Vietnamese words
@@ -788,15 +810,20 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
               const IconComponent = t.Icon;
               const isDone = (t.key === 'exam' && examDone) || (t.key === 'order' && orderDone) || (t.key === 'fee' && invoiceDone) || (t.key === 'careSheet' && careSheets.length > 0);
               const isActive = activeForm === t.key;
-              
+              // Làm theo thứ tự: Khám bệnh (sinh hiệu) → Chỉ định → Viện phí
+              const lockReason = t.key === 'order' && !examDone ? 'Cần lưu tab Khám bệnh (sinh hiệu) trước khi chỉ định dịch vụ.'
+                : t.key === 'fee' && !orderDone ? (!examDone ? 'Cần lưu tab Khám bệnh và tab Chỉ định trước khi lập phiếu thu.' : 'Cần lưu tab Chỉ định trước khi lập phiếu thu.')
+                : null;
+
               return (
-                <TouchableOpacity key={t.key} onPress={() => setActiveForm(t.key)}
-                  style={[s.tabPill, isActive && s.tabPillActive, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                <TouchableOpacity key={t.key}
+                  onPress={() => (lockReason ? notify("Chưa thể mở " + t.label, lockReason) : setActiveForm(t.key))}
+                  style={[s.tabPill, isActive && s.tabPillActive, lockReason && { opacity: 0.5 }, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
                   <IconComponent size={14} color={isActive ? "#FFFFFF" : "#64748B"} />
                   <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>
                     {t.label}
                   </Text>
-                  {isDone && <CheckCircle2 size={13} color={isActive ? "#FFFFFF" : "#047857"} />}
+                  {lockReason ? <Lock size={12} color="#94A3B8" /> : isDone && <CheckCircle2 size={13} color={isActive ? "#FFFFFF" : "#047857"} />}
                 </TouchableOpacity>
               );
             })}
@@ -1874,8 +1901,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                       ))}
                     </View>
                     
-                    <Text style={s.fieldLabel}>Chẩn đoán lâm sàng sơ bộ</Text>
-                    <TextInput style={[s.input, { marginBottom: 14 }]} placeholder="Nhập chẩn đoán sơ bộ..." placeholderTextColor="#94A3B8" value={orderDiagnosis} onChangeText={setOrderDiagnosis} />
+                    <Text style={s.fieldLabel}>Chẩn đoán lâm sàng sơ bộ *</Text>
+                    <TextInput style={[s.input, { marginBottom: 14 }]} placeholder="VD: Theo dõi u não, đau đầu kéo dài chưa rõ nguyên nhân..." placeholderTextColor="#94A3B8" value={orderDiagnosis} onChangeText={setOrderDiagnosis} />
                     
                     <Text style={s.groupLabel}>Danh sách các dịch vụ chỉ định</Text>
                     {orderServices.length === 0 && <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", paddingVertical: 12 }}>Chưa chọn dịch vụ chỉ định nào.</Text>}
@@ -2016,7 +2043,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 /* INPUT FORM FOR FEE (PHIẾU THU VIỆN PHÍ) */
                 <View>
                   <Text style={s.sectionTitle}>Phiếu Thu Viện Phí</Text>
-                  <Text style={s.sectionSubtitle}>Kiểm tra lại danh sách các dịch vụ thu phí của bệnh nhân trước khi chuyển.</Text>
+                  <Text style={s.sectionSubtitle}>Danh sách lấy từ phiếu chỉ định, giá theo bảng giá bệnh viện. Muốn thêm/bớt dịch vụ, sửa ở tab Chỉ định.</Text>
                   <View style={s.card}>
                     <View style={s.patientSummaryBox}>
                       <Text style={s.fieldLabel}>Họ và tên: <Text style={{ fontWeight: "700" }}>{patientName}</Text></Text>
@@ -2026,7 +2053,6 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     <View style={s.tableHeader}>
                       <Text style={[s.tableHeaderText, { flex: 3 }]}>Tên dịch vụ y tế</Text>
                       <Text style={[s.tableHeaderText, { flex: 2, textAlign: "right" }]}>Thành tiền (VNĐ)</Text>
-                      <View style={{ width: 28 }} />
                     </View>
                     {feeItems.map((item, idx) => (
                       <View key={idx} style={[s.tableRow, { backgroundColor: idx % 2 === 0 ? "#fff" : "#F8FAFC" }]}>
@@ -2034,17 +2060,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                         <Text style={{ flex: 2, fontSize: 13, fontWeight: "600", color: "#0F172A", textAlign: "right" }}>
                           {parseFloat(item.amount).toLocaleString("vi-VN")}
                         </Text>
-                        <TouchableOpacity onPress={() => setFeeItems(p => p.filter((_, i) => i !== idx))} style={{ width: 28, alignItems: "center", padding: 4 }}>
-                          <Trash2 size={14} color="#EF4444" />
-                        </TouchableOpacity>
                       </View>
                     ))}
-                    
-                    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                      <TextInput style={[s.input, { flex: 2 }]} placeholder="Tên dịch vụ phát sinh..." placeholderTextColor="#94A3B8" value={feeNewName} onChangeText={setFeeNewName} />
-                      <TextInput style={[s.input, { flex: 1 }]} placeholder="Số tiền..." placeholderTextColor="#94A3B8" keyboardType="numeric" value={feeNewAmt} onChangeText={setFeeNewAmt} />
-                      <TouchableOpacity onPress={addFeeItem} style={s.addBtn}><Text style={s.addBtnText}>+</Text></TouchableOpacity>
-                    </View>
+                    {feeItems.length === 0 && (
+                      <Text style={[s.hintText, { textAlign: "center", paddingVertical: 14 }]}>
+                        {activeVisitId ? "Chưa có dịch vụ — hãy lưu phiếu ở tab Chỉ định." : "Bệnh nhân mở từ Hồ sơ bệnh án không gắn lượt khám nên không lập phiếu thu tại đây. Vui lòng mở từ Hàng chờ / Lượt khám hôm nay."}
+                      </Text>
+                    )}
                     
                     <View style={{ marginTop: 12 }}>
                       <Text style={s.fieldLabel}>Ghi chú thêm</Text>
@@ -2057,8 +2079,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
 
                     {/* CONFIRM / SUBMIT BUTTON */}
-                    <TouchableOpacity onPress={handleConfirmFee} disabled={submitting}
-                      style={[s.confirmBtn, submitting && { backgroundColor: "#94A3B8" }, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}>
+                    <TouchableOpacity onPress={handleConfirmFee} disabled={submitting || feeItems.length === 0}
+                      style={[s.confirmBtn, (submitting || feeItems.length === 0) && { backgroundColor: "#94A3B8" }, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }]}>
                       {submitting ? <ActivityIndicator color="#fff" /> : (
                         <>
                           <CreditCard size={16} color="#fff" />
@@ -2075,6 +2097,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
           )}
         </ScrollView>
       </SafeAreaView>
+      {dialog}
     </ResponsiveLayout>
   );
 };

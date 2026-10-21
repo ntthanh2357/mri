@@ -14,6 +14,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, post, put } from '../services/api.service';
@@ -149,21 +150,24 @@ export default function StaffManagementScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffManagement">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Quản lý nhân sự"
-          subtitle="Cấp tài khoản, phân chức danh và khóa/mở khóa tài khoản nhân viên của bệnh viện."
-          below={
-            <PageTabs
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.office}
+                tone="navy"
+                eyebrow="Nhân sự bệnh viện"
+                title="Quản lý nhân sự"
+                subtitle="Cấp tài khoản, phân chức danh và khóa/mở khóa tài khoản nhân viên của bệnh viện."
+              >
+              </StaffBanner>
+              <PillTabs
               tabs={Object.keys(ROLE_LABELS).map((role) => ({ key: role, label: ROLE_LABELS[role] }))}
               value={activeRoleTab}
               onChange={setActiveRoleTab}
             />
-          }
-        />
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <PageContainer>
+            </View>
           {/* Grid Layout */}
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
             {/* Form Column */}
@@ -359,7 +363,7 @@ export default function StaffManagementScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },

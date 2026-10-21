@@ -90,6 +90,7 @@ const StaffLoginScreen = ({ navigation }) => {
     Alert.alert(title, message, [{ text: 'Tiếp tục', onPress: onOk }]);
 
   const handleLogin = async () => {
+    if (loading) return; // bấm Enter liên tục không gửi đăng nhập nhiều lần
     setEmailError('');
     setPasswordError('');
     setTwoFactorError('');
@@ -156,6 +157,7 @@ const StaffLoginScreen = ({ navigation }) => {
   };
 
   const handleVerify2Factor = async () => {
+    if (loading) return; // bấm Enter liên tục không gửi mã nhiều lần
     setTwoFactorError('');
     if (!twoFactorCode) { setTwoFactorError('Vui lòng nhập mã xác thực OTP.'); return; }
     if (twoFactorCode.length !== 6) { setTwoFactorError('Mã OTP phải gồm 6 chữ số.'); return; }
@@ -278,8 +280,11 @@ const StaffLoginScreen = ({ navigation }) => {
                 keyboardType="number-pad"
                 maxLength={6}
                 secureTextEntry
+                autoFocus
                 value={twoFactorCode}
                 onChangeText={setTwoFactorCode}
+                returnKeyType="done"
+                onSubmitEditing={handleVerify2Factor}
               />
               {renderFieldError(twoFactorError)}
               {debugOtp ? (

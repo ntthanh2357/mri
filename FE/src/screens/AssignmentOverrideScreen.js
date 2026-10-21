@@ -32,6 +32,7 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, put } from '../services/api.service';
@@ -495,22 +496,6 @@ export default function AssignmentOverrideScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="AssignmentOverride">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Điều chuyển Phân công Ca"
-          subtitle="Can thiệp thủ công chuyển ca đọc phim / điều trị sang bác sĩ khác khi có sự cố phát sinh; lý do điều chuyển bắt buộc ghi vào nhật ký kiểm toán (UC-HADM-04)."
-          actions={!loading ? (
-            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={refreshAll} />
-          ) : null}
-          below={
-            <PageTabs
-              tabs={MAIN_TABS.map((t) => ({ key: t.key, label: t.label }))}
-              value={mainTab}
-              onChange={setMainTab}
-            />
-          }
-        />
-
         <ScrollView
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -518,6 +503,25 @@ export default function AssignmentOverrideScreen({ navigation }) {
           }
         >
           <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.mriDiscuss}
+                tone="indigo"
+                eyebrow="Điều phối ca"
+                title="Điều chuyển Phân công Ca"
+                subtitle="Can thiệp thủ công chuyển ca đọc phim / điều trị sang bác sĩ khác khi có sự cố phát sinh; lý do điều chuyển bắt buộc ghi vào nhật ký kiểm toán (UC-HADM-04)."
+              >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{!loading ? (
+            <HeaderAction icon="refresh-cw" label="Làm mới" onPress={refreshAll} />
+          ) : null}</View>
+              </StaffBanner>
+              <PillTabs
+              tabs={MAIN_TABS.map((t) => ({ key: t.key, label: t.label }))}
+              value={mainTab}
+              onChange={setMainTab}
+            />
+            </View>
             {error ? (
               <View style={styles.errorBox}>
                 <AlertTriangle size={18} color={Colors.errorText} />
@@ -572,7 +576,7 @@ export default function AssignmentOverrideScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingBottom: 40, paddingTop: 4 },
 
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.errorBg, borderRadius: 10, padding: 12, marginBottom: 12 },
