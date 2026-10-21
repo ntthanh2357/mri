@@ -23,6 +23,9 @@ import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, a
 import { foldText, prepareItems, filterItems, isFiltering, NO_FILTER, initialSelection, isItemOn, sectionState, toggleSectionAll, toggleItem, setItemsOn, sharePayload, countsOf, flattenSharedRecord, countBySection } from '../utils/shareCatalog.js';
 import { SCREENING_LABELS, flaggedAnswers, prefillFromScreening, screeningBadge } from '../utils/mriScreening.js';
 import { atTime, reminderPlan, appointmentPlan, buildPlan, MAX_SCHEDULED } from '../utils/notificationPlan.js';
+import { COPY_SECTIONS, copySectionsText, copyStatus, copyFormError, COPY_REASON_MAX } from '../utils/recordCopy.js';
+import { looksUrgent, appendMessage, SUGGESTED_QUESTIONS, CHAT_MAX_MESSAGE, CHAT_CONSENT_VERSION, CHAT_CONSENT_POINTS } from '../utils/healthChat.js';
+import { readFileSync } from 'node:fs';
 
 const colors = {
   reset: "\x1b[0m",
@@ -715,6 +718,37 @@ it('local notifications: appointments 2 hours ahead, only active future visits, 
   assert.strictEqual(all.length, MAX_SCHEDULED);
   assert.ok(all.every((p, i) => i === 0 || all[i - 1].date <= p.date)); // theo thứ tự thời gian
 });
+
+it('record copy: sections match the backend list, labels and form validation', () => {
+  assert.deepStrictEqual(COPY_SECTIONS.map((x) => x.key), ['visits', 'imaging', 'prescriptions', 'labs', 'vitals', 'inpatient', 'papers']);
+  assert.strictEqual(copySectionsText(['prescriptions', 'visits']), 'Lịch sử khám, Đơn thuốc'); // theo thứ tự chuẩn
+  assert.strictEqual(copyStatus('approved').label, 'Đã duyệt');
+  assert.strictEqual(copyStatus('lạ').label, 'Không rõ');
+  assert.ok(copyFormError({ sections: [], reason: '' }));
+  assert.ok(copyFormError({ sections: ['visits'], reason: 'a'.repeat(COPY_REASON_MAX + 1) }));
+  assert.strictEqual(copyFormError({ sections: ['visits'], reason: '  ' + 'a'.repeat(COPY_REASON_MAX) + '  ' }), null);
+});
+
+it('health chat: urgent-sign hint ignores diacritics, history is capped', () => {
+  assert.strictEqual(looksUrgent('Bố tôi bị CO GIẬT từ sáng'), true);
+  assert.strictEqual(looksUrgent('yeu nua nguoi ben trai'), true);
+  assert.strictEqual(looksUrgent('Chụp MRI có đau không?'), false);
+  let list = [];
+  for (let i = 0; i < 70; i += 1) list = appendMessage(list, i % 2 ? 'assistant' : 'user', 'm' + i);
+  assert.strictEqual(list.length, 60);
+  assert.strictEqual(list[59].text, 'm69');
+  assert.strictEqual(new Set(list.map((m) => m.id)).size, 60);
+  assert.ok(SUGGESTED_QUESTIONS.every((q) => q.length <= CHAT_MAX_MESSAGE));
+});
+
+it('health chat consent: version matches the backend, text names Google and the logging', () => {
+  // đồng ý gửi kèm phiên bản nội dung đã hiện; lệch với máy chủ thì mọi lần bấm đồng ý đều bị 409
+  const be = readFileSync(new URL('../../../BE/src/services/patientChat.service.js', import.meta.url), 'utf8');
+  assert.strictEqual(/CHAT_CONSENT_VERSION = "([^"]+)"/.exec(be)?.[1], CHAT_CONSENT_VERSION);
+  const text = CHAT_CONSENT_POINTS.join(' ');
+  assert.ok(text.includes('Google') && text.includes('ghi lại') && text.includes('rút lại'));
+});
+
 
 console.log(`\n======================================================================`);
 console.log(`SUMMARY: ${passed}/${passed + failed} FRONTEND UNIT TESTS PASSED (100%)`);

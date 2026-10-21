@@ -38,6 +38,20 @@ class MemoryStore {
 
 const defaultStore = new MemoryStore();
 
+/**
+ * Khoá đếm theo người được cấp link tải (uid trong token, chưa kiểm chữ ký — chỉ để đếm; token giả bị từ chối ở bước kiểm sau,
+ * rẻ, trước khi gửi file). Không tin IP vì IP lấy từ header X-Forwarded-For do client tự gửi.
+ */
+export const tokenUserKey = (prefix) => (req, ip) => {
+  try {
+    const part = String(req.params?.token || "").split(".")[1] || "";
+    const uid = JSON.parse(Buffer.from(part, "base64url").toString("utf8"))?.uid;
+    return `${prefix}:${typeof uid === "string" && uid.length <= 64 ? uid : ip}`;
+  } catch {
+    return `${prefix}:${ip}`;
+  }
+};
+
 export const createRateLimiter = ({
   windowMs = 60 * 1000, // 1 minute window
   maxRequests = 10,     // Max requests per window

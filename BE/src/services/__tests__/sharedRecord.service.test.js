@@ -6,6 +6,7 @@ import { PatientProfile } from '../../models/patientProfile.model.js';
 import { ScannedDocument } from '../../models/scannedDocument.model.js';
 import { ImagingResult } from '../../models/imagingResult.model.js';
 import { MedicalRecord } from '../../modules/emr/models/medicalRecord.model.js';
+import { Visit } from '../../models/visit.model.js';
 
 describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã chọn', () => {
   const pid = new mongoose.Types.ObjectId();
@@ -154,5 +155,32 @@ describe('Bệnh án chia sẻ qua QR — mã bệnh nhân trùng ở 2 bệnh v
     const r = await buildSharedRecord(noHospital, ['imaging', 'inpatient']);
     expect(r.imaging).toEqual([]);
     expect(r.inpatientRecords).toEqual([]);
+  });
+});
+
+describe('Bệnh án chia sẻ / bản sao: lượt khám đã xoá không xuất hiện', () => {
+  const pid = new mongoose.Types.ObjectId();
+  const live = new mongoose.Types.ObjectId();
+  const gone = new mongoose.Types.ObjectId();
+  beforeAll(async () => {
+    const mongoUri = process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017/neuroscan_test_logic';
+    if (mongoose.connection.readyState === 0) await mongoose.connect(mongoUri);
+    await User.collection.insertOne({ _id: pid, role: 'patient', email: `del-${pid}@test.local`, profile: { name: 'BN Xoá' } });
+    await Visit.collection.insertMany([
+      { _id: live, patientId: pid, reason: 'Lượt còn', createdAt: new Date() },
+      { _id: gone, patientId: pid, reason: 'Lượt đã xoá', isDeleted: true, createdAt: new Date() },
+    ]);
+  });
+  afterAll(async () => {
+    await User.collection.deleteOne({ _id: pid });
+    await Visit.collection.deleteMany({ _id: { $in: [live, gone] } });
+  });
+
+  it('xoá mềm (isDeleted) thì không vào bệnh án chia sẻ, danh mục, cũng không chọn được', async () => {
+    expect((await buildSharedRecord(pid, ['visits'])).visits.map((v) => v.reason)).toEqual(['Lượt còn']);
+    expect((await buildShareCatalog(pid)).items.filter((x) => x.section === 'visits').map((x) => x.id)).toEqual([String(live)]);
+    let status = 200;
+    try { await resolveShareItems(pid, ['visits'], { visits: [String(gone)] }); } catch (e) { status = e.status; }
+    expect(status).toBe(400);
   });
 });

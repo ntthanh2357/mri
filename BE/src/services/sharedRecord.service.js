@@ -58,13 +58,14 @@ export const toSharedSafety = (profile) => ({
  * Dùng chung cho: gom bệnh án chia sẻ, danh mục để bệnh nhân chọn, và kiểm tra mục được chọn có thuộc bệnh nhân không.
  * Mỗi nhóm trả 1 mảng truy vấn (nhóm "papers" gồm 2 loại giấy).
  */
-const sectionQueries = (patientId, medicalId, hospitalId) => {
-  const only = (ids) => (ids ? { _id: { $in: ids } } : {});
+const sectionQueries = (patientId, medicalId, hospitalId, onlyHospitalId = null) => {
+  // `onlyHospitalId`: chỉ dữ liệu của 1 bệnh viện (bản sao bệnh án do bệnh viện đó cấp)
+  const only = (ids) => ({ ...(ids ? { _id: { $in: ids } } : {}), ...(onlyHospitalId ? { hospitalId: onlyHospitalId } : {}) });
   // Mã bệnh nhân (BN001…) chỉ duy nhất trong 1 bệnh viện, và các truy vấn ở đây bỏ qua tenancy → tìm theo mã phải kèm bệnh viện
   // của bệnh nhân, không thì lẫn phim / bệnh án của người trùng mã ở viện khác. Chưa gắn bệnh viện = không tìm theo mã.
-  const byCode = medicalId && hospitalId ? { medicalId, hospitalId } : null;
+  const byCode = medicalId && hospitalId && (!onlyHospitalId || String(onlyHospitalId) === String(hospitalId)) ? { medicalId, hospitalId } : null;
   return {
-    visits: (ids) => [Visit.find({ patientId, ...only(ids) }).sort({ createdAt: -1 })],
+    visits: (ids) => [Visit.find({ patientId, isDeleted: { $ne: true }, ...only(ids) }).sort({ createdAt: -1 })], // lượt khám đã xoá mềm không đưa ra ngoài
     vitals: (ids) => [VitalSign.find({ patient_id: patientId, ...only(ids) }).sort({ recorded_at: -1 })],
     labs: (ids) => [LabOrder.find({ patient_id: patientId, ...only(ids) }).sort({ ordered_at: -1 })],
     prescriptions: (ids) => [Prescription.find({ patient_id: patientId, ...only(ids) }).sort({ recorded_at: -1 })],
@@ -104,7 +105,7 @@ const patientOf = async (patientId) => {
  * `itemIds` { nhóm: [mã mục] }: bệnh nhân chỉ chia sẻ một số mục trong nhóm đó (chốt lúc tạo mã).
  * Nhóm không có danh sách = cả nhóm, kể cả mục phát sinh sau khi tạo mã. Danh sách rỗng = không trả gì.
  */
-export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { shareId = null, documentIds, itemIds } = {}) => {
+export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { shareId = null, documentIds, itemIds, onlyHospitalId = null } = {}) => {
   const user = await patientOf(patientId);
   const medicalId = user.profile?.medicalId || null;
   const has = (s) => sections.includes(s);
@@ -114,7 +115,7 @@ export const buildSharedRecord = async (patientId, sections = SHARE_SECTIONS, { 
     if (list === undefined) return null;
     return Array.isArray(list) ? list : [];
   };
-  const q = sectionQueries(patientId, medicalId, user.hospitalId || null);
+  const q = sectionQueries(patientId, medicalId, user.hospitalId || null, onlyHospitalId);
   // nhóm không chọn: không truy vấn, không gửi
   const load = (s, prepare = (query) => query) => (has(s) ? Promise.all(q[s](idsOf(s)).map((query) => prepare(query).setOptions(BYPASS).lean())) : Promise.resolve([[], []]));
 

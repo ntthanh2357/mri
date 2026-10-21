@@ -42,6 +42,8 @@ import {
   Heart,
   Ticket,
   QrCode,
+  FileCheck,
+  MessageCircle,
   ScanLine,
   Sliders,
 } from 'lucide-react';
@@ -196,6 +198,8 @@ const ResponsiveLayout = ({
           { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
           { label: 'Hóa đơn viện phí', route: 'MyInvoices', icon: CreditCard },
           { label: 'Chia sẻ bệnh án', route: 'RecordShare', icon: QrCode },
+          { label: 'Bản sao bệnh án', route: 'RecordCopies', icon: FileCheck },
+          { label: 'Hỏi đáp sức khỏe', route: 'HealthChat', icon: MessageCircle },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
@@ -240,6 +244,7 @@ const ResponsiveLayout = ({
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -255,6 +260,7 @@ const ResponsiveLayout = ({
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];

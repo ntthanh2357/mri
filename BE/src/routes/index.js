@@ -18,6 +18,7 @@ import notificationRoutes from "./notification.routes.js";
 import supportRoutes from "./support.routes.js";
 import queueTicketRoutes from "./queueTicket.routes.js";
 import sharedRecordRoutes from "./sharedRecord.routes.js";
+import recordCopyRoutes from "./recordCopy.routes.js";
 
 // Module v3.2 new routes
 import mriRoomRoutes from "./mriRoom.routes.js";
@@ -74,6 +75,7 @@ router.use("/api/v1/notifications", notificationRoutes);
 router.use("/api/v1/support", supportRoutes);
 router.use("/api/v1/queue-tickets", queueTicketRoutes); // UC-PAT-03 lấy số tiếp đón online
 router.use("/api/v1/shared-records", sharedRecordRoutes); // UC-PAT-09 xem bệnh án qua QR (công khai)
+router.use("/api/v1/record-copies", recordCopyRoutes); // bản sao bệnh án: bệnh viện duyệt + tải PDF theo token
 
 // Mount v3.2 core foundation routes
 router.use("/api/v1/mri-rooms", mriRoomRoutes);

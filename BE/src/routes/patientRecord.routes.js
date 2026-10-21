@@ -6,6 +6,8 @@ import * as consentCtrl from "../controllers/patientConsent.controller.js";
 import * as shareCtrl from "../controllers/recordShare.controller.js";
 import * as docCtrl from "../controllers/scannedDocument.controller.js";
 import * as visitCtrl from "../controllers/patientVisit.controller.js";
+import * as copyCtrl from "../controllers/recordCopy.controller.js";
+import * as chatCtrl from "../controllers/patientChat.controller.js";
 import { createRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
@@ -74,6 +76,19 @@ router.get("/mri-prep", checkRole(["patient"]), visitCtrl.mriPrepMine);
 router.put("/mri-prep/:visitId/screening", checkRole(["patient"]), visitCtrl.saveScreeningMine);
 // Hóa đơn viện phí của chính bệnh nhân (chỉ xem)
 router.get("/invoices", checkRole(["patient"]), visitCtrl.invoicesMine);
+
+// Xin bản sao bệnh án: gửi yêu cầu → bệnh viện duyệt → tải PDF có ký số
+router.post("/record-copies", checkRole(["patient"]), copyCtrl.createMine);
+router.get("/record-copies", checkRole(["patient"]), copyCtrl.listMine);
+router.put("/record-copies/:id/cancel", checkRole(["patient"]), copyCtrl.cancelMine);
+router.post("/record-copies/:id/download", checkRole(["patient"]), createRateLimiter({ windowMs: 60 * 1000, maxRequests: 10, keyGenerator: (req) => `record-copy-download:${req.user?.id}`, message: "Bạn tải quá nhanh. Vui lòng đợi 1 phút." }), copyCtrl.downloadMine);
+
+// Hỏi đáp sức khỏe (chatbot của AI service). Hạn mức theo ngày nằm ở patientChat.service; đây chặn gửi dồn dập
+const chatLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 6, keyGenerator: (req) => `patient-chat:${req.user?.id}`, message: "Bạn hỏi quá nhanh. Vui lòng đợi 1 phút." });
+router.post("/chat", checkRole(["patient"]), chatLimiter, chatCtrl.askMine);
+router.get("/chat/consent", checkRole(["patient"]), chatCtrl.consentMine);
+router.put("/chat/consent", checkRole(["patient"]), chatCtrl.grantConsentMine);
+router.delete("/chat/consent", checkRole(["patient"]), chatCtrl.revokeConsentMine);
 
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);

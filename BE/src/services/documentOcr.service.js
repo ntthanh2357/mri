@@ -3,7 +3,7 @@
  * AI service cũng trả về bản ảnh đã chuẩn hoá (JPEG, xoay đúng chiều, thu nhỏ, không còn EXIF/GPS) để lưu thay file gốc.
  * Ranh giới mạng ra ngoài: luôn có timeout, không retry (mỗi lần gọi tốn lượt Gemini).
  */
-const aiBaseUrl = () =>
+export const aiBaseUrl = () =>
   (process.env.AI_SERVER_URL || "http://localhost:8000").replace(/\/predict\/?$/, "").replace(/\/+$/, "");
 
 /**

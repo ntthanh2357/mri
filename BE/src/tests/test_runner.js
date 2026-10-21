@@ -180,6 +180,9 @@ async function runAllTests() {
     '../services/__tests__/visitProgress.service.test.js',
     '../services/__tests__/mriPrep.service.test.js',
     '../services/__tests__/patientInvoice.service.test.js',
+    '../services/__tests__/pdfSignature.service.test.js',
+    '../services/__tests__/recordCopy.service.test.js',
+    '../services/__tests__/patientChat.service.test.js',
     './tenancy_and_transaction.test.js',
     './clinical_workflow_e2e.test.js',
     './schedule_registration.test.js',
@@ -187,6 +190,7 @@ async function runAllTests() {
     './visit_routes_authz.test.js',
     './queue_ticket_routes_authz.test.js',
     './record_share_routes_authz.test.js',
+    './record_copy_routes_authz.test.js',
     './emergency_protocol.test.js',
     './referral_package_email.test.js',
   ];
