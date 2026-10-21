@@ -18,7 +18,15 @@ import SystemAdminScreen from '../screens/SystemAdminScreen';
 import PatientRecordsScreen from '../screens/PatientRecordsScreen';
 import MyHealthScreen from '../screens/MyHealthScreen';
 import ContrastConsentScreen from '../screens/ContrastConsentScreen';
+import MriPrepScreen from '../screens/MriPrepScreen';
+import MyInvoicesScreen from '../screens/MyInvoicesScreen';
+import HealthChatScreen from '../screens/HealthChatScreen';
+import RecordCopiesScreen from '../screens/RecordCopiesScreen';
+import RecordCopyReviewScreen from '../screens/RecordCopyReviewScreen';
 import QueueTicketScreen from '../screens/QueueTicketScreen';
+import RecordShareScreen from '../screens/RecordShareScreen';
+import SharedRecordScreen from '../screens/SharedRecordScreen';
+import ScanRecordQrScreen from '../screens/ScanRecordQrScreen';
 import PatientDetailScreen from '../screens/PatientDetailScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
@@ -113,7 +121,15 @@ const isNativeMobile = Platform.OS !== 'web';
         <Stack.Screen name="PatientRecords" component={PatientRecordsScreen} options={{ title: 'Hồ sơ bệnh nhân', headerShown: false }} />
         <Stack.Screen name="MyHealth" component={MyHealthScreen} options={{ title: 'Sức khỏe của tôi', headerShown: false }} />
         <Stack.Screen name="ContrastConsent" component={ContrastConsentScreen} options={{ title: 'Phiếu đồng thuận', headerShown: false }} />
+        <Stack.Screen name="MriPrep" component={MriPrepScreen} options={{ title: 'Chuẩn bị chụp MRI', headerShown: false }} />
+        <Stack.Screen name="MyInvoices" component={MyInvoicesScreen} options={{ title: 'Hóa đơn viện phí', headerShown: false }} />
+        <Stack.Screen name="HealthChat" component={HealthChatScreen} options={{ title: 'Hỏi đáp sức khỏe', headerShown: false }} />
+        <Stack.Screen name="RecordCopies" component={RecordCopiesScreen} options={{ title: 'Bản sao bệnh án', headerShown: false }} />
+        <Stack.Screen name="RecordCopyReview" component={RecordCopyReviewScreen} options={{ title: 'Yêu cầu bản sao bệnh án', headerShown: false }} />
         <Stack.Screen name="QueueTicket" component={QueueTicketScreen} options={{ title: 'Lấy số khám', headerShown: false }} />
+        <Stack.Screen name="RecordShare" component={RecordShareScreen} options={{ title: 'Chia sẻ bệnh án', headerShown: false }} />
+        <Stack.Screen name="SharedRecord" component={SharedRecordScreen} options={{ title: 'Bệnh án được chia sẻ', headerShown: false }} />
+        <Stack.Screen name="ScanRecordQr" component={ScanRecordQrScreen} options={{ title: 'Quét mã bệnh án', headerShown: false }} />
         <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: 'Chi tiết bệnh án', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />

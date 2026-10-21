@@ -1,6 +1,8 @@
 import { Schema, model } from "mongoose";
 import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
+const SCREENING_ANSWER = ["yes", "no", "unsure"];
+
 const visitSchema = new Schema(
   {
     hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
@@ -117,6 +119,25 @@ const visitSchema = new Schema(
       screenedAt: { type: Date, default: null },              // Thời gian kiểm tra
       passed: { type: Boolean, default: false },              // Đủ điều kiện vào buồng
       notes: { type: String, default: "" }
+    },
+    // Bệnh nhân tự khai sàng lọc an toàn MRI trên app trước khi tới chụp (services/mriPrep.service.js).
+    // Chỉ để KTV biết trước; KTV vẫn tự hỏi lại và xác nhận ở mriSafetyChecklist.
+    patientMriScreening: {
+      answers: {
+        pacemaker: { type: String, enum: SCREENING_ANSWER },
+        aneurysmClip: { type: String, enum: SCREENING_ANSWER },
+        cochlearImplant: { type: String, enum: SCREENING_ANSWER },
+        metalFragments: { type: String, enum: SCREENING_ANSWER },
+        implants: { type: String, enum: SCREENING_ANSWER },
+        recentSurgery: { type: String, enum: SCREENING_ANSWER },
+        pregnant: { type: String, enum: SCREENING_ANSWER },
+        claustrophobia: { type: String, enum: SCREENING_ANSWER },
+        cannotLieStill: { type: String, enum: SCREENING_ANSWER },
+        tattoo: { type: String, enum: SCREENING_ANSWER },
+      },
+      details: { type: String, default: "" },
+      level: { type: String, enum: ["clear", "attention", "danger"] }, // "danger": khai có thiết bị / kim loại → KTV kiểm tra kỹ
+      declaredAt: { type: Date, default: null },
     },
     mriCancelReason: { type: String, default: "" },
     mriRescanReason: { type: String, default: "" },

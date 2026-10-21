@@ -6,6 +6,8 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import Colors from '../constants/colors';
 import { useQueueTicket } from '../controllers/useQueueTicket';
 import { PatientPage, PatientHero, HeroButton, SideCard, StepList, PATIENT_IMAGES, P } from '../components/patient/PatientUI';
+import { useVisitProgress } from '../controllers/useVisitProgress';
+import VisitProgress from '../components/patient/VisitProgress';
 
 // UC-PAT-03 — Lấy số tiếp đón online trong ngày; theo dõi số đang gọi và giờ dự kiến tới lượt.
 
@@ -51,6 +53,7 @@ const QueueTicketScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const isWide = width > 1100;
   const { loading, data, hospitals, error, reload, take, cancel, hospitalId, setHospitalId } = useQueueTicket();
+  const visit = useVisitProgress(); // sau khi được tiếp nhận: theo dõi các bước của lượt khám
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -200,7 +203,7 @@ const QueueTicketScreen = ({ navigation }) => {
             { value: active ? ticket.number : '—', label: 'số của bạn' },
           ]}
         >
-          <HeroButton icon={RefreshCw} label="Tải lại" onPress={reload} ghost />
+          <HeroButton icon={RefreshCw} label="Tải lại" onPress={() => { reload(); visit.reload(); }} ghost />
         </PatientHero>
 
         {msg && !msg.ok ? (
@@ -211,7 +214,14 @@ const QueueTicketScreen = ({ navigation }) => {
         ) : null}
 
         <View style={[styles.columns, isWide && styles.columnsWide]}>
-          <View style={[styles.mainCol, isWide && { flex: 1.25 }]}>{renderMain()}</View>
+          <View style={[styles.mainCol, isWide && { flex: 1.25 }]}>
+            {visit.progress ? (
+              <View style={styles.visitBlock}>
+                <VisitProgress progress={visit.progress} onOpenConsent={() => navigation.navigate('ContrastConsent')} onOpenFilms={() => navigation.navigate('ImagingHistory')} onOpenPrep={() => navigation.navigate('MriPrep')} />
+              </View>
+            ) : null}
+            {renderMain()}
+          </View>
           <View style={[styles.sideCol, isWide && { flex: 1 }]}>
             <SideCard icon={ListChecks} title="Lấy số hoạt động thế nào?" subtitle="4 bước, không cần xếp hàng">
               <StepList steps={STEPS} />
@@ -238,6 +248,7 @@ const styles = StyleSheet.create({
   columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
   mainCol: { gap: 16 },
   sideCol: { gap: 16 },
+  visitBlock: { marginBottom: 0 },
   stack: { gap: 16 },
   grow: { flex: 1, minWidth: 0 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: P.line, padding: 20, gap: 12, ...shadow },

@@ -6,6 +6,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { buildServiceItems, hasVitals } from "../modules/billing/servicePricing.util.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { ConsentForm } from "../models/consentForm.model.js";
+import { syncVisitVitals } from "../services/vitalSign.service.js";
 import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.js";
@@ -483,6 +484,13 @@ export const updateVitals = async (req, res) => {
     }
 
     await visit.save();
+
+    // UC-PAT-12: chép sang VitalSign để bệnh nhân xem diễn biến (lỗi đồng bộ không chặn việc lưu lượt khám)
+    try {
+      await syncVisitVitals(visit);
+    } catch (syncErr) {
+      console.warn("⚠️ Không đồng bộ được sinh hiệu sang VitalSign:", syncErr.message);
+    }
 
     res.status(200).json({
       message: evaluation.isAbnormal

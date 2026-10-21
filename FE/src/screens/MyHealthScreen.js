@@ -16,7 +16,8 @@ import Colors from '../constants/colors';
 import { useMyHealth } from '../controllers/useMyHealth';
 import IdentityForm from '../components/patient/IdentityForm';
 import ReminderTimesCard from '../components/patient/ReminderTimesCard';
-import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule } from '../utils/myHealth';
+import { bpStatus, pulseStatus, spo2Status, temperatureStatus, labResultFlag, drugSchedule } from '../utils/myHealth';
+import VitalsChart from '../components/patient/VitalsChart';
 
 const TABS = ['vitals', 'labs', 'prescriptions', 'profile'];
 const LAB_CATEGORY = { HOA_SINH: 'Hóa sinh máu', HUYET_HOC: 'Huyết học' };
@@ -90,10 +91,13 @@ const VitalsTab = ({ state, onRetry }) => {
           <Metric label="Huyết áp" value={bp ? `${bp.systolic}/${bp.diastolic}` : '—'} unit="mmHg" status={bpStatus(bp)} />
           <Metric label="Mạch" value={latest.pulse ?? '—'} unit="lần/phút" status={pulseStatus(latest.pulse)} />
           <Metric label="SpO₂" value={latest.spo2 ?? '—'} unit="%" status={spo2Status(latest.spo2)} />
+          {typeof latest.temperature === 'number' ? <Metric label="Thân nhiệt" value={latest.temperature} unit="°C" status={temperatureStatus(latest.temperature)} /> : null}
           {latest.weight ? <Metric label="Cân nặng" value={latest.weight} unit="kg" /> : null}
           {latest.bmi ? <Metric label="BMI" value={Number(latest.bmi).toFixed(1)} /> : null}
         </View>
       </View>
+
+      <VitalsChart items={state.items} />
 
       {history.length > 1 ? (
         <View style={styles.card}>
@@ -102,7 +106,7 @@ const VitalsTab = ({ state, onRetry }) => {
             <View key={v._id} style={styles.historyRow}>
               <Text style={styles.historyDate}>{fmtDate(v.recorded_at)}</Text>
               <Text style={styles.historyText}>
-                Huyết áp {v.blood_pressure?.systolic}/{v.blood_pressure?.diastolic}, mạch {v.pulse}, SpO₂ {v.spo2}%
+                Huyết áp {v.blood_pressure?.systolic}/{v.blood_pressure?.diastolic}, mạch {v.pulse}, SpO₂ {v.spo2}%{typeof v.temperature === 'number' ? `, thân nhiệt ${v.temperature} °C` : ''}
               </Text>
             </View>
           ))}

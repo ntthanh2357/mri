@@ -5,6 +5,7 @@ import {
   TextInput, ActivityIndicator, StyleSheet
 } from 'react-native';
 import { ClipboardCheck, AlertTriangle, XOctagon, Check } from 'lucide-react';
+import { flaggedAnswers, ANSWER_LABEL } from '../utils/mriScreening';
 
 /**
  * Component: Modal Bảng kiểm An toàn MRI trước buồng máy
@@ -24,6 +25,7 @@ const MriSafetyCheckModal = ({
   setIsPregnant,
   safetyNotes,
   setSafetyNotes,
+  patientScreening,
   onSubmit,
   submitting
 }) => {
@@ -46,6 +48,24 @@ const MriSafetyCheckModal = ({
                 CẢNH BÁO AN TOÀN TỪ TRƯỜNG: Bắt buộc KTV rà soát kỹ lưỡng các yếu tố kim loại sinh mạng trước khi kích hoạt buồng máy MRI.
               </Text>
             </View>
+          </View>
+
+          {/* Lời khai của bệnh nhân trên app: chỉ để tham khảo, KTV vẫn hỏi lại từng câu */}
+          <View style={[styles.declared, patientScreening?.level === 'danger' && styles.declaredDanger]}>
+            {patientScreening?.declaredAt ? (
+              <>
+                <Text style={styles.declaredTitle}>
+                  Bệnh nhân tự khai trên ứng dụng lúc {new Date(patientScreening.declaredAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                </Text>
+                {flaggedAnswers(patientScreening).length ? flaggedAnswers(patientScreening).map((f) => (
+                  <Text key={f.key} style={[styles.declaredLine, f.danger && styles.declaredLineDanger]}>• {f.label}: {ANSWER_LABEL[f.answer]}</Text>
+                )) : <Text style={styles.declaredLine}>Không khai yếu tố nguy cơ nào.</Text>}
+                {patientScreening.details ? <Text style={styles.declaredLine}>Ghi chú: {patientScreening.details}</Text> : null}
+                <Text style={styles.declaredHint}>Đã điền sẵn theo lời khai. Hãy hỏi lại bệnh nhân từng câu trước khi xác nhận.</Text>
+              </>
+            ) : (
+              <Text style={styles.declaredHint}>Bệnh nhân chưa tự khai trên ứng dụng. Hãy hỏi đủ các câu dưới đây.</Text>
+            )}
           </View>
 
           <ScrollView style={{ maxHeight: 400 }}>
@@ -197,6 +217,12 @@ const MriSafetyCheckModal = ({
 };
 
 const styles = StyleSheet.create({
+  declared: { padding: 12, borderRadius: 10, backgroundColor: Colors.infoBg, marginBottom: 12, gap: 4 },
+  declaredDanger: { backgroundColor: Colors.errorBg },
+  declaredTitle: { fontSize: 14, fontWeight: '700', color: Colors.slateDark },
+  declaredLine: { fontSize: 14, lineHeight: 20, color: Colors.slateDark },
+  declaredLineDanger: { color: Colors.errorText, fontWeight: '700' },
+  declaredHint: { fontSize: 13, lineHeight: 18, color: Colors.slateMuted },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.brandNavy, marginBottom: 4 },

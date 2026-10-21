@@ -1,0 +1,95 @@
+import multer from "multer";
+import { pipeline } from "stream/promises";
+import * as docService from "../services/scannedDocument.service.js";
+import { successResponse, errorResponse } from "../utils/response.util.js";
+
+// UC-PAT-09 (mở rộng) — Giấy tờ bệnh nhân tự quét. Phân quyền role ở routes.
+
+const wrap = (fn) => async (req, res, next) => {
+  try {
+    return await fn(req, res);
+  } catch (err) {
+    // lỗi có mã riêng (vd. POOR_QUALITY) gửi kèm để giao diện xử lý đúng loại lỗi, không phải đoán theo câu chữ
+    if (err.status) {
+      const errors = err.code === "POOR_QUALITY" ? { code: err.code, reasons: err.reasons } : ["CONSENT_REQUIRED", "CONSENT_OUTDATED"].includes(err.code) ? { code: err.code } : null;
+      return errorResponse(res, err.message, err.status, errors);
+    }
+    next(err);
+  }
+};
+
+// Bộ nhận file riêng cho quét giấy tờ: đúng 1 ảnh, không nhận trường chữ nào (chặn nhồi multipart làm đầy bộ nhớ)
+const uploadScan = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: docService.MAX_BYTES, files: 1, fields: 0, parts: 2 },
+  fileFilter: (req, file, cb) => cb(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)),
+}).single("file");
+
+/** Nhận 1 ảnh (field "file"); lỗi của multer (quá lớn, sai loại, thừa trường) trả 400 thay vì rơi xuống 500. */
+export const receiveImage = (req, res, next) =>
+  uploadScan(req, res, (err) => {
+    if (err) return errorResponse(res, err.code === "LIMIT_FILE_SIZE" ? "Ảnh quá lớn (tối đa 10 MB)." : "Yêu cầu tải ảnh không hợp lệ.", 400);
+    if (!req.file?.buffer) return errorResponse(res, "Chỉ nhận 1 ảnh JPEG, PNG hoặc WEBP.", 400);
+    next();
+  });
+
+// POST /api/v1/patient/scanned-documents[?autocrop=0][&force=1] (multipart "file") — chụp giấy tờ, AI tự cắt nền + đọc chữ + tách thông tin,
+// lưu ở trạng thái chưa kiểm tra. autocrop=0: giữ nguyên khung ảnh (dùng khi tự cắt bị sai)
+export const scanMine = wrap(async (req, res) => {
+  const autocrop = !["0", "false"].includes(req.query.autocrop); // chỉ chuỗi "0"/"false" mới tắt tự cắt
+  const force = ["1", "true"].includes(req.query.force); // bệnh nhân chọn "vẫn dùng ảnh này" dù ảnh kém
+  const { doc, ocrFailed, cropped, textOnly } = await docService.scanDocument({ patientId: req.user.id, hospitalId: req.user.hospitalId, buffer: req.file.buffer, autocrop, force });
+  const message = ocrFailed ? "Đã lưu ảnh nhưng chưa đọc được chữ tự động. Bạn có thể tự gõ nội dung."
+    : textOnly ? "Đã đọc phần chữ trong ảnh. Giấy tờ được lưu ở dạng chữ; hãy kiểm tra lại trước khi lưu."
+      : "Đã đọc chữ trong ảnh. Hãy kiểm tra lại trước khi lưu.";
+  return successResponse(res, { ...docService.toPublicDoc(doc, { withReview: true }), ocrFailed, cropped, textOnly }, message);
+});
+
+// GET / PUT {version} / DELETE /api/v1/patient/scanned-documents/consent — đồng ý gửi ảnh tới dịch vụ AI đọc chữ (xem / đồng ý / rút lại)
+export const consentMine = wrap(async (req, res) => successResponse(res, await docService.getScanConsent(req.user.id)));
+export const grantConsentMine = wrap(async (req, res) =>
+  successResponse(res, await docService.grantScanConsent(req.user.id, req.body?.version), "Đã ghi nhận bạn đồng ý. Bạn có thể quét giấy tờ."));
+export const revokeConsentMine = wrap(async (req, res) =>
+  successResponse(res, await docService.revokeScanConsent(req.user.id), "Đã rút lại đồng ý. Ảnh mới sẽ không được gửi đi; giấy tờ đã lưu vẫn còn."));
+
+// GET /api/v1/patient/scanned-documents — giấy tờ của tôi (mới nhất trước)
+export const listMine = wrap(async (req, res) =>
+  successResponse(res, (await docService.listDocuments(req.user.id, { limit: req.query.limit })).map((d) => docService.toPublicDoc(d, { withReview: true }))));
+
+// PUT /api/v1/patient/scanned-documents/:id { title, text, fields? } — lưu sau khi kiểm tra
+export const saveMine = wrap(async (req, res) => {
+  const doc = await docService.saveDocument(req.user.id, req.params.id, { title: req.body?.title, text: req.body?.text, fields: req.body?.fields });
+  return successResponse(res, docService.toPublicDoc(doc, { withReview: true }), "Đã lưu giấy tờ.");
+});
+
+// DELETE /api/v1/patient/scanned-documents/:id
+export const deleteMine = wrap(async (req, res) => {
+  await docService.deleteDocument(req.user.id, req.params.id);
+  return successResponse(res, null, "Đã xoá giấy tờ.");
+});
+
+// GET /api/v1/shared-records/document-image/:token — công khai theo link ngắn hạn (token ký riêng, 15 phút)
+export const streamImage = async (req, res) => {
+  let payload;
+  try {
+    payload = docService.verifyImageToken(req.params.token);
+  } catch {
+    return errorResponse(res, "Liên kết ảnh đã hết hạn. Hãy tải lại trang.", 401);
+  }
+  let image;
+  try {
+    image = await docService.getImage(payload);
+  } catch (err) {
+    // Endpoint công khai: không trả chi tiết lỗi kho lưu ra ngoài, chỉ ghi log
+    if (err.status !== 404) console.error("[scanned-document] Không đọc được ảnh:", err.message);
+    return errorResponse(res, "Không tìm thấy ảnh giấy tờ.", 404);
+  }
+  res.set({ "Content-Type": image.mimeType, "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=600" });
+  try {
+    await pipeline(image.stream, res); // đóng file kể cả khi người xem ngắt kết nối giữa chừng
+  } catch (err) {
+    console.error("[scanned-document] Lỗi khi gửi ảnh:", err.code || err.message);
+    if (!res.headersSent) return errorResponse(res, "Không tìm thấy ảnh giấy tờ.", 404);
+    res.destroy();
+  }
+};

@@ -5,6 +5,7 @@ import { Consultation } from "./models/consultation.model.js";
 import { ConsentForm } from "./models/consentForm.model.js";
 import { EMRVersion } from "./models/emrVersion.model.js";
 import { checkPatientTenancy } from "../../utils/tenancy.util.js";
+import { normalizeTemperature } from "../../services/vitalSign.service.js";
 import crypto from "crypto";
 import { FEATURES } from "../../config/features.config.js";
 import { recordAuditLog } from "../../services/auditLog.service.js";
@@ -544,6 +545,7 @@ export const createCareSheet = async (req, res) => {
               pulse: Number(pulse),
               blood_pressure: { systolic, diastolic },
               spo2: Number(spo2),
+              temperature: normalizeTemperature(temperature),
               weight: weight || undefined,
               height: height || undefined,
               bmi: bmi || undefined,

@@ -22,7 +22,7 @@ const router = express.Router();
 
 router.get("/staff", protect, getStaff);
 router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "hospital_admin"]), createVisit);
-router.get("/my-queue", protect, getMyQueue);
+router.get("/my-queue", protect, checkRole(["doctor", "nurse", "technician", "receptionist", "admin", "hospital_admin", "system_admin"]), getMyQueue); // chỉ nhân viên: hàng đợi chứa lượt khám của cả bệnh viện
 router.post("/check-vitals", protect, checkVitalsSafety);
 // UC-NUR-01: gọi bệnh nhân vào phòng đo sinh hiệu — chỉ điều dưỡng
 router.put("/:id/call-vitals", protect, checkRole(["nurse"]), callPatientForVitals);

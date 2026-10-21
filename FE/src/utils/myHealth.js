@@ -49,3 +49,42 @@ export const isReminderDue = (item, now = new Date()) => {
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return item.time <= hhmm;
 };
+
+/** Thân nhiệt (°C): 35–37.4 bình thường, 37.5–37.9 hơi cao, ≥38 sốt, <35 thấp. */
+export const temperatureStatus = (t) => {
+  if (typeof t !== 'number') return null;
+  if (t >= 38) return status('high', 'Sốt');
+  if (t >= 37.5) return status('elevated', 'Hơi cao');
+  if (t < 35) return status('low', 'Thấp hơn mức bình thường');
+  return status('normal', 'Bình thường');
+};
+
+// ── UC-PAT-12: biểu đồ diễn biến sinh hiệu ──
+// band = vùng bình thường để tô nền tham chiếu; lines = các đường vẽ (huyết áp có 2 đường)
+export const VITAL_METRICS = [
+  { key: 'bp', label: 'Huyết áp', unit: 'mmHg', band: { min: 80, max: 120 }, lines: ['Tâm thu', 'Tâm trương'], pick: (v) => [v.blood_pressure?.systolic, v.blood_pressure?.diastolic] },
+  { key: 'pulse', label: 'Mạch', unit: 'lần/phút', band: { min: 60, max: 100 }, lines: ['Mạch'], pick: (v) => [v.pulse] },
+  { key: 'spo2', label: 'SpO₂', unit: '%', band: { min: 95, max: 100 }, lines: ['SpO₂'], pick: (v) => [v.spo2] },
+  { key: 'temperature', label: 'Thân nhiệt', unit: '°C', band: { min: 36, max: 37.4 }, lines: ['Thân nhiệt'], pick: (v) => [v.temperature] },
+];
+
+/** Chuỗi điểm cũ → mới của 1 chỉ số, bỏ lần đo thiếu chỉ số đó, lấy tối đa `limit` lần gần nhất. */
+export const vitalSeries = (items, metricKey, limit = 12) => {
+  const metric = VITAL_METRICS.find((m) => m.key === metricKey);
+  if (!metric) return [];
+  return [...(items || [])]
+    .sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at))
+    .map((v) => ({ date: new Date(v.recorded_at), values: metric.pick(v) }))
+    .filter((p) => p.values.every((x) => typeof x === 'number' && Number.isFinite(x)))
+    .slice(-limit);
+};
+
+/** Khoảng trục tung bao cả dữ liệu lẫn vùng bình thường, chừa lề 10%. */
+export const chartRange = (points, band) => {
+  const all = points.flatMap((p) => p.values).concat(band ? [band.min, band.max] : []);
+  let min = Math.min(...all);
+  let max = Math.max(...all);
+  if (max - min < 1) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.1;
+  return { min: min - pad, max: max + pad };
+};

@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from "../../utils/response.util.js";
 import crypto from "crypto";
 import { Hospital } from "../hospital/models/hospital.model.js";
 import { createReportToken, verifyReportToken, loadReportImages, buildImagingReportPdf } from "../../services/reportPdf.service.js";
+import { getPdfSigner } from "../../services/pdfSignature.service.js";
 
 // ─── H.1 — Xem ảnh kết quả MRI đại diện (cho bệnh nhân) ─────────────────────
 // @route GET /api/v1/patient-b2c/imaging/:imagingResultId
@@ -94,6 +95,19 @@ export const downloadPatientReport = async (req, res) => {
   }
 };
 
+// PDF đã ký của phim đã duyệt không đổi nữa: nhớ đệm vài bản gần nhất để tải lại không phải dựng + ký lại (ký số tốn CPU)
+const REPORT_CACHE_MAX = 20;
+const reportCache = new Map(); // khoá: mã phim + thời điểm ký + lần sửa cuối
+const cachedReport = (key) => {
+  const hit = reportCache.get(key);
+  if (hit) { reportCache.delete(key); reportCache.set(key, hit); } // đưa lên mới nhất
+  return hit;
+};
+const rememberReport = (key, pdf) => {
+  reportCache.set(key, pdf);
+  while (reportCache.size > REPORT_CACHE_MAX) reportCache.delete(reportCache.keys().next().value);
+};
+
 // ─── H.2b — Tải file PDF qua link ngắn hạn (token tạo ở H.2, đã kiểm tra quyền sở hữu + đã ký) ──
 // @route GET /api/v1/patient-b2c/report-file/:token
 // @access Public — chỉ hợp lệ với token còn hạn
@@ -109,9 +123,14 @@ export const streamImagingReportPdf = async (req, res) => {
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả chụp.", 404);
     if (!imaging.isSigned) return errorResponse(res, "Báo cáo chưa được bác sĩ ký duyệt. Không thể tải PDF.", 400);
 
-    const hospital = imaging.hospitalId ? await Hospital.findById(imaging.hospitalId).select("name").lean() : null;
-    const images = await loadReportImages(imaging.images || []);
-    const pdf = await buildImagingReportPdf(imaging, { hospitalName: hospital?.name || "", images });
+    const cacheKey = `${imaging._id}:${new Date(imaging.signedAt || 0).getTime()}:${new Date(imaging.updatedAt || 0).getTime()}`;
+    let pdf = cachedReport(cacheKey);
+    if (!pdf) {
+      const hospital = imaging.hospitalId ? await Hospital.findById(imaging.hospitalId).select("name").lean() : null;
+      const images = await loadReportImages(imaging.images || []);
+      pdf = await buildImagingReportPdf(imaging, { hospitalName: hospital?.name || "", images, signer: getPdfSigner() });
+      rememberReport(cacheKey, pdf);
+    }
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="ket-qua-${(imaging.imagingType || "mri").toLowerCase()}-${imaging._id}.pdf"`);

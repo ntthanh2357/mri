@@ -38,11 +38,26 @@ class MemoryStore {
 
 const defaultStore = new MemoryStore();
 
+/**
+ * Khoá đếm theo người được cấp link tải (uid trong token, chưa kiểm chữ ký — chỉ để đếm; token giả bị từ chối ở bước kiểm sau,
+ * rẻ, trước khi gửi file). Không tin IP vì IP lấy từ header X-Forwarded-For do client tự gửi.
+ */
+export const tokenUserKey = (prefix) => (req, ip) => {
+  try {
+    const part = String(req.params?.token || "").split(".")[1] || "";
+    const uid = JSON.parse(Buffer.from(part, "base64url").toString("utf8"))?.uid;
+    return `${prefix}:${typeof uid === "string" && uid.length <= 64 ? uid : ip}`;
+  } catch {
+    return `${prefix}:${ip}`;
+  }
+};
+
 export const createRateLimiter = ({
   windowMs = 60 * 1000, // 1 minute window
   maxRequests = 10,     // Max requests per window
   message = "Bạn đã thực hiện quá nhiều yêu cầu. Vui lòng thử lại sau.",
   skip = () => false,
+  keyGenerator = null, // (req, ip) => string — khoá đếm riêng; mặc định: IP + baseUrl (+ email)
 }) => {
   return (req, res, next) => {
     // Kích hoạt khi ở production hoặc khi có biến ENABLE_RATE_LIMIT=true
@@ -56,7 +71,7 @@ export const createRateLimiter = ({
     const routeKey = req.baseUrl || req.path || "";
     // Chống tấn công dò mật khẩu phân tán: kết hợp IP + Email (nếu có)
     const accountIdentifier = req.body?.email ? `:${req.body.email.toLowerCase().trim()}` : "";
-    const key = `${ip}:${routeKey}${accountIdentifier}`;
+    const key = keyGenerator ? String(keyGenerator(req, ip)) : `${ip}:${routeKey}${accountIdentifier}`;
     const now = Date.now();
 
     let record = defaultStore.getRecord(key);

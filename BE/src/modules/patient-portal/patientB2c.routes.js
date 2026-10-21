@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { createRateLimiter, tokenUserKey } from "../../middlewares/rateLimiter.middleware.js";
 import {
   getPatientMriResult,
   downloadPatientReport,
@@ -29,7 +30,8 @@ router.get("/imaging/:imagingResultId", protect, getPatientMriResult);
 router.get("/imaging/:imagingResultId/report-pdf", protect, downloadPatientReport);
 
 // H.2b — Tải file PDF qua link ngắn hạn (token chứa quyền đã kiểm tra ở H.2)
-router.get("/report-file/:token", streamImagingReportPdf);
+// tạo PDF + ký số tốn CPU: giới hạn theo người được cấp link (không theo IP tự khai)
+router.get("/report-file/:token", createRateLimiter({ windowMs: 60 * 1000, maxRequests: 20, keyGenerator: tokenUserKey("report-file"), message: "Bạn tải quá nhanh. Vui lòng đợi 1 phút." }), streamImagingReportPdf);
 
 // H.3 — Tạo QR chia sẻ
 router.post("/imaging/:imagingResultId/share-qr", protect, generateShareQr);

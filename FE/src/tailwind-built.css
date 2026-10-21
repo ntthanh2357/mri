@@ -319,6 +319,9 @@
   .pointer-events-none {
     pointer-events: none;
   }
+  .\!visible {
+    visibility: visible !important;
+  }
   .visible {
     visibility: visible;
   }

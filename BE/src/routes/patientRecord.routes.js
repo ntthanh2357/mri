@@ -1,8 +1,14 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
 import * as ctrl from "../controllers/patientRecord.controller.js";
 import * as consentCtrl from "../controllers/patientConsent.controller.js";
+import * as shareCtrl from "../controllers/recordShare.controller.js";
+import * as docCtrl from "../controllers/scannedDocument.controller.js";
+import * as visitCtrl from "../controllers/patientVisit.controller.js";
+import * as copyCtrl from "../controllers/recordCopy.controller.js";
+import * as chatCtrl from "../controllers/patientChat.controller.js";
+import { createRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
 
@@ -42,6 +48,47 @@ router.delete("/records/:visitId/documents/:docId", blockPatientWrite, ctrl.dele
 router.get("/consents", consentCtrl.listMyConsents);
 router.put("/consents/:id/checklist", consentCtrl.submitMyChecklist);
 router.put("/consents/:id/sign", consentCtrl.signMyConsent);
+
+// Chia sẻ bệnh án qua QR (UC-PAT-09) — chỉ bệnh nhân, trên bệnh án của chính mình
+router.post("/record-shares", checkRole(["patient"]), shareCtrl.createMine);
+router.get("/record-shares", checkRole(["patient"]), shareCtrl.listMine);
+const catalogLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 30, keyGenerator: (req) => `share-catalog:${req.user?.id}`, message: "Bạn tải lại quá nhanh. Vui lòng đợi 1 phút." });
+router.get("/record-shares/catalog", checkRole(["patient"]), catalogLimiter, shareCtrl.catalogMine);
+router.delete("/record-shares/:id", checkRole(["patient"]), shareCtrl.revokeMine);
+
+// Giấy tờ tự quét để chia sẻ qua QR (UC-PAT-09 mở rộng) — chỉ bệnh nhân, trên giấy tờ của chính mình
+// Mỗi lần quét tốn 1 lượt AI đọc chữ: giới hạn theo TÀI KHOẢN (không theo IP — header X-Forwarded-For giả được,
+// và nhiều bệnh nhân dùng chung Wi-Fi bệnh viện). Hạn mức theo ngày nằm ở scannedDocument.service.
+const scanLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 6, keyGenerator: (req) => `scan-document:${req.user?.id}`, message: "Bạn quét quá nhanh. Vui lòng đợi 1 phút rồi thử lại." });
+router.post("/scanned-documents", checkRole(["patient"]), scanLimiter, docCtrl.receiveImage, docCtrl.scanMine);
+router.get("/scanned-documents", checkRole(["patient"]), docCtrl.listMine);
+// đặt trước "/:id" để "consent" không bị hiểu là mã giấy tờ
+router.get("/scanned-documents/consent", checkRole(["patient"]), docCtrl.consentMine);
+router.put("/scanned-documents/consent", checkRole(["patient"]), docCtrl.grantConsentMine);
+router.delete("/scanned-documents/consent", checkRole(["patient"]), docCtrl.revokeConsentMine);
+router.put("/scanned-documents/:id", checkRole(["patient"]), docCtrl.saveMine);
+router.delete("/scanned-documents/:id", checkRole(["patient"]), docCtrl.deleteMine);
+
+// Theo dõi lượt khám (UC-PAT-05) — chỉ bệnh nhân, lượt khám của chính mình
+router.get("/visit-progress", checkRole(["patient"]), visitCtrl.progressMine);
+// Chuẩn bị chụp MRI: hướng dẫn + bệnh nhân tự khai sàng lọc an toàn (KTV vẫn xác nhận lại tại buồng máy)
+router.get("/mri-prep", checkRole(["patient"]), visitCtrl.mriPrepMine);
+router.put("/mri-prep/:visitId/screening", checkRole(["patient"]), visitCtrl.saveScreeningMine);
+// Hóa đơn viện phí của chính bệnh nhân (chỉ xem)
+router.get("/invoices", checkRole(["patient"]), visitCtrl.invoicesMine);
+
+// Xin bản sao bệnh án: gửi yêu cầu → bệnh viện duyệt → tải PDF có ký số
+router.post("/record-copies", checkRole(["patient"]), copyCtrl.createMine);
+router.get("/record-copies", checkRole(["patient"]), copyCtrl.listMine);
+router.put("/record-copies/:id/cancel", checkRole(["patient"]), copyCtrl.cancelMine);
+router.post("/record-copies/:id/download", checkRole(["patient"]), createRateLimiter({ windowMs: 60 * 1000, maxRequests: 10, keyGenerator: (req) => `record-copy-download:${req.user?.id}`, message: "Bạn tải quá nhanh. Vui lòng đợi 1 phút." }), copyCtrl.downloadMine);
+
+// Hỏi đáp sức khỏe (chatbot của AI service). Hạn mức theo ngày nằm ở patientChat.service; đây chặn gửi dồn dập
+const chatLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 6, keyGenerator: (req) => `patient-chat:${req.user?.id}`, message: "Bạn hỏi quá nhanh. Vui lòng đợi 1 phút." });
+router.post("/chat", checkRole(["patient"]), chatLimiter, chatCtrl.askMine);
+router.get("/chat/consent", checkRole(["patient"]), chatCtrl.consentMine);
+router.put("/chat/consent", checkRole(["patient"]), chatCtrl.grantConsentMine);
+router.delete("/chat/consent", checkRole(["patient"]), chatCtrl.revokeConsentMine);
 
 // Medicine Reminders
 router.get("/reminders/today", ctrl.getTodayReminders);
