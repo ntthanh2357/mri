@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Alert } from 'react-native';
 import {
   ClipboardList,
   Search,
@@ -71,15 +72,30 @@ export default function AdminAuditLogsView() {
   }, [fetchLogs]);
 
   // ─── Anonymize ─────────────────────────────────────────────────────────────
-  const handleAnonymize = async () => {
+  const handleAnonymize = () => {
+    // [FIX 0022] Thao tác VĨNH VIỄN (đè performedBy → REDACTED-HIPAA) nên bắt buộc
+    // xác nhận trước khi chạy; trước đây 1 click nhầm là mất lịch sử không hồi phục.
+    Alert.alert(
+      'Xác nhận ẩn danh dữ liệu',
+      'Hành động này sẽ VĨNH VIỄN thay tên người thực hiện trong các bản ghi audit Patient/MedicalRecord bằng nhãn REDACTED-HIPAA (tuân thủ lưu giữ HIPAA). Không thể hoàn tác. Tiếp tục?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Ẩn danh', style: 'destructive', onPress: doAnonymize },
+      ]
+    );
+  };
+
+  const doAnonymize = async () => {
     setAnonymizing(true);
     setAnonymizeError(null);
     try {
-      await apiRequest('/admin/anonymize', {
+      const data = await apiRequest('/admin/anonymize', {
         method: 'POST',
       });
       // Reload log list on success
       await fetchLogs();
+      const count = data?.modifiedCount ?? 0;
+      Alert.alert('Hoàn tất ẩn danh', `Đã ẩn danh ${count} bản ghi Patient/MedicalRecord theo quy trình HIPAA.`);
     } catch (err) {
       setAnonymizeError(err.message || 'Ẩn danh dữ liệu thất bại');
     } finally {
@@ -126,6 +142,44 @@ export default function AdminAuditLogsView() {
       return new Date(value).toLocaleString('vi-VN');
     } catch {
       return String(value);
+    }
+  };
+
+  // [FIX 0022] Nút "Xuất CSV" trước đây KHÔNG có onClick — nút chết.
+  // Xuất đúng danh sách đang lọc (search + entity + bệnh viện) ra file CSV UTF-8 BOM.
+  const handleExportCSV = () => {
+    if (!filteredLogs.length) {
+      Alert.alert('Không có dữ liệu', 'Không có bản ghi nào phù hợp bộ lọc hiện tại để xuất CSV.');
+      return;
+    }
+    const escapeCsv = (val) => {
+      const s = String(val ?? '');
+      return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const header = ['Thời gian', 'Người thực hiện', 'Email', 'Bệnh viện', 'Entity', 'Hành động', 'Chi tiết'];
+    const rows = filteredLogs.map((log) => [
+      formatDate(log.createdAt),
+      log.performedByName || log.performedBy || '',
+      log.performedByEmail || '',
+      log.hospitalName || 'Hệ thống',
+      log.entity || '',
+      log.action || '',
+      log.details || '',
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(',')).join('\n');
+    try {
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      Alert.alert('Thành công', `Đã tải xuống ${filteredLogs.length} bản ghi audit log (CSV).`);
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể tạo file CSV. Vui lòng thử lại.');
     }
   };
 
@@ -213,7 +267,7 @@ export default function AdminAuditLogsView() {
             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-slate-500 placeholder:text-slate-400 font-medium"
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           {isAdmin && (
             <select
               value={hospitalFilter}
@@ -242,7 +296,12 @@ export default function AdminAuditLogsView() {
             ))}
           </select>
 
-          <button className="bg-white border border-[#e8edf5] px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+          <button
+            onClick={handleExportCSV}
+            disabled={loading}
+            title="Tải xuống danh sách audit log đang lọc (CSV)"
+            className="bg-white border border-[#e8edf5] px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download className="w-3.5 h-3.5" />
             Xuất CSV
           </button>

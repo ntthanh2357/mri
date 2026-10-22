@@ -53,6 +53,7 @@ export async function apiRequest(path, options) {
   const response = await fetch(url, {
     ...options,
     headers,
+    cache: 'no-store', // [FIX 0014] tránh 304 conditional GET bị coi là lỗi
   });
 
   if (response.status === 401) {
@@ -63,16 +64,24 @@ export async function apiRequest(path, options) {
   }
 
   if (!response.ok) {
+    // [FIX 0014] Gắn status + code để caller phân biệt 429 với 401/403
     let message = 'Request failed';
+    let code;
     try {
       const body = await response.json();
       if (body?.message) {
         message = body.message;
       }
+      if (body?.code) {
+        code = body.code;
+      }
     } catch {
       // ignore JSON parse errors — keep default message
     }
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = response.status;
+    if (code) err.code = code;
+    throw err;
   }
 
   return response.json();

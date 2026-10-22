@@ -99,6 +99,23 @@ describe('Unit Tests: Visit Service (visit.service.js)', () => {
     expect(result.checklist.screenedBy).toBe('KTV. Lê Văn Bình');
   });
 
+  test('2c. Bệnh nhân vừa sửa phiếu tự khai sau khi KTV mở bảng kiểm: không nhận bảng kiểm dựa trên lời khai cũ', async () => {
+    const seenAt = new Date('2026-10-15T01:00:00Z');
+    const newerAt = new Date('2026-10-15T01:20:00Z');
+    const visit = new Visit({ hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp',
+      patientMriScreening: { answers: { metalFragments: 'yes' }, level: 'danger', declaredAt: newerAt } });
+    await visit.save();
+    const safe = { hasPacemakerOrMetal: false, hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, passed: true };
+    for (const screeningDeclaredAt of [seenAt.toISOString(), undefined, null, 'rác']) {
+      let err;
+      try { await submitMriSafetyCheckService({ visitId: visit._id, hospitalId: mockHospitalId, user: mockTechnician, checklistData: { ...safe, screeningDeclaredAt } }); } catch (e) { err = e; }
+      expect(err?.statusCode).toBe(409);
+    }
+    expect((await Visit.findById(visit._id)).mriSafetyChecklist.isScreened).toBe(false);
+    const ok = await submitMriSafetyCheckService({ visitId: visit._id, hospitalId: mockHospitalId, user: mockTechnician, checklistData: { ...safe, screeningDeclaredAt: newerAt.toISOString() } });
+    expect(ok.checklist.isScreened).toBe(true);
+  });
+
   test('2b. Có tiêm cản quang mà bệnh nhân chưa ký phiếu: lưu bảng kiểm nhưng KHÔNG tự chuyển "đang chụp" (UC-PAT-06)', async () => {
     const visit = new Visit({
       hospitalId: mockHospitalId,

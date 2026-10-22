@@ -17,6 +17,7 @@ import Config from '../constants/config';
 import { post } from '../services/api.service';
 import styles from './RegisterScreen.styles';
 import { Building2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useDialogKeys } from '../utils/useDialogKeys';
 
 
 const RegisterScreen = ({ navigation }) => {
@@ -41,6 +42,14 @@ const RegisterScreen = ({ navigation }) => {
     message: '',
     onClose: null,
   });
+  // Đóng hộp thông báo (nút "Tiếp tục", phím Enter hoặc Esc)
+  const closeCustomAlert = () => {
+    setCustomAlert(prev => ({ ...prev, visible: false }));
+    if (customAlert.onClose) {
+      customAlert.onClose();
+    }
+  };
+  useDialogKeys(customAlert.visible, { onEnter: closeCustomAlert, onEscape: closeCustomAlert });
 
   const showAlert = (type, title, message, onClose = null) => {
     setCustomAlert({
@@ -452,12 +461,7 @@ const RegisterScreen = ({ navigation }) => {
                 customAlert.type === 'error' && { backgroundColor: '#DC2626' },
                 customAlert.type === 'info' && { backgroundColor: '#2563EB' },
               ]}
-              onPress={() => {
-                setCustomAlert(prev => ({ ...prev, visible: false }));
-                if (customAlert.onClose) {
-                  customAlert.onClose();
-                }
-              }}
+              onPress={closeCustomAlert}
             >
               <Text style={styles.alertButtonText}>Tiếp tục</Text>
             </TouchableOpacity>

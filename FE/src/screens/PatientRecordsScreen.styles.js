@@ -2,7 +2,7 @@ import { StyleSheet, Platform, Dimensions } from 'react-native';
 import Colors from '../constants/colors';
 
 export default StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   centerState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 },
   centerText: { fontSize: 14, color: Colors.secondary, textAlign: 'center' },
   errorIcon: { fontSize: 36 },
@@ -54,14 +54,14 @@ export default StyleSheet.create({
 
   searchContainer: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface,
-    borderWidth: 1, borderColor: Colors.border, borderRadius: 12,
-    paddingHorizontal: 12, height: 46, marginBottom: 26,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 999,
+    paddingHorizontal: 16, height: 48,
   },
   searchIcon: { fontSize: 14, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: Colors.slateDark },
 
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.brandNavy, marginBottom: 4 },
-  sectionSub: { fontSize: 13, color: Colors.secondary, marginBottom: 16 },
+  sectionSub: { fontSize: 13, color: Colors.secondary },
 
   emptyState: { alignItems: 'center', paddingVertical: 24 },
   emptyIllus: { width: 150, height: 150, marginBottom: 4 },

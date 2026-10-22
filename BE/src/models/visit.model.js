@@ -1,6 +1,8 @@
 import { Schema, model } from "mongoose";
 import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
+const SCREENING_ANSWER = ["yes", "no", "unsure"];
+
 const visitSchema = new Schema(
   {
     hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
@@ -41,6 +43,9 @@ const visitSchema = new Schema(
       default: 'đang chờ'
     },
     priority: { type: String, enum: ['thấp', 'trung bình', 'cao', 'khẩn cấp'], default: 'trung bình' },
+    // UC-REC-03 — Số thứ tự gọi khám trong ngày (cấp khi tạo lượt khám) & phòng khám được phân luồng
+    queueNumber: { type: Number, default: null },
+    clinicRoom: { type: String, default: '' },
     reason: { type: String, default: "" },
     vitals: {
       pulse: { type: Number, default: null },
@@ -48,7 +53,50 @@ const visitSchema = new Schema(
       temperature: { type: Number, default: null },
       spo2: { type: Number, default: null },
       respiratoryRate: { type: Number, default: null },
-      measuredAt: { type: Date, default: null }
+      measuredAt: { type: Date, default: null },
+      isAbnormal: { type: Boolean, default: false },
+      alerts: { type: [String], default: [] },
+      alertDetails: { type: Schema.Types.Mixed, default: [] },
+      flags: { type: Schema.Types.Mixed, default: {} }
+    },
+    // UC-NUR-01: Điều dưỡng gọi bệnh nhân từ phòng tiếp đón vào phòng đo sinh hiệu
+    vitalsCall: {
+      status: { type: String, enum: ['none', 'called', 'missed'], default: 'none' },
+      callCount: { type: Number, default: 0 },
+      room: { type: String, default: "" },
+      calledAt: { type: Date, default: null },
+      calledBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
+    },
+    // UC-NUR-03: Sàng lọc sơ bộ dị ứng & chống chỉ định (hen phế quản, suy thận, phản ứng thuốc cản quang)
+    preScreening: {
+      screened: { type: Boolean, default: false },
+      asthma: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      renalFailure: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      contrastReaction: {
+        answer: { type: String, enum: ['no', 'yes', 'unknown'], default: 'no' },
+        note: { type: String, default: "" }
+      },
+      otherAllergies: { type: String, default: "" },
+      notes: { type: String, default: "" },
+      riskLevel: { type: String, enum: ['none', 'caution', 'high'], default: 'none' },
+      flags: { type: [String], default: [] },
+      screenedAt: { type: Date, default: null },
+      screenedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      screenedByName: { type: String, default: "" }
+    },
+    // Phiếu chỉ định dịch vụ cận lâm sàng của điều dưỡng (bước giữa sinh hiệu và phiếu thu)
+    serviceOrder: {
+      services: [{ type: String }],
+      diagnosis: { type: String, default: "" },
+      priority: { type: String, default: "Thường" },
+      orderedAt: { type: Date, default: null },
+      orderedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
     },
     mriOrder: {
       region: { type: String, default: "" },
@@ -71,6 +119,25 @@ const visitSchema = new Schema(
       screenedAt: { type: Date, default: null },              // Thời gian kiểm tra
       passed: { type: Boolean, default: false },              // Đủ điều kiện vào buồng
       notes: { type: String, default: "" }
+    },
+    // Bệnh nhân tự khai sàng lọc an toàn MRI trên app trước khi tới chụp (services/mriPrep.service.js).
+    // Chỉ để KTV biết trước; KTV vẫn tự hỏi lại và xác nhận ở mriSafetyChecklist.
+    patientMriScreening: {
+      answers: {
+        pacemaker: { type: String, enum: SCREENING_ANSWER },
+        aneurysmClip: { type: String, enum: SCREENING_ANSWER },
+        cochlearImplant: { type: String, enum: SCREENING_ANSWER },
+        metalFragments: { type: String, enum: SCREENING_ANSWER },
+        implants: { type: String, enum: SCREENING_ANSWER },
+        recentSurgery: { type: String, enum: SCREENING_ANSWER },
+        pregnant: { type: String, enum: SCREENING_ANSWER },
+        claustrophobia: { type: String, enum: SCREENING_ANSWER },
+        cannotLieStill: { type: String, enum: SCREENING_ANSWER },
+        tattoo: { type: String, enum: SCREENING_ANSWER },
+      },
+      details: { type: String, default: "" },
+      level: { type: String, enum: ["clear", "attention", "danger"] }, // "danger": khai có thiết bị / kim loại → KTV kiểm tra kỹ
+      declaredAt: { type: Date, default: null },
     },
     mriCancelReason: { type: String, default: "" },
     mriRescanReason: { type: String, default: "" },

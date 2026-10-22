@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { CheckCircle2, AlertCircle, Info, PenLine } from 'lucide-react';
+import { useDialogKeys } from '../../utils/useDialogKeys';
 
 const TYPES = {
   success: { icon: CheckCircle2, color: '#0F9D6B', bg: '#E3F7EF' },
@@ -48,6 +49,12 @@ export const useAppDialog = () => {
       resolver.current = resolve;
       setState({ mode: 'notify', type: type || typeFromTitle(title), title, message });
     }), []);
+
+  // Phím tắt: thông báo 1 nút → Enter = đã hiểu; hộp xác nhận → Esc = hủy (Enter không tự xác nhận để tránh lỡ tay thu / hoàn tiền)
+  useDialogKeys(!!state, {
+    onEnter: state?.mode === 'notify' ? () => close(true) : undefined,
+    onEscape: () => close(state?.mode === 'notify'),
+  });
 
   const cfg = state ? TYPES[state.type] || TYPES.info : TYPES.info;
   const Icon = cfg.icon;
@@ -117,7 +124,7 @@ const s = StyleSheet.create({
   noteText: { fontSize: 12, color: '#64748B', lineHeight: 18, textAlign: 'center' },
   row: { flexDirection: 'row', gap: 10, marginTop: 22, alignSelf: 'stretch' },
   btn: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
-  btnFull: { flex: 0, alignSelf: 'stretch', marginTop: 22 },
+  btnFull: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', alignSelf: 'stretch', marginTop: 22 },
   btnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   btnGhost: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   btnGhostText: { color: '#475569', fontWeight: '700', fontSize: 14 },

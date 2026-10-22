@@ -71,8 +71,10 @@ export const CONTRAST_UNSIGNED_MESSAGE = "Bệnh nhân chưa ký phiếu đồng
 /** Ca chụp có tiêm cản quang mà bệnh nhân chưa ký phiếu → chưa được bắt đầu chụp. */
 export const contrastConsentPending = async (visit) => {
   if (!visit?.mriOrder?.withContrast) return false;
+  // lọc tường minh theo lượt khám + bệnh viện của lượt khám (bệnh nhân xem lượt khám ở bệnh viện khác bệnh viện gắn với tài khoản)
   const consent = await ConsentForm.findOne({ visitId: visit._id, hospitalId: visit.hospitalId, procedureName: CONTRAST_PROCEDURE })
     .select("patientSigned")
+    .setOptions({ bypassTenancy: true })
     .lean();
   return !consent?.patientSigned;
 };

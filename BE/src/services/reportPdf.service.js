@@ -5,6 +5,7 @@ import { createRequire } from "module";
 import PDFDocument from "pdfkit";
 import jwt from "jsonwebtoken";
 import { getJwtSecret } from "../config/jwt.config.js";
+import { addSignaturePlaceholder, signPdf, signatureNote } from "./pdfSignature.service.js";
 
 /**
  * UC-PAT-08 — Báo cáo kết quả chụp MRI/CT dạng PDF cho bệnh nhân.
@@ -16,12 +17,12 @@ const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BE_ROOT = path.join(__dirname, "../..");
 const FONT_DIR = path.dirname(require.resolve("@expo-google-fonts/be-vietnam-pro/package.json"));
-const FONTS = {
+export const FONTS = {
   regular: path.join(FONT_DIR, "400Regular/BeVietnamPro_400Regular.ttf"),
   semibold: path.join(FONT_DIR, "600SemiBold/BeVietnamPro_600SemiBold.ttf"),
   bold: path.join(FONT_DIR, "700Bold/BeVietnamPro_700Bold.ttf"),
 };
-const COLOR = { navy: "#0B2A55", green: "#067A5E", text: "#0F172A", muted: "#475569", border: "#E2E8F0", soft: "#F8FAFC" };
+export const COLOR = { navy: "#0B2A55", green: "#067A5E", text: "#0F172A", muted: "#475569", border: "#E2E8F0", soft: "#F8FAFC" };
 
 // ─── Token tải file ─────────────────────────────────────────────────────────
 const TOKEN_PURPOSE = "imaging-report-pdf";
@@ -73,7 +74,7 @@ export const loadReportImages = async (urls = [], { limit = 2, timeoutMs = 8000 
 };
 
 // ─── Dựng PDF ───────────────────────────────────────────────────────────────
-const fmtDate = (d, withTime = false) => {
+export const fmtDate = (d, withTime = false) => {
   if (!d) return "—";
   const t = new Date(d);
   if (isNaN(t)) return "—";
@@ -87,7 +88,8 @@ const fmtDate = (d, withTime = false) => {
  * @param {{hospitalName?: string, images?: Buffer[]}} opts  ảnh đã tải sẵn (JPEG/PNG)
  * @returns {Promise<Buffer>}
  */
-export const buildImagingReportPdf = (imaging = {}, { hospitalName = "", images = [] } = {}) =>
+/** `signer` (từ pdfSignature.service: getPdfSigner) → file được ký số PAdES; không truyền = không ký. */
+export const buildImagingReportPdf = (imaging = {}, { hospitalName = "", images = [], signer = null } = {}) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
@@ -96,7 +98,11 @@ export const buildImagingReportPdf = (imaging = {}, { hospitalName = "", images 
     });
     const chunks = [];
     doc.on("data", (c) => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("end", () => {
+      const pdf = Buffer.concat(chunks);
+      if (!signer) return resolve(pdf);
+      return signPdf(pdf, signer).then(resolve, reject);
+    });
     doc.on("error", reject);
 
     doc.registerFont("R", FONTS.regular);
@@ -188,5 +194,7 @@ export const buildImagingReportPdf = (imaging = {}, { hospitalName = "", images 
       `Tài liệu tạo từ hệ thống NeuroScan AI lúc ${fmtDate(new Date(), true)}. Kết quả chỉ có giá trị khi đã được bác sĩ ký duyệt; mọi thắc mắc vui lòng liên hệ bác sĩ điều trị.`,
       left, doc.y, { width, align: "center" },
     );
+    doc.font("R").fontSize(8).fillColor(COLOR.muted).text(signatureNote(signer), left, doc.y + 2, { width, align: "center" });
+    if (signer) addSignaturePlaceholder(doc, { reason: "Kết quả chẩn đoán hình ảnh", name: signer.signerName, contactInfo: hospitalName });
     doc.end();
   });

@@ -13,6 +13,7 @@
     "test:coverage": "c8 --reporter=text --reporter=html node src/tests/run_all_tests.js",
     "storage:verify": "node scripts/verifyStorage.js",
     "db:backup": "node scripts/backupDatabase.js",
+    "vitals:backfill": "node src/scripts/backfill_visit_vitals.js",
     "dataset:import": "node scripts/importTamTriDataset.js"
   },
   "type": "module",
@@ -20,6 +21,8 @@
     "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@google-cloud/storage": "^5.18.3",
     "@payos/node": "^2.0.5",
+    "@signpdf/signpdf": "3.3.0",
+    "@signpdf/utils": "3.3.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -29,6 +32,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.3.4",
     "multer": "^2.2.0",
+    "node-forge": "1.4.0",
     "nodemailer": "^9.0.1",
     "pdfkit": "^0.20.2"
   },

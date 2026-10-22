@@ -499,7 +499,7 @@ const DocumentDetailScreen = ({ route, navigation }) => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   body: { padding: 16, paddingBottom: 40 },
   bodyWide: { padding: 28, maxWidth: 880, width: '100%', alignSelf: 'center' },
 

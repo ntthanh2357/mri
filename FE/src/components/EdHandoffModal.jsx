@@ -144,7 +144,7 @@ export default function EdHandoffModal({
             <>
               {/* Cảnh báo trách nhiệm pháp lý */}
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
-                ⚠️ <b>Ranh giới pháp lý & An toàn người bệnh:</b> Trách nhiệm theo dõi và hồi sinh cấp cứu thuộc <b>100% về Khoa Cấp Cứu</b> cho tới khi Bác sĩ Ngoại Thần Kinh của Khoa Ung Thư Não bấm xác nhận <b>[Chấp thuận nhận bệnh (Accept)]</b>.
+                <b>Ranh giới pháp lý & An toàn người bệnh:</b> Trách nhiệm theo dõi và hồi sinh cấp cứu thuộc <b>100% về Khoa Cấp Cứu</b> cho tới khi Bác sĩ Ngoại Thần Kinh của Khoa Ung Thư Não bấm xác nhận <b>[Chấp thuận nhận bệnh (Accept)]</b>.
               </div>
 
               {/* Thông tin hành chính & Liên kết HIS */}

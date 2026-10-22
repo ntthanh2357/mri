@@ -2,7 +2,13 @@ import { StyleSheet, Platform } from 'react-native';
 import Colors from '../constants/colors';
 
 export default StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#0B2A55', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  bannerBlock: { marginBottom: 18 },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   
 
   searchContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.borderStrong, borderRadius: 10, backgroundColor: Colors.surface, marginBottom: 16 },

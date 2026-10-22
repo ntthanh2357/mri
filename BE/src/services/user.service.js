@@ -11,14 +11,19 @@ export const getAllUsers = async () => {
 };
 
 // Higher rank can lock/unlock strictly lower-rank roles only — never a peer or higher.
-// admin > hospital_admin > (doctor/nurse/technician/patient). Blocks admin-vs-admin,
+// admin > hospital_admin > (doctor/nurse/technician/pharmacist/receptionist/patient). Blocks admin-vs-admin,
 // hospital_admin-vs-hospital_admin, and hospital_admin-vs-admin, including self-lock.
+// [FIX 0022] bổ sung system_admin (ngang admin) + pharmacist/receptionist (rank staff)
+// — trước đây 2 role này rơi về rank 0 do thiếu trong map.
 const ROLE_RANK = {
   admin: 3,
+  system_admin: 3,
   hospital_admin: 2,
   doctor: 1,
   nurse: 1,
   technician: 1,
+  pharmacist: 1,
+  receptionist: 1,
   patient: 1,
 };
 

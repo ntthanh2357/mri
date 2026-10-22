@@ -63,7 +63,8 @@ const ReceptionistHome = ({ user, navigation }) => {
         get('/api/v1/invoices').catch(() => null),
         get('/api/v1/schedules/my-schedule').catch(() => null),
       ]);
-      setVisits(qRes?.visits || []);
+      // Trang chủ chỉ thống kê lượt tiếp đón trong hôm nay (máy chủ trả thêm lượt cũ chưa kết thúc cho bảng hàng chờ)
+      setVisits((qRes?.visits || []).filter((v) => isToday(v.createdAt)));
       setInvoices(invRes?.invoices || []);
       const list = schRes?.data?.schedules;
       setShift(Array.isArray(list) ? list.find((x) => isToday(x.date)) || null : null);
@@ -252,7 +253,7 @@ const ReceptionistHome = ({ user, navigation }) => {
 const shadow = isWeb ? { boxShadow: '0 10px 30px -18px rgba(11,42,91,0.35)' } : { elevation: 2 };
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#F8FAFC' },
+  page: { flex: 1, backgroundColor: '#F3F7FC' },
   pageContent: { padding: 28, paddingBottom: 48, maxWidth: 1320, width: '100%', alignSelf: 'center', gap: 22 },
 
   bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999, marginTop: 20 },

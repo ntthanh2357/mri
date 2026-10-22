@@ -30,6 +30,9 @@ export const AUDIT_ACTIONS = {
   VISIT_STATUS_CHANGED: "VISIT_STATUS_CHANGED",
   FSM_TRANSITION: "FSM_TRANSITION",
 
+  // UC-HADM-04 — Can thiệp Điều chuyển Phân công (Smart Override): lý do bắt buộc
+  ASSIGNMENT_OVERRIDDEN: "ASSIGNMENT_OVERRIDDEN",
+
   // Phân hệ Quản lý Buồng giường & Chuyển viện Liên viện (Module 04 Concurrency & Patient Safety)
   BED_RESERVED: "BED_RESERVED",
   BED_OCCUPIED: "BED_OCCUPIED",
@@ -60,6 +63,19 @@ export const AUDIT_ACTIONS = {
   BHYT_CLAIM_SUBMITTED: "BHYT_CLAIM_SUBMITTED",
   BHYT_CLAIM_APPROVED: "BHYT_CLAIM_APPROVED",
   BHYT_CLAIM_REJECTED: "BHYT_CLAIM_REJECTED",
+
+  // Phân hệ Khoa Dược — UC-PHA (Dual-Sign, Phát thuốc, Hậu kiểm 24h, Kho theo lô GPP)
+  // Trước đây các thao tác này chỉ để lại dispenseHistory/stockMovements rải rác trong
+  // từng document — không nằm trong chuỗi băm trung tâm, không truy vấn được từ màn
+  // Nhật ký kiểm toán lâm sàng. Giờ ghi đủ 8 thao tác dược sĩ & quản trị danh mục.
+  PRESCRIPTION_VERIFIED: "PRESCRIPTION_VERIFIED",
+  PRESCRIPTION_REJECTED: "PRESCRIPTION_REJECTED",
+  PRESCRIPTION_DISPENSED: "PRESCRIPTION_DISPENSED",
+  PRESCRIPTION_POST_HOC_REVIEWED: "PRESCRIPTION_POST_HOC_REVIEWED",
+  DRUG_CATALOG_CREATED: "DRUG_CATALOG_CREATED",
+  DRUG_CATALOG_UPDATED: "DRUG_CATALOG_UPDATED",
+  DRUG_CATALOG_DELETED: "DRUG_CATALOG_DELETED",
+  DRUG_STOCK_ADJUSTED: "DRUG_STOCK_ADJUSTED",
 };
 
 const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";

@@ -5,6 +5,9 @@ import Colors from '../../constants/colors';
 import Config from '../../constants/config';
 import PressableScale from '../PressableScale';
 import { usePatientHome } from '../../controllers/usePatientHome';
+import { useVisitProgress } from '../../controllers/useVisitProgress';
+import { useLocalReminderSync } from '../../controllers/useLocalReminderSync';
+import VisitProgress from './VisitProgress';
 import { isReminderDue } from '../../utils/myHealth';
 import { useStaggeredEntrance, useCountUp, useLoop, useDrift, driftStyle, useProgress, enterStyle } from '../../controllers/useMotion';
 
@@ -62,6 +65,8 @@ const QuickLink = ({ icon, title, sub, onPress }) => (
 
 const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
   const { imaging, visitCount, reminders, doneCount, markReminderDone, consentsToDo } = usePatientHome();
+  const { progress } = useVisitProgress();
+  useLocalReminderSync(reminders.items, !reminders.loading); // điện thoại: hẹn sẵn thông báo nhắc uống thuốc / lịch khám
   const sections = useStaggeredEntrance(5);
   const heroDrift = useDrift(18000);
   const filmScan = useLoop(2600, { pause: 900 });
@@ -108,7 +113,10 @@ const PatientHome = ({ user, isDesktop, navigation, onEditProfile }) => {
         </View>
       </Animated.View>
 
-      {consentsToDo > 0 ? (
+      <VisitProgress progress={progress} onOpenConsent={() => navigation.navigate('ContrastConsent')} onOpenFilms={() => navigation.navigate('ImagingHistory')} onOpenPrep={() => navigation.navigate('MriPrep')} />
+
+      {/* thẻ lượt khám đã nhắc ký phiếu của lượt đang chụp thì không lặp lại */}
+      {consentsToDo > 0 && !progress?.mri?.consentPending ? (
         <Pressable
           onPress={() => navigation.navigate('ContrastConsent')}
           accessibilityRole="button"

@@ -4,24 +4,25 @@ import { User } from "../auth/models/user.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
+import { parseBhytCard, compareHolder, isCardExpired, fmtDateVN, isRealDate } from "./bhytCard.util.js";
+import { applyBhytCore } from "./bhytApply.service.js";
 
 // ─── R.1 — Lưu / Cập nhật thông tin thẻ BHYT cho bệnh nhân ─────────────────
 // @route POST /api/v1/bhyt/:patientId
 // @access Private (Receptionist, Nurse, Admin)
 export const saveBhytInfo = async (req, res) => {
   try {
-    const allowedRoles = ["receptionist", "nurse", "admin", "hospital_admin", "doctor"];
+    // UC-REC-02: khai báo & xác minh thẻ BHYT là nghiệp vụ của lễ tân (quản trị được phép hỗ trợ)
+    const allowedRoles = ["receptionist", "admin", "hospital_admin"];
     if (!allowedRoles.includes(req.user.role)) {
-      return errorResponse(res, "Bạn không có quyền nhập thông tin BHYT.", 403);
+      return errorResponse(res, "Chỉ lễ tân / quầy tiếp đón được khai báo và xác minh thẻ BHYT.", 403);
     }
 
     const { patientId } = req.params;
     const {
       cardNumber,
-      coverageRate = 80,
       expiresAt,
       registrationPlace,
-      patientName,
       visitId,
       annualCap = 72000000,
       usedThisYear = 0,
@@ -30,11 +31,28 @@ export const saveBhytInfo = async (req, res) => {
       hasTransferForm = false,
       priorAuthorizations = [],
       note,
+      manuallyVerified = false,
+      holderName,
+      holderBirthDate,
+      holderGender,
+      mismatchNote = "",
     } = req.body;
 
+    // UC-REC-02 — 1. Kiểm tra cấu trúc mã thẻ & tự xác định tỷ lệ chi trả theo mức hưởng (ký tự thứ 3)
     if (!cardNumber) return errorResponse(res, "Số thẻ BHYT là bắt buộc.", 400);
-    if (![80, 95, 100].includes(Number(coverageRate))) {
-      return errorResponse(res, "Tỷ lệ BHYT chi trả phải là 80%, 95%, hoặc 100%.", 400);
+    const card = parseBhytCard(cardNumber);
+    if (!card.ok) return errorResponse(res, card.error, 400);
+
+    // 2. Hạn thẻ: bắt buộc và phải còn hiệu lực
+    if (!expiresAt || !isRealDate(expiresAt)) {
+      return errorResponse(res, "Hạn thẻ: ngày không hợp lệ.", 400);
+    }
+    if (isCardExpired(expiresAt)) {
+      return errorResponse(res, `Thẻ BHYT đã hết hạn từ ngày ${fmtDateVN(expiresAt)}. Bệnh nhân cần gia hạn thẻ hoặc tự chi trả.`, 400);
+    }
+
+    if (holderBirthDate && (!isRealDate(holderBirthDate) || new Date(holderBirthDate) > new Date())) {
+      return errorResponse(res, "Ngày sinh trên thẻ: ngày không hợp lệ.", 400);
     }
 
     const patient = await User.findById(patientId).lean();
@@ -42,49 +60,123 @@ export const saveBhytInfo = async (req, res) => {
       return errorResponse(res, "Không tìm thấy bệnh nhân.", 404);
     }
 
-    // Kiểm tra thẻ hết hạn
-    const isValid = expiresAt ? new Date(expiresAt) > new Date() : true;
+    // 3. Đối soát thông tin in trên thẻ với hồ sơ — lệch thì phải ghi lý do mới được xác nhận
+    const holder = { name: holderName || patient.profile?.name, birthDate: holderBirthDate, gender: holderGender };
+    const mismatches = compareHolder(patient.profile, holder);
+    if (mismatches.length && !String(mismatchNote).trim()) {
+      return errorResponse(res, `Thông tin trên thẻ lệch với hồ sơ (${mismatches.join(", ")}). Vui lòng kiểm tra lại hoặc ghi lý do chênh lệch.`, 400);
+    }
+    if (manuallyVerified !== true) {
+      return errorResponse(res, "Vui lòng đối chiếu thẻ BHYT gốc với giấy tờ tùy thân và tick xác nhận trước khi lưu.", 400);
+    }
 
-    // Upsert — nếu bệnh nhân đã có thẻ BHYT cho lần khám này thì cập nhật
+    // 4. Mỗi bệnh nhân chỉ 1 thẻ đang dùng: lưu thẻ (theo mã thẻ) rồi chuyển các thẻ khác thành lịch sử
     const bhyt = await BhytInfo.findOneAndUpdate(
-      { hospitalId: req.user.hospitalId, patientId, visitId: visitId || null },
+      { hospitalId: req.user.hospitalId, patientId, cardNumber: card.cardNumber },
       {
         hospitalId: req.user.hospitalId,
         patientId,
         visitId: visitId || null,
-        cardNumber, // R.1 — Trong thực tế cần mã hóa AES-256 trước khi lưu
-        coverageRate: Number(coverageRate),
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        cardNumber: card.cardNumber, // R.1 — Trong thực tế cần mã hóa AES-256 trước khi lưu
+        objectCode: card.objectCode,
+        benefitLevel: card.benefitLevel,
+        coverageRate: card.coverageRate,
+        expiresAt: new Date(expiresAt),
         registrationPlace: registrationPlace || "",
-        patientName: patientName || patient.profile?.name || "",
+        patientName: String(holder.name || "").trim(),
+        holderBirthDate: String(holderBirthDate || "").trim(),
+        holderGender: holderGender || "",
+        mismatches,
+        mismatchNote: mismatches.length ? String(mismatchNote).trim() : "",
         annualCap: Number(annualCap) || 72000000,
         usedThisYear: Number(usedThisYear) || 0,
         isOutOfNetwork: Boolean(isOutOfNetwork),
         treatmentType,
         hasTransferForm: Boolean(hasTransferForm),
         priorAuthorizations: Array.isArray(priorAuthorizations) ? priorAuthorizations : [],
-        isValid,
+        isValid: true,
+        isActive: true,
+        replacedAt: null,
         verifiedAt: new Date(),
+        manuallyVerified: true,
+        verifiedBy: req.user.id,
         note: note || "",
       },
       { upsert: true, new: true }
+    );
+    await BhytInfo.updateMany(
+      { hospitalId: req.user.hospitalId, patientId, _id: { $ne: bhyt._id }, isActive: { $ne: false } },
+      { $set: { isActive: false, replacedAt: new Date() } }
     );
 
     return successResponse(res, {
       bhytId: bhyt._id,
       patientId: bhyt.patientId,
       cardNumber: `****${bhyt.cardNumber.slice(-4)}`,
+      objectCode: bhyt.objectCode,
+      benefitLevel: bhyt.benefitLevel,
       coverageRate: bhyt.coverageRate,
       annualCap: bhyt.annualCap,
       usedThisYear: bhyt.usedThisYear,
       isOutOfNetwork: bhyt.isOutOfNetwork,
       isValid: bhyt.isValid,
       expiresAt: bhyt.expiresAt,
+      mismatches: bhyt.mismatches,
     }, "Lưu thông tin BHYT thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
 };
+
+// ─── UC-REC-02 — Thẻ BHYT đang dùng của 1 bệnh nhân (null nếu chưa khai báo) ───
+// @route GET /api/v1/bhyt/:patientId/active
+export const getActiveBhyt = async (req, res) => {
+  try {
+    const filter = { patientId: req.params.patientId, isActive: { $ne: false } };
+    if (req.user.hospitalId) filter.hospitalId = req.user.hospitalId;
+    const b = await BhytInfo.findOne(filter).sort({ updatedAt: -1 }).populate("verifiedBy", "profile.name email").lean();
+    if (!b) return successResponse(res, null, "Bệnh nhân chưa khai báo thẻ BHYT.");
+    return successResponse(res, toCardSummary(b), "Lấy thẻ BHYT đang dùng thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// ─── UC-REC-02 — Tóm tắt thẻ đang dùng của mọi bệnh nhân trong viện (gắn nhãn BHYT ở danh sách tiếp nhận) ───
+// @route GET /api/v1/bhyt/active-cards
+export const getActiveCards = async (req, res) => {
+  try {
+    const filter = { isActive: { $ne: false } };
+    if (req.user.hospitalId) filter.hospitalId = req.user.hospitalId;
+    const list = await BhytInfo.find(filter).sort({ updatedAt: -1 }).lean();
+    const seen = new Set();
+    const cards = list.filter((b) => !seen.has(String(b.patientId)) && seen.add(String(b.patientId))).map(toCardSummary);
+    return successResponse(res, cards, "Lấy danh sách thẻ BHYT đang dùng thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// Thông tin thẻ an toàn để hiển thị (che số thẻ, tính trạng thái hết hạn theo thời điểm hiện tại)
+const toCardSummary = (b) => ({
+  bhytId: b._id,
+  patientId: b.patientId,
+  cardMasked: `${b.cardNumber.slice(0, 3)}••••••••${b.cardNumber.slice(-4)}`,
+  objectCode: b.objectCode || b.cardNumber.slice(0, 2),
+  benefitLevel: b.benefitLevel || Number(b.cardNumber[2]) || null,
+  coverageRate: b.coverageRate,
+  expiresAt: b.expiresAt,
+  expired: isCardExpired(b.expiresAt),
+  registrationPlace: b.registrationPlace,
+  isOutOfNetwork: b.isOutOfNetwork,
+  hasTransferForm: b.hasTransferForm,
+  treatmentType: b.treatmentType,
+  mismatches: b.mismatches || [],
+  mismatchNote: b.mismatchNote || "",
+  verifiedAt: b.verifiedAt,
+  verifiedByName: b.verifiedBy?.profile?.name || b.verifiedBy?.email || null,
+  manuallyVerified: b.manuallyVerified === true,
+});
 
 // ─── R.1 — Xem thông tin BHYT của bệnh nhân ──────────────────────────────────
 // @route GET /api/v1/bhyt/:patientId
@@ -134,6 +226,9 @@ export const calculateCopay = async (req, res) => {
     const bhyt = await BhytInfo.findOne({
       patientId,
       isValid: true,
+      isActive: { $ne: false },
+      manuallyVerified: true,
+      expiresAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       $or: [
         { visitId },
         { visitId: null },
@@ -286,61 +381,18 @@ export const applyBhytToInvoice = async (req, res) => {
     const { invoiceId } = req.params;
     const { bhytId, treatmentType = "outpatient", isOutOfNetwork = false, hasTransferForm = false } = req.body;
 
-    const invoice = await Invoice.findOne({
-      _id: invoiceId,
-      hospitalId: req.user.hospitalId,
-    });
+    const invoice = await Invoice.findOne({ _id: invoiceId, hospitalId: req.user.hospitalId });
     if (!invoice) return errorResponse(res, "Không tìm thấy hóa đơn.", 404);
-    if (invoice.status === "đã thanh toán") {
-      return errorResponse(res, "Không thể chỉnh sửa hóa đơn đã thanh toán.", 400);
+
+    const bhyt = bhytId ? await BhytInfo.findById(bhytId) : null;
+    if (bhytId && !bhyt) return errorResponse(res, "Không tìm thấy thẻ BHYT.", 404);
+
+    const result = await applyBhytCore(invoice, { bhyt, treatmentType, isOutOfNetwork, hasTransferForm });
+    if (!result.ok) {
+      const status = { NO_CARD: 404, PAID_BEFORE_BHYT: 409, PAYOS_IN_FLIGHT: 409 }[result.code] || 400;
+      return res.status(status).json({ success: false, code: result.code, message: result.message });
     }
 
-    const bhyt = await BhytInfo.findById(bhytId);
-    if (!bhyt || !bhyt.isValid) {
-      return errorResponse(res, "Thẻ BHYT không hợp lệ hoặc đã hết hạn.", 400);
-    }
-
-    const totalAmount = invoice.totalAmount || 0;
-    const effectiveOutOfNetwork = isOutOfNetwork || bhyt.isOutOfNetwork;
-    const effectiveTransferForm = hasTransferForm || bhyt.hasTransferForm;
-    let effectiveRate = bhyt.coverageRate;
-
-    if (effectiveOutOfNetwork && !effectiveTransferForm) {
-      if (treatmentType === "outpatient") {
-        effectiveRate = 0;
-      }
-    }
-
-    // Kiểm tra trần thanh toán BHYT
-    const annualCap = bhyt.annualCap || 72000000;
-    const usedThisYear = bhyt.usedThisYear || 0;
-    const remainingCap = Math.max(0, annualCap - usedThisYear);
-    const tentativeBhytAmount = Math.round(totalAmount * (effectiveRate / 100));
-    const bhytAmount = Math.min(tentativeBhytAmount, remainingCap);
-    const patientAmount = totalAmount - bhytAmount;
-
-    // Cập nhật Invoice với thông tin BHYT hoàn chỉnh
-    invoice.bhytInfo = {
-      bhytId: bhyt._id,
-      cardNumber: `****${bhyt.cardNumber?.slice(-4)}`,
-      coverageRate: effectiveRate,
-      bhytAmount,
-      patientCopayAmount: patientAmount,
-      annualCap,
-      usedThisYear: usedThisYear + bhytAmount,
-      isOutOfNetwork: effectiveOutOfNetwork,
-      priorAuthorization: bhyt.priorAuthorizations?.[0]?.approvalNumber || null,
-    };
-    invoice.patientPayAmount = patientAmount; // Bệnh nhân chỉ trả phần đồng chi trả
-
-    await invoice.save();
-
-    // Cập nhật BhytInfo với invoiceId và lũy kế đã dùng
-    bhyt.invoiceId = invoice._id;
-    bhyt.usedThisYear = usedThisYear + bhytAmount;
-    await bhyt.save();
-
-    // Ghi nhận Audit Log
     try {
       await recordAuditLog({
         action: AUDIT_ACTIONS.BHYT_CLAIM_APPROVED,
@@ -348,19 +400,13 @@ export const applyBhytToInvoice = async (req, res) => {
         entityId: invoice._id,
         performedBy: req.user.id,
         hospitalId: req.user.hospitalId,
-        details: `Áp dụng thành công BHYT vào hóa đơn ${invoice._id}: BHYT chi trả ${bhytAmount.toLocaleString("vi-VN")}đ, BN đồng chi trả ${patientAmount.toLocaleString("vi-VN")}đ.`
+        details: `Áp dụng thành công BHYT vào hóa đơn ${invoice._id}: BHYT chi trả ${result.data.bhytAmount.toLocaleString("vi-VN")}đ, BN đồng chi trả ${result.data.patientCopayAmount.toLocaleString("vi-VN")}đ.`
       });
     } catch (auditErr) {
       console.warn("[BHYT Apply AuditLog Warn]", auditErr.message);
     }
 
-    return successResponse(res, {
-      invoiceId: invoice._id,
-      totalAmount,
-      bhytAmount,
-      patientCopayAmount: patientAmount,
-      coverageRate: bhyt.coverageRate,
-    }, "Áp dụng BHYT vào hóa đơn thành công.");
+    return successResponse(res, result.data, "Áp dụng BHYT vào hóa đơn thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

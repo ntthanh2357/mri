@@ -335,7 +335,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                       hasDicom ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-400 border-slate-200'
                     }`}
                   >
-                    📦 DICOM Archive {hasDicom ? `(Có sẵn)` : '(Chưa nén)'}
+                    DICOM Archive {hasDicom ? `(Có sẵn)` : '(Chưa nén)'}
                   </span>
 
                   <span
@@ -352,12 +352,12 @@ export default function InterHospitalTransferView({ currentUser }) {
                       has3D ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
                     }`}
                   >
-                    🧊 Mô hình 3D Mesh {has3D ? '(.GLTF)' : '(Chưa tạo)'}
+                    Mô hình 3D Mesh {has3D ? '(.GLTF)' : '(Chưa tạo)'}
                   </span>
 
                   {snapshot?.representativeSliceUrl && (
                     <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-sky-50 text-sky-700 border border-sky-200">
-                      🖼️ Ảnh cắt lớp chính
+                      Ảnh cắt lớp chính
                     </span>
                   )}
                 </div>
@@ -599,12 +599,12 @@ export default function InterHospitalTransferView({ currentUser }) {
                   <div className="pt-2 flex flex-wrap gap-2 text-[11px]">
                     {detailModalItem.packageSnapshot.dicom?.zipUrl && (
                       <span className="px-2 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-md font-semibold">
-                        📦 File DICOM: {detailModalItem.packageSnapshot.dicom.filename || 'dicom_study.zip'}
+                        File DICOM: {detailModalItem.packageSnapshot.dicom.filename || 'dicom_study.zip'}
                       </span>
                     )}
                     {detailModalItem.packageSnapshot.model3dUrl && (
                       <span className="px-2 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-md font-semibold">
-                        🧊 Mô hình 3D (.gltf)
+                        Mô hình 3D (.gltf)
                       </span>
                     )}
                   </div>

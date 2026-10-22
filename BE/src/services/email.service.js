@@ -158,6 +158,111 @@ export const sendSwapRequestResultEmail = async ({ toEmail, staffName, status, s
   }
 };
 
+// UC-REC-04 — Thông báo dời lịch chụp MRI cho bệnh nhân thường khi nhường slot cho ca cấp cứu
+export const sendMriRescheduleEmail = async ({ toEmail, patientName, oldTime, newTime }) => {
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+  const fmt = (d) => (d ? new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "sẽ được lễ tân liên hệ sắp xếp");
+
+  if (!emailUser || !emailPass) {
+    console.log(`[SMTP Fallback] MRI reschedule email for ${patientName}: email=${toEmail} old=${fmt(oldTime)} new=${fmt(newTime)}`);
+    return false;
+  }
+  if (!toEmail || toEmail.endsWith(".local")) return false; // tài khoản tạo tại quầy không có email thật
+
+  try {
+    const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: emailUser, pass: emailPass } });
+    await transporter.sendMail({
+      from: `"NeuroScan AI - Lễ tân" <${emailUser}>`,
+      to: toEmail,
+      subject: "[NeuroScan AI] Thông báo dời lịch chụp MRI",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px;">
+          <h2 style="color:#1A5FD0;margin:0 0 8px">NeuroScan AI</h2>
+          <p>Kính gửi <strong>${patientName}</strong>,</p>
+          <p>Do bệnh viện cần ưu tiên một ca cấp cứu thần kinh, lịch chụp MRI của quý bệnh nhân đã được dời.</p>
+          <div style="background:#f2f7ff;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #c9dcfb">
+            <p style="margin:0 0 8px"><strong>Lịch cũ:</strong> ${fmt(oldTime)}</p>
+            <p style="margin:0"><strong>Lịch mới:</strong> <span style="color:#0F9D6B;font-weight:bold">${fmt(newTime)}</span></p>
+          </div>
+          <p>Nếu khung giờ mới không phù hợp, vui lòng gọi hotline 0236 3650 676 để được sắp xếp lại. Chân thành xin lỗi vì sự bất tiện.</p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (error) {
+    console.error(`[SMTP Error] Failed to send MRI reschedule email to ${toEmail}:`, error);
+    return false;
+  }
+};
+
+// ─── UC-REC: email thông báo cho bệnh nhân (tạo lượt khám, hoàn tiền) ─────────────────────
+/** Email liên hệ thật của bệnh nhân (tài khoản tạo tại quầy không có email dùng địa chỉ nội bộ *.local) */
+export const hasRealEmail = (email) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "")) && !String(email).toLowerCase().endsWith(".local");
+
+const fmtVNTime = (d) => (d ? new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—");
+const formatMoney = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;
+
+const sendPatientMail = async ({ toEmail, subject, html, logLine }) => {
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+  if (!hasRealEmail(toEmail)) return false;
+  if (!emailUser || !emailPass) {
+    console.log(`[SMTP Fallback] ${logLine} → ${toEmail} (chưa cấu hình EMAIL_USER / EMAIL_PASS)`);
+    return false;
+  }
+  try {
+    const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: emailUser, pass: emailPass } });
+    await transporter.sendMail({ from: `"NeuroScan AI - Lễ tân" <${emailUser}>`, to: toEmail, subject, html });
+    return true;
+  } catch (error) {
+    console.error(`[SMTP Error] ${logLine} → ${toEmail}:`, error.message);
+    return false;
+  }
+};
+
+const mailFrame = (body) => `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px;">
+    <h2 style="color:#1A5FD0;margin:0 0 8px">NeuroScan AI</h2>
+    ${body}
+    <p style="color:#64748b;font-size:12px;margin-top:20px">Hotline hỗ trợ: 0236 3650 676 · Email này được gửi tự động, vui lòng không trả lời.</p>
+  </div>`;
+
+// UC-REC-03/04 — Xác nhận đã tiếp nhận lượt khám (số thứ tự, phòng khám, bác sĩ)
+export const sendVisitCreatedEmail = ({ toEmail, patientName, queueNumber, priority, clinicRoom, doctorName, createdAt }) =>
+  sendPatientMail({
+    toEmail,
+    subject: "[NeuroScan AI] Xác nhận tiếp nhận lượt khám",
+    logLine: `Visit created email for ${patientName} số ${queueNumber}`,
+    html: mailFrame(`
+      <p>Kính gửi <strong>${patientName}</strong>,</p>
+      <p>Bệnh viện đã tiếp nhận lượt khám của quý bệnh nhân.</p>
+      <div style="background:#f2f7ff;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #c9dcfb">
+        <p style="margin:0 0 8px"><strong>Số thứ tự:</strong> <span style="font-size:20px;font-weight:bold;color:${priority === "khẩn cấp" ? "#DC2626" : "#1A5FD0"}">${priority === "khẩn cấp" ? "CC-" : "#"}${String(queueNumber || 0).padStart(3, "0")}</span></p>
+        <p style="margin:0 0 8px"><strong>Phòng khám:</strong> ${clinicRoom || "—"}</p>
+        <p style="margin:0 0 8px"><strong>Bác sĩ:</strong> ${doctorName || "—"}</p>
+        <p style="margin:0"><strong>Thời gian tiếp nhận:</strong> ${fmtVNTime(createdAt)}</p>
+      </div>
+      <p>Vui lòng có mặt tại khu chờ và theo dõi bảng gọi số. Lịch chụp MRI (nếu có) sẽ được thông báo qua email này.</p>`),
+  });
+
+// UC-REC-09 — Thông báo hoàn trả viện phí
+export const sendRefundEmail = ({ toEmail, patientName, amount, reason, invoiceCode, isPartial }) =>
+  sendPatientMail({
+    toEmail,
+    subject: "[NeuroScan AI] Thông báo hoàn trả viện phí",
+    logLine: `Refund email for ${patientName} ${formatMoney(amount)}`,
+    html: mailFrame(`
+      <p>Kính gửi <strong>${patientName}</strong>,</p>
+      <p>Bệnh viện đã ${isPartial ? "hoàn trả một phần" : "hoàn trả"} viện phí cho hóa đơn <strong>#${invoiceCode}</strong>.</p>
+      <div style="background:#fef2f2;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #fecaca">
+        <p style="margin:0 0 8px"><strong>Số tiền hoàn:</strong> <span style="font-size:18px;font-weight:bold;color:#DC2626">${formatMoney(amount)}</span></p>
+        <p style="margin:0"><strong>Lý do:</strong> ${reason || "—"}</p>
+      </div>
+      <p>Nếu có thắc mắc, vui lòng liên hệ quầy thu ngân.</p>`),
+  });
+
 // ─── Gói chuyển viện gửi cho bệnh nhân (UC-DOC-10) ────────────────────────────
 // Gmail giới hạn 25MB/thư; chừa dư địa cho phần thân thư và mã hoá base64.
 const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024;

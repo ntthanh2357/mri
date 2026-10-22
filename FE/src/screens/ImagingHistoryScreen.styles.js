@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 import Colors from '../constants/colors';
 
 export default StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
 
   page: { padding: 16, gap: 20 },
   pageDesktop: { padding: 28, gap: 24, maxWidth: 1240, width: '100%', alignSelf: 'center' },

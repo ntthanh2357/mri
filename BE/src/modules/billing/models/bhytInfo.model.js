@@ -21,6 +21,21 @@ const bhytInfoSchema = new Schema(
     // Trạng thái kiểm tra hợp lệ
     isValid: { type: Boolean, default: true }, // Thẻ còn hạn
     verifiedAt: { type: Date, default: null }, // Lần xác thực gần nhất
+    // UC-REC-02 (đơn giản hóa) — lễ tân kiểm tra thẻ gốc bằng tay rồi tick xác nhận
+    manuallyVerified: { type: Boolean, default: false },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+
+    // Mỗi bệnh nhân chỉ có 1 thẻ đang dùng; thẻ cũ (gia hạn, đổi đối tượng) giữ lại làm lịch sử
+    isActive: { type: Boolean, default: true, index: true },
+    replacedAt: { type: Date, default: null },
+    objectCode: { type: String, default: "" }, // Mã đối tượng (2 ký tự đầu: SV, HS, DN...)
+    benefitLevel: { type: Number, default: null }, // Mức hưởng (ký tự thứ 3: 1–5)
+
+    // Đối soát thông tin in trên thẻ với hồ sơ bệnh nhân
+    holderBirthDate: { type: String, default: "" }, // Ngày sinh trên thẻ (YYYY hoặc YYYY-MM-DD)
+    holderGender: { type: String, default: "" },
+    mismatches: [{ type: String }], // Các trường lệch với hồ sơ (họ tên / năm sinh / giới tính)
+    mismatchNote: { type: String, default: "" }, // Lý do lễ tân vẫn xác nhận khi có chênh lệch
 
     // R.2 — Tính mức hưởng (tự động tính khi tạo hóa đơn)
     // Thông tin này được copy vào Invoice khi lập hóa đơn

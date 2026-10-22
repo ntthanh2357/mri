@@ -14,6 +14,7 @@ import {
   X,
   Lock,
   Sparkles,
+  Info,
 } from 'lucide-react';
 import { get, post, put } from '../services/api.service';
 import InpatientEmergencyModal from './InpatientEmergencyModal';
@@ -62,6 +63,9 @@ export default function HospitalBedManagementView({ currentUser }) {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchKeyword, setSearchKeyword] = useState('');
+  // True khi BE trả 403/404 vì tài khoản chưa gán bệnh viện (vd: system admin) —
+  // hiển thị banner giải thích thay vì sơ đồ giường toàn 0.
+  const [noHospitalScope, setNoHospitalScope] = useState(false);
 
   // Modals state
   const [activeModal, setActiveModal] = useState(null); // 'reserve' | 'occupy' | 'release' | 'transfer' | 'create'
@@ -115,6 +119,10 @@ export default function HospitalBedManagementView({ currentUser }) {
       }
     } catch (err) {
       console.error('Lỗi tải dữ liệu buồng giường:', err);
+      const msg = (err && (err.message || err.errorMessage)) || '';
+      if ((err && (err.status === 403 || err.status === 404)) && /bệnh viện/i.test(msg)) {
+        setNoHospitalScope(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -139,6 +147,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
   // Open action modal
   const handleOpenModal = (type, bed) => {
+    if (isDoctor) return;
     setSelectedBed(bed);
     setActiveModal(type);
     setFormPatientId(bed?.reservedForPatientId?._id || bed?.currentPatientId?._id || '');
@@ -229,6 +238,7 @@ export default function HospitalBedManagementView({ currentUser }) {
 
   // 4. Hoàn tất khử khuẩn
   const handleCompleteCleaning = async (bedId) => {
+    if (isDoctor) return;
     try {
       const res = await put(`/api/v1/hospital-beds/${bedId}/cleaning-complete`, {});
       if (res && res.success) {
@@ -333,11 +343,25 @@ export default function HospitalBedManagementView({ currentUser }) {
     return dept.departmentId === selectedDepartment;
   });
 
+  const isDoctor = currentUser?.role === 'doctor';
   const isHospitalAdmin = currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin';
 
   return (
     <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
       {dialog}
+      
+      {/* Cảnh báo phạm vi: tài khoản chưa gán bệnh viện → không có dữ liệu giường */}
+      {noHospitalScope && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <Info className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-amber-800">Chưa có dữ liệu giường bệnh theo bệnh viện</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              Tài khoản của bạn chưa được gán vào một bệnh viện cụ thể nên sơ đồ giường hiển thị bằng 0. Hãy gán bệnh viện cho tài khoản (Quản trị → Người dùng) hoặc đăng nhập bằng tài khoản quản lý bệnh viện để xem sơ đồ giường thật.
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* ── HEADER & CAPACITY ALERT ────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -358,13 +382,15 @@ export default function HospitalBedManagementView({ currentUser }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setEdHandoffModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs md:text-sm font-semibold rounded-xl shadow-xs transition-all"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            Tiếp Nhận Từ Cấp Cứu (ISBAR)
-          </button>
+          {!isDoctor && (
+            <button
+              onClick={() => setEdHandoffModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs md:text-sm font-semibold rounded-xl shadow-xs transition-all"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              Tiếp Nhận Từ Cấp Cứu (ISBAR)
+            </button>
+          )}
           {isHospitalAdmin && (
             <button
               onClick={() => handleOpenModal('create', null)}
@@ -580,22 +606,22 @@ export default function HospitalBedManagementView({ currentUser }) {
                                 <div className="flex flex-wrap items-center gap-1 mt-1.5">
                                   {(bed.hasIcpMonitor || bed.type === 'icu_neuro_icp') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                                      🧠 ICP Monitor
+                                      ICP Monitor
                                     </span>
                                   )}
                                   {(bed.hasEegMonitor || bed.type === 'icu_neuro_eeg') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
-                                      ⚡ EEG Monitor
+                                      EEG Monitor
                                     </span>
                                   )}
                                   {(bed.isIsolationRoom || bed.type === 'isolation') && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-                                      🛡️ Buồng vô trùng
+                                      Buồng vô trùng
                                     </span>
                                   )}
                                   {bed.type === 'post_op_recovery' && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 font-semibold">
-                                      🩺 Hậu phẫu mở sọ
+                                      Hậu phẫu mở sọ
                                     </span>
                                   )}
                                 </div>
@@ -621,7 +647,8 @@ export default function HospitalBedManagementView({ currentUser }) {
                               </div>
 
                               {/* Clinical Action Buttons */}
-                              <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                              {!isDoctor && (
+                                <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
                                 {bed.status === 'available' && (
                                   <>
                                     <button
@@ -690,7 +717,8 @@ export default function HospitalBedManagementView({ currentUser }) {
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Đã khử khuẩn xong
                                   </button>
                                 )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -705,18 +733,18 @@ export default function HospitalBedManagementView({ currentUser }) {
       </div>
 
       {/* ── MODALS FOR ACTIONS ─────────────────────────────────────────── */}
-      {activeModal && (
+      {!isDoctor && activeModal && (
         <Portal>
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-800">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-lg font-bold text-slate-800">
                 {activeModal === 'reserve' && `Giữ Chỗ Giường ${selectedBed?.bedNumber} (Khóa 4h)`}
                 {activeModal === 'occupy' && `Nhập Viện Vào Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'release' && `Giải Phóng Giường ${selectedBed?.bedNumber}`}
                 {activeModal === 'transfer' && `Điều Chuyển Bệnh Nhân (Giường ${selectedBed?.bedNumber})`}
                 {activeModal === 'create' && 'Thêm giường bệnh mới'}
-              </h3>
+                </h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
@@ -1048,23 +1076,27 @@ export default function HospitalBedManagementView({ currentUser }) {
       )}
 
       {/* Modal Cấp Cứu Nội Viện 1-Chạm */}
-      <InpatientEmergencyModal
-        isOpen={inpatientEmergencyModalOpen}
-        onClose={() => {
-          setInpatientEmergencyModalOpen(false);
-          setSelectedEmergencyBed(null);
-        }}
-        bed={selectedEmergencyBed}
-        patient={selectedEmergencyBed?.currentPatientId}
-        onSuccess={() => fetchBedData()}
-      />
+      {!isDoctor && (
+        <InpatientEmergencyModal
+          isOpen={inpatientEmergencyModalOpen}
+          onClose={() => {
+            setInpatientEmergencyModalOpen(false);
+            setSelectedEmergencyBed(null);
+          }}
+          bed={selectedEmergencyBed}
+          patient={selectedEmergencyBed?.currentPatientId}
+          onSuccess={() => fetchBedData()}
+        />
+      )}
 
       {/* Modal Bàn Giao ISBAR từ Khoa Cấp Cứu */}
-      <EdHandoffModal
-        isOpen={edHandoffModalOpen}
-        onClose={() => setEdHandoffModalOpen(false)}
-        onSuccess={() => fetchBedData()}
-      />
+      {!isDoctor && (
+        <EdHandoffModal
+          isOpen={edHandoffModalOpen}
+          onClose={() => setEdHandoffModalOpen(false)}
+          onSuccess={() => fetchBedData()}
+        />
+      )}
     </div>
   );
 }

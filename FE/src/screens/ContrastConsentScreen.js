@@ -281,7 +281,7 @@ const ContrastConsentScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   page: { paddingTop: 20, paddingBottom: 40 },
   stack: { gap: 16 },
   grow: { flex: 1, minWidth: 0 },

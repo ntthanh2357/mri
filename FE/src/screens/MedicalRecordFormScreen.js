@@ -595,7 +595,7 @@ const MedicalRecordFormScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F7FC',
   },
   loadingContainer: {
     flex: 1,

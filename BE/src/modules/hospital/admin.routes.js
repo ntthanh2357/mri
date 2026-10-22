@@ -66,7 +66,9 @@ router.get("/users", requireSystemAdmin, fetchUsers);
 router.post("/users/lock", requireSystemAdmin, lockUser);
 router.get("/datasets", requireSystemAdmin, fetchDatasets);
 router.post("/datasets", requireSystemAdmin, addDataset);
-router.get("/audit-logs", requireSystemAdmin, fetchAuditLogs);
+// UC-HADM-13 — hospital_admin được xem audit log (controller tự scope theo hospitalId của bệnh viện);
+// system_admin/admin giữ hành vi cũ (lọc ?hospitalId= tùy chọn)
+router.get("/audit-logs", checkRole(["admin", "system_admin", "hospital_admin"]), fetchAuditLogs);
 
 // ─── New routes (task 4.1) ────────────────────────────────────────────────────
 router.get("/users/:id", requireSystemAdmin, fetchUserById);

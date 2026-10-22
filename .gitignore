@@ -201,3 +201,8 @@ credentials.json
 dataTAMTRI/
 **/dataTAMTRI/
 dataTAMTRI*
+
+# Chứng thư ký PDF (chứa khoá bí mật)
+BE/certs/
+*.p12
+*.pfx

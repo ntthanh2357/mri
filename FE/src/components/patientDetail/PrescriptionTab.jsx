@@ -388,7 +388,7 @@ const PrescriptionTab = ({
                     {aiConsultationData.tumor_protocol_compatibility && (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: '#DDD6FE' }}>
                         <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
-                          🧠 Tương thích Khối u AI ({aiConsultationData.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
+                          Tương thích Khối u AI ({aiConsultationData.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
                         </Text>
                         <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                           {aiConsultationData.tumor_protocol_compatibility.clinical_rationale}
@@ -397,13 +397,13 @@ const PrescriptionTab = ({
                     )}
                     {aiConsultationData.pharmacist_recommendations ? (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>Khuyến nghị bác sĩ:</Text>
                         <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.pharmacist_recommendations}</Text>
                       </View>
                     ) : null}
                     {aiConsultationData.patient_instructions ? (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>Lời dặn người bệnh:</Text>
                         <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>{aiConsultationData.patient_instructions}</Text>
                       </View>
                     ) : null}
@@ -457,7 +457,7 @@ const PrescriptionTab = ({
                               </Text>
                               {w.recommendation && (
                                 <Text style={{ fontSize: 10, color: textCol, marginTop: 3, fontStyle: 'italic' }}>
-                                  👉 Xử trí: {w.recommendation}
+                                  Xử trí: {w.recommendation}
                                 </Text>
                               )}
                             </View>
@@ -578,12 +578,12 @@ const PrescriptionTab = ({
                         }}
                       >
                         {isMeaningful
-                          ? `✓ Đã đạt yêu cầu giải trình chuyên môn (${cleanOver.length} ký tự, ${words.length} từ).`
+                          ? `Đã đạt yêu cầu giải trình chuyên môn (${cleanOver.length} ký tự, ${words.length} từ).`
                           : isRep
-                            ? `⚠️ Không được lặp ký tự vô nghĩa liên tiếp.`
+                            ? `Không được lặp ký tự vô nghĩa liên tiếp.`
                             : words.length < 3
-                              ? `⚠️ Cần tối thiểu 3 từ ngữ có ý nghĩa y khoa (hiện có ${words.length}/3 từ).`
-                              : `⚠️ Cần thêm ít nhất ${Math.max(0, 15 - cleanOver.length)} ký tự giải trình (${cleanOver.length}/15).`}
+                              ? `Cần tối thiểu 3 từ ngữ có ý nghĩa y khoa (hiện có ${words.length}/3 từ).`
+                              : `Cần thêm ít nhất ${Math.max(0, 15 - cleanOver.length)} ký tự giải trình (${cleanOver.length}/15).`}
                       </Text>
                     </View>
                   );
@@ -778,7 +778,7 @@ const PrescriptionTab = ({
                       {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility && (
                         <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 6 }}>
                           <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
-                            🧠 Tương thích Khối u AI ({activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.compatibility_status}):
+                            Tương thích Khối u AI ({activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.compatibility_status}):
                           </Text>
                           <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                             {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.clinical_rationale}
@@ -788,7 +788,7 @@ const PrescriptionTab = ({
 
                       {activePres.clinicalSafety.aiConsultation.pharmacist_recommendations ? (
                         <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>💡 Khuyến nghị bác sĩ:</Text>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>Khuyến nghị bác sĩ:</Text>
                           <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                             {activePres.clinicalSafety.aiConsultation.pharmacist_recommendations}
                           </Text>
@@ -797,7 +797,7 @@ const PrescriptionTab = ({
 
                       {activePres.clinicalSafety.aiConsultation.patient_instructions ? (
                         <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4 }}>
-                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>🗣️ Lời dặn người bệnh:</Text>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>Lời dặn người bệnh:</Text>
                           <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                             {activePres.clinicalSafety.aiConsultation.patient_instructions}
                           </Text>
@@ -810,7 +810,7 @@ const PrescriptionTab = ({
                   {activePres.clinicalSafety.overrideReason ? (
                     <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 8, padding: 8, marginTop: 4 }}>
                       <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#991B1B' }}>
-                        ⚠️ Giải trình ghi đè lâm sàng (Clinical Override):
+                        Giải trình ghi đè lâm sàng (Clinical Override):
                       </Text>
                       <Text style={{ fontSize: 10, color: '#7F1D1D', marginTop: 2 }}>
                         {activePres.clinicalSafety.overrideReason}

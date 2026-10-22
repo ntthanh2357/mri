@@ -18,7 +18,7 @@ import {
 import { get, post, put } from '../services/api.service';
 import Config from '../constants/config';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, Copy, AlertTriangle, Brain } from 'lucide-react';
+import { CheckCircle2, Edit3, X, Activity, Scan, ArrowLeft, Download, ShieldCheck, QrCode, FileText, ZoomIn, Save, AlertTriangle, Brain } from 'lucide-react';
 import DigitalSignatureBadge from '../components/DigitalSignatureBadge';
 import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
@@ -71,35 +71,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
   // Extra images (e.g. heatmap from AI analysis)
   const [extraImages, setExtraImages] = useState([]);
 
-  // Patient B2C Share QR & PDF States
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [qrShareUrl, setQrShareUrl] = useState('');
-  const [qrExpiresAt, setQrExpiresAt] = useState('');
-  const [generatingQr, setGeneratingQr] = useState(false);
+  // Patient B2C PDF state
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-
-  const handleGenerateShareQr = async () => {
-    if (!resultId) return;
-    setGeneratingQr(true);
-    try {
-      const res = await post(`/api/v1/patient-b2c/imaging/${resultId}/share-qr`, { expireDays: 30 });
-      if (res && res.success) {
-        setQrShareUrl(res.data?.shareUrl || '');
-        setQrExpiresAt(res.data?.expiresAt ? new Date(res.data.expiresAt).toLocaleDateString('vi-VN') : '30 ngày');
-        setShowQrModal(true);
-      } else {
-        Alert.alert('Lỗi', res.message || 'Không thể tạo mã QR chia sẻ.');
-      }
-    } catch (err) {
-      console.error('Lỗi tạo mã QR:', err);
-      Alert.alert('Thông báo', 'Hệ thống đã tự động tạo link chia sẻ liên viện cho hồ sơ của bạn.');
-      setQrShareUrl(`${Config.API_URL}/shared/sample-token-30days`);
-      setQrExpiresAt('30 ngày');
-      setShowQrModal(true);
-    } finally {
-      setGeneratingQr(false);
-    }
-  };
 
   const handleDownloadPdf = async () => {
     if (!resultId) return;
@@ -425,15 +398,10 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
               </PressableScale>
 
-              <PressableScale style={styles.actionSecondary} hoverStyle={styles.actionSecondaryHover} onPress={handleGenerateShareQr} disabled={generatingQr}>
-                {generatingQr ? (
-                  <ActivityIndicator color={Colors.brandGreen} size="small" />
-                ) : (
-                  <>
-                    <QrCode size={15} color={Colors.brandGreen} />
-                    <Text style={styles.actionSecondaryText}>Tạo mã QR chia sẻ (30 ngày)</Text>
-                  </>
-                )}
+              {/* UC-PAT-09: chia sẻ cả bệnh án (kèm phim) qua mã QR 5 phút */}
+              <PressableScale style={styles.actionSecondary} hoverStyle={styles.actionSecondaryHover} onPress={() => navigation.navigate('RecordShare')}>
+                <QrCode size={15} color={Colors.brandGreen} />
+                <Text style={styles.actionSecondaryText}>Chia sẻ bệnh án qua QR</Text>
               </PressableScale>
 
               {Boolean(result.dicomZipUrl) && (
@@ -873,63 +841,6 @@ const ImagingResultScreen = ({ route, navigation }) => {
             </View>
           </FadeIn>
         </ScrollView>
-
-        {/* Share QR Code Modal */}
-        <Modal
-          visible={showQrModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowQrModal(false)}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <QrCode size={20} color="#0891B2" />
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center' }}>
-                  Mã QR Chia Sẻ Kết Quả Chụp MRI
-                </Text>
-              </View>
-              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 16 }}>
-                Quét mã này để bác sĩ hoặc cơ sở y tế khác xem trực tiếp hồ sơ. Mã có hiệu lực trong <Text style={{ fontWeight: 'bold', color: '#059669' }}>{qrExpiresAt}</Text>.
-              </Text>
-
-              {/* QR Image Placeholder / Canvas */}
-              <View style={{ width: 180, height: 180, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#CBD5E1', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-                <Image
-                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrShareUrl)}` }}
-                  style={{ width: 160, height: 160 }}
-                  resizeMode="contain"
-                />
-              </View>
-
-              <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Link xem trực tiếp:</Text>
-              <View style={{ backgroundColor: '#F1F5F9', padding: 10, borderRadius: 8, width: '100%', marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, color: '#334155', textAlign: 'center' }} numberOfLines={2}>
-                  {qrShareUrl}
-                </Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#0891B2', paddingVertical: 12, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
-                  onPress={() => {
-                    Alert.alert('Thành công', 'Đã sao chép link chia sẻ vào bộ nhớ tạm!');
-                  }}
-                >
-                  <Copy size={14} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>Sao chép Link</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#E2E8F0', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                  onPress={() => setShowQrModal(false)}
-                >
-                  <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Đóng</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
 
         {/* Zoom Image Modal */}
         {Boolean(result.images && result.images.length > 0) && (

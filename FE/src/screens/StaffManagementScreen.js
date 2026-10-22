@@ -14,15 +14,18 @@ import {
 import Colors from '../constants/colors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, post, put } from '../services/api.service';
+import { Plus, Save, Users, Search, Lock, Unlock } from 'lucide-react';
 
 const ROLE_LABELS = {
   doctor: 'Bác sĩ Ung Thư Não',
   nurse: 'Điều dưỡng Hồi sức & Chăm sóc',
   technician: 'Kỹ thuật viên CĐHA & MRI',
   receptionist: 'Nhân viên Tiếp đón & Thu ngân',
+  pharmacist: 'Dược sĩ Bệnh viện (Khoa Dược)',
   hospital_admin: 'Ban Lãnh đạo Khoa / Quản lý',
 };
 
@@ -147,28 +150,31 @@ export default function StaffManagementScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffManagement">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Quản lý nhân sự"
-          subtitle="Cấp tài khoản, phân chức danh và khóa/mở khóa tài khoản nhân viên của bệnh viện."
-          below={
-            <PageTabs
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.office}
+                tone="navy"
+                eyebrow="Nhân sự bệnh viện"
+                title="Quản lý nhân sự"
+                subtitle="Cấp tài khoản, phân chức danh và khóa/mở khóa tài khoản nhân viên của bệnh viện."
+              >
+              </StaffBanner>
+              <PillTabs
               tabs={Object.keys(ROLE_LABELS).map((role) => ({ key: role, label: ROLE_LABELS[role] }))}
               value={activeRoleTab}
               onChange={setActiveRoleTab}
             />
-          }
-        />
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <PageContainer>
+            </View>
           {/* Grid Layout */}
           <View style={isDesktop ? styles.desktopRow : styles.mobileColumn}>
             {/* Form Column */}
             <View style={isDesktop ? styles.formColumn : styles.fullWidth}>
               <View style={styles.card}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Text style={{ fontSize: 16 }}>➕</Text>
+                    <Plus size={16} color={Colors.brandNavy} />
                     <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Cấp tài khoản {ROLE_LABELS[activeRoleTab]} mới</Text>
                   </View>
                 <Text style={styles.cardSub}>Điền đầy đủ thông tin để cấp tài khoản. Tài khoản mới sẽ ở trạng thái chờ kích hoạt.</Text>
@@ -257,7 +263,7 @@ export default function StaffManagementScreen({ navigation }) {
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 14 }}>💾</Text>
+                      <Save size={14} color="#FFFFFF" />
                       <Text style={styles.submitButtonText}>Tạo tài khoản {ROLE_LABELS[activeRoleTab]}</Text>
                     </View>
                   )}
@@ -270,7 +276,7 @@ export default function StaffManagementScreen({ navigation }) {
               <View style={styles.card}>
                 <View style={styles.listHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Text style={{ fontSize: 16 }}>👥</Text>
+                    <Users size={16} color={Colors.brandNavy} />
                     <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Danh sách {ROLE_LABELS[activeRoleTab]} hiện có</Text>
                   </View>
                   <View style={{ position: 'relative', justifyContent: 'center' }}>
@@ -282,7 +288,7 @@ export default function StaffManagementScreen({ navigation }) {
                       onChangeText={setSearchQuery}
                     />
                     <View style={{ position: 'absolute', left: 12 }}>
-                      <Text style={{ fontSize: 14 }}>🔍</Text>
+                      <Search size={14} color={Colors.secondary} />
                     </View>
                   </View>
                 </View>
@@ -334,7 +340,7 @@ export default function StaffManagementScreen({ navigation }) {
                               style={[styles.lockButton, item.isLocked ? styles.unlockButton : styles.lockButton]}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ fontSize: 12, color: item.isLocked ? Colors.brandGreenPressed : '#475569' }}>{item.isLocked ? '🔓' : '🔒'}</Text>
+                                {item.isLocked ? <Unlock size={12} color={Colors.brandGreenPressed} /> : <Lock size={12} color="#475569" />}
                                 <Text style={[styles.lockButtonText, item.isLocked && { color: Colors.brandGreenPressed }]}>
                                   {item.isLocked ? 'Mở khóa' : 'Khóa'}
                                 </Text>
@@ -357,7 +363,7 @@ export default function StaffManagementScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   scroll: { paddingTop: 20, paddingBottom: 40 },
   desktopRow: { flexDirection: 'row', gap: 20 },
   mobileColumn: { flexDirection: 'column', gap: 20 },

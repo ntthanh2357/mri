@@ -6,6 +6,7 @@ import {
 import { get, put, post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import PageHeader from '../components/layout/PageHeader';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
 import PageContainer from '../components/layout/PageContainer';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '../constants/colors';
@@ -295,16 +296,21 @@ export default function HospitalOnboardingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="HospitalOnboarding">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Thông tin bệnh viện"
-          subtitle={hospital?.status === 'provisioned'
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <PageContainer>
+            <View style={{ marginBottom: 18 }}>
+              <StaffBanner
+                compact
+                image={RECEPTION_IMAGES.lobby}
+                tone="ocean"
+                eyebrow="Hồ sơ bệnh viện"
+                title="Thông tin bệnh viện"
+                subtitle={hospital?.status === 'provisioned'
             ? 'Điền đầy đủ để hoàn tất đăng ký tài khoản bệnh viện.'
             : 'Thông tin pháp lý, liên hệ và giấy phép hoạt động của bệnh viện.'}
-        />
-
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <PageContainer width="reading">
+              >
+              </StaffBanner>
+            </View>
           {/* Status Banner */}
           {(hospital?.status === 'submitted' || hospital?.status === 'active' || success) && (
             <View style={[
@@ -441,7 +447,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#F3F7FC' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
   scroll: { paddingTop: 20, paddingBottom: 40 },
   infoBox: {

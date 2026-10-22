@@ -6,6 +6,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { contrastConsentPending } from "./contrastConsent.service.js";
+import { evaluateVitalSigns } from "./vitalsSafety.service.js";
 
 /**
  * Service: Lấy danh sách nhân sự (Bác sĩ, Điều dưỡng, KTV) kèm tải hàng đợi trong ngày
@@ -203,13 +204,29 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
     throw err;
   }
 
-  visit.vitals = { ...vitals, measuredAt: new Date() };
+  const evaluation = evaluateVitalSigns(vitals);
+
+  visit.vitals = {
+    ...vitals,
+    measuredAt: new Date(),
+    isAbnormal: evaluation.isAbnormal,
+    alerts: evaluation.alertMessages,
+    alertDetails: evaluation.alerts,
+    flags: evaluation.flags
+  };
+
+  if (evaluation.isAbnormal && evaluation.alerts.some(a => a.severity === 'danger')) {
+    if (['thấp', 'trung bình'].includes(visit.priority)) {
+      visit.priority = 'cao';
+    }
+  }
+
   if (visit.status === "đang chờ") {
     visit.status = "đang khám";
   }
 
   await visit.save();
-  return visit;
+  return { visit, evaluation };
 };
 
 /**
@@ -289,7 +306,8 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     isPregnant,
     metalDetails,
     passed,
-    notes
+    notes,
+    screeningDeclaredAt
   } = checklistData;
 
   const visit = await Visit.findById(visitId);
@@ -302,6 +320,15 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   if (visit.hospitalId.toString() !== hospitalId.toString()) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
+    throw err;
+  }
+
+  // Bệnh nhân có tự khai phiếu sàng lọc trên app: KTV phải xác nhận đúng bản lời khai mới nhất
+  // (bệnh nhân sửa phiếu sau khi KTV mở bảng kiểm → bảng kiểm đang dựa trên lời khai cũ)
+  const declaredAt = visit.patientMriScreening?.declaredAt;
+  if (declaredAt && new Date(screeningDeclaredAt || 0).getTime() !== new Date(declaredAt).getTime()) {
+    const err = new Error("Bệnh nhân vừa cập nhật phiếu tự khai sàng lọc MRI. Hãy mở lại bảng kiểm để xem lời khai mới nhất.");
+    err.statusCode = 409;
     throw err;
   }
 

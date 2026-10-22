@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { get, put, post, postFormData } from '../services/api.service';
+import { isRateLimitError } from '../utils/apiErrors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import Config from '../constants/config';
 import Colors from '../constants/colors';
@@ -14,9 +15,12 @@ import MriCancelModal from '../components/MriCancelModal';
 import ContrastConsentReview from '../components/staff/ContrastConsentReview';
 import ReceptionQueueBoard from '../components/reception/ReceptionQueueBoard';
 import { consentStatus } from '../utils/signature';
+import { prefillFromScreening, screeningBadge } from '../utils/mriScreening';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
 import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
 import PageTabs from '../components/layout/PageTabs';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import { Hourglass as QStatWait, ScanLine as QStatMri, Siren as QStatEmergency, LayoutList as QStatAll, RefreshCw as QBtnRefresh } from 'lucide-react';
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
 import { 
@@ -183,6 +187,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         .catch(err => {
           console.warn('[DoctorWorkQueueScreen] Lỗi xác thực người dùng:', err);
           if (isMountedRef.current) {
+            // [FIX 0014] 429 (hệ thống bận) không phải phiên hết hạn — không đá user đi đăng nhập lại
+            if (isRateLimitError(err)) {
+              Alert.alert(
+                'Hệ thống đang bận',
+                'Có quá nhiều yêu cầu cùng lúc. Vui lòng chờ vài giây rồi bấm Làm mới.',
+                [{ text: 'Đã hiểu' }]
+              );
+              return;
+            }
             Alert.alert(
               'Phiên làm việc hết hạn',
               'Không thể xác thực thông tin tài khoản hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
@@ -282,13 +295,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   // [THỰC TẾ BV: NGHỊCH LÝ 3] Mở bảng kiểm an toàn trước khi vào buồng chụp
   const openSafetyModal = (visit) => {
+    // Điền sẵn theo phiếu bệnh nhân tự khai trên app (nếu có); KTV vẫn phải hỏi lại và tự xác nhận
+    const pre = prefillFromScreening(visit.patientMriScreening);
     setSafetyVisit(visit);
-    setHasPacemakerOrMetal(false);
-    setHasClaustrophobia(false);
+    setHasPacemakerOrMetal(pre.hasPacemakerOrMetal);
+    setHasClaustrophobia(pre.hasClaustrophobia);
     setHasKidneyDisease(false);
-    setIsPregnant(false);
+    setIsPregnant(pre.isPregnant);
     setMetalDetails('');
-    setSafetyNotes('');
+    setSafetyNotes(pre.safetyNotes);
     setSafetyModal(true);
   };
 
@@ -313,6 +328,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         metalDetails,
         notes: safetyNotes,
         passed: true,
+        screeningDeclaredAt: safetyVisit.patientMriScreening?.declaredAt || null, // lời khai KTV đang xem
       });
 
       if (res && res.success && res.contrastConsentPending) {
@@ -329,7 +345,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         Alert.alert('Lỗi', res?.message || 'Không thể lưu bảng kiểm an toàn.');
       }
     } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Không thể lưu bảng kiểm an toàn.');
+      const msg = err.message || 'Không thể lưu bảng kiểm an toàn.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Lỗi', msg);
+      // bệnh nhân vừa sửa phiếu tự khai: đóng bảng kiểm, tải lại để KTV mở lại với lời khai mới nhất
+      if (/vừa cập nhật phiếu tự khai/.test(msg)) { setSafetyModal(false); fetchData(); }
     } finally {
       setSubmittingSafety(false);
     }
@@ -720,7 +739,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const safetyFlagOf = (v) => {
     if (v.mriSafetyChecklist?.passed) return { tone: 'success', icon: CheckCircle2, label: 'An toàn MRI: đạt' };
     if (v.mriSafetyChecklist?.isScreened) return { tone: 'danger', icon: XCircle, label: 'Chống chỉ định MRI' };
-    return null;
+    // KTV chưa kiểm tra: hiện lời khai của bệnh nhân trên app (nếu có)
+    const declared = screeningBadge(v.patientMriScreening);
+    return declared ? { ...declared, icon: declared.tone === 'info' ? ShieldCheck : AlertTriangle } : null;
   };
   const CONSENT_FLAG = {
     checklist: { tone: 'info', icon: Clock, label: 'Cản quang: chờ trả lời' },
@@ -986,6 +1007,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 <XCircle size={12} color="#DC2626" strokeWidth={2.4} />
                 <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>Chống chỉ định MRI</Text>
               </View>
+            ) : screeningBadge(v.patientMriScreening) ? (
+              <View style={[styles.declaredBadge, styles[`declared_${screeningBadge(v.patientMriScreening).tone}`]]}>
+                <AlertTriangle size={12} color={screeningBadge(v.patientMriScreening).tone === 'danger' ? Colors.errorText : screeningBadge(v.patientMriScreening).tone === 'warning' ? Colors.warningText : Colors.infoText} strokeWidth={2.4} />
+                <Text style={[styles.declaredText, styles[`declaredText_${screeningBadge(v.patientMriScreening).tone}`]]}>{screeningBadge(v.patientMriScreening).label}</Text>
+              </View>
             ) : null}
           </View>
         )}
@@ -1063,11 +1089,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
   ).length;
 
-  // Lễ tân: bảng gọi số ca khám riêng (chỉ xem, không thao tác lâm sàng) — dinhhuyhoang
-  if (isReceptionist) {
+  // Lễ tân & điều dưỡng: cùng một bảng gọi số ca khám (giao diện nhất quán giữa 2 vai trò)
+  if (isReceptionist || isNurse) {
     return (
       <ResponsiveLayout navigation={navigation} title="Hàng chờ ca khám" user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-        <ReceptionQueueBoard navigation={navigation} />
+        <ReceptionQueueBoard navigation={navigation} role={user?.role} />
       </ResponsiveLayout>
     );
   }
@@ -1076,26 +1102,40 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
-      <PageHeader
-        bar
-        title={screenTitle}
-        subtitle="Ca cấp cứu luôn nằm đầu danh sách."
-        actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={fetchData} />}
-        below={
-          <PageTabs
-            tabs={[
-              { key: 'all', label: 'Tất cả', count: examActiveCount + mriActiveCount },
-              { key: 'examQueue', label: 'Khám lâm sàng', count: examActiveCount },
-              { key: 'mriQueue', label: 'Chụp MRI', count: mriActiveCount },
-            ]}
-            value={currentMode}
-            onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
-          />
-        }
-      />
-
       <ScrollView>
         <PageContainer style={styles.page}>
+          <View style={styles.bannerBlock}>
+            <StaffBanner
+              image={isTechnician ? RECEPTION_IMAGES.mriFilms : currentMode === 'mriQueue' ? RECEPTION_IMAGES.mriFilms : RECEPTION_IMAGES.mriDiscuss}
+              tone="indigo"
+              eyebrow={isTechnician ? 'Phòng chụp MRI' : 'Hàng đợi bác sĩ'}
+              title={screenTitle}
+              subtitle="Ca cấp cứu luôn nằm đầu danh sách. Bấm thao tác ở cuối mỗi dòng để khám, kê đơn hoặc đọc kết quả phim."
+              right={(
+                <BannerStats items={[
+                  { icon: QStatWait, value: examActiveCount, label: 'Khám lâm sàng' },
+                  { icon: QStatMri, value: mriActiveCount, label: 'Chụp MRI' },
+                  { icon: QStatEmergency, value: emergencyCount, label: 'Ca cấp cứu' },
+                ]} />
+              )}
+            >
+              <View style={styles.bannerBtns}>
+                <Pressable style={styles.bannerGhost} onPress={fetchData}>
+                  <QBtnRefresh size={15} color="#FFFFFF" />
+                  <Text style={styles.bannerGhostText}>Làm mới</Text>
+                </Pressable>
+              </View>
+            </StaffBanner>
+            <PillTabs
+              tabs={[
+                { key: 'all', label: 'Tất cả', icon: QStatAll, count: examActiveCount + mriActiveCount },
+                { key: 'examQueue', label: 'Khám lâm sàng', icon: QStatWait, count: examActiveCount },
+                { key: 'mriQueue', label: 'Chụp MRI', icon: QStatMri, count: mriActiveCount },
+              ]}
+              value={currentMode}
+              onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
+            />
+          </View>
           <View style={styles.toolbar}>
             <View style={styles.seg}>
               {[
@@ -1180,10 +1220,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
             </View>
 
             {/* Ghi chú */}
-            <Text style={styles.fieldLabel}>Ghi chú cho KTV</Text>
+            <Text style={styles.fieldLabel}>Dặn thêm (KTV và bệnh nhân đều thấy)</Text>
             <TextInput
               style={styles.textArea}
-              placeholder="Lưu ý đặc biệt khi chụp, tư thế, độ tương phản..."
+              placeholder="Ví dụ: mang theo phim cũ, nhịn ăn 6 giờ, lưu ý tư thế khi chụp..."
               multiline
               numberOfLines={3}
               value={instructions}
@@ -1507,6 +1547,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         setIsPregnant={setIsPregnant}
         safetyNotes={safetyNotes}
         setSafetyNotes={setSafetyNotes}
+        patientScreening={safetyVisit?.patientMriScreening}
         onSubmit={handleSubmitSafety}
         submitting={submittingSafety}
       />
@@ -1547,6 +1588,21 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 },
+  bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  bannerBtnText: { color: '#1E1B4B', fontWeight: '800', fontSize: 13 },
+  bannerGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999 },
+  bannerGhostText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  bannerBlock: { marginBottom: 18 },
+  // nhãn lời khai sàng lọc MRI của bệnh nhân (thẻ ca chụp trên điện thoại)
+  declaredBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  declared_danger: { backgroundColor: Colors.errorBg, borderColor: Colors.errorText },
+  declared_warning: { backgroundColor: Colors.warningBg, borderColor: Colors.warningText },
+  declared_info: { backgroundColor: Colors.infoBg, borderColor: Colors.infoBg },
+  declaredText: { fontSize: 12, fontWeight: '700' },
+  declaredText_danger: { color: Colors.errorText },
+  declaredText_warning: { color: Colors.warningText },
+  declaredText_info: { color: Colors.infoText },
   page: { paddingTop: 20, paddingBottom: 32 },
   toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   seg: { flexDirection: 'row', backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3, gap: 2 },

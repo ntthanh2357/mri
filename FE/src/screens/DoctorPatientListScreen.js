@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { get } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
-import PageHeader, { HeaderAction } from '../components/layout/PageHeader';
-import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
+import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../components/reception/ReceptionUI';
+import { Users as TabAll, FlaskConical as TabLab, Eye as TabTrack, RefreshCw as BtnRefresh } from 'lucide-react';
 import Layout from '../constants/layout';
 import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
@@ -42,17 +42,17 @@ const calculateAge = (dob, birthYear) => {
 };
 
 const DoctorPatientListScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'XN' | 'TRACKING'
+  const [activeFilter, setActiveFilter] = useState('ALL');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const { width } = useWindowDimensions();
   const wide = width >= Layout.wide;
 
   useEffect(() => {
-    get('/auth/me').then(r => setUser(r.user)).catch(() => { });
+    get('/auth/me').then(r => setUser(r.user)).catch(() => {});
   }, []);
 
   const fetchPatients = async () => {
@@ -70,7 +70,7 @@ const DoctorPatientListScreen = ({ navigation }) => {
           let status = 'Chưa theo dõi';
           let statusCode = 'NONE';
           let badgeColor = '#F1F5F9';
-          let textColor = '#64748B';
+          let textColor = '#94A3B8';
           if (lastVital) {
             status = 'Đang theo dõi';
             statusCode = 'TRACKING';
@@ -92,11 +92,11 @@ const DoctorPatientListScreen = ({ navigation }) => {
             name: p.profile?.name || p.email,
             gender: p.profile?.gender || '',
             genderAge: [p.profile?.gender, age !== 'N/A' ? `${age} tuổi` : null].filter(Boolean).join(', '),
-            phone: p.phone || '',
+            phone: /^[a-f0-9]{32,}$/i.test(p.phone || '') ? (p.profile?.phoneLast4 ? `•••• ${p.profile.phoneLast4}` : '') : (p.phone || ''),
             labText: totalOrders > 0 ? `${completedOrders}/${totalOrders} phiếu có kết quả` : 'Chưa có phiếu',
             vitalText: recorded ? `${recorded.getDate()}/${recorded.getMonth() + 1}` : 'Chưa đo',
-            status,
             statusCode,
+            status,
             badgeColor,
             textColor,
           };
@@ -138,26 +138,40 @@ const DoctorPatientListScreen = ({ navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} user={user} activeRoute="DoctorPatientList">
       <SafeAreaView style={styles.container}>
-        <PageHeader
-          bar
-          title="Bệnh nhân"
-          subtitle="Tình trạng xét nghiệm và sinh hiệu gần nhất của từng bệnh nhân."
-          actions={<HeaderAction icon="refresh-cw" label="Làm mới" onPress={fetchPatients} />}
-          below={
-            <PageTabs
-              tabs={[
-                { key: 'ALL', label: 'Tất cả', count: totalCount },
-                { key: 'XN', label: 'Có kết quả XN', count: xnCount },
-                { key: 'TRACKING', label: 'Đang theo dõi', count: trackingCount },
-              ]}
-              value={activeFilter}
-              onChange={setActiveFilter}
-            />
-          }
-        />
-
         <ScrollView>
           <PageContainer style={styles.page}>
+            <View style={styles.bannerBlock}>
+              <StaffBanner
+                image={RECEPTION_IMAGES.doctorDesk}
+                tone="navy"
+                eyebrow="Bệnh nhân phụ trách"
+                title="Bệnh nhân"
+                subtitle="Tình trạng xét nghiệm và sinh hiệu gần nhất của từng bệnh nhân — mở hồ sơ, xem phim hoặc nhập phim mới."
+                right={(
+                  <BannerStats items={[
+                    { icon: TabAll, value: totalCount, label: 'Bệnh nhân' },
+                    { icon: TabLab, value: xnCount, label: 'Có kết quả XN' },
+                    { icon: TabTrack, value: trackingCount, label: 'Đang theo dõi' },
+                  ]} />
+                )}
+              >
+                <View style={styles.bannerBtns}>
+                  <TouchableOpacity style={styles.bannerGhost} onPress={fetchPatients}>
+                    <BtnRefresh size={15} color="#FFFFFF" />
+                    <Text style={styles.bannerGhostText}>Làm mới</Text>
+                  </TouchableOpacity>
+                </View>
+              </StaffBanner>
+              <PillTabs
+                tabs={[
+                  { key: 'ALL', label: 'Tất cả', icon: TabAll, count: totalCount },
+                  { key: 'XN', label: 'Có kết quả XN', icon: TabLab, count: xnCount },
+                  { key: 'TRACKING', label: 'Đang theo dõi', icon: TabTrack, count: trackingCount },
+                ]}
+                value={activeFilter}
+                onChange={setActiveFilter}
+              />
+            </View>
             <View style={styles.searchContainer}>
               <Search size={16} color={Colors.secondary} />
               <TextInput

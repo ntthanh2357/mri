@@ -44,6 +44,20 @@ const drugSchema = new Schema(
       lastUpdated: { type: Date, default: Date.now },
     },
 
+    // ── Tồn kho THEO LÔ (UC-PHA-07 — FEFO: hết hạn sớm trước) ──
+    // stock.quantity luôn là TỔNG các lô; mọi biến động kho phải đi qua
+    // reconcileBatchesFEFO() để hai sổ không bị lệch nhau.
+    batches: [
+      {
+        batchNumber: { type: String, required: true, trim: true },  // Số lô nhà sản xuất
+        quantity: { type: Number, default: 0, min: 0 },              // Số lượng còn của lô
+        expiryDate: { type: Date, default: null },                   // Hạn dùng của lô
+        supplier: { type: String, default: "" },                     // Nhà cung cấp nhập lô
+        receivedAt: { type: Date, default: Date.now },               // Ngày nhập lô
+        receivedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      },
+    ],
+
     // ── Kho Biệt trữ / Cách ly / Chờ tiêu hủy (Quy chế Dược Bệnh viện / GPP) ──
     quarantineStock: {
       quantity: { type: Number, default: 0, min: 0 },      // Thuốc bệnh nhân hoàn trả sau khi đã xuất vật lý
@@ -115,6 +129,8 @@ const drugSchema = new Schema(
 drugSchema.index({ hospitalId: 1, name: 1 });
 // Index cảnh báo tồn kho thấp
 drugSchema.index({ hospitalId: 1, "stock.quantity": 1 });
+// Index cảnh báo hết hạn theo lô (UC-PHA-07)
+drugSchema.index({ hospitalId: 1, "batches.expiryDate": 1 });
 
 export const Drug = model("Drug", drugSchema);
 export default Drug;

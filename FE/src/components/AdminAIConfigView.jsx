@@ -166,7 +166,9 @@ export default function AdminAIConfigView() {
         setBlacklistInput(data.config.blacklist.join(', '));
       }
     } catch (err) {
-      setConfigError(err.message || 'Lỗi khi tải cấu hình chatbot');
+      // [FIX 0022] không lộ err.message thô (lộ đường dẫn server khi ENOENT)
+      console.error('Lỗi tải cấu hình chatbot:', err?.message);
+      setConfigError('Không tải được cấu hình Chatbot từ máy chủ. Vui lòng tải lại trang hoặc thử lại sau.');
     } finally {
       setLoadingConfig(false);
     }
@@ -290,7 +292,9 @@ export default function AdminAIConfigView() {
         setConfig(response.config);
       }
     } catch (err) {
-      setConfigError(err.message || 'Lỗi khi lưu cấu hình chatbot');
+      // [FIX 0022] không lộ err.message thô ra giao diện
+      console.error('Lỗi lưu cấu hình chatbot:', err?.message);
+      setConfigError('Lưu cấu hình thất bại. Vui lòng thử lại.');
     }
   };
 
@@ -474,9 +478,11 @@ export default function AdminAIConfigView() {
                 <>
                   <RotateCw className="w-4 h-4 text-cyan-400" />
                   <span>
-                    {feedback.length >= 50
-                      ? `Kích hoạt Huấn luyện lại đạt chuẩn (${feedback.length} ca)`
-                      : `Chạy thử nghiệm Huấn luyện lại với ${feedback.length} ca phản hồi`}
+                    {feedback.length === 0
+                      ? 'Chưa có ca phản hồi — cần phản hồi bác sĩ để chạy huấn luyện'
+                      : feedback.length >= 50
+                        ? `Kích hoạt Huấn luyện lại đạt chuẩn (${feedback.length} ca)`
+                        : `Chạy thử nghiệm Huấn luyện lại với ${feedback.length} ca phản hồi`}
                   </span>
                 </>
               )}

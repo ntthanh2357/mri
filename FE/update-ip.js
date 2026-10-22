@@ -17,7 +17,8 @@ function getLocalIP() {
       nameLower.includes('loopback') ||
       nameLower.includes('pseudo') ||
       nameLower.includes('hyper-v') ||
-      nameLower.includes('host-only')
+      nameLower.includes('host-only') ||
+      nameLower.includes('vpn') // Radmin VPN, OpenVPN...: điện thoại cùng Wi-Fi không vào được IP này
     ) {
       continue;
     }

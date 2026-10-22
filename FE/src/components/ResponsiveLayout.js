@@ -41,7 +41,16 @@ import {
   Database,
   Heart,
   Ticket,
+  QrCode,
+  FileCheck,
+  MessageCircle,
+  ScanLine,
   Sliders,
+  Pill,
+  Gauge,
+  FileSearch,
+  Shuffle,
+  ClipboardCheck,
 } from 'lucide-react';
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
@@ -179,7 +188,21 @@ const ResponsiveLayout = ({
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
                     localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
                     localUser?.role === 'nurse' ? 'Điều dưỡng' : 
-                    localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 'Bệnh nhân';
+                    localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 
+                    localUser?.role === 'pharmacist' ? 'Dược sĩ Bệnh viện' : 'Bệnh nhân';
+
+  // Banner cảnh báo cấp cứu: đích "Xử lý ngay" theo vai trò — Dược sĩ xử lý thuốc cấp cứu
+  // (trước đây mọi role đều bị đưa sang hàng đợi đọc MRI của Bác sĩ).
+  const emergencyNavTarget = () => {
+    if (localUser?.role === 'pharmacist') return { route: 'PharmacyQueue', params: {} };
+    return { route: 'DoctorWorkQueue', params: { tab: 'mriQueue' } };
+  };
+  const handleEmergencyPress = () => {
+    const t = emergencyNavTarget();
+    navigation.navigate(t.route, t.params);
+  };
+  // Hiện mức cảnh báo bằng tiếng Việt thay cho mã thô trong ngoặc vuông ([RED]/[ORANGE])
+  const emergencyLevelLabel = (level) => (level === 'RED' ? 'ĐỎ' : level === 'ORANGE' ? 'CAM' : level);
 
   // Menu items config - Tách riêng từng role hoàn chỉnh bám sát thực tế lâm sàng
   const getMenuItems = (role) => {
@@ -192,19 +215,25 @@ const ResponsiveLayout = ({
           { label: 'Phân tích AI', route: 'AIAnalysis', icon: Activity },
           { label: 'Lịch sử khám', route: 'PatientRecords', icon: FileText },
           { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
+          { label: 'Hóa đơn viện phí', route: 'MyInvoices', icon: CreditCard },
+          { label: 'Chia sẻ bệnh án', route: 'RecordShare', icon: QrCode },
+          { label: 'Bản sao bệnh án', route: 'RecordCopies', icon: FileCheck },
+          { label: 'Hỏi đáp sức khỏe', route: 'HealthChat', icon: MessageCircle },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
           { label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
           { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Danh mục thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
           { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -213,14 +242,17 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'nurse':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Tiếp nhận', route: 'NurseTriage', icon: Users },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -230,10 +262,21 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Tiếp nhận bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'pharmacist':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Hàng đợi Khoa Dược', route: 'PharmacyQueue', icon: Package },
+          { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Pill },
+          { label: 'Thuốc hết hạn', route: 'DrugManagement', params: { tab: 'expiry' }, icon: AlertTriangle },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -245,8 +288,12 @@ const ResponsiveLayout = ({
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Quản lý nhân sự', route: 'StaffManagement', icon: Users },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Điều chuyển phân công ca', route: 'AssignmentOverride', icon: Shuffle },
+          { label: 'Năng suất & SLA', route: 'SlaReport', icon: Gauge },
           { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
-          { label: 'Quản lý kho thuốc', route: 'DrugManagement', icon: Package },
+          { label: 'Quản lý kho thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
+          { label: 'Nhật ký kiểm toán lâm sàng', route: 'ClinicalAudit', icon: FileSearch },
+          { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
           { label: 'Thông tin bệnh viện', route: 'HospitalOnboarding', icon: Building2 },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -293,6 +340,7 @@ const ResponsiveLayout = ({
       if (activeRoute === 'ReceptionistDashboard_billing' && item.route === 'NurseReception' && item.params?.tab === 'billing') return true;
       if (activeRoute === 'ReceptionistDashboard_myQueue' && item.route === 'NurseReception' && item.params?.tab === 'myQueue') return true;
       if (activeRoute === 'EMRDashboard' && item.params.tab === 'records') return true;
+      if (activeRoute === 'DrugManagement' && item.params.tab === 'list') return true;
       return false;
     }
     if (item.route === 'DoctorWorkQueue' && activeRoute.startsWith('DoctorWorkQueue')) return false;
@@ -358,7 +406,7 @@ const ResponsiveLayout = ({
         {/* Emergency Alert Banner on Mobile */}
         {activeEmergency && !isPatient && (
           <TouchableOpacity
-            onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
+            onPress={handleEmergencyPress}
             style={{
               backgroundColor: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C',
               paddingVertical: 8,
@@ -368,9 +416,9 @@ const ResponsiveLayout = ({
               justifyContent: 'space-between',
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
               <AlertTriangle size={15} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 11 }} numberOfLines={1}>
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 11, flexShrink: 1 }} numberOfLines={1} ellipsizeMode="tail">
                 CẤP CỨU: {activeEmergency.patientName} ({activeEmergency.medicalId})
               </Text>
             </View>
@@ -636,7 +684,7 @@ const ResponsiveLayout = ({
             borderBottomWidth: 2,
             borderBottomColor: activeEmergency.level === 'RED' ? '#7F1D1D' : '#9A3412',
           }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
               <View style={{
                 backgroundColor: 'rgba(255,255,255,0.2)',
                 padding: 6,
@@ -644,11 +692,11 @@ const ResponsiveLayout = ({
               }}>
                 <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.5} />
               </View>
-              <View>
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
-                  CẢNH BÁO CẤP CỨU [{activeEmergency.level}] - BỆNH NHÂN: {activeEmergency.patientName?.toUpperCase()} ({activeEmergency.medicalId})
+              <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1} ellipsizeMode="tail">
+                  CẢNH BÁO CẤP CỨU {emergencyLevelLabel(activeEmergency.level)} - BỆNH NHÂN: {activeEmergency.patientName?.toUpperCase()} ({activeEmergency.medicalId})
                 </Text>
-                <Text style={{ color: '#FEE2E2', fontSize: 12 }}>
+                <Text style={{ color: '#FEE2E2', fontSize: 12 }} numberOfLines={1} ellipsizeMode="tail">
                   {activeEmergency.reason || 'Cần ưu tiên dời lịch & chuẩn bị phòng chụp MRI khẩn cấp!'}
                 </Text>
               </View>
@@ -664,7 +712,7 @@ const ResponsiveLayout = ({
                 alignItems: 'center',
                 gap: 4,
               }}
-              onPress={() => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' })}
+              onPress={handleEmergencyPress}
               activeOpacity={0.85}
             >
               <Text style={{ color: activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C', fontWeight: 'bold', fontSize: 12 }}>
@@ -923,7 +971,7 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     height: '100%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F7FC',
   },
   bellBtn: {
     padding: 8,

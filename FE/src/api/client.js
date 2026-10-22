@@ -2,6 +2,7 @@ import Config from '../constants/config.js';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goToPortalLogin } from '../utils/navigationRef.js';
+import { cancelScheduled } from '../services/localNotifications';
 
 // Helper functions for cross-platform token persistence (Web & Native Mobile)
 export const getToken = async () => {
@@ -68,6 +69,10 @@ export const setRefreshToken = async (refreshToken) => {
 
 export const setAuthToken = async (token, refreshToken = null) => {
   await setToken(token);
+  if (!token) {
+    // hết phiên trên máy này: huỷ thông báo nhắc thuốc / lịch khám đã hẹn (máy dùng chung không lộ thông tin người trước)
+    await cancelScheduled().catch((err) => console.warn('[client.js] Lỗi huỷ thông báo đã hẹn:', err?.message));
+  }
   if (refreshToken !== null) {
     await setRefreshToken(refreshToken);
   } else if (!token) {
@@ -136,6 +141,10 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   const response = await fetch(url, {
     ...options,
     headers,
+    // [FIX 0014] no-store: tránh trình duyệt gửi conditional GET (If-None-Match)
+    // khiến server trả 304 — fetch coi 304 là !ok → FE tưởng lỗi và mất dữ liệu
+    // (dashboard hiển thị 0 im lặng). Với API đăng nhập theo token, cache vô nghĩa.
+    cache: 'no-store',
   });
   let data;
   try {
@@ -190,7 +199,14 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
     throw new Error(data?.message || 'Tài khoản hoặc bệnh viện của bạn đang bị khóa hoặc hết hạn dịch vụ.');
   }
 
-  if (!response.ok) throw new Error(data.message || `Request failed with status ${response.status}`);
+  if (!response.ok) {
+    // [FIX 0014] Gắn status + code để màn hình phân biệt 429 (hệ thống bận)
+    // với 401/403 (phiên hết hạn) — xem utils/apiErrors.js
+    const err = new Error(data.message || `Request failed with status ${response.status}`);
+    err.status = response.status;
+    if (data && data.code) err.code = data.code;
+    throw err;
+  }
   return data;
 };
 
@@ -207,7 +223,7 @@ export const postFormData = async (endpoint, formData, isRetry = false) => {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const response = await fetch(url, { method: 'POST', headers, body: formData });
+  const response = await fetch(url, { method: 'POST', headers, body: formData, cache: 'no-store' });
   let data;
   try {
     const text = await response.text();
@@ -233,7 +249,13 @@ export const postFormData = async (endpoint, formData, isRetry = false) => {
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
-  if (!response.ok) throw new Error(data.message || `Upload failed with status ${response.status}`);
+  if (!response.ok) {
+    throw Object.assign(new Error(data.message || `Upload failed with status ${response.status}`), {
+      status: response.status,
+      ...(data && data.code ? { code: data.code } : {}),
+      errors: data.errors, // vd. POOR_QUALITY khi quét giấy tờ: giao diện cần mã lỗi, không đoán theo câu chữ
+    });
+  }
   return data;
 };
 

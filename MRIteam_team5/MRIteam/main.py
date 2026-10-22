@@ -87,6 +87,10 @@ from gemini_rotator import GeminiProxy
 gemini_client = GeminiProxy()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
+# OCR giấy tờ bệnh nhân tự chụp (POST /ocr_document) — xem document_ocr.py
+from document_ocr import build_ocr_router
+app.include_router(build_ocr_router(gemini_client, GEMINI_MODEL))
+
 def call_gemini(system_prompt: str, user_prompt: str, temperature: float = 0.2) -> str:
     """Helper duy nhất để gọi Gemini API cho tất cả Agents (Gemini 3.1)."""
     models_to_try = [GEMINI_MODEL, "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite"]

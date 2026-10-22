@@ -38,11 +38,26 @@ class MemoryStore {
 
 const defaultStore = new MemoryStore();
 
+/**
+ * Khoá đếm theo người được cấp link tải (uid trong token, chưa kiểm chữ ký — chỉ để đếm; token giả bị từ chối ở bước kiểm sau,
+ * rẻ, trước khi gửi file). Không tin IP vì IP lấy từ header X-Forwarded-For do client tự gửi.
+ */
+export const tokenUserKey = (prefix) => (req, ip) => {
+  try {
+    const part = String(req.params?.token || "").split(".")[1] || "";
+    const uid = JSON.parse(Buffer.from(part, "base64url").toString("utf8"))?.uid;
+    return `${prefix}:${typeof uid === "string" && uid.length <= 64 ? uid : ip}`;
+  } catch {
+    return `${prefix}:${ip}`;
+  }
+};
+
 export const createRateLimiter = ({
   windowMs = 60 * 1000, // 1 minute window
   maxRequests = 10,     // Max requests per window
   message = "Bạn đã thực hiện quá nhiều yêu cầu. Vui lòng thử lại sau.",
   skip = () => false,
+  keyGenerator = null, // (req, ip) => string — khoá đếm riêng; mặc định: IP + baseUrl (+ email)
 }) => {
   return (req, res, next) => {
     // Kích hoạt khi ở production hoặc khi có biến ENABLE_RATE_LIMIT=true
@@ -56,7 +71,7 @@ export const createRateLimiter = ({
     const routeKey = req.baseUrl || req.path || "";
     // Chống tấn công dò mật khẩu phân tán: kết hợp IP + Email (nếu có)
     const accountIdentifier = req.body?.email ? `:${req.body.email.toLowerCase().trim()}` : "";
-    const key = `${ip}:${routeKey}${accountIdentifier}`;
+    const key = keyGenerator ? String(keyGenerator(req, ip)) : `${ip}:${routeKey}${accountIdentifier}`;
     const now = Date.now();
 
     let record = defaultStore.getRecord(key);
@@ -94,10 +109,24 @@ export const createRateLimiter = ({
 };
 
 // 1. Giới hạn đăng nhập & OTP: tối đa 10 lần/phút/IP
+// [FIX 0014] Bỏ qua 2 endpoint phiên làm việc ĐÃ XÁC THỰC khỏi giới hạn:
+//  - GET /auth/me: FE gọi 3 lần mỗi lần chuyển màn hình → ngưỡng 10/phút/IP sẽ đá
+//    user đang thao tác bình thường (429 → màn báo sai "Phiên hết hạn", dashboard
+//    hiển thị 0 im lặng). Endpoint này đã được bảo vệ bằng JWT (middleware protect).
+//  - POST /auth/refresh: làm mới token định kỳ, đã được bảo vệ bằng refreshToken hợp lệ.
+// Rate limit chỉ mang ý nghĩa chống brute-force trên các route đoán mật khẩu/OTP:
+// login, verify-2fa, resend-2fa, forgot-password, phone-login-*, firebase-login, sso —
+// tất cả vẫn bị giới hạn như cũ.
 export const authRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 10,
   message: "Quá nhiều lần thử xác thực hoặc đăng nhập thất bại.",
+  skip: (req) => {
+    const p = (req.path || "").replace(/\/+$/, "");
+    if (req.method === "GET" && p === "/me") return true;
+    if (req.method === "POST" && p === "/refresh") return true;
+    return false;
+  },
 });
 
 // 2. Giới hạn tra cứu cổng bệnh nhân B2C: tối đa 30 lần/phút/IP

@@ -54,15 +54,11 @@ const PATIENT_FAQS = [
     ],
   },
   {
-    category: 'Khai báo & Premium',
+    category: 'Khai báo & quyền riêng tư',
     items: [
       {
         q: 'Mục "Khai báo bệnh án" dùng để làm gì? Tôi nên tải lên những giấy tờ nào?',
         a: 'Đây là sổ sức khỏe cá nhân để bạn lưu giấy tờ khám chữa bệnh (kể cả ở cơ sở khác). Bạn có thể "Tải ảnh lên" (chụp hoặc chọn ảnh/PDF) hoặc "Điền thủ công" theo mẫu. Nên lưu: phiếu khám bệnh, toa thuốc, kết quả xét nghiệm, kết quả MRI/CT, giấy ra viện, phiếu chuyển tuyến. Bác sĩ sẽ có thêm thông tin tiền sử khi bạn đến khám.',
-      },
-      {
-        q: 'Gói Premium có những quyền lợi gì? Tôi đã thanh toán bằng VietQR nhưng gói chưa kích hoạt thì làm sao?',
-        a: 'Gói Premium (99.000đ/năm) gồm: lưu trữ hồ sơ vĩnh viễn, AI chuyên sâu & lịch sử, Chat AI Trợ lý 24/7, ưu tiên từ bác sĩ, báo cáo PDF chuyên sâu và cảnh báo sớm rủi ro. Gói được kích hoạt tự động ngay khi cổng PayOS xác nhận giao dịch. Nếu sau vài phút vẫn chưa kích hoạt, hãy đăng xuất rồi đăng nhập lại; nếu vẫn chưa được, gửi ticket chủ đề "Thanh toán & Nâng cấp Premium" kèm ảnh chụp giao dịch.',
       },
       {
         q: 'Dữ liệu sức khỏe của tôi có bị chia sẻ cho người khác không? Ai được xem hồ sơ của tôi?',

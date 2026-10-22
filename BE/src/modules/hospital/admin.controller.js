@@ -27,9 +27,21 @@ import { getDatasets, createDataset, updateDatasetPrice as updateDatasetPriceSer
 import { getAuditLogs, anonymizeAuditLogs } from "../../services/audit.service.js";
 import { sendHospitalCredentials } from "../../services/email.service.js";
 import { authCache } from "../../utils/authCache.util.js";
+// [FIX 0022] fan-out Notification cho announcement — trước đây thông báo chỉ nằm trong DB,
+// không người dùng nào nhận được.
+import { createNotificationInternal } from "../../controllers/notification.controller.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// [FIX 0022] Thông báo thân thiện khi AI Server không phản hồi —
+// trước đây lỗi mạng lộ nguyên văn "fetch failed" ra giao diện admin.
+const getAiServerBase = () =>
+  process.env.AI_SERVER_URL
+    ? process.env.AI_SERVER_URL.replace("/predict", "")
+    : "http://localhost:8000";
+const AI_SERVER_UNREACHABLE = (server) =>
+  `Không kết nối được máy chủ AI (${server}). Vui lòng kiểm tra AI Server đang hoạt động rồi thử lại.`;
 
 export const fetchUsers = async (req, res) => {
   try {
@@ -44,11 +56,17 @@ export const lockUser = async (req, res) => {
   try {
     const { userId, isLocked } = req.body;
     const adminId = req.user.id;
-    const user = await toggleUserLock(userId, Boolean(isLocked), adminId);
+    // [FIX 0022] truyền actorRole — service kiểm tra rank vai trò; thiếu param này
+    // thì canModerateRole(undefined, ...) luôn false → mọi lock/unlock đều bị 403.
+    const user = await toggleUserLock(userId, Boolean(isLocked), adminId, req.user.role);
     authCache.invalidateUser(userId);
     res.status(200).json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.message.includes("không có quyền")) {
+      res.status(403).json({ success: false, message: error.message });
+    } else {
+      res.status(500).json({ success: false, message: error.message });
+    }
   }
 };
 
@@ -72,21 +90,69 @@ export const addDataset = async (req, res) => {
   }
 };
 
+// UC-HADM-13 — Nhóm thao tác nhạy cảm lâm sàng để lọc nhanh nhật ký kiểm toán
+export const CLINICAL_AUDIT_CATEGORIES = {
+  break_glass: ["BREAK_GLASS_EMERGENCY_ACCESSED"],
+  soft_delete: ["SOFT_DELETE_VISIT"],
+  emr_edit: ["UPDATE_EMR_RECORD", "ADDENDUM_CREATED", "SIGN_EMR_RECORD", "RECORD_LOCKED"],
+  refund: ["REFUND_REQUESTED", "REFUND_APPROVED"],
+  assignment: ["ASSIGNMENT_OVERRIDDEN"],
+  // Khoa Dược — Dual-Sign, phát thuốc, hậu kiểm 24h, kho & danh mục (UC-PHA)
+  pharmacy: [
+    "PRESCRIPTION_VERIFIED",
+    "PRESCRIPTION_REJECTED",
+    "PRESCRIPTION_DISPENSED",
+    "PRESCRIPTION_POST_HOC_REVIEWED",
+    "DRUG_CATALOG_CREATED",
+    "DRUG_CATALOG_UPDATED",
+    "DRUG_CATALOG_DELETED",
+    "DRUG_STOCK_ADJUSTED",
+  ],
+};
+
 export const fetchAuditLogs = async (req, res) => {
   try {
     const userRole = req.user.role;
-    let logs;
-    
+
+    // Phạm vi truy vấn: hospital_admin bị khóa scope vào bệnh viện của chính mình
+    // (an toàn đa thuê bao — bỏ qua mọi ?hospitalId= truyền lên), admin hệ thống
+    // giữ hành vi cũ: lọc tùy chọn theo ?hospitalId= hoặc xem toàn hệ thống.
+    let scopeHospitalId;
     if (userRole === "hospital_admin") {
-      logs = await getAuditLogs(req.user.hospitalId);
+      if (!req.user.hospitalId) {
+        return res.status(400).json({ success: false, message: "Tài khoản quản lý bệnh viện chưa liên kết với bệnh viện nào." });
+      }
+      scopeHospitalId = req.user.hospitalId;
     } else if (userRole === "admin" || userRole === "system_admin") {
-      const filterHospitalId = req.query.hospitalId;
-      logs = await getAuditLogs(filterHospitalId);
+      scopeHospitalId = req.query.hospitalId || null;
     } else {
       return res.status(403).json({ success: false, message: "Không có quyền xem audit logs." });
     }
-    
-    res.status(200).json({ success: true, logs });
+
+    // Bộ lọc phía server (tương thích ngược: không truyền → trả về toàn bộ như cũ)
+    const { category, action, from, to, limit, page } = req.query;
+    const filters = {};
+    if (category && CLINICAL_AUDIT_CATEGORIES[category]) {
+      filters.actions = CLINICAL_AUDIT_CATEGORIES[category];
+    }
+    if (action) filters.action = String(action).trim();
+    if (from) {
+      const d = new Date(from);
+      if (!isNaN(d.getTime())) filters.from = d;
+    }
+    if (to) {
+      const d = new Date(to);
+      if (!isNaN(d.getTime())) filters.to = d;
+    }
+    const parsedLimit = parseInt(limit, 10);
+    filters.limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 1000) : 500;
+    const parsedPage = parseInt(page, 10);
+    filters.page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+    const { logs, total } = await getAuditLogs(scopeHospitalId, filters);
+    const totalPages = Math.max(1, Math.ceil(total / filters.limit));
+
+    res.status(200).json({ success: true, logs, total, page: filters.page, limit: filters.limit, totalPages });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -120,12 +186,16 @@ export const lockUserById = async (req, res) => {
       return;
     }
     const adminId = req.user.id;
-    const user = await lockUserByIdService(id, adminId);
+    // [FIX 0022] truyền actorRole để service kiểm tra rank (trước đây luôn 403)
+    const user = await lockUserByIdService(id, adminId, req.user.role);
     authCache.invalidateUser(id);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "User not found") {
       res.status(404).json({ success: false, message: error.message });
+    } else if (error.message.includes("không có quyền")) {
+      // [FIX 0022] lỗi phân quyền là 403, không phải 500
+      res.status(403).json({ success: false, message: error.message });
     } else {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -141,12 +211,16 @@ export const unlockUserById = async (req, res) => {
       return;
     }
     const adminId = req.user.id;
-    const user = await unlockUserByIdService(id, adminId);
+    // [FIX 0022] truyền actorRole để service kiểm tra rank (trước đây luôn 403)
+    const user = await unlockUserByIdService(id, adminId, req.user.role);
     authCache.invalidateUser(id);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "User not found") {
       res.status(404).json({ success: false, message: error.message });
+    } else if (error.message.includes("không có quyền")) {
+      // [FIX 0022] lỗi phân quyền là 403, không phải 500
+      res.status(403).json({ success: false, message: error.message });
     } else {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -370,7 +444,10 @@ export const createUser = async (req, res) => {
 export const fetchHospitals = async (req, res) => {
   try {
     const hospitals = await Hospital.find()
-      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt isActive")
+      // [FIX 0022] bổ sung 3 field subscription — SaaS Suite (Gói dịch vụ & Subscription)
+      // cần đúng các field này; thiếu thì bảng luôn hiện "Không xác định" + "Hết hạn/Khóa"
+      // và modal Sửa Gói mở với ngày hết hạn rỗng (rủi ro ghi đè dữ liệu tốt).
+      .select("name nameShort code status tempUsername loginEmail contactEmail phone createdAt isActive subscriptionPlan subscriptionStatus subscriptionExpiresAt")
       .lean();
     res.status(200).json({ success: true, hospitals });
   } catch (error) {
@@ -545,7 +622,8 @@ export const retrainAiModel = async (req, res) => {
       status: "running",
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // [FIX 0022] lỗi mạng tới AI Server → thông báo thân thiện (trước đây lộ "fetch failed")
+    res.status(502).json({ success: false, message: AI_SERVER_UNREACHABLE(getAiServerBase()) });
   }
 };
 
@@ -573,10 +651,11 @@ export const getAiRetrainStatus = async (req, res) => {
       ...data
     });
   } catch (error) {
+    // [FIX 0022] AI Server offline → trạng thái offline + thông báo thân thiện
     res.status(200).json({
       success: false,
-      status: "error",
-      message: error.message
+      status: "offline",
+      message: AI_SERVER_UNREACHABLE(getAiServerBase())
     });
   }
 };
@@ -598,7 +677,8 @@ export const deployAiRetrainedModel = async (req, res) => {
     const data = await aiRes.json();
     res.status(aiRes.ok ? 200 : 500).json(data);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // [FIX 0022] lỗi mạng tới AI Server → thông báo thân thiện (trước đây lộ "fetch failed")
+    res.status(502).json({ success: false, message: AI_SERVER_UNREACHABLE(getAiServerBase()) });
   }
 };
 
@@ -619,7 +699,8 @@ export const rollbackAiRetrainedModel = async (req, res) => {
     const data = await aiRes.json();
     res.status(aiRes.ok ? 200 : 500).json(data);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // [FIX 0022] lỗi mạng tới AI Server → thông báo thân thiện (trước đây lộ "fetch failed")
+    res.status(502).json({ success: false, message: AI_SERVER_UNREACHABLE(getAiServerBase()) });
   }
 };
 
@@ -667,6 +748,12 @@ CÁCH TRẢ LỜI:
       }
     } else {
       // Create default config file if it does not exist
+      // [FIX 0022] mkdir thư mục cha trước khi ghi — deploy mới chưa có MRIteam/
+      // khiến writeFileSync ném ENOENT và lộ đường dẫn server ra UI.
+      const configDir = path.dirname(configPath);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
     }
 
@@ -1985,7 +2072,33 @@ export const createAnnouncement = async (req, res) => {
       details: `Admin đăng thông báo khẩn cấp hệ thống: ${title}`,
     });
 
-    res.status(201).json({ success: true, message: "Tạo thông báo khẩn cấp thành công!", announcement: ann });
+    // [FIX 0022] Fan-out Notification tới toàn bộ nhân sự đang hoạt động của các bệnh viện
+    // (khác patient — thông báo hệ thống dành cho giao diện nhân sự). Fan-out lỗi ở 1 user
+    // không phá thao tác chính (createNotificationInternal đã try/catch nội bộ).
+    let deliveredCount = 0;
+    const recipients = await User.find(
+      { hospitalId: { $ne: null }, isLocked: { $ne: true }, role: { $ne: "patient" } },
+      "_id hospitalId"
+    ).lean();
+    for (const u of recipients) {
+      const notif = await createNotificationInternal({
+        hospitalId: u.hospitalId,
+        recipientId: u._id,
+        senderId: req.user.id,
+        type: "announcement",
+        title: `Thông báo hệ thống: ${title}`,
+        message: content,
+        relatedId: ann._id,
+      });
+      if (notif) deliveredCount++;
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Tạo thông báo khẩn cấp thành công! Đã gửi tới ${deliveredCount} tài khoản nhân sự.`,
+      announcement: ann,
+      deliveredCount,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }

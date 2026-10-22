@@ -33,6 +33,10 @@ import PatientRecordsScreen from '../screens/PatientRecordsScreen';
 import MyHealthScreen from '../screens/MyHealthScreen';
 import ContrastConsentScreen from '../screens/ContrastConsentScreen';
 import QueueTicketScreen from '../screens/QueueTicketScreen';
+import RecordShareScreen from '../screens/RecordShareScreen';
+import SharedRecordScreen from '../screens/SharedRecordScreen';
+import ScanRecordQrScreen from '../screens/ScanRecordQrScreen';
+import RecordCopyReviewScreen from '../screens/RecordCopyReviewScreen';
 import PatientDetailScreen from '../screens/PatientDetailScreen';
 import FinancialsScreen from '../screens/FinancialsScreen';
 import SupportScreen from '../screens/SupportScreen';
@@ -45,13 +49,19 @@ import ImagingResultScreen from '../screens/ImagingResultScreen';
 import CreateImagingResultScreen from '../screens/CreateImagingResultScreen';
 import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
+import NurseTriageScreen from '../screens/NurseTriageScreen';
 import ActivateAccountScreen from '../screens/ActivateAccountScreen';
 import DoctorWorkQueueScreen from '../screens/DoctorWorkQueueScreen';
+import MyAssignmentsScreen from '../screens/MyAssignmentsScreen';
 import HospitalOnboardingScreen from '../screens/HospitalOnboardingScreen';
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import NursePatientDetailScreen from '../screens/NursePatientDetailScreen';
 import DrugManagementScreen from '../screens/DrugManagementScreen';
+import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
+import SlaReportScreen from '../screens/SlaReportScreen';
+import ClinicalAuditScreen from '../screens/ClinicalAuditScreen';
+import AssignmentOverrideScreen from '../screens/AssignmentOverrideScreen';
 
 export const staffLinkingConfig = {
   prefixes: ['/'],
@@ -70,6 +80,10 @@ export const staffLinkingConfig = {
       MyHealth: 'staff/my-health',
       ContrastConsent: 'staff/consents',
       QueueTicket: 'staff/queue-ticket',
+      RecordShare: 'staff/chia-se-benh-an',
+      ScanRecordQr: 'staff/quet-ma-benh-an',
+      RecordCopyReview: 'staff/ban-sao-benh-an',
+      SharedRecord: 'staff/xem-benh-an',
       PatientDetail: 'staff/patient-detail',
       Financials: 'staff/financials',
       Support: 'staff/support',
@@ -82,13 +96,19 @@ export const staffLinkingConfig = {
       CreateImagingResult: 'staff/create-imaging-result',
       DoctorPatientList: 'staff/doctor-patient-list',
       NurseReception: 'staff/nurse-reception',
+      NurseTriage: 'staff/nurse-triage',
       ActivateAccount: 'staff/activate-account',
       DoctorWorkQueue: 'staff/doctor-work-queue',
+      MyAssignments: 'staff/my-assignments',
       HospitalOnboarding: 'staff/hospital-onboarding',
       StaffManagement: 'staff/staff-management',
       NursePatientDetail: 'staff/nurse-patient-detail',
       DrugManagement: 'staff/drug-management',
+      PharmacyQueue: 'staff/pharmacy-queue',
       StaffScheduling: 'staff/staff-scheduling',
+      SlaReport: 'staff/sla-report',
+      ClinicalAudit: 'staff/clinical-audit',
+      AssignmentOverride: 'staff/assignment-override',
     },
   },
 };
@@ -177,6 +197,10 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="MyHealth" component={MyHealthScreen} options={{ title: 'Sức khỏe của tôi', headerShown: false }} />
         <Stack.Screen name="ContrastConsent" component={ContrastConsentScreen} options={{ title: 'Phiếu đồng thuận', headerShown: false }} />
         <Stack.Screen name="QueueTicket" component={QueueTicketScreen} options={{ title: 'Lấy số khám', headerShown: false }} />
+        <Stack.Screen name="RecordShare" component={RecordShareScreen} options={{ title: 'Chia sẻ bệnh án', headerShown: false }} />
+        <Stack.Screen name="ScanRecordQr" component={ScanRecordQrScreen} options={{ title: 'Quét mã bệnh án', headerShown: false }} />
+        <Stack.Screen name="RecordCopyReview" component={RecordCopyReviewScreen} options={{ title: 'Yêu cầu bản sao bệnh án', headerShown: false }} />
+        <Stack.Screen name="SharedRecord" component={SharedRecordScreen} options={{ title: 'Bệnh án được chia sẻ', headerShown: false }} />
         <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: 'Chi tiết bệnh án', headerShown: false }} />
         <Stack.Screen name="Financials" component={FinancialsScreen} options={{ title: 'Tài chính', headerShown: false }} />
         <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Hỗ trợ kỹ thuật', headerShown: false }} />
@@ -189,13 +213,19 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
+        <Stack.Screen name="NurseTriage" component={NurseTriageScreen} options={{ title: 'Tiếp nhận', headerShown: false }} />
         <Stack.Screen name="ActivateAccount" component={ActivateAccountScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DoctorWorkQueue" component={DoctorWorkQueueScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="MyAssignments" component={MyAssignmentsScreen} options={{ title: 'Phân công của tôi', headerShown: false }} />
         <Stack.Screen name="HospitalOnboarding" component={HospitalOnboardingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffManagement" component={StaffManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NursePatientDetail" component={NursePatientDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DrugManagement" component={DrugManagementScreen} options={{ title: 'Quản lý kho thuốc', headerShown: false }} />
+        <Stack.Screen name="PharmacyQueue" component={PharmacyQueueScreen} options={{ title: 'Hàng đợi Khoa Dược', headerShown: false }} />
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
+        <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
+        <Stack.Screen name="ClinicalAudit" component={ClinicalAuditScreen} options={{ title: 'Nhật ký Kiểm toán Lâm sàng', headerShown: false }} />
+        <Stack.Screen name="AssignmentOverride" component={AssignmentOverrideScreen} options={{ title: 'Điều chuyển Phân công Ca', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

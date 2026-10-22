@@ -2,7 +2,12 @@ import './src/tailwind-built.css';
 import { registerRootComponent } from 'expo';
 import { Alert, Platform } from 'react-native';
 
+// Font icon Feather nhúng base64 cho web — phải nạp TRƯỚC khi app render
+// (xem src/utils/embedFeatherFont.web.js để hiểu vì sao cần thiết).
+import './src/utils/embedFeatherFont';
+
 import AppNavigator from './src/navigation/AppNavigator';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
 
 // Custom high-fidelity Alert.alert Web Polyfill
 if (Platform.OS === 'web') {
@@ -54,6 +59,7 @@ if (Platform.OS === 'web') {
     btnContainer.style.display = 'flex';
     btnContainer.style.flexDirection = 'column';
     btnContainer.style.gap = '8px';
+    const buttonEls = [];
 
     buttons.forEach(btn => {
       const button = document.createElement('button');
@@ -81,12 +87,29 @@ if (Platform.OS === 'web') {
       }
 
       button.onclick = () => {
-        document.body.removeChild(overlay);
+        document.removeEventListener('keydown', onKeyDown, true);
+        if (overlay.parentNode) document.body.removeChild(overlay);
         if (btn.onPress) btn.onPress();
       };
 
       btnContainer.appendChild(button);
+      buttonEls.push({ el: button, style: btn.style });
     });
+
+    // Phím tắt: popup 1 nút ("Tiếp tục" / "OK") → Enter hoặc Esc = bấm nút đó.
+    // Popup nhiều nút → Esc = nút Hủy; Enter không tự chọn để tránh lỡ tay xác nhận thao tác quan trọng.
+    function onKeyDown(e) {
+      if (e.repeat || e.isComposing) return;
+      const single = buttonEls.length === 1 ? buttonEls[0] : null;
+      let target = null;
+      if (e.key === 'Enter' && single) target = single;
+      if (e.key === 'Escape') target = single || buttonEls.find((b) => b.style === 'cancel');
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      target.el.click();
+    }
+    document.addEventListener('keydown', onKeyDown, true);
 
     box.appendChild(titleEl);
     if (message) box.appendChild(msgEl);
@@ -99,5 +122,12 @@ if (Platform.OS === 'web') {
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
-registerRootComponent(AppNavigator);
+// Bộ bắt lỗi bọc ngoài cùng: 1 màn lỗi khi vẽ không làm trắng cả ứng dụng
+const Root = () => (
+  <AppErrorBoundary>
+    <AppNavigator />
+  </AppErrorBoundary>
+);
+
+registerRootComponent(Root);
 

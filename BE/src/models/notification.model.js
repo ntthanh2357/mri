@@ -21,7 +21,21 @@ const notificationSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ["new_visit", "mri_order", "ai_ready", "low_stock", "stock_shortage", "announcement", "swap_request", "system_alert", "transfer_draft", "transfer_sent", "transfer_incoming", "transfer_accepted", "other"],
+      // Fix 0010: bổ sung 7 loại notification đang được nghiệp vụ sử dụng nhưng
+      // thiếu trong enum — mọi lần gọi createNotificationInternal với type ngoài
+      // enum đều fail validation và bị nuốt lỗi trong try/catch (BS không bao giờ
+      // nhận được thông báo): assignment_new/assignment_override (phân công &
+      // điều chuyển ca), result_ready (phim sẵn sàng), emergency_alert/
+      // emergency_stand_down (cảnh báo khẩn cấp), peer_review_assigned,
+      // appointment_reminder (scheduler nhắc lịch).
+      enum: [
+        "new_visit", "mri_order", "ai_ready", "low_stock", "stock_shortage",
+        "announcement", "swap_request", "system_alert",
+        "transfer_draft", "transfer_sent", "transfer_incoming", "transfer_accepted",
+        "assignment_new", "assignment_override", "result_ready",
+        "emergency_alert", "emergency_stand_down", "peer_review_assigned",
+        "appointment_reminder", "other",
+      ],
       default: "other",
     },
     title: {
