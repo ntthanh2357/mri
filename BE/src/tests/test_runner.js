@@ -185,6 +185,7 @@ async function runAllTests() {
     '../services/__tests__/pdfSignature.service.test.js',
     '../services/__tests__/recordCopy.service.test.js',
     '../services/__tests__/patientChat.service.test.js',
+    '../services/__tests__/externalAlerts.service.test.js',
     './tenancy_and_transaction.test.js',
     './admin_lock_role.test.js',
     './clinical_workflow_e2e.test.js',

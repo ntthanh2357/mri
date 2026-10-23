@@ -328,7 +328,7 @@ export const sendTransferEmail = async (req, res) => {
         });
       } catch (_) {}
 
-      return errorResponse(res, `Không thể gửi email hồ sơ chuyển viện: ${sendResult.reason || "Lỗi SMTP"}. Bạn có thể kiểm tra lại cấu hình hoặc thử lại.`, 502);
+      return errorResponse(res, `Không thể gửi email hồ sơ chuyển viện: ${sendResult.reason || "Lỗi SMTP"}. Bạn có thể kiểm tra lại cấu hình hoặc thử lại.`, sendResult.code === "EMAIL_NOT_CONFIGURED" ? 503 : 502);
     }
   } catch (err) {
     console.error("Lỗi gửi email hồ sơ chuyển viện:", err);

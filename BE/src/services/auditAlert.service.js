@@ -82,14 +82,14 @@ export const sendSecuritySIEMAlert = async ({
           ...payload,
         }),
       });
-      return { sent: true, status: response.status };
+      return { sent: response.ok, status: response.status };
     } catch (netErr) {
       console.error("[SIEM_ALERT_ERROR] Không thể gửi Webhook tới SIEM endpoint:", netErr.message);
       return { sent: false, error: netErr.message };
     }
   }
 
-  return { sent: true, simulated: true, message: "Logged to structured SIEM stdout stream" };
+  return { sent: false, reason: "SIEM_NOT_CONFIGURED", message: "Chưa cấu hình SECURITY_SIEM_WEBHOOK_URL, cảnh báo chỉ ghi ra log máy chủ" };
 };
 
 /**
@@ -103,12 +103,19 @@ export const runAuditIntegrityCheckAndAlert = async (limit = 2000, verifierFn = 
   try {
     result = await verifierFn(limit);
   } catch (err) {
-    // Xử lý an toàn khi chạy trong môi trường kiểm thử Unit Test không có kết nối DB trực tiếp
-    result = {
-      valid: true,
-      verifiedCount: 0,
-      offlineSimulated: true,
-      message: "Database offline / in-memory test mode: " + err.message,
+    // Không đọc được nhật ký thì không biết chuỗi còn nguyên hay không: ghi "chưa kiểm được", không báo là hợp lệ
+    console.error("[AUDIT_CHECK_ERROR] Không kiểm được chuỗi băm nhật ký:", err.message);
+    const now = new Date().toISOString();
+    lastCheckStatus.lastCheckedAt = now;
+    lastCheckStatus.valid = null;
+    lastCheckStatus.verifiedCount = 0;
+    lastCheckStatus.headHash = null;
+    return {
+      success: false,
+      checkFailed: true,
+      tampered: false,
+      alertTriggered: false,
+      result: { valid: null, verifiedCount: 0, error: err.message },
     };
   }
 
@@ -121,7 +128,7 @@ export const runAuditIntegrityCheckAndAlert = async (limit = 2000, verifierFn = 
 
   if (!result.valid) {
     // Kích hoạt ngay lập tức cảnh báo mức độ tối cao (CRITICAL)
-    await sendSecuritySIEMAlert({
+    const alert = await sendSecuritySIEMAlert({
       alertType: "CRYPTOGRAPHIC_HASH_CHAIN_COMPROMISED",
       severity: "CRITICAL",
       title: "PHÁT HIỆN CAN THIỆP TRÁI PHÉP VÀO CSDL NHẬT KÝ KIỂM TOÁN (TAMPER DETECTED)",
@@ -135,6 +142,7 @@ export const runAuditIntegrityCheckAndAlert = async (limit = 2000, verifierFn = 
       success: false,
       tampered: true,
       alertTriggered: true,
+      alertSent: alert.sent,
       result,
     };
   }

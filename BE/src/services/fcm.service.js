@@ -14,7 +14,7 @@ try {
     isFirebaseInitialized = true;
     console.log("✅ FCM Service: Firebase Admin SDK đã khởi tạo thành công.");
   } else {
-    console.log("ℹ️ FCM Service: FIREBASE_SERVICE_ACCOUNT chưa được cấu hình. Push notification chạy ở chế độ MOCK.");
+    console.log("ℹ️ FCM Service: FIREBASE_SERVICE_ACCOUNT chưa được cấu hình. Push notification sẽ không được gửi.");
   }
 } catch (err) {
   console.warn("⚠️ FCM Service: Lỗi khởi tạo Firebase Admin:", err.message);
@@ -34,13 +34,10 @@ export const sendFcmNotification = async (targetTokens, { title, body, data = {}
     return { successCount: 0, failureCount: 0, message: "Không có FCM token hợp lệ." };
   }
 
-  // Chế độ MOCK nếu chưa có Firebase Credentials thực tế
+  // Chưa có Firebase Credentials thì không gửi được, báo đúng là chưa gửi
   if (!isFirebaseInitialized) {
-    console.log(`📱 [FCM MOCK PUSH] Gửi tới ${tokens.length} thiết bị:`);
-    console.log(`   Tiêu đề: ${title}`);
-    console.log(`   Nội dung: ${body}`);
-    console.log(`   Data payload:`, data);
-    return { successCount: tokens.length, failureCount: 0, mode: "mock" };
+    console.warn(`📱 [FCM Not Configured] Bỏ qua push tới ${tokens.length} thiết bị (FIREBASE_SERVICE_ACCOUNT chưa cấu hình).`);
+    return { successCount: 0, failureCount: tokens.length, skipped: true, reason: "FCM_NOT_CONFIGURED" };
   }
 
   try {

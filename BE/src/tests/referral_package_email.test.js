@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import nodemailer from 'nodemailer';
 import { TransferForm } from '../models/transferForm.model.js';
 import { User } from '../models/user.model.js';
 import { Hospital } from '../models/hospital.model.js';
@@ -11,6 +12,24 @@ import {
   getTransfers,
   getTransferById
 } from '../controllers/transfer.controller.js';
+import { referralMailer } from '../services/email.service.js';
+
+const EMAIL_ENV = ['EMAIL_USER', 'EMAIL_PASS'];
+// Chạy fn với cấu hình email cho trước (undefined = chưa cấu hình), trả lại biến môi trường cũ sau đó
+const withEmailEnv = async (values, fn) => {
+  const saved = EMAIL_ENV.map((k) => [k, process.env[k]]);
+  EMAIL_ENV.forEach((k, i) => { if (values[i] === undefined) delete process.env[k]; else process.env[k] = values[i]; });
+  try { return await fn(); } finally { saved.forEach(([k, v]) => { if (v === undefined) delete process.env[k]; else process.env[k] = v; }); }
+};
+
+const callSendEmail = async (user, transferId, overrideEmail) => {
+  let status = 0;
+  let body = null;
+  const req = { user, params: { id: transferId }, body: { overrideEmail } };
+  const res = { status(code) { status = code; return this; }, json(data) { body = data; return this; } };
+  await sendTransferEmail(req, res);
+  return { status, body };
+};
 
 describe('Unit & Integration Tests: Gói Chuyển Viện Thông Minh & Gửi Email Bệnh Nhân (UC-DOC-10)', () => {
   let hospital;
@@ -266,39 +285,48 @@ describe('Unit & Integration Tests: Gói Chuyển Viện Thông Minh & Gửi Ema
     expect(item.patient_id.profile.fullName).toBe('Hoàng Văn Bệnh Nhân');
   });
 
+  const receptionistReq = () => ({
+    id: receptionistUser._id.toString(),
+    role: 'receptionist',
+    hospitalId: hospital._id.toString(),
+    name: receptionistUser.profile.name
+  });
+
+  test('4a. Máy chủ chưa cấu hình email: báo lỗi, không ghi là đã gửi, không báo bác sĩ', async () => {
+    const { status, body } = await withEmailEnv([undefined, undefined],
+      () => callSendEmail(receptionistReq(), createdTransferId, 'benhnhan.chuyenkhoa@gmail.com'));
+    expect(status).toBe(503);
+    expect(body.success).toBe(false);
+    expect(body.message).toContain('chưa cấu hình email');
+
+    const updated = await TransferForm.findById(createdTransferId);
+    expect(updated.status).toBe('failed');
+    expect(updated.sentAt).toBeFalsy();
+    expect(await AuditLog.findOne({ entityId: createdTransferId, action: 'REFERRAL_PACKAGE_EMAILED' })).toBeNull();
+    expect(await AuditLog.findOne({ entityId: createdTransferId, action: 'REFERRAL_PACKAGE_EMAIL_FAILED' })).toBeTruthy();
+    expect(await Notification.findOne({ hospitalId: hospital._id, type: 'transfer_sent' })).toBeNull();
+  });
+
   test('4. Lễ tân gửi email hồ sơ chuyển viện cho bệnh nhân: Cập nhật status sent, ghi vết người gửi', async () => {
-    let responseStatus = 0;
-    let responseData = null;
-
-    const mockReq = {
-      user: {
-        id: receptionistUser._id.toString(),
-        role: 'receptionist',
-        hospitalId: hospital._id.toString(),
-        name: receptionistUser.profile.name
-      },
-      params: {
-        id: createdTransferId
-      },
-      body: {
-        overrideEmail: 'benhnhan.chuyenkhoa@gmail.com'
-      }
+    // Gửi qua transport giả của nodemailer (dựng thư đầy đủ, không ra mạng)
+    const realCreate = referralMailer.createTransport;
+    const sentMails = [];
+    referralMailer.createTransport = () => {
+      const t = nodemailer.createTransport({ jsonTransport: true });
+      return { sendMail: async (mail) => { const info = await t.sendMail(mail); sentMails.push(JSON.parse(info.message)); return info; } };
     };
-
-    const mockRes = {
-      status(code) {
-        responseStatus = code;
-        return this;
-      },
-      json(data) {
-        responseData = data;
-        return this;
-      }
-    };
-
-    await sendTransferEmail(mockReq, mockRes);
+    let result;
+    try {
+      result = await withEmailEnv(['benhvien.test@gmail.com', 'app-password'],
+        () => callSendEmail(receptionistReq(), createdTransferId, 'benhnhan.chuyenkhoa@gmail.com'));
+    } finally {
+      referralMailer.createTransport = realCreate;
+    }
+    const { status: responseStatus, body: responseData } = result;
     expect(responseStatus).toBe(200);
     expect(responseData.success).toBe(true);
+    expect(sentMails.length).toBe(1);
+    expect(sentMails[0].to[0].address).toBe('benhnhan.chuyenkhoa@gmail.com');
 
     // Kiểm tra DB cập nhật trạng thái
     const updated = await TransferForm.findById(createdTransferId);
@@ -312,7 +340,7 @@ describe('Unit & Integration Tests: Gói Chuyển Viện Thông Minh & Gửi Ema
       entityId: createdTransferId,
       action: 'REFERRAL_PACKAGE_EMAILED'
     });
-    expect(audit).toBeDefined();
+    expect(audit).toBeTruthy();
   });
 
   test('5. Bác sĩ/Lễ tân xem chi tiết gói chuyển viện đã gửi kèm thông tin delivery', async () => {

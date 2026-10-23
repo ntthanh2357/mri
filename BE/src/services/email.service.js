@@ -334,20 +334,19 @@ ${extraBlock}
  *
  * @returns {Promise<{ ok: boolean, reason?: string, attached: string[], linked: string[], skipped: string[] }>}
  */
+// Test thay createTransport bằng transport giả của nodemailer; code chạy thật luôn gửi qua Gmail
+export const referralMailer = {
+  createTransport: (user, pass) => nodemailer.createTransport({ service: "gmail", auth: { user, pass } }),
+};
+
 export const sendReferralPackageEmail = async ({ to, patientName, hospitalName, transfer, snapshot }) => {
   const result = { ok: false, attached: [], linked: [], skipped: [] };
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
 
   if (!emailUser || !emailPass) {
-    console.log(`[SMTP Mock/Fallback] Referral package ${transfer.transferNo} -> ${to} (EMAIL_USER/EMAIL_PASS chưa cấu hình trong .env, mô phỏng gửi email thành công)`);
-    return {
-      ok: true,
-      isMock: true,
-      attached: ["Báo cáo AI (HTML)", "Ảnh lát cắt MRI u não", "Mô hình 3D (.gltf)"],
-      linked: snapshot?.dicom?.zipUrl ? [`Tệp DICOM nén: ${snapshot.dicom.zipUrl}`] : [],
-      skipped: []
-    };
+    console.warn(`[SMTP Not Configured] Referral package ${transfer.transferNo} not sent (EMAIL_USER/EMAIL_PASS chưa cấu hình)`);
+    return { ...result, code: "EMAIL_NOT_CONFIGURED", reason: "Máy chủ chưa cấu hình email gửi đi (EMAIL_USER/EMAIL_PASS)" };
   }
 
   const publicBase = (process.env.PUBLIC_API_URL || process.env.BACKEND_URL || "").replace(/\/+$/, "");
@@ -400,10 +399,7 @@ export const sendReferralPackageEmail = async ({ to, patientName, hospitalName, 
       : "";
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: emailUser, pass: emailPass },
-    });
+    const transporter = referralMailer.createTransport(emailUser, emailPass);
 
     await transporter.sendMail({
       from: `"${hospitalName || "NeuroScan AI"}" <${emailUser}>`,

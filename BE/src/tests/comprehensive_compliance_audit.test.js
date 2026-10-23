@@ -612,7 +612,11 @@ const runAllTests = async () => {
       details: "Kiểm tra kết nối và cấu trúc dữ liệu JSON cảnh báo tới hệ thống giám sát tập trung.",
       affectedSequenceNumber: 9999,
     });
-    assert.strictEqual(alertResult.sent, true, "Hàm cảnh báo an ninh SIEM phải gửi thành công");
+    // Môi trường test không có webhook SIEM: không được báo là đã gửi
+    if (!process.env.SECURITY_SIEM_WEBHOOK_URL && !process.env.SLACK_SECURITY_WEBHOOK_URL) {
+      assert.strictEqual(alertResult.sent, false, "Không có webhook SIEM thì không được báo đã gửi");
+      assert.strictEqual(alertResult.reason, "SIEM_NOT_CONFIGURED");
+    }
 
     // 3. Kiểm tra rà soát toàn vẹn tự động
     const checkResult = await runAuditIntegrityCheckAndAlert();
