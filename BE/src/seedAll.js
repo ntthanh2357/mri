@@ -45,10 +45,11 @@ import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
 import { AiJob } from "./models/aiJob.model.js";
 
-import { connectDB } from "./config/db.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 import { tenantStorage } from "./middlewares/tenant.middleware.js";
 
 dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
 
 const seedComprehensiveDatabase = async () => {
   return tenantStorage.run({ bypassTenancy: true, isSuperAdmin: true }, async () => {
@@ -58,7 +59,8 @@ const seedComprehensiveDatabase = async () => {
       console.log("================================================================================");
 
       console.log("🔌 Connecting to database...");
-      await connectDB();
+      assertDemoSeedEnabled({ scriptName: "seedAll.js" });
+      await connectLocalTestMongo(mongoose, MONGO_URI);
       console.log("✅ Successfully connected to database.");
 
       // ── STEP 1: CLEAN ALL COLLECTIONS TO ENSURE CONSISTENCY ──────────────────
@@ -421,7 +423,9 @@ const seedComprehensiveDatabase = async () => {
         },
       ];
 
-      const users = await User.insertMany(mockUsers);
+      const users = await User.insertMany(
+        mockUsers.map((user) => ({ ...user, isTestAccount: true })),
+      );
       console.log(`✅ Seeded ${users.length} Users successfully across all 7 roles.`);
 
       // Quick access helpers

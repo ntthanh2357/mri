@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { Biomarker } from "./models/biomarker.model.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/neuro";
+const MONGO_URI = process.env.MONGO_URI;
+assertDemoSeedEnabled({ scriptName: "seedBiomarkers.js" });
 
 const BIOMARKERS_DATA = [
   // ─── HUYẾT HỌC (17 chỉ số) ─────────────────────────────────────────────────
@@ -365,7 +367,7 @@ const BIOMARKERS_DATA = [
 const seedBiomarkers = async () => {
   try {
     console.log("🔌 Connecting to MongoDB...");
-    await mongoose.connect(MONGO_URI);
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log("✅ Connected successfully.");
 
     // Xóa biomarkers cũ nếu có để tránh trùng

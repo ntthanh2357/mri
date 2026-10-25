@@ -6,13 +6,15 @@ import MedicalRecord from './models/medicalRecord.model.js';
 import CareSheet from './models/careSheet.model.js';
 import Consultation from './models/consultation.model.js';
 import ConsentForm from './models/consentForm.model.js';
-import { connectDB } from './config/db.js';
+import { assertDemoSeedEnabled, connectLocalTestMongo } from './utils/seedGuard.util.js';
 
 dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
 
 const seedData = async () => {
   try {
-    await connectDB();
+    assertDemoSeedEnabled({ scriptName: 'seedEMR.js' });
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log('✅ DB connected for seeding');
 
     // Get hospital context

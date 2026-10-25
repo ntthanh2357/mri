@@ -2,16 +2,18 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { connectLocalTestMongo } from '../utils/seedGuard.util.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://group5:12345@mri.kwwgmt6.mongodb.net/neuro';
+// Bắt buộc đọc từ biến môi trường — KHÔNG hardcode thông tin xác thực trong mã nguồn.
+const MONGO_URI = process.env.MONGO_URI;
 
 async function renewHospitals() {
   console.log('Connecting to MongoDB...');
-  await mongoose.connect(MONGO_URI);
+  await connectLocalTestMongo(mongoose, MONGO_URI);
   console.log('Connected.');
 
   const db = mongoose.connection.db;
