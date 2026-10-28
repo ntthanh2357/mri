@@ -20,10 +20,14 @@ import Config from '../constants/config';
 import Colors from '../constants/colors';
 import { get, post, setAuthToken } from '../services/api.service';
 import { signInWithGoogleWeb } from '../firebase';
-import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw } from 'lucide-react';
+import {
+  Eye, EyeOff, CheckCircle2, AlertCircle, Info, ShieldCheck, Sparkles, Check, Brain, Microscope, Stethoscope, RefreshCw,
+  ArrowRight, ArrowLeft, Mail, Lock, KeyRound, Phone, UserRound, UserPlus, LogIn, House,
+} from 'lucide-react';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import PressableScale from '../components/PressableScale';
 import HeroScanOverlay from '../components/HeroScanOverlay';
+import { FloatingOrb } from '../components/ui/Motion';
 import useWelcomeAnimations from '../controllers/useWelcomeAnimations';
 import styles from './WelcomeScreen.styles';
 import { useDialogKeys } from '../utils/useDialogKeys';
@@ -41,6 +45,83 @@ const servicesData = [
   { id: 2, title: 'Phân tích & Tầm soát U não AI', icon: 'Sparkles' },
   { id: 3, title: 'Chẩn đoán hình ảnh Ung thư Não', icon: 'Microscope' },
 ];
+
+// ===== Thành phần hiển thị của thẻ đăng nhập (không chứa logic nghiệp vụ) =====
+// Khai báo ngoài WelcomeScreen để ô nhập không bị tạo lại (mất focus) mỗi lần gõ.
+const IS_WEB = Platform.OS === 'web';
+const FIELD_ICON = { idle: '#8A9AB3', focus: '#0E8A7A', error: '#C2410C' };
+
+/** Ô nhập có biểu tượng đầu dòng; viền + vòng sáng khi focus nằm ở khung ngoài. */
+const AuthField = ({ icon: Icon, focused, error, trailing, style, inputStyle, ...inputProps }) => (
+  <View style={[styles.fieldShell, style, focused && styles.fieldShellFocused, !!error && styles.fieldShellError]}>
+    {Icon ? (
+      <Icon size={18} strokeWidth={2} color={error ? FIELD_ICON.error : focused ? FIELD_ICON.focus : FIELD_ICON.idle} />
+    ) : null}
+    <TextInput style={[styles.fieldInput, inputStyle]} placeholderTextColor={Colors.secondary} {...inputProps} />
+    {trailing}
+  </View>
+);
+
+/** Dòng báo lỗi dưới ô nhập. */
+const FieldError = ({ message }) =>
+  message ? (
+    <View style={styles.inlineErrorRow}>
+      <AlertCircle size={13} color={FIELD_ICON.error} />
+      <Text style={styles.inlineErrorText}>{message}</Text>
+    </View>
+  ) : null;
+
+/** Mã OTP thử nghiệm — chỉ có khi backend bật ENABLE_DEBUG_OTP. */
+const DevOtpNote = ({ code }) =>
+  code ? (
+    <View style={styles.devOtpBox}>
+      <Text style={styles.devOtpTag}>DEV</Text>
+      <Text style={styles.devOtpText}>
+        Mã OTP thử nghiệm: <Text style={styles.devOtpCode}>{code}</Text>
+      </Text>
+    </View>
+  ) : null;
+
+/** Nút chính dạng viên, nền chuyển navy → xanh ngọc. */
+const PrimaryButton = ({ label, loadingLabel, loading, onPress }) => (
+  <PressableScale
+    style={styles.formButton}
+    hoverStyle={styles.formButtonHover}
+    focusStyle={styles.buttonFocus}
+    onPress={onPress}
+    disabled={loading}
+  >
+    <View style={styles.btnLoadingRow}>
+      {loading ? <ActivityIndicator color="#FFF" size="small" /> : null}
+      <Text style={styles.formButtonText}>{loading ? loadingLabel : label}</Text>
+      {loading ? null : <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />}
+    </View>
+  </PressableScale>
+);
+
+/**
+ * Đầu thẻ: nhãn nhỏ + tiêu đề + mô tả + huy hiệu biểu tượng.
+ * dark: nền navy (desktop, đi cùng cột ảnh bên trái); sáng: nền trắng (điện thoại — ảnh hero phía trên đã là navy).
+ */
+const AuthCardHeader = ({ dark, compact, eyebrow, title, subtitle }) => (
+  <View style={[styles.cardHeader, dark ? styles.cardHeaderDark : styles.cardHeaderLight, compact && styles.cardHeaderCompact]}>
+    {dark ? <View style={styles.cardHeaderGlow} pointerEvents="none" /> : null}
+    {dark ? <View style={styles.cardHeaderRing} pointerEvents="none" /> : null}
+    {!dark && IS_WEB ? <View style={styles.cardTopAccent} pointerEvents="none" /> : null}
+    <View style={styles.cardHeaderRow}>
+      <View style={styles.cardHeaderText}>
+        <View style={[styles.eyebrowChip, dark && styles.eyebrowChipDark]}>
+          <View style={[styles.eyebrowDot, dark && styles.eyebrowDotDark]} />
+          <Text style={[styles.eyebrowText, dark && styles.eyebrowTextDark]}>{eyebrow}</Text>
+        </View>
+        <Text style={[styles.authCardTitle, dark && styles.authCardTitleDark]} accessibilityRole="header" dataSet={{ font: 'display' }}>
+          {title}
+        </Text>
+        <Text style={[styles.authCardSub, dark && styles.authCardSubDark]}>{subtitle}</Text>
+      </View>
+    </View>
+  </View>
+);
 
 const WelcomeScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -581,6 +662,400 @@ const WelcomeScreen = ({ navigation }) => {
     }
   };
 
+  // ===== Thẻ đăng nhập / đăng ký / xác thực 2 lớp — một khối dùng chung cho desktop và điện thoại =====
+  const passwordToggle = (
+    <TouchableOpacity
+      style={styles.passwordVisibilityBtn}
+      onPress={() => setShowPassword(!showPassword)}
+      accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+    >
+      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
+    </TouchableOpacity>
+  );
+
+  const cardHeader = showTwoFactor
+    ? {
+        icon: ShieldCheck,
+        eyebrow: 'Bảo mật 2 lớp',
+        title: 'Xác thực 2 lớp',
+        subtitle: 'Mã xác thực đã được gửi tới địa chỉ email đăng ký của bạn. Vui lòng nhập để tiếp tục.',
+      }
+    : activeForm === 'login'
+      ? {
+          icon: LogIn,
+          eyebrow: loginRole === 'patient' ? 'Cổng bệnh nhân' : 'Cổng nhân viên y tế',
+          title: isDesktop ? 'Chào mừng quay trở lại' : 'Đăng nhập',
+          subtitle: isDesktop ? 'Đăng nhập để truy cập hệ thống NeuroScan AI' : 'Truy cập hệ thống NeuroScan AI',
+        }
+      : {
+          icon: UserPlus,
+          eyebrow: 'Tài khoản mới',
+          title: 'Đăng ký tài khoản',
+          subtitle: 'Tạo tài khoản mới để lưu lịch sử chẩn đoán MRI',
+        };
+
+  const authCard = (
+    <Animated.View style={[styles.authStack, anim.enterStyle(anim.card, 24)]}>
+      <View style={styles.authCardContainer} dataSet={{ authcard: 'patient' }}>
+        <AuthCardHeader dark={isDesktop} compact={!isDesktop} {...cardHeader} />
+
+        <View style={[styles.cardBody, !isDesktop && styles.cardBodyCompact]}>
+          {showTwoFactor ? (
+            <View style={styles.authForm}>
+              <View style={styles.otpSentBox}>
+                <Mail size={16} color={Colors.brandGreen} />
+                <Text style={styles.otpSentText}>
+                  Mã được gửi tới: <Text style={styles.otpSentEmail}>{twoFactorEmail}</Text>
+                </Text>
+              </View>
+
+              <Text style={styles.formLabel}>Mã xác thực OTP (6 chữ số) *</Text>
+              <AuthField
+                icon={KeyRound}
+                focused={focusedInput === 'twoFactor'}
+                error={twoFactorError}
+                inputStyle={twoFactorCode ? styles.otpInputFilled : null}
+                placeholder="Nhập 6 chữ số"
+                value={twoFactorCode}
+                onChangeText={(text) => {
+                  setTwoFactorCode(text);
+                  if (twoFactorError) setTwoFactorError('');
+                }}
+                autoCapitalize="none"
+                keyboardType="number-pad"
+                maxLength={6}
+                onFocus={() => setFocusedInput('twoFactor')}
+                onBlur={() => setFocusedInput(null)}
+                onSubmitEditing={handleVerify2Factor}
+              />
+              <FieldError message={twoFactorError} />
+              <DevOtpNote code={debugOtp} />
+
+              <PrimaryButton
+                label="Xác nhận & Đăng nhập"
+                loadingLabel="Đang xác nhận kết nối..."
+                loading={loading}
+                onPress={handleVerify2Factor}
+              />
+
+              <TouchableOpacity
+                style={styles.resendOtpRow}
+                onPress={handleResend2FA}
+                disabled={resendingOtp || loading}
+              >
+                {resendingOtp ? (
+                  <ActivityIndicator size="small" color={Colors.brandGreen} />
+                ) : (
+                  <RefreshCw size={13} color={Colors.brandGreen} />
+                )}
+                <Text style={styles.resendOtpText}>
+                  {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.backButtonInline}
+                onPress={() => {
+                  setShowTwoFactor(false);
+                  setTwoFactorCode('');
+                  setDebugOtp('');
+                }}
+              >
+                <ArrowLeft size={14} color="#64748B" />
+                <Text style={styles.backButtonInlineText}>Quay lại đăng nhập</Text>
+              </TouchableOpacity>
+            </View>
+          ) : activeForm === 'login' ? (
+            <View style={styles.authForm}>
+              {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
+                  Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
+              {!isWeb && (
+              <View style={styles.roleTabsContainer}>
+                <TouchableOpacity
+                  style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
+                  onPress={() => {
+                    setLoginRole('patient');
+                    setEmailError('');
+                    setPasswordError('');
+                  }}
+                >
+                  <Text style={[styles.roleTabText, loginRole === 'patient' ? styles.roleTabTextActive : null]}>
+                    Bệnh nhân
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.roleTab, loginRole === 'staff' ? styles.roleTabActive : null]}
+                  onPress={() => {
+                    setLoginRole('staff');
+                    setEmailError('');
+                    setPasswordError('');
+                  }}
+                >
+                  <Text style={[styles.roleTabText, loginRole === 'staff' ? styles.roleTabTextActive : null]}>
+                    Bác sĩ / Nhân viên
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              )}
+
+              <Text style={styles.formLabel}>
+                {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
+              </Text>
+              <AuthField
+                icon={loginRole === 'patient' ? Mail : UserRound}
+                focused={focusedInput === 'email'}
+                error={emailError}
+                placeholder={loginRole === 'patient' ? 'vidu@neuroscan.com' : 'Nhập mã nhân sự hoặc email'}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) setEmailError('');
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onFocus={() => setFocusedInput('email')}
+                onBlur={() => setFocusedInput(null)}
+              />
+              <FieldError message={emailError} />
+
+              <View style={styles.labelRow}>
+                <Text style={[styles.formLabel, styles.formLabelInline]}>Mật khẩu *</Text>
+                <TouchableOpacity onPress={handleForgotPassword}>
+                  <Text style={styles.forgotPasswordLink}>Quên mật khẩu?</Text>
+                </TouchableOpacity>
+              </View>
+              <AuthField
+                icon={Lock}
+                focused={focusedInput === 'password'}
+                error={passwordError}
+                trailing={passwordToggle}
+                placeholder="••••••••"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) setPasswordError('');
+                }}
+                autoCapitalize="none"
+                onFocus={() => setFocusedInput('password')}
+                onBlur={() => setFocusedInput(null)}
+                onSubmitEditing={handleLogin}
+              />
+              <FieldError message={passwordError} />
+
+              {/* Bệnh nhân chưa kích hoạt: nhập mã OTP kích hoạt ngay trong thẻ đăng nhập */}
+              {showVerification && (
+                <View style={styles.activationBox}>
+                  <Text style={styles.formLabel}>Mã xác thực OTP kích hoạt *</Text>
+                  <AuthField
+                    icon={KeyRound}
+                    style={styles.fieldShellOnTint}
+                    focused={focusedInput === 'verifyCode'}
+                    error={verificationError}
+                    inputStyle={verificationCode ? styles.otpInputFilled : null}
+                    placeholder="Nhập 6 chữ số"
+                    value={verificationCode}
+                    onChangeText={(text) => {
+                      setVerificationCode(text);
+                      if (verificationError) setVerificationError('');
+                    }}
+                    autoCapitalize="none"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onFocus={() => setFocusedInput('verifyCode')}
+                    onBlur={() => setFocusedInput(null)}
+                    onSubmitEditing={handleLogin}
+                  />
+                  <FieldError message={verificationError} />
+                  <DevOtpNote code={debugOtp} />
+
+                  <View style={styles.resendRow}>
+                    <Text style={styles.resendText}>Chưa nhận được mã? </Text>
+                    <TouchableOpacity onPress={handleResendActivation} disabled={loading}>
+                      <Text style={styles.resendLink}>Gửi lại mã</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Remember Me Box */}
+              <View style={styles.rememberRow}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setRememberMe(!rememberMe)}
+                >
+                  <View style={[styles.checkbox, rememberMe ? styles.checkboxChecked : null]}>
+                    {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
+                  <Text style={styles.rememberText}>
+                    Lưu thông tin đăng nhập (Không khuyến nghị trên thiết bị công cộng)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <PrimaryButton
+                label={showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
+                loadingLabel="Đang xử lý kết nối..."
+                loading={loading}
+                onPress={handleLogin}
+              />
+
+              <View style={styles.orDivider}>
+                <View style={styles.orLine} />
+                <Text style={styles.orText}>hoặc</Text>
+                <View style={styles.orLine} />
+              </View>
+
+              {/* Google SSO */}
+              <PressableScale style={styles.googleBtn} hoverStyle={styles.googleBtnHover} focusStyle={styles.buttonFocus} onPress={handleGoogleLogin}>
+                <Image
+                  source={{ uri: 'https://developers.google.com/static/identity/images/g-logo.png' }}
+                  style={styles.googleLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+              </PressableScale>
+
+              <View style={styles.formFooter}>
+                <Text style={styles.formFooterText}>Chưa có tài khoản? </Text>
+                <TouchableOpacity onPress={() => {
+                  setActiveForm('register');
+                  setEmailError('');
+                  setPasswordError('');
+                }}>
+                  <Text style={styles.formFooterLink}>Đăng ký ngay</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.authForm}>
+              <Text style={styles.formLabel}>Họ và tên *</Text>
+              <AuthField
+                icon={UserRound}
+                focused={focusedInput === 'name'}
+                error={nameError}
+                placeholder="Nguyễn Văn A"
+                value={name}
+                onChangeText={(text) => {
+                  setName(text);
+                  if (nameError) setNameError('');
+                }}
+                onFocus={() => setFocusedInput('name')}
+                onBlur={() => setFocusedInput(null)}
+              />
+              <FieldError message={nameError} />
+
+              <Text style={styles.formLabel}>Địa chỉ Email *</Text>
+              <AuthField
+                icon={Mail}
+                focused={focusedInput === 'email'}
+                error={emailError}
+                placeholder="vidu@neuroscan.com"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) setEmailError('');
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onFocus={() => setFocusedInput('email')}
+                onBlur={() => setFocusedInput(null)}
+              />
+              <FieldError message={emailError} />
+
+              <Text style={styles.formLabel}>Số điện thoại (tùy chọn)</Text>
+              <AuthField
+                icon={Phone}
+                focused={focusedInput === 'phone'}
+                error={phoneError}
+                placeholder="09XXXXXXXX"
+                value={phone}
+                onChangeText={(text) => {
+                  setPhone(text);
+                  if (phoneError) setPhoneError('');
+                }}
+                keyboardType="phone-pad"
+                onFocus={() => setFocusedInput('phone')}
+                onBlur={() => setFocusedInput(null)}
+                onSubmitEditing={handleRegister}
+              />
+              <FieldError message={phoneError} />
+
+              <Text style={styles.formLabel}>Mật khẩu *</Text>
+              <AuthField
+                icon={Lock}
+                focused={focusedInput === 'password'}
+                error={passwordError}
+                trailing={passwordToggle}
+                placeholder="••••••••"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) setPasswordError('');
+                }}
+                autoCapitalize="none"
+                onFocus={() => setFocusedInput('password')}
+                onBlur={() => setFocusedInput(null)}
+                onSubmitEditing={handleRegister}
+              />
+              <FieldError message={passwordError} />
+
+              <PrimaryButton
+                label="Đăng ký ngay"
+                loadingLabel="Đang đăng ký..."
+                loading={loading}
+                onPress={handleRegister}
+              />
+
+              <View style={styles.formFooter}>
+                <Text style={styles.formFooterText}>Đã có tài khoản? </Text>
+                <TouchableOpacity onPress={() => {
+                  setActiveForm('login');
+                  setEmailError('');
+                  setPasswordError('');
+                }}>
+                  <Text style={styles.formFooterLink}>Đăng nhập</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.cardTrust}>
+          <ShieldCheck size={14} color={Colors.brandGreen} />
+          <Text style={styles.cardTrustText}>Bảo vệ bằng xác thực 2 lớp (mã OTP qua email)</Text>
+        </View>
+      </View>
+
+      {/* Hỗ trợ — nằm dưới thẻ. Lưu ý tách luồng: KHÔNG hiển thị liên kết tới Cổng nội bộ /staff
+          trên trang công khai — nhân viên dùng địa chỉ nội bộ riêng. */}
+      <View style={styles.supportOutside}>
+        <View style={styles.supportChips}>
+          {!isDesktop ? (
+            <TouchableOpacity style={styles.supportChip} onPress={() => navigation.navigate('Landing')}>
+              <House size={13} color={Colors.brandGreen} />
+              <Text style={[styles.supportChipText, styles.supportChipStrong]}>Về trang chủ</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity style={styles.supportChip} onPress={() => Linking.openURL('tel:02363650676')}>
+            <Phone size={13} color={Colors.brandGreen} />
+            <Text style={styles.supportChipText}>
+              Hotline hỗ trợ: <Text style={styles.supportChipStrong}>0236 3650 676</Text>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.supportChip} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
+            <Mail size={13} color={Colors.brandGreen} />
+            <Text style={styles.supportChipText}>
+              <Text style={styles.supportChipStrong}>support@neuroscan.com</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
+      </View>
+    </Animated.View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {isDesktop ? (
@@ -659,437 +1134,24 @@ const WelcomeScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Right Column - Centered Form Card */}
+          {/* Right Column - nền chấm mờ + quầng màu thương hiệu, thẻ đăng nhập ở giữa (cuộn được khi màn hình thấp) */}
           <View style={styles.rightColumn}>
-            <Animated.View style={[styles.authCardContainer, anim.enterStyle(anim.card, 24)]}>
-              {showTwoFactor ? (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Xác thực 2 lớp</Text>
-                  <Text style={styles.authCardSub}>
-                    Mã xác thực đã được gửi tới địa chỉ email đăng ký của bạn. Vui lòng nhập để tiếp tục.
-                  </Text>
-
-                  <Text style={styles.formLabel}>Mã xác thực OTP (6 chữ số) *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'twoFactor' ? styles.formInputFocused : null,
-                      twoFactorError ? styles.formInputError : null
-                    ]}
-                    placeholder="Nhập 6 chữ số"
-                    placeholderTextColor={Colors.secondary}
-                    value={twoFactorCode}
-                    onChangeText={(text) => {
-                      setTwoFactorCode(text);
-                      if (twoFactorError) setTwoFactorError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    onFocus={() => setFocusedInput('twoFactor')}
-                    onBlur={() => setFocusedInput(null)}
-                    onSubmitEditing={handleVerify2Factor}
-                  />
-                  {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
-                  {debugOtp ? (
-                    <Text
-                      style={{
-                        fontSize: 12, fontWeight: '700', color: '#92400E',
-                        backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
-                        borderRadius: 8, marginTop: 10, textAlign: 'center',
-                      }}
-                    >
-                      (DEV) Mã OTP thử nghiệm: {debugOtp}
-                    </Text>
-                  ) : null}
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleVerify2Factor}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
-                    )}
-                  </PressableScale>
-
-                  <Text style={styles.twoFactorEmailHint}>
-                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.resendOtpRow}
-                    onPress={handleResend2FA}
-                    disabled={resendingOtp || loading}
-                  >
-                    {resendingOtp ? (
-                      <ActivityIndicator size="small" color={Colors.brandGreen} />
-                    ) : (
-                      <RefreshCw size={13} color={Colors.brandGreen} />
-                    )}
-                    <Text style={styles.resendOtpText}>
-                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.backButtonInline}
-                    onPress={() => {
-                      setShowTwoFactor(false);
-                      setTwoFactorCode('');
-                      setDebugOtp('');
-                    }}
-                  >
-                    <Text style={styles.backButtonInlineText}>← Quay lại đăng nhập</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : activeForm === 'login' ? (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Chào mừng quay trở lại</Text>
-                  <Text style={styles.authCardSub}>Đăng nhập để truy cập hệ thống NeuroScan AI</Text>
-
-                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
-                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
-                  {!isWeb && (
-                  <View style={styles.roleTabsContainer}>
-                    <TouchableOpacity
-                      style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
-                      onPress={() => {
-                        setLoginRole('patient');
-                        setEmailError('');
-                        setPasswordError('');
-                      }}
-                    >
-                      <Text style={[styles.roleTabText, loginRole === 'patient' ? styles.roleTabTextActive : null]}>
-                        Bệnh nhân
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.roleTab, loginRole === 'staff' ? styles.roleTabActive : null]}
-                      onPress={() => {
-                        setLoginRole('staff');
-                        setEmailError('');
-                        setPasswordError('');
-                      }}
-                    >
-                      <Text style={[styles.roleTabText, loginRole === 'staff' ? styles.roleTabTextActive : null]}>
-                        Bác sĩ / Nhân viên
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  )}
-
-                  <Text style={styles.formLabel}>
-                    {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'email' ? styles.formInputFocused : null,
-                      emailError ? styles.formInputError : null
-                    ]}
-                    placeholder={loginRole === 'patient' ? 'vidu@neuroscan.com' : 'Nhập mã nhân sự hoặc email'}
-                    placeholderTextColor={Colors.secondary}
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (emailError) setEmailError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onFocus={() => setFocusedInput('email')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {emailError ? <Text style={styles.inlineErrorText}>{emailError}</Text> : null}
-
-                  <View style={styles.labelRow}>
-                    <Text style={styles.formLabel}>Mật khẩu *</Text>
-                    <TouchableOpacity onPress={handleForgotPassword}>
-                      <Text style={styles.forgotPasswordLink}>Quên mật khẩu?</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.passwordInputContainer}>
-                    <TextInput
-                      style={[
-                        styles.formInput,
-                        { paddingRight: 45 },
-                        focusedInput === 'password' ? styles.formInputFocused : null,
-                        passwordError ? styles.formInputError : null
-                      ]}
-                      placeholder="••••••••"
-                      placeholderTextColor={Colors.secondary}
-                      secureTextEntry={!showPassword}
-                      value={password}
-                      onChangeText={(text) => {
-                        setPassword(text);
-                        if (passwordError) setPasswordError('');
-                      }}
-                      autoCapitalize="none"
-                      onFocus={() => setFocusedInput('password')}
-                      onBlur={() => setFocusedInput(null)}
-                      onSubmitEditing={handleLogin}
-                    />
-                    <TouchableOpacity
-                      style={styles.passwordVisibilityBtn}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
-                    </TouchableOpacity>
-                  </View>
-                  {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
-
-                  {/* Patient Activation OTP field inside Login card (Desktop) */}
-                  {showVerification && (
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.formLabel}>Mã xác thực OTP kích hoạt *</Text>
-                      <TextInput
-                        style={[
-                          styles.formInput,
-                          focusedInput === 'verifyCode' ? styles.formInputFocused : null,
-                          verificationError ? styles.formInputError : null
-                        ]}
-                        placeholder="Nhập 6 chữ số"
-                        placeholderTextColor={Colors.secondary}
-                        value={verificationCode}
-                        onChangeText={(text) => {
-                          setVerificationCode(text);
-                          if (verificationError) setVerificationError('');
-                        }}
-                        autoCapitalize="none"
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        onFocus={() => setFocusedInput('verifyCode')}
-                        onBlur={() => setFocusedInput(null)}
-                        onSubmitEditing={handleLogin}
-                      />
-                      {verificationError ? <Text style={styles.inlineErrorText}>{verificationError}</Text> : null}
-                      {debugOtp ? (
-                        <Text
-                          style={{
-                            fontSize: 12, fontWeight: '700', color: '#92400E',
-                            backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
-                            borderRadius: 8, marginTop: 6, marginBottom: 8, textAlign: 'center',
-                          }}
-                        >
-                          (DEV) Mã OTP thử nghiệm: {debugOtp}
-                        </Text>
-                      ) : null}
-
-                      <View style={[styles.resendRow, { justifyContent: 'flex-start', marginTop: -8, marginBottom: 0 }]}>
-                        <Text style={styles.resendText}>Chưa nhận được mã? </Text>
-                        <TouchableOpacity onPress={handleResendActivation} disabled={loading}>
-                          <Text style={styles.resendLink}>Gửi lại mã</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Remember Me Box */}
-                  <View style={styles.rememberRow}>
-                    <TouchableOpacity
-                      style={styles.checkboxContainer}
-                      onPress={() => setRememberMe(!rememberMe)}
-                    >
-                      <View style={[styles.checkbox, rememberMe ? styles.checkboxChecked : null]}>
-                        {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
-                      </View>
-                      <Text style={styles.rememberText}>
-                        Lưu thông tin đăng nhập (Không khuyến nghị trên thiết bị công cộng)
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleLogin}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang xử lý kết nối...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
-                      </Text>
-                    )}
-                  </PressableScale>
-
-                  {/* Google SSO */}
-                  <PressableScale style={styles.googleBtn} hoverStyle={styles.googleBtnHover} focusStyle={styles.buttonFocus} onPress={handleGoogleLogin}>
-                    <Image
-                      source={{ uri: 'https://developers.google.com/static/identity/images/g-logo.png' }}
-                      style={{ width: 18, height: 18, marginRight: 8 }}
-                      resizeMode="contain"
-                    />
-                    <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
-                  </PressableScale>
-
-                  <View style={styles.formFooter}>
-                    <Text style={styles.formFooterText}>Chưa có tài khoản? </Text>
-                    <TouchableOpacity onPress={() => {
-                      setActiveForm('register');
-                      setEmailError('');
-                      setPasswordError('');
-                    }}>
-                      <Text style={styles.formFooterLink}>Đăng ký ngay</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Đăng ký tài khoản</Text>
-                  <Text style={styles.authCardSub}>Tạo tài khoản mới để lưu lịch sử chẩn đoán MRI</Text>
-
-                  <Text style={styles.formLabel}>Họ và tên *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'name' ? styles.formInputFocused : null,
-                      nameError ? styles.formInputError : null
-                    ]}
-                    placeholder="Nguyễn Văn A"
-                    placeholderTextColor={Colors.secondary}
-                    value={name}
-                    onChangeText={(text) => {
-                      setName(text);
-                      if (nameError) setNameError('');
-                    }}
-                    onFocus={() => setFocusedInput('name')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {nameError ? <Text style={styles.inlineErrorText}>{nameError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Địa chỉ Email *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'email' ? styles.formInputFocused : null,
-                      emailError ? styles.formInputError : null
-                    ]}
-                    placeholder="vidu@neuroscan.com"
-                    placeholderTextColor={Colors.secondary}
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (emailError) setEmailError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onFocus={() => setFocusedInput('email')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {emailError ? <Text style={styles.inlineErrorText}>{emailError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Số điện thoại (tùy chọn)</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'phone' ? styles.formInputFocused : null,
-                      phoneError ? styles.formInputError : null
-                    ]}
-                    placeholder="09XXXXXXXX"
-                    placeholderTextColor={Colors.secondary}
-                    value={phone}
-                    onChangeText={(text) => {
-                      setPhone(text);
-                      if (phoneError) setPhoneError('');
-                    }}
-                    keyboardType="phone-pad"
-                    onFocus={() => setFocusedInput('phone')}
-                    onBlur={() => setFocusedInput(null)}
-                    onSubmitEditing={handleRegister}
-                  />
-                  {phoneError ? <Text style={styles.inlineErrorText}>{phoneError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Mật khẩu *</Text>
-                  <View style={styles.passwordInputContainer}>
-                    <TextInput
-                      style={[
-                        styles.formInput,
-                        { paddingRight: 45 },
-                        focusedInput === 'password' ? styles.formInputFocused : null,
-                        passwordError ? styles.formInputError : null
-                      ]}
-                      placeholder="••••••••"
-                      placeholderTextColor={Colors.secondary}
-                      secureTextEntry={!showPassword}
-                      value={password}
-                      onChangeText={(text) => {
-                        setPassword(text);
-                        if (passwordError) setPasswordError('');
-                      }}
-                      autoCapitalize="none"
-                      onFocus={() => setFocusedInput('password')}
-                      onBlur={() => setFocusedInput(null)}
-                      onSubmitEditing={handleRegister}
-                    />
-                    <TouchableOpacity
-                      style={styles.passwordVisibilityBtn}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
-                    </TouchableOpacity>
-                  </View>
-                  {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleRegister}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang đăng ký...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>Đăng ký ngay</Text>
-                    )}
-                  </PressableScale>
-
-                  <View style={styles.formFooter}>
-                    <Text style={styles.formFooterText}>Đã có tài khoản? </Text>
-                    <TouchableOpacity onPress={() => {
-                      setActiveForm('login');
-                      setEmailError('');
-                      setPasswordError('');
-                    }}>
-                      <Text style={styles.formFooterLink}>Đăng nhập</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Footer: Support Info below Form Card on Desktop */}
-              {/* Lưu ý tách luồng: KHÔNG hiển thị liên kết tới Cổng nội bộ /staff
-                  trên trang công khai — nhân viên dùng địa chỉ nội bộ riêng. */}
-              <View style={styles.formSeparator} />
-              <View style={styles.supportContainerInline}>
-                <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ:{' '}
-                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
-                    0236 3650 676
-                  </Text>
-                  {'  |  Email: '}
-                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
-                    support@neuroscan.com
-                  </Text>
-                </Text>
-                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
-              </View>
-            </Animated.View>
+            {/* Nút 'Về trang chủ' — góc trên phải (giống Cổng nội bộ) */}
+            <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Landing')} dataSet={{ hover: 'glow' }}>
+              <ArrowLeft size={15} color={Colors.brandNavy} />
+              <House size={15} color={Colors.brandGreen} />
+              <Text style={styles.homeButtonText}>Về trang chủ</Text>
+            </TouchableOpacity>
+            <View style={styles.rightDots} pointerEvents="none" />
+            <FloatingOrb size={440} color="rgba(111, 221, 178, 0.26)" style={{ top: -180, right: -160 }} />
+            <FloatingOrb size={400} color="rgba(11, 42, 85, 0.10)" style={{ bottom: -180, left: -150 }} slow />
+            <ScrollView
+              style={styles.rightScroll}
+              contentContainerStyle={styles.rightScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {authCard}
+            </ScrollView>
           </View>
         </View>
       ) : (
@@ -1125,433 +1187,7 @@ const WelcomeScreen = ({ navigation }) => {
 
           {/* Form Card */}
           <View style={styles.mobileFormContainer}>
-            <Animated.View style={[styles.authCardContainer, anim.enterStyle(anim.card, 24)]}>
-              {showTwoFactor ? (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Xác thực 2 lớp</Text>
-                  <Text style={styles.authCardSub}>
-                    Mã xác thực đã được gửi tới địa chỉ email đăng ký của bạn. Vui lòng nhập để tiếp tục.
-                  </Text>
-
-                  <Text style={styles.formLabel}>Mã xác thực OTP (6 chữ số) *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'twoFactor' ? styles.formInputFocused : null,
-                      twoFactorError ? styles.formInputError : null
-                    ]}
-                    placeholder="Nhập 6 chữ số"
-                    placeholderTextColor={Colors.secondary}
-                    value={twoFactorCode}
-                    onChangeText={(text) => {
-                      setTwoFactorCode(text);
-                      if (twoFactorError) setTwoFactorError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    onFocus={() => setFocusedInput('twoFactor')}
-                    onBlur={() => setFocusedInput(null)}
-                    onSubmitEditing={handleVerify2Factor}
-                  />
-                  {twoFactorError ? <Text style={styles.inlineErrorText}>{twoFactorError}</Text> : null}
-                  {debugOtp ? (
-                    <Text
-                      style={{
-                        fontSize: 12, fontWeight: '700', color: '#92400E',
-                        backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
-                        borderRadius: 8, marginTop: 10, textAlign: 'center',
-                      }}
-                    >
-                      (DEV) Mã OTP thử nghiệm: {debugOtp}
-                    </Text>
-                  ) : null}
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleVerify2Factor}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang xác nhận kết nối...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>Xác nhận & Đăng nhập</Text>
-                    )}
-                  </PressableScale>
-
-                  <Text style={styles.twoFactorEmailHint}>
-                    Mã được gửi tới: <Text style={{ fontWeight: '700' }}>{twoFactorEmail}</Text>
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.resendOtpRow}
-                    onPress={handleResend2FA}
-                    disabled={resendingOtp || loading}
-                  >
-                    {resendingOtp ? (
-                      <ActivityIndicator size="small" color={Colors.brandGreen} />
-                    ) : (
-                      <RefreshCw size={13} color={Colors.brandGreen} />
-                    )}
-                    <Text style={styles.resendOtpText}>
-                      {resendingOtp ? 'Đang gửi lại…' : 'Chưa nhận được mã? Gửi lại mã'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.backButtonInline}
-                    onPress={() => {
-                      setShowTwoFactor(false);
-                      setTwoFactorCode('');
-                      setDebugOtp('');
-                    }}
-                  >
-                    <Text style={styles.backButtonInlineText}>← Quay lại đăng nhập</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : activeForm === 'login' ? (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Đăng nhập</Text>
-                  <Text style={styles.authCardSub}>Truy cập hệ thống NeuroScan AI</Text>
-
-                  {/* Role Tabs — chỉ hiển thị trên app di động (một ứng dụng duy nhất).
-                      Trên Web: cổng / dành riêng Bệnh nhân, không có tab nhân viên. */}
-                  {!isWeb && (
-                  <View style={styles.roleTabsContainer}>
-                    <TouchableOpacity
-                      style={[styles.roleTab, loginRole === 'patient' ? styles.roleTabActive : null]}
-                      onPress={() => {
-                        setLoginRole('patient');
-                        setEmailError('');
-                        setPasswordError('');
-                      }}
-                    >
-                      <Text style={[styles.roleTabText, loginRole === 'patient' ? styles.roleTabTextActive : null]}>
-                        Bệnh nhân
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.roleTab, loginRole === 'staff' ? styles.roleTabActive : null]}
-                      onPress={() => {
-                        setLoginRole('staff');
-                        setEmailError('');
-                        setPasswordError('');
-                      }}
-                    >
-                      <Text style={[styles.roleTabText, loginRole === 'staff' ? styles.roleTabTextActive : null]}>
-                        Bác sĩ / Nhân viên
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  )}
-
-                  <Text style={styles.formLabel}>
-                    {loginRole === 'patient' ? 'Địa chỉ Email *' : 'Mã nhân sự hoặc Email nội bộ *'}
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'email' ? styles.formInputFocused : null,
-                      emailError ? styles.formInputError : null
-                    ]}
-                    placeholder={loginRole === 'patient' ? 'vidu@neuroscan.com' : 'Nhập mã nhân sự hoặc email'}
-                    placeholderTextColor={Colors.secondary}
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (emailError) setEmailError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onFocus={() => setFocusedInput('email')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {emailError ? <Text style={styles.inlineErrorText}>{emailError}</Text> : null}
-
-                  <View style={styles.labelRow}>
-                    <Text style={styles.formLabel}>Mật khẩu *</Text>
-                    <TouchableOpacity onPress={handleForgotPassword}>
-                      <Text style={styles.forgotPasswordLink}>Quên mật khẩu?</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.passwordInputContainer}>
-                    <TextInput
-                      style={[
-                        styles.formInput,
-                        { paddingRight: 45 },
-                        focusedInput === 'password' ? styles.formInputFocused : null,
-                        passwordError ? styles.formInputError : null
-                      ]}
-                      placeholder="••••••••"
-                      placeholderTextColor={Colors.secondary}
-                      secureTextEntry={!showPassword}
-                      value={password}
-                      onChangeText={(text) => {
-                        setPassword(text);
-                        if (passwordError) setPasswordError('');
-                      }}
-                      autoCapitalize="none"
-                      onFocus={() => setFocusedInput('password')}
-                      onBlur={() => setFocusedInput(null)}
-                      onSubmitEditing={handleLogin}
-                    />
-                    <TouchableOpacity
-                      style={styles.passwordVisibilityBtn}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
-                    </TouchableOpacity>
-                  </View>
-                  {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
-
-                  {/* Patient Activation OTP field inside Login card (Mobile) */}
-                  {showVerification && (
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.formLabel}>Mã xác thực OTP kích hoạt *</Text>
-                      <TextInput
-                        style={[
-                          styles.formInput,
-                          focusedInput === 'verifyCode' ? styles.formInputFocused : null,
-                          verificationError ? styles.formInputError : null
-                        ]}
-                        placeholder="Nhập 6 chữ số"
-                        placeholderTextColor={Colors.secondary}
-                        value={verificationCode}
-                        onChangeText={(text) => {
-                          setVerificationCode(text);
-                          if (verificationError) setVerificationError('');
-                        }}
-                        autoCapitalize="none"
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        onFocus={() => setFocusedInput('verifyCode')}
-                        onBlur={() => setFocusedInput(null)}
-                        onSubmitEditing={handleLogin}
-                      />
-                      {verificationError ? <Text style={styles.inlineErrorText}>{verificationError}</Text> : null}
-                      {debugOtp ? (
-                        <Text
-                          style={{
-                            fontSize: 12, fontWeight: '700', color: '#92400E',
-                            backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7,
-                            borderRadius: 8, marginTop: 6, marginBottom: 8, textAlign: 'center',
-                          }}
-                        >
-                          (DEV) Mã OTP thử nghiệm: {debugOtp}
-                        </Text>
-                      ) : null}
-
-                      <View style={[styles.resendRow, { justifyContent: 'flex-start', marginTop: -8, marginBottom: 0 }]}>
-                        <Text style={styles.resendText}>Chưa nhận được mã? </Text>
-                        <TouchableOpacity onPress={handleResendActivation} disabled={loading}>
-                          <Text style={styles.resendLink}>Gửi lại mã</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Remember Me Box */}
-                  <View style={styles.rememberRow}>
-                    <TouchableOpacity
-                      style={styles.checkboxContainer}
-                      onPress={() => setRememberMe(!rememberMe)}
-                    >
-                      <View style={[styles.checkbox, rememberMe ? styles.checkboxChecked : null]}>
-                        {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
-                      </View>
-                      <Text style={styles.rememberText}>
-                        Lưu thông tin đăng nhập (Không khuyến nghị trên thiết bị công cộng)
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleLogin}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang xử lý kết nối...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>
-                        {showVerification ? 'Xác nhận kích hoạt và đăng nhập' : 'Đăng nhập'}
-                      </Text>
-                    )}
-                  </PressableScale>
-
-                  {/* Google SSO */}
-                  <PressableScale style={styles.googleBtn} hoverStyle={styles.googleBtnHover} focusStyle={styles.buttonFocus} onPress={handleGoogleLogin}>
-                    <Image
-                      source={{ uri: 'https://developers.google.com/static/identity/images/g-logo.png' }}
-                      style={{ width: 18, height: 18, marginRight: 8 }}
-                      resizeMode="contain"
-                    />
-                    <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
-                  </PressableScale>
-
-                  <View style={styles.formFooter}>
-                    <Text style={styles.formFooterText}>Chưa có tài khoản? </Text>
-                    <TouchableOpacity onPress={() => {
-                      setActiveForm('register');
-                      setEmailError('');
-                      setPasswordError('');
-                    }}>
-                      <Text style={styles.formFooterLink}>Đăng ký ngay</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.authForm}>
-                  <Text style={styles.authCardTitle}>Đăng ký tài khoản</Text>
-                  <Text style={styles.authCardSub}>Tạo tài khoản mới để lưu lịch sử chẩn đoán MRI</Text>
-
-                  <Text style={styles.formLabel}>Họ và tên *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'name' ? styles.formInputFocused : null,
-                      nameError ? styles.formInputError : null
-                    ]}
-                    placeholder="Nguyễn Văn A"
-                    placeholderTextColor={Colors.secondary}
-                    value={name}
-                    onChangeText={(text) => {
-                      setName(text);
-                      if (nameError) setNameError('');
-                    }}
-                    onFocus={() => setFocusedInput('name')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {nameError ? <Text style={styles.inlineErrorText}>{nameError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Địa chỉ Email *</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'email' ? styles.formInputFocused : null,
-                      emailError ? styles.formInputError : null
-                    ]}
-                    placeholder="vidu@neuroscan.com"
-                    placeholderTextColor={Colors.secondary}
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (emailError) setEmailError('');
-                    }}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onFocus={() => setFocusedInput('email')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {emailError ? <Text style={styles.inlineErrorText}>{emailError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Số điện thoại (tùy chọn)</Text>
-                  <TextInput
-                    style={[
-                      styles.formInput,
-                      focusedInput === 'phone' ? styles.formInputFocused : null,
-                      phoneError ? styles.formInputError : null
-                    ]}
-                    placeholder="09XXXXXXXX"
-                    placeholderTextColor={Colors.secondary}
-                    value={phone}
-                    onChangeText={(text) => {
-                      setPhone(text);
-                      if (phoneError) setPhoneError('');
-                    }}
-                    keyboardType="phone-pad"
-                    onFocus={() => setFocusedInput('phone')}
-                    onBlur={() => setFocusedInput(null)}
-                    onSubmitEditing={handleRegister}
-                  />
-                  {phoneError ? <Text style={styles.inlineErrorText}>{phoneError}</Text> : null}
-
-                  <Text style={styles.formLabel}>Mật khẩu *</Text>
-                  <View style={styles.passwordInputContainer}>
-                    <TextInput
-                      style={[
-                        styles.formInput,
-                        { paddingRight: 45 },
-                        focusedInput === 'password' ? styles.formInputFocused : null,
-                        passwordError ? styles.formInputError : null
-                      ]}
-                      placeholder="••••••••"
-                      placeholderTextColor={Colors.secondary}
-                      secureTextEntry={!showPassword}
-                      value={password}
-                      onChangeText={(text) => {
-                        setPassword(text);
-                        if (passwordError) setPasswordError('');
-                      }}
-                      autoCapitalize="none"
-                      onFocus={() => setFocusedInput('password')}
-                      onBlur={() => setFocusedInput(null)}
-                      onSubmitEditing={handleRegister}
-                    />
-                    <TouchableOpacity
-                      style={styles.passwordVisibilityBtn}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
-                    </TouchableOpacity>
-                  </View>
-                  {passwordError ? <Text style={styles.inlineErrorText}>{passwordError}</Text> : null}
-
-                  <PressableScale
-                    style={styles.formButton}
-                    hoverStyle={styles.formButtonHover}
-                    focusStyle={styles.buttonFocus}
-                    onPress={handleRegister}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <View style={styles.btnLoadingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.formButtonText}>Đang đăng ký...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.formButtonText}>Đăng ký ngay</Text>
-                    )}
-                  </PressableScale>
-
-                  <View style={styles.formFooter}>
-                    <Text style={styles.formFooterText}>Đã có tài khoản? </Text>
-                    <TouchableOpacity onPress={() => {
-                      setActiveForm('login');
-                      setEmailError('');
-                      setPasswordError('');
-                    }}>
-                      <Text style={styles.formFooterLink}>Đăng nhập</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Footer: Support Info below Form Card on Mobile */}
-              <View style={styles.formSeparator} />
-              <View style={styles.supportContainerInline}>
-                <Text style={styles.supportTextInline}>
-                  Hotline hỗ trợ:{' '}
-                  <Text style={styles.supportLink} onPress={() => Linking.openURL('tel:02363650676')}>
-                    0236 3650 676
-                  </Text>
-                  {'  |  Email: '}
-                  <Text style={styles.supportLink} onPress={() => Linking.openURL('mailto:support@neuroscan.com')}>
-                    support@neuroscan.com
-                  </Text>
-                </Text>
-                <Text style={styles.footerCopyrightInline}>© 2026 NeuroScan AI</Text>
-              </View>
-            </Animated.View>
+            {authCard}
           </View>
         </ScrollView>
       )}

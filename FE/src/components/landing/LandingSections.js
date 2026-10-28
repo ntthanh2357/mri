@@ -69,23 +69,23 @@ export const LandingNav = ({ isDesktop, onNavigate, onLogin }) => (
 // ── Phần giới thiệu trong hero (bên trái form đăng nhập) ─────────────────────
 export const HeroIntro = ({ isDesktop, onExplore, onStart }) => (
   <View style={[s.heroIntro, !isDesktop && s.heroIntroMobile]}>
-    <Reveal>
+    <Reveal variant="blur-up">
       <View style={s.heroChip}>
         <View style={s.pingDot} dataSet={{ anim: 'ping' }} />
         <Text style={s.heroChipText}>AI hỗ trợ chẩn đoán u não · trực 24/7</Text>
       </View>
     </Reveal>
-    <Reveal delay={120}>
+    <Reveal variant="blur-up" delay={120}>
       <Text style={[s.heroTitle, !isDesktop && s.heroTitleMobile]} dataSet={{ font: 'display' }}>
         Chăm sóc chuyên sâu cho từng lát cắt MRI của bạn
       </Text>
     </Reveal>
-    <Reveal delay={240}>
+    <Reveal variant="blur-up" delay={240}>
       <Text style={s.heroSub}>
         Kết hợp đội ngũ bác sĩ chuyên khoa với hệ thống AI đa mô hình để phát hiện, phân loại và theo dõi u não — từ lúc tiếp đón đến khi trả kết quả đã ký số.
       </Text>
     </Reveal>
-    <Reveal delay={360}>
+    <Reveal variant="blur-up" delay={360}>
       <View style={s.heroCtas}>
         <TouchableOpacity style={s.ctaWhite} onPress={onStart} dataSet={{ hover: 'glow' }}>
           <Text style={s.ctaWhiteText}>Bắt đầu ngay</Text>
@@ -96,7 +96,7 @@ export const HeroIntro = ({ isDesktop, onExplore, onStart }) => (
         </TouchableOpacity>
       </View>
     </Reveal>
-    <Reveal delay={480}>
+    <Reveal variant="blur-up" delay={480}>
       <View style={s.heroStats}>
         <View style={s.heroStat}>
           <CountUp value={3461} style={s.heroStatVal} />
@@ -119,7 +119,7 @@ export const HeroIntro = ({ isDesktop, onExplore, onStart }) => (
 
 // ── Tiêu đề section ──────────────────────────────────────────────────────────
 const SectionHead = ({ eyebrow, title, sub, center = true, light = false }) => (
-  <Reveal style={[s.sectionHead, center && { alignItems: 'center' }]}>
+  <Reveal variant="blur-up" style={[s.sectionHead, center && { alignItems: 'center' }]}>
     <Text style={[s.eyebrow, light && { color: '#A7F3D0' }]}>{eyebrow}</Text>
     <Text style={[s.sectionTitle, center && { textAlign: 'center' }, light && { color: C.white }]} dataSet={{ font: 'display' }}>
       {title}
@@ -159,7 +159,7 @@ const AI_BARS = [
 // ── Hàng xen kẽ ảnh/chữ (kiểu Mayo Clinic) ───────────────────────────────────
 const ZigzagRow = ({ isDesktop, reverse, image, title, text, cta, onPress, bubbles }) => {
   const textCol = (
-    <Reveal style={[s.zzText, isDesktop && { flex: 1 }]}>
+    <Reveal variant={!isDesktop ? 'blur-up' : reverse ? 'blur-right' : 'blur-left'} style={[s.zzText, isDesktop && { flex: 1 }]}>
       <Text style={s.zzTitle} dataSet={{ font: 'display' }}>{title}</Text>
       <View style={s.zzBar} />
       <Text style={s.zzBody}>{text}</Text>
@@ -169,7 +169,7 @@ const ZigzagRow = ({ isDesktop, reverse, image, title, text, cta, onPress, bubbl
     </Reveal>
   );
   const imageCol = bubbles ? (
-    <Reveal delay={120} style={[s.bubbleWrap, isDesktop && { flex: 1.1 }]}>
+    <Reveal variant="zoom-in" delay={120} style={[s.bubbleWrap, isDesktop && { flex: 1.1 }]}>
       <View style={s.bubbleHalo} />
       <Image source={image} style={s.bubbleImage} resizeMode="cover" />
       {bubbles.map((b, i) => {
@@ -183,7 +183,7 @@ const ZigzagRow = ({ isDesktop, reverse, image, title, text, cta, onPress, bubbl
       })}
     </Reveal>
   ) : (
-    <Reveal delay={120} style={[s.zzImageWrap, isDesktop && { flex: 1.1 }]}>
+    <Reveal variant="zoom-in" delay={120} style={[s.zzImageWrap, isDesktop && { flex: 1.1 }]}>
       <Image source={image} style={s.zzImage} resizeMode="cover" />
     </Reveal>
   );
@@ -197,7 +197,7 @@ const ZigzagRow = ({ isDesktop, reverse, image, title, text, cta, onPress, bubbl
 
 // ── Hai thẻ "Đặt lịch / Cần hỗ trợ" (kiểu Get Care / Need Help) ─────────────
 const HelpCard = ({ icon: Icon, title, links, style }) => (
-  <Reveal style={[s.helpCard, style]} dataSet={{ hover: 'lift' }}>
+  <Reveal variant="blur-up" style={[s.helpCard, style]} dataSet={{ hover: 'lift' }}>
     <View style={s.helpIcon}><Icon size={30} color={C.blue} strokeWidth={1.8} /></View>
     <Text style={s.helpTitle}>{title}</Text>
     {links.map((l) => (
@@ -227,7 +227,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             {SERVICES.map((sv, i) => {
               const Icon = sv.icon;
               return (
-                <Reveal key={sv.title} delay={i * 110} style={[s.card, col(4)]} dataSet={{ hover: 'lift' }}>
+                <Reveal variant="zoom-in" key={sv.title} delay={i * 140} style={[s.card, col(4)]} dataSet={{ hover: 'lift' }}>
                   <View style={[s.iconCircle, { backgroundColor: sv.bg }]}>
                     <Icon size={24} color={sv.color} strokeWidth={2.2} />
                   </View>
@@ -289,14 +289,14 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
               'Gemini phân xử khi các mô hình bất đồng, có lớp bảo vệ quyền riêng tư',
               'Bác sĩ duyệt hoặc hiệu chỉnh — phản hồi được dùng để huấn luyện lại',
             ].map((t, i) => (
-              <Reveal key={t} delay={i * 100} style={s.checkRow}>
+              <Reveal variant="blur-left" key={t} delay={i * 120} style={s.checkRow}>
                 <CheckCircle2 size={18} color={C.green} />
                 <Text style={s.checkText}>{t}</Text>
               </Reveal>
             ))}
           </View>
 
-          <Reveal delay={150} style={[s.scanCard, isDesktop ? { flex: 1 } : { marginTop: 28 }]}>
+          <Reveal variant="blur-right" delay={150} style={[s.scanCard, isDesktop ? { flex: 1 } : { marginTop: 28 }]}>
             <View style={s.scanHeader}>
               <View style={s.scanDots}>
                 {['#F87171', '#FBBF24', '#34D399'].map((c) => <View key={c} style={[s.scanDot, { backgroundColor: c }]} />)}
@@ -315,7 +315,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
               <View key={b.label} style={s.barRow}>
                 <Text style={s.barLabel}>{b.label}</Text>
                 <View style={s.barTrack}>
-                  <Reveal delay={300 + i * 120} style={{ height: '100%' }}>
+                  <Reveal variant="blur-up" delay={300 + i * 120} style={{ height: '100%' }}>
                     <View style={[s.barFill, { width: `${Math.max(b.value, 3)}%`, backgroundColor: b.color }]} dataSet={{ anim: 'grow' }} />
                   </Reveal>
                 </View>
@@ -338,7 +338,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             {STEPS.map((st, i) => {
               const Icon = st.icon;
               return (
-                <Reveal key={st.title} delay={i * 140} style={[s.step, col(4)]}>
+                <Reveal variant="blur-up" key={st.title} delay={i * 180} style={[s.step, col(4)]}>
                   <View style={s.stepTop}>
                     <View style={s.stepNumber}><Text style={s.stepNumberText}>{i + 1}</Text></View>
                     {isDesktop && i < STEPS.length - 1 && <View style={s.stepConnector} />}
@@ -364,7 +364,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             { node: <CountUp value={92.04} decimals={2} suffix="%" style={s.bandVal} />, label: 'chỉ số F1 trung bình' },
             { node: <Text style={s.bandVal}>24/7</Text>, label: 'hỗ trợ kỹ thuật & cấp cứu' },
           ].map((it, i) => (
-            <Reveal key={it.label} delay={i * 100} style={[s.bandItem, col(4)]}>
+            <Reveal variant="blur-up" key={it.label} delay={i * 100} style={[s.bandItem, col(4)]}>
               {it.node}
               <Text style={s.bandLabel}>{it.label}</Text>
             </Reveal>
@@ -384,7 +384,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             {ROLES.map((r, i) => {
               const Icon = r.icon;
               return (
-                <Reveal key={r.title} delay={i * 110} style={[s.card, s.roleCard, col(4)]} dataSet={{ hover: 'lift' }}>
+                <Reveal variant="zoom-in" key={r.title} delay={i * 140} style={[s.card, s.roleCard, col(4)]} dataSet={{ hover: 'lift' }}>
                   <View style={s.roleHead}>
                     <View style={[s.iconCircle, { backgroundColor: C.blueLight, marginBottom: 0 }]}>
                       <Icon size={22} color={C.blue} />
@@ -406,7 +406,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
 
       {/* Kêu gọi hành động */}
       <View style={[s.section, { paddingTop: 0 }]}>
-        <Reveal style={[s.container, s.ctaBand]} dataSet={{ bg: 'hero' }}>
+        <Reveal variant="blur-up" style={[s.container, s.ctaBand]} dataSet={{ bg: 'hero' }}>
           <View style={isDesktop ? { flex: 1 } : null}>
             <Text style={s.ctaTitle} dataSet={{ font: 'display' }}>Sẵn sàng trải nghiệm NeuroScan AI?</Text>
             <Text style={s.ctaSub}>Đăng nhập để xem hồ sơ, kết quả MRI và trao đổi với bác sĩ của bạn.</Text>

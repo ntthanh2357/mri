@@ -201,6 +201,28 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   animation: ns-fade-up 700ms cubic-bezier(.2,.8,.2,1) backwards;
 }
 
+/* Kiểu landing y tế: mờ nhòe → rõ nét khi cuộn tới (Reveal variant="blur-*" / "zoom-in") */
+@keyframes ns-blur-up {
+  from { opacity: 0; transform: translateY(56px); filter: blur(12px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}
+@keyframes ns-blur-left {
+  from { opacity: 0; transform: translateX(-80px); filter: blur(12px); }
+  to   { opacity: 1; transform: translateX(0);     filter: blur(0); }
+}
+@keyframes ns-blur-right {
+  from { opacity: 0; transform: translateX(80px); filter: blur(12px); }
+  to   { opacity: 1; transform: translateX(0);    filter: blur(0); }
+}
+@keyframes ns-zoom-in {
+  from { opacity: 0; transform: scale(0.86) translateY(30px); filter: blur(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0);       filter: blur(0); }
+}
+#root [data-anim="blur-up"]    { animation: ns-blur-up 900ms cubic-bezier(.16,1,.3,1) backwards; }
+#root [data-anim="blur-left"]  { animation: ns-blur-left 1000ms cubic-bezier(.16,1,.3,1) backwards; }
+#root [data-anim="blur-right"] { animation: ns-blur-right 1000ms cubic-bezier(.16,1,.3,1) backwards; }
+#root [data-anim="zoom-in"]    { animation: ns-zoom-in 1100ms cubic-bezier(.16,1,.3,1) backwards; }
+
 /* Trang vừa mở: trượt nhẹ vào */
 @keyframes ns-page-in {
   from { opacity: 0; transform: translateY(10px); }
@@ -299,3 +321,32 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   #root [data-anim], #root [data-bg="hero"] { animation: none !important; }
   #root [data-hover]:hover { transform: none; }
 }
+
+/* Thẻ đăng nhập cổng bệnh nhân (WelcomeScreen, data-authcard): ô tự điền (autofill) giữ màu nền của khung,
+   không bị nền xanh nhạt mặc định của Chrome; vòng focus đã vẽ ở khung ngoài nên bỏ outline của input. */
+#root [data-authcard] input:-webkit-autofill,
+#root [data-authcard] input:-webkit-autofill:hover {
+  -webkit-text-fill-color: #0f172a;
+  -webkit-box-shadow: 0 0 0 1000px #f7fafd inset;
+  box-shadow: 0 0 0 1000px #f7fafd inset;
+  caret-color: #0f172a;
+  transition: background-color 9999s ease-out 0s;
+}
+#root [data-authcard] input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+}
+#root [data-authcard] input:focus-visible { outline: none; }
+
+/* Thẻ đăng nhập Cổng nội bộ (StaffLoginScreen, data-staffcard): ô tự điền giữ nền sáng của khung. */
+#root [data-staffcard] input:-webkit-autofill,
+#root [data-staffcard] input:-webkit-autofill:hover,
+#root [data-staffcard] input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0F172A;
+  -webkit-box-shadow: 0 0 0 1000px #F5F8FC inset;
+  box-shadow: 0 0 0 1000px #F5F8FC inset;
+  caret-color: #0F172A;
+  transition: background-color 9999s ease-out 0s;
+}
+#root [data-staffcard] input:focus-visible { outline: none; }

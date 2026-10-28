@@ -32,8 +32,12 @@ const useInView = (ref, once = true) => {
   return inView;
 };
 
-/** Hiện dần từ dưới lên khi cuộn tới (kiểu Docplanner). delay tính bằng ms. */
-export const Reveal = ({ children, delay = 0, style, dataSet, ...rest }) => {
+/**
+ * Hiện dần khi cuộn tới. delay tính bằng ms.
+ * variant: 'fade-up' (mặc định) | 'blur-up' | 'blur-left' | 'blur-right' | 'zoom-in'
+ *   (các kiểu blur-* : mờ nhòe → rõ nét, trượt từ dưới/trái/phải — kiểu landing y tế hiện đại)
+ */
+export const Reveal = ({ children, delay = 0, style, dataSet, variant = 'fade-up', ...rest }) => {
   const ref = useRef(null);
   const inView = useInView(ref);
   if (!isWeb) return <View style={style} {...rest}>{children}</View>;
@@ -41,7 +45,7 @@ export const Reveal = ({ children, delay = 0, style, dataSet, ...rest }) => {
     <View
       ref={ref}
       style={[style, !inView && { opacity: 0 }, inView && { animationDelay: `${delay}ms` }]}
-      dataSet={{ ...dataSet, ...(inView ? { anim: 'fade-up' } : {}) }}
+      dataSet={{ ...dataSet, ...(inView ? { anim: variant } : {}) }}
       {...rest}
     >
       {children}

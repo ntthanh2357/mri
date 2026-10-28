@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import {
   View, Text, Image, ScrollView, SafeAreaView, TouchableOpacity, StyleSheet,
-  useWindowDimensions, Linking, Platform,
+  useWindowDimensions, Linking, Platform, Animated,
 } from 'react-native';
 import { FileText, Sparkles, LifeBuoy, ArrowRight } from 'lucide-react';
 import { LandingNav, HeroIntro, LandingBody, LANDING_IMAGES } from '../components/landing/LandingSections';
@@ -15,6 +15,18 @@ const LandingScreen = ({ navigation }) => {
   const isDesktop = width > 900;
   const scrollRef = useRef(null);
   const offsets = useRef({});
+  // Vị trí cuộn → hiệu ứng parallax cho hero (ảnh trôi chậm hơn trang, chữ mờ dần khi cuộn qua)
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroImageStyle = {
+    transform: [
+      { translateY: scrollY.interpolate({ inputRange: [0, 800], outputRange: [0, 300], extrapolate: 'clamp' }) },
+      { scale: scrollY.interpolate({ inputRange: [0, 800], outputRange: [1.06, 1.18], extrapolate: 'clamp' }) },
+    ],
+  };
+  const heroTextStyle = {
+    opacity: scrollY.interpolate({ inputRange: [0, 480], outputRange: [1, 0], extrapolate: 'clamp' }),
+    transform: [{ translateY: scrollY.interpolate({ inputRange: [0, 480], outputRange: [0, -90], extrapolate: 'clamp' }) }],
+  };
 
   const scrollToSection = (key) => {
     const y = key === 'top' ? 0 : (offsets.current[key] ?? 0) - 72;
@@ -33,18 +45,24 @@ const LandingScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={s.page}>
-      <ScrollView ref={scrollRef} style={{ flex: 1 }} stickyHeaderIndices={[0]}>
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        stickyHeaderIndices={[0]}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+      >
         <LandingNav isDesktop={isDesktop} onNavigate={scrollToSection} onLogin={goLogin} />
 
         {/* Hero ảnh toàn khung */}
         <View style={[s.hero, !isDesktop && s.heroMobile]}>
-          <Image source={LANDING_IMAGES.doctorsDiscuss} style={s.heroImage} resizeMode="cover" />
+          <Animated.Image source={LANDING_IMAGES.doctorsDiscuss} style={[s.heroImage, heroImageStyle]} resizeMode="cover" />
           <View style={s.heroOverlay} dataSet={{ bg: 'hero-overlay' }} />
           <FloatingOrb size={380} color="rgba(52,211,153,0.22)" style={{ bottom: -180, left: '25%' }} slow />
           <View style={[s.container, { flexDirection: 'row' }]}>
-            <View style={{ maxWidth: 640, width: '100%' }}>
+            <Animated.View style={[{ maxWidth: 640, width: '100%' }, heroTextStyle]}>
               <HeroIntro isDesktop={isDesktop} onExplore={() => scrollToSection('ai')} onStart={goRegister} />
-            </View>
+            </Animated.View>
           </View>
         </View>
 
@@ -54,7 +72,7 @@ const LandingScreen = ({ navigation }) => {
             {quickActions.map((q, i) => {
               const Icon = q.icon;
               return (
-                <Reveal key={q.title} delay={i * 120} style={[s.quickItem, isDesktop && { flex: 1 }, i > 0 && (isDesktop ? s.quickDividerV : s.quickDividerH)]}>
+                <Reveal variant="blur-up" key={q.title} delay={200 + i * 140} style={[s.quickItem, isDesktop && { flex: 1 }, i > 0 && (isDesktop ? s.quickDividerV : s.quickDividerH)]}>
                   <TouchableOpacity style={s.quickInner} onPress={q.onPress} dataSet={{ hover: 'tint' }}>
                     <View style={s.quickIcon}><Icon size={22} color="#067A5E" /></View>
                     <View style={{ flex: 1 }}>
@@ -77,7 +95,7 @@ const LandingScreen = ({ navigation }) => {
           onCall={call}
           onEmail={email}
         />
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
