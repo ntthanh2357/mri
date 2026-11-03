@@ -228,6 +228,15 @@ export const unlockUserById = async (req, res) => {
 };
 
 // ─── 3.3b deleteUser ─────────────────────────────────────────────────────────
+const CLOSED_VISIT_STATUSES = ["hoàn tất", "đã đóng", "đã hủy", "no_show"];
+
+/**
+ * [P2-4] Xóa mềm + ẩn danh hóa theo Luật 91/2025/QH15.
+ * - Không xóa cứng: giữ ObjectId để Visit/Invoice/Prescription/ImagingResult/EMR
+ *   không bị mồ côi và còn dấu vết pháp lý.
+ * - Chặn khi còn hồ sơ đang hoạt động (lượt khám chưa đóng, hóa đơn chưa thu).
+ * - Ẩn danh PII, vô hiệu hóa đăng nhập (isLocked + tokenVersion).
+ */
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -240,13 +249,80 @@ export const deleteUser = async (req, res) => {
       res.status(404).json({ success: false, message: "Không tìm thấy người dùng" });
       return;
     }
+    if (user.isDeleted) {
+      res.status(409).json({ success: false, message: "Tài khoản này đã được xóa trước đó." });
+      return;
+    }
+    if (String(req.user.id) === String(id)) {
+      res.status(400).json({ success: false, message: "Không thể tự xóa tài khoản đang đăng nhập." });
+      return;
+    }
     if (user.role === "admin" && user.email === "admin@neuroscan.com") {
       res.status(403).json({ success: false, message: "Không thể xóa tài khoản Quản trị viên hệ thống cấp cao." });
       return;
     }
-    await User.findByIdAndDelete(id);
+    if (user.role === "system_admin") {
+      res.status(403).json({ success: false, message: "Không thể xóa tài khoản quản trị nền tảng (system_admin)." });
+      return;
+    }
+
+    // Chặn xóa khi còn hồ sơ đang hoạt động → tránh mất người chịu trách nhiệm pháp lý
+    const [activeVisits, unpaidInvoices] = await Promise.all([
+      Visit.countDocuments({
+        $or: [{ patientId: id }, { doctorId: id }, { nurseId: id }, { technicianId: id }],
+        status: { $nin: CLOSED_VISIT_STATUSES },
+      }),
+      Invoice.countDocuments({ patientId: id, status: { $in: ["chờ thanh toán", "đang xử lý"] } }),
+    ]);
+    if (activeVisits > 0 || unpaidInvoices > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Không thể xóa: người dùng còn ${activeVisits} lượt khám đang hoạt động và ${unpaidInvoices} hóa đơn chưa tất toán. Vui lòng đóng hồ sơ trước.`,
+        activeVisits,
+        unpaidInvoices,
+      });
+    }
+
+    const anonymizedEmail = `deleted_${id}@anonymized.local`;
+    await User.findByIdAndUpdate(id, {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id || req.user._id || null,
+        isLocked: true,
+        email: anonymizedEmail,
+        passwordHash: "!deleted-account-no-login!",
+        "profile.name": "Người dùng đã xóa",
+        "profile.fullName": "",
+        "profile.photoUrl": "",
+        "profile.licenseUrl": "",
+        "profile.address": "",
+        "profile.medicalId": "",
+        "profile.cccdHash": null,
+        "profile.cccdLast4": "",
+        "profile.phoneLast4": "",
+        "profile.fcmToken": null,
+        "profile.specialty": "",
+        "profile.isOnCall": false,
+        lastLoginIp: "",
+        lastLoginLocation: {},
+        loginHistory: [],
+      },
+      $unset: { phone: 1, otpCode: 1, otpExpires: 1, otp2FACode: 1, otp2FAExpires: 1 },
+      $inc: { tokenVersion: 1 },
+    });
     authCache.invalidateUser(id);
-    res.status(200).json({ success: true, message: `Đã xóa người dùng ${user.email} thành công.` });
+
+    await AuditLog.create({
+      action: "soft-delete-user",
+      entity: "User",
+      entityId: id,
+      performedBy: req.user.id || req.user._id || null,
+      hospitalId: user.hospitalId || null,
+      details: `Xóa mềm & ẩn danh tài khoản ${user.role} (${user.email}). Giữ ObjectId để bảo toàn hồ sơ liên quan.`,
+    });
+
+    res.status(200).json({ success: true, message: `Đã xóa mềm và ẩn danh người dùng ${user.email}.` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -279,6 +355,7 @@ export const verifyAdminUser = async (req, res) => {
     }
     const adminId = req.user.id;
     const user = await verifyAdminById(id, verified, adminId);
+    authCache.invalidateUser(id);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "Admin not found") {
@@ -338,7 +415,9 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"];
+    // [P2-17] Bổ sung pharmacist — trước đây backoffice không tạo được dược sĩ.
+    // system_admin không cho tạo từ màn hình bệnh viện (tránh tự nâng quyền nền tảng).
+    const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
     }
@@ -350,7 +429,7 @@ export const createUser = async (req, res) => {
 
     // Process hospital reference on the fly if role requires it
     let resolvedHospitalId = undefined;
-    if (["hospital_admin", "doctor", "nurse", "technician", "receptionist"].includes(role)) {
+    if (["hospital_admin", "department_head", "doctor", "radiologist", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "cleaner"].includes(role)) {
       if (!hospitalName || !hospitalName.trim()) {
         return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện/cơ sở." });
       }
@@ -1234,6 +1313,7 @@ export const deleteHospital = async (req, res) => {
 
     // Delete hospital record
     await Hospital.findByIdAndDelete(id);
+    authCache.invalidateHospital(id);
 
     // Log action to AuditLog
     await AuditLog.create({

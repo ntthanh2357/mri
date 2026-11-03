@@ -5,17 +5,31 @@ import { getMyHospital, submitOnboardingInfo, uploadLicenseFile, getHospitalStaf
 
 const router = Router();
 
+const ALL_STAFF_ROLES = [
+  "admin",
+  "system_admin",
+  "hospital_admin",
+  "department_head",
+  "doctor",
+  "radiologist",
+  "nurse",
+  "technician",
+  "lab_technician",
+  "pharmacist",
+  "receptionist",
+];
+
 // ─── Public routes (không cần đăng nhập) ─────────────────────────────────────
 router.get("/public/doctors", getPublicDoctors);
 
 router.use(protect);
 
-// Chỉ hospital_admin và admin mới được xem thông tin bệnh viện
-router.get("/me", checkRole(["admin", "hospital_admin"]), getMyHospital);
+// Chỉ hospital_admin, department_head và admin mới được xem thông tin bệnh viện
+router.get("/me", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), getMyHospital);
 
-// Bất kỳ ai trong bệnh viện cũng được xem danh sách nhân viên (để đổi ca, assign, v.v.)
-router.get("/staff", getHospitalStaff);
-router.put("/staff/:id/toggle-lock", checkRole(["admin", "hospital_admin"]), toggleStaffLock);
+// Nhân viên trong bệnh viện được xem danh sách nhân sự (để đổi ca, assign, v.v.) — chặn patient
+router.get("/staff", checkRole(ALL_STAFF_ROLES), getHospitalStaff);
+router.put("/staff/:id/toggle-lock", checkRole(["admin", "system_admin", "hospital_admin"]), toggleStaffLock);
 
 // Onboarding — chỉ hospital_admin (dùng protect vì giai đoạn onboarding, chưa có hospitalId đầy đủ)
 router.put("/onboarding", checkRole(["hospital_admin"]), submitOnboardingInfo);

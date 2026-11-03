@@ -545,7 +545,8 @@ export async function assessPrescriptionSafety({
     try {
       latestLab = await LabOrder.findOne({ 
         patient_id: patientId, 
-        status: "COMPLETED" 
+        // [P2-7] Dùng cả kết quả đã có (RESULTED) và đã duyệt (VERIFIED/COMPLETED)
+        status: { $in: ["RESULTED", "VERIFIED", "COMPLETED"] }
       }).sort({ ordered_at: -1 }).lean();
     } catch (e) {}
   }

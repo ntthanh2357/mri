@@ -52,10 +52,15 @@ const dataPrivacyConsentSchema = new Schema(
       required: true,
       trim: true,
     },
+    // [P1-9] Số CCCD người ký được mã hoá AES-256-GCM, chỉ giữ 4 số cuối để hiển thị
     signerNationalId: {
       type: String,
       trim: true,
-      default: "", // Số CCCD / VNeID
+      default: "", // Bản mã (v1:iv:tag:ciphertext), không phải plaintext
+    },
+    signerNationalIdLast4: {
+      type: String,
+      default: "",
     },
     signerRelationship: {
       type: String,

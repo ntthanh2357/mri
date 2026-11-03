@@ -102,7 +102,7 @@ export const submitScreeningChecklist = async (req, res) => {
 // @access Private (Doctor)
 export const overrideChecklistRisk = async (req, res) => {
   try {
-    if (!["doctor", "admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới có quyền override cảnh báo nguy cơ cản quang.", 403);
     }
 

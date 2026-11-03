@@ -56,6 +56,7 @@ const calculateAge = (dob, birthYear) => {
 
 const PatientDetailScreen = ({ route, navigation }) => {
   const patientId = route.params?.patientId;
+  const visitId = route.params?.visitId;
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
@@ -453,6 +454,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const body = {
         doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
         diagnosis: prescriptionDiagnosis,
+        visitId: visitId || undefined,
         drugs: prescriptionDrugs,
         note: prescriptionNote,
         overrideCategory: overrideCategory || 'BENEFIT_EXCEEDS_RISK',

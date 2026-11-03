@@ -179,4 +179,114 @@ describe('Unit Tests: Visit Service (visit.service.js)', () => {
     expect(updated.status).toBe('đã hủy');
     expect(updated.mriCancelReason).toBe('Bệnh nhân hoảng loạn hội chứng sợ buồng kín');
   });
+
+  // ── Hồi quy P0-1: client không được tự tuyên bố "an toàn" ──────────────────
+  test('P0-1a. Gửi hasPacemakerOrMetal=true kèm passed=true vẫn bị chặn (không bypass được)', async () => {
+    const visit = new Visit({ hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp' });
+    await visit.save();
+
+    let err;
+    try {
+      await submitMriSafetyCheckService({
+        visitId: visit._id,
+        hospitalId: mockHospitalId,
+        user: mockTechnician,
+        checklistData: { hasPacemakerOrMetal: true, passed: true }
+      });
+    } catch (e) { err = e; }
+
+    expect(err?.statusCode).toBe(400);
+    expect(err.message).toContain('CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI');
+    const stored = await Visit.findById(visit._id);
+    expect(stored.status).toBe('chờ chụp');
+    expect(stored.mriSafetyChecklist.passed).toBe(false);
+  });
+
+  test('P0-1b. KTV không được ghi đè chống chỉ định kim loại dù có nêu lý do', async () => {
+    const visit = new Visit({ hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp' });
+    await visit.save();
+
+    await expect(
+      submitMriSafetyCheckService({
+        visitId: visit._id,
+        hospitalId: mockHospitalId,
+        user: mockTechnician,
+        checklistData: { hasPacemakerOrMetal: true, passed: true, overrideReason: 'Bệnh nhân khai mảnh kim loại nhỏ đã cũ' }
+      })
+    ).rejects.toThrow('CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI');
+  });
+
+  test('P0-1c. Bác sĩ ghi đè có lý do chuyên môn: lưu vết người chấp thuận và cho vào buồng', async () => {
+    const visit = new Visit({ hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp' });
+    await visit.save();
+    const doctor = { id: new mongoose.Types.ObjectId().toString(), hospitalId: mockHospitalId.toString(), role: 'doctor', profile: { fullName: 'BS. Trần Văn A' } };
+
+    const result = await submitMriSafetyCheckService({
+      visitId: visit._id,
+      hospitalId: mockHospitalId,
+      user: doctor,
+      checklistData: {
+        hasPacemakerOrMetal: true,
+        overrideReason: 'Thiết bị titanium đã được xác nhận tương thích 1.5T theo hồ sơ cấy ghép',
+        passed: false // client cố gửi false cũng không ảnh hưởng: server tự quyết định
+      }
+    });
+
+    expect(result.checklist.passed).toBe(true);
+    expect(result.checklist.overriddenByName).toBe('BS. Trần Văn A');
+    expect(result.visit.status).toBe('đang chụp');
+  });
+
+  test('P0-1d. Bệnh nhân tự khai có máy tạo nhịp tim: bác sĩ cũng không được ghi đè', async () => {
+    const declaredAt = new Date('2026-10-20T02:00:00Z');
+    const visit = new Visit({
+      hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp',
+      patientMriScreening: { answers: { pacemaker: 'yes' }, level: 'danger', declaredAt }
+    });
+    await visit.save();
+    const doctor = { id: new mongoose.Types.ObjectId().toString(), hospitalId: mockHospitalId.toString(), role: 'doctor', profile: { fullName: 'BS. Trần Văn A' } };
+
+    await expect(
+      submitMriSafetyCheckService({
+        visitId: visit._id,
+        hospitalId: mockHospitalId,
+        user: doctor,
+        checklistData: {
+          screeningDeclaredAt: declaredAt.toISOString(),
+          hasPacemakerOrMetal: false,
+          overrideReason: 'Bác sĩ muốn chụp dù bệnh nhân có máy tạo nhịp'
+        }
+      })
+    ).rejects.toThrow('CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI');
+    expect((await Visit.findById(visit._id)).status).toBe('chờ chụp');
+  });
+
+  test('P0-1e. Thai kỳ / suy thận có cản quang: KTV không được tự chuyển "đang chụp", cần bác sĩ', async () => {
+    const visit = new Visit({
+      hospitalId: mockHospitalId, patientId: mockPatientId, doctorId: mockDoctorId, status: 'chờ chụp',
+      mriOrder: { region: 'Não bộ', withContrast: true, orderedAt: new Date() }
+    });
+    await visit.save();
+
+    const first = await submitMriSafetyCheckService({
+      visitId: visit._id,
+      hospitalId: mockHospitalId,
+      user: mockTechnician,
+      checklistData: { hasKidneyDisease: true }
+    });
+    expect(first.requiresDoctorReview).toBe(true);
+    expect(first.checklist.passed).toBe(false);
+    expect(first.visit.status).toBe('chờ chụp');
+
+    // Bác sĩ xác nhận → được phép vào buồng (vẫn giữ cờ suy thận để theo dõi eGFR)
+    const doctor = { id: new mongoose.Types.ObjectId().toString(), hospitalId: mockHospitalId.toString(), role: 'doctor', profile: { fullName: 'BS. Trần Văn A' } };
+    const second = await submitMriSafetyCheckService({
+      visitId: visit._id,
+      hospitalId: mockHospitalId,
+      user: doctor,
+      checklistData: { hasKidneyDisease: true }
+    });
+    expect(second.requiresDoctorReview).toBe(false);
+    expect(second.checklist.hasKidneyDisease).toBe(true);
+  });
 });

@@ -43,8 +43,8 @@ export const register = async (req, res) => {
       return;
     }
 
-    // [P0-Pharmacist] Thêm "pharmacist" vào danh sách role hợp lệ khi đăng ký/level tài khoản
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"];
+    // [P0-Pharmacist + Mini-PACS] Thêm "pharmacist", "radiologist", "department_head" vào danh sách role hợp lệ
+    const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist"];
     if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
@@ -52,11 +52,11 @@ export const register = async (req, res) => {
 
     // ── Bảo vệ leo thang đặc quyền ──────────────────────────────────────────
     // Nếu caller là hospital_admin (đã đăng nhập):
-    //   1. Chỉ được tạo doctor, nurse, technician — không được tạo admin/hospital_admin
+    //   1. Chỉ được tạo doctor, radiologist, department_head, nurse, technician, receptionist, pharmacist — không được tạo admin/hospital_admin
     //   2. hospitalId bắt buộc = hospitalId của chính họ (không tin client)
     if (req.user && req.user.role === "hospital_admin") {
-      // [P0-Pharmacist] hospital_admin được cấp thêm tài khoản Dược sĩ Khoa Dược
-      const staffOnlyRoles = ["doctor", "nurse", "technician", "receptionist", "pharmacist"];
+      // [P0-Pharmacist + Mini-PACS] hospital_admin được cấp thêm tài khoản Dược sĩ, BS CĐHA, Trưởng khoa
+      const staffOnlyRoles = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist"];
       if (!staffOnlyRoles.includes(role)) {
         res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên, lễ tân, dược sĩ." });
         return;
@@ -123,7 +123,7 @@ export const register = async (req, res) => {
         photoUrl: "",
         specialty: specialty || "",
         bhytNumber: role === "patient" ? bhytNumber || "" : "",
-        licenseUrl: role === "doctor" ? licenseUrl || "" : "",
+        licenseUrl: ["doctor", "radiologist", "department_head"].includes(role) ? licenseUrl || "" : "",
       },
     });
 
@@ -332,9 +332,8 @@ export const login = async (req, res) => {
       }
     }
 
-    // [P0-Pharmacist] Bổ sung "receptionist" + "pharmacist": nhân viên Khoa Dược
-    // (và lễ tân) tạo bởi hospital_admin cũng phải kích hoạt OTP ở lần đăng nhập đầu.
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
+    // [P0-Pharmacist + Mini-PACS] Bổ sung "receptionist", "pharmacist", "radiologist", "department_head"
+    const STAFF_ROLES = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     let otpCode;
@@ -1263,7 +1262,7 @@ export const phoneLoginVerify = async (req, res) => {
 
     // Staff roles created by hospital admin must activate on first login
     // [P0-Pharmacist] Thêm "pharmacist": tài khoản Dược sĩ mới cấp cũng chạy luồng kích hoạt OTP.
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
+    const STAFF_ROLES = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({

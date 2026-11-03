@@ -41,35 +41,35 @@ const checkSelfOrRoles = (allowedRoles) => {
 router.use(protect);
 
 // Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
-router.get("/", checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getPatients);
+router.get("/", checkRole(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "hospital_admin"]), getPatients);
 // UC-REC-01: tạo hồ sơ bệnh nhân mới tại quầy tiếp đón
 router.post("/", checkRole(["receptionist", "nurse", "admin", "hospital_admin"]), createPatientAtDesk);
 // UC-REC-04: cập nhật email nhận thông báo (lượt khám, dời lịch chụp, hoàn tiền)
 router.put("/:patientId/email", checkRole(["receptionist", "nurse", "admin", "hospital_admin"]), updatePatientEmail);
 
 // Lấy chi tiết 1 bệnh nhân theo ID (cho phép xuyên viện để phục vụ chuyển tuyến)
-router.get("/:patientId", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), getPatientById);
+router.get("/:patientId", checkRole(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "hospital_admin"]), getPatientById);
 
 // Quản lý sinh hiệu bệnh nhân: bệnh nhân chỉ XEM của chính mình; chỉ nhân viên lâm sàng được THÊM
-router.get("/:patientId/vitals", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientVitals);
-router.post("/:patientId/vitals", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), addPatientVitals);
+router.get("/:patientId/vitals", checkSelfOrRoles(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "hospital_admin"]), getPatientVitals);
+router.post("/:patientId/vitals", checkRole(["doctor", "department_head", "nurse", "receptionist", "admin", "hospital_admin"]), addPatientVitals);
 
-// Quản lý chỉ định xét nghiệm của bệnh nhân (Bác sĩ, Điều dưỡng, Kỹ thuật viên, Admin hoặc tự bệnh nhân xem)
-router.get("/:patientId/lab-orders", checkSelfOrRoles(["doctor", "nurse", "technician", "admin", "hospital_admin"]), getPatientLabOrders);
+// Quản lý chỉ định xét nghiệm của bệnh nhân (Bác sĩ, Trưởng khoa, BS CĐHA, Điều dưỡng, KTV, Admin hoặc tự bệnh nhân xem)
+router.get("/:patientId/lab-orders", checkSelfOrRoles(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "hospital_admin"]), getPatientLabOrders);
 
-// Tạo chỉ định xét nghiệm (Chỉ cho Bác sĩ, Tiếp tân, Admin tạo)
-router.post("/:patientId/lab-orders", checkRole(["doctor", "nurse", "admin", "hospital_admin"]), createPatientLabOrder);
+// Tạo chỉ định xét nghiệm (Cho Bác sĩ, Trưởng khoa, Điều dưỡng, KTV, Admin tạo)
+router.post("/:patientId/lab-orders", checkRole(["doctor", "department_head", "nurse", "technician", "lab_technician", "admin", "hospital_admin"]), createPatientLabOrder);
 
 // Quản lý đơn thuốc (Toa thuốc)
-router.get("/:patientId/prescriptions", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientPrescriptions);
-router.post("/:patientId/prescriptions", checkRole(["doctor", "admin", "hospital_admin"]), addPatientPrescription);
+router.get("/:patientId/prescriptions", checkSelfOrRoles(["doctor", "department_head", "radiologist", "nurse", "receptionist", "pharmacist", "technician", "lab_technician", "admin", "hospital_admin"]), getPatientPrescriptions);
+router.post("/:patientId/prescriptions", checkRole(["doctor", "department_head", "admin", "hospital_admin"]), addPatientPrescription);
 
 // Quản lý giấy ra viện
-router.get("/:patientId/discharge-papers", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin"]), getPatientDischargePapers);
-router.post("/:patientId/discharge-papers", checkRole(["doctor", "admin", "hospital_admin"]), addPatientDischargePaper);
+router.get("/:patientId/discharge-papers", checkSelfOrRoles(["doctor", "department_head", "radiologist", "nurse", "receptionist", "pharmacist", "admin", "hospital_admin"]), getPatientDischargePapers);
+router.post("/:patientId/discharge-papers", checkRole(["doctor", "department_head", "admin", "hospital_admin"]), addPatientDischargePaper);
 
 // Quản lý phiếu chuyển tuyến
-router.get("/:patientId/transfer-forms", checkSelfOrRoles(["doctor", "nurse", "admin", "hospital_admin", "receptionist"]), getPatientTransferForms);
-router.post("/:patientId/transfer-forms", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), addPatientTransferForm);
+router.get("/:patientId/transfer-forms", checkSelfOrRoles(["doctor", "department_head", "radiologist", "nurse", "pharmacist", "admin", "hospital_admin", "receptionist"]), getPatientTransferForms);
+router.post("/:patientId/transfer-forms", checkRole(["doctor", "department_head", "admin", "hospital_admin", "receptionist"]), addPatientTransferForm);
 
 export default router;

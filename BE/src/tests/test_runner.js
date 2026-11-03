@@ -193,12 +193,21 @@ async function runAllTests() {
     './auth_session_rate_limit.test.js',
     './patient_routes_authz.test.js',
     './visit_routes_authz.test.js',
+    './imaging_authz.test.js',
+    './image_source_ssrf.test.js',
+    './prescription_scope.test.js',
+    './storage_access_authz.test.js',
+    './task_authz.test.js',
+    './lab_critical_value.test.js',
+    './sensitive_field_crypto.test.js',
     './queue_ticket_routes_authz.test.js',
     './record_share_routes_authz.test.js',
     './record_copy_routes_authz.test.js',
     './emergency_protocol.test.js',
     './referral_package_email.test.js',
     './single_device_and_geoip.test.js',
+    './neuro_oncology_pacs_workflow.test.js',
+    './pacs_concurrent_upload_and_drive_queue.test.js',
   ];
 
   const startTime = Date.now();

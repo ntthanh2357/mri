@@ -27,7 +27,11 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"],
+      // system_admin: quản trị nền tảng SaaS (không gắn bệnh viện)
+      // cleaner: nhân viên vệ sinh — chỉ dùng cho bước "hoàn tất dọn giường"
+      // radiologist: Bác sĩ Chẩn đoán hình ảnh (Khoa CĐHA - KCDHA)
+      // department_head: Trưởng khoa lâm sàng (Khoa Ung thư Não - KUTN)
+      enum: ["patient", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"],
       default: "patient",
       required: true,
     },
@@ -44,6 +48,15 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // [P2-4] Xóa mềm: giữ ObjectId để Visit/Invoice/Prescription/EMR không mồ côi.
+    // Khi xóa, PII trong hồ sơ được ẩn danh hóa; tài khoản không thể đăng nhập lại.
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     // Cơ chế chống Brute-force mật khẩu (khóa tạm 15 phút sau 5 lần nhập sai)
     failedLoginAttempts: {
       type: Number,

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import fs from "fs";
 
 /**
  * Sinh khóa mã hóa 256-bit ngẫu nhiên chuẩn (64 ký tự hex)
@@ -74,6 +75,34 @@ export const decryptBuffer = (encryptedBuffer, ivHex, authTagHex, customKeyHex =
  */
 export const computeSha256 = (buffer) => {
   return crypto.createHash("sha256").update(buffer).digest("hex");
+};
+
+/**
+ * Tính mã băm SHA-256 bằng Stream (Zero-RAM-Spike cho tệp DICOM lớn hàng trăm MB)
+ * Đọc từng mảnh 64KB từ đĩa cứng mà không nạp cả tệp vào V8 Heap.
+ * @param {string} filePath - Đường dẫn tệp trên ổ cứng
+ * @returns {Promise<{ sha256: string, sizeBytes: number }>}
+ */
+export const computeFileSha256Stream = (filePath) => {
+  return new Promise((resolve, reject) => {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return reject(new Error(`Tệp tin không tồn tại để tính SHA-256: ${filePath}`));
+    }
+    const hash = crypto.createHash("sha256");
+    let sizeBytes = 0;
+    const stream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 });
+
+    stream.on("data", (chunk) => {
+      sizeBytes += chunk.length;
+      hash.update(chunk);
+    });
+    stream.on("end", () => {
+      resolve({ sha256: hash.digest("hex"), sizeBytes });
+    });
+    stream.on("error", (err) => {
+      reject(err);
+    });
+  });
 };
 
 /**
