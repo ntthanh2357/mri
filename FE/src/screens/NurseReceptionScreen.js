@@ -183,7 +183,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const fillFromDeclared = () => {
     const b = declared.data?.bhyt;
     if (!b) return;
-    setBhytCardNumber(String(b.cardNumber || '').replace(/s/g, '').toUpperCase());
+    setBhytCardNumber(String(b.cardNumber || '').replace(/\s/g, '').toUpperCase());
     if (b.registrationPlace) setBhytRegistrationPlace(b.registrationPlace);
     if (b.expiresAt) setBhytExpiryDate(new Date(b.expiresAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }));
   };
@@ -191,7 +191,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const reviewDeclaredCard = async (savedCard) => {
     const b = declared.data?.bhyt;
     if (!b?.cardNumber || b.status === 'verified') return '';
-    const action = String(b.cardNumber).replace(/s/g, '').toUpperCase() === savedCard ? 'verify' : 'reject';
+    const action = String(b.cardNumber).replace(/\s/g, '').toUpperCase() === savedCard ? 'verify' : 'reject';
     try {
       await put(`/api/v1/patient/profile/identity/bhyt-review?patientId=${selectedPatientId}`, { action });
       return action === 'verify' ? ' Đã xác nhận thẻ bệnh nhân tự khai trên app.' : ' Số thẻ bệnh nhân tự khai không khớp thẻ gốc, đã báo bệnh nhân kiểm tra lại.';

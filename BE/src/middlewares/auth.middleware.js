@@ -31,7 +31,7 @@ export const protect = async (req, res, next) => {
       // Tầng đệm Auth Cache (In-Memory Fast Path): Tránh gọi DB lặp lại trên mọi request
       let user = authCache.getUserAuth(decoded.id);
       if (!user) {
-        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role departmentId profile emergencyDuty").lean();
+        user = await User.findById(decoded.id).select("tokenVersion isLocked isDeleted hospitalId role departmentId profile emergencyDuty").lean();
         if (user) {
           authCache.setUserAuth(decoded.id, user, 60000); // Cache 60s
         }
@@ -42,7 +42,7 @@ export const protect = async (req, res, next) => {
         return;
       }
 
-      if (user.isLocked) {
+      if (user.isLocked || user.isDeleted) {
         res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
         return;
       }

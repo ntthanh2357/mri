@@ -11,8 +11,10 @@ const bhytInfoSchema = new Schema(
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null }, // Liên kết lần khám cụ thể
 
-    // Thông tin thẻ BHYT (R.1)
-    cardNumber: { type: String, required: true, trim: true }, // Số thẻ BHYT (mã hóa trong thực tế)
+    // Thông tin thẻ BHYT (R.1) — [P1-9] KHÔNG lưu plaintext
+    cardNumber: { type: String, required: true, trim: true }, // Bản mã AES-256-GCM (v1:iv:tag:ciphertext)
+    cardNumberHash: { type: String, default: "", index: true }, // HMAC-SHA256 để tra cứu chính xác
+    cardLast4: { type: String, default: "" }, // 4 số cuối để hiển thị
     coverageRate: { type: Number, default: 80 }, // Tỷ lệ BHYT chi trả (%) — 80/95/100
     expiresAt: { type: Date, default: null }, // Ngày hết hạn thẻ
     registrationPlace: { type: String, default: "" }, // Nơi đăng ký KCB ban đầu
@@ -63,6 +65,7 @@ const bhytInfoSchema = new Schema(
   { timestamps: true }
 );
 
+bhytInfoSchema.index({ hospitalId: 1, patientId: 1, cardNumberHash: 1 });
 bhytInfoSchema.plugin(tenancyPlugin);
 
 export const BhytInfo = model("BhytInfo", bhytInfoSchema);

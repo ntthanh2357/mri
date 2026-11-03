@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { authCache } from "../../utils/authCache.util.js";
 import { getJwtSecret, getRefreshSecret, generateSecureOtp } from "../../config/jwt.config.js";
 import { FEATURES } from "../../config/features.config.js";
+import { recordUserLoginSession } from "../../utils/geoIp.util.js";
 
 const hashPhone = (phone) => {
   if (!phone) return null;
@@ -42,8 +43,8 @@ export const register = async (req, res) => {
       return;
     }
 
-    // [P0-Pharmacist] Thêm "pharmacist" vào danh sách role hợp lệ khi đăng ký/level tài khoản
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"];
+    // [P0-Pharmacist + Mini-PACS] Thêm "pharmacist", "radiologist", "department_head" vào danh sách role hợp lệ
+    const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist"];
     if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
       return;
@@ -51,11 +52,11 @@ export const register = async (req, res) => {
 
     // ── Bảo vệ leo thang đặc quyền ──────────────────────────────────────────
     // Nếu caller là hospital_admin (đã đăng nhập):
-    //   1. Chỉ được tạo doctor, nurse, technician — không được tạo admin/hospital_admin
+    //   1. Chỉ được tạo doctor, radiologist, department_head, nurse, technician, receptionist, pharmacist — không được tạo admin/hospital_admin
     //   2. hospitalId bắt buộc = hospitalId của chính họ (không tin client)
     if (req.user && req.user.role === "hospital_admin") {
-      // [P0-Pharmacist] hospital_admin được cấp thêm tài khoản Dược sĩ Khoa Dược
-      const staffOnlyRoles = ["doctor", "nurse", "technician", "receptionist", "pharmacist"];
+      // [P0-Pharmacist + Mini-PACS] hospital_admin được cấp thêm tài khoản Dược sĩ, BS CĐHA, Trưởng khoa
+      const staffOnlyRoles = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist"];
       if (!staffOnlyRoles.includes(role)) {
         res.status(403).json({ message: "Quản trị bệnh viện chỉ được tạo tài khoản bác sĩ, điều dưỡng, kỹ thuật viên, lễ tân, dược sĩ." });
         return;
@@ -122,7 +123,7 @@ export const register = async (req, res) => {
         photoUrl: "",
         specialty: specialty || "",
         bhytNumber: role === "patient" ? bhytNumber || "" : "",
-        licenseUrl: role === "doctor" ? licenseUrl || "" : "",
+        licenseUrl: ["doctor", "radiologist", "department_head"].includes(role) ? licenseUrl || "" : "",
       },
     });
 
@@ -331,9 +332,8 @@ export const login = async (req, res) => {
       }
     }
 
-    // [P0-Pharmacist] Bổ sung "receptionist" + "pharmacist": nhân viên Khoa Dược
-    // (và lễ tân) tạo bởi hospital_admin cũng phải kích hoạt OTP ở lần đăng nhập đầu.
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
+    // [P0-Pharmacist + Mini-PACS] Bổ sung "receptionist", "pharmacist", "radiologist", "department_head"
+    const STAFF_ROLES = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     let otpCode;
@@ -367,6 +367,12 @@ export const login = async (req, res) => {
       } catch (emailErr) {
         console.error("Lỗi gửi email OTP xác thực 2 lớp:", emailErr);
       }
+    }
+
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    // Chỉ cấp token và ghi nhận phiên khi đã hoàn tất xác thực (không vướng verify hoặc 2FA)
+    if (!requiresVerification && !requires2FA) {
+      await recordUserLoginSession(user, req);
     }
 
     const accessToken = requiresVerification || requires2FA ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
@@ -484,11 +490,14 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    // OTP đúng → xoá mã, cấp token phiên đăng nhập
+    // OTP đúng → xoá mã
     user.otp2FACode = undefined;
     user.otp2FAExpires = undefined;
     user.otp2FAAttempts = 0;
-    await user.save({ validateBeforeSave: false });
+
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    // Tăng tokenVersion để hủy phiên cũ của tất cả máy khác, lưu IP và tọa độ/vị trí địa lý
+    await recordUserLoginSession(user, req);
 
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
@@ -1243,7 +1252,9 @@ export const phoneLoginVerify = async (req, res) => {
     // Clear OTP fields
     user.otpCode = undefined;
     user.otpExpires = undefined;
-    await user.save();
+
+    // [SINGLE DEVICE ENFORCEMENT & IP GEOLOCATION AUDIT]:
+    await recordUserLoginSession(user, req);
 
     // Generate tokens
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
@@ -1251,7 +1262,7 @@ export const phoneLoginVerify = async (req, res) => {
 
     // Staff roles created by hospital admin must activate on first login
     // [P0-Pharmacist] Thêm "pharmacist": tài khoản Dược sĩ mới cấp cũng chạy luồng kích hoạt OTP.
-    const STAFF_ROLES = ["doctor", "nurse", "technician", "receptionist", "pharmacist", "hospital_admin"];
+    const STAFF_ROLES = ["doctor", "radiologist", "department_head", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "hospital_admin"];
     const requiresActivation = !user.isVerified && STAFF_ROLES.includes(user.role);
 
     res.status(200).json({

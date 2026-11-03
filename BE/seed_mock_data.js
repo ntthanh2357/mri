@@ -85,14 +85,18 @@ async function seed() {
     const passwordHash = await bcrypt.hash("123456", 10);
 
     const roles = [
-      { role: "nurse", email: "dieuduong@neuro.com", name: "Điều dưỡng Lê Văn B" },
-      { role: "doctor", email: "bacsi@neuro.com", name: "Bác sĩ Trần Thị C" },
-      { role: "hospital_admin", email: "admin@neuro.com", name: "Quản lý Bệnh viện A" }
+      { role: "nurse", email: "dieuduong@neuro.com", name: "Điều dưỡng Lê Văn B", departmentId: "KUTN" },
+      { role: "doctor", email: "bacsi@neuro.com", name: "Bác sĩ Trần Thị C", departmentId: "KUTN" },
+      { role: "radiologist", email: "radiologist@hospital.vn", name: "BS.CKI CĐHA Nguyễn Minh Đọc", departmentId: "KCDHA" },
+      { role: "department_head", email: "head@hospital.vn", name: "PGS.TS Trưởng khoa Ung thư Não", departmentId: "KUTN" },
+      { role: "technician", email: "ktv@hospital.vn", name: "KTV Chụp MRI Phạm Văn Kỹ", departmentId: "KCDHA" },
+      { role: "hospital_admin", email: "admin@neuro.com", name: "Quản lý Bệnh viện A", departmentId: "KUTN" }
     ];
 
     const staffDocs = await Promise.all(roles.map(r => User.create({
       email: r.email,
       hospitalId: hospital._id,
+      departmentId: r.departmentId || "KUTN",
       passwordHash,
       role: r.role,
       isVerified: true,

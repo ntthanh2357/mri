@@ -264,7 +264,8 @@ export const getPatients = async (req, res) => {
         { $group: { _id: "$patient_id", count: { $sum: 1 } } }
       ]),
       LabOrder.aggregate([
-        { $match: { patient_id: { $in: patientIds }, status: "COMPLETED" } },
+        // [P2-7] Kết quả chỉ được tính hoàn tất sau khi bác sĩ duyệt; giữ COMPLETED cho dữ liệu cũ
+        { $match: { patient_id: { $in: patientIds }, status: { $in: ["RESULTED", "VERIFIED", "COMPLETED"] } } },
         { $group: { _id: "$patient_id", count: { $sum: 1 } } }
       ]),
       VitalSign.aggregate([
@@ -372,7 +373,7 @@ export const addPatientVitals = async (req, res) => {
     }
 
     const newVital = new VitalSign({
-      patient_id: patientId,
+      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
       pulse,
       blood_pressure,
       spo2,
@@ -425,7 +426,8 @@ export const createPatientLabOrder = async (req, res) => {
     }
 
     // Kiểm tra barcode trùng lặp
-    const existingOrder = await LabOrder.findOne({ barcode });
+    const resolvedHospitalId = req.user?.hospitalId || patient?.hospitalId || null;
+    const existingOrder = await LabOrder.findOne(resolvedHospitalId ? { barcode, hospitalId: resolvedHospitalId } : { barcode });
     if (existingOrder) {
       return errorResponse(res, "Mã vạch barcode đã được sử dụng cho một phiếu khác.", 400);
     }
@@ -434,8 +436,8 @@ export const createPatientLabOrder = async (req, res) => {
     const genderToUse = patient_gender || "Nam";
 
     const newOrder = new LabOrder({
-      patient_id: patientId,
-      patient_gender: genderToUse,
+      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
+      patient_gender: genderToUse, hospitalId: resolvedHospitalId,
       barcode,
       category,
       status: "PENDING",
@@ -471,7 +473,7 @@ export const getPatientPrescriptions = async (req, res) => {
 export const addPatientPrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { doctor_name, diagnosis, drugs, note, overrideCategory, overrideReason, requestAi, aiConsultation } = req.body;
+    const { doctor_name, diagnosis, drugs, note, overrideCategory, overrideReason, requestAi, aiConsultation, visitId } = req.body;
 
     if (!diagnosis || !drugs || !Array.isArray(drugs) || drugs.length === 0) {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
@@ -523,7 +525,7 @@ export const addPatientPrescription = async (req, res) => {
       const isEmergencyContext = 
         userDept.includes("CẤP CỨU") || userDept.includes("EMERGENCY") || userDept.includes("ICU") || userDept.includes("HỒI SỨC") ||
         userSpecialty.includes("EMERGENCY") || userSpecialty.includes("CẤP CỨU") ||
-        ["admin", "system_admin"].includes(req.user?.role) ||
+        ["admin", "system_admin", "department_head", "hospital_admin"].includes(req.user?.role) ||
         req.user?.isEmergencyDuty === true || req.user?.dutyRole === "emergency" || req.user?.profile?.isEmergencyDuty === true;
 
       if (!isEmergencyContext) {
@@ -536,7 +538,7 @@ export const addPatientPrescription = async (req, res) => {
 
     const hasCriticalWarning = safetyCheck.warnings && safetyCheck.warnings.some(w => w.severity === "CRITICAL");
     const newItem = new Prescription({
-      patient_id: patientId,
+      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
       doctorId: req.user?.id || null,
       doctor_name: doctor_name || req.user?.profile?.name || "Bác sĩ điều trị",
       diagnosis,
@@ -600,7 +602,7 @@ export const addPatientDischargePaper = async (req, res) => {
     }
 
     const newItem = new DischargePaper({
-      patient_id: patientId,
+      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
       doctor_name: doctor_name || "Bác sĩ điều trị",
       dischargeNo: dischargeNo || "",
       hospitalNo: hospitalNo || "",
@@ -648,7 +650,7 @@ export const addPatientTransferForm = async (req, res) => {
     }
 
     const newItem = new TransferForm({
-      patient_id: patientId,
+      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
       ...fields
     });
 

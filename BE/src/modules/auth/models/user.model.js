@@ -27,7 +27,11 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist"],
+      // system_admin: quản trị nền tảng SaaS (không gắn bệnh viện)
+      // cleaner: nhân viên vệ sinh — chỉ dùng cho bước "hoàn tất dọn giường"
+      // radiologist: Bác sĩ Chẩn đoán hình ảnh (Khoa CĐHA - KCDHA)
+      // department_head: Trưởng khoa lâm sàng (Khoa Ung thư Não - KUTN)
+      enum: ["patient", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"],
       default: "patient",
       required: true,
     },
@@ -44,6 +48,15 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // [P2-4] Xóa mềm: giữ ObjectId để Visit/Invoice/Prescription/EMR không mồ côi.
+    // Khi xóa, PII trong hồ sơ được ẩn danh hóa; tài khoản không thể đăng nhập lại.
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     // Cơ chế chống Brute-force mật khẩu (khóa tạm 15 phút sau 5 lần nhập sai)
     failedLoginAttempts: {
       type: Number,
@@ -75,6 +88,35 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Giám sát an ninh đăng nhập & Định vị địa lý IP (HIPAA & TT 13/2025/TT-BYT)
+    lastLoginIp: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    lastLoginLocation: {
+      country: { type: String, default: "" },
+      countryCode: { type: String, default: "" },
+      region: { type: String, default: "" },
+      city: { type: String, default: "" },
+      timezone: { type: String, default: "" },
+      lat: { type: Number, default: null },
+      lon: { type: Number, default: null },
+      isp: { type: String, default: "" },
+      displayLocation: { type: String, default: "" },
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    loginHistory: [
+      {
+        ip: { type: String, default: "" },
+        location: { type: String, default: "" },
+        device: { type: String, default: "" },
+        loggedInAt: { type: Date, default: Date.now },
+      },
+    ],
     wardId: {
       type: String,
       default: "",

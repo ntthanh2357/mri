@@ -52,6 +52,17 @@ export const decryptField = (value) => {
   return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
 };
 
+/**
+ * Băm có khoá (HMAC-SHA256) để tra cứu chính xác trên trường đã mã hoá ngẫu nhiên.
+ * Dùng cùng khoá FIELD_ENCRYPTION_KEY nhưng tách namespace để không lẫn mục đích.
+ */
+export const hashField = (value, namespace = "default") => {
+  return crypto
+    .createHmac("sha256", getKey())
+    .update(`${namespace}:${String(value ?? "")}`)
+    .digest("hex");
+};
+
 /** Che giá trị, chỉ để lộ `visible` ký tự cuối: "079201001234" → "********1234". */
 export const maskTail = (value, visible = 4) => {
   const s = String(value || "");

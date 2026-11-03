@@ -7,6 +7,7 @@ import { Hospital } from "../../models/hospital.model.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { aiQueueManager } from "../../jobs/aiQueue.manager.js";
+import { loadImageBuffer } from "../../utils/imageSource.util.js";
 
 const rawAiUrl = process.env.AI_SERVER_URL || "http://localhost:8000";
 const AI_SERVER_URL = rawAiUrl.replace(/\/predict\/?$/, '').replace(/\/+$/, '');
@@ -199,13 +200,6 @@ export const getAiQueueStats = (req, res) => {
   return successResponse(res, aiQueueManager.getStats(), "Lấy thống kê hàng đợi AI thành công.");
 };
 
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ─── Internal — Xử lý AI Job thực tế (bridge tới Python FastAPI service) ─────
 /**
  * Hàm chạy nền kết nối trực tiếp với Python AI Service (YOLOv8 + Ensemble Deep Learning).
@@ -244,22 +238,14 @@ async function processAiJobAsync(jobId, hospitalId) {
       const imgObj = imagingResult.images[0];
       const targetUrl = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.filepath);
       if (targetUrl) {
-        if (targetUrl.startsWith("/uploads/")) {
-          const localPath = path.join(__dirname, "../../", targetUrl);
-          if (fs.existsSync(localPath)) {
-            fileBuffer = fs.readFileSync(localPath);
-            fileName = path.basename(localPath);
-          }
-        } else if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
-          try {
-            const fetchRes = await fetch(targetUrl);
-            if (fetchRes.ok) {
-              const arrayBuf = await fetchRes.arrayBuffer();
-              fileBuffer = Buffer.from(arrayBuf);
-            }
-          } catch (fetchErr) {
-            console.warn(`[AiJob] Không thể tải ảnh từ URL: ${targetUrl}`, fetchErr.message);
-          }
+        // Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
+        try {
+          const loaded = await loadImageBuffer(targetUrl);
+          fileBuffer = loaded.buffer;
+          fileName = loaded.fileName;
+          mimeType = loaded.mimeType;
+        } catch (loadErr) {
+          console.warn(`[AiJob ${jobId}] Không thể tải ảnh (${targetUrl}):`, loadErr.message);
         }
       }
     }

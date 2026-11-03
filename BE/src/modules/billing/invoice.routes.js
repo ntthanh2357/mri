@@ -23,10 +23,10 @@ const router = express.Router();
 router.get("/stuck-processing", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin", "pharmacist"]), getStuckProcessingInvoices);
 router.post("/:id/resolve-processing", protect, checkRole(["admin", "hospital_admin", "pharmacist"]), resolveProcessingInvoice);
 router.get("/", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), getInvoices);
-router.put("/:id/pay", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), payInvoice);
-router.post("/visit/:visitId", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createAndPayInvoice);
+router.put("/:id/pay", protect, checkRole(["admin", "system_admin", "receptionist", "hospital_admin"]), payInvoice);
+router.post("/visit/:visitId", protect, checkRole(["admin", "system_admin", "receptionist", "hospital_admin"]), createAndPayInvoice);
 router.post("/pending", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), createPendingInvoice);
-router.put("/:id/refund", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), refundInvoice);
+router.put("/:id/refund", protect, checkRole(["admin", "system_admin", "receptionist", "hospital_admin"]), refundInvoice);
 // UC-REC-05: cập nhật dịch vụ phát sinh (tiền giường...) vào hóa đơn đang chờ
 router.post("/:id/sync", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), syncInvoiceServices);
 router.post("/:id/payos-check", protect, checkRole(["nurse", "admin", "receptionist", "hospital_admin"]), checkPayOSPayment);

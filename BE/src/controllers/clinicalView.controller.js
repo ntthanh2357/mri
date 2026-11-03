@@ -12,7 +12,7 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 // @access Private (Doctor, Technician, Admin)
 export const getDicomViewerData = async (req, res) => {
   try {
-    const allowedRoles = ["doctor", "technician", "admin", "hospital_admin", "nurse"];
+    const allowedRoles = ["doctor", "radiologist", "department_head", "technician", "admin", "system_admin", "hospital_admin", "nurse"];
     if (!allowedRoles.includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem trình chiếu DICOM.", 403);
     }
@@ -74,7 +74,7 @@ export const getDicomViewerData = async (req, res) => {
 // @access Private (Doctor)
 export const getAiOverlays = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới được xem overlay AI.", 403);
     }
 
@@ -131,7 +131,7 @@ export const getAiOverlays = async (req, res) => {
 // @access Private (Doctor, Admin)
 export const getFullAiReport = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin", "technician"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem báo cáo AI chi tiết.", 403);
     }
 
@@ -209,7 +209,7 @@ export const getFullAiReport = async (req, res) => {
 // @access Private (Doctor)
 export const get3dModelUrl = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem mô hình 3D.", 403);
     }
 
@@ -242,7 +242,7 @@ export const get3dModelUrl = async (req, res) => {
 // @access Private (Doctor)
 export const signImagingReport = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin") {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới có thể ký duyệt báo cáo.", 403);
     }
 
@@ -300,7 +300,9 @@ export const signImagingReport = async (req, res) => {
     // Cập nhật Visit → hoàn tất
     const visit = await Visit.findOne({ "mriOrder.imagingResultId": imagingResultId });
     if (visit) {
-      visit.status = "hoàn tất";
+      if (!["hoàn tất", "đã đóng"].includes(visit.status)) {
+        visit.status = "chờ kết luận";
+      }
       await visit.save();
 
       // H.6 — Gửi thông báo bệnh nhân (kết quả sẵn sàng)
@@ -353,7 +355,7 @@ export const signImagingReport = async (req, res) => {
 // @access Private (Doctor)
 export const getFollowUpComparison = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem dữ liệu so sánh.", 403);
     }
 
@@ -365,7 +367,11 @@ export const getFollowUpComparison = async (req, res) => {
     const medicalId = user.profile?.medicalId;
     if (!medicalId) return errorResponse(res, "Bệnh nhân chưa có mã y tế.", 400);
 
-    const results = await ImagingResult.find({ medicalId })
+    const followUpFilter = { medicalId };
+    if (!["admin", "system_admin"].includes(req.user.role) && req.user.hospitalId) {
+      followUpFilter.hospitalId = req.user.hospitalId;
+    }
+    const results = await ImagingResult.find(followUpFilter)
       .sort({ orderDate: 1 })
       .select("orderDate procedure aiReport representativeSliceUrl isSigned signedAt")
       .lean();
@@ -410,7 +416,7 @@ export const getFollowUpComparison = async (req, res) => {
 // @access Private (Doctor, Admin — trưởng khoa)
 export const getDoctorCaseloads = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem caseload.", 403);
     }
 
@@ -419,7 +425,7 @@ export const getDoctorCaseloads = async (req, res) => {
     // Lấy tất cả bác sĩ trong bệnh viện đang trực
     const doctors = await User.find({
       hospitalId,
-      role: "doctor",
+      role: { $in: ["doctor", "radiologist", "department_head"] },
       isLocked: false,
     }).select("profile.name profile.specialty profile.isOnCall profile.maxCaseload").lean();
 

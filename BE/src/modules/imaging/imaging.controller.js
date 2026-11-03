@@ -11,6 +11,8 @@ import { bucket } from "../../config/firebase.js";
 import { uploadMetadataBackup, uploadToDrive } from "../../config/googleDrive.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import storageService from "../../services/storage/storageService.js";
+import { enqueueAiTask } from "../../services/storage/pacsQueue.service.js";
+import { loadImageBuffer } from "../../utils/imageSource.util.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +34,7 @@ export const getPatientResults = async (req, res) => {
     }
 
     // 2. Query results matching medicalId
-    const results = await ImagingResult.find({ medicalId }).sort({ reportDate: -1 });
+    const results = await ImagingResult.find(req.user.hospitalId && !["admin", "system_admin", "patient"].includes(req.user.role) ? { medicalId, hospitalId: req.user.hospitalId } : { medicalId }).sort({ reportDate: -1 });
     return successResponse(res, results, "Lấy danh sách kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy danh sách kết quả chẩn đoán hình ảnh:", error);
@@ -103,14 +105,10 @@ export const createImagingResult = async (req, res) => {
       visitId,
     } = req.body;
 
-    // 1. Check roles
-    if (req.user.role === "patient") {
-      const user = await User.findById(req.user.id);
-      if (!user || user.profile?.medicalId !== medicalId) {
-        return errorResponse(res, "Bạn chỉ có thể tự lưu trữ kết quả cho chính mình.", 403);
-      }
-    } else if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
-      return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
+    // 1. Check roles — kết quả CĐHA là tài liệu y khoa, bệnh nhân không bao giờ được tự tạo (P0-3).
+    // Bệnh nhân chỉ được tải tài liệu cá nhân qua module scanned-documents.
+    if (!["doctor", "radiologist", "department_head", "technician"].includes(req.user.role)) {
+      return errorResponse(res, "Chỉ bác sĩ hoặc kỹ thuật viên hình ảnh mới được tạo kết quả chẩn đoán hình ảnh.", 403);
     }
 
     // 2. Validate required fields
@@ -186,7 +184,7 @@ export const createImagingResult = async (req, res) => {
 // @access  Private (Doctor, Admin, Technician, Nurse)
 export const getResultsByPatientUserId = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician" && req.user.role !== "nurse" && req.user.role !== "receptionist") {
+    if (!["doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
     const { patientId } = req.params;
@@ -222,14 +220,14 @@ export const getResultsByPatientUserId = async (req, res) => {
 // @access  Private (Doctor, Admin only)
 export const getPatientResultsByMedicalId = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+    if (!["doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
     const { medicalId } = req.params;
     if (!medicalId) {
       return errorResponse(res, "Thiếu Mã y tế bệnh nhân.", 400);
     }
-    const results = await ImagingResult.find({ medicalId }).sort({ reportDate: -1 });
+    const results = await ImagingResult.find(req.user.hospitalId && !["admin", "system_admin", "patient"].includes(req.user.role) ? { medicalId, hospitalId: req.user.hospitalId } : { medicalId }).sort({ reportDate: -1 });
     return successResponse(res, results, `Lấy danh sách phim chụp của bệnh nhân mã ${medicalId} thành công.`);
   } catch (error) {
     console.error("Lỗi khi lấy phim của bệnh nhân theo medicalId:", error);
@@ -319,7 +317,19 @@ export const uploadImagingImage = async (req, res) => {
     // ── 3. Lưu trữ vào Hệ thống Hybrid PACS (Local-First + Encrypted Drive Mirror) ──
     let savedStorageFile = null;
     try {
-      const bufferToSave = req.file ? await fs.promises.readFile(req.file.path) : streamOrBuffer;
+      if (req.file && req.file.path) {
+        savedStorageFile = await storageService.putFromPath({
+          category: "pacs",
+          studyId: req.body.studyId || req.body.medicalId || null,
+          fileName: originalName,
+          sourceFilePath: req.file.path,
+          moveFile: false,
+          mimeType,
+          uploadedBy: req.user?.id,
+          patientId: req.body.patientId || null,
+        });
+      }
+      const bufferToSave = req.file ? null : streamOrBuffer;
       if (bufferToSave && Buffer.isBuffer(bufferToSave)) {
         savedStorageFile = await storageService.put({
           category: "pacs",
@@ -355,7 +365,7 @@ export const uploadImagingImage = async (req, res) => {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hospital = await Hospital.findById(resolvedHospitalId).lean();
         const scansFolderId = hospital?.subFolders?.originalScansId;
-        if (scansFolderId) {
+        if (scansFolderId && !savedStorageFile) {
           const bgStream = (req.file && req.file.path) ? fs.createReadStream(req.file.path) : streamOrBuffer;
           if (bgStream) {
             uploadToDrive(bgStream, originalName, mimeType, scansFolderId)
@@ -393,32 +403,8 @@ export const uploadImagingImage = async (req, res) => {
 
 // @desc    Helper to execute AI prediction on an image
 export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
-  let fileBuffer;
-  let fileName = "scan.jpg";
-
-  // 1. Resolve image source (Local path vs Firebase vs external URL)
-  if (imageUrl.startsWith("/uploads/")) {
-    const absolutePath = path.join(__dirname, "../../..", imageUrl);
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error(`Không tìm thấy tệp ảnh tại đường dẫn cục bộ: ${imageUrl}`);
-    }
-    fileBuffer = fs.readFileSync(absolutePath);
-    fileName = path.basename(absolutePath);
-  } else if (imageUrl.startsWith("http")) {
-    const downloadRes = await fetch(imageUrl);
-    if (!downloadRes.ok) {
-      throw new Error(`Tải ảnh từ URL thất bại với mã trạng thái ${downloadRes.status}`);
-    }
-    const arrayBuffer = await downloadRes.arrayBuffer();
-    fileBuffer = Buffer.from(arrayBuffer);
-    fileName = path.basename(new URL(imageUrl).pathname) || "scan.jpg";
-  } else {
-    throw new Error("Đường dẫn hình ảnh không hợp lệ.");
-  }
-
-  // Determine mime-type
-  const ext = path.extname(fileName).toLowerCase();
-  const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
+  // 1. Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
+  const { buffer: fileBuffer, fileName, mimeType } = await loadImageBuffer(imageUrl);
 
   // 2. Forward to Python FastAPI server using native fetch and FormData
   const formData = new FormData();
@@ -495,7 +481,7 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
           if (resolvedHospId) {
             const hosp = await Hospital.findById(resolvedHospId).lean();
             const aiPredFolderId = hosp?.subFolders?.aiPredictionsId;
-            if (aiPredFolderId) {
+            if (aiPredFolderId && !aiData.storageHeatmapFileId) {
               await uploadToDrive(
                 imageBuffer,
                 `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`,
@@ -557,7 +543,7 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
 export const analyzeImagingResultAI = async (req, res) => {
   try {
     // 1. Check roles
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician" && req.user.role !== "patient") {
+    if (!["doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "patient"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
@@ -583,7 +569,7 @@ export const analyzeImagingResultAI = async (req, res) => {
 // @access  Private (Doctor, Technician, Admin only)
 export const feedbackImagingResultAI = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+    if (!["doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
@@ -592,35 +578,14 @@ export const feedbackImagingResultAI = async (req, res) => {
       return errorResponse(res, "Thiếu thông tin hình ảnh hoặc kết quả chẩn đoán điều chỉnh.", 400);
     }
 
-    let fileBuffer;
-    let fileName = "scan.jpg";
-
-    if (imageUrl.startsWith("/uploads/")) {
-      const absolutePath = path.join(__dirname, "../../..", imageUrl);
-      if (!fs.existsSync(absolutePath)) {
-        return errorResponse(res, `Không tìm thấy tệp ảnh tại đường dẫn cục bộ: ${imageUrl}`, 404);
-      }
-      fileBuffer = fs.readFileSync(absolutePath);
-      fileName = path.basename(absolutePath);
-    } else if (imageUrl.startsWith("http")) {
-      try {
-        const downloadRes = await fetch(imageUrl);
-        if (!downloadRes.ok) {
-          throw new Error(`Tải ảnh từ URL thất bại với mã trạng thái ${downloadRes.status}`);
-        }
-        const arrayBuffer = await downloadRes.arrayBuffer();
-        fileBuffer = Buffer.from(arrayBuffer);
-        fileName = path.basename(new URL(imageUrl).pathname) || "scan.jpg";
-      } catch (err) {
-        console.error("Lỗi khi tải ảnh từ URL:", err);
-        return errorResponse(res, `Không thể tải ảnh từ URL cung cấp: ${err.message}`, 400);
-      }
-    } else {
-      return errorResponse(res, "Đường dẫn hình ảnh không hợp lệ.", 400);
+    // Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
+    let loaded;
+    try {
+      loaded = await loadImageBuffer(imageUrl);
+    } catch (loadErr) {
+      return errorResponse(res, loadErr.message, loadErr.statusCode || 400);
     }
-
-    const ext = path.extname(fileName).toLowerCase();
-    const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
+    const { buffer: fileBuffer, fileName, mimeType } = loaded; const ext = path.extname(fileName || "").toLowerCase() || (mimeType === "image/png" ? ".png" : ".jpg");
 
     const formData = new FormData();
     const blob = new Blob([fileBuffer], { type: mimeType });
@@ -720,7 +685,7 @@ export const feedbackImagingResultAI = async (req, res) => {
 // @access  Private (Doctor, Technician, Admin only)
 export const approveImagingResultAI = async (req, res) => {
   try {
-    if (req.user.role !== "doctor" && req.user.role !== "admin" && req.user.role !== "technician") {
+    if (!["doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
@@ -949,7 +914,11 @@ export const createKtvImagingResult = async (req, res) => {
 
     // Tự động chạy phân tích AI ngầm nếu KTV yêu cầu
     if (requestAiAnalysis && imageList.length > 0) {
-      (async () => {
+      enqueueAiTask({
+        priority: visit.priority === "khẩn cấp" ? 1 : 5,
+        visitId: visit._id,
+        label: `Auto AI Scan (${visit._id})`,
+        taskFn: async () => {
         try {
           console.log(`🤖 [Auto AI] Kích hoạt phân tích AI ngầm cho kết quả ${imagingResult._id}...`);
           const aiData = await executeAiPredictionInternal(imageList[0], req.user, visit._id);
@@ -975,7 +944,8 @@ export const createKtvImagingResult = async (req, res) => {
           console.warn(`⚠️ [Auto AI] Phân tích ngầm không thành công (${autoAiErr.message}). Chuyển trạng thái để Bác sĩ đọc trực tiếp.`);
           await Visit.findByIdAndUpdate(visit._id, { status: "chờ bác sĩ đọc" });
         }
-      })();
+        },
+      }).catch(() => {});
     }
 
     res.status(201).json({
@@ -989,17 +959,91 @@ export const createKtvImagingResult = async (req, res) => {
   }
 };
 
+/**
+ * Helper: Tính toán tiêu chuẩn RANO (Response Assessment in Neuro-Oncology)
+ * dựa trên tích hai đường kính vuông góc lớn nhất (d1 x d2 mm²)
+ */
+export const computeRanoEvaluation = ({
+  d1Mm = 0,
+  d2Mm = 0,
+  priorCrossProductMm2 = null,
+  priorResultId = null,
+  radiotherapyEndDate = null
+}) => {
+  const d1 = Math.max(0, Number(d1Mm) || 0);
+  const d2 = Math.max(0, Number(d2Mm) || 0);
+  const crossProductMm2 = Math.round(d1 * d2 * 100) / 100;
+
+  let changePercent = null;
+  let category = "N/A";
+
+  if (priorCrossProductMm2 !== null && priorCrossProductMm2 !== undefined && Number(priorCrossProductMm2) > 0) {
+    const prior = Number(priorCrossProductMm2);
+    if (crossProductMm2 === 0) {
+      changePercent = -100;
+      category = "CR"; // Complete Response
+    } else {
+      changePercent = Math.round(((crossProductMm2 - prior) / prior) * 1000) / 10;
+      if (changePercent <= -50) {
+        category = "PR"; // Partial Response (giảm >= 50%)
+      } else if (changePercent >= 25) {
+        category = "PD"; // Progressive Disease (tăng >= 25%)
+      } else {
+        category = "SD"; // Stable Disease
+      }
+    }
+  }
+
+  // Kiểm tra giả tiến triển (Pseudoprogression) nếu PD xuất hiện trong vòng 12 tuần (84 ngày) sau xạ trị
+  let isPseudoprogressionSuspected = false;
+  if (category === "PD" && radiotherapyEndDate) {
+    const rtDate = new Date(radiotherapyEndDate);
+    if (!isNaN(rtDate.getTime())) {
+      const diffDays = (Date.now() - rtDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays >= 0 && diffDays <= 84) {
+        isPseudoprogressionSuspected = true;
+      }
+    }
+  }
+
+  return {
+    crossProductMm2,
+    rano: {
+      priorResultId: priorResultId || null,
+      priorCrossProductMm2: priorCrossProductMm2 !== null && priorCrossProductMm2 !== undefined ? Number(priorCrossProductMm2) : null,
+      changePercent,
+      category,
+      isPseudoprogressionSuspected,
+      radiotherapyEndDate: radiotherapyEndDate ? new Date(radiotherapyEndDate) : null
+    }
+  };
+};
+
 // @desc    Cập nhật kết quả chẩn đoán phim chụp (Bác sĩ đọc phim)
 // @route   PUT /api/v1/imaging/:id
-// @access  Private (Doctor, Admin)
+// @access  Private (Doctor, Radiologist, Department Head)
 export const updateImagingResult = async (req, res) => {
   try {
     const { id } = req.params;
-    const { findings, conclusion, radiologist, technique, images } = req.body;
+    const {
+      findings,
+      conclusion,
+      radiologist,
+      technique,
+      images,
+      structuredReport,
+      aiAgreement,
+      criticalFinding
+    } = req.body;
 
     const result = await ImagingResult.findById(id);
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    }
+
+    // [P0-2 + Mini-PACS] Bác sĩ CĐHA (radiologist), bác sĩ (doctor), hoặc Trưởng khoa (department_head) của đúng bệnh viện được đọc/ký báo cáo
+    if (!["doctor", "radiologist", "department_head"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Chỉ bác sĩ chẩn đoán hình ảnh mới được ký báo cáo." });
     }
 
     // Tenancy Check
@@ -1007,36 +1051,138 @@ export const updateImagingResult = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền sửa đổi kết quả chụp này." });
     }
 
+    // [P0-2] Báo cáo đã ký là bản ghi pháp lý bất biến: không ghi đè, không "ký lại".
+    // Muốn bổ sung phải dùng addendum (bản bổ sung có version riêng).
+    if (result.isSigned) {
+      return res.status(409).json({
+        message: "Báo cáo này đã được ký duyệt và không thể sửa trực tiếp. Vui lòng tạo bản bổ sung (addendum) nếu cần đính chính."
+      });
+    }
+
+    // Tên bác sĩ trên báo cáo luôn lấy từ tài khoản đang đăng nhập, không lấy từ body (chống mạo danh).
     const signingDoctorName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
     if (findings !== undefined) result.findings = findings;
     if (conclusion !== undefined) result.conclusion = conclusion;
-    if (radiologist !== undefined && radiologist.trim() && radiologist !== "Chờ bác sĩ CĐHA đọc & ký duyệt") {
-      result.radiologist = radiologist;
-    } else if (!result.radiologist || result.radiologist === "Chờ bác sĩ CĐHA đọc & ký duyệt") {
-      result.radiologist = signingDoctorName;
-    }
+    // `radiologist` do client gửi lên bị bỏ qua có chủ đích (P0-2).
+    result.radiologist = signingDoctorName;
     if (technique !== undefined) result.technique = technique;
     if (images !== undefined) result.images = images;
+
+    // ── Lưu Báo cáo CĐHA u não có cấu trúc (Structured Brain Tumor Report) & tự động tính RANO ──
+    if (structuredReport && typeof structuredReport === "object") {
+      const d1Mm = Number(structuredReport.measurements?.d1Mm ?? 0);
+      const d2Mm = Number(structuredReport.measurements?.d2Mm ?? 0);
+      const d3Mm = Number(structuredReport.measurements?.d3Mm ?? 0);
+
+      let priorResultId = structuredReport.rano?.priorResultId || null;
+      let priorCrossProductMm2 = structuredReport.rano?.priorCrossProductMm2 ?? null;
+
+      // Nếu chưa truyền priorCrossProductMm2 nhưng có priorResultId hoặc bệnh nhân có phim cũ đã ký -> tự tra cứu
+      if (priorCrossProductMm2 === null) {
+        try {
+          let priorDoc = null;
+          if (priorResultId) {
+            priorDoc = await ImagingResult.findById(priorResultId).lean();
+          } else if (result.medicalId) {
+            priorDoc = await ImagingResult.findOne({
+              _id: { $ne: result._id },
+              hospitalId: result.hospitalId,
+              medicalId: result.medicalId,
+              isSigned: true
+            }).sort({ reportDate: -1, createdAt: -1 }).lean();
+          }
+          if (priorDoc && priorDoc.structuredReport?.measurements?.crossProductMm2 > 0) {
+            priorResultId = priorDoc._id;
+            priorCrossProductMm2 = priorDoc.structuredReport.measurements.crossProductMm2;
+          }
+        } catch { /* ignore */ }
+      }
+
+      const { crossProductMm2, rano } = computeRanoEvaluation({
+        d1Mm,
+        d2Mm,
+        priorCrossProductMm2,
+        priorResultId,
+        radiotherapyEndDate: structuredReport.rano?.radiotherapyEndDate || null
+      });
+
+      result.structuredReport = {
+        hemisphere: structuredReport.hemisphere || "none",
+        lobe: structuredReport.lobe || "none",
+        axialLocation: structuredReport.axialLocation || "none",
+        measurements: {
+          d1Mm,
+          d2Mm,
+          d3Mm,
+          crossProductMm2,
+          sliceIndex: Number(structuredReport.measurements?.sliceIndex ?? 0),
+          seriesType: structuredReport.measurements?.seriesType || "T1C+"
+        },
+        enhancement: structuredReport.enhancement || "none",
+        peritumoralEdema: structuredReport.peritumoralEdema || "none",
+        necrosis: Boolean(structuredReport.necrosis),
+        hemorrhage: Boolean(structuredReport.hemorrhage),
+        midlineShiftMm: Number(structuredReport.midlineShiftMm ?? 0),
+        herniation: structuredReport.herniation || "none",
+        hydrocephalus: Boolean(structuredReport.hydrocephalus),
+        rano
+      };
+    }
+
+    // ── Lưu đánh giá đồng thuận AI (AI-Radiologist Concordance) ──
+    if (aiAgreement && typeof aiAgreement === "object") {
+      result.aiAgreement = {
+        status: ["agreed", "modified", "rejected", "unrated"].includes(aiAgreement.status) ? aiAgreement.status : "unrated",
+        note: String(aiAgreement.note || "").trim()
+      };
+    }
+
+    // ── Kiểm tra & kích hoạt Cảnh báo Đỏ CĐHA (Critical Finding Alert - ACR Guideline) ──
+    const sr = result.structuredReport || {};
+    const autoCriticalReasons = [];
+    if (Number(sr.midlineShiftMm) >= 5) {
+      autoCriticalReasons.push(`Đẩy lệch đường giữa ${sr.midlineShiftMm} mm (>= 5mm)`);
+    }
+    if (sr.herniation && sr.herniation !== "none") {
+      autoCriticalReasons.push(`Thoát vị não (${sr.herniation})`);
+    }
+    if (sr.hydrocephalus) {
+      autoCriticalReasons.push("Giãn não thất cấp (Hydrocephalus)");
+    }
+    if (sr.hemorrhage) {
+      autoCriticalReasons.push("Xuất huyết nội sọ / trong u cấp tính");
+    }
+
+    const isCriticalFlag = Boolean(criticalFinding?.isCritical) || autoCriticalReasons.length > 0;
+    if (isCriticalFlag) {
+      const reasonText = String(criticalFinding?.reason || autoCriticalReasons.join("; ") || "Phát hiện CĐHA nguy kịch cần xử trí khẩn").trim();
+      result.criticalFinding = {
+        isCritical: true,
+        reason: reasonText,
+        notifiedAt: new Date(),
+        acknowledgedBy: null,
+        acknowledgedByName: "",
+        acknowledgedAt: null,
+        escalatedAt: null
+      };
+    }
+
     result.reportDate = new Date();
-    // [THỰC TẾ BV: NGHỊCH LÝ 2] Đóng dấu ký số điện tử của Bác sĩ CĐHA
     result.isSigned = true;
     result.signedBy = req.user.id;
     result.signedByDoctorId = req.user.id;
     result.signedAt = new Date();
 
-    // Chuẩn hóa Chữ ký số y tế PKI / Cloud HSM theo Luật Giao dịch điện tử 20/2023/QH15, NĐ 130/2018/NĐ-CP & TT 13/2025/TT-BYT
+    // [P0-2] Hệ thống hiện chỉ có hạch toàn vẹn nội bộ (SHA-256), KHÔNG phải chữ ký PKI/PAdES.
     const signaturePayload = `${result._id}|${result.medicalId}|${result.patientName}|${result.findings}|${result.conclusion}|${result.signedAt.toISOString()}|${req.user.id}`;
     const signedHash = crypto.createHash("sha256").update(signaturePayload).digest("hex");
-    const certSerial = req.body.certificateSerial || `VNPT-CA-${String(req.user.id).slice(-8).toUpperCase()}`;
-    const caProvider = req.body.caProvider || "VNPT-CA";
-    const signatureType = req.body.signatureType || "electronic";
 
     result.digitalSignatureMetadata = {
-      signatureType,
-      certificateSerial: certSerial,
-      signingAlgorithm: "SHA256withRSA",
-      timestampToken: `TSA-VN-${Date.now()}-${signedHash.slice(0, 8)}`,
-      caProvider,
+      signatureType: "internal_hash",
+      certificateSerial: null,
+      signingAlgorithm: "SHA-256",
+      timestampToken: null,
+      caProvider: "NONE",
       signedHash,
       signedBy: signingDoctorName,
       signedAt: result.signedAt,
@@ -1044,6 +1190,40 @@ export const updateImagingResult = async (req, res) => {
     };
 
     await result.save();
+
+    // Đồng bộ trạng thái mriOrder.mriStatus và gửi Cảnh báo Đỏ CĐHA nếu có
+    if (result.visitId || isCriticalFlag) {
+      try {
+        const visit = result.visitId ? await Visit.findById(result.visitId) : null;
+        if (visit) {
+          if (visit.mriOrder) visit.mriOrder.mriStatus = "completed"; const isPdOrCritical = isCriticalFlag || result.structuredReport?.rano?.category === "PD"; if (isPdOrCritical && !["hoàn tất", "đã đóng", "đã hủy", "chờ nhập viện"].includes(visit.status)) { visit.status = "chờ hội chẩn"; } else if (["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ chụp lại", "lỗi AI", "chờ chụp sau phẫu thuật"].includes(visit.status)) { visit.status = "chờ bác sĩ đọc"; }
+          await visit.save();
+        }
+        if (isCriticalFlag) {
+          const recipients = new Set();
+          if (visit?.doctorId) recipients.add(String(visit.doctorId));
+          const deptHeads = await User.find({
+            hospitalId: result.hospitalId,
+            role: "department_head"
+          }).select("_id").lean();
+          deptHeads.forEach(dh => recipients.add(String(dh._id)));
+
+          for (const recipientId of recipients) {
+            await createNotificationInternal({
+              hospitalId: result.hospitalId,
+              recipientId,
+              senderId: req.user.id,
+              type: "mri_order",
+              title: "🚨 CẢNH BÁO ĐỎ CĐHA (CRITICAL FINDING)",
+              message: `Bệnh nhân ${result.patientName} (${result.medicalId}): ${result.criticalFinding.reason}. Yêu cầu Bác sĩ điều trị / Trưởng khoa xác nhận đã đọc (Acknowledge) khẩn cấp!`,
+              relatedId: result._id,
+            });
+          }
+        }
+      } catch (critErr) {
+        console.warn("⚠️ Không thể gửi thông báo Critical Finding:", critErr.message);
+      }
+    }
 
     // [DRIVE] Lưu báo cáo chẩn đoán vào thư mục 04_Patient_Reports + 05_Metadata_Backups
     try {
@@ -1085,7 +1265,7 @@ export const updateImagingResult = async (req, res) => {
         const { Hospital } = await import("../../models/hospital.model.js");
         const hosp = await Hospital.findById(targetHospitalId).lean();
         const reportsFolderId = hosp?.subFolders?.patientReportsId;
-        if (reportsFolderId) {
+        if (reportsFolderId && !result.storageReportFileId) {
           const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), 'utf-8');
           await uploadToDrive(
             reportJson,
@@ -1148,6 +1328,165 @@ export const getImagingResultByVisitId = async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi lấy phim theo visitId:", error);
     return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", 500);
+  }
+};
+
+// @desc    Xác nhận đã nhận & đọc Cảnh báo Đỏ CĐHA (Critical Finding Acknowledgment - ACR Guideline)
+// @route   POST /api/v1/imaging/:id/acknowledge-critical
+// @access  Private (Doctor, Department Head, Radiologist, Admin, Hospital Admin)
+export const acknowledgeCriticalFinding = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await ImagingResult.findById(id);
+    if (!result) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    }
+    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
+    }
+    if (!result.criticalFinding?.isCritical) {
+      return res.status(400).json({ message: "Kết quả CĐHA này không có Cảnh báo Đỏ (Critical Finding)." });
+    }
+
+    const ackName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ lâm sàng";
+    result.criticalFinding.acknowledgedBy = req.user.id;
+    result.criticalFinding.acknowledgedByName = ackName;
+    result.criticalFinding.acknowledgedAt = new Date();
+    await result.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã xác nhận tiếp nhận Cảnh báo Đỏ CĐHA (Critical Finding).",
+      criticalFinding: result.criticalFinding,
+      data: result
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Tạo bản đính chính / bổ sung báo cáo đã ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
+// @route   POST /api/v1/imaging/:id/addendum
+// @access  Private (Radiologist, Doctor, Department Head)
+export const addImagingAddendum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, reason } = req.body;
+
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập nội dung bản bổ sung / đính chính (addendum)." });
+    }
+
+    const result = await ImagingResult.findById(id);
+    if (!result) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    }
+    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền bổ sung báo cáo của bệnh viện khác." });
+    }
+    if (!result.isSigned) {
+      return res.status(400).json({ message: "Báo cáo chưa ký duyệt, có thể cập nhật trực tiếp mà chưa cần tạo Addendum." });
+    }
+
+    const authorName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
+    const addedAt = new Date();
+    const hashPayload = `${result._id}|${String(content).trim()}|${String(reason || "").trim()}|${addedAt.toISOString()}|${req.user.id}`;
+    const signatureHash = crypto.createHash("sha256").update(hashPayload).digest("hex");
+
+    const addendumItem = {
+      content: String(content).trim(),
+      reason: String(reason || "").trim(),
+      addedBy: req.user.id,
+      addedByName: authorName,
+      addedAt,
+      signatureHash
+    };
+
+    if (!Array.isArray(result.addenda)) result.addenda = [];
+    result.addenda.push(addendumItem);
+    await result.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Đã phát hành bản bổ sung (Addendum) có chữ ký toàn vẹn, giữ nguyên bản gốc báo cáo.",
+      addendum: result.addenda[result.addenda.length - 1],
+      addenda: result.addenda,
+      data: result
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Lấy chuỗi diễn tiến kích thước khối u & tiêu chuẩn RANO dọc thời gian (Longitudinal RANO Timeline)
+// @route   GET /api/v1/imaging/patient/:medicalId/rano-timeline
+// @access  Private (Doctor, Radiologist, Department Head, Technician, Nurse, Admin)
+export const getPatientRanoTimeline = async (req, res) => {
+  try {
+    const { medicalId } = req.params;
+    if (!medicalId) {
+      return res.status(400).json({ message: "Thiếu mã y tế bệnh nhân (medicalId)." });
+    }
+
+    const query = { medicalId };
+    if (req.user.hospitalId && !["admin", "system_admin"].includes(req.user.role)) {
+      query.hospitalId = req.user.hospitalId;
+    }
+
+    const results = await ImagingResult.find(query)
+      .sort({ reportDate: 1, createdAt: 1 })
+      .lean();
+
+    let baselineCrossProductMm2 = null;
+    const timeline = results.map((item, idx) => {
+      const m = item.structuredReport?.measurements || {};
+      const r = item.structuredReport?.rano || {};
+      const crossProduct = Number(m.crossProductMm2 || (Number(m.d1Mm || 0) * Number(m.d2Mm || 0)) || 0);
+      if (baselineCrossProductMm2 === null && crossProduct > 0) {
+        baselineCrossProductMm2 = crossProduct;
+      }
+      const prevItem = idx > 0 ? results[idx - 1] : null;
+      const prevM = prevItem?.structuredReport?.measurements || {};
+      const prevCrossProduct = Number(prevM.crossProductMm2 || (Number(prevM.d1Mm || 0) * Number(prevM.d2Mm || 0)) || 0);
+
+      const computed = computeRanoEvaluation({
+        d1Mm: m.d1Mm || 0,
+        d2Mm: m.d2Mm || 0,
+        priorCrossProductMm2: r.priorCrossProductMm2 ?? (prevCrossProduct > 0 ? prevCrossProduct : null),
+        priorResultId: r.priorResultId || prevItem?._id || null,
+        radiotherapyEndDate: r.radiotherapyEndDate || null
+      });
+
+      return {
+        imagingResultId: item._id,
+        visitId: item.visitId,
+        reportDate: item.reportDate || item.createdAt,
+        procedure: item.procedure,
+        radiologist: item.radiologist,
+        isSigned: item.isSigned,
+        hemisphere: item.structuredReport?.hemisphere || "none",
+        lobe: item.structuredReport?.lobe || "none",
+        d1Mm: Number(m.d1Mm || 0),
+        d2Mm: Number(m.d2Mm || 0),
+        d3Mm: Number(m.d3Mm || 0),
+        crossProductMm2: computed.crossProductMm2,
+        midlineShiftMm: Number(item.structuredReport?.midlineShiftMm || 0),
+        ranoCategory: r.category && r.category !== "N/A" ? r.category : computed.rano.category,
+        changePercent: r.changePercent ?? computed.rano.changePercent,
+        isPseudoprogressionSuspected: Boolean(r.isPseudoprogressionSuspected || computed.rano.isPseudoprogressionSuspected),
+        criticalFinding: item.criticalFinding || { isCritical: false }
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      medicalId,
+      totalStudies: timeline.length,
+      baselineCrossProductMm2,
+      timeline
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi máy chủ khi tính chuỗi RANO", error: error.message });
   }
 };
 

@@ -349,7 +349,7 @@ export const getShiftRegistrations = async (req, res) => {
     }
 
     // Nếu không phải là admin, chỉ được xem danh sách của chính mình
-    if (!["hospital_admin", "admin", "system_admin"].includes(req.user.role)) {
+    if (!["hospital_admin", "admin", "system_admin", "department_head"].includes(req.user.role)) {
       filter.staffId = req.user.id;
     } else if (staffId && isValidObjectId(staffId)) {
       filter.staffId = staffId;
@@ -437,7 +437,7 @@ export const cancelMyRegistration = async (req, res) => {
     }
 
     const isOwner = schedule.staffId.toString() === req.user.id.toString();
-    const isAdmin = ["hospital_admin", "admin", "system_admin"].includes(req.user.role);
+    const isAdmin = ["hospital_admin", "admin", "system_admin", "department_head"].includes(req.user.role);
 
     if (!isOwner && !isAdmin) {
       return errorResponse(res, "Không có quyền hủy đăng ký ca làm này.", 403);
@@ -533,7 +533,7 @@ export const getSwapRequests = async (req, res) => {
     }
 
     // If not admin, staff can only see their own requests (or requests targeted to them)
-    if (req.user.role !== "hospital_admin" && req.user.role !== "admin") {
+    if (!["hospital_admin", "admin", "system_admin", "department_head"].includes(req.user.role)) {
       filter.$or = [
         { requesterId: req.user.id },
         { targetStaffId: req.user.id }
