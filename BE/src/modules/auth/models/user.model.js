@@ -39,6 +39,11 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isTestAccount: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     tokenVersion: {
       type: Number,
       default: 0,
