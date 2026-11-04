@@ -9,6 +9,8 @@ import { User } from "./models/user.model.js";
 import { PatientProfile } from "./models/patientProfile.model.js";
 import { BhytInfo } from "./models/bhytInfo.model.js";
 import { DataPrivacyConsent } from "./models/dataPrivacyConsent.model.js";
+import { encryptBhytCardNumber } from "./modules/billing/bhytCrypto.util.js";
+import { encryptField } from "./services/fieldCrypto.service.js";
 import { WorkSchedule } from "./models/workSchedule.model.js";
 import { SwapRequest } from "./models/swapRequest.model.js";
 import { HospitalBed } from "./models/hospitalBed.model.js";
@@ -45,10 +47,11 @@ import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
 import { AiJob } from "./models/aiJob.model.js";
 
-import { connectDB } from "./config/db.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 import { tenantStorage } from "./middlewares/tenant.middleware.js";
 
 dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
 
 const seedComprehensiveDatabase = async () => {
   return tenantStorage.run({ bypassTenancy: true, isSuperAdmin: true }, async () => {
@@ -58,7 +61,8 @@ const seedComprehensiveDatabase = async () => {
       console.log("================================================================================");
 
       console.log("🔌 Connecting to database...");
-      await connectDB();
+      assertDemoSeedEnabled({ scriptName: "seedAll.js" });
+      await connectLocalTestMongo(mongoose, MONGO_URI);
       console.log("✅ Successfully connected to database.");
 
       // ── STEP 1: CLEAN ALL COLLECTIONS TO ENSURE CONSISTENCY ──────────────────
@@ -421,7 +425,9 @@ const seedComprehensiveDatabase = async () => {
         },
       ];
 
-      const users = await User.insertMany(mockUsers);
+      const users = await User.insertMany(
+        mockUsers.map((user) => ({ ...user, isTestAccount: true })),
+      );
       console.log(`✅ Seeded ${users.length} Users successfully across all 7 roles.`);
 
       // Quick access helpers
@@ -481,7 +487,7 @@ const seedComprehensiveDatabase = async () => {
         {
           hospitalId: hospital._id,
           patientId: pat1._id,
-          cardNumber: "DN4797932200123",
+          ...encryptBhytCardNumber("DN4797932200123"),
           coverageRate: 80,
           expiresAt: new Date(now.getTime() + 365 * 24 * 3600000),
           registrationPlace: "Bệnh viện Đà Nẵng",
@@ -506,7 +512,7 @@ const seedComprehensiveDatabase = async () => {
         {
           hospitalId: hospital._id,
           patientId: pat2._id,
-          cardNumber: "HN4797932200456",
+          ...encryptBhytCardNumber("HN4797932200456"),
           coverageRate: 95,
           expiresAt: new Date(now.getTime() + 300 * 24 * 3600000),
           registrationPlace: "Bệnh viện Bạch Mai",
@@ -531,7 +537,7 @@ const seedComprehensiveDatabase = async () => {
         {
           hospitalId: hospital._id,
           patientId: pat3._id,
-          cardNumber: "GD4797932200789",
+          ...encryptBhytCardNumber("GD4797932200789"),
           coverageRate: 80,
           expiresAt: new Date(now.getTime() + 200 * 24 * 3600000),
           registrationPlace: "Bệnh viện Chợ Rẫy",
@@ -559,7 +565,8 @@ const seedComprehensiveDatabase = async () => {
           },
           consentStatus: "granted",
           signerName: pat1.profile.name,
-          signerNationalId: "048080001234",
+          signerNationalId: encryptField("048080001234"),
+          signerNationalIdLast4: "1234",
           signerRelationship: "Bản thân",
           signedAt: now,
         },
@@ -575,7 +582,8 @@ const seedComprehensiveDatabase = async () => {
           },
           consentStatus: "granted",
           signerName: pat2.profile.name,
-          signerNationalId: "001174005678",
+          signerNationalId: encryptField("001174005678"),
+          signerNationalIdLast4: "5678",
           signerRelationship: "Bản thân",
           signedAt: now,
         },
@@ -591,7 +599,8 @@ const seedComprehensiveDatabase = async () => {
           },
           consentStatus: "granted",
           signerName: pat3.profile.name,
-          signerNationalId: "079088009999",
+          signerNationalId: encryptField("079088009999"),
+          signerNationalIdLast4: "9999",
           signerRelationship: "Bản thân",
           signedAt: now,
         },

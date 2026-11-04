@@ -7,7 +7,8 @@ import { Invoice } from "../models/invoice.model.js";
 import { authCache } from "../utils/authCache.util.js";
 
 export const getAllUsers = async () => {
-  return User.find({}, "-passwordHash").lean();
+  // [P2-4] Tài khoản đã xóa mềm không còn xuất hiện trong danh sách quản trị
+  return User.find({ isDeleted: { $ne: true } }, "-passwordHash").lean();
 };
 
 // Higher rank can lock/unlock strictly lower-rank roles only — never a peer or higher.
@@ -19,7 +20,9 @@ const ROLE_RANK = {
   admin: 3,
   system_admin: 3,
   hospital_admin: 2,
+  department_head: 1.5,
   doctor: 1,
+  radiologist: 1,
   nurse: 1,
   technician: 1,
   pharmacist: 1,
@@ -34,9 +37,12 @@ export const canModerateRole = (actorRole, targetRole) => {
 };
 
 export const toggleUserLock = async (userId, isLocked, adminId, actorRole) => {
-  const target = await User.findById(userId).select("role email hospitalId").lean();
+  const target = await User.findById(userId).select("role email hospitalId isDeleted").lean();
   if (!target) {
     throw new Error("User not found");
+  }
+  if (target.isDeleted) {
+    throw new Error("Tài khoản đã bị xóa, không thể khóa/mở khóa.");
   }
   if (!canModerateRole(actorRole, target.role)) {
     throw new Error("Bạn không có quyền khóa/mở khóa tài khoản này.");
@@ -130,12 +136,13 @@ export const verifyAdminById = async (id, verified, adminId) => {
 };
 
 export const unlockUserById = async (id, adminId, actorRole) => {
-  const existing = await User.findById(id).select("isLocked role email hospitalId").lean();
-
+  const existing = await User.findById(id).select("isLocked isDeleted role email hospitalId").lean();
   if (!existing) {
     throw new Error("User not found");
   }
-
+  if (existing.isDeleted) {
+    throw new Error("Tài khoản đã bị xóa, không thể mở khóa.");
+  }
   if (!canModerateRole(actorRole, existing.role)) {
     throw new Error("Bạn không có quyền mở khóa tài khoản này.");
   }
@@ -179,11 +186,11 @@ export const getUserById = async (id) => {
 
 export const getSystemStats = async () => {
   const [totalUsers, totalDoctors, totalDatasets, totalAuditLogs, pendingDoctors, totalAiScans, paidInvoices] = await Promise.all([
-    User.countDocuments(),
-    User.countDocuments({ role: "doctor" }),
+    User.countDocuments({ isDeleted: { $ne: true } }),
+    User.countDocuments({ role: "doctor", isDeleted: { $ne: true } }),
     Dataset.countDocuments(),
     AuditLog.countDocuments(),
-    User.countDocuments({ role: "doctor", isVerified: false }),
+    User.countDocuments({ role: "doctor", isVerified: false, isDeleted: { $ne: true } }),
     Visit.countDocuments({ "mriOrder.requestAiAnalysis": true }),
     Invoice.find({ status: "đã thanh toán" }),
   ]);
@@ -213,8 +220,8 @@ export const getSystemStats = async () => {
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
   const [usersThisMonth, usersLastMonth] = await Promise.all([
-    User.countDocuments({ createdAt: { $gte: startOfThisMonth } }),
-    User.countDocuments({ createdAt: { $gte: startOfLastMonth, $lt: startOfThisMonth } }),
+    User.countDocuments({ isDeleted: { $ne: true }, createdAt: { $gte: startOfThisMonth } }),
+    User.countDocuments({ isDeleted: { $ne: true }, createdAt: { $gte: startOfLastMonth, $lt: startOfThisMonth } }),
   ]);
   const userGrowth = usersLastMonth > 0 ? ((usersThisMonth - usersLastMonth) / usersLastMonth * 100) : (usersThisMonth > 0 ? 100 : 0);
 
@@ -229,8 +236,8 @@ export const getSystemStats = async () => {
   const scanGrowth = prevMonthScan > 0 ? ((lastMonthScan - prevMonthScan) / prevMonthScan * 100) : (lastMonthScan > 0 ? 100 : 0);
 
   // User role distribution counts
-  const patientsCount = await User.countDocuments({ role: "patient" });
-  const staffCount = await User.countDocuments({ role: { $in: ["admin", "hospital_admin", "technician", "nurse"] } });
+  const patientsCount = await User.countDocuments({ role: "patient", isDeleted: { $ne: true } });
+  const staffCount = await User.countDocuments({ role: { $in: ["admin", "system_admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist", "cleaner"] }, isDeleted: { $ne: true } });
 
   const userDistribution = {
     patient: patientsCount,

@@ -89,6 +89,8 @@ export const recordAuditLog = async ({
   hospitalId = null,
   details = "",
   payload = null,
+  ipAddress = "",
+  location = "",
 }) => {
   // Thực thi tuần tự qua hàng đợi Promise Chain kết hợp Optimistic Concurrency Retry
   return new Promise((resolve, reject) => {
@@ -102,6 +104,8 @@ export const recordAuditLog = async ({
             performedBy: performedBy ? performedBy.toString() : "system",
             hospitalId: hospitalId || null,
             details: details || "",
+            ipAddress: ipAddress || "",
+            location: location || "",
           });
           return resolve(basicLog);
         }
@@ -137,6 +141,8 @@ export const recordAuditLog = async ({
               performedBy: performedBy ? performedBy.toString() : "system",
               hospitalId: hospitalId || null,
               details: details || "",
+              ipAddress: ipAddress || "",
+              location: location || "",
               sequenceNumber,
               previousHash,
               currentHash,

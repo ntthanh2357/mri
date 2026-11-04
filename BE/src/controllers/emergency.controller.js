@@ -44,11 +44,11 @@ export async function getRosterOnDuty(hospitalId) {
 
     // 1. Bác sĩ Ngoại Thần Kinh trực (Neurosurgeon)
     const neurosurgeon = candidates.find(u =>
-      u.role === 'doctor' && (
+      ['doctor', 'department_head'].includes(u.role) && (
         /ngoại|thần kinh|phẫu thuật|neuro/i.test(u.profile?.specialty || "") ||
         /ngoại|thần kinh/i.test(u.profile?.department || "")
       )
-    ) || candidates.find(u => u.role === 'doctor');
+    ) || candidates.find(u => ['doctor', 'department_head'].includes(u.role));
 
     if (neurosurgeon) {
       assigned.push({
@@ -66,7 +66,7 @@ export async function getRosterOnDuty(hospitalId) {
         /icu|hồi sức/i.test(u.profile?.department || "") ||
         /hồi sức|cấp cứu|icu/i.test(u.profile?.specialty || "")
       )
-    ) || candidates.find(u => u.role === 'doctor' && u._id.toString() !== neurosurgeon?._id.toString());
+    ) || candidates.find(u => ['doctor', 'department_head'].includes(u.role) && u._id.toString() !== neurosurgeon?._id.toString());
 
     if (neuroIcu) {
       assigned.push({
@@ -92,7 +92,7 @@ export async function getRosterOnDuty(hospitalId) {
 
     // 4. Kỹ thuật viên / Bác sĩ Chẩn đoán hình ảnh (Radiology Tech)
     const radTech = candidates.find(u =>
-      u.role === 'technician' ||
+      ['technician', 'radiologist'].includes(u.role) ||
       (u.role === 'doctor' && /hình ảnh|radiolog|mri|ct/i.test(u.profile?.specialty || ""))
     );
     if (radTech) {
@@ -130,7 +130,7 @@ async function broadcastEmergencyEvent(event, hospitalId, senderId, isStandDown 
       isLocked: false,
       $or: [
         { _id: { $in: recipientIds } },
-        { "profile.isOnCall": true, role: { $in: ['doctor', 'nurse', 'technician'] } }
+        { "profile.isOnCall": true, role: { $in: ['doctor', 'department_head', 'radiologist', 'nurse', 'technician'] } }
       ]
     }, "_id profile.fcmToken profile.name");
 
@@ -446,7 +446,7 @@ export const edHandoff = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 export const edAccept = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "department_head", "admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ Bác sĩ Ngoại Thần Kinh mới có thẩm quyền chấp thuận nhận bệnh.", 403);
     }
 
@@ -505,7 +505,7 @@ export const acknowledgeByRole = async (req, res) => {
     let matchedRole = role;
     if (!matchedRole) {
       if (req.user.role === 'nurse') matchedRole = 'nurse_lead';
-      else if (req.user.role === 'technician') matchedRole = 'radiology_tech';
+      else if (['technician', 'radiologist'].includes(req.user.role)) matchedRole = 'radiology_tech';
       else matchedRole = 'neurosurgeon';
     }
 
@@ -904,7 +904,7 @@ export const getActiveEvents = getActiveAlerts;
 // ══════════════════════════════════════════════════════════════════════════════
 export const triggerEmergency = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin", "nurse"].includes(req.user.role)) {
+    if (!["doctor", "department_head", "radiologist", "technician", "admin", "hospital_admin", "nurse"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ nhân viên y tế mới có thể kích hoạt cấp cứu.", 403);
     }
 

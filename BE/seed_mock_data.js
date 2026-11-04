@@ -9,15 +9,18 @@ import { PatientProfile } from './src/models/patientProfile.model.js';
 import { Visit } from './src/models/visit.model.js';
 import { ImagingResult } from './src/models/imagingResult.model.js';
 import { Drug } from './src/models/drug.model.js';
+import { assertDemoSeedEnabled, connectLocalTestMongo } from './src/utils/seedGuard.util.js';
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://group5:12345@mri.kwwgmt6.mongodb.net/neuro";
+// Bắt buộc đọc từ biến môi trường — KHÔNG hardcode thông tin xác thực trong mã nguồn.
+const MONGO_URI = process.env.MONGO_URI;
+assertDemoSeedEnabled({ scriptName: "seed_mock_data.js" });
 
 async function seed() {
   try {
     console.log("Connecting to MongoDB...");
-    await mongoose.connect(MONGO_URI);
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log("Connected to MongoDB.");
 
     console.log("Clearing existing mock data...");
@@ -85,14 +88,19 @@ async function seed() {
     const passwordHash = await bcrypt.hash("123456", 10);
 
     const roles = [
-      { role: "nurse", email: "dieuduong@neuro.com", name: "Điều dưỡng Lê Văn B" },
-      { role: "doctor", email: "bacsi@neuro.com", name: "Bác sĩ Trần Thị C" },
-      { role: "hospital_admin", email: "admin@neuro.com", name: "Quản lý Bệnh viện A" }
+      { role: "nurse", email: "dieuduong@neuro.com", name: "Điều dưỡng Lê Văn B", departmentId: "KUTN" },
+      { role: "doctor", email: "bacsi@neuro.com", name: "Bác sĩ Trần Thị C", departmentId: "KUTN" },
+      { role: "radiologist", email: "radiologist@hospital.vn", name: "BS.CKI CĐHA Nguyễn Minh Đọc", departmentId: "KCDHA" },
+      { role: "department_head", email: "head@hospital.vn", name: "PGS.TS Trưởng khoa Ung thư Não", departmentId: "KUTN" },
+      { role: "technician", email: "ktv@hospital.vn", name: "KTV Chụp MRI Phạm Văn Kỹ", departmentId: "KCDHA" },
+      { role: "hospital_admin", email: "admin@neuro.com", name: "Quản lý Bệnh viện A", departmentId: "KUTN" }
     ];
 
     const staffDocs = await Promise.all(roles.map(r => User.create({
+      isTestAccount: true,
       email: r.email,
       hospitalId: hospital._id,
+      departmentId: r.departmentId || "KUTN",
       passwordHash,
       role: r.role,
       isVerified: true,
@@ -103,6 +111,7 @@ async function seed() {
 
     console.log("Creating Patients...");
     const patient1User = await User.create({
+      isTestAccount: true,
       email: "benhnhan1@gmail.com",
       hospitalId: hospital._id,
       passwordHash,
@@ -119,6 +128,7 @@ async function seed() {
     });
 
     const patient2User = await User.create({
+      isTestAccount: true,
       email: "benhnhan2@gmail.com",
       hospitalId: hospital._id,
       passwordHash,
@@ -135,6 +145,7 @@ async function seed() {
     });
 
     const patient3User = await User.create({
+      isTestAccount: true,
       email: "benhnhan3@gmail.com",
       hospitalId: hospital._id,
       passwordHash,

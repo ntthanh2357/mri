@@ -1,5 +1,6 @@
 import { BhytInfo } from "./models/bhytInfo.model.js";
 import { isCardExpired, fmtDateVN } from "./bhytCard.util.js";
+import { bhytCardLast4 } from "./bhytCrypto.util.js";
 import { getPayOSLink, releasePayOSLink, markInvoicePaidByPayOS, inFlightMessage, MONEY_IN_FLIGHT } from "./payosLink.util.js";
 
 const owedOf = (inv) => inv.patientPayAmount ?? ((inv.totalAmount || 0) - (inv.bhytInfo?.bhytAmount || 0));
@@ -64,7 +65,7 @@ export const applyBhytCore = async (invoice, { bhyt = null, treatmentType = "out
 
   invoice.bhytInfo = {
     bhytId: card._id,
-    cardNumber: `****${card.cardNumber?.slice(-4)}`,
+    cardNumber: `****${bhytCardLast4(card)}`,
     coverageRate: effectiveRate,
     bhytAmount,
     patientCopayAmount: patientAmount,

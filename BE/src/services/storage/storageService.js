@@ -1,78 +1,66 @@
 import crypto from "crypto";
 import path from "path";
+import fs from "fs";
 import StoredMedicalFile from "../../models/storedMedicalFile.model.js";
 import {
   buildLogicalPath,
   writeLocalFile,
+  writeLocalFileFromPath,
   createLocalReadStream,
   readLocalBuffer,
   existsOnLocal,
   deleteLocalFile,
 } from "./localAdapter.js";
 import {
-  uploadEncryptedFile,
   downloadEncryptedFile,
   deleteDriveFile,
 } from "./driveMirrorAdapter.js";
-import { encryptBuffer, decryptBuffer, computeSha256 } from "../../utils/cryptoStorage.util.js";
+import {
+  decryptBuffer,
+  computeSha256,
+  computeFileSha256Stream,
+} from "../../utils/cryptoStorage.util.js";
+import { enqueueDriveSync } from "./pacsQueue.service.js";
 
 /**
- * Đẩy ngầm một tệp tin lên Google Drive (Asynchronous Background Mirror)
- * Hàm này chạy ngầm không chặn luồng chính của Controller
+ * Đẩy ngầm một tệp tin lên Google Drive qua Hàng đợi điều tiết (DriveSyncQueue)
+ * Không giữ Buffer trong RAM để chống tràn bộ nhớ khi nhiều KTV tải lên cùng lúc.
  */
-export const triggerDriveSyncAsync = async (fileRecordId, buffer, relativeDir, fileName, mimeType) => {
-  // Thực hiện trong setImmediate để tách hoàn toàn khỏi luồng Event Loop chính
-  setImmediate(async () => {
-    try {
-      // 1. Mã hóa AES-256-GCM
-      const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(buffer);
-
-      // 2. Upload file mã hóa lên Google Drive
-      const driveFileName = `${fileName}.enc`;
-      const driveResult = await uploadEncryptedFile(encryptedBuffer, relativeDir, driveFileName, mimeType);
-
-      // 3. Cập nhật trạng thái SYNCED vào DB
-      await StoredMedicalFile.findByIdAndUpdate(fileRecordId, {
-        driveFileId: driveResult.driveFileId,
-        driveFolderId: driveResult.driveFolderId,
-        syncStatus: "SYNCED",
-        encryptionIv: ivHex,
-        encryptionAuthTag: authTagHex,
-        isEncrypted: true,
-        lastSyncAttemptAt: new Date(),
-        syncError: null,
-      });
-
-      console.log(`✅ [Storage Mirror] Đã đồng bộ mã hóa tệp "${fileName}" lên Drive (ID: ${driveResult.driveFileId})`);
-    } catch (err) {
-      console.warn(`⚠️ [Storage Mirror] Lỗi khi đồng bộ ngầm tệp "${fileName}" lên Drive:`, err.message);
-      try {
-        await StoredMedicalFile.findByIdAndUpdate(fileRecordId, {
-          syncStatus: "FAILED",
-          syncError: err.message,
-          lastSyncAttemptAt: new Date(),
-          $inc: { syncRetries: 1 },
-        });
-      } catch (dbErr) {
-        console.error("Lỗi cập nhật trạng thái lỗi sync vào DB:", dbErr);
-      }
-    }
+export const triggerDriveSyncAsync = async (fileRecordId, _bufferUnused, relativeDir, fileName, mimeType, priority = 5) => {
+  enqueueDriveSync({
+    fileRecordId,
+    relativeDir,
+    fileName,
+    mimeType,
+    priority,
   });
 };
 
 /**
- * Ghi tệp tin mới vào hệ thống (Local-First: Ghi local ngay, đồng bộ Drive ngầm)
- * @param {object} params
- * @param {string} params.category - 'pacs' | 'sequence_slice' | 'report' | 'patient_upload' | 'ai_temp' | 'backup'
- * @param {string} [params.studyId] - ID ca chụp
- * @param {string} [params.sequenceName] - Tên chuỗi xung
- * @param {string} params.fileName - Tên tệp
- * @param {Buffer} params.buffer - Dữ liệu nhị phân
- * @param {string} [params.mimeType] - MimeType
- * @param {string} [params.patientId] - ID bệnh nhân
- * @param {string} [params.uploadedBy] - ID người tải lên
- * @param {boolean} [params.syncToDrive=true] - Có đồng bộ lên Drive không
- * @returns {Promise<StoredMedicalFile>}
+ * Tìm bản ghi tệp tin đã tồn tại theo SHA-256 để chống lưu trùng (Content-Addressable Deduplication)
+ * @param {string} sha256
+ * @returns {Promise<StoredMedicalFile|null>}
+ */
+export const findExistingBySha256 = async (sha256) => {
+  if (!sha256) return null;
+  try {
+    const candidates = await StoredMedicalFile.find({ sha256 })
+      .sort({ syncStatus: -1, createdAt: -1 })
+      .limit(5)
+      .lean();
+    for (const item of candidates) {
+      if (item.localPath && existsOnLocal(item.localPath)) {
+        return item;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Ghi tệp tin mới vào hệ thống từ Buffer (Local-First + SHA-256 Deduplication + Queued Drive Mirror)
  */
 export const putFile = async ({
   category,
@@ -85,39 +73,165 @@ export const putFile = async ({
   patientId = null,
   uploadedBy = null,
   syncToDrive = true,
+  enableDeduplication = true,
 }) => {
   if (!buffer || !Buffer.isBuffer(buffer)) {
     throw new Error("Dữ liệu tệp không hợp lệ (cần Buffer).");
   }
 
   const fileId = crypto.randomUUID();
+  const sha256 = computeSha256(buffer);
   const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
 
-  // 1. Ghi tệp ngay lập tức vào Local Storage (Bản chính - 100% không nghẽn mạng)
-  const { localPath, sizeBytes } = await writeLocalFile(logicalPath, buffer);
-  const sha256 = computeSha256(buffer);
+  // 1. Kiểm tra chống lưu trùng theo SHA-256 (Deduplication)
+  const existing = enableDeduplication ? await findExistingBySha256(sha256) : null;
+  let localPath;
+  let sizeBytes;
+  let isDeduplicated = false;
 
-  // 2. Tạo bản ghi quản trị tệp tin trong Database với trạng thái PENDING
+  if (existing && existsOnLocal(existing.localPath)) {
+    localPath = existing.localPath;
+    sizeBytes = existing.sizeBytes || buffer.length;
+    isDeduplicated = true;
+  } else {
+    // Ghi tệp ngay lập tức vào Local Storage (Bản chính - 100% không nghẽn mạng)
+    const written = await writeLocalFile(logicalPath, buffer);
+    localPath = written.localPath;
+    sizeBytes = written.sizeBytes;
+  }
+
+  const alreadySyncedOnDrive = Boolean(
+    existing &&
+      existing.syncStatus === "SYNCED" &&
+      existing.driveFileId &&
+      existing.encryptionIv &&
+      existing.encryptionAuthTag
+  );
+
+  // 2. Tạo bản ghi quản trị tệp tin trong Database
   const fileRecord = await StoredMedicalFile.create({
     fileId,
     category,
     studyId,
     sequenceName,
     fileName,
-    logicalPath,
+    logicalPath: isDeduplicated ? existing.logicalPath : logicalPath,
     localPath,
     sha256,
     sizeBytes,
     mimeType,
-    syncStatus: "PENDING",
+    syncStatus: alreadySyncedOnDrive ? "SYNCED" : "PENDING",
+    driveFileId: alreadySyncedOnDrive ? existing.driveFileId : null,
+    driveFolderId: alreadySyncedOnDrive ? existing.driveFolderId : null,
+    encryptionIv: alreadySyncedOnDrive ? existing.encryptionIv : null,
+    encryptionAuthTag: alreadySyncedOnDrive ? existing.encryptionAuthTag : null,
+    isEncrypted: true,
     patientId,
     uploadedBy,
   });
 
-  // 3. Đưa tác vụ mã hóa & tải lên Drive vào tiến trình chạy ngầm
-  if (syncToDrive && category !== "ai_temp") {
+  // 3. Đưa tác vụ mã hóa & tải lên Drive vào Hàng đợi DriveSyncQueue (nếu chưa có trên Drive)
+  if (syncToDrive && category !== "ai_temp" && !alreadySyncedOnDrive) {
     const relativeDir = path.dirname(logicalPath);
-    triggerDriveSyncAsync(fileRecord._id, buffer, relativeDir, fileName, mimeType);
+    enqueueDriveSync({
+      fileRecordId: fileRecord._id,
+      relativeDir,
+      fileName,
+      mimeType,
+    });
+  }
+
+  return fileRecord;
+};
+
+/**
+ * Ghi tệp tin vào hệ thống trực tiếp từ đường dẫn đĩa (Zero-RAM-Spike Stream)
+ * Dành cho tệp lớn từ Multer hoặc Chunked Upload mà KHÔNG nạp toàn bộ tệp vào RAM.
+ */
+export const putFileFromPath = async ({
+  category,
+  studyId = null,
+  sequenceName = null,
+  fileName,
+  sourceFilePath,
+  moveFile = false,
+  mimeType = "application/octet-stream",
+  patientName = null,
+  patientId = null,
+  uploadedBy = null,
+  syncToDrive = true,
+  enableDeduplication = true,
+  priority = 5,
+}) => {
+  if (!sourceFilePath || !existsOnLocal(sourceFilePath)) {
+    throw new Error(`Tệp nguồn không tồn tại: ${sourceFilePath}`);
+  }
+
+  const fileId = crypto.randomUUID();
+  // 1. Tính SHA-256 bằng Stream (từng mảnh 64KB, không tốn RAM)
+  const { sha256, sizeBytes: streamedSize } = await computeFileSha256Stream(sourceFilePath);
+  const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
+
+  // 2. Kiểm tra chống lưu trùng (SHA-256 Deduplication)
+  const existing = enableDeduplication ? await findExistingBySha256(sha256) : null;
+  let localPath;
+  let sizeBytes = streamedSize;
+  let isDeduplicated = false;
+
+  if (existing && existsOnLocal(existing.localPath)) {
+    localPath = existing.localPath;
+    sizeBytes = existing.sizeBytes || streamedSize;
+    isDeduplicated = true;
+    // Nếu yêu cầu moveFile (dọn tệp tạm Multer), xóa tệp tạm vì đã có bản chính trong kho PACS
+    if (moveFile && path.resolve(sourceFilePath) !== path.resolve(existing.localPath)) {
+      await fs.promises.unlink(sourceFilePath).catch(() => {});
+    }
+  } else {
+    const written = await writeLocalFileFromPath(logicalPath, sourceFilePath, { moveFile });
+    localPath = written.localPath;
+    sizeBytes = written.sizeBytes;
+  }
+
+  const alreadySyncedOnDrive = Boolean(
+    existing &&
+      existing.syncStatus === "SYNCED" &&
+      existing.driveFileId &&
+      existing.encryptionIv &&
+      existing.encryptionAuthTag
+  );
+
+  // 3. Tạo bản ghi quản trị tệp tin trong Database
+  const fileRecord = await StoredMedicalFile.create({
+    fileId,
+    category,
+    studyId,
+    sequenceName,
+    fileName,
+    logicalPath: isDeduplicated ? existing.logicalPath : logicalPath,
+    localPath,
+    sha256,
+    sizeBytes,
+    mimeType,
+    syncStatus: alreadySyncedOnDrive ? "SYNCED" : "PENDING",
+    driveFileId: alreadySyncedOnDrive ? existing.driveFileId : null,
+    driveFolderId: alreadySyncedOnDrive ? existing.driveFolderId : null,
+    encryptionIv: alreadySyncedOnDrive ? existing.encryptionIv : null,
+    encryptionAuthTag: alreadySyncedOnDrive ? existing.encryptionAuthTag : null,
+    isEncrypted: true,
+    patientId,
+    uploadedBy,
+  });
+
+  // 4. Xếp vào Hàng đợi Đồng bộ Google Drive (nếu chưa có bản sao trên Drive)
+  if (syncToDrive && category !== "ai_temp" && !alreadySyncedOnDrive) {
+    const relativeDir = path.dirname(logicalPath);
+    enqueueDriveSync({
+      fileRecordId: fileRecord._id,
+      relativeDir,
+      fileName,
+      mimeType,
+      priority,
+    });
   }
 
   return fileRecord;
@@ -149,7 +263,8 @@ export const getFileStream = async (fileId) => {
     console.warn(`[Self-Healing] Phát hiện file local bị mất: ${file.localPath}. Đang phục hồi từ Google Drive...`);
     try {
       const encryptedBuffer = await downloadEncryptedFile(file.driveFileId);
-      const decrypted = decryptBuffer(encryptedBuffer, null, file.encryptionIv, file.encryptionAuthTag);
+      // [FIX]: Truyền đúng thứ tự (encryptedBuffer, ivHex, authTagHex)
+      const decrypted = decryptBuffer(encryptedBuffer, file.encryptionIv, file.encryptionAuthTag);
 
       // Đối chiếu hash để chắc chắn tính toàn vẹn
       const checkSha = computeSha256(decrypted);
@@ -191,18 +306,26 @@ export const getFileBuffer = async (fileId) => {
 
 /**
  * Xóa tệp tin khỏi cả Local Storage, Drive và Database
+ * Chỉ xóa tệp vật lý / Drive nếu không còn bản ghi deduplicated nào khác đang tham chiếu tới cùng sha256.
  * @param {string} fileId
  */
 export const deleteFile = async (fileId) => {
   const file = await StoredMedicalFile.findOne({ fileId });
   if (!file) return;
 
-  // Xóa local
-  await deleteLocalFile(file.localPath);
+  const otherRefsCount = await StoredMedicalFile.countDocuments({
+    _id: { $ne: file._id },
+    sha256: file.sha256,
+  });
 
-  // Xóa Drive nếu có
-  if (file.driveFileId) {
-    await deleteDriveFile(file.driveFileId);
+  if (otherRefsCount === 0) {
+    // Xóa local
+    await deleteLocalFile(file.localPath);
+
+    // Xóa Drive nếu có
+    if (file.driveFileId) {
+      await deleteDriveFile(file.driveFileId);
+    }
   }
 
   // Xóa bản ghi DB
@@ -211,6 +334,8 @@ export const deleteFile = async (fileId) => {
 
 export default {
   put: putFile,
+  putFromPath: putFileFromPath,
+  findExistingBySha256,
   get: getFileStream,
   getBuffer: getFileBuffer,
   delete: deleteFile,

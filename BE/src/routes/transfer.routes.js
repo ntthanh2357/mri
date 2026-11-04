@@ -23,23 +23,23 @@ router.get("/cross-view/:token", accessCrossHospitalView);
 router.use(protect);
 
 // Danh sách & chi tiết gói chuyển viện
-router.get("/", checkRole(["doctor", "nurse", "admin", "hospital_admin", "receptionist"]), getTransfers);
-router.get("/:id", checkRole(["doctor", "nurse", "admin", "hospital_admin", "receptionist"]), getTransferById);
+router.get("/", checkRole(["doctor", "department_head", "radiologist", "nurse", "admin", "system_admin", "hospital_admin", "receptionist"]), getTransfers);
+router.get("/:id", checkRole(["doctor", "department_head", "radiologist", "nurse", "admin", "system_admin", "hospital_admin", "receptionist"]), getTransferById);
 
-// Bác sĩ tạo gói chuyển viện thông minh (UC-DOC-10) -> lưu draft & báo lễ tân
-router.post("/", checkRole(["doctor", "admin", "hospital_admin"]), createTransferRequest);
+// Bác sĩ / Trưởng khoa tạo gói chuyển viện thông minh (UC-DOC-10) -> lưu draft & báo lễ tân
+router.post("/", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), createTransferRequest);
 
-// Lễ tân (hoặc bác sĩ/admin) xác nhận & gửi email cho bệnh nhân
-router.post("/:id/send-email", checkRole(["receptionist", "doctor", "admin", "hospital_admin"]), sendTransferEmail);
+// Lễ tân (hoặc bác sĩ/trưởng khoa/admin) xác nhận & gửi email cho bệnh nhân
+router.post("/:id/send-email", checkRole(["receptionist", "doctor", "department_head", "admin", "system_admin", "hospital_admin"]), sendTransferEmail);
 
 // Hủy gói chuyển viện
-router.delete("/:id", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), deleteTransfer);
+router.delete("/:id", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin", "receptionist"]), deleteTransfer);
 
 // Compatibility endpoints
-router.post("/check-capacity", checkRole(["doctor", "nurse", "admin", "hospital_admin", "receptionist"]), checkSurgeryCapacity);
-router.put("/:id/accept", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), acceptTransferRequest);
-router.put("/:id/reject", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), rejectTransferRequest);
-router.post("/:id/grant-cross-view", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), grantCrossHospitalView);
-router.post("/:id/revoke-cross-view", checkRole(["doctor", "admin", "hospital_admin", "receptionist"]), revokeCrossHospitalView);
+router.post("/check-capacity", checkRole(["doctor", "department_head", "nurse", "admin", "system_admin", "hospital_admin", "receptionist"]), checkSurgeryCapacity);
+router.put("/:id/accept", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin", "receptionist"]), acceptTransferRequest);
+router.put("/:id/reject", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin", "receptionist"]), rejectTransferRequest);
+router.post("/:id/grant-cross-view", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin", "receptionist"]), grantCrossHospitalView);
+router.post("/:id/revoke-cross-view", checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin", "receptionist"]), revokeCrossHospitalView);
 
 export default router;

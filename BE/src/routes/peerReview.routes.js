@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import {
   flagForPeerReview,
   submitReview,
@@ -11,10 +11,12 @@ import {
 const router = Router();
 router.use(protect);
 
-router.get("/", getPeerReviews);
-router.post("/", flagForPeerReview);
-router.post("/:id/submit-reading", submitReview);
-router.put("/:id/finalize", finalizePeerReview);
-router.post("/random-qa-sampling", runRandomQaSampling);
+const PEER_REVIEW_ROLES = ["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"];
+
+router.get("/", checkRole(PEER_REVIEW_ROLES), getPeerReviews);
+router.post("/", checkRole(PEER_REVIEW_ROLES), flagForPeerReview);
+router.post("/:id/submit-reading", checkRole(["doctor", "radiologist", "department_head"]), submitReview);
+router.put("/:id/finalize", checkRole(PEER_REVIEW_ROLES), finalizePeerReview);
+router.post("/random-qa-sampling", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), runRandomQaSampling);
 
 export default router;

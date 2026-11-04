@@ -158,14 +158,15 @@ export const createAndPayInvoice = async (req, res) => {
     });
 
     if (prescription && prescription.drugs && prescription.drugs.length > 0) {
-      const drugNames = prescription.drugs.map(d => new RegExp(`^${d.name.trim()}$`, "i"));
+      const escapeDrugName = (str) => (str || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const drugNames = prescription.drugs.map(d => new RegExp(`^${escapeDrugName(d.name)}$`, "i"));
       const dbDrugs = await Drug.find({
         hospitalId: req.user.hospitalId,
         name: { $in: drugNames }
       });
 
       for (const pDrug of prescription.drugs) {
-        const pDrugRegex = new RegExp(`^${pDrug.name.trim()}$`, "i");
+        const pDrugRegex = new RegExp(`^${escapeDrugName(pDrug.name)}$`, "i");
         const dbDrug = dbDrugs.find(d => pDrugRegex.test(d.name));
 
         // Kiểm tra tồn kho trước khi thanh toán
@@ -337,6 +338,9 @@ export const payInvoice = async (req, res) => {
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn" });
+    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId && invoice.hospitalId.toString() !== req.user.hospitalId) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
 
     // Chỉ thu tiền hóa đơn đang chờ (đã thanh toán / đã hoàn trả / đã hủy thì không thu lại)
     if (invoice.status === "đang xử lý") {
@@ -742,6 +746,9 @@ export const checkPayOSPayment = async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn" });
+    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId && invoice.hospitalId.toString() !== req.user.hospitalId) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
     if (!["admin", "system_admin"].includes(req.user.role) && String(invoice.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }

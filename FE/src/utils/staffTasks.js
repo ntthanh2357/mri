@@ -16,7 +16,7 @@ const task = (key, label, hint, count, route, params) => ({ key, label, hint, co
 /** Danh sách việc theo role; việc còn tồn (count > 0) lên trước, giữ thứ tự ưu tiên trong từng nhóm. */
 export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], prescriptions = [], assignments = [] } = {}) => {
   let list = [];
-  if (role === 'doctor') {
+  if (role === 'doctor' || role === 'department_head') {
     list = [
       // [0013-MyAssignments] Ca phân công chờ xác nhận nhận bàn giao (ACK) — lên đầu
       // vì BS chưa ACK thì hệ thống chưa thể theo dõi tiến độ đúng hạn chót.
@@ -27,7 +27,14 @@ export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], pr
       task('scan', 'Ca chụp MRI đang xử lý', 'Chờ chụp hoặc đang chụp, bác sĩ có thể thao tác thay KTV', countStatus(visits, SCAN_STATUSES), 'DoctorWorkQueue', { tab: 'mriQueue' }),
       task('sign', 'Bệnh án chờ ký duyệt', 'Hồ sơ EMR chưa ký số', emr.filter(r => r.signStatus === 'Chưa duyệt').length, 'EMRDashboard', { tab: 'records' }),
     ];
-  } else if (role === 'technician') {
+  } else if (role === 'radiologist') {
+    list = [
+      task('assign', 'Ca phân công chờ xác nhận', 'Phim MRI được giao đọc, cần xác nhận nhận ca', assignments.filter(a => a.status === 'pending').length, 'MyAssignments', { tab: 'pending' }),
+      task('read', 'Phim MRI chờ đọc & ký số', 'Đã chụp xong hoặc đã có AI, chờ BS CĐHA kết luận', countStatus(visits, ['chờ bác sĩ đọc', 'chờ kết quả AI']), 'DoctorWorkQueue', { tab: 'mriQueue' }),
+      task('tumor_board', 'Ca chờ Hội chẩn Tumor Board', 'Ca RANO tiến triển (PD) hoặc u phức tạp chờ hội chẩn', countStatus(visits, ['chờ hội chẩn']), 'DoctorWorkQueue', { tab: 'all' }),
+      task('scan', 'Ca chụp MRI đang thực hiện', 'Theo dõi tiến độ phòng chụp PACS', countStatus(visits, SCAN_STATUSES), 'DoctorWorkQueue', { tab: 'mriQueue' }),
+    ];
+  } else if (role === 'technician' || role === 'lab_technician') {
     list = [
       task('scan', 'Ca chờ chụp MRI', 'Kiểm tra an toàn rồi đưa vào buồng chụp', countStatus(visits, SCAN_STATUSES.filter(x => x !== 'đang chụp')), 'DoctorWorkQueue', { tab: 'mriQueue' }),
       task('upload', 'Đang chụp, chưa nộp phim', 'Tải ảnh phim lên để AI phân tích', countStatus(visits, ['đang chụp']), 'DoctorWorkQueue', { tab: 'mriQueue' }),
@@ -55,7 +62,10 @@ export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], pr
 };
 
 const NEXT_STATUSES = {
-  doctor: ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ bác sĩ đọc', 'chờ kết quả AI', ...SCAN_STATUSES],
+  doctor: ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ bác sĩ đọc', 'chờ kết quả AI', 'chờ hội chẩn', ...SCAN_STATUSES],
+  department_head: ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ bác sĩ đọc', 'chờ kết quả AI', 'chờ hội chẩn', 'chờ nhập viện', ...SCAN_STATUSES],
+  radiologist: ['chờ bác sĩ đọc', 'chờ kết quả AI', 'chờ hội chẩn', 'đang chụp'],
+  lab_technician: SCAN_STATUSES,
   technician: SCAN_STATUSES,
   nurse: ['đang chờ'],
 };

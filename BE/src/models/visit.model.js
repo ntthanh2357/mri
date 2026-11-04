@@ -104,6 +104,20 @@ const visitSchema = new Schema(
       instructions: { type: String, default: "" },
       requestAiAnalysis: { type: Boolean, default: false },
       withContrast: { type: Boolean, default: false }, // UC-PAT-06: có tiêm cản quang Gadolinium → bệnh nhân ký phiếu trên app
+      clinicalScenario: {
+        type: String,
+        enum: ['initial_diagnosis', 'pre_op', 'post_op_72h', 'surveillance_rano'],
+        default: 'initial_diagnosis'
+      },
+      protocolCode: { type: String, default: 'BRAIN_TUMOR_STANDARD' },
+      mriStatus: {
+        type: String,
+        enum: ['none', 'ordered', 'safety_checked', 'scanning', 'uploaded', 'completed', 'cancelled'],
+        default: 'none'
+      },
+      priorStudyId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
+      creatinineEgfr: { type: Number, default: null },
+      slotId: { type: Schema.Types.ObjectId, ref: 'MriSlot', default: null },
       imagingResultId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
       orderedAt: { type: Date, default: null }
     },
@@ -118,7 +132,12 @@ const visitSchema = new Schema(
       screenedBy: { type: String, default: "" },              // Họ tên người kiểm tra
       screenedAt: { type: Date, default: null },              // Thời gian kiểm tra
       passed: { type: Boolean, default: false },              // Đủ điều kiện vào buồng
-      notes: { type: String, default: "" }
+      notes: { type: String, default: "" },
+      // Bác sĩ chấp thuận ca có thiết bị kim loại (ghi đè) — lưu vết pháp lý
+      overrideReason: { type: String, default: "" },
+      overriddenBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      overriddenByName: { type: String, default: "" },
+      overriddenAt: { type: Date, default: null }
     },
     // Bệnh nhân tự khai sàng lọc an toàn MRI trên app trước khi tới chụp (services/mriPrep.service.js).
     // Chỉ để KTV biết trước; KTV vẫn tự hỏi lại và xác nhận ở mriSafetyChecklist.

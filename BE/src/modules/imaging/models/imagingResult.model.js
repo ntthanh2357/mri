@@ -134,7 +134,8 @@ const imagingResultSchema = new Schema(
     digitalSignatureMetadata: {
       signatureType: {
         type: String,
-        enum: ['electronic', 'pki_token', 'cloud_hsm', 'smartcard', 'electronic_stamp'],
+        // 'internal_hash': chỉ là mã băm toàn vẹn nội bộ, KHÔNG phải chữ ký số PKI (xem P0-2 trong báo cáo audit)
+        enum: ['electronic', 'pki_token', 'cloud_hsm', 'smartcard', 'electronic_stamp', 'internal_hash'],
         default: 'electronic',
       },
       certificateSerial: { type: String, default: "" },
@@ -149,6 +150,65 @@ const imagingResultSchema = new Schema(
     // [BUG-05 FIX] - Các field thiếu khiến scheduler.js không lưu được dữ liệu
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', default: null },          // Liên kết trực tiếp đến Visit
     peerReviewId: { type: Schema.Types.ObjectId, ref: 'PeerReview', default: null }, // Đã có peer review chưa (tránh tạo lại)
+    // ── Báo cáo CĐHA u não có cấu trúc (Structured Brain Tumor Report + RANO) ──
+    structuredReport: {
+      hemisphere: { type: String, enum: ['left', 'right', 'bilateral', 'midline', 'none'], default: 'none' },
+      lobe: {
+        type: String,
+        enum: ['frontal', 'temporal', 'parietal', 'occipital', 'cerebellar', 'brainstem', 'sellar_pituitary', 'cp_angle', 'multifocal', 'none'],
+        default: 'none'
+      },
+      axialLocation: { type: String, enum: ['intra_axial', 'extra_axial', 'intraventricular', 'none'], default: 'none' },
+      measurements: {
+        d1Mm: { type: Number, default: 0 },
+        d2Mm: { type: Number, default: 0 },
+        d3Mm: { type: Number, default: 0 },
+        crossProductMm2: { type: Number, default: 0 },
+        sliceIndex: { type: Number, default: 0 },
+        seriesType: { type: String, default: 'T1C+' }
+      },
+      enhancement: { type: String, enum: ['none', 'homogeneous', 'ring_enhancing', 'heterogeneous'], default: 'none' },
+      peritumoralEdema: { type: String, enum: ['none', 'mild', 'moderate', 'severe'], default: 'none' },
+      necrosis: { type: Boolean, default: false },
+      hemorrhage: { type: Boolean, default: false },
+      midlineShiftMm: { type: Number, default: 0 },
+      herniation: { type: String, enum: ['none', 'subfalcine', 'uncal', 'transtentorial', 'tonsillar'], default: 'none' },
+      hydrocephalus: { type: Boolean, default: false },
+      rano: {
+        priorResultId: { type: Schema.Types.ObjectId, ref: 'ImagingResult', default: null },
+        priorCrossProductMm2: { type: Number, default: null },
+        changePercent: { type: Number, default: null },
+        category: { type: String, enum: ['CR', 'PR', 'SD', 'PD', 'N/A'], default: 'N/A' },
+        isPseudoprogressionSuspected: { type: Boolean, default: false },
+        radiotherapyEndDate: { type: Date, default: null }
+      }
+    },
+    // Đánh giá đồng thuận giữa Bác sĩ đọc phim và AI (AI-Radiologist Concordance)
+    aiAgreement: {
+      status: { type: String, enum: ['agreed', 'modified', 'rejected', 'unrated'], default: 'unrated' },
+      note: { type: String, default: '' }
+    },
+    // Cảnh báo Đỏ CĐHA (Critical Imaging Finding Alert - ACR Guideline)
+    criticalFinding: {
+      isCritical: { type: Boolean, default: false },
+      reason: { type: String, default: '' },
+      notifiedAt: { type: Date, default: null },
+      acknowledgedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      acknowledgedByName: { type: String, default: '' },
+      acknowledgedAt: { type: Date, default: null },
+      escalatedAt: { type: Date, default: null }
+    },
+    // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
+    addenda: [
+      {
+        content: { type: String, required: true },
+        reason: { type: String, default: '' },
+        addedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+        addedByName: { type: String, default: '' },
+        addedAt: { type: Date, default: Date.now },
+        signatureHash: { type: String, default: '' }
+      }
+    ]
   },
   {
     timestamps: true,

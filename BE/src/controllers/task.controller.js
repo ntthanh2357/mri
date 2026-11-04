@@ -75,7 +75,7 @@ export const getKanbanBoard = async (req, res) => {
 
     // Bác sĩ/KTV/Lễ tân chỉ xem task thuộc vai trò mình (hoặc gán trực tiếp)
     const userRole = role || req.user.role;
-    if (!["admin", "hospital_admin"].includes(userRole)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(userRole)) {
       filter.$or = [
         { roleRequired: userRole },
         { assignedToUserId: req.user.id }
@@ -111,6 +111,25 @@ export const getKanbanBoard = async (req, res) => {
 // ─── I.2 — Cập nhật trạng thái task & kích hoạt task kế tiếp ───────────────
 // @route PUT /api/v1/tasks/:id/status
 // @access Private
+
+const TASK_ADMIN_ROLES = ["admin", "system_admin", "hospital_admin", "department_head"];
+
+/**
+ * [P2-6] Chỉ người đúng vai trò của bước, hoặc người được giao trực tiếp, mới được
+ * đổi trạng thái task. Trước đây mọi nhân viên cùng viện đều tick hoàn tất được
+ * bước của người khác (lễ tân "ký duyệt báo cáo" thay bác sĩ).
+ */
+export const canUpdateTask = (task, user) => {
+  if (!task || !user) return false;
+  if (TASK_ADMIN_ROLES.includes(user.role)) return true;
+  if (task.assignedToUserId && task.assignedToUserId.toString() !== String(user.id)) return false;
+  // Bước "auto" là của hệ thống/AI, không cho nhân viên tự tick
+  if (task.roleRequired === "auto") return false;
+  if (task.roleRequired === "doctor" && ["doctor", "radiologist", "department_head"].includes(user.role)) return true;
+  if (task.roleRequired === "technician" && ["technician", "lab_technician"].includes(user.role)) return true;
+  return task.roleRequired === user.role;
+};
+
 export const updateTaskStatus = async (req, res) => {
   try {
     const task = await Task.findOne({
@@ -122,6 +141,15 @@ export const updateTaskStatus = async (req, res) => {
     const { status, notes } = req.body;
     if (!['pending', 'in_progress', 'completed', 'cancelled', 'skipped'].includes(status)) {
       return errorResponse(res, "Trạng thái task không hợp lệ.", 400);
+    }
+    const oldStatus = task.status;
+
+    if (!canUpdateTask(task, req.user)) {
+      return errorResponse(
+        res,
+        `Bạn không có quyền cập nhật bước "${task.title}" (yêu cầu vai trò ${task.roleRequired}).`,
+        403
+      );
     }
 
     task.status = status;
@@ -157,6 +185,23 @@ export const updateTaskStatus = async (req, res) => {
     }
 
     await task.save();
+
+    // [P2-6] Lưu vết ai đổi trạng thái bước nào — phục vụ đối soát trách nhiệm
+    try {
+      const { recordAuditLog } = await import("../services/auditLog.service.js");
+      await recordAuditLog({
+        action: "TASK_STATUS_CHANGED",
+        entity: "Task",
+        entityId: task._id.toString(),
+        performedBy: (req.user.id || req.user._id || "system").toString(),
+        hospitalId: task.hospitalId,
+        details: `Người dùng ${req.user.profile?.name || req.user.email || req.user.id} (${req.user.role}) chuyển task bước ${task.stepNumber} "${task.title}" sang ${status}.`,
+        payload: { from: oldStatus, to: status, notes: notes || "" },
+      });
+    } catch (auditErr) {
+      console.warn("Không ghi được audit log task:", auditErr.message);
+    }
+
     return successResponse(res, { task }, "Cập nhật trạng thái task thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);

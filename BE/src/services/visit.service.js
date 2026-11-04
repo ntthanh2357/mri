@@ -3,10 +3,34 @@ import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
+import { LabOrder } from "../modules/laboratory/models/labOrder.model.js";
+import { ImagingResult } from "../modules/imaging/models/imagingResult.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { contrastConsentPending } from "./contrastConsent.service.js";
 import { evaluateVitalSigns } from "./vitalsSafety.service.js";
+
+/**
+ * Helper: Tra cứu chỉ số eGFR gần nhất từ LIS (LabOrder) của bệnh nhân
+ */
+export const findLatestPatientEgfr = async (hospitalId, patientId) => {
+  if (!patientId) return null;
+  try {
+    const latestOrder = await LabOrder.findOne({
+      hospitalId,
+      patient_id: patientId,
+      status: { $in: ["RESULTED", "VERIFIED", "COMPLETED"] },
+      "results.biomarker_code": { $regex: /^e?gfr$/i }
+    })
+      .sort({ ordered_at: -1, createdAt: -1 })
+      .lean();
+    if (!latestOrder || !Array.isArray(latestOrder.results)) return null;
+    const egfrItem = latestOrder.results.find(r => /^e?gfr$/i.test(String(r.biomarker_code || "")));
+    return egfrItem && Number.isFinite(Number(egfrItem.value_result)) ? Number(egfrItem.value_result) : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Service: Lấy danh sách nhân sự (Bác sĩ, Điều dưỡng, KTV) kèm tải hàng đợi trong ngày
@@ -18,10 +42,13 @@ export const getStaffService = async ({ hospitalId }) => {
     throw err;
   }
 
-  const [doctorsList, nurses, dbTechnicians] = await Promise.all([
-    User.find({ hospitalId, role: "doctor" }).select("profile email role").lean(),
+  const [doctorsList, nurses, dbTechnicians, radiologists] = await Promise.all([
+    User.find({ hospitalId, role: { $in: ["doctor", "department_head"] } }).select("profile email role departmentId").lean(),
+
+
     User.find({ hospitalId, role: { $in: ["nurse", "receptionist"] } }).select("profile email role"),
     User.find({ hospitalId, role: "technician" }).select("profile email role"),
+    User.find({ hospitalId, role: "radiologist" }).select("profile email role departmentId").lean(),
   ]);
 
   const { startOfDay } = getDayRangeVN();
@@ -46,7 +73,7 @@ export const getStaffService = async ({ hospitalId }) => {
   }));
 
   const technicians = dbTechnicians.length > 0 ? dbTechnicians : doctors;
-  return { doctors, nurses, technicians };
+  return { doctors, nurses, technicians, radiologists };
 };
 
 /**
@@ -154,6 +181,14 @@ export const getMyQueueService = async ({ role, id, hospitalId, query = {} }) =>
         "mriOrder.orderedAt": { $exists: true }
       }
     ];
+  } else if (role === "radiologist") {
+    filter.status = { $in: ["đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "hoàn tất"] };
+    filter["mriOrder.orderedAt"] = { $exists: true };
+  } else if (role === "department_head") {
+    filter.$or = [
+      { doctorId: id },
+      { status: { $in: ["đang chờ", "đang khám", "chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] } }
+    ];
   } else if (role === "nurse") {
     filter.$or = [
       { nurseId: id, status: "đang chờ", hospitalId },
@@ -190,7 +225,7 @@ export const getMyQueueService = async ({ role, id, hospitalId, query = {} }) =>
 /**
  * Service: Cập nhật sinh hiệu bệnh nhân
  */
-export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
+export const updateVitalsService = async ({ visitId, hospitalId, vitals, keepWaitingStatus = false }) => {
   const visit = await Visit.findById(visitId);
   if (!visit) {
     const err = new Error("Không tìm thấy lượt khám");
@@ -204,7 +239,24 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
     throw err;
   }
 
-  const evaluation = evaluateVitalSigns(vitals);
+  let patientContext = {};
+  if (visit.patientId) {
+    if (typeof visit.patientId === 'object') {
+      patientContext = {
+        age: vitals.age ?? visit.patientId.profile?.age ?? visit.patientId.age,
+        gender: vitals.gender ?? visit.patientId.profile?.gender ?? visit.patientId.gender,
+        birthYear: vitals.birthYear ?? visit.patientId.profile?.birthYear
+      };
+    } else {
+      patientContext = {
+        age: vitals.age,
+        gender: vitals.gender,
+        birthYear: vitals.birthYear
+      };
+    }
+  }
+
+  const evaluation = evaluateVitalSigns(vitals, patientContext);
 
   visit.vitals = {
     ...vitals,
@@ -212,7 +264,8 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
     isAbnormal: evaluation.isAbnormal,
     alerts: evaluation.alertMessages,
     alertDetails: evaluation.alerts,
-    flags: evaluation.flags
+    flags: evaluation.flags,
+    patientContext: evaluation.patientContext
   };
 
   if (evaluation.isAbnormal && evaluation.alerts.some(a => a.severity === 'danger')) {
@@ -221,7 +274,7 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
     }
   }
 
-  if (visit.status === "đang chờ") {
+  if (visit.status === "đang chờ" && !keepWaitingStatus) {
     visit.status = "đang khám";
   }
 
@@ -232,7 +285,21 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals }) => {
 /**
  * Service: Ra y lệnh chụp MRI và tạo hóa đơn tạm tính
  */
-export const createMriOrderService = async ({ visitId, hospitalId, userId, technicianId, region, instructions, requestAiAnalysis }) => {
+export const createMriOrderService = async ({
+  visitId,
+  hospitalId,
+  userId,
+  technicianId,
+  region,
+  instructions,
+  requestAiAnalysis,
+  withContrast,
+  clinicalScenario,
+  protocolCode,
+  priorStudyId,
+  creatinineEgfr,
+  slotId
+}) => {
   const visit = await Visit.findById(visitId);
   if (!visit) {
     const err = new Error("Không tìm thấy lượt khám");
@@ -255,9 +322,47 @@ export const createMriOrderService = async ({ visitId, hospitalId, userId, techn
     }
   }
 
+  let resolvedEgfr = creatinineEgfr !== undefined && creatinineEgfr !== null ? Number(creatinineEgfr) : null;
+  if (withContrast && resolvedEgfr === null) {
+    resolvedEgfr = await findLatestPatientEgfr(hospitalId, visit.patientId);
+  }
+
+  let resolvedPriorStudyId = priorStudyId || null;
+  if (!resolvedPriorStudyId && ["surveillance_rano", "post_op_72h"].includes(clinicalScenario)) {
+    try {
+      const patientDoc = await User.findById(visit.patientId).select("profile.medicalId").lean();
+      const priorVisits = await Visit.find({ hospitalId, patientId: visit.patientId, _id: { $ne: visit._id } }).select("_id").lean();
+      const orClauses = [
+        ...(patientDoc?.profile?.medicalId ? [{ medicalId: patientDoc.profile.medicalId }] : []),
+        ...(priorVisits.length > 0 ? [{ visitId: { $in: priorVisits.map((pv) => pv._id) } }] : []),
+        { patientUserId: visit.patientId }
+      ];
+      const prior = await ImagingResult.findOne({ hospitalId, isSigned: true, $or: orClauses }).sort({ reportDate: -1, createdAt: -1 }).select("_id").lean();
+      if (prior) resolvedPriorStudyId = prior._id;
+
+
+      if (prior) resolvedPriorStudyId = prior._id;
+      if (prior) resolvedPriorStudyId = prior._id;
+    } catch { /* ignore */ }
+  }
+
   visit.technicianId = technicianId;
-  visit.mriOrder = { region, instructions, requestAiAnalysis, orderedAt: new Date() };
-  visit.status = "chờ chụp";
+  visit.mriOrder = {
+    region: region || "Sọ não",
+    instructions: instructions || "",
+    requestAiAnalysis: Boolean(requestAiAnalysis),
+    withContrast: Boolean(withContrast),
+    clinicalScenario: ["initial_diagnosis", "pre_op", "post_op_72h", "surveillance_rano"].includes(clinicalScenario)
+      ? clinicalScenario
+      : "initial_diagnosis",
+    protocolCode: protocolCode || "BRAIN_TUMOR_STANDARD",
+    mriStatus: "ordered",
+    priorStudyId: resolvedPriorStudyId,
+    creatinineEgfr: resolvedEgfr,
+    slotId: slotId || null,
+    orderedAt: new Date()
+  };
+  visit.status = clinicalScenario === "post_op_72h" ? "chờ chụp sau phẫu thuật" : "chờ chụp";
 
   // Lập hóa đơn tạm tính
   try {
@@ -286,6 +391,21 @@ export const createMriOrderService = async ({ visitId, hospitalId, userId, techn
       });
       await draftInvoice.save();
       visit.invoiceId = draftInvoice._id;
+    } else {
+      const existingInvoice = await Invoice.findById(visit.invoiceId);
+      if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
+        const hospital = await Hospital.findById(visit.hospitalId);
+        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+        const aiFee = hospital?.pricing?.aiFee ?? 200000;
+        if (!existingInvoice.items.some((i) => i.type === "mri")) {
+          existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
+        }
+        if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
+          existingInvoice.items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
+        }
+        existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        await existingInvoice.save();
+      }
     }
   } catch (invErr) {
     console.warn("⚠️ Không thể tạo hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
@@ -305,9 +425,9 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     hasKidneyDisease,
     isPregnant,
     metalDetails,
-    passed,
     notes,
-    screeningDeclaredAt
+    screeningDeclaredAt,
+    overrideReason
   } = checklistData;
 
   const visit = await Visit.findById(visitId);
@@ -332,26 +452,79 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     throw err;
   }
 
-  const isSafe = passed !== undefined ? Boolean(passed) : (!hasPacemakerOrMetal);
+  // ── AN TOÀN NGƯỜI BỆNH (P0-1): máy chủ TỰ quyết định, KHÔNG tin `passed` do client gửi lên ──
+  // Trước đây `{ hasPacemakerOrMetal: true, passed: true }` bypass được chống chỉ định tuyệt đối.
+  const screening = visit.patientMriScreening?.answers || {};
+  const patientDeclaredPacemaker = screening.pacemaker === 'yes';
+  const metalFlagged = Boolean(hasPacemakerOrMetal) || patientDeclaredPacemaker;
+  const pregnant = Boolean(isPregnant) || screening.pregnant === 'yes';
+  const withContrast = Boolean(visit.mriOrder?.withContrast);
+
+  // Kiểm tra tự động chỉ số eGFR từ LIS nếu ca chụp có tiêm thuốc đối quang từ Gadolinium
+  let egfrValue = checklistData.creatinineEgfr !== undefined && checklistData.creatinineEgfr !== null
+    ? Number(checklistData.creatinineEgfr)
+    : (visit.mriOrder?.creatinineEgfr ?? null);
+  if (withContrast && egfrValue === null) {
+    egfrValue = await findLatestPatientEgfr(hospitalId, visit.patientId);
+    if (egfrValue !== null && visit.mriOrder) {
+      visit.mriOrder.creatinineEgfr = egfrValue;
+    }
+  }
+  const egfrLowRisk = withContrast && egfrValue !== null && egfrValue < 30;
+  const kidneyDisease = Boolean(hasKidneyDisease) || egfrLowRisk;
+
+  // Kiểm tra Cổng Viện phí (Payment Gate) cho lượt khám thường (không phải cấp cứu)
+  let paymentPending = false;
+  if (visit.priority !== "khẩn cấp" && visit.invoiceId) {
+    const inv = await Invoice.findById(visit.invoiceId).select("status totalAmount patientPayAmount bhytInfo").lean();
+    if (inv && inv.status === "chờ thanh toán") {
+      const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+      if (owed > 0) paymentPending = true;
+    }
+  }
+
+  if (checklistData.enforcePaymentGate === true && paymentPending) {
+    const err = new Error("CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu hoặc BHYT 100%).");
+    err.statusCode = 402;
+    err.code = "ERR_INVOICE_NOT_PAID";
+    throw err;
+  }
+
+  // Kim loại/thiết bị cấy ghép: chỉ bác sĩ được ghi đè, phải nêu lý do chuyên môn (lưu vết).
+  // Máy tạo nhịp tim (bệnh nhân tự khai) là chống chỉ định tuyệt đối — KHÔNG có ngoại lệ.
+  const overrideReasonText = String(overrideReason || "").trim();
+  const allowedToOverride = ['doctor', 'department_head', 'radiologist'].includes(user.role) && !patientDeclaredPacemaker;
+  const hasOverride = metalFlagged && Boolean(allowedToOverride && overrideReasonText.length >= 10);
+  const isSafe = !metalFlagged || hasOverride;
+
+  // Suy thận + có cản quang, hoặc đang mang thai: cần bác sĩ xác nhận trước khi vào buồng.
+  // Bác sĩ tự thực hiện bảng kiểm thì coi như đã xác nhận (không lặp vô hạn).
+  const requiresDoctorReview = isSafe && !hasOverride && !['doctor', 'department_head', 'radiologist'].includes(user.role)
+    && (pregnant || (kidneyDisease && withContrast));
+
   const screenerName = user.profile?.fullName || user.profile?.name || user.email || "Kỹ thuật viên";
 
   visit.mriSafetyChecklist = {
-    hasPacemakerOrMetal: Boolean(hasPacemakerOrMetal),
+    hasPacemakerOrMetal: metalFlagged,
     hasClaustrophobia: Boolean(hasClaustrophobia),
-    hasKidneyDisease: Boolean(hasKidneyDisease),
-    isPregnant: Boolean(isPregnant),
+    hasKidneyDisease: kidneyDisease,
+    isPregnant: pregnant,
     metalDetails: metalDetails || "",
     isScreened: true,
     screenedBy: screenerName,
     screenedAt: new Date(),
-    passed: isSafe,
-    notes: notes || ""
+    passed: isSafe && !requiresDoctorReview,
+    notes: notes || (egfrLowRisk ? `Cảnh báo LIS tự động: eGFR = ${egfrValue} mL/phút/1.73m² (< 30) — Nguy cơ xơ hóa hệ thống do thận (NSF) khi tiêm Gadolinium.` : ""),
+    overrideReason: hasOverride ? overrideReasonText : "",
+    overriddenBy: hasOverride ? (user.id || user._id || null) : null,
+    overriddenByName: hasOverride ? screenerName : "",
+    overriddenAt: hasOverride ? new Date() : null
   };
 
-  // Nếu phát hiện có máy tạo nhịp tim hoặc kim loại từ tính -> Chặn ngay và báo lỗi chống chỉ định
-  if (hasPacemakerOrMetal && !isSafe) {
+  // Phát hiện chống chỉ định tuyệt đối chưa được bác sĩ chấp thuận -> chặn ngay
+  if (!isSafe) {
     await visit.save();
-    const err = new Error("CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI: Bệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính! Không được phép đưa vào buồng chụp từ trường 1.5T/3T.");
+    const err = new Error("CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI: Bệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính! Không được phép đưa vào buồng chụp từ trường 1.5T/3T. Nếu có chỉ định đặc biệt, bác sĩ phải ghi rõ lý do chuyên môn để chấp thuận.");
     err.statusCode = 400;
     err.checklist = visit.mriSafetyChecklist;
     err.visit = visit;
@@ -359,16 +532,23 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   }
 
   // Nếu an toàn, tự động chuyển sang 'đang chụp' — trừ khi có tiêm cản quang mà bệnh nhân chưa ký phiếu (UC-PAT-06)
+  // hoặc trường hợp cần bác sĩ xác nhận (thai kỳ / suy thận + cản quang).
   const consentPending = await contrastConsentPending(visit);
-  if (isSafe && !consentPending && ['chờ chụp', 'chờ chụp lại'].includes(visit.status)) {
+  if (isSafe && !requiresDoctorReview && !consentPending && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
     visit.status = 'đang chụp';
+    if (visit.mriOrder) visit.mriOrder.mriStatus = 'scanning';
+  } else if (visit.mriOrder && isSafe) {
+    visit.mriOrder.mriStatus = 'safety_checked';
   }
 
   await visit.save();
   return {
     checklist: visit.mriSafetyChecklist,
     visit,
-    contrastConsentPending: consentPending
+    contrastConsentPending: consentPending,
+    requiresDoctorReview,
+    paymentPending,
+    creatinineEgfr: egfrValue
   };
 };
 
@@ -399,6 +579,9 @@ export const requestMriRescanService = async ({ visitId, hospitalId, user, reaso
   visit.mriRescanReason = reason.trim();
   visit.mriRescanRequestedAt = new Date();
   visit.mriRescanRequestedBy = user.id;
+  if (visit.mriOrder) {
+    visit.mriOrder.mriStatus = 'ordered';
+  }
 
   if (visit.mriSafetyChecklist) {
     visit.mriSafetyChecklist.isScreened = false;
@@ -431,9 +614,9 @@ export const requestMriRescanService = async ({ visitId, hospitalId, user, reaso
 };
 
 /**
- * Service: Hủy ca chụp MRI
+ * Service: Hủy ca chụp MRI (hỗ trợ hoàn trả về bác sĩ khám + tự động gỡ phí MRI/AI khỏi hóa đơn tạm tính)
  */
-export const cancelMriOrderService = async ({ visitId, hospitalId, user, reason }) => {
+export const cancelMriOrderService = async ({ visitId, hospitalId, user, reason, returnToDoctor = false }) => {
   if (!reason || !reason.trim()) {
     const err = new Error("Vui lòng cung cấp lý do hủy ca chụp MRI.");
     err.statusCode = 400;
@@ -453,10 +636,41 @@ export const cancelMriOrderService = async ({ visitId, hospitalId, user, reason 
     throw err;
   }
 
-  visit.status = 'đã hủy';
+  visit.status = returnToDoctor ? 'đang khám' : 'đã hủy';
   visit.mriCancelReason = reason.trim();
   visit.mriCancelledAt = new Date();
-  visit.mriCancelledBy = user.id;
+  visit.mriCancelledBy = user.id || user._id || null;
+  if (visit.mriOrder) {
+    visit.mriOrder.mriStatus = 'cancelled';
+  }
+
+  // Tự động điều chỉnh hóa đơn tạm tính: gỡ phí chụp MRI & phân tích AI nếu chưa thanh toán
+  try {
+    const invoiceQuery = visit.invoiceId ? { _id: visit.invoiceId } : { visitId: visit._id, status: "chờ thanh toán" };
+    const draftInvoice = await Invoice.findOne(invoiceQuery);
+    if (draftInvoice && draftInvoice.status === "chờ thanh toán" && Array.isArray(draftInvoice.items)) {
+      const filteredItems = draftInvoice.items.filter(item => !["mri", "ai"].includes(item.type));
+      if (filteredItems.length !== draftInvoice.items.length) {
+        draftInvoice.items = filteredItems;
+        draftInvoice.totalAmount = filteredItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        await draftInvoice.save();
+      }
+    }
+  } catch (invErr) {
+    console.warn("⚠️ Không thể điều chỉnh hóa đơn tạm tính khi hủy lệnh MRI:", invErr.message);
+  }
+
+  // Giải phóng MriSlot nếu ca chụp có giữ slot
+  if (visit.mriOrder?.slotId) {
+    try {
+      const { MriSlot } = await import("../models/mriSlot.model.js");
+      await MriSlot.findByIdAndUpdate(visit.mriOrder.slotId, {
+        status: "available",
+        visitId: null,
+        patientId: null
+      });
+    } catch { /* ignore if slot model unavailable */ }
+  }
 
   await visit.save();
 

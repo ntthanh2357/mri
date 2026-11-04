@@ -26,7 +26,7 @@ const SLA_STAGE_MAP = [
 
 export const getSlaReport = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ Quản trị viên bệnh viện mới xem được báo cáo năng suất & SLA.", 403);
     }
     const hospitalId = req.user.hospitalId;
@@ -152,7 +152,7 @@ export const getSlaReport = async (req, res) => {
 // @access Private (Hospital_admin, Admin)
 export const getRevenueReport = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin mới xem được báo cáo doanh thu.", 403);
     }
     const hospitalId = req.user.hospitalId;
@@ -205,7 +205,7 @@ export const getRevenueReport = async (req, res) => {
 // @access Private (Hospital_admin, Admin)
 export const getAiPerformanceReport = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin xem được báo cáo AI.", 403);
     }
     const hospitalId = req.user.hospitalId;
@@ -265,7 +265,7 @@ export const getAiPerformanceReport = async (req, res) => {
 // @access Private (Hospital_admin, Admin)
 export const getDepartmentOperationReport = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin xem được báo cáo vận hành.", 403);
     }
     const hospitalId = req.user.hospitalId;
@@ -301,6 +301,9 @@ export const getClinicalAnalyticsDashboard = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
 
+    if (!["admin", "system_admin", "hospital_admin", "department_head", "doctor", "radiologist"].includes(req.user.role)) {
+      return errorResponse(res, "Bạn không có quyền xem dashboard thống kê lâm sàng.", 403);
+    }
     const imagingResults = await ImagingResult.find({ hospitalId }).lean();
 
     let totalCases = imagingResults.length;
