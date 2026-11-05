@@ -239,44 +239,93 @@ export const get3dModelUrl = async (req, res) => {
 
 // ─── G.5 — Bác sĩ ký duyệt báo cáo + lưu feedback AI ───────────────────────
 // @route POST /api/v1/clinical-view/imaging/:imagingResultId/sign
-// @access Private (Doctor)
+// @access Private (Radiologist / Department Head signs; Attending Doctor acknowledges)
 export const signImagingReport = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin"].includes(req.user.role)) {
-      return errorResponse(res, "Chỉ bác sĩ mới có thể ký duyệt báo cáo.", 403);
+    const SIGNING_ROLES = ["radiologist", "department_head"];
+    const ACK_ROLES = ["doctor"];
+
+    if (![...SIGNING_ROLES, ...ACK_ROLES].includes(req.user.role)) {
+      return errorResponse(res, "Chỉ Bác sĩ CĐHA hoặc Trưởng khoa mới có quyền ký số báo cáo.", 403);
     }
 
     const { imagingResultId } = req.params;
     const {
       finalConclusion, // Kết luận cuối của bác sĩ
+      conclusion,
       correctedBoundingBox, // G.5 Active Learning: bác sĩ chỉnh sửa
       correctedMask,        // G.5 Active Learning: vẽ lại mask
       isAiCorrection,       // true nếu bác sĩ thấy AI sai
       doctorNote,
+      actingRadiologistReason,
     } = req.body;
 
-    if (!finalConclusion) {
-      return errorResponse(res, "Vui lòng nhập kết luận cuối của bác sĩ.", 400);
-    }
+    const effectiveConclusion = finalConclusion || conclusion;
 
     const imaging = await ImagingResult.findById(imagingResultId);
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
     // Multi-tenant check: Bác sĩ không có quyền ký duyệt kết quả của bệnh viện khác
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!["admin", "system_admin"].includes(req.user.role) && (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()))) {
       return errorResponse(res, "Bác sĩ không có quyền ký duyệt kết quả hình ảnh của bệnh viện khác.", 403);
     }
 
-    if (imaging.isSigned) {
-      return errorResponse(res, "Kết quả này đã được ký duyệt.", 400);
+    // [SECURITY FIX BUG-CLINICAL-001]: Chặn ký đè với HTTP 409 Conflict khi báo cáo đã ký số
+    if (imaging.isSigned === true) {
+      return errorResponse(
+        res,
+        "Báo cáo CĐHA đã được ký số khóa sổ. Vui lòng tạo Phụ lục đính chính (Addendum) hoặc Acknowledge.",
+        409
+      );
     }
 
-    // Cập nhật báo cáo
-    imaging.conclusion = finalConclusion;
+    // [Q-CLINICAL-01]: Nếu người gọi là Bác sĩ lâm sàng (doctor) -> Chuyển sang luồng Attending Acknowledge
+    if (ACK_ROLES.includes(req.user.role) && !SIGNING_ROLES.includes(req.user.role)) {
+      const ackName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ lâm sàng";
+      imaging.attendingAcknowledgment = {
+        acknowledgedBy: req.user.id,
+        acknowledgedByName: ackName,
+        acknowledgedAt: new Date(),
+        clinicalNote: String(doctorNote || effectiveConclusion || "").trim(),
+      };
+      await imaging.save();
+
+      try {
+        const { recordAuditLog, AUDIT_ACTIONS } = await import("../services/auditLog.service.js");
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.IMAGING_REPORT_ACKNOWLEDGED || "IMAGING_REPORT_ACKNOWLEDGED",
+          entity: "ImagingResult",
+          entityId: imaging._id,
+          performedBy: req.user.id,
+          hospitalId: req.user.hospitalId,
+          details: `Bác sĩ lâm sàng ${ackName} xác nhận đã đọc báo cáo CĐHA #${imaging._id}`,
+        });
+      } catch { /* optional */ }
+
+      return successResponse(res, {
+        imagingResultId: imaging._id,
+        isSigned: imaging.isSigned,
+        mode: "acknowledged",
+        attendingAcknowledgment: imaging.attendingAcknowledgment,
+      }, "Bác sĩ lâm sàng đã xác nhận đọc báo cáo CĐHA (Attending Acknowledge).");
+    }
+
+    if (!effectiveConclusion) {
+      return errorResponse(res, "Vui lòng nhập kết luận cuối của bác sĩ CĐHA.", 400);
+    }
+
+    // Cập nhật báo cáo bởi Radiologist hoặc Department Head
+    const signerName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
+    imaging.conclusion = effectiveConclusion;
+    imaging.radiologist = signerName;
     imaging.isSigned = true;
     imaging.signedBy = req.user.id;
+    imaging.signedByDoctorId = req.user.id;
     imaging.signedAt = new Date();
-    if (doctorNote) imaging.findings = imaging.findings + "\n\nGhi chú bác sĩ: " + doctorNote;
+    if (req.user.role === "department_head" && actingRadiologistReason) {
+      imaging.actingRadiologistReason = String(actingRadiologistReason).trim();
+    }
+    if (doctorNote) imaging.findings = (imaging.findings || "") + "\n\nGhi chú bác sĩ: " + doctorNote;
 
     // G.5 — Active Learning: lưu feedback bác sĩ nếu có chỉnh sửa
     if (isAiCorrection && (correctedBoundingBox || correctedMask)) {

@@ -3,6 +3,7 @@
  * Đóng gói toàn bộ logic truy vấn thống kê, doanh thu, dược phẩm và ca chụp MRI cho admin.
  */
 
+import mongoose from "mongoose";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { Hospital } from "../models/hospital.model.js";
@@ -14,14 +15,18 @@ import { DrugReport } from "../models/drugReport.model.js";
  * Lấy số liệu tổng quan hệ thống (Dashboard KPI)
  */
 export const getAdminDashboardStatsService = async (hospitalId = null) => {
-  const filter = hospitalId ? { hospitalId } : {};
+  const normalizedHospId = hospitalId && mongoose.Types.ObjectId.isValid(hospitalId)
+    ? new mongoose.Types.ObjectId(String(hospitalId))
+    : hospitalId;
+  const filter = normalizedHospId ? { hospitalId: normalizedHospId } : {};
+  const paidStatuses = ["đã thanh toán", "PAID"];
 
   const [totalVisits, totalPatients, totalInvoices, totalRevenueAgg] = await Promise.all([
     Visit.countDocuments(filter),
-    User.countDocuments({ role: "patient", ...(hospitalId ? { hospitalId } : {}) }),
-    Invoice.countDocuments({ ...filter, status: "PAID" }),
+    User.countDocuments({ role: "patient", ...(normalizedHospId ? { hospitalId: normalizedHospId } : {}) }),
+    Invoice.countDocuments({ ...filter, status: { $in: paidStatuses } }),
     Invoice.aggregate([
-      { $match: { ...filter, status: "PAID" } },
+      { $match: { ...filter, status: { $in: paidStatuses } } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ]),
   ]);

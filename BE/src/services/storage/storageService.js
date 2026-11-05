@@ -41,10 +41,22 @@ export const triggerDriveSyncAsync = async (fileRecordId, _bufferUnused, relativ
  * @param {string} sha256
  * @returns {Promise<StoredMedicalFile|null>}
  */
-export const findExistingBySha256 = async (sha256) => {
+export const findExistingBySha256 = async (sha256, options = {}) => {
   if (!sha256) return null;
   try {
-    const candidates = await StoredMedicalFile.find({ sha256 })
+    const query = { sha256 };
+    // [SECURITY FIX BUG-STORAGE-001]: Cô lập chống trùng lặp theo bệnh viện (Tenant) hoặc chủ sở hữu (Owner)
+    if (options && typeof options === "object") {
+      if (options.hospitalId) {
+        query.hospitalId = options.hospitalId;
+      } else if (options.strictTenantIsolation) {
+        query.hospitalId = null;
+        if (options.uploadedBy) {
+          query.uploadedBy = options.uploadedBy;
+        }
+      }
+    }
+    const candidates = await StoredMedicalFile.find(query)
       .sort({ syncStatus: -1, createdAt: -1 })
       .limit(5)
       .lean();
@@ -72,6 +84,7 @@ export const putFile = async ({
   patientName = null,
   patientId = null,
   uploadedBy = null,
+  hospitalId = null,
   syncToDrive = true,
   enableDeduplication = true,
 }) => {
@@ -84,7 +97,7 @@ export const putFile = async ({
   const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
 
   // 1. Kiểm tra chống lưu trùng theo SHA-256 (Deduplication)
-  const existing = enableDeduplication ? await findExistingBySha256(sha256) : null;
+  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId }) : null;
   let localPath;
   let sizeBytes;
   let isDeduplicated = false;
@@ -126,6 +139,7 @@ export const putFile = async ({
     encryptionIv: alreadySyncedOnDrive ? existing.encryptionIv : null,
     encryptionAuthTag: alreadySyncedOnDrive ? existing.encryptionAuthTag : null,
     isEncrypted: true,
+    hospitalId: hospitalId || null,
     patientId,
     uploadedBy,
   });
@@ -159,6 +173,7 @@ export const putFileFromPath = async ({
   patientName = null,
   patientId = null,
   uploadedBy = null,
+  hospitalId = null,
   syncToDrive = true,
   enableDeduplication = true,
   priority = 5,
@@ -173,7 +188,7 @@ export const putFileFromPath = async ({
   const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
 
   // 2. Kiểm tra chống lưu trùng (SHA-256 Deduplication)
-  const existing = enableDeduplication ? await findExistingBySha256(sha256) : null;
+  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId }) : null;
   let localPath;
   let sizeBytes = streamedSize;
   let isDeduplicated = false;
@@ -218,6 +233,7 @@ export const putFileFromPath = async ({
     encryptionIv: alreadySyncedOnDrive ? existing.encryptionIv : null,
     encryptionAuthTag: alreadySyncedOnDrive ? existing.encryptionAuthTag : null,
     isEncrypted: true,
+    hospitalId: hospitalId || null,
     patientId,
     uploadedBy,
   });

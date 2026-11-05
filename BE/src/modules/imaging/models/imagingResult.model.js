@@ -198,11 +198,26 @@ const imagingResultSchema = new Schema(
       acknowledgedAt: { type: Date, default: null },
       escalatedAt: { type: Date, default: null }
     },
+    // [Q-CLINICAL-01] Bác sĩ lâm sàng xác nhận đã đọc báo cáo CĐHA (Attending Acknowledgment)
+    attendingAcknowledgment: {
+      acknowledgedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      acknowledgedByName: { type: String, default: '' },
+      acknowledgedAt: { type: Date, default: null },
+      clinicalNote: { type: String, default: '' }
+    },
+    // Lý do khi Trưởng khoa (department_head) ký thay Bác sĩ CĐHA (radiologist)
+    actingRadiologistReason: { type: String, default: '' },
     // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
     addenda: [
       {
         content: { type: String, required: true },
         reason: { type: String, default: '' },
+        addendumType: {
+          type: String,
+          enum: ['radiology_amendment', 'clinical_correlation'],
+          default: 'radiology_amendment'
+        },
+        authorRole: { type: String, default: '' },
         addedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
         addedByName: { type: String, default: '' },
         addedAt: { type: Date, default: Date.now },

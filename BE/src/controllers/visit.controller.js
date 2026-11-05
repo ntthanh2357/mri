@@ -18,6 +18,7 @@ import {
 } from "../services/visit.service.js";
 import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -1110,5 +1111,85 @@ export const cancelMriOrder = async (req, res) => {
     return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi máy chủ", error: error.message });
   }
 };
+
+// ─── [Q-BILLING-01] BẢO LÃNH NỢ VIỆN PHÍ (DEBT APPROVAL BY ADMIN) ────────────
+// @desc    Ban Giám đốc / Hospital Admin phê duyệt bảo lãnh nợ viện phí để qua cổng MRI
+// @route   POST /api/v1/visits/:id/debt-approval
+// @access  Private (hospital_admin, admin, system_admin)
+export const approveVisitDebt = async (req, res) => {
+  try {
+    const allowedRoles = ["hospital_admin", "admin", "system_admin"];
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ Ban Giám đốc hoặc Quản trị viên bệnh viện mới có thẩm quyền phê duyệt bảo lãnh nợ viện phí.",
+      });
+    }
+
+    const { id } = req.params;
+    const { reason, maxAmount, expiresInHours = 48, expiresAt } = req.body || {};
+    const reasonText = String(reason || "").trim();
+    if (reasonText.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Lý do phê duyệt bảo lãnh nợ phải có tối thiểu 10 ký tự.",
+      });
+    }
+
+    const visit = await Visit.findById(id);
+    if (!visit) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy lượt khám." });
+    }
+    if (
+      req.user.role !== "system_admin" &&
+      req.user.hospitalId &&
+      visit.hospitalId &&
+      String(visit.hospitalId) !== String(req.user.hospitalId)
+    ) {
+      return res.status(403).json({ success: false, message: "Không có quyền bảo lãnh nợ cho lượt khám thuộc bệnh viện khác." });
+    }
+
+    const expirationDate = expiresAt
+      ? new Date(expiresAt)
+      : new Date(Date.now() + Number(expiresInHours || 48) * 60 * 60 * 1000);
+
+    visit.debtApproval = {
+      isApproved: true,
+      approvedBy: req.user.id || req.user._id,
+      approvedByName: req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Hospital Admin",
+      approvedAt: new Date(),
+      expiresAt: expirationDate,
+      maxAmount: Number(maxAmount || 0),
+      reason: reasonText,
+    };
+
+    await visit.save();
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.DEBT_APPROVAL_GRANTED,
+      actorId: req.user.id || req.user._id,
+      actorRole: req.user.role,
+      hospitalId: visit.hospitalId,
+      targetModel: "Visit",
+      targetId: String(visit._id),
+      metadata: {
+        reason: reasonText,
+        maxAmount: visit.debtApproval.maxAmount,
+        expiresAt: visit.debtApproval.expiresAt,
+      },
+      req,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã phê duyệt bảo lãnh nợ viện phí cho lượt khám.",
+      debtApproval: visit.debtApproval,
+      visit,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
+  }
+};
+
 
 

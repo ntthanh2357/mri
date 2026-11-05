@@ -47,7 +47,8 @@ const invoiceSchema = new Schema(
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', index: true },
     items: [invoiceItemSchema],
     totalAmount: { type: Number, required: true },
-    status: { type: String, enum: ['chờ thanh toán', 'đang xử lý', 'đã thanh toán', 'hoàn trả', 'hủy'], default: 'chờ thanh toán' },
+    status: { type: String, enum: ['chờ thanh toán', 'thanh toán một phần', 'đang xử lý', 'đã thanh toán', 'hoàn trả', 'hủy'], default: 'chờ thanh toán' },
+    paidAmount: { type: Number, default: 0 },
     stockDeductionStatus: {
       type: String,
       enum: ['PENDING', 'DEDUCTED', 'SHORTAGE_FLAGGED', 'PERMANENT_ERROR_FLAGGED', 'EXCEEDED_MAX_RETRIES'],
@@ -129,10 +130,25 @@ const invoiceSchema = new Schema(
     // Quy trình duyệt hoàn tiền 2 cấp cho hóa đơn giá trị cao (Dual Approval Workflow >= 10M)
     refundApproval: {
       requiresDualApproval: { type: Boolean, default: false },
+      requiredRole: {
+        type: String,
+        enum: ['none', 'receptionist', 'hospital_admin', 'admin'],
+        default: 'none'
+      },
+      requestedAmount: { type: Number, default: 0 },
+      requestedReason: { type: String, default: '' },
+      requestedAt: { type: Date, default: null },
       firstApproverId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       secondApproverId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       approvedAt: { type: Date, default: null },
-      approvalStatus: { type: String, enum: ['none', 'pending_second_approval', 'approved', 'rejected'], default: 'none' }
+      rejectedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      rejectedAt: { type: Date, default: null },
+      rejectReason: { type: String, default: '' },
+      approvalStatus: {
+        type: String,
+        enum: ['none', 'pending_second_approval', 'approved', 'rejected', 'completed'],
+        default: 'none'
+      }
     },
     // Cảnh báo phòng chống rửa tiền (AML - Anti-Money Laundering >= 300M VNĐ - TT35/2013/TT-NHNN)
     amlReport: {

@@ -25,9 +25,11 @@ const ROLE_RANK = {
   radiologist: 1,
   nurse: 1,
   technician: 1,
+  lab_technician: 1,
   pharmacist: 1,
   receptionist: 1,
-  patient: 1,
+  cleaner: 1,
+  patient: 0.5,
 };
 
 export const canModerateRole = (actorRole, targetRole) => {

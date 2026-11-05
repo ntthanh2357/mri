@@ -11,6 +11,7 @@ import csv
 import json
 import time
 import shutil
+import hashlib
 from datetime import datetime
 import numpy as np
 import cv2
@@ -118,14 +119,74 @@ def load_data_with_attention_guidance(csv_path, hard_dir):
     return np.array(images), np.array(labels), processed_files
 
 
-def run_benchmark_eval(model, test_path, sample_per_class=25):
+def compute_file_metadata(filepath: str) -> dict:
+    """Tính toán SHA-256 checksum và dung lượng (MB) của tệp mô hình để đối chiếu tính toàn vẹn khi backup/rollback."""
+    if not filepath or not os.path.exists(filepath):
+        return {"exists": False, "sha256": None, "size_mb": 0.0}
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    size_mb = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+    return {
+        "exists": True,
+        "sha256": h.hexdigest(),
+        "size_mb": size_mb,
+    }
+
+
+def update_model_registry(version_entry: dict, registry_path: str = "models/model_registry.json"):
+    """Lưu lịch sử các phiên bản mô hình AI, chỉ số so sánh (Bản cũ vs Bản mới) và đường dẫn bản sao lưu."""
+    os.makedirs(os.path.dirname(registry_path) or ".", exist_ok=True)
+    registry = {
+        "active_model": "models/resnet_risk_calibrated.keras",
+        "baseline_model": "models/resnet_risk_calibrated.keras",
+        "last_updated_at": None,
+        "versions": [],
+    }
+    if os.path.exists(registry_path):
+        try:
+            with open(registry_path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    registry.update(loaded)
+        except Exception:
+            pass
+
+    if not isinstance(registry.get("versions"), list):
+        registry["versions"] = []
+
+    registry["versions"].insert(0, version_entry)
+    registry["versions"] = registry["versions"][:30]
+    registry["last_updated_at"] = datetime.now().isoformat()
+
+    with open(registry_path, "w", encoding="utf-8") as f:
+        json.dump(registry, f, indent=2, ensure_ascii=False)
+    return registry
+
+
+def run_benchmark_eval(model, test_path, sample_per_class=25, return_dict=False):
     """
-    Validation Gate: Đánh giá mô hình trên tập test chuẩn (archive_v2/Testing)
-    Lấy mẫu đại diện mỗi lớp để đo lường độ chính xác (Accuracy).
+    Validation Gate (BUG-MLOPS-001): Đánh giá toàn diện mô hình trên tập test chuẩn (archive_v2/Testing).
+    Đo lường:
+      - Overall Accuracy (%)
+      - Macro F1-Score (%)
+      - Per-class Recall / Sensitivity (%) — đặc biệt giám sát 'glioma' (u ác tính)
+      - Per-class Precision & F1-Score (%)
+      - Average Inference Latency (ms/ảnh)
     """
+    empty_metrics = {
+        "accuracy": 0.0,
+        "macro_f1": 0.0,
+        "per_class_recall": {cat: 0.0 for cat in CATEGORIES},
+        "per_class_precision": {cat: 0.0 for cat in CATEGORIES},
+        "per_class_f1": {cat: 0.0 for cat in CATEGORIES},
+        "avg_latency_ms": 0.0,
+        "total_evaluated": 0,
+    }
     if not os.path.exists(test_path):
         print(f"[Benchmark] Cảnh báo: Không tìm thấy thư mục test: {test_path}")
-        return 0.0
+        return empty_metrics if return_dict else 0.0
 
     test_images: list[np.ndarray] = []
     test_labels: list[int] = []
@@ -134,7 +195,7 @@ def run_benchmark_eval(model, test_path, sample_per_class=25):
         cat_dir = os.path.join(test_path, cat)
         if not os.path.isdir(cat_dir):
             continue
-        files = [f for f in os.listdir(cat_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+        files = sorted([f for f in os.listdir(cat_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
         selected_files = files[:sample_per_class]
 
         for fname in selected_files:
@@ -147,16 +208,50 @@ def run_benchmark_eval(model, test_path, sample_per_class=25):
                 test_labels.append(idx)
 
     if not test_images:
-        return 0.0
+        return empty_metrics if return_dict else 0.0
 
     X_test = np.array(test_images)
     y_test = np.array(test_labels)
 
+    t0 = time.perf_counter()
     preds = model.predict(X_test, batch_size=16, verbose=0)
-    pred_labels = np.argmax(preds, axis=1)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    avg_latency_ms = round(elapsed_ms / max(len(X_test), 1), 2)
 
-    acc = float(np.mean(pred_labels == y_test) * 100)
-    return round(acc, 2)
+    pred_labels = np.argmax(preds, axis=1)
+    acc = round(float(np.mean(pred_labels == y_test) * 100), 2)
+
+    per_class_recall = {}
+    per_class_precision = {}
+    per_class_f1 = {}
+    f1_list = []
+
+    for idx, cat in enumerate(CATEGORIES):
+        tp = int(np.sum((pred_labels == idx) & (y_test == idx)))
+        fp = int(np.sum((pred_labels == idx) & (y_test != idx)))
+        fn = int(np.sum((pred_labels != idx) & (y_test == idx)))
+
+        recall = (tp / (tp + fn) * 100.0) if (tp + fn) > 0 else 100.0
+        precision = (tp / (tp + fp) * 100.0) if (tp + fp) > 0 else 100.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+
+        per_class_recall[cat] = round(float(recall), 2)
+        per_class_precision[cat] = round(float(precision), 2)
+        per_class_f1[cat] = round(float(f1), 2)
+        f1_list.append(per_class_f1[cat])
+
+    macro_f1 = round(float(np.mean(f1_list)), 2) if f1_list else 0.0
+
+    metrics = {
+        "accuracy": acc,
+        "macro_f1": macro_f1,
+        "per_class_recall": per_class_recall,
+        "per_class_precision": per_class_precision,
+        "per_class_f1": per_class_f1,
+        "avg_latency_ms": avg_latency_ms,
+        "total_evaluated": int(len(X_test)),
+    }
+    return metrics if return_dict else acc
 
 
 def main():
@@ -167,6 +262,7 @@ def main():
     print("=" * 65)
 
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    version_id = f"v_{timestamp_str}"
     os.makedirs("hard_examples", exist_ok=True)
     os.makedirs("hard_examples/history", exist_ok=True)
     os.makedirs("models/versions", exist_ok=True)
@@ -190,14 +286,20 @@ def main():
     print(f"   -> Thu thập thành công {len(X)} ca phản hồi từ bác sĩ chuyên khoa.")
     y_one_hot = tf.keras.utils.to_categorical(y, num_classes=len(CATEGORIES))
 
-    # 2. Tải mô hình cơ sở
-    print(f"\n[2/6] Đang nạp mô hình sản xuất: {args.base_model} ...")
+    # 2. Tải mô hình cơ sở & Tạo bản sao lưu (Backup) TRƯỚC KHI fine-tune
+    print(f"\n[2/6] Đang nạp mô hình đang vận hành (Bản cũ): {args.base_model} ...")
     if not os.path.exists(args.base_model):
         err_msg = f"Không tìm thấy file mô hình: {args.base_model}"
         print(f"❌ [Active Learning] {err_msg}")
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump({"status": "FAILED", "error": err_msg, "timestamp": timestamp_str}, f, indent=2)
         return
+
+    # Sao lưu backup mô hình hiện hành TRƯỚC khi huấn luyện để đảm bảo 100% có thể Rollback
+    checkpoint_path = f"models/checkpoints/resnet_baseline_backup_{timestamp_str}.keras"
+    shutil.copyfile(args.base_model, checkpoint_path)
+    base_file_meta = compute_file_metadata(checkpoint_path)
+    print(f"   -> [Backup] Đã sao lưu mô hình cũ tại: {checkpoint_path} (SHA256: {base_file_meta['sha256'][:12]}..., {base_file_meta['size_mb']} MB)")
 
     try:
         custom_objects = {'tf': tf}
@@ -215,10 +317,16 @@ def main():
             json.dump({"status": "FAILED", "error": err_msg, "timestamp": timestamp_str}, f, indent=2)
         return
 
-    # 3. Đo lường chỉ số chuẩn (Baseline Benchmark) trước khi train
-    print(f"\n[3/6] Đang đo lường chỉ số cơ sở (Baseline Benchmark) trên {args.test_path} ...")
-    baseline_acc = run_benchmark_eval(model, args.test_path, sample_per_class=25)
-    print(f"   -> Độ chính xác cơ sở hiện tại: {baseline_acc}%")
+    # 3. Đo lường chỉ số chuẩn (Baseline Benchmark — Bản cũ) trước khi train
+    print(f"\n[3/6] Đang đo lường chỉ số mô hình cũ (Baseline Benchmark) trên {args.test_path} ...")
+    baseline_metrics = run_benchmark_eval(model, args.test_path, sample_per_class=25, return_dict=True)
+    baseline_acc = baseline_metrics["accuracy"]
+    baseline_macro_f1 = baseline_metrics["macro_f1"]
+    baseline_glioma_recall = baseline_metrics["per_class_recall"].get("glioma", 0.0)
+    print(
+        f"   -> [Bản cũ] Accuracy: {baseline_acc}% | Macro-F1: {baseline_macro_f1}% | "
+        f"Glioma Recall: {baseline_glioma_recall}% | Latency: {baseline_metrics['avg_latency_ms']} ms/ảnh"
+    )
 
     # 4. Huấn luyện Fine-Tuning với Attention Guidance
     print(f"\n[4/6] Bắt đầu huấn luyện Fine-Tuning ({args.epochs} Epochs, Learning Rate = {args.lr}) ...")
@@ -237,32 +345,47 @@ def main():
             json.dump({"status": "FAILED", "error": err_msg, "timestamp": timestamp_str}, f, indent=2)
         return
 
-    # 5. Validation Gate: Đánh giá mô hình ứng viên sau khi học
-    print(f"\n[5/6] Đánh giá kiểm chuẩn (Quality Gate) mô hình ứng viên mới ...")
-    candidate_acc = run_benchmark_eval(model, args.test_path, sample_per_class=25)
+    # 5. Validation Gate: Đánh giá mô hình ứng viên (Bản mới) & So sánh với Bản cũ
+    print(f"\n[5/6] Đánh giá kiểm chuẩn (Clinical Quality Gate) mô hình ứng viên mới ...")
+    candidate_metrics = run_benchmark_eval(model, args.test_path, sample_per_class=25, return_dict=True)
+    candidate_acc = candidate_metrics["accuracy"]
+    candidate_macro_f1 = candidate_metrics["macro_f1"]
+    candidate_glioma_recall = candidate_metrics["per_class_recall"].get("glioma", 0.0)
+
     acc_diff = round(candidate_acc - baseline_acc, 2)
+    f1_diff = round(candidate_macro_f1 - baseline_macro_f1, 2)
+    glioma_recall_diff = round(candidate_glioma_recall - baseline_glioma_recall, 2)
+    latency_diff_ms = round(candidate_metrics["avg_latency_ms"] - baseline_metrics["avg_latency_ms"], 2)
+
     diff_str = f"+{acc_diff}%" if acc_diff >= 0 else f"{acc_diff}%"
+    f1_diff_str = f"+{f1_diff}%" if f1_diff >= 0 else f"{f1_diff}%"
+    glioma_diff_str = f"+{glioma_recall_diff}%" if glioma_recall_diff >= 0 else f"{glioma_recall_diff}%"
 
-    # Cho phép dao động nhỏ do số mẫu học ít, cảnh báo nếu suy giảm > 1.5%
-    gate_passed = candidate_acc >= (baseline_acc - 1.5)
-    print(f"   -> Độ chính xác sau retrain: {candidate_acc}% (Biến thiên: {diff_str})")
-    print(f"   -> Kết luận Quality Gate: {'✅ ĐẠT CHUẨN (PASSED)' if gate_passed else '⚠️ CẢNH BÁO SUY GIẢM (WARNING)'}")
+    # Dual Clinical Validation Gate:
+    # 1. Tổng Accuracy không suy giảm quá 1.5%
+    # 2. Macro-F1 không suy giảm quá 2.0%
+    # 3. Độ nhạy (Recall) lớp Glioma (u ác tính) không suy giảm quá 2.0%
+    acc_gate_ok = candidate_acc >= (baseline_acc - 1.5)
+    f1_gate_ok = candidate_macro_f1 >= (baseline_macro_f1 - 2.0)
+    glioma_gate_ok = candidate_glioma_recall >= (baseline_glioma_recall - 2.0)
+    gate_passed = bool(acc_gate_ok and f1_gate_ok and glioma_gate_ok)
 
-    # 6. Lưu trữ phiên bản mô hình mới & Archive CSV an toàn
-    print(f"\n[6/6] Lưu trữ phiên bản mô hình và bảo toàn nhật ký dữ liệu ...")
+    print(
+        f"   -> [Bản mới] Accuracy: {candidate_acc}% ({diff_str}) | Macro-F1: {candidate_macro_f1}% ({f1_diff_str}) | "
+        f"Glioma Recall: {candidate_glioma_recall}% ({glioma_diff_str})"
+    )
+    print(f"   -> Kết luận Quality Gate: {'✅ ĐẠT CHUẨN LÂM SÀNG (PASSED)' if gate_passed else '⚠️ CẢNH BÁO SUY GIẢM (FAILED GATE)'}")
+
+    # 6. Lưu trữ phiên bản mô hình mới & Archive CSV + Model Registry
+    print(f"\n[6/6] Lưu trữ phiên bản mô hình mới, checksum SHA-256 và bảo toàn nhật ký dữ liệu ...")
     versioned_model_path = f"models/versions/resnet_active_{timestamp_str}.keras"
     model.save(versioned_model_path)
-    print(f"   -> Đã lưu mô hình phiên bản mới: {versioned_model_path}")
+    candidate_file_meta = compute_file_metadata(versioned_model_path)
+    print(f"   -> Đã lưu mô hình phiên bản mới: {versioned_model_path} (SHA256: {candidate_file_meta['sha256'][:12]}..., {candidate_file_meta['size_mb']} MB)")
 
     # Lưu một bản copy là candidate_model.keras để hot-reload nạp nhanh
     candidate_symlink_path = "models/candidate_model.keras"
     shutil.copyfile(versioned_model_path, candidate_symlink_path)
-
-    # Sao lưu backup baseline model phòng khi rollback
-    checkpoint_path = f"models/checkpoints/resnet_baseline_backup_{timestamp_str}.keras"
-    if os.path.exists(args.base_model):
-        shutil.copyfile(args.base_model, checkpoint_path)
-        print(f"   -> Đã tạo bản sao lưu an toàn tại: {checkpoint_path}")
 
     # Archive file feedback_log.csv
     archived_csv_path = f"hard_examples/history/feedback_archived_{timestamp_str}.csv"
@@ -275,23 +398,99 @@ def main():
     print(f"   -> Đã lưu trữ nhật ký mẫu cũ vào: {archived_csv_path}")
     print(f"   -> Đã làm sạch Sổ tay học tập ({args.csv_path}) cho đợt tiếp theo.")
 
+    comparison_summary = {
+        "old_model": {
+            "path": args.base_model,
+            "backup_checkpoint_path": checkpoint_path,
+            "sha256": base_file_meta["sha256"],
+            "size_mb": base_file_meta["size_mb"],
+            **baseline_metrics,
+        },
+        "new_model": {
+            "path": versioned_model_path,
+            "sha256": candidate_file_meta["sha256"],
+            "size_mb": candidate_file_meta["size_mb"],
+            **candidate_metrics,
+        },
+        "delta": {
+            "accuracy_diff": acc_diff,
+            "accuracy_diff_str": diff_str,
+            "macro_f1_diff": f1_diff,
+            "macro_f1_diff_str": f1_diff_str,
+            "glioma_recall_diff": glioma_recall_diff,
+            "glioma_recall_diff_str": glioma_diff_str,
+            "latency_diff_ms": latency_diff_ms,
+            "per_class_recall_diff": {
+                cat: round(candidate_metrics["per_class_recall"].get(cat, 0.0) - baseline_metrics["per_class_recall"].get(cat, 0.0), 2)
+                for cat in CATEGORIES
+            },
+            "per_class_f1_diff": {
+                cat: round(candidate_metrics["per_class_f1"].get(cat, 0.0) - baseline_metrics["per_class_f1"].get(cat, 0.0), 2)
+                for cat in CATEGORIES
+            },
+        },
+        "gate_checks": {
+            "accuracy_gate_passed": acc_gate_ok,
+            "macro_f1_gate_passed": f1_gate_ok,
+            "glioma_recall_gate_passed": glioma_gate_ok,
+            "overall_passed": gate_passed,
+        },
+    }
+
     # Ghi nhận kết quả vào file JSON cho Backend/Frontend đọc
     result_data = {
         "status": "COMPLETED",
+        "version_id": version_id,
         "timestamp": timestamp_str,
         "samples_trained": len(X),
+        "base_model_path": args.base_model,
         "candidate_model_path": versioned_model_path,
         "checkpoint_backup_path": checkpoint_path,
         "baseline_accuracy": baseline_acc,
         "retrained_accuracy": candidate_acc,
         "accuracy_diff": diff_str,
+        "baseline_macro_f1": baseline_macro_f1,
+        "retrained_macro_f1": candidate_macro_f1,
+        "macro_f1_diff": f1_diff_str,
+        "baseline_glioma_recall": baseline_glioma_recall,
+        "retrained_glioma_recall": candidate_glioma_recall,
+        "glioma_recall_diff": glioma_diff_str,
+        "old_model_metrics": comparison_summary["old_model"],
+        "new_model_metrics": comparison_summary["new_model"],
+        "comparison": comparison_summary,
         "gate_passed": gate_passed,
         "archived_csv": archived_csv_path,
-        "message": f"Huấn luyện thành công {len(X)} ca phản hồi. Độ chính xác: {baseline_acc}% -> {candidate_acc}% ({diff_str})."
+        "message": (
+            f"Huấn luyện thành công {len(X)} ca phản hồi. "
+            f"Accuracy: {baseline_acc}% -> {candidate_acc}% ({diff_str}) | "
+            f"Macro-F1: {baseline_macro_f1}% -> {candidate_macro_f1}% ({f1_diff_str}) | "
+            f"Glioma Recall: {baseline_glioma_recall}% -> {candidate_glioma_recall}% ({glioma_diff_str})."
+        ),
     }
 
     with open(args.output_json, "w", encoding="utf-8") as f:
         json.dump(result_data, f, indent=2, ensure_ascii=False)
+
+    # Cập nhật Model Registry bền vững (models/model_registry.json)
+    update_model_registry({
+        "version_id": version_id,
+        "created_at": datetime.now().isoformat(),
+        "status": "candidate_ready" if gate_passed else "gate_failed",
+        "samples_trained": len(X),
+        "base_model_path": args.base_model,
+        "candidate_model_path": versioned_model_path,
+        "checkpoint_backup_path": checkpoint_path,
+        "archived_csv": archived_csv_path,
+        "gate_passed": gate_passed,
+        "baseline_accuracy": baseline_acc,
+        "retrained_accuracy": candidate_acc,
+        "accuracy_diff": diff_str,
+        "baseline_macro_f1": baseline_macro_f1,
+        "retrained_macro_f1": candidate_macro_f1,
+        "baseline_glioma_recall": baseline_glioma_recall,
+        "retrained_glioma_recall": candidate_glioma_recall,
+        "comparison": comparison_summary,
+    })
 
     print("\n" + "=" * 65)
     print("  TIẾN TRÌNH HUẤN LUYỆN LẠI HOÀN TẤT THÀNH CÔNG!")

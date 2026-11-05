@@ -137,8 +137,14 @@ export const initChunkedUpload = async (req, res) => {
     }
 
     // Nếu client đã tính trước SHA-256, kiểm tra Instant Deduplication ngay lập tức
+    // [SECURITY FIX BUG-STORAGE-001]: Chỉ cho phép Instant Dedup trong cùng một bệnh viện (hospitalId)
+    // hoặc cùng người tải lên (uploadedBy) để chặn tấn công rò rỉ tệp liên viện qua SHA-256.
     if (expectedSha256) {
-      const existing = await storageService.findExistingBySha256(String(expectedSha256).toLowerCase());
+      const existing = await storageService.findExistingBySha256(String(expectedSha256).toLowerCase(), {
+        hospitalId: req.user?.hospitalId || null,
+        uploadedBy: req.user?.id || null,
+        strictTenantIsolation: true,
+      });
       if (existing) {
         const saved = await storageService.putFromPath({
           category,
@@ -150,6 +156,7 @@ export const initChunkedUpload = async (req, res) => {
           mimeType,
           patientId,
           uploadedBy: req.user?.id || null,
+          hospitalId: req.user?.hospitalId || null,
         });
         return res.status(200).json({
           success: true,

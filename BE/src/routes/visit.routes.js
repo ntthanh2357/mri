@@ -15,6 +15,7 @@ import {
   submitMriSafetyCheck,
   requestMriRescan,
   cancelMriOrder,
+  approveVisitDebt,
   getVisitById,
   saveServiceOrder,
 } from "../controllers/visit.controller.js";
@@ -51,6 +52,7 @@ router.put("/:id/status", protect, checkRole(["doctor", "radiologist", "departme
 
 // [THỰC TẾ BV: NGHỊCH LÝ 3 & 4] Bảng kiểm an toàn MRI, Chụp lại & Hủy ca
 router.post("/:id/mri-safety-check", protect, checkRole(["technician", "nurse", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), submitMriSafetyCheck);
+router.post("/:id/debt-approval", protect, checkRole(["hospital_admin", "admin", "system_admin"]), approveVisitDebt);
 router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), requestMriRescan);
 router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), cancelMriOrder);
 
