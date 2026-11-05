@@ -76,6 +76,16 @@ export const AUDIT_ACTIONS = {
   DRUG_CATALOG_UPDATED: "DRUG_CATALOG_UPDATED",
   DRUG_CATALOG_DELETED: "DRUG_CATALOG_DELETED",
   DRUG_STOCK_ADJUSTED: "DRUG_STOCK_ADJUSTED",
+
+  // [MEGA AUDIT v3.0] Các hành động kiểm toán bổ sung (Q-CLINICAL-01, Q-BILLING-01/02, Q-EMG-01)
+  IMAGING_REPORT_ACKNOWLEDGED: "IMAGING_REPORT_ACKNOWLEDGED",
+  CLINICAL_ADDENDUM_CREATED: "CLINICAL_ADDENDUM_CREATED",
+  PAYMENT_GATE_BYPASSED: "PAYMENT_GATE_BYPASSED",
+  DEBT_APPROVAL_GRANTED: "DEBT_APPROVAL_GRANTED",
+  REFUND_REJECTED: "REFUND_REJECTED",
+  VERBAL_ORDER_CREATED: "VERBAL_ORDER_CREATED",
+  VERBAL_ORDER_READBACK_CONFIRMED: "VERBAL_ORDER_READBACK_CONFIRMED",
+  VERBAL_ORDER_COUNTERSIGNED: "VERBAL_ORDER_COUNTERSIGNED",
 };
 
 const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -84,14 +94,24 @@ const MAX_RETRIES = 5;
 export const recordAuditLog = async ({
   action,
   entity,
+  targetModel,
   entityId = "",
+  targetId = "",
   performedBy = "system",
+  actorId = "",
   hospitalId = null,
   details = "",
+  metadata = null,
   payload = null,
   ipAddress = "",
   location = "",
 }) => {
+  const resolvedEntity = entity || targetModel || "System";
+  const resolvedEntityId = entityId || targetId || "";
+  const resolvedPerformedBy = (performedBy && performedBy !== "system") ? performedBy : (actorId || "system");
+  const resolvedPayload = payload || metadata || null;
+  const resolvedDetails = details || (metadata ? JSON.stringify(metadata) : "");
+
   // Thực thi tuần tự qua hàng đợi Promise Chain kết hợp Optimistic Concurrency Retry
   return new Promise((resolve, reject) => {
     auditQueuePromise = auditQueuePromise
@@ -99,11 +119,11 @@ export const recordAuditLog = async ({
         if (!FEATURES.ENABLE_HASH_CHAIN_AUDIT) {
           const basicLog = await AuditLog.create({
             action,
-            entity,
-            entityId: entityId ? entityId.toString() : "",
-            performedBy: performedBy ? performedBy.toString() : "system",
+            entity: resolvedEntity,
+            entityId: resolvedEntityId ? resolvedEntityId.toString() : "",
+            performedBy: resolvedPerformedBy ? resolvedPerformedBy.toString() : "system",
             hospitalId: hospitalId || null,
-            details: details || "",
+            details: resolvedDetails,
             ipAddress: ipAddress || "",
             location: location || "",
           });
@@ -124,29 +144,30 @@ export const recordAuditLog = async ({
             const previousHash = lastLog?.currentHash || GENESIS_HASH;
 
             // Băm payload nếu có (lưu vết before/after diff)
-            const payloadHash = payload
-              ? crypto.createHash("sha256").update(typeof payload === "string" ? payload : JSON.stringify(payload)).digest("hex")
+            const payloadHash = resolvedPayload
+              ? crypto.createHash("sha256").update(typeof resolvedPayload === "string" ? resolvedPayload : JSON.stringify(resolvedPayload)).digest("hex")
               : "";
 
             const timestamp = new Date().toISOString();
 
-            // Tính toán currentHash theo chuẩn mật mã học
-            const hashMaterial = `${previousHash}|${sequenceNumber}|${timestamp}|${action}|${entity}|${entityId || ""}|${performedBy || ""}|${payloadHash}`;
+            // Tính toán currentHash theo chuẩn mật mã học (bao gồm cả details)
+            const hashMaterial = `${previousHash}|${sequenceNumber}|${timestamp}|${action}|${resolvedEntity}|${resolvedEntityId || ""}|${resolvedPerformedBy || ""}|${payloadHash}|${resolvedDetails || ""}`;
             const currentHash = crypto.createHash("sha256").update(hashMaterial).digest("hex");
 
             const newLog = await AuditLog.create({
               action,
-              entity,
-              entityId: entityId ? entityId.toString() : "",
-              performedBy: performedBy ? performedBy.toString() : "system",
+              entity: resolvedEntity,
+              entityId: resolvedEntityId ? resolvedEntityId.toString() : "",
+              performedBy: resolvedPerformedBy ? resolvedPerformedBy.toString() : "system",
               hospitalId: hospitalId || null,
-              details: details || "",
+              details: resolvedDetails,
               ipAddress: ipAddress || "",
               location: location || "",
               sequenceNumber,
               previousHash,
               currentHash,
               payloadHash,
+              hashedTimestamp: timestamp,
               tamperVerified: true,
             });
 
@@ -177,14 +198,15 @@ export const recordAuditLog = async ({
  * Thẩm định tính toàn vẹn của chuỗi băm nhật ký kiểm toán (Tamper-Evidence Verification)
  * Căn cứ: HIPAA §164.312(b) & Thông tư 46/2018/TT-BYT
  */
-export const verifyAuditChainIntegrity = async (limit = 1000) => {
+export const verifyAuditChainIntegrity = async (limitOrHospitalId = 1000) => {
+  const limit = typeof limitOrHospitalId === "number" ? limitOrHospitalId : 1000;
   const logs = await AuditLog.find({ sequenceNumber: { $exists: true } })
     .sort({ sequenceNumber: 1 })
     .limit(limit)
     .lean();
 
   if (!logs || logs.length === 0) {
-    return { valid: true, verifiedCount: 0, message: "Không có bản ghi có chuỗi băm." };
+    return { valid: true, isValid: true, verifiedCount: 0, message: "Không có bản ghi có chuỗi băm." };
   }
 
   let expectedPrevHash = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -196,6 +218,7 @@ export const verifyAuditChainIntegrity = async (limit = 1000) => {
     if (log.previousHash !== expectedPrevHash) {
       return {
         valid: false,
+        isValid: false,
         brokenAtIndex: i,
         brokenSequenceNumber: log.sequenceNumber,
         logId: log._id,
@@ -203,11 +226,30 @@ export const verifyAuditChainIntegrity = async (limit = 1000) => {
       };
     }
 
+    // 2. [BUG-AUDIT-001 FIX]: Băm lại dữ liệu nội tại của bản ghi để phát hiện sửa đổi trực tiếp trong DB
+    if (log.hashedTimestamp) {
+      const hashMaterialWithDetails = `${log.previousHash}|${log.sequenceNumber}|${log.hashedTimestamp}|${log.action}|${log.entity}|${log.entityId || ""}|${log.performedBy || ""}|${log.payloadHash || ""}|${log.details || ""}`;
+      const hashMaterialLegacy = `${log.previousHash}|${log.sequenceNumber}|${log.hashedTimestamp}|${log.action}|${log.entity}|${log.entityId || ""}|${log.performedBy || ""}|${log.payloadHash || ""}`;
+      const recomputedWithDetails = crypto.createHash("sha256").update(hashMaterialWithDetails).digest("hex");
+      const recomputedLegacy = crypto.createHash("sha256").update(hashMaterialLegacy).digest("hex");
+      if (recomputedWithDetails !== log.currentHash && recomputedLegacy !== log.currentHash) {
+        return {
+          valid: false,
+          isValid: false,
+          brokenAtIndex: i,
+          brokenSequenceNumber: log.sequenceNumber,
+          logId: log._id,
+          reason: `Bản ghi đã bị chỉnh sửa nội dung trái phép tại #${log.sequenceNumber}: recomputedHash không khớp với currentHash.`,
+        };
+      }
+    }
+
     expectedPrevHash = log.currentHash;
   }
 
   return {
     valid: true,
+    isValid: true,
     verifiedCount: logs.length,
     latestSequenceNumber: logs[logs.length - 1].sequenceNumber,
     headHash: logs[logs.length - 1].currentHash,

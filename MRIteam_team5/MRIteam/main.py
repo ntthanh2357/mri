@@ -82,6 +82,22 @@ def infer_anatomical_location(bbox: dict, img_shape: tuple) -> tuple:
 
 app = FastAPI(title="Brain Tumor Diagnosis API")
 
+# [SECURITY FIX BUG-INFRA-001]: Xác thực khóa nội bộ X-Internal-Api-Key cho các tác vụ quản trị mô hình AI
+from fastapi.responses import JSONResponse
+INTERNAL_AI_API_KEY = os.getenv("INTERNAL_AI_API_KEY", "").strip()
+PROTECTED_AI_PREFIXES = ("/retrain", "/approve", "/feedback")
+
+@app.middleware("http")
+async def verify_internal_ai_api_key(request: Request, call_next):
+    if INTERNAL_AI_API_KEY and any(request.url.path.startswith(p) for p in PROTECTED_AI_PREFIXES):
+        provided_key = request.headers.get("X-Internal-Api-Key", "")
+        if provided_key != INTERNAL_AI_API_KEY:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "message": "Forbidden: Invalid or missing X-Internal-Api-Key."}
+            )
+    return await call_next(request)
+
 # Cấu hình Gemini API (SDK mới google.genai)
 from gemini_rotator import GeminiProxy
 gemini_client = GeminiProxy()
@@ -859,13 +875,46 @@ async def get_training_stats():
 # =====================================================================
 # MLOps ACTIVE LEARNING RETRAINING & HOT-RELOAD PIPELINE
 # =====================================================================
+MODEL_REGISTRY_PATH = os.path.join(os.path.dirname(__file__) or ".", "models", "model_registry.json")
+
+
+def load_model_registry() -> Dict[str, Any]:
+    """Đọc cấu hình Model Registry bền vững từ đĩa (BUG-MLOPS-003)."""
+    default_reg: Dict[str, Any] = {
+        "active_model": "models/resnet_risk_calibrated.keras",
+        "baseline_model": "models/resnet_risk_calibrated.keras",
+        "last_updated_at": None,
+        "last_deployed_at": None,
+        "versions": [],
+    }
+    if os.path.exists(MODEL_REGISTRY_PATH):
+        try:
+            with open(MODEL_REGISTRY_PATH, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    default_reg.update(loaded)
+        except Exception:
+            pass
+    return default_reg
+
+
+def save_model_registry(registry: Dict[str, Any]) -> Dict[str, Any]:
+    """Lưu trạng thái Model Registry xuống đĩa để không mất phiên bản khi khởi động lại server."""
+    os.makedirs(os.path.dirname(MODEL_REGISTRY_PATH) or ".", exist_ok=True)
+    registry["last_updated_at"] = datetime.now().isoformat()
+    with open(MODEL_REGISTRY_PATH, "w", encoding="utf-8") as f:
+        json.dump(registry, f, indent=2, ensure_ascii=False)
+    return registry
+
+
+_initial_registry = load_model_registry()
 retrain_process = None
 retrain_state: Dict[str, Any] = {
     "status": "idle",  # "idle" | "running" | "completed" | "failed"
     "started_at": None,
     "finished_at": None,
-    "current_active_model": "models/resnet_risk_calibrated.keras",
-    "baseline_model": "models/resnet_risk_calibrated.keras",
+    "current_active_model": _initial_registry.get("active_model", "models/resnet_risk_calibrated.keras"),
+    "baseline_model": _initial_registry.get("baseline_model", "models/resnet_risk_calibrated.keras"),
     "result": None,
     "error": None
 }
@@ -873,7 +922,7 @@ retrain_state: Dict[str, Any] = {
 
 @app.post("/retrain/start")
 async def start_active_learning():
-    """Kích hoạt tiến trình Active Learning ngầm thông qua subprocess."""
+    """Kích hoạt tiến trình Active Learning ngầm thông qua subprocess (kế thừa mô hình đang active)."""
     global retrain_process, retrain_state
 
     # 1. Kiểm tra nếu job đang chạy
@@ -914,10 +963,15 @@ async def start_active_learning():
     log_file_path = os.path.join("hard_examples", "retrain_job.log")
     log_file = open(log_file_path, "w", encoding="utf-8")
 
-    # 4. Xác định python executable trong venv
+    # 4. Xác định python executable trong venv và mô hình gốc đang active (BUG-MLOPS-003)
     venv_py = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
     py_exec = venv_py if os.path.exists(venv_py) else sys.executable
     script_path = os.path.join(os.path.dirname(__file__), "fine_tune_active_learning.py")
+
+    registry = load_model_registry()
+    base_model_to_use = retrain_state.get("current_active_model") or registry.get("active_model") or "models/resnet_risk_calibrated.keras"
+    if not os.path.exists(base_model_to_use):
+        base_model_to_use = "models/resnet_risk_calibrated.keras"
 
     retrain_state["status"] = "running"
     retrain_state["started_at"] = datetime.now().isoformat()
@@ -925,9 +979,9 @@ async def start_active_learning():
     retrain_state["result"] = None
     retrain_state["error"] = None
 
-    # Khởi chạy subprocess độc lập để không chiếm tài nguyên luồng chẩn đoán
+    # Khởi chạy subprocess độc lập, truyền --base_model là mô hình đang vận hành hiện tại
     retrain_process = subprocess.Popen(
-        [py_exec, script_path, "--epochs", "10", "--batch_size", "4"],
+        [py_exec, script_path, "--base_model", base_model_to_use, "--epochs", "10", "--batch_size", "4"],
         stdout=log_file,
         stderr=subprocess.STDOUT,
         cwd=os.path.dirname(__file__) or "."
@@ -935,15 +989,16 @@ async def start_active_learning():
 
     return {
         "success": True,
-        "message": f"Đã kích hoạt tiến trình Active Learning (PID: {retrain_process.pid})",
+        "message": f"Đã kích hoạt tiến trình Active Learning từ mô hình ({os.path.basename(base_model_to_use)}, PID: {retrain_process.pid})",
         "status": "running",
+        "base_model": base_model_to_use,
         "started_at": retrain_state["started_at"]
     }
 
 
 @app.get("/retrain/status")
 async def get_retrain_status():
-    """Truy vấn trạng thái, tiến độ và kết quả của tiến trình huấn luyện lại."""
+    """Truy vấn trạng thái, tiến độ, bảng so sánh Bản cũ vs Bản mới và lịch sử phiên bản."""
     global retrain_process, retrain_state
 
     # Cập nhật trạng thái từ tiến trình con
@@ -980,20 +1035,67 @@ async def get_retrain_status():
         except Exception:
             pass
 
+    registry = load_model_registry()
     return {
         "status": retrain_state["status"],
         "started_at": retrain_state["started_at"],
         "finished_at": retrain_state["finished_at"],
         "current_active_model": retrain_state["current_active_model"],
+        "baseline_model": retrain_state["baseline_model"],
         "result": retrain_state["result"],
+        "registry": registry,
         "error": retrain_state["error"],
         "logs": recent_logs
     }
 
 
+@app.get("/retrain/history")
+async def get_retrain_history():
+    """Trả về danh sách các phiên bản mô hình AI, các bản backup checkpoint và bảng so sánh lịch sử (BUG-MLOPS-005)."""
+    registry = load_model_registry()
+    checkpoints_dir = os.path.join(os.path.dirname(__file__) or ".", "models", "checkpoints")
+    versions_dir = os.path.join(os.path.dirname(__file__) or ".", "models", "versions")
+
+    checkpoints = []
+    if os.path.isdir(checkpoints_dir):
+        for fname in sorted(os.listdir(checkpoints_dir), reverse=True):
+            if fname.endswith(".keras"):
+                fpath = os.path.join("models", "checkpoints", fname).replace("\\", "/")
+                full_p = os.path.join(checkpoints_dir, fname)
+                checkpoints.append({
+                    "filename": fname,
+                    "path": fpath,
+                    "size_mb": round(os.path.getsize(full_p) / (1024 * 1024), 2),
+                    "created_at": datetime.fromtimestamp(os.path.getmtime(full_p)).isoformat()
+                })
+
+    version_files = []
+    if os.path.isdir(versions_dir):
+        for fname in sorted(os.listdir(versions_dir), reverse=True):
+            if fname.endswith(".keras"):
+                fpath = os.path.join("models", "versions", fname).replace("\\", "/")
+                full_p = os.path.join(versions_dir, fname)
+                version_files.append({
+                    "filename": fname,
+                    "path": fpath,
+                    "size_mb": round(os.path.getsize(full_p) / (1024 * 1024), 2),
+                    "created_at": datetime.fromtimestamp(os.path.getmtime(full_p)).isoformat()
+                })
+
+    return {
+        "success": True,
+        "active_model": retrain_state.get("current_active_model") or registry.get("active_model"),
+        "baseline_model": retrain_state.get("baseline_model") or registry.get("baseline_model"),
+        "last_deployed_at": registry.get("last_deployed_at"),
+        "versions": registry.get("versions", []),
+        "checkpoints": checkpoints,
+        "version_files": version_files,
+    }
+
+
 @app.post("/retrain/deploy")
 async def deploy_retrained_model():
-    """Hot-Reload: Nạp trực tiếp mô hình ứng viên mới vào RAM mà không tắt server (Zero Downtime)."""
+    """Hot-Reload: Nạp trực tiếp mô hình ứng viên mới vào RAM + lưu Model Registry bền vững (Zero Downtime)."""
     global model, retrain_state, custom_objects
 
     target_path = None
@@ -1013,14 +1115,31 @@ async def deploy_retrained_model():
             "message": "Không tìm thấy tệp mô hình ứng viên để triển khai."
         }
 
+    previous_active = retrain_state.get("current_active_model", "models/resnet_risk_calibrated.keras")
+
     try:
         new_m = tf.keras.models.load_model(target_path, custom_objects=custom_objects, safe_mode=False, compile=False)
         model = new_m
         retrain_state["current_active_model"] = target_path
+
+        registry = load_model_registry()
+        registry["previous_active_model"] = previous_active
+        registry["active_model"] = target_path
+        registry["last_deployed_at"] = datetime.now().isoformat()
+        for v in registry.get("versions", []):
+            if v.get("candidate_model_path") == target_path:
+                v["status"] = "active"
+                v["deployed_at"] = registry["last_deployed_at"]
+            elif v.get("status") == "active":
+                v["status"] = "archived"
+        save_model_registry(registry)
+
         return {
             "success": True,
-            "message": f"Hot-Reload thành công! Mô hình mới ({os.path.basename(target_path)}) đã được nạp vào RAM phục vụ chẩn đoán.",
-            "active_model": target_path
+            "message": f"Hot-Reload thành công! Mô hình mới ({os.path.basename(target_path)}) đã được nạp vào RAM và lưu vào Model Registry.",
+            "previous_model": previous_active,
+            "active_model": target_path,
+            "result": retrain_state.get("result"),
         }
     except Exception as e:
         return {
@@ -1030,25 +1149,64 @@ async def deploy_retrained_model():
 
 
 @app.post("/retrain/rollback")
-async def rollback_model():
-    """Hoàn tác: Nạp lại mô hình gốc ban đầu vào RAM."""
+async def rollback_model(request: Request):
+    """Hoàn tác (Rollback): Khôi phục về bản sao lưu checkpoint liền trước hoặc phiên bản bất kỳ trong lịch sử."""
     global model, retrain_state, custom_objects
 
-    baseline_path = retrain_state.get("baseline_model", "models/resnet_risk_calibrated.keras")
-    if not os.path.exists(baseline_path):
+    body: Dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    registry = load_model_registry()
+    requested_target = body.get("target_model_path") or body.get("version")
+
+    rollback_target = None
+    if requested_target:
+        # Cho phép chọn theo version_id hoặc đường dẫn trong thư mục models/
+        for v in registry.get("versions", []):
+            if v.get("version_id") == requested_target or v.get("candidate_model_path") == requested_target:
+                rollback_target = v.get("checkpoint_backup_path") if body.get("use_checkpoint") else v.get("candidate_model_path")
+                break
+        if not rollback_target:
+            normalized = os.path.normpath(str(requested_target)).replace("\\", "/")
+            if normalized.startswith("models/") and ".." not in normalized and os.path.exists(normalized):
+                rollback_target = normalized
+
+    if not rollback_target:
+        # Ưu tiên bản sao lưu checkpoint gần nhất của lần retrain vừa rồi, sau đó đến previous_active_model, rồi baseline_model
+        if retrain_state.get("result") and retrain_state["result"].get("checkpoint_backup_path"):
+            ckpt = retrain_state["result"]["checkpoint_backup_path"]
+            if os.path.exists(ckpt):
+                rollback_target = ckpt
+        if not rollback_target and registry.get("previous_active_model") and os.path.exists(registry["previous_active_model"]):
+            rollback_target = registry["previous_active_model"]
+        if not rollback_target:
+            rollback_target = retrain_state.get("baseline_model", "models/resnet_risk_calibrated.keras")
+
+    if not os.path.exists(rollback_target):
         return {
             "success": False,
-            "message": f"Không tìm thấy mô hình gốc ổn định tại: {baseline_path}"
+            "message": f"Không tìm thấy tệp mô hình sao lưu tại: {rollback_target}"
         }
 
+    previous_active = retrain_state.get("current_active_model")
     try:
-        baseline_m = tf.keras.models.load_model(baseline_path, custom_objects=custom_objects, safe_mode=False, compile=False)
+        baseline_m = tf.keras.models.load_model(rollback_target, custom_objects=custom_objects, safe_mode=False, compile=False)
         model = baseline_m
-        retrain_state["current_active_model"] = baseline_path
+        retrain_state["current_active_model"] = rollback_target
+
+        registry["previous_active_model"] = previous_active
+        registry["active_model"] = rollback_target
+        registry["last_rolled_back_at"] = datetime.now().isoformat()
+        save_model_registry(registry)
+
         return {
             "success": True,
-            "message": f"Hoàn tác (Rollback) thành công! Đã nạp lại mô hình gốc ({os.path.basename(baseline_path)}) vào RAM.",
-            "active_model": baseline_path
+            "message": f"Hoàn tác (Rollback) thành công! Đã nạp lại mô hình ({os.path.basename(rollback_target)}) vào RAM.",
+            "rolled_back_from": previous_active,
+            "active_model": rollback_target
         }
     except Exception as e:
         return {

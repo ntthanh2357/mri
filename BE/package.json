@@ -11,6 +11,7 @@
     "test:security": "node src/tests/security_audit.test.js",
     "test:all": "node src/tests/run_all_tests.js",
     "test:coverage": "c8 --reporter=text --reporter=html node src/tests/run_all_tests.js",
+    "audit:legal": "node scripts/auditLegal.js",
     "storage:verify": "node scripts/verifyStorage.js",
     "db:backup": "node scripts/backupDatabase.js",
     "vitals:backfill": "node src/scripts/backfill_visit_vitals.js",

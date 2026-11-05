@@ -76,6 +76,7 @@ async function runAll() {
   if (hasFailure) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runAll();

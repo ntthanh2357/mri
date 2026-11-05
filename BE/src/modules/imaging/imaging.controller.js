@@ -598,9 +598,11 @@ export const feedbackImagingResultAI = async (req, res) => {
 
     console.log(`📡 Đang gửi feedback tới AI server (http://localhost:8000/feedback) ...`);
     const aiFeedbackUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/feedback") : "http://localhost:8000/feedback");
+    const internalKey = process.env.INTERNAL_AI_API_KEY || "";
 
     const aiResponse = await fetch(aiFeedbackUrl, {
       method: "POST",
+      headers: internalKey ? { "X-Internal-Api-Key": internalKey } : undefined,
       body: formData,
     });
 
@@ -704,8 +706,10 @@ export const approveImagingResultAI = async (req, res) => {
     formData.append("confidence", String(confidence ?? 0));
 
     console.log(`✅ Gửi xác nhận đúng tới AI server (${AI_BASE}/approve) ...`);
+    const internalKey = process.env.INTERNAL_AI_API_KEY || "";
     const aiResponse = await fetch(`${AI_BASE}/approve`, {
       method: "POST",
+      headers: internalKey ? { "X-Internal-Api-Key": internalKey } : undefined,
       body: formData,
     });
 
@@ -813,6 +817,10 @@ export const getAllImagingResults = async (req, res) => {
 // @access  Private (Technician, Admin)
 export const createKtvImagingResult = async (req, res) => {
   try {
+    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+      return res.status(403).json({ message: "Chỉ Kỹ thuật viên hoặc Bác sĩ mới được phép tạo kết quả chụp." });
+    }
+
     const {
       visitId,
       patientId,
@@ -838,6 +846,12 @@ export const createKtvImagingResult = async (req, res) => {
     const visit = await Visit.findById(visitId);
     if (!visit) {
       return res.status(404).json({ message: "Không tìm thấy lượt khám tương ứng." });
+    }
+
+    // [SECURITY FIX BUG-IMG-001]: Kiểm tra cô lập bệnh viện (Tenancy check)
+    const isSysAdmin = ["admin", "system_admin"].includes(req.user.role);
+    if (!isSysAdmin && (!req.user.hospitalId || String(visit.hospitalId) !== String(req.user.hospitalId))) {
+      return res.status(403).json({ message: "Không có quyền tạo kết quả chụp cho ca khám của bệnh viện khác." });
     }
 
     // Lấy thông tin bệnh nhân (hỗ trợ fallback từ visit.patientId)
@@ -1370,6 +1384,9 @@ export const acknowledgeCriticalFinding = async (req, res) => {
 // @access  Private (Radiologist, Doctor, Department Head)
 export const addImagingAddendum = async (req, res) => {
   try {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+      return res.status(403).json({ message: "Chỉ Bác sĩ mới có quyền tạo phụ lục (Addendum) báo cáo CĐHA." });
+    }
     const { id } = req.params;
     const { content, reason } = req.body;
 
@@ -1396,6 +1413,8 @@ export const addImagingAddendum = async (req, res) => {
     const addendumItem = {
       content: String(content).trim(),
       reason: String(reason || "").trim(),
+      addendumType: req.body.addendumType === "clinical_correlation" ? "clinical_correlation" : "radiology_amendment",
+      authorRole: req.user.role || "",
       addedBy: req.user.id,
       addedByName: authorName,
       addedAt,
@@ -1416,6 +1435,70 @@ export const addImagingAddendum = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
+};
+
+// @desc    [Q-CLINICAL-01] Bác sĩ lâm sàng xác nhận đã đọc báo cáo CĐHA (Attending Acknowledgment)
+// @route   POST /api/v1/imaging/:id/acknowledge
+// @access  Private (Doctor, Radiologist, Department Head)
+export const acknowledgeImagingReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clinicalNote = "" } = req.body || {};
+
+    if (!["doctor", "radiologist", "department_head"].includes(req.user?.role)) {
+      return res.status(403).json({ message: "Chỉ bác sĩ mới được xác nhận đã đọc báo cáo CĐHA." });
+    }
+
+    const result = await ImagingResult.findById(id);
+    if (!result) {
+      return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    }
+    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
+    }
+
+    const ackName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ lâm sàng";
+    result.attendingAcknowledgment = {
+      acknowledgedBy: req.user.id,
+      acknowledgedByName: ackName,
+      acknowledgedAt: new Date(),
+      clinicalNote: String(clinicalNote || "").trim()
+    };
+    await result.save();
+
+    try {
+      const { recordAuditLog, AUDIT_ACTIONS } = await import("../../services/auditLog.service.js");
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.IMAGING_REPORT_ACKNOWLEDGED || "IMAGING_REPORT_ACKNOWLEDGED",
+        entity: "ImagingResult",
+        entityId: result._id,
+        performedBy: req.user.id,
+        hospitalId: result.hospitalId || req.user.hospitalId,
+        details: `Bác sĩ ${ackName} (${req.user.role}) đã xác nhận đọc báo cáo CĐHA #${result._id}.`,
+        payload: { clinicalNote: result.attendingAcknowledgment.clinicalNote }
+      });
+    } catch { /* ignore audit error */ }
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã xác nhận bác sĩ lâm sàng đọc báo cáo CĐHA (Attending Acknowledge).",
+      attendingAcknowledgment: result.attendingAcknowledgment,
+      data: result
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    [Q-CLINICAL-01] Bác sĩ lâm sàng thêm nhận định / đối chiếu lâm sàng (Clinical Addendum)
+// @route   POST /api/v1/imaging/:id/clinical-addendum
+// @access  Private (Doctor, Radiologist, Department Head)
+export const addClinicalAddendum = async (req, res) => {
+  req.body = {
+    ...req.body,
+    addendumType: "clinical_correlation"
+  };
+  return addImagingAddendum(req, res);
 };
 
 // @desc    Lấy chuỗi diễn tiến kích thước khối u & tiêu chuẩn RANO dọc thời gian (Longitudinal RANO Timeline)

@@ -60,6 +60,10 @@ const auditLogSchema = new Schema(
       type: String,
       default: "",
     },
+    hashedTimestamp: {
+      type: String,
+      default: "",
+    },
     tamperVerified: {
       type: Boolean,
       default: true,

@@ -124,6 +124,10 @@ describe('E2E Clinical Workflow Test: Quy Trình Bệnh Viện Toàn Diện 10 B
     expect(invoice).toBeDefined();
     expect(invoice.totalAmount).toBeGreaterThan(0);
 
+    // Bước thu ngân: Xác nhận thanh toán viện phí trước khi qua Cổng Viện phí MRI (Q-BILLING-01)
+    invoice.status = 'đã thanh toán';
+    await invoice.save();
+
     // -------------------------------------------------------------
     // BƯỚC 3: KTV thực hiện Checklist an toàn MRI (An toàn phòng từ trường)
     // -------------------------------------------------------------
