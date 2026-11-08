@@ -14,6 +14,10 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// QA-21: chốt lỗi cấp tiến trình (unhandledRejection không còn làm sập server)
+import { installProcessGuards, setGuardedServer } from "./utils/processGuards.js";
+installProcessGuards();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -125,10 +129,11 @@ import { startBackgroundJobs } from "./jobs/scheduler.js";
 // Database connection & start server
 connectDB()
   .then(() => {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Backend server is running on http://localhost:${PORT}`);
       startBackgroundJobs();
     });
+    setGuardedServer(server);
   })
   .catch((error) => {
     console.error("Database connection failed during boot:", error);

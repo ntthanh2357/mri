@@ -43,6 +43,10 @@ import { registerSchedule } from "../controllers/schedule.controller.js";
 import { cancelStandDown } from "../controllers/emergency.controller.js";
 import { getKanbanBoard } from "../controllers/task.controller.js";
 import { requestMriRescanService, cancelMriOrderService } from "../services/visit.service.js";
+import { EventEmitter } from "events";
+import { spawnSync } from "child_process";
+import { fileURLToPath, pathToFileURL } from "url";
+import { installProcessGuards, postOpsAlert } from "../utils/processGuards.js";
 import { sanitizeNoSql } from "../middlewares/noSqlSanitize.middleware.js";
 import { inputErrorStatus } from "../utils/inputError.util.js";
 import { Notification } from "../models/notification.model.js";
@@ -426,5 +430,115 @@ describe("Lỗi còn tồn v3.4 (đợt 2): dữ liệu sai kiểu không còn t
     const admin = await mk("hospital_admin");
     const asAdmin = await call(getKanbanBoard, { user: userOf(admin), query: { role: "nurse" } });
     expect(titles(asAdmin)).toEqual(["Việc của điều dưỡng"]);
+  });
+});
+
+describe("QA-21: lỗi cấp tiến trình không làm sập server", () => {
+  const fake = () => {
+    const proc = new EventEmitter();
+    const calls = { exit: [], alert: 0, log: 0, closed: 0, db: 0 };
+    const server = { close: (cb) => { calls.closed += 1; cb(); } };
+    const handlers = installProcessGuards({
+      proc, exit: (c) => calls.exit.push(c), getServer: () => server, closeDb: async () => { calls.db += 1; },
+      alert: async () => { calls.alert += 1; return true; }, log: () => { calls.log += 1; }, timeoutMs: 200,
+    });
+    return { proc, calls, handlers, server };
+  };
+
+  test("unhandledRejection: ghi log + cảnh báo, không thoát; cảnh báo trùng trong 60s chỉ gửi một lần", async () => {
+    const { calls, handlers } = fake();
+    await handlers.onUnhandledRejection(new Error("quên catch"));
+    await handlers.onUnhandledRejection(new Error("quên catch"));
+    await handlers.onUnhandledRejection(new Error("lỗi khác"));
+    expect(calls.exit.length).toBe(0);
+    expect(calls.log).toBe(3);
+    expect(calls.alert).toBe(2);
+  });
+
+  test("uncaughtException: đóng server + DB rồi exit(1), chỉ xử lý một lần", async () => {
+    const { calls, handlers } = fake();
+    await handlers.onUncaughtException(new Error("hỏng trạng thái"));
+    await handlers.onUncaughtException(new Error("lần hai"));
+    expect([calls.closed, calls.db, calls.alert]).toEqual([1, 1, 1]);
+    expect(calls.exit).toEqual([1]);
+  });
+
+  test("uncaughtException: server đóng không xong vẫn bị buộc exit(1) sau thời hạn", async () => {
+    const exits = [];
+    const { onUncaughtException } = installProcessGuards({
+      proc: new EventEmitter(), exit: (c) => exits.push(c), getServer: () => ({ close: () => {} }),
+      closeDb: async () => {}, alert: async () => true, log: () => {}, timeoutMs: 50,
+    });
+    onUncaughtException(new Error("treo khi đóng"));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(exits).toEqual([1]);
+  });
+
+  test("cảnh báo webhook chỉ gửi tên + thông điệp rút gọn, không gửi stack; không cấu hình thì bỏ qua", async () => {
+    const saved = { ops: process.env.OPS_ALERT_WEBHOOK_URL, slack: process.env.SLACK_SECURITY_WEBHOOK_URL };
+    const realFetch = global.fetch;
+    let body = null;
+    try {
+      delete process.env.OPS_ALERT_WEBHOOK_URL; delete process.env.SLACK_SECURITY_WEBHOOK_URL;
+      expect(await postOpsAlert({ kind: "unhandledRejection", error: { name: "Error", message: "m" } })).toBe(false);
+      process.env.OPS_ALERT_WEBHOOK_URL = "http://127.0.0.1:9/hook";
+      global.fetch = async (_url, opts) => { body = JSON.parse(opts.body); return { ok: true }; };
+      expect(await postOpsAlert({ kind: "uncaughtException", error: { name: "TypeError", message: "x".repeat(10) } })).toBe(true);
+      expect(Object.keys(body).includes("stack")).toBe(false);
+      expect(body.kind).toBe("uncaughtException");
+    } finally {
+      global.fetch = realFetch;
+      if (saved.ops === undefined) delete process.env.OPS_ALERT_WEBHOOK_URL; else process.env.OPS_ALERT_WEBHOOK_URL = saved.ops;
+      if (saved.slack === undefined) delete process.env.SLACK_SECURITY_WEBHOOK_URL; else process.env.SLACK_SECURITY_WEBHOOK_URL = saved.slack;
+    }
+  });
+
+  test("SIGTERM/SIGINT: đóng server + DB rồi exit(0); tín hiệu lặp bị bỏ qua; dọn dẹp lỗi → exit(1)", async () => {
+    const { calls, handlers } = fake();
+    await handlers.onSignal("SIGTERM");
+    await handlers.onSignal("SIGINT");
+    expect([calls.closed, calls.db]).toEqual([1, 1]);
+    expect(calls.exit).toEqual([0]);
+    const exits = [];
+    const g = installProcessGuards({ proc: new EventEmitter(), exit: (c) => exits.push(c), getServer: () => null,
+      closeDb: async () => { throw new Error("db close lỗi"); }, alert: async () => true, log: () => {}, signalTimeoutMs: 200 });
+    await g.onSignal("SIGTERM");
+    expect(exits).toEqual([1]);
+  });
+
+  test("tiến trình thật: SIGTERM khi đang có request → request đó vẫn trả 200, tiến trình thoát mã 0", () => {
+    const guards = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "utils", "processGuards.js")).href;
+    const env = { ...process.env, OPS_ALERT_WEBHOOK_URL: "", SLACK_SECURITY_WEBHOOK_URL: "" };
+    const body = [
+      `const http = await import("http");`,
+      `const { installProcessGuards, setGuardedServer } = await import(${JSON.stringify(guards)});`,
+      `installProcessGuards({ closeDb: async () => { console.log("DB_CLOSED"); } });`,
+      `const server = http.createServer((req, res) => { res.on("finish", () => console.log("INFLIGHT_" + res.statusCode)); setTimeout(() => res.end("ok"), 400); });`,
+      `setGuardedServer(server);`,
+      `server.listen(0, "127.0.0.1", () => {`,
+      `  const { port } = server.address();`,
+      `  http.get({ host: "127.0.0.1", port, agent: false }, (res) => res.resume());`,
+      `  setTimeout(() => process.emit("SIGTERM", "SIGTERM"), 100);`,
+      `  setTimeout(() => console.log("KHONG_DUOC_IN"), 6000);`,
+      `});`,
+    ].join(String.fromCharCode(10));
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", body], { env, encoding: "utf8", timeout: 20000 });
+    expect(r.status).toBe(0);
+    expect(r.stdout.includes("INFLIGHT_200")).toBe(true);
+    expect(r.stdout.includes("DB_CLOSED")).toBe(true);
+    expect(r.stdout.includes("KHONG_DUOC_IN")).toBe(false);
+  });
+
+  test("tiến trình thật: promise bị reject không bắt → vẫn sống; exception không bắt → thoát mã 1", () => {
+    const guards = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "utils", "processGuards.js")).href;
+    const env = { ...process.env, OPS_ALERT_WEBHOOK_URL: "", SLACK_SECURITY_WEBHOOK_URL: "" };
+    const run = (body) => spawnSync(process.execPath, ["--input-type=module", "-e", `const { installProcessGuards } = await import(${JSON.stringify(guards)}); installProcessGuards({ closeDb: async () => {} }); ${body}`], { env, encoding: "utf8", timeout: 20000 });
+    const alive = run(`Promise.reject(new Error("quen catch")); setTimeout(() => { console.log("VAN_SONG"); process.exit(0); }, 300);`);
+    expect(alive.status).toBe(0);
+    expect(alive.stdout.includes("VAN_SONG")).toBe(true);
+    const crash = run(`setTimeout(() => { throw new Error("hong"); }, 10); setTimeout(() => console.log("KHONG_DUOC_IN"), 5000);`);
+    expect(crash.status).toBe(1);
+    expect(crash.stdout.includes("KHONG_DUOC_IN")).toBe(false);
+    expect(crash.stderr.includes("uncaughtException")).toBe(true);
   });
 });
