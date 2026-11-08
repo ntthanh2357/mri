@@ -6,7 +6,7 @@ const patientProfileSchema = new Schema(
     hospitalId: {
       type: Schema.Types.ObjectId,
       ref: 'Hospital',
-      required: true,
+      default: null,
       index: true
     },
     userId: {

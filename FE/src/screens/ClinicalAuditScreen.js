@@ -5,7 +5,7 @@
  * Màn hình của Quản trị viên Bệnh viện (ROLE 8 — UC-HADM-13):
  *  Truy vết các thao tác nhạy cảm theo yêu cầu Google Doc:
  *   - Truy cập bệnh án khẩn cấp Break-Glass (HIPAA §164.312(a)(2)(ii))
- *   - Xóa mềm ca khám (SOFT_DELETE_VISIT — TT 46/2018/TT-BYT)
+ *   - Xóa mềm ca khám (SOFT_DELETE_VISIT — TT 13/2025/TT-BYT)
  *   - Sửa kết luận chẩn đoán / bệnh án điện tử (UPDATE_EMR_RECORD)
  *   - Hoàn tiền hóa đơn viện phí (REFUND_REQUESTED / REFUND_APPROVED)
  *   - Điều chuyển phân công ca (ASSIGNMENT_OVERRIDDEN — UC-HADM-04)
@@ -81,6 +81,24 @@ const ACTION_LABELS = {
   RECORD_LOCKED: 'Khóa bệnh án',
   REFUND_REQUESTED: 'Yêu cầu hoàn tiền viện phí',
   REFUND_APPROVED: 'Duyệt hoàn tiền viện phí',
+  REFUND_COMPLETED: 'Hoàn tất hoàn tiền viện phí',
+  REFUND_REJECTED: 'Từ chối hoàn tiền viện phí',
+  LARGE_REFUND_REVIEWED: 'Kiểm tra khoản hoàn lớn',
+  IMAGING_REPORT_SIGNED: 'Ký báo cáo CĐHA',
+  IMAGING_REPORT_ACKNOWLEDGED: 'Xác nhận đã đọc báo cáo CĐHA',
+  CLINICAL_ADDENDUM_CREATED: 'Tạo phụ lục báo cáo CĐHA',
+  VERBAL_ORDER_CREATED: 'Ra y lệnh miệng',
+  VERBAL_ORDER_READBACK_CONFIRMED: 'Điều dưỡng xác nhận đọc lại y lệnh',
+  VERBAL_ORDER_COUNTERSIGNED: 'Ký bổ sung y lệnh miệng',
+  VERBAL_ORDER_REJECTED: 'Từ chối y lệnh miệng',
+  VERBAL_ORDER_READBACK_ESCALATED: 'Y lệnh quá 15 phút chưa đọc lại',
+  VERBAL_ORDER_OVERDUE: 'Y lệnh quá hạn ký bổ sung',
+  PAYMENT_GATE_BYPASSED: 'Được miễn cổng viện phí',
+  DEBT_APPROVAL_GRANTED: 'Bảo lãnh viện phí',
+  MRI_EMERGENCY_SCHEDULED: 'Xếp lịch MRI cấp cứu',
+  HOSPITAL_POLICY_UPDATED: 'Đổi chính sách bệnh viện',
+  STAFF_IMAGING_SIGN_PERMISSION_CHANGED: 'Đổi quyền ký CĐHA',
+  VISIT_TYPE_CHANGED: 'Đổi loại hình điều trị',
   ASSIGNMENT_OVERRIDDEN: 'Điều chuyển phân công ca',
   LOGIN: 'Đăng nhập hệ thống',
   RECORD_VIEWED: 'Xem hồ sơ bệnh án',

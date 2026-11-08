@@ -21,6 +21,6 @@ router.post(
   overrideChecklistRisk
 );
 router.post("/:id/sign-patient", signPatientConsent);
-router.get("/visit/:visitId", getConsentByVisit);
+router.get("/visit/:visitId", checkRole(["patient", "technician", "nurse", "doctor", "radiologist", "department_head", "receptionist", "admin", "system_admin", "hospital_admin"]), getConsentByVisit);
 
 export default router;

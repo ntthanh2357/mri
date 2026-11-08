@@ -44,18 +44,11 @@ export const triggerDriveSyncAsync = async (fileRecordId, _bufferUnused, relativ
 export const findExistingBySha256 = async (sha256, options = {}) => {
   if (!sha256) return null;
   try {
-    const query = { sha256 };
-    // [SECURITY FIX BUG-STORAGE-001]: Cô lập chống trùng lặp theo bệnh viện (Tenant) hoặc chủ sở hữu (Owner)
-    if (options && typeof options === "object") {
-      if (options.hospitalId) {
-        query.hospitalId = options.hospitalId;
-      } else if (options.strictTenantIsolation) {
-        query.hospitalId = null;
-        if (options.uploadedBy) {
-          query.uploadedBy = options.uploadedBy;
-        }
-      }
-    }
+    // [BUG-STORAGE-001] Luôn cô lập: có viện thì trong viện, không có viện thì trong chính người tải lên.
+    // Không truyền gì cũng không được khớp sang tệp của viện khác hay người khác.
+    const query = options?.hospitalId
+      ? { sha256, hospitalId: options.hospitalId }
+      : { sha256, hospitalId: null, uploadedBy: options?.uploadedBy || null };
     const candidates = await StoredMedicalFile.find(query)
       .sort({ syncStatus: -1, createdAt: -1 })
       .limit(5)
@@ -97,7 +90,7 @@ export const putFile = async ({
   const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
 
   // 1. Kiểm tra chống lưu trùng theo SHA-256 (Deduplication)
-  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId }) : null;
+  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId, uploadedBy }) : null;
   let localPath;
   let sizeBytes;
   let isDeduplicated = false;
@@ -188,7 +181,7 @@ export const putFileFromPath = async ({
   const logicalPath = buildLogicalPath({ category, studyId, sequenceName, fileName, patientName });
 
   // 2. Kiểm tra chống lưu trùng (SHA-256 Deduplication)
-  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId }) : null;
+  const existing = enableDeduplication ? await findExistingBySha256(sha256, { hospitalId, uploadedBy }) : null;
   let localPath;
   let sizeBytes = streamedSize;
   let isDeduplicated = false;

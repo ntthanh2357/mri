@@ -4,6 +4,7 @@
  */
 
 import { AuditLog } from "../models/auditLog.model.js";
+import { recordAuditLog } from "../services/auditLog.service.js";
 import { authCache } from "./authCache.util.js";
 
 // Cache in-memory kết quả GeoIP để tránh gọi lặp lại và giảm tải mạng
@@ -17,9 +18,10 @@ const MAX_CACHE_SIZE = 1000;
 export const extractClientIp = (req) => {
   if (!req) return "127.0.0.1";
 
-  const forwarded = req.headers?.["x-forwarded-for"];
-  let ip = "";
-  if (forwarded) {
+  // req.ip đã được Express giải theo "trust proxy". Chỉ đọc header khi không có req.ip (không chạy qua Express).
+  const forwarded = req.ip ? null : req.headers?.["x-forwarded-for"];
+  let ip = req.ip || "";
+  if (!ip && forwarded) {
     // x-forwarded-for có thể chứa danh sách: client, proxy1, proxy2
     ip = forwarded.split(",")[0].trim();
   }
@@ -88,12 +90,15 @@ export const resolveIpLocation = async (ip) => {
     return localLocation;
   }
 
-  // Nếu là IP công khai (Public IP), tra cứu nhanh qua service GeoIP với timeout 1.5s
+  // IP là dữ liệu cá nhân: mặc định không gửi ra bên thứ ba. Chỉ tra cứu khi viện đã cấu hình dịch vụ HTTPS
+  // của mình (GEOIP_LOOKUP_URL, ví dụ https://geo.benhvien.vn/json/{ip}); nếu không dùng giá trị mặc định bên dưới.
+  const lookupTemplate = process.env.GEOIP_LOOKUP_URL || "";
   try {
+    if (!lookupTemplate.startsWith("https://")) throw new Error("GeoIP lookup disabled");
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-    const response = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,message,country,countryCode,regionName,city,lat,lon,timezone,isp`, {
+    const response = await fetch(lookupTemplate.replace("{ip}", encodeURIComponent(cleanIp)), {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -222,7 +227,7 @@ export const recordUserLoginSession = async (user, req) => {
 
   // Ghi nhật ký kiểm toán hệ thống (AuditLog) kèm IP và Vị trí
   try {
-    await AuditLog.create({
+    await recordAuditLog({
       action: "USER_LOGIN",
       entity: "User",
       entityId: userIdStr || "",

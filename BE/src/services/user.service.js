@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
+import { recordAuditLog } from "./auditLog.service.js";
 import { Dataset } from "../models/dataset.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
@@ -58,7 +59,7 @@ export const toggleUserLock = async (userId, isLocked, adminId, actorRole) => {
 
   if (user) {
     authCache.invalidateUser(userId);
-    await AuditLog.create({
+    await recordAuditLog({
       action: isLocked ? "lock-user" : "unlock-user",
       entity: "User",
       entityId: userId,
@@ -98,7 +99,7 @@ export const lockUserById = async (id, adminId, actorRole) => {
 
   authCache.invalidateUser(id);
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: "lock-user",
     entity: "User",
     entityId: id,
@@ -125,7 +126,7 @@ export const verifyAdminById = async (id, verified, adminId) => {
     .select("-passwordHash -otpCode -otpExpires -tokenVersion")
     .lean();
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: verified ? "verify-admin" : "unverify-admin",
     entity: "User",
     entityId: id,
@@ -167,7 +168,7 @@ export const unlockUserById = async (id, adminId, actorRole) => {
 
   authCache.invalidateUser(id);
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: "unlock-user",
     entity: "User",
     entityId: id,

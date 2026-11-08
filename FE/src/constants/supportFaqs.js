@@ -191,7 +191,7 @@ const DOCTOR_FAQS = [
     items: [
       {
         q: 'Vì sao bệnh án đã ký thì không sửa được? Nếu cần bổ sung thì làm thế nào?',
-        a: 'Theo Thông tư 46/2018/TT-BYT, hồ sơ đã "Ký Số EMR" hoặc bệnh nhân đã xuất viện sẽ bị khóa để chống chỉnh sửa. Muốn bổ sung, bấm "+ Lập Phụ Lục (TT 46)" trên hồ sơ, nhập tiêu đề, lý do và nội dung bổ sung. Trước khi ký, mỗi lần cập nhật hồ sơ đều được lưu thành một phiên bản mới để truy vết.',
+        a: 'Theo Thông tư 13/2025/TT-BYT, hồ sơ đã "Ký Số EMR" hoặc bệnh nhân đã xuất viện sẽ bị khóa để chống chỉnh sửa. Muốn bổ sung, bấm "+ Lập Phụ Lục (TT 46)" trên hồ sơ, nhập tiêu đề, lý do và nội dung bổ sung. Trước khi ký, mỗi lần cập nhật hồ sơ đều được lưu thành một phiên bản mới để truy vết.',
       },
       {
         q: 'Khi kê đơn, hệ thống cảnh báo tương tác thuốc hoặc chống chỉ định. Xử lý thế nào?',

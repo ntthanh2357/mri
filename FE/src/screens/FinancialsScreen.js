@@ -477,19 +477,24 @@ const FinancialsScreen = ({ navigation }) => {
   };
 
   // ── UC-PHA-06: Hoàn tiền hóa đơn thuốc — hoàn vị kho theo đúng phân nhánh ──
-  const canRefund = currentUserRole => ['hospital_admin', 'admin'].includes(currentUserRole);
+  const canRefund = currentUserRole => currentUserRole === 'hospital_admin';
 
   const handleRefundInvoice = async () => {
     if (!refundReason.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do hoàn tiền để lưu vết kiểm toán (TT46/2018).');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do hoàn tiền để lưu vết kiểm toán (TT 13/2025).');
       return;
     }
     setRefunding(true);
     try {
-      const res = await put(`/api/v1/invoices/${refundTarget._id}/refund`, {
+      const res = await post(`/api/v1/invoices/${refundTarget._id}/refund/request`, {
         refundReason: refundReason.trim(),
       });
-      if (res && res.status === 'success') {
+      if (res && res.approvalStatus === 'pending_second_approval') {
+        Alert.alert('Đã gửi yêu cầu', 'Khoản từ 10 triệu đồng cần người thứ hai duyệt tại mục "Duyệt hoàn tiền và bảo lãnh".');
+        setRefundTarget(null);
+        setRefundReason('');
+        fetchFinancialData();
+      } else if (res && res.status === 'success') {
         const amt = (res.data?.refundedAmount || 0).toLocaleString('vi-VN');
         const restockInfo = refundHasPendingDrugs
           ? 'Thuốc chưa phát đã hoàn vị về đúng lô đã xuất (tồn kho tăng tương ứng).'
@@ -1343,7 +1348,7 @@ const FinancialsScreen = ({ navigation }) => {
                 onChangeText={setRefundReason}
               />
               <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 16 }}>
-                Lý do được ghi vào chuỗi kiểm toán hash-chain (TT46/2018/TT-BYT) kèm EMRVersion lưu vết.
+                Lý do được ghi vào chuỗi kiểm toán hash-chain (TT 13/2025/TT-BYT) kèm EMRVersion lưu vết.
               </Text>
 
               <View style={{ flexDirection: 'row', gap: 10 }}>

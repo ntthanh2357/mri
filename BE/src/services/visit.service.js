@@ -10,19 +10,28 @@ import { getDayRangeVN } from "../utils/date.util.js";
 import { contrastConsentPending } from "./contrastConsent.service.js";
 import { evaluateVitalSigns } from "./vitalsSafety.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "./auditLog.service.js";
+import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
 
 /**
  * Helper: Đánh giá Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01)
  */
-export const shouldEnforcePaymentGate = (visit, inv) => {
+const INPATIENT_VISIT_TYPES = new Set(["inpatient", "nội trú", "noi_tru", "noi tru"]);
+export const isInpatientVisitType = (visitType) =>
+  INPATIENT_VISIT_TYPES.has(String(visitType || "").trim().toLowerCase());
+
+export const shouldEnforcePaymentGate = (visit, inv, { partialDebtThreshold = 0 } = {}) => {
+  if (!visit) {
+    const err = new Error("Không tìm thấy lượt khám.");
+    err.statusCode = 404;
+    throw err;
+  }
   // 1. Cấp cứu — KHÔNG BAO GIỜ chặn
-  if (visit.priority === "khẩn cấp" || visit.isEmergency === true) {
+  if (visit.priority === "khẩn cấp") {
     return { enforce: false, reason: "EMERGENCY_BYPASS" };
   }
-  // 2. Nội trú / Hậu phẫu —記 sổ nội trú, thanh toán khi ra viện
+  // 2. Nội trú / Hậu phẫu — ghi sổ nội trú, thanh toán khi ra viện
   if (
-    visit.visitType === "inpatient" ||
-    visit.visitType === "nội trú" ||
+    isInpatientVisitType(visit.visitType) ||
     visit.status === "chờ nhập viện" ||
     visit.status === "chờ chụp sau phẫu thuật" ||
     visit.mriOrder?.clinicalScenario === "post_op_72h"
@@ -40,27 +49,90 @@ export const shouldEnforcePaymentGate = (visit, inv) => {
   ) {
     return { enforce: false, reason: "FULL_COVERAGE_OR_SPONSORED" };
   }
-  // 4. Có Bảo lãnh nợ (Debt Approval) hợp lệ từ Ban Giám đốc / Hospital Admin
+  const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+  const paidAmount = inv.status === "thanh toán một phần" ? Number(inv.paidAmount || 0) : 0;
+  const remainingOwed = Math.max(0, owed - paidAmount);
+  // 4. Bảo lãnh nợ từ Ban Giám đốc: còn hạn và đủ hạn mức cho số tiền còn nợ
   if (
     visit.debtApproval?.isApproved === true &&
-    (!visit.debtApproval.expiresAt || new Date(visit.debtApproval.expiresAt) > new Date())
+    visit.debtApproval.expiresAt &&
+    new Date(visit.debtApproval.expiresAt) > new Date() &&
+    remainingOwed <= Number(visit.debtApproval.maxAmount || 0)
   ) {
     return { enforce: false, reason: "DEBT_APPROVED_BY_ADMIN" };
   }
-  // 5. Đã thanh toán hoặc Đặt cọc / Thanh toán một phần (dư nợ còn lại <= 2.000.000 VNĐ)
-  const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
-  if (inv.status === "đã thanh toán" || inv.status === "PAID" || owed <= 0) {
+  // 5. Hóa đơn đã hoàn trả hoặc đã hủy: không còn khoản thu nào cho ca này, cần lập hóa đơn mới
+  if (inv.status === "hoàn trả" || inv.status === "hủy") {
+    return { enforce: true, reason: "INVOICE_VOIDED", owed };
+  }
+  // 6. Đã thu tiền. "đang xử lý" = tiền đã về, chỉ còn kẹt bước trừ kho (xem invoice.controller)
+  if (inv.status === "đã thanh toán" || inv.status === "đang xử lý" || inv.status === "PAID" || owed <= 0) {
     return { enforce: false, reason: "ALREADY_PAID" };
   }
-  if (inv.status === "thanh toán một phần") {
-    const paidAmount = Number(inv.paidAmount || 0);
-    const remainingOwed = Math.max(0, owed - paidAmount);
-    if (remainingOwed <= 2_000_000) {
-      return { enforce: false, reason: "PARTIAL_PAYMENT_WITHIN_THRESHOLD" };
-    }
+  // 7. Thanh toán một phần: mức nợ cho phép do từng viện cấu hình, mặc định phải trả đủ
+  if (inv.status === "thanh toán một phần" && partialDebtThreshold > 0 && remainingOwed <= partialDebtThreshold) {
+    return { enforce: false, reason: "PARTIAL_PAYMENT_WITHIN_THRESHOLD" };
   }
   // Mặc định: Ngoại trú thường chưa đóng tiền -> BẮT BUỘC CHẶN (bất kể client gửi enforcePaymentGate gì)
   return { enforce: true, reason: "OUTPATIENT_UNPAID", owed };
+};
+
+const GATE_MESSAGES = {
+  INVOICE_VOIDED: "CHẶN CỔNG VIỆN PHÍ: Hóa đơn của ca chụp đã hoàn trả hoặc đã hủy. Vui lòng lập hóa đơn mới trước khi vào buồng chụp, hoặc xin bảo lãnh viện phí của Ban Giám đốc.",
+  OUTPATIENT_UNPAID: "CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu, Nội trú/Hậu phẫu, BHYT 100%, hoặc có Bảo lãnh viện phí của Ban Giám đốc).",
+};
+
+/**
+ * Đánh giá cổng viện phí của một lượt khám (đọc hóa đơn và chính sách viện) rồi ghi audit nếu được miễn.
+ * Dùng chung cho mọi đường đưa bệnh nhân vào buồng chụp. Ném lỗi 402 khi bị chặn.
+ */
+export const assertPaymentGateOpen = async (visit, user, req = null) => {
+  const inv = visit.invoiceId
+    ? await Invoice.findById(visit.invoiceId)
+        .select("status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
+        .lean()
+    : null;
+  const hospital = await Hospital.findById(visit.hospitalId).select("billingPolicy").lean();
+  const decision = shouldEnforcePaymentGate(visit, inv, {
+    partialDebtThreshold: Number(hospital?.billingPolicy?.partialPaymentDebtThreshold || 0),
+  });
+
+  if (decision.enforce) {
+    const err = new Error(GATE_MESSAGES[decision.reason] || GATE_MESSAGES.OUTPATIENT_UNPAID);
+    err.statusCode = 402;
+    err.code = "ERR_INVOICE_NOT_PAID";
+    throw err;
+  }
+
+  if (decision.reason !== "ALREADY_PAID") {
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.PAYMENT_GATE_BYPASSED,
+      actorId: user.id || user._id || null,
+      actorRole: user.role,
+      hospitalId: visit.hospitalId,
+      targetModel: "Visit",
+      targetId: String(visit._id),
+      metadata: { bypassReason: decision.reason, invoiceId: visit.invoiceId ? String(visit.invoiceId) : null },
+      req,
+    });
+  }
+  return decision;
+};
+
+// Lịch phòng phản ánh đúng ca đang chụp: nếu không, phòng cứ hiện "đã đặt" dù ca đã xong.
+export const syncMriSlotWithVisit = async (visit, previousStatus) => {
+  try {
+    if (visit.status === "đang chụp") {
+      await MriSlot.updateMany({ hospitalId: visit.hospitalId, visitId: visit._id, status: "booked" }, { $set: { status: "in_progress" } });
+    } else if (previousStatus === "đang chụp") {
+      await MriSlot.updateMany(
+        { hospitalId: visit.hospitalId, visitId: visit._id, status: "in_progress" },
+        { $set: { status: visit.status === "đã hủy" ? "cancelled" : "completed" } }
+      );
+    }
+  } catch (err) {
+    console.warn("Không đồng bộ được lịch phòng MRI:", err.message);
+  }
 };
 
 /**
@@ -528,37 +600,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
 
   // Kiểm tra Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01 / BUG-VISIT-001)
   // Lưu ý: Không bao giờ tin cờ `checklistData.enforcePaymentGate = false` từ client!
-  let paymentPending = false;
-  let inv = null;
-  if (visit.invoiceId) {
-    inv = await Invoice.findById(visit.invoiceId)
-      .select("status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
-      .lean();
-  }
-  const gateDecision = shouldEnforcePaymentGate(visit, inv);
-  paymentPending = gateDecision.enforce;
-
-  if (!gateDecision.enforce && inv && !["ALREADY_PAID", "NO_INVOICE_REQUIRED"].includes(gateDecision.reason)) {
-    await recordAuditLog({
-      action: AUDIT_ACTIONS.PAYMENT_GATE_BYPASSED,
-      actorId: user.id || user._id || null,
-      actorRole: user.role,
-      hospitalId: visit.hospitalId,
-      targetModel: "Visit",
-      targetId: String(visit._id),
-      metadata: {
-        bypassReason: gateDecision.reason,
-        invoiceId: String(visit.invoiceId),
-      },
-    });
-  }
-
-  if (gateDecision.enforce) {
-    const err = new Error("CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu, Nội trú/Hậu phẫu, BHYT 100%, hoặc có Bảo lãnh viện phí của Ban Giám đốc).");
-    err.statusCode = 402;
-    err.code = "ERR_INVOICE_NOT_PAID";
-    throw err;
-  }
+  await assertPaymentGateOpen(visit, user);
 
   // Kim loại/thiết bị cấy ghép: chỉ bác sĩ được ghi đè, phải nêu lý do chuyên môn (lưu vết).
   // Máy tạo nhịp tim (bệnh nhân tự khai) là chống chỉ định tuyệt đối — KHÔNG có ngoại lệ.
@@ -607,6 +649,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   if (isSafe && !requiresDoctorReview && !consentPending && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
     visit.status = 'đang chụp';
     if (visit.mriOrder) visit.mriOrder.mriStatus = 'scanning';
+    await syncMriSlotWithVisit(visit, null);
   } else if (visit.mriOrder && isSafe) {
     visit.mriOrder.mriStatus = 'safety_checked';
   }
@@ -617,7 +660,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     visit,
     contrastConsentPending: consentPending,
     requiresDoctorReview,
-    paymentPending,
+    paymentPending: false,
     creatinineEgfr: egfrValue
   };
 };

@@ -45,7 +45,7 @@ export const sendSecuritySIEMAlert = async ({
     affectedSequenceNumber,
     affectedLogId,
     timestamp,
-    complianceViolation: ["HIPAA §164.312(b)", "Thông tư 46/2018/TT-BYT Điều 18", "Luật 15/2023/QH15 Điều 66"],
+    complianceViolation: ["HIPAA §164.312(b)", "Thông tư 13/2025/TT-BYT", "Luật 15/2023/QH15 Điều 66"],
     recommendedAction: "Cách ly node CSDL, rà soát nhật ký truy cập hệ quản trị CSDL, kích hoạt quy trình điều tra xâm nhập DFIR.",
   };
 
@@ -98,7 +98,7 @@ export const sendSecuritySIEMAlert = async ({
  * @param {Function} [verifierFn] - Hàm kiểm tra toàn vẹn (mặc định verifyAuditChainIntegrity)
  * @returns {Promise<Object>}
  */
-export const runAuditIntegrityCheckAndAlert = async (limit = 2000, verifierFn = verifyAuditChainIntegrity) => {
+export const runAuditIntegrityCheckAndAlert = async (limit = null, verifierFn = verifyAuditChainIntegrity) => {
   let result;
   try {
     result = await verifierFn(limit);
@@ -191,6 +191,6 @@ export const getAuditIntegrityDashboardStatus = () => {
   return {
     ...lastCheckStatus,
     cronActive: cronTimer !== null,
-    standardCompliance: "HIPAA §164.312(b) & TT46/2018/TT-BYT",
+    standardCompliance: "HIPAA §164.312(b) & TT 13/2025/TT-BYT",
   };
 };

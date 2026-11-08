@@ -722,11 +722,31 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // Giả lập gửi dữ liệu từ máy LIS
+  // Vòng đời mẫu xét nghiệm: lấy mẫu, rồi duyệt kết quả sau khi có kết quả
+  const advanceLabOrder = async (order, step, successMessage) => {
+    try {
+      await post(`/api/lis/orders/${order._id}/${step}`, {});
+      Alert.alert('Thành công', successMessage);
+      const ordersData = await get(`/api/patients/${patient?._id}/lab-orders`);
+      setLabOrders(ordersData.data || []);
+      setSelectedOrder((ordersData.data || []).find((o) => o._id === order._id) || null);
+    } catch (error) {
+      Alert.alert('Chưa thực hiện được', error.message || 'Vui lòng thử lại.');
+    }
+  };
+
   // Tạo chỉ định xét nghiệm mới từ UI
   const handleCreateLabOrder = async (category) => {
     const targetPatientId = patient?._id;
     if (!targetPatientId) return;
+
+    // Giới tính quyết định khoảng tham chiếu của kết quả nên phải lấy từ hồ sơ, không được đoán
+    const rawGender = String(patient.profile?.gender || '').trim().toLowerCase();
+    const patientGender = ['nam', 'male'].includes(rawGender) ? 'Nam' : ['nữ', 'nu', 'female'].includes(rawGender) ? 'Nữ' : null;
+    if (!patientGender) {
+      Alert.alert('Thiếu giới tính', 'Vui lòng cập nhật giới tính của bệnh nhân trước khi tạo phiếu xét nghiệm.');
+      return;
+    }
 
     try {
       const barcode = `LIS-${category === 'HOA_SINH' ? 'HS' : 'HH'}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -734,7 +754,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       await post(`/api/patients/${targetPatientId}/lab-orders`, {
         category,
         barcode,
-        patient_gender: patient.profile?.gender || (Math.random() > 0.5 ? 'Nữ' : 'Nam')
+        patient_gender: patientGender
       });
 
       Alert.alert('Thành công', `Đã tạo phiếu xét nghiệm mới (${category}) với mã Barcode: ${barcode}`);
@@ -934,7 +954,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Edit2 size={15} color={Colors.brandGreen} />
             <Text style={styles.manualFormTitle}>
-              {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
+              {selectedOrder.status === 'RESULTED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
           </View>
           <TouchableOpacity
@@ -987,7 +1007,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.manualFormFooter}>
-          {selectedOrder.status === 'COMPLETED' && (
+          {selectedOrder.status === 'RESULTED' && (
             <TouchableOpacity
               style={styles.cancelManualBtn}
               onPress={() => setIsEditingLab(false)}
@@ -1101,6 +1121,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               setSelectedOrder={setSelectedOrder}
               currentUser={currentUser}
               handleCreateLabOrder={handleCreateLabOrder}
+              advanceLabOrder={advanceLabOrder}
               patient={patient}
               isEditingLab={isEditingLab}
               setIsEditingLab={setIsEditingLab}

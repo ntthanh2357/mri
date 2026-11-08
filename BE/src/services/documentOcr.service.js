@@ -1,3 +1,4 @@
+import { aiFetch } from "../utils/aiClient.util.js";
 /**
  * Gọi AI service (FastAPI, endpoint /ocr_document) để đọc chữ trong ảnh giấy tờ.
  * AI service cũng trả về bản ảnh đã chuẩn hoá (JPEG, xoay đúng chiều, thu nhỏ, không còn EXIF/GPS) để lưu thay file gốc.
@@ -16,7 +17,7 @@ export const ocrDocumentImage = async (buffer, mimeType, { timeoutMs = 45000, au
   const form = new FormData();
   form.append("file", new Blob([buffer], { type: mimeType }), `document.${mimeType.split("/")[1]}`);
 
-  const res = await fetch(`${aiBaseUrl()}/ocr_document?autocrop=${autocrop ? "true" : "false"}&force=${force ? "true" : "false"}`, { method: "POST", body: form, signal: AbortSignal.timeout(timeoutMs) });
+  const res = await aiFetch(`${aiBaseUrl()}/ocr_document?autocrop=${autocrop ? "true" : "false"}&force=${force ? "true" : "false"}`, { method: "POST", body: form, signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`AI server trả về ${res.status}`);
   const data = await res.json();
   // Ảnh quá mờ / nhỏ / tối: AI service không đọc (model sẽ bịa nội dung) trừ khi gọi với force

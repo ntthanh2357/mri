@@ -6,6 +6,7 @@ import { createNotificationInternal } from "../../controllers/notification.contr
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { getDayRangeVN } from "../../utils/date.util.js";
 import { sendMriRescheduleEmail } from "../../services/email.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 const fmtVN = (d) => new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -266,6 +267,11 @@ export const getWeeklySchedule = async (req, res) => {
     const hospitalId = req.user.hospitalId;
     if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
 
+    const { weekStart, roomId } = req.query;
+    if (weekStart && Number.isNaN(new Date(weekStart).getTime())) {
+      return errorResponse(res, "Ngày bắt đầu tuần không hợp lệ.", 400);
+    }
+
     const startDate = weekStart ? new Date(weekStart) : (() => {
       const now = new Date();
       const day = now.getDay();
@@ -306,6 +312,20 @@ export const getWeeklySchedule = async (req, res) => {
 };
 
 // ─── A.4 — Xử lý cấp cứu (Emergency Override) ────────────────────────────────
+// Xếp lịch khẩn nâng ca lên "khẩn cấp", và mức này được miễn cổng viện phí. Vì vậy chỉ bác sĩ mới được
+// nâng ưu tiên; vai trò còn lại chỉ xếp lịch cho ca đã là cấp cứu và đã có chỉ định của bác sĩ.
+const PRIORITY_ESCALATION_ROLES = ["doctor", "department_head", "radiologist"];
+const checkEmergencySchedulingAllowed = (visit, user) => {
+  if (PRIORITY_ESCALATION_ROLES.includes(user.role)) return null;
+  if (visit.priority !== "khẩn cấp") {
+    return "Ca này chưa được xác định là cấp cứu. Chỉ bác sĩ mới được nâng mức ưu tiên.";
+  }
+  if (!visit.mriOrder?.orderedAt) {
+    return "Ca cấp cứu này chưa có chỉ định chụp MRI của bác sĩ.";
+  }
+  return null;
+};
+
 export const handleEmergencyOverride = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
@@ -315,6 +335,9 @@ export const handleEmergencyOverride = async (req, res) => {
 
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
+
+    const guardError = checkEmergencySchedulingAllowed(visit, req.user);
+    if (guardError) return errorResponse(res, guardError, 403);
 
     const now = new Date();
 
@@ -341,6 +364,15 @@ export const handleEmergencyOverride = async (req, res) => {
       visit.status = 'chờ chụp';
       visit.priority = 'khẩn cấp';
       await visit.save();
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.MRI_EMERGENCY_SCHEDULED,
+        actorId: req.user.id,
+        actorRole: req.user.role,
+        hospitalId,
+        targetModel: "Visit",
+        targetId: String(visit._id),
+        metadata: { action: "booked_empty_slot", slotId: String(slot._id) },
+      });
       return successResponse(res, {
         slot: { ...slot.toObject(), roomId: { _id: window.room._id, name: window.room.name } },
         action: 'booked_empty_slot',
@@ -404,7 +436,19 @@ export const confirmReschedule = async (req, res) => {
     const originalStartTime = slot.startTime;
 
     // Đặt slot cho ca cấp cứu
-    const emergencyVisit = await Visit.findById(emergencyVisitId);
+    const emergencyVisit = await Visit.findOne({ _id: emergencyVisitId, hospitalId: req.user.hospitalId });
+    if (!emergencyVisit) return errorResponse(res, "Không tìm thấy lượt khám cấp cứu.", 404);
+    const guardError = checkEmergencySchedulingAllowed(emergencyVisit, req.user);
+    if (guardError) return errorResponse(res, guardError, 403);
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.MRI_EMERGENCY_SCHEDULED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: req.user.hospitalId,
+      targetModel: "Visit",
+      targetId: String(emergencyVisit._id),
+      metadata: { action: "rescheduled_slot", slotId: String(slot._id), displacedVisitId: originalVisitId ? String(originalVisitId) : null },
+    });
     slot.visitId = emergencyVisitId;
     slot.patientId = emergencyVisit?.patientId;
     slot.priority = 1;

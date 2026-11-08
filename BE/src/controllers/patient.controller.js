@@ -1,5 +1,14 @@
 import { User } from "../models/user.model.js";
 import { Visit } from "../models/visit.model.js";
+
+// Đơn thuốc và phiếu xét nghiệm phải gắn đúng lượt khám để tính tiền đúng ca.
+// Client không gửi thì lấy lượt khám đang mở gần nhất của bệnh nhân.
+const CLOSED_VISIT_STATUSES = ["hoàn tất", "đã đóng", "đã hủy", "no_show"];
+const resolveVisitId = async (req, patientId) => {
+  if (req.body?.visitId) return req.body.visitId;
+  const open = await Visit.findOne({ patientId, status: { $nin: CLOSED_VISIT_STATUSES } }).sort({ createdAt: -1 }).select("_id").lean();
+  return open?._id || null;
+};
 import { VitalSign } from "../models/vitalSign.model.js";
 import { LabOrder } from "../models/labOrder.model.js";
 import { Prescription } from "../models/prescription.model.js";
@@ -373,7 +382,7 @@ export const addPatientVitals = async (req, res) => {
     }
 
     const newVital = new VitalSign({
-      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
+      patient_id: patientId, visit_id: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
       pulse,
       blood_pressure,
       spo2,
@@ -436,7 +445,7 @@ export const createPatientLabOrder = async (req, res) => {
     const genderToUse = patient_gender || "Nam";
 
     const newOrder = new LabOrder({
-      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
+      patient_id: patientId, visitId: await resolveVisitId(req, patientId), hospitalId: req.user?.hospitalId || null,
       patient_gender: genderToUse, hospitalId: resolvedHospitalId,
       barcode,
       category,
@@ -538,7 +547,7 @@ export const addPatientPrescription = async (req, res) => {
 
     const hasCriticalWarning = safetyCheck.warnings && safetyCheck.warnings.some(w => w.severity === "CRITICAL");
     const newItem = new Prescription({
-      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
+      patient_id: patientId, visitId: await resolveVisitId(req, patientId), hospitalId: req.user?.hospitalId || null,
       doctorId: req.user?.id || null,
       doctor_name: doctor_name || req.user?.profile?.name || "Bác sĩ điều trị",
       diagnosis,

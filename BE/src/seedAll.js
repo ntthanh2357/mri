@@ -42,6 +42,7 @@ import { Notification } from "./models/notification.model.js";
 import { SupportTicket } from "./models/supportTicket.model.js";
 import { Dataset } from "./models/dataset.model.js";
 import { AuditLog } from "./models/auditLog.model.js";
+import { AuditChainAnchor } from "./models/auditChainAnchor.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
@@ -104,6 +105,7 @@ const seedComprehensiveDatabase = async () => {
         SupportTicket.deleteMany({}),
         Dataset.deleteMany({}),
         AuditLog.deleteMany({}),
+        AuditChainAnchor.deleteMany({}),
         ImagingResult.deleteMany({}),
         // MRI Image & AI collections explicitly cleared and kept empty per user request
         DicomStudy.deleteMany({}),

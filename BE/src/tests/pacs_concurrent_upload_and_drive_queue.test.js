@@ -119,7 +119,7 @@ describe("Tối ưu Lưu trữ Cục bộ (Stream/Chunked/Dedup) & Hàng đợi 
     configurePacsQueues({
       drive: { maxConcurrency: 2, rateLimitDelayMs: 5, baseRetryDelayMs: 20, maxRetries: 2 },
       customDriveUploader: async (_encBuf, relativeDir, fileName) => {
-        driveUploadCallCount++;
+        if (fileName.startsWith("t1c_slice_")) driveUploadCallCount++;
         await sleep(15);
         return {
           driveFileId: `DRIVE_FILE_${driveUploadCallCount}_${fileName}`,
@@ -176,6 +176,35 @@ describe("Tối ưu Lưu trữ Cục bộ (Stream/Chunked/Dedup) & Hàng đợi 
       expect(dup.driveFileId).toBe(syncedFirst.driveFileId);
     }
     expect(driveUploadCallCount).toBe(1);
+  });
+
+  it("2b. Cùng SHA-256 nhưng khác viện: mỗi viện có bản sao Drive riêng, không kế thừa khóa của viện khác", async () => {
+    let tenantUploads = 0;
+    configurePacsQueues({
+      drive: { maxConcurrency: 2, rateLimitDelayMs: 5, baseRetryDelayMs: 20, maxRetries: 2 },
+      customDriveUploader: async (_encBuf, relativeDir, fileName) => {
+        if (fileName.startsWith("tenant_dedup_")) tenantUploads++;
+        return { driveFileId: `DRIVE_${fileName}`, driveFolderId: `DRIVE_FOLDER_${relativeDir}`, md5Checksum: "mock_md5", size: 1024 };
+      },
+    });
+    const payload = Buffer.from(`TENANT_DEDUP_${Date.now()}_${Math.random()}`);
+    const putFor = async (hospitalId, fileName) => {
+      const saved = await storageService.put({ category: "pacs", studyId: "TENANT_DEDUP", fileName, buffer: payload, mimeType: "image/jpeg", hospitalId, syncToDrive: true });
+      createdFileIds.push(saved.fileId);
+      for (let i = 0; i < 40; i++) {
+        const check = await StoredMedicalFile.findById(saved._id).lean();
+        if (check?.syncStatus === "SYNCED") return check;
+        await sleep(20);
+      }
+      return StoredMedicalFile.findById(saved._id).lean();
+    };
+
+    const first = await putFor(new mongoose.Types.ObjectId(), "tenant_dedup_a.jpg");
+    const second = await putFor(new mongoose.Types.ObjectId(), "tenant_dedup_b.jpg");
+    expect(first.syncStatus).toBe("SYNCED");
+    expect(second.syncStatus).toBe("SYNCED");
+    expect(second.driveFileId === first.driveFileId).toBe(false);
+    expect(tenantUploads).toBe(2);
   });
 
   it("3. Native Chunked Upload (Băm nhỏ file -> Tải lên đảo thứ tự -> Ghép Stream -> Kiểm định SHA-256 & Instant Dedup)", async () => {

@@ -10,19 +10,15 @@ export const emrApi = {
   updateRecord: (id, data) => put(`/emr/records/${id}`, data),
   getVersions: (recordId) => get(`/emr/records/${recordId}/versions`),
   
-  // Care Sheets
-  getCareSheets: (visitId) => get(`/emr/care-sheets/${visitId}`),
-  createCareSheet: (data) => post('/emr/care-sheets', data),
-
-  // Vital Signs
-  getVitalSigns: (patientId) => get(`/emr/vital-signs/${patientId}`),
-  createVitalSign: (data) => post('/emr/vital-signs', data),
-
-  // Consultations & Consents
-  getConsultations: (visitId) => get(`/emr/consultations/${visitId}`),
-  createConsultation: (data) => post('/emr/consultations', data),
-  getConsentForms: (visitId) => get(`/emr/consent-forms/${visitId}`),
-  signConsentForm: (id, signatureData) => post(`/emr/consent-forms/${id}/sign`, signatureData),
+  // Các phần con của hồ sơ theo đúng route backend
+  getCareSheets: (recordId) => get(`/emr/records/${recordId}/care-sheets`),
+  createCareSheet: (recordId, data) => post(`/emr/records/${recordId}/care-sheets`, data),
+  getConsultations: (recordId) => get(`/emr/records/${recordId}/consultations`),
+  createConsultation: (recordId, data) => post(`/emr/records/${recordId}/consultations`, data),
+  approveTumorBoard: (consultationId, data) => post(`/emr/consultations/${consultationId}/approve-tumor-board`, data),
+  getConsentForms: (recordId) => get(`/emr/records/${recordId}/consents`),
+  createConsentForm: (recordId, data) => post(`/emr/records/${recordId}/consents`, data),
+  signConsentForm: (consentId, signatureData) => put(`/emr/consents/${consentId}/sign`, signatureData),
 };
 
 export default emrApi;

@@ -20,6 +20,7 @@ const LabOrdersTab = ({
   setIsEditingLab,
   getAbnormalDirection,
   renderManualLabForm,
+  advanceLabOrder,
   styles,
 }) => {
   return (
@@ -51,9 +52,9 @@ const LabOrdersTab = ({
                         {order.category === 'HOA_SINH' ? 'Hóa sinh máu' : 'Huyết học'}
                       </Text>
                     </View>
-                    <View style={[styles.statusBadgeSmall, order.status === 'COMPLETED' ? styles.badgeSuccess : styles.badgePending]}>
+                    <View style={[styles.statusBadgeSmall, ['VERIFIED', 'COMPLETED'].includes(order.status) ? styles.badgeSuccess : styles.badgePending]}>
                       <Text style={styles.badgeTextSmall}>
-                        {order.status === 'COMPLETED' ? 'Đã trả KQ' : 'Chờ KQ'}
+                        {['VERIFIED', 'COMPLETED'].includes(order.status) ? 'Đã trả KQ' : 'Chờ KQ'}
                       </Text>
                     </View>
                   </View>
@@ -147,7 +148,17 @@ const LabOrdersTab = ({
                 )}
               </View>
 
-              {selectedOrder.status === 'COMPLETED' && !isEditingLab && currentUser?.role !== 'patient' && (
+              {selectedOrder.status === 'PENDING' && ['nurse', 'technician', 'lab_technician', 'doctor', 'department_head', 'hospital_admin'].includes(currentUser?.role) && (
+                <TouchableOpacity style={styles.saveManualBtn} onPress={() => advanceLabOrder(selectedOrder, 'collect', 'Đã ghi nhận lấy mẫu.')}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Ghi nhận đã lấy mẫu</Text>
+                </TouchableOpacity>
+              )}
+              {selectedOrder.status === 'RESULTED' && ['doctor', 'department_head', 'technician', 'lab_technician', 'hospital_admin'].includes(currentUser?.role) && (
+                <TouchableOpacity style={styles.saveManualBtn} onPress={() => advanceLabOrder(selectedOrder, 'verify', 'Đã duyệt kết quả xét nghiệm.')}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Duyệt kết quả xét nghiệm</Text>
+                </TouchableOpacity>
+              )}
+              {selectedOrder.status === 'RESULTED' && !isEditingLab && currentUser?.role !== 'patient' && (
                 <TouchableOpacity
                   style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: Colors.brandGreen }]}
                   onPress={() => setIsEditingLab(true)}
@@ -158,7 +169,7 @@ const LabOrdersTab = ({
               )}
 
               {/* Bảng kết quả chi tiết */}
-              {selectedOrder.status === 'COMPLETED' && !isEditingLab ? (
+              {(currentUser?.role === 'patient' ? ['VERIFIED', 'COMPLETED'] : ['RESULTED', 'VERIFIED', 'COMPLETED']).includes(selectedOrder.status) && !isEditingLab ? (
                 <View style={styles.tableContainer}>
                   <View style={styles.tableRowHeader}>
                     <Text style={[styles.colHeader, { flex: 2.2 }]}>Tên chỉ số xét nghiệm</Text>
@@ -202,7 +213,7 @@ const LabOrdersTab = ({
                     );
                   })}
                 </View>
-              ) : currentUser?.role !== 'patient' ? (
+              ) : currentUser?.role !== 'patient' && !['VERIFIED', 'COMPLETED'].includes(selectedOrder.status) ? (
                 renderManualLabForm()
               ) : (
                 <View style={styles.pendingReportBox}>

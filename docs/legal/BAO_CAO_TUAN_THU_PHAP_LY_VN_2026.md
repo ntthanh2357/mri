@@ -1,4 +1,13 @@
 # BÁO CÁO RÀ SOÁT TUÂN THỦ PHÁP LÝ VIỆT NAM (2026)
+
+> **Đính chính kỹ thuật tháng 11/2026 (v3.4), chờ pháp chế rà soát toàn văn báo cáo này.** Các điểm sau trong báo cáo không còn đúng với hệ thống hoặc văn bản hiện hành:
+>
+> - Chữ ký báo cáo CĐHA là hash toàn vẹn nội bộ (`internal_hash`), chưa phải chữ ký số PAdES hay PKI.
+> - Thông tư 46/2018/TT-BYT đã được thay bằng Thông tư 13/2025/TT-BYT. Luật An ninh mạng 2018 đã được thay bằng Luật 116/2025/QH15.
+> - Hệ thống không còn lập báo cáo STR theo Thông tư 35/2013/TT-NHNN, vì Điều 4 Luật Phòng, chống rửa tiền không liệt kê bệnh viện là đối tượng báo cáo. Khoản hoàn lớn đi theo kiểm soát nội bộ.
+> - Việc xếp hệ thống AI vào nhóm rủi ro cao chưa được xác nhận theo Quyết định 33/2026/QĐ-TTg.
+> - Yêu cầu người chứng kiến khi ký y lệnh thuốc gây nghiện, hướng thần là quy định nội bộ của hệ thống; chưa đối chiếu được với Thông tư 20/2017/TT-BYT.
+
 ### DỰ ÁN: HỆ THỐNG Y TẾ SỐ & CHẨN ĐOÁN HÌNH ẢNH U NÃO (NEUROSCAN AI)
 
 *Cơ sở phương pháp: Bộ công cụ mã nguồn mở [vn-law-check](https://github.com/mhfed/vn-law-check)*  

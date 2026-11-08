@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { Hospital } from "../models/hospital.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
+import { recordAuditLog } from "./auditLog.service.js";
 
 /**
  * Lấy nhật ký kiểm toán (UC-HADM-13) — hỗ trợ lọc nhóm hành động lâm sàng nhạy cảm,
@@ -67,15 +68,20 @@ export const getAuditLogs = async (hospitalId = null, filters = {}) => {
  * @returns {{ modifiedCount: number }} exact number of records changed
  */
 export const anonymizeAuditLogs = async (adminId) => {
+  // Bản ghi chuỗi v2 lưu bản băm người thực hiện nên ẩn danh không làm đứt chuỗi.
+  // Bản ghi chuỗi cũ băm trực tiếp tên người thực hiện: sửa sẽ bị báo là giả mạo, nên giữ nguyên.
   const result = await AuditLog.updateMany(
-    { entity: { $in: ["Patient", "MedicalRecord"] } },
-    { $set: { performedBy: "REDACTED-HIPAA" } }
+    {
+      entity: { $in: ["Patient", "MedicalRecord"] },
+      $or: [{ sequenceNumber: { $exists: false } }, { hashVersion: 2 }],
+    },
+    { $set: { performedBy: "REDACTED-HIPAA", redactedAt: new Date() } }
   );
 
   const modifiedCount = result.modifiedCount;
 
   // Create an audit trail of the anonymization itself (Requirement 11.5)
-  await AuditLog.create({
+  await recordAuditLog({
     action: "anonymize-data",
     entity: "AuditLog",
     entityId: "bulk",

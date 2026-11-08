@@ -110,7 +110,10 @@ export const getSystemMetrics = async (req, res) => {
   try {
     // [BUG-SA-06 FIX]: system_admin hoặc admin tổng không bị ép theo hospitalId null
     const isSystemAdmin = req.user.role === 'system_admin' || (req.user.role === 'admin' && !req.user.hospitalId);
-    const hospitalFilter = (!isSystemAdmin && req.user.hospitalId) ? { hospitalId: req.user.hospitalId } : {};
+    if (!isSystemAdmin && !req.user.hospitalId) {
+      return res.status(403).json({ success: false, message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
+    const hospitalFilter = isSystemAdmin ? {} : { hospitalId: req.user.hospitalId };
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

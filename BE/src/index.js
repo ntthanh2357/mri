@@ -21,6 +21,7 @@ import { securityHeaders } from "./middlewares/securityHeaders.middleware.js";
 import { sanitizeNoSql } from "./middlewares/noSqlSanitize.middleware.js";
 import { secureUploadsProtection } from "./middlewares/secureUploads.middleware.js";
 import { authRateLimiter, b2cRateLimiter } from "./middlewares/rateLimiter.middleware.js";
+import { requireSignedUpload, signUploadUrlsInResponse, stripUploadSignatures } from "./middlewares/uploadSignature.middleware.js";
 
 // Middlewares
 // 1. Gắn HTTP Security Headers chuẩn OWASP (Clickjacking, MIME-Sniffing, XSS)
@@ -77,10 +78,18 @@ app.use((req, res, next) => {
 // 4. Khử độc NoSQL Injection trên toàn bộ req.body, req.query, req.params
 app.use(sanitizeNoSql);
 
+// 4b. Link tệp y khoa có chữ ký: API trả link đã ký, dữ liệu client gửi lên được bỏ chữ ký trước khi lưu
+app.use(stripUploadSignatures);
+app.use(signUploadUrlsInResponse);
+
 // 5. Cổng bảo vệ thư mục /uploads: chặn tải trực tiếp file sao lưu (.json), mã lệnh và path traversal
-app.use("/uploads", secureUploadsProtection, express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", requireSignedUpload, secureUploadsProtection, express.static(path.join(__dirname, "../uploads")));
 
 // 6. Rate Limiters chống Brute-Force & Credential Stuffing
+// Số proxy tin cậy phía trước app (production mặc định 1 = nginx). Sai số này thì req.ip sai,
+// và rate limit đếm nhầm toàn bộ người dùng vào IP của nginx hoặc tin IP do client giả.
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === "production" ? 1 : 0));
+if (trustProxyHops > 0) app.set("trust proxy", trustProxyHops);
 app.use("/auth", authRateLimiter);
 app.use("/api/v1/patient-b2c", b2cRateLimiter);
 

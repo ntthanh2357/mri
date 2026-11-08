@@ -1,4 +1,5 @@
 import { AiJob } from "./models/aiJob.model.js";
+import { aiFetch } from "../../utils/aiClient.util.js";
 import { DicomStudy } from "./models/dicomStudy.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { Visit } from "../../models/visit.model.js";
@@ -265,7 +266,7 @@ async function processAiJobAsync(jobId, hospitalId) {
         const predictUrl = `${AI_SERVER_URL}/predict`;
         console.log(`[AiJob ${jobId}] Gửi ảnh tới AI Engine: ${predictUrl}`);
 
-        const aiResponse = await fetch(predictUrl, {
+        const aiResponse = await aiFetch(predictUrl, {
           method: "POST",
           body: formData,
         });

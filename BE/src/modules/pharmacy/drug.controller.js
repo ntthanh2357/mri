@@ -209,7 +209,7 @@ export const createDrug = async (req, res) => {
       drug.stock.quantity = sumBatches(initialBatches);
     }
 
-    // Nhật ký nhập kho ban đầu (TT46/2018 — mọi biến động kho phải có movement)
+    // Nhật ký nhập kho ban đầu (TT 13/2025 — mọi biến động kho phải có movement)
     if (initialBatches.length > 0) {
       drug.stockMovements.push({
         type: "import",
@@ -224,7 +224,7 @@ export const createDrug = async (req, res) => {
 
     await drug.save();
 
-    // Nhật ký kiểm toán trung tâm (tạo danh mục thuốc là quyết định quản trị — TT46/2018)
+    // Nhật ký kiểm toán trung tâm (tạo danh mục thuốc là quyết định quản trị — TT 13/2025)
     await auditPharmacy({
       action: AUDIT_ACTIONS.DRUG_CATALOG_CREATED,
       entity: "Drug",
@@ -490,7 +490,7 @@ export const updateStock = async (req, res) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // Nhật ký kiểm toán trung tâm — mọi biến động kho (nhập lô / xuất FEFO / kiểm kê)
-    // phải đi qua chuỗi băm kiểm toán theo GPP & TT46/2018 (UC-PHA-07)
+    // phải đi qua chuỗi băm kiểm toán theo GPP & TT 13/2025 (UC-PHA-07)
     await auditPharmacy({
       action: AUDIT_ACTIONS.DRUG_STOCK_ADJUSTED,
       entity: "Drug",
@@ -703,10 +703,13 @@ export const getPharmacyQueue = async (req, res) => {
     const hospitalId = resolveHospitalId(req);
     if (!hospitalId) return errorResponse(res, "Không xác định được bệnh viện.", 400);
 
-    const { status } = req.query;
+    const { status, postHocOnly } = req.query;
     const filter = { hospitalId };
 
-    if (status) {
+    if (postHocOnly === "true") {
+      // Trang hậu kiểm: đơn phát khẩn đang chờ dược sĩ khác kiểm tra, ở mọi trạng thái phát thuốc
+      filter.postHocReviewRequired = true;
+    } else if (status) {
       filter.dispenseStatus = status;
     } else {
       // Mặc định lấy các đơn cần xử lý: chờ thẩm định, sẵn sàng phát, hoặc chờ phát

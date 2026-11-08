@@ -17,7 +17,8 @@ import {
   UserCheck,
   AlertCircle
 } from 'lucide-react';
-import { post, put, patch } from '../services/api.service';
+import { get, post, put, patch } from '../services/api.service';
+import { useCurrentRole } from '../controllers/useCurrentRole';
 
 export default function InpatientEmergencyModal({
   isOpen,
@@ -41,6 +42,11 @@ export default function InpatientEmergencyModal({
   // Form states: Verbal Order
   const [orderText, setOrderText] = useState('');
   const [isControlledSubstance, setIsControlledSubstance] = useState(false);
+  const role = useCurrentRole();
+  const canPrescribe = ['doctor', 'department_head'].includes(role);
+  const canLeadEmergency = ['doctor', 'department_head', 'hospital_admin', 'admin', 'system_admin'].includes(role);
+  const [nurses, setNurses] = useState([]);
+  const [nurseReceivedId, setNurseReceivedId] = useState('');
 
   // Form states: Pre-MRI Safety Gate
   const [hemodynamicStable, setHemodynamicStable] = useState(false);
@@ -176,10 +182,22 @@ export default function InpatientEmergencyModal({
     }
   };
 
+  // Danh sách điều dưỡng để chọn người nhận y lệnh
+  useEffect(() => {
+    if (activeTab !== 'verbal_order' || nurses.length > 0) return;
+    get('/api/v1/hospital/staff')
+      .then((res) => setNurses((res?.staff || []).filter((s) => s.role === 'nurse' && !s.isLocked)))
+      .catch(() => {});
+  }, [activeTab, nurses.length]);
+
   // Ra y lệnh miệng
   const handleCreateVerbalOrder = async () => {
     if (!orderText.trim()) {
       alert('Vui lòng nhập nội dung y lệnh cấp cứu.');
+      return;
+    }
+    if (!nurseReceivedId) {
+      alert('Vui lòng chọn điều dưỡng nhận y lệnh để đọc lại.');
       return;
     }
     setLoading(true);
@@ -188,12 +206,13 @@ export default function InpatientEmergencyModal({
         emergencyEventId: eventData._id,
         orderText,
         isControlledSubstance,
-        countersignHours: 24
+        nurseReceivedId
       });
       if (res && res.success) {
         setEventData(res.data.event);
         setOrderText('');
-        alert('Ghi nhận y lệnh miệng thành công. Chờ bác sĩ ký số bổ sung EMR trong vòng 24 giờ.');
+        setNurseReceivedId('');
+        alert('Đã ghi nhận y lệnh miệng. Điều dưỡng được chọn sẽ xác nhận đọc lại, sau đó bạn ký bổ sung trong vòng 24 giờ tại mục "Y lệnh miệng chờ xử lý".');
         setActiveTab('overview');
       }
     } catch (err) {
@@ -346,7 +365,8 @@ export default function InpatientEmergencyModal({
             <Activity className="w-3.5 h-3.5" /> GCS & Dấu Hiệu Lâm Sàng
           </button>
 
-          <button
+          {canPrescribe && (
+<button
             onClick={() => setActiveTab('verbal_order')}
             className={`px-3.5 py-2 rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'verbal_order'
@@ -356,8 +376,10 @@ export default function InpatientEmergencyModal({
           >
             <Pill className="w-3.5 h-3.5" /> Y Lệnh Miệng (24h)
           </button>
+)}
 
-          <button
+          {canLeadEmergency && (
+<button
             onClick={() => setActiveTab('mri_gate')}
             className={`px-3.5 py-2 rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'mri_gate'
@@ -367,8 +389,10 @@ export default function InpatientEmergencyModal({
           >
             <Scan className="w-3.5 h-3.5" /> Pre-MRI Safety Gate
           </button>
+)}
 
-          <button
+          {canLeadEmergency && (
+<button
             onClick={() => setActiveTab('icu_bed')}
             className={`px-3.5 py-2 rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'icu_bed'
@@ -378,6 +402,7 @@ export default function InpatientEmergencyModal({
           >
             <BedDouble className="w-3.5 h-3.5" /> Giữ Giường Neuro-ICU
           </button>
+)}
 
           <button
             onClick={() => setActiveTab('timeline')}
@@ -390,7 +415,8 @@ export default function InpatientEmergencyModal({
             <Clock className="w-3.5 h-3.5" /> Mốc Thời Gian (Audit)
           </button>
 
-          <button
+          {canLeadEmergency && (
+<button
             onClick={() => setActiveTab('closure')}
             className={`px-3.5 py-2 rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'closure'
@@ -400,6 +426,7 @@ export default function InpatientEmergencyModal({
           >
             <CheckCircle2 className="w-3.5 h-3.5" /> Đóng sự kiện
           </button>
+)}
         </div>
 
         {/* Modal Body */}
@@ -456,12 +483,14 @@ export default function InpatientEmergencyModal({
                       >
                         <UserCheck className="w-3.5 h-3.5" /> Tôi Nhận Ca (ACK)
                       </button>
-                      <button
+                      {canLeadEmergency && (
+<button
                         onClick={() => setShowCancelPrompt(true)}
                         className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
                       >
                         <Undo2 className="w-3.5 h-3.5" /> Hủy Báo Động Nhầm
                       </button>
+)}
                     </div>
                   </div>
 
@@ -538,7 +567,8 @@ export default function InpatientEmergencyModal({
 
                   {/* Lối tắt hành động nhanh */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-                    <button
+                    {canPrescribe && (
+<button
                       onClick={() => setActiveTab('verbal_order')}
                       className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-left transition-all"
                     >
@@ -546,8 +576,10 @@ export default function InpatientEmergencyModal({
                       <p className="text-xs font-bold text-slate-800">Ra Y Lệnh Miệng</p>
                       <p className="text-[10px] text-slate-500">Thuốc chống phù não, cắt cơn</p>
                     </button>
+)}
 
-                    <button
+                    {canLeadEmergency && (
+<button
                       onClick={() => setActiveTab('mri_gate')}
                       className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-left transition-all"
                     >
@@ -555,8 +587,10 @@ export default function InpatientEmergencyModal({
                       <p className="text-xs font-bold text-slate-800">Pre-MRI Safety Gate</p>
                       <p className="text-[10px] text-slate-500">Chèn lịch MRI 3.0T khẩn</p>
                     </button>
+)}
 
-                    <button
+                    {canLeadEmergency && (
+<button
                       onClick={() => setActiveTab('icu_bed')}
                       className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-left transition-all"
                     >
@@ -564,8 +598,10 @@ export default function InpatientEmergencyModal({
                       <p className="text-xs font-bold text-slate-800">Giữ Giường ICU</p>
                       <p className="text-[10px] text-slate-500">Đơn nguyên Hồi sức U Não</p>
                     </button>
+)}
 
-                    <button
+                    {canLeadEmergency && (
+<button
                       onClick={() => setActiveTab('closure')}
                       className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-left transition-all"
                     >
@@ -573,6 +609,7 @@ export default function InpatientEmergencyModal({
                       <p className="text-xs font-bold text-slate-800">Đóng sự kiện</p>
                       <p className="text-[10px] text-slate-500">Chốt Outcome & Audit</p>
                     </button>
+)}
                   </div>
                 </div>
               )}
@@ -684,6 +721,21 @@ export default function InpatientEmergencyModal({
                     />
                   </div>
 
+                  <div>
+                    <label htmlFor="verbal-order-nurse" className="block text-xs font-bold text-slate-700 mb-1">Điều dưỡng nhận y lệnh và đọc lại:</label>
+                    <select
+                      id="verbal-order-nurse"
+                      value={nurseReceivedId}
+                      onChange={(e) => setNurseReceivedId(e.target.value)}
+                      className="w-full text-xs p-3 border border-slate-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                    >
+                      <option value="">Chọn điều dưỡng</option>
+                      {nurses.map((n) => (
+                        <option key={n._id} value={n._id}>{n.profile?.name || n.email}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
                     <input
                       type="checkbox"
@@ -692,7 +744,7 @@ export default function InpatientEmergencyModal({
                       className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500"
                     />
                     <span className="text-xs font-bold text-slate-800">
-                      Thuốc hướng thần / Gây nghiện (Tuân thủ Thông tư 20/2017/TT-BYT - Đối soát tủ trực)
+                      Thuốc gây nghiện, hướng thần (cần người chứng kiến khi ký bổ sung)
                     </span>
                   </label>
 
@@ -701,7 +753,7 @@ export default function InpatientEmergencyModal({
                     onClick={handleCreateVerbalOrder}
                     className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs"
                   >
-                    Ban Hành Y Lệnh Miệng Khẩn Cấp (Read-Back Confirmed)
+                    Ban hành y lệnh miệng, chờ điều dưỡng đọc lại
                   </button>
                 </div>
               )}

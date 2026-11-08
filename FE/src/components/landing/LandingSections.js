@@ -131,7 +131,7 @@ const SectionHead = ({ eyebrow, title, sub, center = true, light = false }) => (
 const SERVICES = [
   { icon: Brain, color: C.blue, bg: C.blueLight, title: 'Chụp MRI sọ não', desc: 'Máy cộng hưởng từ 1.5T/3T, bảng kiểm an toàn bắt buộc trước buồng chụp và lưu trữ DICOM trên Mini-PACS.' },
   { icon: Sparkles, color: C.green, bg: C.greenLight, title: 'Phân tích AI tức thì', desc: 'Phân loại Glioma, Meningioma, Pituitary hoặc không có u kèm bản đồ nhiệt và vùng khoanh tổn thương.' },
-  { icon: FileText, color: '#7C3AED', bg: '#F3EEFF', title: 'Bệnh án điện tử', desc: 'Hồ sơ EMR có phiên bản, ký số theo Thông tư 46/2018/TT-BYT và chia sẻ liên viện bằng mã QR.' },
+  { icon: FileText, color: '#7C3AED', bg: '#F3EEFF', title: 'Bệnh án điện tử', desc: 'Hồ sơ EMR có phiên bản, ký số theo Thông tư 13/2025/TT-BYT và chia sẻ liên viện bằng mã QR.' },
   { icon: HeartPulse, color: '#E11D48', bg: '#FFF0F3', title: 'Điều trị & nội trú', desc: 'Kê đơn có kiểm tra tương tác thuốc, sơ đồ giường Neuro-ICU và quy trình báo động cấp cứu.' },
 ];
 

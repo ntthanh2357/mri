@@ -18,6 +18,8 @@ import {
   resendActivation,
   verify2FA,
   resend2FA,
+  requestStepUpOtp,
+  verifyStepUpOtp,
 } from "./auth.controller.js";
 import { protect, optionalProtect } from "../../middlewares/auth.middleware.js";
 
@@ -36,6 +38,8 @@ router.put("/profile", protect, updateProfile);
 
 // Endpoints
 router.post("/logout/all", protect, logoutAll);
+router.post("/step-up/request", protect, requestStepUpOtp);
+router.post("/step-up/verify", protect, verifyStepUpOtp);
 router.put("/password", protect, changePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);

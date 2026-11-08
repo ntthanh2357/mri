@@ -44,7 +44,7 @@ export const streamStoredFile = async (req, res) => {
     const { stream, file } = await storageService.get(fileId);
 
     // Kiểm tra quyền truy cập (chống IDOR giữa bệnh nhân và giữa các bệnh viện)
-    if (!(await ensureFileAccess(file, req.user))) {
+    if (!req.signedFileAccess && !(await ensureFileAccess(file, req.user))) {
       return res.status(403).json({
         success: false,
         message: "Bạn không có quyền truy cập tệp tin y tế này.",
@@ -302,6 +302,7 @@ export const completeChunkedUpload = async (req, res) => {
       mimeType: session.mimeType,
       patientId: session.patientId,
       uploadedBy: session.uploadedBy || req.user?.id || null,
+      hospitalId: req.user?.hospitalId || null,
     });
 
     const targetSha = (expectedSha256 || session.expectedSha256 || "").toLowerCase().trim();

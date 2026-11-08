@@ -333,7 +333,7 @@ export const calculateCopay = async (req, res) => {
 
     const patientAmount = totalAmount - bhytAmount;
 
-    // Ghi nhận Audit Log (TT46/2018/TT-BYT)
+    // Ghi nhận Audit Log (TT 13/2025/TT-BYT)
     try {
       if (bhytAmount > 0) {
         await recordAuditLog({

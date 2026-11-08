@@ -1,4 +1,5 @@
 import { ImagingResult } from "../models/imagingResult.model.js";
+import { evaluateImagingSignPermission } from "./imagingSignPolicy.service.js";
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
 
@@ -40,7 +41,7 @@ export const createImagingResultService = async ({ hospitalId, user, body }) => 
       err.statusCode = 403;
       throw err;
     }
-  } else if (!["doctor", "admin", "technician"].includes(user.role)) {
+  } else if (!["doctor", "radiologist", "department_head", "admin", "technician"].includes(user.role)) {
     const err = new Error("Bạn không có quyền thực hiện hành động này.");
     err.statusCode = 403;
     throw err;
@@ -120,12 +121,14 @@ export const signAndFinalizeResultService = async ({ resultId, hospitalId, user,
   if (updateData.procedure !== undefined) result.procedure = updateData.procedure;
   if (updateData.diagnosis !== undefined) result.diagnosis = updateData.diagnosis;
 
-  // Bác sĩ CĐHA ký duyệt số
-  if (user.role === "doctor" || user.role === "admin") {
+  // Bác sĩ CĐHA ký duyệt số, cùng thẩm quyền với các đường ký khác
+  const permission = await evaluateImagingSignPermission({ user, imaging: result });
+  if (permission.allowed) {
     result.radiologist = user.profile?.fullName || user.profile?.name || user.email;
     result.isSigned = true;
     result.signedAt = new Date();
     result.signedByDoctorId = user.id;
+    result.signMode = permission.mode;
   }
 
   await result.save();

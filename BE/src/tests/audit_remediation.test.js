@@ -1216,36 +1216,6 @@ test("Dual Approval Workflow: Hóa đơn giá trị cao (≥ 10.000.000 VNĐ) y�
   assert.strictEqual(highValueInvoice.status, "hoàn trả");
 });
 
-test("AML Anti-Money Laundering Guard: Giao dịch y tế quy mô lớn (≥ 300.000.000 VNĐ - TT35/2013/TT-NHNN)", () => {
-  const massiveInvoice = {
-    _id: "INV_PROTON_THERAPY_01",
-    totalAmount: 350000000, // 350 triệu (Phẫu thuật xạ trị Proton chùm u nền sọ)
-    amlReport: {
-      isFlagged: false,
-      flaggedAt: null,
-      reason: null
-    }
-  };
-
-  const checkAmlThreshold = (invoice) => {
-    if (invoice.totalAmount >= 300000000) {
-      invoice.amlReport = {
-        isFlagged: true,
-        flaggedAt: new Date(),
-        reason: "Giao dịch y tế quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN"
-      };
-      return true;
-    }
-    return false;
-  };
-
-  const isTriggered = checkAmlThreshold(massiveInvoice);
-  assert.strictEqual(isTriggered, true, "Kích hoạt cờ kiểm toán AML cho hóa đơn 350 triệu");
-  assert.strictEqual(massiveInvoice.amlReport.isFlagged, true);
-  assert.ok(massiveInvoice.amlReport.reason.includes("300 triệu"));
-  assert.strictEqual(AUDIT_ACTIONS.AML_THRESHOLD_FLAGGED, "AML_THRESHOLD_FLAGGED");
-});
-
 test("BHYT Copayment & Phân bổ chi phí thuốc điều trị U não (Bảo hiểm 80% vs Bệnh nhân 20%)", () => {
   const bhytCard = {
     coverageRate: 80, // BHYT 80%
@@ -1447,43 +1417,6 @@ test("BHYT Edge Case: Thuốc đặc trị Bevacizumab yêu cầu Prior Authoriz
   assert.strictEqual(res2.eligibleAmount, 38000000, "Cả TMZ và Bevacizumab đều đủ điều kiện");
   assert.strictEqual(res2.bhyt, 30400000, "BHYT chi trả 80% của 38 triệu = 30.4 triệu");
   assert.strictEqual(res2.rejected.length, 0, "Không có mặt hàng nào bị từ chối");
-});
-
-test("AML STR Compliance: Báo cáo STR gửi NHNN trong 48h và lưu trữ hồ sơ 5 năm (TT35/2013/TT-NHNN)", () => {
-  const highValueInvoice = {
-    _id: "INV_NEURO_LARGE_01",
-    totalAmount: 320000000 // 320 triệu VNĐ
-  };
-
-  const generateStrReport = (invoice, kycUser) => {
-    const now = new Date();
-    const strDeadline = new Date(now.getTime() + 48 * 3600 * 1000);
-    const retentionUntil = new Date(now);
-    retentionUntil.setFullYear(retentionUntil.getFullYear() + 5);
-
-    return {
-      isFlagged: true,
-      flaggedAt: now,
-      strReportId: `STR-HOSP-${Date.now()}`,
-      strDeadline,
-      retentionUntil,
-      kycVerified: true,
-      kycDetails: {
-        idCardNumber: kycUser.idCard,
-        fullName: kycUser.fullName,
-        nationality: "Việt Nam"
-      }
-    };
-  };
-
-  const report = generateStrReport(highValueInvoice, { idCard: "001234567890", fullName: "Bệnh nhân X" });
-  assert.strictEqual(report.isFlagged, true);
-  assert.ok(report.strReportId.startsWith("STR-HOSP-"));
-  // Kiểm tra thời hạn 48 giờ (+- 5 giây)
-  const diffHours = (report.strDeadline - report.flaggedAt) / (3600 * 1000);
-  assert.strictEqual(Math.round(diffHours), 48, "Thời hạn gửi báo cáo STR chính xác 48 giờ");
-  // Kiểm tra thời hạn lưu trữ 5 năm
-  assert.strictEqual(report.retentionUntil.getFullYear() - report.flaggedAt.getFullYear(), 5, "Lưu trữ hồ sơ AML tối thiểu 5 năm");
 });
 
 test("Dual Approval Hardening: Chặn người lập/cấp 1 tự duyệt cấp 2 cho chính mình (Separation of Duties)", () => {

@@ -109,6 +109,31 @@ export const resolveLocalUploadPath = (urlPath) => {
   return absolutePath;
 };
 
+const STORAGE_FILE_PATH = /^\/api\/v1\/storage\/files\/([^/?#]+)/;
+
+const loadStoredImage = async (fileId, maxBytes) => {
+  const { getFileBuffer } = await import("../services/storage/storageService.js");
+  let loaded;
+  try {
+    loaded = await getFileBuffer(fileId);
+  } catch (error) {
+    error.statusCode = error.status || 500;
+    throw error;
+  }
+  const { buffer, file } = loaded;
+  if (!String(file.mimeType || "").startsWith("image/")) {
+    const err = new Error("Tệp đã chọn không phải là ảnh nên không phân tích AI được.");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (buffer.length > maxBytes) {
+    const err = new Error("Tệp ảnh vượt quá dung lượng cho phép để phân tích AI.");
+    err.statusCode = 413;
+    throw err;
+  }
+  return { buffer, fileName: file.fileName, mimeType: file.mimeType };
+};
+
 /**
  * Trả về { buffer, fileName, mimeType } cho ảnh cần phân tích AI.
  * Ném lỗi có `statusCode` để controller trả đúng mã HTTP.
@@ -142,6 +167,9 @@ export const loadImageBuffer = async (imageUrl, { maxBytes = MAX_REMOTE_IMAGE_BY
       mimeType: ext === ".png" ? "image/png" : "image/jpeg",
     };
   }
+
+  const storedFile = value.match(STORAGE_FILE_PATH);
+  if (storedFile) return loadStoredImage(storedFile[1], maxBytes);
 
   // ── 2. URL công khai (Firebase/Google Storage...) ──────────────────────
   if (!/^https?:\/\//i.test(value)) {

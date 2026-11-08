@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { aiFetch } from "../../../utils/aiClient.util.js";
 import { User } from "../../../models/user.model.js";
 import { VitalSign } from "../../../models/vitalSign.model.js";
 import { LabOrder } from "../../../models/labOrder.model.js";
@@ -420,7 +421,7 @@ export async function consultAiPharmacist({ patientInfo, medications, diagnosis,
       tumor_ai_result: tumorAiResult || null
     };
 
-    const resp = await fetch(aiServerUrl, {
+    const resp = await aiFetch(aiServerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

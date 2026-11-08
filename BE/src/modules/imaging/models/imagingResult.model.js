@@ -205,9 +205,24 @@ const imagingResultSchema = new Schema(
       acknowledgedAt: { type: Date, default: null },
       clinicalNote: { type: String, default: '' }
     },
+    // Các lần xác nhận trước đó, không ghi đè để giữ vết ai đã đọc báo cáo
+    acknowledgmentHistory: [
+      {
+        acknowledgedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        acknowledgedByName: { type: String, default: '' },
+        acknowledgedAt: { type: Date },
+        clinicalNote: { type: String, default: '' },
+      },
+    ],
     // Lý do khi Trưởng khoa (department_head) ký thay Bác sĩ CĐHA (radiologist)
     actingRadiologistReason: { type: String, default: '' },
-    // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
+    // Căn cứ thẩm quyền của người ký (xem services/imagingSignPolicy.service.js)
+    signMode: {
+      type: String,
+      enum: ['radiologist', 'acting_department_head', 'ordering_doctor_exception', null],
+      default: null,
+    },
+    // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT 13/2025/TT-BYT)
     addenda: [
       {
         content: { type: String, required: true },

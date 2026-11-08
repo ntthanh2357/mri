@@ -49,7 +49,7 @@ export default function InterHospitalTransferView({ currentUser }) {
   const [detailModalItem, setDetailModalItem] = useState(null);
 
   const isReceptionistOrStaff = useMemo(() => {
-    return ['receptionist', 'doctor', 'admin', 'hospital_admin'].includes(currentUser?.role);
+    return ['receptionist', 'doctor', 'department_head', 'admin', 'hospital_admin'].includes(currentUser?.role);
   }, [currentUser?.role]);
 
   // Fetch danh sách hồ sơ chuyển viện

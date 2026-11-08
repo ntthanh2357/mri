@@ -1,3 +1,4 @@
+import { User } from "../../models/user.model.js";
 import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
@@ -342,23 +343,37 @@ export const getViewerManifest = async (req, res) => {
     const { id } = req.params;
     const hospitalId = req.user.hospitalId;
 
+    // Model CĐHA không có patientId nên bộ lọc tenancy của bệnh nhân không khớp; bên dưới kiểm tra đúng phim của họ
+    const imagingQuery = req.user.role === "patient" ? { bypassTenancy: true } : undefined;
+
     // Cho phép truyền studyId hoặc imagingResultId
-    let study = await DicomStudy.findById(id).lean();
+    let study = await DicomStudy.findById(id, null, imagingQuery).lean();
     let imagingResult = null;
 
     if (!study) {
-      imagingResult = await ImagingResult.findById(id).lean();
+      imagingResult = await ImagingResult.findById(id, null, imagingQuery).lean();
       if (imagingResult?.studyId) {
-        study = await DicomStudy.findById(imagingResult.studyId).lean();
+        study = await DicomStudy.findById(imagingResult.studyId, null, imagingQuery).lean();
       }
     } else {
       imagingResult = study.imagingResultId
-        ? await ImagingResult.findById(study.imagingResultId).lean()
-        : await ImagingResult.findOne({ studyId: study._id }).lean();
+        ? await ImagingResult.findById(study.imagingResultId, null, imagingQuery).lean()
+        : await ImagingResult.findOne({ studyId: study._id }, null, imagingQuery).lean();
     }
 
     if (!study && !imagingResult) {
       return errorResponse(res, "Không tìm thấy hồ sơ DICOM Study hoặc kết quả phim chụp.", 404);
+    }
+
+    // Bệnh nhân không gắn viện nên không qua được kiểm tra bên dưới: phải kiểm tra đúng phim của mình
+    if (req.user.role === "patient") {
+      const owner = await User.findById(req.user.id).select("profile.medicalId").lean();
+      const ownsStudy =
+        String(study?.patientId || "") === String(req.user.id) ||
+        (Boolean(imagingResult?.medicalId) && owner?.profile?.medicalId === imagingResult.medicalId);
+      if (!ownsStudy || imagingResult?.isSigned !== true) {
+        return errorResponse(res, "Bạn không có quyền xem phim chụp này.", 403);
+      }
     }
 
     const targetHospitalId = study?.hospitalId || imagingResult?.hospitalId;
@@ -379,7 +394,11 @@ export const getViewerManifest = async (req, res) => {
           sliceCount: s.sliceCount || (s.dicomFileUrls?.length || fallbackImages.length || 1),
           pixelSpacing: s.metadata?.pixelSpacing?.length === 2 ? s.metadata.pixelSpacing : [0.5, 0.5],
           sliceThickness: s.metadata?.sliceThickness || 3.0,
-          slices: (s.dicomFileUrls?.length ? s.dicomFileUrls : fallbackImages).map((url, sIdx) => ({
+          slices: (s.dicomFileUrls?.length
+            ? s.dicomFileUrls
+            : s.sliceFileIds?.length
+              ? s.sliceFileIds.map((fileId) => `/api/v1/storage/files/${fileId}`)
+              : fallbackImages).map((url, sIdx) => ({
             sliceIndex: sIdx + 1,
             imageUrl: url,
             isRepresentative: url === imagingResult?.representativeSliceUrl

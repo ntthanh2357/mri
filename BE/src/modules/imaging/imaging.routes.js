@@ -17,24 +17,31 @@ import {
   acknowledgeImagingReport,
   addImagingAddendum,
   addClinicalAddendum,
-  getPatientRanoTimeline
+  getPatientRanoTimeline,
+  getImagingSignPermission
 } from "./imaging.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 import { uploadImagingFile } from "../../middlewares/imagingUpload.middleware.js";
 
 const router = Router();
 
+// Dữ liệu CĐHA là hồ sơ người bệnh: chỉ người cần cho việc điều trị và tiếp nhận mới được đọc (Luật KCB 2023 Điều 69).
+// Quản trị nền tảng (admin, system_admin) không tham gia điều trị nên không đọc dữ liệu này.
+const IMAGING_STAFF_READ_ROLES = ["doctor", "radiologist", "department_head", "technician", "nurse", "receptionist", "hospital_admin"];
+// Bệnh nhân chỉ đọc được phim của chính mình, controller kiểm tra quyền sở hữu.
+const IMAGING_READ_ROLES = [...IMAGING_STAFF_READ_ROLES, "patient"];
+
 // Get all imaging results (Doctor/Admin/Nurse/Technician/Receptionist only)
-router.get("/", protect, getAllImagingResults);
+router.get("/", protect, checkRole(IMAGING_STAFF_READ_ROLES), getAllImagingResults);
 
 // Get patient's own imaging results (Requires login)
 router.get("/my-results", protect, getPatientResults);
 
 // Longitudinal RANO tumor trajectory by medicalId
-router.get("/patient/:medicalId/rano-timeline", protect, checkRole(["doctor", "radiologist", "department_head", "technician", "nurse", "admin", "hospital_admin"]), getPatientRanoTimeline);
+router.get("/patient/:medicalId/rano-timeline", protect, checkRole(["doctor", "radiologist", "department_head", "technician", "nurse", "hospital_admin"]), getPatientRanoTimeline);
 
 // Get specific patient's results (Requires login - Doctor/Admin only)
-router.get("/patient/:medicalId", protect, getPatientResultsByMedicalId);
+router.get("/patient/:medicalId", protect, checkRole(IMAGING_STAFF_READ_ROLES), getPatientResultsByMedicalId);
 
 // Upload imaging scan image or DICOM archive — chỉ KTV/bác sĩ của bệnh viện (P0-4)
 router.post("/upload", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), uploadImagingFile, uploadImagingImage);
@@ -53,20 +60,21 @@ router.post("/:id/explain-ai", protect, explainImagingResultAI);
 
 // Critical Finding Acknowledgment & Post-Signature Addendum
 router.post("/:id/acknowledge-critical", protect, checkRole(["doctor", "radiologist", "department_head", "admin", "hospital_admin"]), acknowledgeCriticalFinding);
-router.post("/:id/acknowledge", protect, checkRole(["doctor", "radiologist", "department_head"]), acknowledgeImagingReport);
+router.post("/:id/acknowledge", protect, checkRole(["doctor", "department_head"]), acknowledgeImagingReport);
 router.post("/:id/addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), addImagingAddendum);
-router.post("/:id/clinical-addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), addClinicalAddendum);
+router.post("/:id/clinical-addendum", protect, checkRole(["doctor", "department_head"]), addClinicalAddendum);
+router.get("/:id/sign-permission", protect, checkRole(["doctor", "radiologist", "department_head"]), getImagingSignPermission);
 
 // Get imaging results by visit ID
-router.get("/by-visit/:visitId", protect, getImagingResultByVisitId);
+router.get("/by-visit/:visitId", protect, checkRole(IMAGING_READ_ROLES), getImagingResultByVisitId);
 
 // Get imaging results by patient User ID (ObjectId) - fallback for patients without medicalId
-router.get("/by-patient/:patientId", protect, getResultsByPatientUserId);
+router.get("/by-patient/:patientId", protect, checkRole(IMAGING_STAFF_READ_ROLES), getResultsByPatientUserId);
 
 // Get single imaging result details (Requires login)
-router.get("/:id", protect, getResultById);
+router.get("/:id", protect, checkRole(IMAGING_READ_ROLES), getResultById);
 
-// Ký/duyệt báo cáo CĐHA — chỉ bác sĩ đọc phim (P0-2)
+// Ký báo cáo CĐHA: controller xét thẩm quyền cụ thể theo evaluateImagingSignPermission
 router.put("/:id", protect, checkRole(["doctor", "radiologist", "department_head"]), updateImagingResult);
 
 // Tạo kết quả CĐHA — KTV tạo ca chụp, bác sĩ đọc phim. Bệnh nhân KHÔNG được tạo (P0-3)

@@ -58,7 +58,15 @@ export const sendHospitalCredentials = async ({ itEmail, hospitalName, tempUsern
   }
 };
 
-export const sendOtpEmail = async (to, otpCode) => {
+export const sendOtpEmail = async (
+  to,
+  otpCode,
+  {
+    subject = "[NeuroScan AI] Mã xác thực đặt lại mật khẩu (OTP)",
+    purpose = "Chúng tôi nhận được yêu cầu đặt lại mật khẩu từ bạn. Vui lòng sử dụng mã OTP dưới đây để hoàn tất quá trình đặt lại mật khẩu:",
+    validity = "5 phút",
+  } = {}
+) => {
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
 
@@ -81,7 +89,7 @@ export const sendOtpEmail = async (to, otpCode) => {
     const mailOptions = {
       from: `"NeuroScan AI Support" <${emailUser}>`,
       to,
-      subject: "[NeuroScan AI] Mã xác thực đặt lại mật khẩu (OTP)",
+      subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
           <div style="text-align: center; margin-bottom: 24px;">
@@ -90,11 +98,11 @@ export const sendOtpEmail = async (to, otpCode) => {
           </div>
           <div style="padding: 20px; background-color: #f0fdf4; border-radius: 8px; margin-bottom: 24px;">
             <p style="margin-top: 0; color: #1f2937; font-size: 16px; font-weight: bold;">Chào bạn,</p>
-            <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">Chúng tôi nhận được yêu cầu đặt lại mật khẩu từ bạn. Vui lòng sử dụng mã OTP dưới đây để hoàn tất quá trình đặt lại mật khẩu:</p>
+            <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">${purpose}</p>
             <div style="text-align: center; margin: 24px 0;">
               <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #047857; background-color: #ffffff; padding: 12px 24px; border: 2px dashed #047857; border-radius: 8px; display: inline-block;">${otpCode}</span>
             </div>
-            <p style="color: #ef4444; font-size: 12px; margin-bottom: 0;">* Lưu ý: Mã OTP này có hiệu lực trong vòng 5 phút và chỉ sử dụng được 1 lần duy nhất. Vui lòng không chia sẻ mã này với bất kỳ ai.</p>
+            <p style="color: #ef4444; font-size: 12px; margin-bottom: 0;">* Lưu ý: Mã OTP này có hiệu lực trong vòng ${validity} và chỉ sử dụng được 1 lần duy nhất. Vui lòng không chia sẻ mã này với bất kỳ ai.</p>
           </div>
           <div style="border-top: 1px solid #f3f4f6; padding-top: 16px; text-align: center; color: #9ca3af; font-size: 12px;">
             <p style="margin: 0;">Đây là email tự động từ hệ thống NeuroScan AI, vui lòng không trả lời thư này.</p>

@@ -61,13 +61,22 @@ describe('Quy trình Cấp cứu U Não Chuẩn Y Khoa (Neuro-Oncology Emergency
       profile: { name: 'BS. Lê Minh Trí (Ngoại Thần Kinh)', specialty: 'Ngoại Thần Kinh' },
     };
 
+    const nurseObjectId = new mongoose.Types.ObjectId();
     nurseUser = {
-      id: new mongoose.Types.ObjectId().toString(),
-      _id: new mongoose.Types.ObjectId(),
+      id: nurseObjectId.toString(),
+      _id: nurseObjectId,
       role: 'nurse',
       hospitalId: mockHospitalId,
       profile: { name: 'ĐD. Nguyễn Thị Thảo', department: 'Khoa Ung Thư Não' },
     };
+    await User.create({
+      _id: nurseObjectId,
+      hospitalId: mockHospitalId,
+      email: `emergency_nurse_test_${Date.now()}@hospital.local`,
+      passwordHash: 'hashed',
+      role: 'nurse',
+      profile: nurseUser.profile,
+    });
 
     // Dọn dẹp dữ liệu cũ nếu có
     await User.deleteMany({ email: /emergency_patient_test/ });
@@ -199,8 +208,8 @@ describe('Quy trình Cấp cứu U Não Chuẩn Y Khoa (Neuro-Oncology Emergency
         emergencyEventId: createdEventId,
         medicalRecordId: mockRecord._id,
         orderText: 'Tiêm tĩnh mạch chậm Diazepam 10mg cắt cơn giật + Truyền tĩnh mạch nhanh Mannitol 20% 250ml trong 30 phút',
-        isControlledSubstance: true, // Thuốc hướng thần / gây nghiện (TT 20/2017)
-        countersignHours: 24,
+        isControlledSubstance: true,
+        nurseReceivedId: nurseUser.id,
       },
     };
     const res = createMockRes();
@@ -209,8 +218,8 @@ describe('Quy trình Cấp cứu U Não Chuẩn Y Khoa (Neuro-Oncology Emergency
 
     expect(res.statusCode).toBe(201);
     expect(res.data.verbalOrder.isControlledSubstance).toBe(true);
-    expect(res.data.verbalOrder.status).toBe('pending_countersign');
-    expect(res.data.verbalOrder.isReadBackConfirmed).toBe(true);
+    expect(res.data.verbalOrder.status).toBe('pending_readback');
+    expect(res.data.verbalOrder.isReadBackConfirmed).toBe(false);
 
     // Kiểm tra đã lưu vào MedicalRecord
     const updatedRecord = await MedicalRecord.findById(mockRecord._id);

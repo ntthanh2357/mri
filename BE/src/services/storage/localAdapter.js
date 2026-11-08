@@ -40,6 +40,9 @@ export const cleanPatientSlug = (name) => {
     .replace(/^_|_$/g, "");
 };
 
+// Mã ca chụp có thể đến từ client: chỉ giữ ký tự an toàn, không để ".." thoát khỏi thư mục ca bệnh
+const safePathSegment = (value) => String(value).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, "_");
+
 /**
  * Xây dựng đường dẫn logic chuẩn hóa (De-identified & Traceable Logical Path)
  * Ví dụ:
@@ -58,7 +61,7 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
   // Xây dựng tên thư mục ca bệnh: study_{studyId}_{PatientName}
   let studyFolderName = "study_general";
   if (studyId) {
-    const baseStudy = studyId.replace(/^study_/, "");
+    const baseStudy = safePathSegment(studyId).replace(/^study_/, "");
     const patSlug = patientName ? cleanPatientSlug(patientName) : "";
     if (patSlug && !baseStudy.toLowerCase().includes(patSlug.toLowerCase())) {
       studyFolderName = `study_${baseStudy}_${patSlug}`;
@@ -70,12 +73,12 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
   switch (category) {
     case "pacs": {
       if (sequenceName) {
-        return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", sequenceName, safeFileName);
+        return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", safePathSegment(sequenceName), safeFileName);
       }
       return path.posix.join("pacs", yyyy, mm, studyFolderName, safeFileName);
     }
     case "sequence_slice": {
-      const seq = sequenceName || "general_sequence";
+      const seq = safePathSegment(sequenceName || "general_sequence");
       return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", seq, safeFileName);
     }
     case "report": {
@@ -85,7 +88,7 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
       return path.posix.join("patient-uploads", "quarantine", safeFileName);
     }
     case "ai_temp": {
-      const token = studyId || `job_${Date.now()}`;
+      const token = safePathSegment(studyId || `job_${Date.now()}`);
       return path.posix.join("ai-temp", token, safeFileName);
     }
     case "backup": {

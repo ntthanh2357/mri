@@ -1,6 +1,6 @@
 /**
  * NeuroScan AI - Compliance & Security Feature Flags
- * Điều khiển bật/tắt các rào chắn an ninh theo chuẩn TT46/2018/TT-BYT, Luật 15/2023/QH15, HIPAA, OWASP.
+ * Điều khiển bật/tắt các rào chắn an ninh theo chuẩn TT 13/2025/TT-BYT, Luật 15/2023/QH15, HIPAA, OWASP.
  * Hỗ trợ cơ chế Rollback tức thời không cần redeploy khi phát hiện sự cố trên môi trường sản xuất.
  */
 

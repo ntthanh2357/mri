@@ -5,6 +5,8 @@ import { ImagingResult } from "../models/imagingResult.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { sendFcmNotification } from "../services/fcm.service.js";
 import { runPayOSReconcileJob } from "../modules/billing/payosReconcile.job.js";
+import { runVerbalOrderEscalationJob } from "../services/verbalOrderEscalation.service.js";
+import { runWithJobLock } from "../utils/jobLock.util.js";
 
 /**
  * A.6 — Scheduled Job Nhắc lịch chụp MRI 24h trước
@@ -79,13 +81,20 @@ export const runPeerReviewSamplingJob = async () => {
 
     let createdCount = 0;
     for (const item of sampled) {
+      const reviewer = await User.findOne({
+        hospitalId: item.hospitalId,
+        role: { $in: ['radiologist', 'department_head', 'doctor'] },
+        _id: { $ne: item.signedBy },
+        isLocked: { $ne: true },
+      }).select("_id").lean();
       const review = new PeerReview({
         hospitalId: item.hospitalId,
         imagingResultId: item._id,
         visitId: item.visitId,
         primaryDoctorId: item.signedBy, // BUG-04 FIX: field is 'signedBy' not 'signedByDoctorId'
         requestType: 'random_qa',       // BUG-03 FIX: field is 'requestType' not 'samplingType'
-        status: 'pending',
+        reviewerIds: reviewer ? [reviewer._id] : [],
+        status: reviewer ? 'in_review' : 'pending',
       });
       await review.save();
 
@@ -114,16 +123,20 @@ export const startBackgroundJobs = () => {
 
   // Chạy nhắc lịch MRI mỗi 1 giờ
   setInterval(() => {
-    runMriReminderJob();
+    runWithJobLock("mri-reminder", 55 * 60 * 1000, runMriReminderJob);
   }, 60 * 60 * 1000);
 
   // Đối soát VietQR PayOS mỗi 5 phút (tiền về khi màn QR đã đóng / webhook không tới) + 1 lần sau khi khởi động
-  setTimeout(runPayOSReconcileJob, 30 * 1000);
-  setInterval(runPayOSReconcileJob, 5 * 60 * 1000);
+  const reconcilePayOS = () => runWithJobLock("payos-reconcile", 4 * 60 * 1000, runPayOSReconcileJob);
+  setTimeout(reconcilePayOS, 30 * 1000);
+  setInterval(reconcilePayOS, 5 * 60 * 1000);
+
+  // Leo thang y lệnh miệng quá 15 phút chưa đọc lại, quá 24 giờ chưa ký bổ sung
+  setInterval(runVerbalOrderEscalationJob, 60 * 1000);
 
   // Chạy Peer Review QA sampling mỗi 24 giờ
   setInterval(() => {
-    runPeerReviewSamplingJob();
+    runWithJobLock("peer-review-sampling", 23 * 60 * 60 * 1000, runPeerReviewSamplingJob);
   }, 24 * 60 * 60 * 1000);
 };
 

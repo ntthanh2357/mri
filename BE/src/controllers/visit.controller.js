@@ -14,8 +14,12 @@ import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.j
 import {
   submitMriSafetyCheckService,
   requestMriRescanService,
-  cancelMriOrderService
+  cancelMriOrderService,
+  assertPaymentGateOpen,
+  shouldEnforcePaymentGate,
+  syncMriSlotWithVisit
 } from "../services/visit.service.js";
+import { Task } from "../models/task.model.js";
 import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
@@ -163,6 +167,19 @@ export const createVisit = async (req, res) => {
     });
 
     await visit.save();
+
+    // Mức "khẩn cấp" được miễn cổng viện phí. Không chặn ở tiếp nhận vì không được chậm cấp cứu, nhưng phải có vết để hậu kiểm.
+    if (visit.priority === "khẩn cấp") {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.VISIT_EMERGENCY_FLAGGED,
+        actorId: req.user.id,
+        actorRole: req.user.role,
+        hospitalId,
+        targetModel: "Visit",
+        targetId: String(visit._id),
+        metadata: { reason: reason || "" },
+      });
+    }
 
     // ── Module I.2 — Tự động tạo 8 task theo quy trình ──────────────────
     try {
@@ -817,6 +834,9 @@ export const ALLOWED_TRANSITIONS = {
   'đã hủy': []
 };
 
+const ENTER_SCANNER_ROLES = ["technician", "radiologist", "doctor", "department_head"];
+const VISIT_TYPE_EDITOR_ROLES = ["doctor", "department_head"];
+
 // @desc    Cập nhật trạng thái
 // @route   PUT /api/v1/visits/:id/status
 // @access  Private
@@ -856,12 +876,39 @@ export const updateStatus = async (req, res) => {
       if (status === "đang chụp" && await contrastConsentPending(visit)) {
         return res.status(409).json({ message: CONTRAST_UNSIGNED_MESSAGE });
       }
+      // Đưa bệnh nhân vào từ trường là thao tác an toàn người bệnh: máy chủ tự kiểm tra, không tin FE.
+      if (status === "đang chụp") {
+        if (!ENTER_SCANNER_ROLES.includes(req.user.role)) {
+          return res.status(403).json({ message: "Vai trò của bạn không được đưa bệnh nhân vào buồng chụp." });
+        }
+        if (visit.mriSafetyChecklist?.isScreened !== true || visit.mriSafetyChecklist?.passed !== true) {
+          return res.status(409).json({
+            code: "ERR_MRI_SAFETY_NOT_PASSED",
+            message: "Chưa hoàn tất bảng kiểm an toàn MRI hoặc bảng kiểm chưa đạt. Không được đưa bệnh nhân vào buồng chụp.",
+          });
+        }
+        await assertPaymentGateOpen(visit, req.user, req);
+      }
       oldStatus = visit.status;
       visit.status = status;
       statusChanged = true;
     }
 
-    if (visitType) {
+    if (visitType && visitType !== visit.visitType) {
+      // Nội trú được miễn cổng viện phí: chỉ bác sĩ mới được phân loại, không cho lễ tân tự mở cổng.
+      if (!VISIT_TYPE_EDITOR_ROLES.includes(req.user.role)) {
+        return res.status(403).json({ message: "Chỉ bác sĩ mới được thay đổi loại hình điều trị (Nội trú/Ngoại trú)." });
+      }
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.VISIT_TYPE_CHANGED,
+        actorId: req.user.id,
+        actorRole: req.user.role,
+        hospitalId: visit.hospitalId,
+        targetModel: "Visit",
+        targetId: String(visit._id),
+        metadata: { from: visit.visitType, to: visitType },
+        req,
+      });
       visit.visitType = visitType;
     }
 
@@ -991,8 +1038,13 @@ export const updateStatus = async (req, res) => {
 
     await visit.save();
 
-    // [TT46/2018/TT-BYT & HIPAA]: Ghi nhận Hash-Chained Audit Log khi chuyển trạng thái FSM ca khám
+    // [TT 13/2025/TT-BYT & HIPAA]: Ghi nhận Hash-Chained Audit Log khi chuyển trạng thái FSM ca khám
     if (statusChanged) {
+      await syncMriSlotWithVisit(visit, oldStatus);
+      // Lượt khám đã kết thúc thì các bước còn mở không còn ý nghĩa, tránh báo quá hạn giả
+      if (["hoàn tất", "đã đóng", "đã hủy", "no_show"].includes(visit.status)) {
+        await Task.updateMany({ hospitalId: visit.hospitalId, visitId: visit._id, status: { $in: ["pending", "in_progress"] } }, { $set: { status: "skipped" } });
+      }
       try {
         const { recordAuditLog, AUDIT_ACTIONS } = await import("../services/auditLog.service.js");
         await recordAuditLog({
@@ -1011,6 +1063,9 @@ export const updateStatus = async (req, res) => {
     
     res.status(200).json({ message: "Cập nhật trạng thái thành công", visit });
   } catch (error) {
+    if (error.code === "ERR_INVOICE_NOT_PAID") {
+      return res.status(error.statusCode).json({ code: error.code, message: error.message });
+    }
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
@@ -1113,21 +1168,62 @@ export const cancelMriOrder = async (req, res) => {
 };
 
 // ─── [Q-BILLING-01] BẢO LÃNH NỢ VIỆN PHÍ (DEBT APPROVAL BY ADMIN) ────────────
+const DEBT_APPROVAL_DEFAULT_HOURS = 48;
+const DEBT_APPROVAL_MAX_HOURS = 7 * 24;
+
+// @desc    Các ca chụp đang bị cổng viện phí chặn, để Ban Giám đốc xem xét bảo lãnh
+// @route   GET /api/v1/visits/debt-candidates
+// @access  Private (hospital_admin)
+export const getDebtApprovalCandidates = async (req, res) => {
+  try {
+    const [visits, hospital] = await Promise.all([
+      Visit.find({
+        hospitalId: req.user.hospitalId,
+        status: { $in: ["chờ chụp", "chờ chụp lại"] },
+        invoiceId: { $ne: null },
+      })
+        .populate("patientId", "profile.name profile.fullName")
+        .populate("invoiceId", "status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean(),
+      Hospital.findById(req.user.hospitalId).select("billingPolicy").lean(),
+    ]);
+    const partialDebtThreshold = Number(hospital?.billingPolicy?.partialPaymentDebtThreshold || 0);
+    const data = visits
+      .filter((visit) => shouldEnforcePaymentGate(visit, visit.invoiceId, { partialDebtThreshold }).enforce)
+      .map((visit) => {
+        const inv = visit.invoiceId;
+        const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+        const paid = inv.status === "thanh toán một phần" ? Number(inv.paidAmount || 0) : 0;
+        return {
+          _id: visit._id,
+          status: visit.status,
+          patientName: visit.patientId?.profile?.name || visit.patientId?.profile?.fullName || "Bệnh nhân",
+          invoiceStatus: inv.status,
+          remainingOwed: Math.max(0, owed - paid),
+        };
+      });
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
+  }
+};
+
 // @desc    Ban Giám đốc / Hospital Admin phê duyệt bảo lãnh nợ viện phí để qua cổng MRI
 // @route   POST /api/v1/visits/:id/debt-approval
-// @access  Private (hospital_admin, admin, system_admin)
+// @access  Private (hospital_admin)
 export const approveVisitDebt = async (req, res) => {
   try {
-    const allowedRoles = ["hospital_admin", "admin", "system_admin"];
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    if (req.user?.role !== "hospital_admin") {
       return res.status(403).json({
         success: false,
-        message: "Chỉ Ban Giám đốc hoặc Quản trị viên bệnh viện mới có thẩm quyền phê duyệt bảo lãnh nợ viện phí.",
+        message: "Chỉ Ban Giám đốc bệnh viện (hospital_admin) mới có thẩm quyền phê duyệt bảo lãnh nợ viện phí.",
       });
     }
 
     const { id } = req.params;
-    const { reason, maxAmount, expiresInHours = 48, expiresAt } = req.body || {};
+    const { reason, maxAmount, expiresInHours = DEBT_APPROVAL_DEFAULT_HOURS } = req.body || {};
     const reasonText = String(reason || "").trim();
     if (reasonText.length < 10) {
       return res.status(400).json({
@@ -1136,22 +1232,27 @@ export const approveVisitDebt = async (req, res) => {
       });
     }
 
+    const limit = Number(maxAmount);
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return res.status(400).json({ success: false, message: "Hạn mức bảo lãnh (maxAmount) phải là số tiền lớn hơn 0." });
+    }
+    const hours = Number(expiresInHours);
+    if (!Number.isFinite(hours) || hours <= 0 || hours > DEBT_APPROVAL_MAX_HOURS) {
+      return res.status(400).json({
+        success: false,
+        message: `Thời hạn bảo lãnh phải lớn hơn 0 và không quá ${DEBT_APPROVAL_MAX_HOURS} giờ.`,
+      });
+    }
+
     const visit = await Visit.findById(id);
     if (!visit) {
       return res.status(404).json({ success: false, message: "Không tìm thấy lượt khám." });
     }
-    if (
-      req.user.role !== "system_admin" &&
-      req.user.hospitalId &&
-      visit.hospitalId &&
-      String(visit.hospitalId) !== String(req.user.hospitalId)
-    ) {
+    if (String(visit.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ success: false, message: "Không có quyền bảo lãnh nợ cho lượt khám thuộc bệnh viện khác." });
     }
 
-    const expirationDate = expiresAt
-      ? new Date(expiresAt)
-      : new Date(Date.now() + Number(expiresInHours || 48) * 60 * 60 * 1000);
+    const expirationDate = new Date(Date.now() + hours * 60 * 60 * 1000);
 
     visit.debtApproval = {
       isApproved: true,
@@ -1159,7 +1260,7 @@ export const approveVisitDebt = async (req, res) => {
       approvedByName: req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Hospital Admin",
       approvedAt: new Date(),
       expiresAt: expirationDate,
-      maxAmount: Number(maxAmount || 0),
+      maxAmount: limit,
       reason: reasonText,
     };
 

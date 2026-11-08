@@ -1,3 +1,4 @@
+import { AsyncResource } from "async_hooks";
 import StoredMedicalFile from "../../models/storedMedicalFile.model.js";
 import { readLocalBuffer, existsOnLocal } from "./localAdapter.js";
 import { uploadEncryptedFile, getDriveFolderLockStats } from "./driveMirrorAdapter.js";
@@ -70,6 +71,8 @@ const executeSingleDriveSyncJob = async (job) => {
     const existingSynced = await StoredMedicalFile.findOne({
       _id: { $ne: record._id },
       sha256: record.sha256,
+      // Bản sao trên Drive cũng không được dùng chung giữa các viện
+      hospitalId: record.hospitalId || null,
       syncStatus: "SYNCED",
       driveFileId: { $ne: null },
       encryptionIv: { $ne: null },
@@ -260,7 +263,8 @@ const drainAiQueue = async () => {
 export const enqueueAiTask = ({ taskFn, priority = 5, visitId = null, label = "AI Analysis" }) => {
   return new Promise((resolve, reject) => {
     aiPendingQueue.push({
-      taskFn,
+      // Worker rảnh chạy tiếp trong ngữ cảnh của tác vụ trước. Không gắn lại thì bộ lọc tenancy sẽ dùng nhầm viện.
+      taskFn: AsyncResource.bind(taskFn),
       priority: Number(priority) || 5,
       visitId,
       label,

@@ -24,7 +24,7 @@ import {
 // Banner đầu trang Bệnh án điện tử: ảnh, tông màu & mô tả đổi theo tab (cùng phong cách các trang lễ tân / điều dưỡng)
 const EMR_TAB_META = {
   nurseQueue: { icon: TabVitals, image: 'tabletScan', tone: 'teal', title: 'Đo sinh hiệu', subtitle: 'Bệnh nhân chờ đo sinh hiệu ban đầu trong ngày.' },
-  records: { icon: TabRecords, image: 'doctorDesk', tone: 'navy', title: 'Hồ sơ bệnh án', subtitle: 'Tra cứu, ký số và lập phụ lục hồ sơ bệnh án điện tử theo TT 46/2018.' },
+  records: { icon: TabRecords, image: 'doctorDesk', tone: 'navy', title: 'Hồ sơ bệnh án', subtitle: 'Tra cứu, ký số và lập phụ lục hồ sơ bệnh án điện tử theo TT 13/2025.' },
   care: { icon: TabCare, image: 'tabletScan', tone: 'plum', title: 'Phiếu chăm sóc điều dưỡng', subtitle: 'Theo dõi người bệnh nội trú: sinh hiệu, tri giác Glasgow và diễn biến trong ca.' },
   consult: { icon: TabConsult, image: 'mriDiscuss', tone: 'indigo', title: 'Hội chẩn', subtitle: 'Biên bản hội chẩn đa chuyên khoa cho ca bệnh khó.' },
   consent: { icon: TabConsent, image: 'doctorDesk', tone: 'ocean', title: 'Giấy cam đoan', subtitle: 'Cam đoan phẫu thuật, thủ thuật và tiêm thuốc cản quang.' },
@@ -82,7 +82,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   // Nurse workflow: selected patient for detail panel
   const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
 
-  // EMR Signing & Addendum states (Thông tư 46/2018/TT-BYT)
+  // EMR Signing & Addendum states (Thông tư 13/2025/TT-BYT)
   const [addendumModal, setAddendumModal] = useState(false);
   const [addendumRecord, setAddendumRecord] = useState(null);
   const [addendumTitle, setAddendumTitle] = useState('');
@@ -132,7 +132,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
         method: 'POST',
         body: JSON.stringify({
           title: addendumTitle.trim(),
-          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 46/2018/TT-BYT',
+          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 13/2025/TT-BYT',
           content: addendumContent.trim(),
         }),
       });
@@ -225,15 +225,24 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     }
   };
 
+  const handleSignConsent = async (consent) => {
+    try {
+      await apiRequest(`/emr/consents/${consent._id || consent.id}/sign`, { method: 'PUT', body: JSON.stringify({}) });
+      await fetchRecordDetails(selectedRecord._id);
+    } catch (err) {
+      Alert.alert('Chưa ký được', err.message || 'Vui lòng thử lại.');
+    }
+  };
+
   // Fetch care sheets, consultations, consents for a specific record
   const fetchRecordDetails = async (recordId) => {
     setLoading(true);
     try {
       const [careData, consultData, consentData, versionData, rxData] = await Promise.all([
-        apiRequest(`/emr/records/${recordId}/care-sheets`),
-        apiRequest(`/emr/records/${recordId}/consultations`),
-        apiRequest(`/emr/records/${recordId}/consents`),
-        apiRequest(`/emr/records/${recordId}/versions`),
+        apiRequest(`/emr/records/${recordId}/care-sheets`).catch(() => ({ data: [] })),
+        apiRequest(`/emr/records/${recordId}/consultations`).catch(() => ({ data: [] })),
+        apiRequest(`/emr/records/${recordId}/consents`).catch(() => ({ data: [] })),
+        apiRequest(`/emr/records/${recordId}/versions`).catch(() => ({ data: [] })),
         get(`/api/patients/${selectedRecord.patientId}/prescriptions`).catch(() => null),
       ]);
       setCareSheets(careData.data || []);
@@ -385,7 +394,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     serverMatchIds.includes(r.patientId)
   );
 
-  const isDoctorLike = localUser?.role === 'doctor' || localUser?.role === 'admin';
+  const isDoctorLike = ['doctor', 'department_head', 'admin'].includes(localUser?.role);
   const emrTabs = [
     localUser?.role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
     { key: 'records', label: 'Hồ sơ bệnh án' },
@@ -394,7 +403,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     isDoctorLike && { key: 'consent', label: 'Giấy cam đoan' },
     isDoctorLike && { key: 'prescriptions', label: 'Kê đơn thuốc' },
     { key: 'versions', label: 'Lịch sử sửa đổi' },
-    isDoctorLike && { key: 'imaging', label: 'Phim MRI & CT' },
+    (isDoctorLike || localUser?.role === 'radiologist') && { key: 'imaging', label: 'Phim MRI & CT' },
     { key: 'beds', label: 'Giường bệnh' },
     { key: 'transfers', label: 'Chuyển viện' },
   ].filter(Boolean);
@@ -498,6 +507,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
                 {activeTab === 'consult' && (
                   <ConsultationTab
+                    canApproveTumorBoard={['department_head', 'hospital_admin'].includes(localUser?.role)}
                     consultations={consultations}
                     selectedRecord={selectedRecord}
                     onNewConsult={() => {
@@ -511,6 +521,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   <ConsentTab
                     consents={consents}
                     selectedRecord={selectedRecord}
+                    canSignAsDoctor={['doctor', 'department_head', 'hospital_admin'].includes(localUser?.role)}
+                    onSignConsent={handleSignConsent}
                     onNewConsent={() => {
                       setModalType('newConsent');
                       setIsModalVisible(true);
@@ -569,12 +581,12 @@ const EMRDashboardScreen = ({ navigation, route }) => {
           availableDrugs={availableDrugs}
         />
 
-        {/* Modal Lập phụ lục bệnh án theo TT 46/2018/TT-BYT */}
+        {/* Modal Lập phụ lục bệnh án theo TT 13/2025/TT-BYT */}
         <Modal visible={addendumModal} transparent animationType="slide" onRequestClose={() => setAddendumModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalBox, { maxWidth: 500, backgroundColor: '#fff', borderRadius: 16, padding: 20 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 46/2018)</Text>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 13/2025)</Text>
                 <TouchableOpacity onPress={() => setAddendumModal(false)}>
                   <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>Đóng</Text>
                 </TouchableOpacity>
@@ -583,7 +595,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 Bệnh nhân: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
               </Text>
               <Text style={{ fontSize: 12, color: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft, padding: 8, borderRadius: 8, marginBottom: 12 }}>
-                Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
+                Theo quy định Thông tư 13/2025/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
               </Text>
 
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>Tiêu đề phụ lục *</Text>
@@ -1478,7 +1490,7 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
       </View>
     </TouchableOpacity>
 
-    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 46/2018 */}
+    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 13/2025 */}
     <View style={styles.cardActions}>
       {record.signStatus !== 'Đã ký số' ? (
         <TouchableOpacity
@@ -1642,7 +1654,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   </View>
 );
 
-const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
+const ConsultationTab = ({ canApproveTumorBoard, consultations, selectedRecord, onNewConsult }) => {
   const [approvingId, setApprovingId] = useState(null);
   const [approvedMap, setApprovedMap] = useState({});
 
@@ -1651,7 +1663,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
     if (!cId) return;
     setApprovingId(cId);
     try {
-      const res = await post(`/api/v1/emr/consultations/${cId}/approve-tumor-board`, {
+      const res = await post(`/emr/consultations/${cId}/approve-tumor-board`, {
         consensusDecision: consult.treatmentConclusion || 'Phác đồ đồng thuận Hội đồng U não (MTB)',
         scheduledSurgeryDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
       });
@@ -1725,7 +1737,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
                       </Text>
                     </View>
                   )}
-                  {!isApproved && (
+                  {!isApproved && canApproveTumorBoard && (
                     <TouchableOpacity
                       style={{ backgroundColor: '#0F766E', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, marginTop: 10, alignSelf: 'flex-start' }}
                       onPress={() => handleApproveTumorBoard(c)}
@@ -1746,7 +1758,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
   );
 };
 
-const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
+const ConsentTab = ({ consents, selectedRecord, onNewConsent, canSignAsDoctor, onSignConsent }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1784,6 +1796,11 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
                 <StatusBadge status={c.doctorSigned ? 'Đã ký' : 'Chưa ký'} color="blue" />
                 <StatusBadge status={c.patientSigned ? 'Đã ký' : 'Chưa ký'} color="green" />
               </View>
+              {canSignAsDoctor && !c.doctorSigned ? (
+                <TouchableOpacity style={[styles.actionButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => onSignConsent(c)}>
+                  <Text style={styles.actionButtonText}>Bác sĩ ký giấy cam đoan</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ))
         )}

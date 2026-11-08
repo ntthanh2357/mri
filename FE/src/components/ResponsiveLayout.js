@@ -82,7 +82,7 @@ const ResponsiveLayout = ({
     if (isPollingStoppedRef.current) return;
     try {
       const { get } = require('../services/api.service');
-      const res = await get('/api/v1/emergency/alerts');
+      const res = await get('/api/v1/emergency/alerts?recentHours=24');
       if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
         const first = res.data[0];
         const pName = first.patientId?.profile?.name || first.patientId?.profile?.fullName || first.patientName || 'Bệnh nhân cấp cứu';
@@ -196,8 +196,10 @@ const ResponsiveLayout = ({
 
   // Banner cảnh báo cấp cứu: đích "Xử lý ngay" theo vai trò — Dược sĩ xử lý thuốc cấp cứu
   // (trước đây mọi role đều bị đưa sang hàng đợi đọc MRI của Bác sĩ).
+  const canActOnEmergency = !['cleaner', 'lab_technician'].includes(localUser?.role);
   const emergencyNavTarget = () => {
     if (localUser?.role === 'pharmacist') return { route: 'PharmacyQueue', params: {} };
+    if (localUser?.role === 'receptionist') return { route: 'NurseReception', params: { tab: 'myQueue' } };
     return { route: 'DoctorWorkQueue', params: { tab: 'mriQueue' } };
   };
   const handleEmergencyPress = () => {
@@ -220,6 +222,7 @@ const ResponsiveLayout = ({
           { label: 'Sức khỏe của tôi', route: 'MyHealth', icon: Heart },
           { label: 'Hóa đơn viện phí', route: 'MyInvoices', icon: CreditCard },
           { label: 'Chia sẻ bệnh án', route: 'RecordShare', icon: QrCode },
+          { label: 'Dữ liệu cá nhân của tôi', route: 'PrivacyConsents', icon: FileCheck },
           { label: 'Bản sao bệnh án', route: 'RecordCopies', icon: FileCheck },
           { label: 'Hỏi đáp sức khỏe', route: 'HealthChat', icon: MessageCircle },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -232,6 +235,12 @@ const ResponsiveLayout = ({
           { label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
           { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
           { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Y lệnh miệng chờ xử lý', route: 'VerbalOrders', icon: ClipboardCheck },
+          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
+          { label: 'Bình duyệt phim lần 2', route: 'PeerReview', icon: FileSearch },
+          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
+          ...(role === 'department_head' ? [{ label: 'Báo cáo vận hành và lâm sàng', route: 'ClinicalReports', icon: Gauge }] : []),
+          { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
           { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
@@ -248,6 +257,9 @@ const ResponsiveLayout = ({
           { label: 'Trạm đọc phim MRI / PACS', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tất cả ca khám & Hội chẩn', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Bình duyệt phim lần 2', route: 'PeerReview', icon: FileSearch },
+          { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
+          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
           { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
@@ -267,6 +279,9 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
+          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
+          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -277,6 +292,9 @@ const ResponsiveLayout = ({
           { label: 'Tiếp nhận', route: 'NurseTriage', icon: Users },
           { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
+          { label: 'Y lệnh miệng chờ đọc lại', route: 'VerbalOrders', icon: ClipboardCheck },
+          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
+          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
@@ -290,6 +308,8 @@ const ResponsiveLayout = ({
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
+          { label: 'Duyệt hoàn tiền', route: 'FinanceApprovals', icon: CreditCard },
+          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
           { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
           { label: 'Lượt tiếp đón hôm nay', route: 'NurseReception', params: { tab: 'myQueue' }, icon: FileText },
           { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
@@ -300,6 +320,8 @@ const ResponsiveLayout = ({
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Hàng đợi Khoa Dược', route: 'PharmacyQueue', icon: Package },
+          { label: 'Hậu kiểm dược', route: 'PharmacyOversight', icon: FileSearch },
+          { label: 'Hóa đơn kẹt trừ kho', route: 'FinanceApprovals', icon: CreditCard },
           { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Pill },
           { label: 'Thuốc hết hạn', route: 'DrugManagement', params: { tab: 'expiry' }, icon: AlertTriangle },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -316,6 +338,14 @@ const ResponsiveLayout = ({
           { label: 'Điều chuyển phân công ca', route: 'AssignmentOverride', icon: Shuffle },
           { label: 'Năng suất & SLA', route: 'SlaReport', icon: Gauge },
           { label: 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
+          { label: 'Duyệt hoàn tiền và bảo lãnh', route: 'FinanceApprovals', icon: FileCheck },
+          { label: 'Báo cáo vận hành và lâm sàng', route: 'ClinicalReports', icon: Gauge },
+          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
+          { label: 'Bình duyệt phim lần 2', route: 'PeerReview', icon: FileSearch },
+          { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
+          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
+          { label: 'Hậu kiểm dược', route: 'PharmacyOversight', icon: Pill },
+          { label: 'Tuân thủ và dữ liệu', route: 'ComplianceCenter', icon: Database },
           { label: 'Quản lý kho thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
           { label: 'Nhật ký kiểm toán lâm sàng', route: 'ClinicalAudit', icon: FileSearch },
           { label: 'Bản sao bệnh án', route: 'RecordCopyReview', icon: FileCheck },
@@ -335,6 +365,8 @@ const ResponsiveLayout = ({
           { label: 'Quản lý giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
+          { label: 'Yêu cầu hỗ trợ', route: 'SupportTicketsAdmin', icon: MessageCircle },
+          { label: 'Tuân thủ và dữ liệu', route: 'ComplianceCenter', icon: FileSearch },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       default:
@@ -727,6 +759,7 @@ const ResponsiveLayout = ({
               </View>
             </View>
 
+            {canActOnEmergency && (
             <TouchableOpacity
               style={{
                 backgroundColor: '#FFFFFF',
@@ -745,6 +778,7 @@ const ResponsiveLayout = ({
               </Text>
               <ChevronRight size={14} color={activeEmergency.level === 'RED' ? '#B91C1C' : '#C2410C'} strokeWidth={2.5} />
             </TouchableOpacity>
+            )}
           </View>
         )}
 

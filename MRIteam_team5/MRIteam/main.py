@@ -84,14 +84,19 @@ app = FastAPI(title="Brain Tumor Diagnosis API")
 
 # [SECURITY FIX BUG-INFRA-001]: Xác thực khóa nội bộ X-Internal-Api-Key cho các tác vụ quản trị mô hình AI
 from fastapi.responses import JSONResponse
+import hmac
 INTERNAL_AI_API_KEY = os.getenv("INTERNAL_AI_API_KEY", "").strip()
-PROTECTED_AI_PREFIXES = ("/retrain", "/approve", "/feedback")
+# Chỉ để chạy thử trên máy cá nhân: phải bật rõ ràng, không bao giờ đặt trên môi trường thật.
+ALLOW_INSECURE_AI = os.getenv("ALLOW_INSECURE_AI", "").strip().lower() == "true"
+if not INTERNAL_AI_API_KEY and not ALLOW_INSECURE_AI:
+    raise RuntimeError("Thiếu INTERNAL_AI_API_KEY: AI service từ chối khởi động để không chạy khi chưa có xác thực.")
+PUBLIC_AI_PATHS = {"/", "/health", "/docs", "/openapi.json"}
 
 @app.middleware("http")
 async def verify_internal_ai_api_key(request: Request, call_next):
-    if INTERNAL_AI_API_KEY and any(request.url.path.startswith(p) for p in PROTECTED_AI_PREFIXES):
+    if request.url.path not in PUBLIC_AI_PATHS and INTERNAL_AI_API_KEY:
         provided_key = request.headers.get("X-Internal-Api-Key", "")
-        if provided_key != INTERNAL_AI_API_KEY:
+        if not hmac.compare_digest(provided_key.encode(), INTERNAL_AI_API_KEY.encode()):
             return JSONResponse(
                 status_code=403,
                 content={"success": False, "message": "Forbidden: Invalid or missing X-Internal-Api-Key."}

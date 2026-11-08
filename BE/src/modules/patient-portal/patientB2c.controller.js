@@ -1,3 +1,4 @@
+import { recordAuditLog } from "../../services/auditLog.service.js";
 import { ImagingResult } from "../imaging/models/imagingResult.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { User } from "../auth/models/user.model.js";
@@ -181,8 +182,7 @@ export const generateShareQr = async (req, res) => {
 
     // Ghi AuditLog (chỉ log nếu có model AuditLog)
     try {
-      const { AuditLog } = await import("../models/auditLog.model.js");
-      await AuditLog.create({
+      await recordAuditLog({
         action: "H3_SHARE_QR_GENERATED",
         performedBy: req.user.id,
         targetId: imagingResultId,

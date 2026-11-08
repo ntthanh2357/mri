@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 import {
   triggerAiJob,
   getJobProgress,
@@ -11,6 +11,8 @@ import {
 
 const router = Router();
 router.use(protect);
+// Hàng đợi AI chứa dữ liệu người bệnh: chỉ nhân sự CĐHA và điều trị.
+router.use(checkRole(["doctor", "radiologist", "department_head", "technician", "nurse", "hospital_admin"]));
 
 router.post("/trigger", triggerAiJob);
 router.get("/queue-stats", getAiQueueStats);

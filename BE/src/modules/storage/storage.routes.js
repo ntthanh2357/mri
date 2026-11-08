@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
+import { allowSignedStorageFile } from "../../middlewares/uploadSignature.middleware.js";
 import {
   streamStoredFile,
   getStoredFileMetadata,
@@ -12,6 +13,9 @@ import {
 const router = Router();
 
 // Toàn bộ route yêu cầu xác thực JWT
+// Thẻ <Image> không gửi được Bearer token nên route xem tệp nhận thêm link có chữ ký
+router.get("/files/:fileId", allowSignedStorageFile(protect), streamStoredFile);
+
 router.use(protect);
 
 // Quan sát trạng thái Hàng đợi Đồng bộ Drive & Hàng đợi AI
@@ -35,7 +39,6 @@ router.post(
 );
 
 // Stream và lấy Metadata tệp y tế
-router.get("/files/:fileId", streamStoredFile);
 router.get("/files/:fileId/metadata", getStoredFileMetadata);
 
 export default router;

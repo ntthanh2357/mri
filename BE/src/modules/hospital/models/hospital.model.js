@@ -59,6 +59,18 @@ const hospitalSchema = new Schema(
       maxPatients: { type: Number, default: 50 },
     },
 
+    // Chính sách viện phí do từng viện tự quy định: pháp luật không đặt ngưỡng nợ cho phép trước khi chụp.
+    billingPolicy: {
+      // Số tiền còn nợ tối đa được vào chụp khi đã thanh toán một phần. 0 = phải trả đủ.
+      partialPaymentDebtThreshold: { type: Number, default: 0, min: 0 },
+    },
+
+    imagingPolicy: {
+      // NĐ 96/2023 Điều 40 k4: cơ sở không có nhân sự chuyên khoa hình ảnh thì bác sĩ chỉ định
+      // đọc và ký kết quả. Viện tự xác nhận, và máy chủ vẫn kiểm tra viện không có radiologist.
+      allowOrderingDoctorSign: { type: Boolean, default: false },
+    },
+
     subscriptionPlan: {
       type: String,
       enum: ['trial', 'basic', 'pro'],

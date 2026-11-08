@@ -100,7 +100,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
   // Bệnh nhân xem bản dễ hiểu; chỉ bác sĩ/KTV/admin được duyệt hoặc hiệu chỉnh (khớp quyền ở BE approve-ai/feedback-ai).
   const role = useCurrentRole();
   const isPatient = role === 'patient';
-  const canReview = ['doctor', 'technician', 'admin'].includes(role);
+  const canReview = ['doctor', 'radiologist', 'department_head', 'technician', 'admin', 'hospital_admin'].includes(role);
 
   const [phase, setPhase] = useState('analyzing'); // 'analyzing' | 'result'
   const [aiResult, setAiResult] = useState(null);
@@ -197,7 +197,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
     if (!aiResult) return;
     setApprovingAI(true);
     try {
-      const filename = imageUrl?.split('/').pop() || 'scan.jpg';
+      const filename = imageUrl?.split('?')[0].split('/').pop() || 'scan.jpg';
       await post('/api/v1/imaging/approve-ai', {
         filename,
         predicted_class: aiResult.class_name,

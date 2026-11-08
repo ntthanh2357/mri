@@ -34,7 +34,7 @@ const notificationSchema = new Schema(
         "transfer_draft", "transfer_sent", "transfer_incoming", "transfer_accepted",
         "assignment_new", "assignment_override", "result_ready",
         "emergency_alert", "emergency_stand_down", "peer_review_assigned",
-        "appointment_reminder", "other",
+        "appointment_reminder", "task_new", "other",
       ],
       default: "other",
     },

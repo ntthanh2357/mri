@@ -1,4 +1,5 @@
 import { Hospital } from "../models/hospital.model.js";
+import { StoredMedicalFile } from "../models/storedMedicalFile.model.js";
 import { User } from "../models/user.model.js";
 import { DicomStudy } from "../models/dicomStudy.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
@@ -82,10 +83,13 @@ export const checkDriveCapacity = async (req, res) => {
       return errorResponse(res, "Chỉ admin mới xem được cảnh báo dung lượng.", 403);
     }
 
-    // Mô phỏng dung lượng Drive bệnh viện (Drive dùng chung 2TB = 2,000,000 MB)
-    const totalCapacityMb = 2000000;
-    // Giả lập dung lượng đã dùng ngẫu nhiên để demo
-    const usedCapacityMb = 1680000; // ~84%
+    // Dung lượng đã dùng tính từ các tệp đã đồng bộ lên Drive. Tổng dung lượng do viện cấu hình (mặc định 2 TB).
+    const totalCapacityMb = Number(process.env.DRIVE_TOTAL_CAPACITY_MB) || 2000000;
+    const [usage] = await StoredMedicalFile.aggregate([
+      { $match: { driveFileId: { $nin: [null, ""] } } },
+      { $group: { _id: null, bytes: { $sum: "$sizeBytes" } } },
+    ]);
+    const usedCapacityMb = Math.round((usage?.bytes || 0) / (1024 * 1024));
     const usagePercentage = Math.round((usedCapacityMb / totalCapacityMb) * 100);
 
     let alertLevel = 'normal';
@@ -107,31 +111,6 @@ export const checkDriveCapacity = async (req, res) => {
       alertMessage,
       checkedAt: new Date(),
     }, "Kiểm tra dung lượng Google Drive thành công.");
-  } catch (err) {
-    return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
-  }
-};
-
-// ─── L.4 — Tạo link chia sẻ có thời hạn (Signed URL Proxy) ─────────────────
-// @route GET /api/v1/drive-storage/share-link/:fileId
-// @access Private
-export const getSignedShareLink = async (req, res) => {
-  try {
-    const { fileId } = req.params;
-    const { expireDays = 30 } = req.query;
-
-    const expireDate = new Date();
-    expireDate.setDate(expireDate.getDate() + Number(expireDays));
-
-    // Signed URL proxy ẩn URL Drive trực tiếp
-    const signedUrl = `${req.protocol}://${req.get('host')}/api/v1/drive-storage/proxy-download/${fileId}?token=${Buffer.from(fileId + expireDate.getTime()).toString('base64')}`;
-
-    return successResponse(res, {
-      fileId,
-      signedUrl,
-      expiresAt: expireDate,
-      expireDays: Number(expireDays),
-    }, "Tạo link chia sẻ an toàn có thời hạn thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

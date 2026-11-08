@@ -50,9 +50,16 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   // Doctor / Radiologist Report Editing States
   const [localUser, setLocalUser] = useState(null);
-  // Duyệt/hiệu chỉnh AI & ký báo cáo CĐHA cho bác sĩ lâm sàng, BS CĐHA (radiologist), Trưởng khoa (department_head)
   const canReviewAI = ['doctor', 'radiologist', 'department_head', 'technician', 'admin'].includes(localUser?.role);
-  const canSignReport = ['doctor', 'radiologist', 'department_head'].includes(localUser?.role);
+  // Máy chủ quyết định ai được ký: Bác sĩ CĐHA, Trưởng khoa đã được cấp quyền, hoặc bác sĩ chỉ định khi viện không có Bác sĩ CĐHA
+  const [signPermission, setSignPermission] = useState(null);
+  const [actingReason, setActingReason] = useState('');
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [peerReviewReason, setPeerReviewReason] = useState('');
+  const [requestingPeerReview, setRequestingPeerReview] = useState(false);
+  const canSignReport = signPermission?.canSign === true;
+  const isPhysician = ['doctor', 'radiologist', 'department_head'].includes(localUser?.role);
+  const canAcknowledgeReport = ['doctor', 'department_head'].includes(localUser?.role);
   const [findingsText, setFindingsText] = useState('');
   const [conclusionText, setConclusionText] = useState('');
   const [completingVisit, setCompletingVisit] = useState(false);
@@ -170,6 +177,13 @@ const ImagingResultScreen = ({ route, navigation }) => {
   }, [result, localUser, route.params?.visitStatus]);
 
   useEffect(() => {
+    if (!resultId || !isPhysician) return;
+    get(`/api/v1/imaging/${resultId}/sign-permission`)
+      .then((res) => setSignPermission(res?.data || null))
+      .catch(() => setSignPermission(null));
+  }, [resultId, isPhysician]);
+
+  useEffect(() => {
     if (!resultId) {
       setError('Không tìm thấy thông tin kết quả.');
       setLoading(false);
@@ -284,7 +298,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
     setApproveSuccess(false);
     try {
       const imageUrl = result.images[0] || '';
-      const filename = imageUrl.split('/').pop() || 'scan.jpg';
+      const filename = imageUrl.split('?')[0].split('/').pop() || 'scan.jpg';
       const payload = {
         filename,
         predicted_class: aiResult.class_name,
@@ -339,6 +353,12 @@ const ImagingResultScreen = ({ route, navigation }) => {
       else Alert.alert('Thông báo', 'Vui lòng điền đầy đủ mô tả hình ảnh và kết luận chẩn đoán.');
       return;
     }
+    if (signPermission?.requiresReason && actingReason.trim().length < 10) {
+      const msg = 'Trưởng khoa ký thay Bác sĩ CĐHA phải ghi rõ lý do, tối thiểu 10 ký tự.';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Thông báo', msg);
+      return;
+    }
 
     setCompletingVisit(true);
     try {
@@ -347,6 +367,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
       const updateRes = await put(`/api/v1/imaging/${resultId}`, {
         findings: findingsText.trim(),
         conclusion: conclusionText.trim(),
+        actingRadiologistReason: signPermission?.requiresReason ? actingReason.trim() : undefined,
         radiologist: docName,
         images: updatedImages,
         structuredReport,
@@ -399,6 +420,42 @@ const ImagingResultScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleAcknowledgeReport = async () => {
+    setAcknowledging(true);
+    try {
+      const res = await post(`/api/v1/imaging/${resultId}/acknowledge`, {});
+      if (res?.data) setResult(res.data);
+      if (Platform.OS === 'web') alert('Đã xác nhận đã đọc báo cáo CĐHA.');
+      else Alert.alert('Thành công', 'Đã xác nhận đã đọc báo cáo CĐHA.');
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi xác nhận: ' + (err.message || ''));
+      else Alert.alert('Lỗi', err.message || 'Không xác nhận được.');
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const handleRequestPeerReview = async () => {
+    setRequestingPeerReview(true);
+    try {
+      const res = await post('/api/v1/peer-reviews', {
+        imagingResultId: resultId,
+        visitId: visitId || result?.visitId,
+        requestType: 'manual',
+        conflictReason: peerReviewReason.trim() || 'Bác sĩ yêu cầu đọc lần 2',
+      });
+      setPeerReviewReason('');
+      const msg = res?.data?.warning || 'Đã gửi yêu cầu bình duyệt lần 2.';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Thành công', msg);
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi: ' + (err.message || ''));
+      else Alert.alert('Lỗi', err.message || 'Không gửi được yêu cầu.');
+    } finally {
+      setRequestingPeerReview(false);
+    }
+  };
+
   const handleCreateAddendum = async () => {
     if (!addendumContent.trim()) {
       if (Platform.OS === 'web') alert('Vui lòng nhập nội dung bản bổ sung / đính chính (Addendum).');
@@ -406,7 +463,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
     }
     setSubmittingAddendum(true);
     try {
-      const res = await post(`/api/v1/imaging/${resultId}/addendum`, {
+      const addendumPath = localUser?.role === 'radiologist' ? 'addendum' : 'clinical-addendum';
+      const res = await post(`/api/v1/imaging/${resultId}/${addendumPath}`, {
         content: addendumContent.trim(),
         reason: addendumReason.trim() || 'Bổ sung nhận định chuyên môn sau hội chẩn'
       });
@@ -603,7 +661,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                       </Text>
                     </View>
                   </View>
-                  {!result.criticalFinding.acknowledgedAt && canSignReport && (
+                  {!result.criticalFinding.acknowledgedAt && isPhysician && (
                     <TouchableOpacity
                       style={{ backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
                       onPress={handleAcknowledgeCritical}
@@ -1040,6 +1098,43 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
               </View>
 
+              {canSignReport && !result.isSigned && signPermission?.requiresReason && (
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={styles.sectionHeading}>LÝ DO TRƯỞNG KHOA KÝ THAY BÁC SĨ CĐHA</Text>
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 42 }]}
+                    placeholder="Ví dụ: Bác sĩ CĐHA trực đang xử trí cấp cứu..."
+                    value={actingReason}
+                    onChangeText={setActingReason}
+                  />
+                </View>
+              )}
+
+              {!canSignReport && !result.isSigned && isPhysician && (
+                <Text style={{ fontSize: 13, color: '#475569', marginBottom: 16 }}>
+                  Báo cáo đang chờ Bác sĩ CĐHA ký. Bạn sẽ xác nhận đã đọc sau khi báo cáo được ký.
+                </Text>
+              )}
+
+              {result.isSigned && canAcknowledgeReport && (
+                <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, color: '#14532D', marginBottom: 8 }}>
+                    {result.attendingAcknowledgment?.acknowledgedAt
+                      ? `Đã được ${result.attendingAcknowledgment.acknowledgedByName} xác nhận đọc lúc ${formatDate(result.attendingAcknowledgment.acknowledgedAt)}.`
+                      : 'Báo cáo đã ký. Vui lòng xác nhận sau khi đọc.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#059669', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, alignSelf: 'flex-start' }}
+                    onPress={handleAcknowledgeReport}
+                    disabled={acknowledging}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                      {acknowledging ? 'Đang xác nhận...' : 'Xác nhận đã đọc báo cáo'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {canSignReport && !result.isSigned && (
                 <TouchableOpacity
                   style={{
@@ -1067,7 +1162,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               )}
 
-              {/* 📝 Danh sách Bản bổ sung / Đính chính sau ký số (Addenda - TT46/2018/TT-BYT) */}
+              {/* 📝 Danh sách Bản bổ sung / Đính chính sau ký số (Addenda - TT 13/2025/TT-BYT) */}
               {Boolean(result.addenda && result.addenda.length > 0) && (
                 <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 8, padding: 12, marginTop: 12, marginBottom: 16 }}>
                   <Text style={{ fontWeight: '800', fontSize: 13, color: '#92400E', marginBottom: 8 }}>
@@ -1084,7 +1179,37 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 </View>
               )}
 
-              {result.isSigned && canSignReport && (
+              {isPhysician && Boolean(result.medicalId) && (
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 12 }}
+                  onPress={() => navigation.navigate('TumorProgress', { medicalId: result.medicalId, patientName: result.patientName })}
+                >
+                  <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12 }}>Xem diễn tiến khối u (RANO)</Text>
+                </TouchableOpacity>
+              )}
+
+              {result.isSigned && isPhysician && (
+                <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>Yêu cầu bình duyệt lần 2</Text>
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 42, marginBottom: 8 }]}
+                    placeholder="Lý do cần bác sĩ khác đọc lại..."
+                    value={peerReviewReason}
+                    onChangeText={setPeerReviewReason}
+                  />
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, alignSelf: 'flex-start' }}
+                    onPress={handleRequestPeerReview}
+                    disabled={requestingPeerReview}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                      {requestingPeerReview ? 'Đang gửi...' : 'Gửi yêu cầu bình duyệt'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {result.isSigned && isPhysician && (
                 <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 12, marginBottom: 16 }}>
                   <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
                     + Thêm Bản đính chính / Bổ sung sau ký số (Addendum — giữ nguyên bản gốc):

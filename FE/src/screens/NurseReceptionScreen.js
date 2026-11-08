@@ -788,17 +788,20 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     if (!refundTarget) return;
     setRefunding(true);
     try {
-      const res = await put(`/api/v1/invoices/${refundTarget._id}/refund`, {
+      const res = await post(`/api/v1/invoices/${refundTarget._id}/refund/request`, {
         refundReason: [refundReason, refundNote.trim()].filter(Boolean).join(' — '),
       });
       setRefundTarget(null);
       setRefundNote('');
       await fetchInvoices();
-      notify('Thành công', res?.message || 'Đã hoàn trả viện phí và chuyển hóa đơn sang "Hoàn trả".');
+      if (res?.approvalStatus === 'pending_second_approval') {
+        notify('Đã gửi yêu cầu', 'Khoản từ 10 triệu đồng cần người thứ hai duyệt tại mục "Duyệt hoàn tiền".', 'info');
+      } else {
+        notify('Thành công', res?.message || 'Đã hoàn trả viện phí và chuyển hóa đơn sang "Hoàn trả".');
+      }
     } catch (err) {
-      // Hóa đơn ≥ 10 triệu cần phê duyệt cấp 2 → backend trả 403 kèm hướng dẫn
       setRefundTarget(null);
-      notify('Cần phê duyệt thêm', err.message || 'Không thể hoàn trả viện phí.', 'info');
+      notify('Chưa hoàn được tiền', err.message || 'Không thể hoàn trả viện phí.', 'error');
     } finally {
       setRefunding(false);
     }

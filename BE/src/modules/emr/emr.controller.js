@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { MedicalRecord } from "./models/medicalRecord.model.js";
+import { Visit } from "../../models/visit.model.js";
 import { CareSheet } from "./models/careSheet.model.js";
 import { Consultation } from "./models/consultation.model.js";
 import { ConsentForm } from "./models/consentForm.model.js";
@@ -106,7 +107,7 @@ export const createRecord = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin bắt buộc." });
     }
 
-    // [TT46/2018/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
+    // [TT 13/2025/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
     const categoryToUse = userRetentionCat || (admissionType === "Ngoại trú" ? "ngoai_tru" : "noi_tru");
     const { retentionCategory, retentionYears, retentionExpiresAt } = calculateRetentionExpiry(categoryToUse, new Date());
 
@@ -281,12 +282,12 @@ export const updateRecord = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền cập nhật hồ sơ bệnh án này." });
     }
 
-    // [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: KHÓA BẤT BIẾN HỒ SƠ BỆNH ÁN ĐÃ KÝ SỐ HOẶC ĐÃ XUẤT VIỆN
+    // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: KHÓA BẤT BIẾN HỒ SƠ BỆNH ÁN ĐÃ KÝ SỐ HOẶC ĐÃ XUẤT VIỆN
     if (FEATURES.ENABLE_EMR_IMMUTABLE_LOCK && (record.signStatus === "Đã ký số" || record.status === "Xuất viện")) {
       return res.status(400).json({
         status: "fail",
         code: "EMR_IMMUTABLE_RECORD_LOCKED",
-        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 46/2018/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
+        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 13/2025/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
       });
     }
 
@@ -329,7 +330,7 @@ export const updateRecord = async (req, res) => {
       updates.retentionExpiresAt = retentionExpiresAt;
     }
 
-    // [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: CẬP NHẬT NGUYÊN TỬ (ATOMIC CONDITIONAL UPDATE) CHỐNG RACE CONDITION
+    // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: CẬP NHẬT NGUYÊN TỬ (ATOMIC CONDITIONAL UPDATE) CHỐNG RACE CONDITION
     const lockFilter = {
       _id: req.params.id,
       ...(FEATURES.ENABLE_EMR_IMMUTABLE_LOCK
@@ -350,7 +351,7 @@ export const updateRecord = async (req, res) => {
       return res.status(400).json({
         status: "fail",
         code: "EMR_IMMUTABLE_RECORD_LOCKED",
-        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 46/2018/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
+        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 13/2025/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
       });
     }
 
@@ -726,7 +727,7 @@ export const signConsent = async (req, res) => {
     const signerName = req.user?.profile?.name || req.user?.name;
 
     // [SECURITY FIX]: Xác thực vai trò ký từ req.user.role đã được định danh, ngăn chặn mạo danh
-    if (["doctor", "admin", "hospital_admin"].includes(userRole)) {
+    if (["doctor", "department_head", "admin", "hospital_admin"].includes(userRole)) {
       consent.doctorSigned = true;
       consent.doctorSignature = signature || signerName || "Bs. Phụ trách";
       consent.signedAt = new Date();
@@ -765,7 +766,7 @@ export const signConsent = async (req, res) => {
   }
 };
 
-// --- [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: BỔ SUNG PHỤ LỤC BỆNH ÁN (EMR ADDENDUM) ---
+// --- [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: BỔ SUNG PHỤ LỤC BỆNH ÁN (EMR ADDENDUM) ---
 export const createRecordAddendum = async (req, res) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
@@ -810,7 +811,7 @@ export const createRecordAddendum = async (req, res) => {
         entityId: record._id.toString(),
         performedBy: (req.user?.id || req.user?._id || "system").toString(),
         hospitalId: record.hospitalId || req.user?.hospitalId,
-        details: `Thêm phụ lục bệnh án (lý do: ${reason}) theo Điều 12 TT46/2018/TT-BYT.`,
+        details: `Thêm phụ lục bệnh án (lý do: ${reason}) theo TT 13/2025/TT-BYT.`,
         payload: { addendumHash: signedHash, reason },
       });
     } catch (auditErr) {
@@ -824,7 +825,7 @@ export const createRecordAddendum = async (req, res) => {
   }
 };
 
-// --- [LUẬT GDĐT 20/2023 & TT46/2018]: KÝ SỐ BỆNH ÁN ĐIỆN TỬ VÀ KÍCH HOẠT KHÓA BẤT BIẾN ---
+// --- [LUẬT GDĐT 20/2023 & TT 13/2025]: KÝ SỐ BỆNH ÁN ĐIỆN TỬ VÀ KÍCH HOẠT KHÓA BẤT BIẾN ---
 export const signMedicalRecord = async (req, res) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
@@ -920,7 +921,15 @@ export const createPrivacyConsent = async (req, res) => {
   try {
     const { purposes, signerName, signerNationalId, signerRelationship, medicalId } = req.body;
     const patientId = req.user.role === 'patient' ? (req.user.id || req.user._id) : req.body.patientId;
-    const hospitalId = req.user.hospitalId || req.body.hospitalId;
+    let hospitalId = req.user.hospitalId || req.body.hospitalId;
+    // Tài khoản bệnh nhân không gắn viện: lấy viện từ lượt khám gần nhất của chính họ
+    if (!hospitalId && req.user.role === "patient") {
+      const latestVisit = await Visit.findOne({ patientId }).sort({ createdAt: -1 }).select("hospitalId").lean();
+      hospitalId = latestVisit?.hospitalId;
+    }
+    if (!hospitalId) {
+      return res.status(400).json({ message: "Bạn chưa có lượt khám tại bệnh viện nào nên chưa thể lập cam kết." });
+    }
 
     if (!patientId || !signerName) {
       return res.status(400).json({ message: "Thiếu thông tin người bệnh hoặc người ký cam kết." });
@@ -993,7 +1002,7 @@ export const revokePrivacyConsent = async (req, res) => {
     if (req.user.role === 'patient' && consent.patientId.toString() !== (req.user.id || req.user._id).toString()) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết này." });
     }
-    if (!["admin", "system_admin"].includes(req.user.role)
+    if (!["admin", "system_admin", "patient"].includes(req.user.role)
       && String(consent.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết của bệnh viện khác." });
     }
@@ -1073,7 +1082,7 @@ export const approveTumorBoard = async (req, res) => {
     let linkedVisitId = visitId || tb.postOpMriVisitId || null;
     if (effectiveSurgeryDate) {
       try {
-        const { Visit } = await import("../../models/visit.model.js");
+        
         let targetVisit = linkedVisitId ? await Visit.findById(linkedVisitId) : null;
         if (!targetVisit) {
           const record = await MedicalRecord.findById(consultation.medicalRecordId).lean();

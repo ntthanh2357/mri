@@ -169,6 +169,11 @@ export const getConsentByVisit = async (req, res) => {
       procedureName: "Tiêm thuốc cản quang Gadolinium"
     }).populate("doctorOverrideByUserId", "profile.name profile.fullName");
 
+    // Bệnh nhân chỉ xem được phiếu của chính mình
+    if (req.user.role === "patient" && consent && String(consent.patientId) !== String(req.user.id)) {
+      return errorResponse(res, "Bạn không có quyền xem phiếu đồng thuận này.", 403);
+    }
+
     return successResponse(res, consent, "Lấy thông tin phiếu đồng thuận thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);

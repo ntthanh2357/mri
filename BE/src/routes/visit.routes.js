@@ -16,6 +16,7 @@ import {
   requestMriRescan,
   cancelMriOrder,
   approveVisitDebt,
+  getDebtApprovalCandidates,
   getVisitById,
   saveServiceOrder,
 } from "../controllers/visit.controller.js";
@@ -37,6 +38,7 @@ const ALL_STAFF_ROLES = [
 ];
 
 router.get("/staff", protect, checkRole(ALL_STAFF_ROLES), getStaff);
+router.get("/debt-candidates", protect, checkRole(["hospital_admin"]), getDebtApprovalCandidates);
 router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), createVisit);
 router.get("/my-queue", protect, checkRole(ALL_STAFF_ROLES), getMyQueue); // chỉ nhân viên: hàng đợi chứa lượt khám của cả bệnh viện
 router.post("/check-vitals", protect, checkRole(ALL_STAFF_ROLES), checkVitalsSafety);
@@ -52,7 +54,7 @@ router.put("/:id/status", protect, checkRole(["doctor", "radiologist", "departme
 
 // [THỰC TẾ BV: NGHỊCH LÝ 3 & 4] Bảng kiểm an toàn MRI, Chụp lại & Hủy ca
 router.post("/:id/mri-safety-check", protect, checkRole(["technician", "nurse", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), submitMriSafetyCheck);
-router.post("/:id/debt-approval", protect, checkRole(["hospital_admin", "admin", "system_admin"]), approveVisitDebt);
+router.post("/:id/debt-approval", protect, checkRole(["hospital_admin"]), approveVisitDebt);
 router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), requestMriRescan);
 router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), cancelMriOrder);
 

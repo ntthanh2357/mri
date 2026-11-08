@@ -212,7 +212,7 @@ export const createTransferRequest = async (req, res) => {
 // @access Private (Receptionist, Doctor, Admin, Hospital Admin)
 export const sendTransferEmail = async (req, res) => {
   try {
-    if (!["receptionist", "doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["receptionist", "doctor", "department_head", "admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện gửi hồ sơ chuyển viện.", 403);
     }
 

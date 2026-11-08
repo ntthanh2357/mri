@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { AuditLog } from "../models/auditLog.model.js";
 import { FEATURES } from "../config/features.config.js";
+import { AuditChainAnchor } from "../models/auditChainAnchor.model.js";
+import { getJwtSecret } from "../config/jwt.config.js";
 
 // Hàng đợi tuần tự in-process bảo vệ chuỗi băm khỏi Race Condition khi nhiều request đồng thời
 let auditQueuePromise = Promise.resolve();
@@ -26,7 +28,7 @@ export const AUDIT_ACTIONS = {
   // Cơ chế truy cập khẩn cấp Cấp cứu (HIPAA §164.312(a)(2)(ii) Break-Glass)
   BREAK_GLASS_EMERGENCY_ACCESSED: "BREAK_GLASS_EMERGENCY_ACCESSED",
 
-  // Kiểm toán chu trình State Machine Ca khám (TT46/2018/TT-BYT & HIPAA Audit Trail)
+  // Kiểm toán chu trình State Machine Ca khám (TT 13/2025/TT-BYT & HIPAA Audit Trail)
   VISIT_STATUS_CHANGED: "VISIT_STATUS_CHANGED",
   FSM_TRANSITION: "FSM_TRANSITION",
 
@@ -86,10 +88,60 @@ export const AUDIT_ACTIONS = {
   VERBAL_ORDER_CREATED: "VERBAL_ORDER_CREATED",
   VERBAL_ORDER_READBACK_CONFIRMED: "VERBAL_ORDER_READBACK_CONFIRMED",
   VERBAL_ORDER_COUNTERSIGNED: "VERBAL_ORDER_COUNTERSIGNED",
+
+  // [v3.4] Các hành động bổ sung sau rà soát nghiệp vụ
+  VERBAL_ORDER_REJECTED: "VERBAL_ORDER_REJECTED",
+  VERBAL_ORDER_READBACK_ESCALATED: "VERBAL_ORDER_READBACK_ESCALATED",
+  VERBAL_ORDER_OVERDUE: "VERBAL_ORDER_OVERDUE",
+  IMAGING_REPORT_SIGNED: "IMAGING_REPORT_SIGNED",
+  REFUND_REQUESTED: "REFUND_REQUESTED",
+  REFUND_COMPLETED: "REFUND_COMPLETED",
+  LARGE_REFUND_REVIEWED: "LARGE_REFUND_REVIEWED",
+  VISIT_TYPE_CHANGED: "VISIT_TYPE_CHANGED",
+  VISIT_EMERGENCY_FLAGGED: "VISIT_EMERGENCY_FLAGGED",
+  MRI_EMERGENCY_SCHEDULED: "MRI_EMERGENCY_SCHEDULED",
+  HOSPITAL_POLICY_UPDATED: "HOSPITAL_POLICY_UPDATED",
+  STAFF_IMAGING_SIGN_PERMISSION_CHANGED: "STAFF_IMAGING_SIGN_PERMISSION_CHANGED",
 };
 
 const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_RETRIES = 5;
+
+const sha256 = (text) => crypto.createHash("sha256").update(text).digest("hex");
+
+const anchorSecret = () => process.env.AUDIT_ANCHOR_SECRET || getJwtSecret();
+const signAnchor = (sequenceNumber, currentHash, v2FromSequence) =>
+  crypto.createHmac("sha256", anchorSecret()).update(`${sequenceNumber}|${currentHash}|${v2FromSequence}`).digest("hex");
+
+const updateChainAnchor = async (sequenceNumber, currentHash) => {
+  try {
+    const existing = await AuditChainAnchor.findById("head").select("v2FromSequence").lean();
+    const v2FromSequence = existing?.v2FromSequence ?? sequenceNumber;
+    const fields = { sequenceNumber, currentHash, v2FromSequence, signature: signAnchor(sequenceNumber, currentHash, v2FromSequence) };
+    await AuditChainAnchor.updateOne(
+      { _id: "head", sequenceNumber: { $lt: sequenceNumber } },
+      { $set: fields },
+      { upsert: true }
+    );
+  } catch (err) {
+    // E11000: mốc hiện tại đã mới hơn bản ghi này (instance khác vừa ghi), không cần cập nhật
+    if (err.code !== 11000) console.error("Lỗi cập nhật mốc chuỗi audit:", err.message);
+  }
+};
+
+const hashMaterialV2 = ({ previousHash, sequenceNumber, hashedTimestamp, action, entity, entityId, performerDigest, payloadHash, details, hospitalId, ipAddress, location }) =>
+  [previousHash, sequenceNumber, hashedTimestamp, action, entity, entityId || "", performerDigest, payloadHash || "", details || "", hospitalId ? String(hospitalId) : "", ipAddress || "", location || ""].join("|");
+
+// Bản ghi trước v3.4 giữ công thức cũ. Không thể hạ cấp bản ghi mới về công thức cũ vì hash sẽ không khớp.
+const recomputedHashes = (log) => {
+  if (log.hashVersion === 2) {
+    const performerDigest = log.redactedAt ? log.performerDigest : sha256(String(log.performedBy || ""));
+    if (!log.redactedAt && log.performerDigest !== performerDigest) return [];
+    return [sha256(hashMaterialV2({ ...log, performerDigest }))];
+  }
+  const base = `${log.previousHash}|${log.sequenceNumber}|${log.hashedTimestamp}|${log.action}|${log.entity}|${log.entityId || ""}|${log.performedBy || ""}|${log.payloadHash || ""}`;
+  return [sha256(`${base}|${log.details || ""}`), sha256(base)];
+};
 
 export const recordAuditLog = async ({
   action,
@@ -101,6 +153,7 @@ export const recordAuditLog = async ({
   actorId = "",
   hospitalId = null,
   details = "",
+  note = "",
   metadata = null,
   payload = null,
   ipAddress = "",
@@ -110,7 +163,7 @@ export const recordAuditLog = async ({
   const resolvedEntityId = entityId || targetId || "";
   const resolvedPerformedBy = (performedBy && performedBy !== "system") ? performedBy : (actorId || "system");
   const resolvedPayload = payload || metadata || null;
-  const resolvedDetails = details || (metadata ? JSON.stringify(metadata) : "");
+  const resolvedDetails = details || note || (metadata ? JSON.stringify(metadata) : "");
 
   // Thực thi tuần tự qua hàng đợi Promise Chain kết hợp Optimistic Concurrency Retry
   return new Promise((resolve, reject) => {
@@ -149,20 +202,36 @@ export const recordAuditLog = async ({
               : "";
 
             const timestamp = new Date().toISOString();
+            const performedByText = resolvedPerformedBy ? resolvedPerformedBy.toString() : "system";
+            const entityIdText = resolvedEntityId ? resolvedEntityId.toString() : "";
+            const performerDigest = sha256(performedByText);
 
-            // Tính toán currentHash theo chuẩn mật mã học (bao gồm cả details)
-            const hashMaterial = `${previousHash}|${sequenceNumber}|${timestamp}|${action}|${resolvedEntity}|${resolvedEntityId || ""}|${resolvedPerformedBy || ""}|${payloadHash}|${resolvedDetails || ""}`;
-            const currentHash = crypto.createHash("sha256").update(hashMaterial).digest("hex");
+            const currentHash = sha256(hashMaterialV2({
+              previousHash,
+              sequenceNumber,
+              hashedTimestamp: timestamp,
+              action,
+              entity: resolvedEntity,
+              entityId: entityIdText,
+              performerDigest,
+              payloadHash,
+              details: resolvedDetails,
+              hospitalId,
+              ipAddress,
+              location,
+            }));
 
             const newLog = await AuditLog.create({
               action,
               entity: resolvedEntity,
-              entityId: resolvedEntityId ? resolvedEntityId.toString() : "",
-              performedBy: resolvedPerformedBy ? resolvedPerformedBy.toString() : "system",
+              entityId: entityIdText,
+              performedBy: performedByText,
               hospitalId: hospitalId || null,
               details: resolvedDetails,
               ipAddress: ipAddress || "",
               location: location || "",
+              hashVersion: 2,
+              performerDigest,
               sequenceNumber,
               previousHash,
               currentHash,
@@ -171,6 +240,7 @@ export const recordAuditLog = async ({
               tamperVerified: true,
             });
 
+            await updateChainAnchor(sequenceNumber, currentHash);
             return resolve(newLog);
           } catch (err) {
             lastError = err;
@@ -195,63 +265,85 @@ export const recordAuditLog = async ({
 };
 
 /**
- * Thẩm định tính toàn vẹn của chuỗi băm nhật ký kiểm toán (Tamper-Evidence Verification)
- * Căn cứ: HIPAA §164.312(b) & Thông tư 46/2018/TT-BYT
+ * Thẩm định tính toàn vẹn của chuỗi băm nhật ký kiểm toán.
+ * Mặc định xét toàn bộ chuỗi theo con trỏ, không nạp hết vào bộ nhớ. Truyền số để chỉ xét N bản ghi đầu
+ * (kết quả có partial: true). Chuỗi là chung toàn hệ thống nên tham số hospitalId không lọc được.
  */
-export const verifyAuditChainIntegrity = async (limitOrHospitalId = 1000) => {
-  const limit = typeof limitOrHospitalId === "number" ? limitOrHospitalId : 1000;
-  const logs = await AuditLog.find({ sequenceNumber: { $exists: true } })
-    .sort({ sequenceNumber: 1 })
-    .limit(limit)
-    .lean();
+export const verifyAuditChainIntegrity = async (limitOrHospitalId = null) => {
+  const limit = typeof limitOrHospitalId === "number" && limitOrHospitalId > 0 ? limitOrHospitalId : null;
+  const query = AuditLog.find({ sequenceNumber: { $exists: true } }).sort({ sequenceNumber: 1 });
+  if (limit) query.limit(limit);
 
-  if (!logs || logs.length === 0) {
-    return { valid: true, isValid: true, verifiedCount: 0, message: "Không có bản ghi có chuỗi băm." };
-  }
+  const broken = (log, index, reason) => ({
+    valid: false,
+    isValid: false,
+    brokenAtIndex: index,
+    brokenSequenceNumber: log?.sequenceNumber ?? null,
+    logId: log?._id ?? null,
+    reason,
+  });
 
-  let expectedPrevHash = "0000000000000000000000000000000000000000000000000000000000000000";
+  let expectedPrevHash = GENESIS_HASH;
+  let index = 0;
+  let last = null;
+  const anchor = await AuditChainAnchor.findById("head").lean();
+  let anchorEntry = null;
+  let seenV2 = false;
+  let legacyUnverifiedCount = 0;
 
-  for (let i = 0; i < logs.length; i++) {
-    const log = logs[i];
-
-    // 1. Kiểm tra liên kết previousHash với bản ghi trước
+  for await (const log of query.lean().cursor()) {
     if (log.previousHash !== expectedPrevHash) {
-      return {
-        valid: false,
-        isValid: false,
-        brokenAtIndex: i,
-        brokenSequenceNumber: log.sequenceNumber,
-        logId: log._id,
-        reason: `Chuỗi băm bị đứt gãy tại bản ghi #${log.sequenceNumber}: previousHash không khớp với currentHash của bản ghi trước.`,
-      };
+      return broken(log, index, `Chuỗi băm bị đứt gãy tại bản ghi #${log.sequenceNumber}: previousHash không khớp với currentHash của bản ghi trước.`);
     }
-
-    // 2. [BUG-AUDIT-001 FIX]: Băm lại dữ liệu nội tại của bản ghi để phát hiện sửa đổi trực tiếp trong DB
-    if (log.hashedTimestamp) {
-      const hashMaterialWithDetails = `${log.previousHash}|${log.sequenceNumber}|${log.hashedTimestamp}|${log.action}|${log.entity}|${log.entityId || ""}|${log.performedBy || ""}|${log.payloadHash || ""}|${log.details || ""}`;
-      const hashMaterialLegacy = `${log.previousHash}|${log.sequenceNumber}|${log.hashedTimestamp}|${log.action}|${log.entity}|${log.entityId || ""}|${log.performedBy || ""}|${log.payloadHash || ""}`;
-      const recomputedWithDetails = crypto.createHash("sha256").update(hashMaterialWithDetails).digest("hex");
-      const recomputedLegacy = crypto.createHash("sha256").update(hashMaterialLegacy).digest("hex");
-      if (recomputedWithDetails !== log.currentHash && recomputedLegacy !== log.currentHash) {
-        return {
-          valid: false,
-          isValid: false,
-          brokenAtIndex: i,
-          brokenSequenceNumber: log.sequenceNumber,
-          logId: log._id,
-          reason: `Bản ghi đã bị chỉnh sửa nội dung trái phép tại #${log.sequenceNumber}: recomputedHash không khớp với currentHash.`,
-        };
+    const mustBeV2 = seenV2 || (anchor && log.sequenceNumber >= anchor.v2FromSequence);
+    if (log.hashVersion === 2) {
+      seenV2 = true;
+    } else if (mustBeV2) {
+      return broken(log, index, `Bản ghi đã bị chỉnh sửa nội dung trái phép tại #${log.sequenceNumber}: bị hạ xuống định dạng cũ.`);
+    }
+    if (!log.hashedTimestamp) {
+      if (log.hashVersion === 2) {
+        return broken(log, index, `Bản ghi đã bị chỉnh sửa nội dung trái phép tại #${log.sequenceNumber}: thiếu hashedTimestamp.`);
       }
+      // Log tạo trước khi có hashedTimestamp: chỉ kiểm tra được liên kết, không băm lại được nội dung
+      legacyUnverifiedCount += 1;
+      expectedPrevHash = log.currentHash;
+      last = log;
+      index += 1;
+      continue;
     }
-
+    if (!recomputedHashes(log).includes(log.currentHash)) {
+      return broken(log, index, `Bản ghi đã bị chỉnh sửa nội dung trái phép tại #${log.sequenceNumber}: recomputedHash không khớp với currentHash.`);
+    }
+    if (anchor && log.sequenceNumber === anchor.sequenceNumber) anchorEntry = log;
     expectedPrevHash = log.currentHash;
+    last = log;
+    index += 1;
   }
 
+  // Xóa bản ghi cuối không làm đứt liên kết: chỉ phát hiện được bằng mốc đầu chuỗi đã ký
+  let anchorChecked = false;
+  if (anchor && !limit) {
+    anchorChecked = true;
+    if (anchor.signature !== signAnchor(anchor.sequenceNumber, anchor.currentHash, anchor.v2FromSequence)) {
+      return broken(last, index, "Mốc đầu chuỗi nhật ký có chữ ký không hợp lệ.");
+    }
+    if (!anchorEntry || anchorEntry.currentHash !== anchor.currentHash) {
+      return broken(last, index, `Chuỗi nhật ký bị cắt hoặc thay thế: không còn bản ghi #${anchor.sequenceNumber} khớp với mốc đã ký.`);
+    }
+  }
+
+  if (!last) {
+    return { valid: true, isValid: true, verifiedCount: 0, anchorChecked, message: "Không có bản ghi có chuỗi băm." };
+  }
   return {
     valid: true,
     isValid: true,
-    verifiedCount: logs.length,
-    latestSequenceNumber: logs[logs.length - 1].sequenceNumber,
-    headHash: logs[logs.length - 1].currentHash,
+    verifiedCount: index,
+    partial: Boolean(limit),
+    anchorChecked,
+    legacyUnverifiedCount,
+    latestSequenceNumber: last.sequenceNumber,
+    headHash: last.currentHash,
   };
 };

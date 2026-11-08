@@ -5,16 +5,67 @@ import { Hospital } from "../../models/hospital.model.js";
 import { sendOtpEmail } from "../../services/email.service.js";
 import { Otp } from "./models/otp.model.js";
 import { AuditLog } from "../../models/auditLog.model.js";
+import { recordAuditLog } from "../../services/auditLog.service.js";
 import crypto from "crypto";
 import { authCache } from "../../utils/authCache.util.js";
 import { getJwtSecret, getRefreshSecret, generateSecureOtp } from "../../config/jwt.config.js";
 import { FEATURES } from "../../config/features.config.js";
 import { recordUserLoginSession } from "../../utils/geoIp.util.js";
+import { issueStepUpOtp, verifyStepUpCode } from "../../services/stepUp.service.js";
 
 const hashPhone = (phone) => {
   if (!phone) return null;
   const salt = process.env.PHONE_SALT || "neuroscan_phone_salt";
   return crypto.createHmac("sha256", salt).update(phone).digest("hex");
+};
+
+// Cửa sau cho môi trường phát triển (mã 123456, trả OTP trong response): chỉ bật khi đặt rõ
+// ENABLE_DEBUG_OTP=true. Không dựa vào NODE_ENV!==production: staging cấu hình sai sẽ bị chiếm tài khoản.
+const isDevOtpEnabled = () => process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true";
+
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+
+// Gửi lại OTP đặt lại bộ đếm, nên phải có giãn cách để không dò tiếp được bằng cách xin mã mới.
+const isOtpResendBlocked = (user) =>
+  Boolean(user.otpLastSentAt) && Date.now() - new Date(user.otpLastSentAt).getTime() < OTP_RESEND_COOLDOWN_MS;
+
+const OTP_RESEND_BLOCKED_MESSAGE = "Bạn vừa yêu cầu mã OTP. Vui lòng chờ 60 giây rồi thử lại.";
+
+const stampNewOtp = (user, otpCode) => {
+  user.otpCode = otpCode;
+  user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+  user.otpAttempts = 0;
+  user.otpLastSentAt = new Date();
+};
+
+// Kiểm tra otpCode có giới hạn số lần thử. Đếm atomic trước khi so khớp để request song song không lách được.
+const verifyAccountOtp = async (user, otp) => {
+  if (isDevOtpEnabled() && otp === "123456") return { ok: true };
+
+  const counted = await User.findOneAndUpdate(
+    { _id: user._id, otpAttempts: { $not: { $gte: OTP_MAX_ATTEMPTS } } },
+    { $inc: { otpAttempts: 1 } },
+    { new: true }
+  ).select("otpAttempts").lean();
+
+  if (!counted) {
+    await User.updateOne({ _id: user._id }, { $set: { otpCode: null, otpExpires: null } });
+    return {
+      ok: false,
+      status: 429,
+      message: `Bạn đã nhập sai mã OTP quá ${OTP_MAX_ATTEMPTS} lần. Mã hiện tại đã bị vô hiệu, vui lòng yêu cầu mã mới.`,
+    };
+  }
+  if (!user.otpCode || String(user.otpCode) !== String(otp)) {
+    const remaining = Math.max(0, OTP_MAX_ATTEMPTS - counted.otpAttempts);
+    return { ok: false, status: 400, message: `Mã OTP không chính xác. Bạn còn ${remaining} lần thử.` };
+  }
+  if (!user.otpExpires || user.otpExpires < new Date()) {
+    return { ok: false, status: 400, message: "Mã OTP đã hết hạn." };
+  }
+  await User.updateOne({ _id: user._id }, { $set: { otpAttempts: 0 } });
+  return { ok: true };
 };
 
 // Helper function to generate JWT Access Token
@@ -131,7 +182,7 @@ export const register = async (req, res) => {
 
     // Log the change
     try {
-      await AuditLog.create({
+      await recordAuditLog({
         action: "create-staff",
         entity: "User",
         entityId: newUser._id,
@@ -158,7 +209,7 @@ export const register = async (req, res) => {
         ? "Đăng ký tài khoản thành công! Mã OTP kích hoạt đã được gửi tới email của bạn."
         : "Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.",
       requiresVerification: role === "patient" && !isAutoVerified,
-      debugOtp: (process.env.NODE_ENV !== "production" && role === "patient") ? otpCode : undefined,
+      debugOtp: (isDevOtpEnabled() && role === "patient") ? otpCode : undefined,
       user: {
         id: newUser._id,
         email: newUser.email,
@@ -256,7 +307,7 @@ export const login = async (req, res) => {
         updateFields.failedLoginAttempts = 0;
 
         try {
-          await AuditLog.create({
+          await recordAuditLog({
             action: "ACCOUNT_LOCKED_BRUTE_FORCE",
             entity: "User",
             entityId: user._id,
@@ -306,7 +357,7 @@ export const login = async (req, res) => {
 
     // If patient requires verification and has provided the OTP code, verify it right here!
     if (requiresVerification && req.body.otp) {
-      const isMasterOtp = (process.env.NODE_ENV !== "production" && req.body.otp === "123456");
+      const isMasterOtp = isDevOtpEnabled() && req.body.otp === "123456";
       if (isMasterOtp || (user.otpCode === req.body.otp && user.otpExpires >= new Date())) {
         user.isVerified = true;
         user.otpCode = undefined;
@@ -316,7 +367,7 @@ export const login = async (req, res) => {
         justActivated = true; // Vừa xác thực email xong → miễn 2FA cho phiên này
         // Log the change
         try {
-          await AuditLog.create({
+          await recordAuditLog({
             action: "activate-patient",
             entity: "User",
             entityId: user._id,
@@ -474,7 +525,7 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    const isMasterOtp = (process.env.NODE_ENV !== "production" && otp === "123456");
+    const isMasterOtp = isDevOtpEnabled() && otp === "123456";
     if (!isMasterOtp && (!user.otp2FACode || user.otp2FACode !== otp)) {
       user.otp2FAAttempts = (user.otp2FAAttempts || 0) + 1;
       await user.save({ validateBeforeSave: false });
@@ -559,8 +610,8 @@ export const resend2FA = async (req, res) => {
       return;
     }
 
-    // Chống spam: chỉ gửi lại nếu không có mã hiệu lực hoặc mã cũ đã trên 30 giây
-    if (user.otp2FAExpires && user.otp2FAExpires > new Date() && user.otp2FAExpires - new Date() > 4.5 * 60 * 1000) {
+    // Gửi lại đặt lại bộ đếm lần thử, nên giãn cách 60 giây để không dò tiếp được bằng cách xin mã mới
+    if (user.otp2FAExpires && user.otp2FAExpires > new Date() && user.otp2FAExpires - new Date() > 4 * 60 * 1000) {
       res.status(429).json({ message: "Bạn vừa yêu cầu mã gần đây. Vui lòng chờ vài giây rồi thử lại." });
       return;
     }
@@ -644,9 +695,13 @@ export const refresh = async (req, res) => {
     const decoded = jwt.verify(refreshToken, secret, verifyOptions);
 
     // Fetch user to verify active session version
-    const user = await User.findById(decoded.id).select("tokenVersion role hospitalId");
+    const user = await User.findById(decoded.id).select("tokenVersion role hospitalId isLocked isDeleted");
     if (!user) {
       res.status(401).json({ message: "Người dùng không tồn tại." });
+      return;
+    }
+    if (user.isLocked || user.isDeleted) {
+      res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." });
       return;
     }
 
@@ -656,8 +711,8 @@ export const refresh = async (req, res) => {
       return;
     }
 
-    // Generate new access token
-    const accessToken = generateAccessToken(decoded.id, decoded.role, user.tokenVersion, user.hospitalId);
+    // Vai trò lấy từ DB: đổi vai trò phải có hiệu lực ngay, không đợi refresh token cũ hết hạn
+    const accessToken = generateAccessToken(decoded.id, user.role, user.tokenVersion, user.hospitalId);
 
     res.status(200).json({
       accessToken,
@@ -896,8 +951,36 @@ export const ssoLogin = async (req, res) => {
 // @desc    Logout from current device — hủy phiên phía server
 // @route   POST /auth/logout
 // @access  Public (hoạt động cả khi access token đã hết hạn — logout phải luôn thành công)
+// Hệ thống mỗi tài khoản chỉ một phiên, nên logout tăng tokenVersion để thu hồi cả refresh và access token.
+// Chỉ người đang giữ token hợp lệ mới thu hồi được; token sai thì bỏ qua và vẫn trả OK.
+const revokeSessionFromRequest = async (req) => {
+  const bearer = req.headers?.authorization?.startsWith("Bearer ") ? req.headers.authorization.split(" ")[1] : null;
+  const candidates = [
+    [req.body?.refreshToken, getRefreshSecret()],
+    [req.cookies?.refreshToken, getRefreshSecret()],
+    [bearer, getJwtSecret()],
+  ];
+  const verifyOptions = FEATURES.ENABLE_JWT_ALGORITHM_LOCK ? { algorithms: ["HS256"] } : {};
+  for (const [token, secret] of candidates) {
+    if (!token) continue;
+    try {
+      const decoded = jwt.verify(String(token), secret, verifyOptions);
+      const version = decoded.tokenVersion ?? 0;
+      await User.updateOne(
+        { _id: decoded.id, tokenVersion: { $in: version === 0 ? [0, null] : [version] } },
+        { $inc: { tokenVersion: 1 } }
+      );
+      authCache.invalidateUser(String(decoded.id));
+      return;
+    } catch {
+      // Token hết hạn hoặc sai: thử token khác
+    }
+  }
+};
+
 export const logout = async (req, res) => {
   try {
+    await revokeSessionFromRequest(req);
     // Xóa cookie HttpOnly refreshToken trên trình duyệt hiện tại.
     // Clear ở cả 2 biến thể path để chắc chắn khớp với mọi cách BE từng set
     // (path "/auth" theo login; "/" cho các triển khai sau reverse-proxy).
@@ -1059,12 +1142,14 @@ export const forgotPassword = async (req, res) => {
       return;
     }
 
+    if (isOtpResendBlocked(user)) {
+      res.status(429).json({ message: OTP_RESEND_BLOCKED_MESSAGE });
+      return;
+    }
+
     // Generate 6-digit OTP
     const otpCode = generateSecureOtp();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // Expires in 5 minutes
-
-    user.otpCode = otpCode;
-    user.otpExpires = otpExpires;
+    stampNewOtp(user, otpCode);
     await user.save();
 
     // Send OTP via email (falls back to console log if SMTP is not configured)
@@ -1074,11 +1159,55 @@ export const forgotPassword = async (req, res) => {
       message: emailSent
         ? "Mã OTP đã được gửi thành công đến Gmail của bạn."
         : "Mã OTP đã được tạo thành công (Xem tại terminal của Server do chưa cấu hình SMTP).",
-      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+      debugOtp: isDevOtpEnabled() ? otpCode : undefined,
     });
   } catch (error) {
     console.error("Lỗi quên mật khẩu:", error);
     res.status(500).json({ message: "Đã xảy ra lỗi trên máy chủ khi yêu cầu OTP.", error: error.message });
+  }
+};
+
+// @desc    Gửi OTP email cho xác thực bước 2 trước thao tác nhạy cảm (duyệt hoàn tiền)
+// @route   POST /auth/step-up/request
+// @access  Private
+export const requestStepUpOtp = async (req, res) => {
+  try {
+    const result = await issueStepUpOtp(req.user.id);
+    if (!result.ok) {
+      res.status(result.status).json({ message: result.message });
+      return;
+    }
+    res.status(200).json({
+      message: result.emailSent
+        ? "Mã xác thực đã được gửi tới email của bạn."
+        : "Mã xác thực đã được tạo (xem tại terminal của Server do chưa cấu hình SMTP).",
+      debugOtp: isDevOtpEnabled() ? result.otp : undefined,
+    });
+  } catch (error) {
+    console.error("Lỗi gửi mã xác thực bước 2:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi khi gửi mã xác thực." });
+  }
+};
+
+// @desc    Xác minh OTP bước 2, có hiệu lực 5 phút
+// @route   POST /auth/step-up/verify
+// @access  Private
+export const verifyStepUpOtp = async (req, res) => {
+  try {
+    const { otp } = req.body || {};
+    if (!otp) {
+      res.status(400).json({ message: "Vui lòng nhập mã xác thực." });
+      return;
+    }
+    const result = await verifyStepUpCode(req.user.id, String(otp));
+    if (!result.ok) {
+      res.status(result.status).json({ message: result.message });
+      return;
+    }
+    res.status(200).json({ message: "Xác thực bước 2 thành công.", validUntil: result.validUntil });
+  } catch (error) {
+    console.error("Lỗi xác minh mã xác thực bước 2:", error);
+    res.status(500).json({ message: "Đã xảy ra lỗi khi xác minh mã." });
   }
 };
 
@@ -1101,14 +1230,9 @@ export const verifyOtp = async (req, res) => {
     }
 
     // Verify OTP code and expiration
-    const isMasterOtp = (process.env.NODE_ENV !== "production" && otp === "123456");
-    if (!isMasterOtp && (!user.otpCode || user.otpCode !== otp)) {
-      res.status(400).json({ message: "Mã OTP không chính xác." });
-      return;
-    }
-
-    if (!isMasterOtp && (!user.otpExpires || user.otpExpires < new Date())) {
-      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+    const otpCheck = await verifyAccountOtp(user, otp);
+    if (!otpCheck.ok) {
+      res.status(otpCheck.status).json({ message: otpCheck.message });
       return;
     }
 
@@ -1173,12 +1297,13 @@ export const phoneLoginRequest = async (req, res) => {
       return;
     }
 
+    if (isOtpResendBlocked(user)) {
+      return res.status(429).json({ message: OTP_RESEND_BLOCKED_MESSAGE });
+    }
+
     // Generate 6-digit OTP
     const otpCode = generateSecureOtp();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // Expires in 5 minutes
-
-    user.otpCode = otpCode;
-    user.otpExpires = otpExpires;
+    stampNewOtp(user, otpCode);
     await user.save();
 
     // Print OTP to server console (since we don't have an SMS gateway configured)
@@ -1189,8 +1314,8 @@ export const phoneLoginRequest = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Mã OTP đăng nhập đã được gửi (Mã mặc định môi trường Dev: 123456).",
-      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+      message: "Mã OTP đăng nhập đã được gửi.",
+      debugOtp: isDevOtpEnabled() ? otpCode : undefined,
     });
   } catch (error) {
     console.error("Lỗi yêu cầu OTP đăng nhập:", error);
@@ -1238,14 +1363,9 @@ export const phoneLoginVerify = async (req, res) => {
     }
 
     // Verify OTP code and expiration
-    const isMasterOtp = (process.env.NODE_ENV !== "production" && otp === "123456");
-    if (!isMasterOtp && (!user.otpCode || user.otpCode !== otp)) {
-      res.status(400).json({ message: "Mã OTP không chính xác." });
-      return;
-    }
-
-    if (!isMasterOtp && (!user.otpExpires || user.otpExpires < new Date())) {
-      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+    const otpCheck = await verifyAccountOtp(user, otp);
+    if (!otpCheck.ok) {
+      res.status(otpCheck.status).json({ message: otpCheck.message });
       return;
     }
 
@@ -1363,13 +1483,9 @@ export const verifyActivation = async (req, res) => {
     }
 
     // Verify OTP code and expiration
-    if (!user.otpCode || user.otpCode !== otp) {
-      res.status(400).json({ message: "Mã OTP không chính xác." });
-      return;
-    }
-
-    if (!user.otpExpires || user.otpExpires < new Date()) {
-      res.status(400).json({ message: "Mã OTP đã hết hạn." });
+    const otpCheck = await verifyAccountOtp(user, otp);
+    if (!otpCheck.ok) {
+      res.status(otpCheck.status).json({ message: otpCheck.message });
       return;
     }
 
@@ -1382,7 +1498,7 @@ export const verifyActivation = async (req, res) => {
 
     // Log the change
     try {
-      await AuditLog.create({
+      await recordAuditLog({
         action: "activate-patient",
         entity: "User",
         entityId: user._id,
@@ -1423,9 +1539,13 @@ export const resendActivation = async (req, res) => {
       return;
     }
 
+    if (isOtpResendBlocked(user)) {
+      res.status(429).json({ message: OTP_RESEND_BLOCKED_MESSAGE });
+      return;
+    }
+
     const otpCode = generateSecureOtp();
-    user.otpCode = otpCode;
-    user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    stampNewOtp(user, otpCode);
     await user.save();
 
     const emailSent = await sendOtpEmail(user.email, otpCode);
@@ -1434,7 +1554,7 @@ export const resendActivation = async (req, res) => {
       message: emailSent
         ? "Mã OTP kích hoạt mới đã được gửi thành công đến Gmail của bạn."
         : "Mã OTP mới đã được tạo thành công (Xem tại terminal của Server).",
-      debugOtp: process.env.NODE_ENV !== "production" ? otpCode : undefined,
+      debugOtp: isDevOtpEnabled() ? otpCode : undefined,
     });
   } catch (error) {
     console.error("Lỗi gửi lại OTP kích hoạt:", error);

@@ -1,14 +1,11 @@
 import { get, post } from '../client.js';
 
 export const lisApi = {
-  getOrders: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    return get(`/api/v1/lis/orders${query ? `?${query}` : ''}`);
-  },
-  getOrdersByVisit: (visitId) => get(`/api/v1/lis/visit/${visitId}`),
-  getOrderById: (id) => get(`/api/v1/lis/orders/${id}`),
-  createOrder: (data) => post('/api/v1/lis/orders', data),
-  getBiomarkers: () => get('/api/v1/lis/biomarkers'),
+  getOrdersByPatient: (patientId) => get(`/api/patients/${patientId}/lab-orders`),
+  createOrder: (patientId, data) => post(`/api/patients/${patientId}/lab-orders`, data),
+  collectSpecimen: (orderId, data = {}) => post(`/api/lis/orders/${orderId}/collect`, data),
+  verifyResults: (orderId, data = {}) => post(`/api/lis/orders/${orderId}/verify`, data),
+  getBiomarkers: (category) => get(`/api/lis/biomarkers${category ? `?category=${category}` : ''}`),
 };
 
 export default lisApi;

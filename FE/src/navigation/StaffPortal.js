@@ -61,6 +61,18 @@ import PharmacyQueueScreen from '../screens/PharmacyQueueScreen';
 import StaffSchedulingScreen from '../screens/StaffSchedulingScreen';
 import SlaReportScreen from '../screens/SlaReportScreen';
 import ClinicalAuditScreen from '../screens/ClinicalAuditScreen';
+import VerbalOrdersScreen from '../screens/VerbalOrdersScreen';
+import FinanceApprovalsScreen from '../screens/FinanceApprovalsScreen';
+import PeerReviewScreen from '../screens/PeerReviewScreen';
+import TaskBoardScreen from '../screens/TaskBoardScreen';
+import MriRoomsScreen from '../screens/MriRoomsScreen';
+import EmergencyHistoryScreen from '../screens/EmergencyHistoryScreen';
+import ClinicalReportsScreen from '../screens/ClinicalReportsScreen';
+import PharmacyOversightScreen from '../screens/PharmacyOversightScreen';
+import SupportTicketsAdminScreen from '../screens/SupportTicketsAdminScreen';
+import ComplianceCenterScreen from '../screens/ComplianceCenterScreen';
+import PrivacyConsentsScreen from '../screens/PrivacyConsentsScreen';
+import TumorProgressScreen from '../screens/TumorProgressScreen';
 import AssignmentOverrideScreen from '../screens/AssignmentOverrideScreen';
 
 export const staffLinkingConfig = {
@@ -108,6 +120,18 @@ export const staffLinkingConfig = {
       StaffScheduling: 'staff/staff-scheduling',
       SlaReport: 'staff/sla-report',
       ClinicalAudit: 'staff/clinical-audit',
+      VerbalOrders: 'staff/y-lenh-mieng',
+      FinanceApprovals: 'staff/duyet-tai-chinh',
+      PeerReview: 'staff/peer-review',
+      TaskBoard: 'staff/cong-viec-ca-truc',
+      MriRooms: 'staff/phong-mri',
+      EmergencyHistory: 'staff/lich-su-cap-cuu',
+      ClinicalReports: 'staff/bao-cao-lam-sang',
+      PharmacyOversight: 'staff/hau-kiem-duoc',
+      SupportTicketsAdmin: 'staff/quan-tri-ho-tro',
+      ComplianceCenter: 'staff/tuan-thu',
+      PrivacyConsents: 'staff/du-lieu-ca-nhan',
+      TumorProgress: 'staff/dien-tien-khoi-u',
       AssignmentOverride: 'staff/assignment-override',
     },
   },
@@ -225,6 +249,18 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="StaffScheduling" component={StaffSchedulingScreen} options={{ title: 'Lịch làm việc nhân sự', headerShown: false }} />
         <Stack.Screen name="SlaReport" component={SlaReportScreen} options={{ title: 'Năng suất & Thời gian Chờ', headerShown: false }} />
         <Stack.Screen name="ClinicalAudit" component={ClinicalAuditScreen} options={{ title: 'Nhật ký Kiểm toán Lâm sàng', headerShown: false }} />
+        <Stack.Screen name="VerbalOrders" component={VerbalOrdersScreen} options={{ title: 'Y lệnh miệng chờ xử lý', headerShown: false }} />
+        <Stack.Screen name="FinanceApprovals" component={FinanceApprovalsScreen} options={{ title: 'Duyệt hoàn tiền và bảo lãnh', headerShown: false }} />
+        <Stack.Screen name="PeerReview" component={PeerReviewScreen} options={{ title: 'Bình duyệt phim lần 2', headerShown: false }} />
+        <Stack.Screen name="TaskBoard" component={TaskBoardScreen} options={{ title: 'Công việc ca trực', headerShown: false }} />
+        <Stack.Screen name="MriRooms" component={MriRoomsScreen} options={{ title: 'Phòng máy MRI', headerShown: false }} />
+        <Stack.Screen name="EmergencyHistory" component={EmergencyHistoryScreen} options={{ title: 'Lịch sử cấp cứu', headerShown: false }} />
+        <Stack.Screen name="ClinicalReports" component={ClinicalReportsScreen} options={{ title: 'Báo cáo vận hành và lâm sàng', headerShown: false }} />
+        <Stack.Screen name="PharmacyOversight" component={PharmacyOversightScreen} options={{ title: 'Hậu kiểm dược', headerShown: false }} />
+        <Stack.Screen name="SupportTicketsAdmin" component={SupportTicketsAdminScreen} options={{ title: 'Yêu cầu hỗ trợ', headerShown: false }} />
+        <Stack.Screen name="ComplianceCenter" component={ComplianceCenterScreen} options={{ title: 'Tuân thủ và dữ liệu', headerShown: false }} />
+        <Stack.Screen name="PrivacyConsents" component={PrivacyConsentsScreen} options={{ title: 'Dữ liệu cá nhân của tôi', headerShown: false }} />
+        <Stack.Screen name="TumorProgress" component={TumorProgressScreen} options={{ title: 'Diễn tiến khối u', headerShown: false }} />
         <Stack.Screen name="AssignmentOverride" component={AssignmentOverrideScreen} options={{ title: 'Điều chuyển Phân công Ca', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>

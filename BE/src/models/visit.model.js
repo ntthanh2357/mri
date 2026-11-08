@@ -43,6 +43,10 @@ const visitSchema = new Schema(
       default: 'đang chờ'
     },
     priority: { type: String, enum: ['thấp', 'trung bình', 'cao', 'khẩn cấp'], default: 'trung bình' },
+    // Chẩn đoán lúc tiếp nhận cấp cứu, hoặc do bệnh nhân tự ghi ở lịch sử khám ngoài viện
+    diagnosis: { type: String, default: "" },
+    medicalId: { type: String, default: "" },
+    doctor: { type: String, default: "" },
     // UC-REC-03 — Số thứ tự gọi khám trong ngày (cấp khi tạo lượt khám) & phòng khám được phân luồng
     queueNumber: { type: Number, default: null },
     clinicRoom: { type: String, default: '' },
@@ -178,7 +182,7 @@ const visitSchema = new Schema(
     invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', default: null },
     // [BUG-06 FIX] Flag để tránh gửi nhắc lịch MRI lặp vô hạn
     reminderSent: { type: Boolean, default: false },
-    // Soft Delete tuân thủ Luật Khám bệnh, chữa bệnh 2023 & Thông tư 46/2018/TT-BYT
+    // Soft Delete tuân thủ Luật Khám bệnh, chữa bệnh 2023 & Thông tư 13/2025/TT-BYT
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },

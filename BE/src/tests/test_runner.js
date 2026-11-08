@@ -1,3 +1,4 @@
+import "./assertLocalTestDb.js";
 /**
  * NeuroScan AI - Enterprise Test Suite Runner
  * Designed for Clean ES-Module testing without external runtime conflicts
@@ -209,6 +210,8 @@ async function runAllTests() {
     './neuro_oncology_pacs_workflow.test.js',
     './pacs_concurrent_upload_and_drive_queue.test.js',
     './mega_audit_v3_remediation.test.js',
+    './v34_business_rules.test.js',
+    './v34_security_hardening.test.js',
   ];
 
   const startTime = Date.now();

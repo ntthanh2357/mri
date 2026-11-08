@@ -42,6 +42,8 @@ const invoiceItemSchema = new Schema({
 
 const invoiceSchema = new Schema(
   {
+    // Ghi chú nghiệp vụ, ví dụ vết hoàn tiền
+    notes: { type: String, default: "" },
     hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
     patientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     visitId: { type: Schema.Types.ObjectId, ref: 'Visit', index: true },
@@ -137,6 +139,8 @@ const invoiceSchema = new Schema(
       },
       requestedAmount: { type: Number, default: 0 },
       requestedReason: { type: String, default: '' },
+      // Dòng hoàn một phần do người lập chọn. Người duyệt không được đổi phạm vi hoàn.
+      requestedItems: { type: Schema.Types.Mixed, default: null },
       requestedAt: { type: Date, default: null },
       firstApproverId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       secondApproverId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
@@ -150,7 +154,16 @@ const invoiceSchema = new Schema(
         default: 'none'
       }
     },
-    // Cảnh báo phòng chống rửa tiền (AML - Anti-Money Laundering >= 300M VNĐ - TT35/2013/TT-NHNN)
+    // Kiểm soát nội bộ khoản hoàn từ 300 triệu đồng: cần thêm một Ban Giám đốc khác người lập và người duyệt.
+    largeRefundReview: {
+      required: { type: Boolean, default: false },
+      reviewedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      reviewedByName: { type: String, default: '' },
+      reviewedAt: { type: Date, default: null },
+      note: { type: String, default: '' },
+    },
+    // Dữ liệu cũ, chỉ để đọc lại lịch sử. Không ghi mới: bệnh viện không thuộc đối tượng báo cáo
+    // tại Điều 4 Luật Phòng, chống rửa tiền, nên hệ thống không lập báo cáo STR nữa.
     amlReport: {
       isFlagged: { type: Boolean, default: false },
       flaggedAt: { type: Date, default: null },
@@ -202,6 +215,7 @@ invoiceSchema.plugin(tenancyPlugin);
 
 // Compound indexes tối ưu hiệu năng lọc hóa đơn theo bệnh viện và trạng thái thanh toán
 invoiceSchema.index({ hospitalId: 1, status: 1, createdAt: -1 });
+invoiceSchema.index({ hospitalId: 1, "refundApproval.approvalStatus": 1 });
 invoiceSchema.index({ hospitalId: 1, patientId: 1, createdAt: -1 });
 
 export const Invoice = model('Invoice', invoiceSchema);
