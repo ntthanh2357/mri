@@ -105,7 +105,11 @@ sequenceDiagram
     
     alt Phát hiện Máy tạo nhịp tim / Dị vật kim loại từ tính
         SYS-->>KTV: Chặn thao tác! Báo động đỏ: Chống chỉ định tuyệt đối!
-        KTV->>SYS: Bấm "Hủy ca chụp" kèm lý do an toàn sinh mạng
+        opt Thiết bị MR-conditional (không áp dụng máy tạo nhịp bệnh nhân tự khai)
+            BSCĐ->>SYS: Xác nhận an toàn MRI: lý do + tải giấy xác nhận MR-conditional
+            SYS->>SYS: Ghi nhật ký, thông báo Trưởng khoa
+        end
+        KTV->>SYS: Không có ngoại lệ thì bấm "Hủy ca chụp" kèm lý do an toàn sinh mạng
         SYS->>BS: Thông báo Bác sĩ lâm sàng đổi phương pháp khác (CT-Scan)
     else Đạt tiêu chuẩn an toàn buồng chụp
         SYS->>SYS: Cập nhật Bảng kiểm hợp lệ -> Chuyển ca sang "dang_chup"

@@ -7,7 +7,7 @@ import { buildServiceItems, hasVitals } from "../modules/billing/servicePricing.
 import { createNotificationInternal } from "./notification.controller.js";
 import { ConsentForm } from "../models/consentForm.model.js";
 import { syncVisitVitals } from "../services/vitalSign.service.js";
-import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
+import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, contrastRiskBlockMessage, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { buildVisitPrescriptionFilter } from "../utils/prescriptionScope.util.js";
 import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.js";
@@ -17,12 +17,14 @@ import {
   cancelMriOrderService,
   assertPaymentGateOpen,
   shouldEnforcePaymentGate,
-  syncMriSlotWithVisit
+  syncMriSlotWithVisit,
+  parseEgfrInput
 } from "../services/visit.service.js";
 import { Task } from "../models/task.model.js";
 import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
+import { putFile } from "../services/storage/storageService.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -264,8 +266,12 @@ export const getMyQueue = async (req, res) => {
         }
       ];
     } else if (role === "radiologist") {
-      // Bác sĩ CĐHA (Khoa CĐHA): chỉ tập trung đọc phim MRI & kết quả AI
-      filter.status = { $in: ["đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "hoàn tất"] };
+      // Bác sĩ CĐHA (Khoa CĐHA): đọc phim MRI & kết quả AI, và ca chờ chụp có bảng kiểm chưa đạt cần xác nhận an toàn
+      // Dùng $and để nhánh ?today=true bên dưới (ghi đè filter.$or) không làm mất giới hạn này
+      filter.$and = [{ $or: [
+        { status: { $in: ["đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "hoàn tất"] } },
+        { status: { $in: MRI_WAITING_STATUSES }, "mriSafetyChecklist.isScreened": true, "mriSafetyChecklist.passed": false },
+      ] }];
       filter["mriOrder.orderedAt"] = { $exists: true };
     } else if (role === "department_head") {
       // Trưởng khoa Ung thư Não: giám sát toàn khoa + hội chẩn Tumor Board + ca nguy kịch
@@ -694,7 +700,18 @@ export const createMriOrder = async (req, res) => {
       }
     }
 
-    let resolvedEgfr = creatinineEgfr !== undefined && creatinineEgfr !== null ? Number(creatinineEgfr) : null;
+    // Ra lại chỉ định chỉ khi lượt khám còn đi được sang chờ chụp theo ma trận trạng thái
+    const targetStatus = clinicalScenario === "post_op_72h" ? "chờ chụp sau phẫu thuật" : "chờ chụp";
+    if (!MRI_WAITING_STATUSES.includes(visit.status) && !ALLOWED_TRANSITIONS[visit.status]?.includes(targetStatus)) {
+      return res.status(400).json({ message: `Không thể ra y lệnh chụp MRI khi lượt khám đang ở trạng thái '${visit.status}'.` });
+    }
+
+    let resolvedEgfr;
+    try {
+      resolvedEgfr = parseEgfrInput(creatinineEgfr);
+    } catch (err) {
+      return res.status(400).json({ message: err.message });
+    }
     if (withContrast && resolvedEgfr === null) {
       const { findLatestPatientEgfr } = await import("../services/visit.service.js");
       resolvedEgfr = await findLatestPatientEgfr(visit.hospitalId, visit.patientId);
@@ -716,7 +733,12 @@ export const createMriOrder = async (req, res) => {
       slotId: slotId || null,
       orderedAt: new Date()
     };
-    visit.status = clinicalScenario === "post_op_72h" ? "chờ chụp sau phẫu thuật" : "chờ chụp";
+    visit.status = targetStatus;
+    // Chỉ định mới (vd. thêm cản quang) phải làm lại bảng kiểm an toàn, như khi yêu cầu chụp lại
+    if (visit.mriSafetyChecklist?.isScreened) {
+      visit.mriSafetyChecklist.isScreened = false;
+      visit.mriSafetyChecklist.passed = false;
+    }
 
     // ── [THỰC TẾ BV: NGHỊCH LÝ 1] Lập hóa đơn viện phí tạm tính khi ra y lệnh MRI ──
     try {
@@ -835,6 +857,7 @@ export const ALLOWED_TRANSITIONS = {
 };
 
 const ENTER_SCANNER_ROLES = ["technician", "radiologist", "doctor", "department_head"];
+const MRI_WAITING_STATUSES = ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật"];
 const VISIT_TYPE_EDITOR_ROLES = ["doctor", "department_head"];
 
 // @desc    Cập nhật trạng thái
@@ -873,8 +896,9 @@ export const updateStatus = async (req, res) => {
         }
       }
       // UC-PAT-06: chụp có tiêm cản quang phải có chữ ký đồng thuận của bệnh nhân
-      if (status === "đang chụp" && await contrastConsentPending(visit)) {
-        return res.status(409).json({ message: CONTRAST_UNSIGNED_MESSAGE });
+      if (status === "đang chụp") {
+        const contrastBlock = (await contrastConsentPending(visit)) ? CONTRAST_UNSIGNED_MESSAGE : await contrastRiskBlockMessage(visit);
+        if (contrastBlock) return res.status(409).json({ message: contrastBlock });
       }
       // Đưa bệnh nhân vào từ trường là thao tác an toàn người bệnh: máy chủ tự kiểm tra, không tin FE.
       if (status === "đang chụp") {
@@ -1077,6 +1101,9 @@ export const updateStatus = async (req, res) => {
 export const submitMriSafetyCheck = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Mã lượt khám không hợp lệ." });
+    }
     const result = await submitMriSafetyCheckService({
       visitId: id,
       hospitalId: req.user.hospitalId,
@@ -1087,6 +1114,10 @@ export const submitMriSafetyCheck = async (req, res) => {
     let message = "Đã hoàn tất bảng kiểm an toàn MRI. Bệnh nhân đủ điều kiện vào buồng chụp.";
     if (result.contrastConsentPending) {
       message = "Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp.";
+    } else if (result.contrastBlocked) {
+      message = "Đã lưu bảng kiểm an toàn MRI. Sàng lọc cản quang có nguy cơ cao, bác sĩ chưa xác nhận nên chưa thể bắt đầu chụp.";
+    } else if (result.reviewReasonRequired) {
+      message = "Đã lưu bảng kiểm. Trường hợp thai kỳ hoặc suy thận có cản quang: bác sĩ cần ghi lý do xác nhận (tối thiểu 10 ký tự) trước khi vào buồng chụp.";
     } else if (result.requiresDoctorReview) {
       message = "Đã lưu bảng kiểm. Trường hợp này cần bác sĩ xác nhận trước khi vào buồng chụp (thai kỳ hoặc suy thận có cản quang).";
     }
@@ -1095,6 +1126,7 @@ export const submitMriSafetyCheck = async (req, res) => {
       success: true,
       message,
       contrastConsentPending: result.contrastConsentPending,
+      contrastBlocked: Boolean(result.contrastBlocked),
       requiresDoctorReview: Boolean(result.requiresDoctorReview),
       paymentPending: Boolean(result.paymentPending),
       creatinineEgfr: result.creatinineEgfr ?? null,
@@ -1110,7 +1142,44 @@ export const submitMriSafetyCheck = async (req, res) => {
         visit: error.visit
       });
     }
-    return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi máy chủ", error: error.message });
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    console.error("Lỗi bảng kiểm an toàn MRI:", error);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ" });
+  }
+};
+
+// @desc    Bác sĩ CĐHA tải giấy xác nhận thiết bị MR-conditional trước khi ghi đè chống chỉ định kim loại
+// @route   POST /api/v1/visits/:id/mri-conditional-doc (multipart, trường "file": PDF hoặc ảnh)
+// @access  Private (Radiologist)
+export const uploadMriConditionalDoc = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Mã lượt khám không hợp lệ." });
+    }
+    if (!req.file?.buffer?.length) {
+      return res.status(400).json({ success: false, message: "Vui lòng chọn tệp PDF hoặc ảnh giấy xác nhận MR-conditional." });
+    }
+    const visit = await Visit.findOne({ _id: id, hospitalId: req.user.hospitalId });
+    if (!visit) return res.status(404).json({ success: false, message: "Không tìm thấy lượt khám." });
+    if (!MRI_WAITING_STATUSES.includes(visit.status)) {
+      return res.status(409).json({ success: false, message: "Lượt khám này hiện không chờ chụp MRI." });
+    }
+    const ext = req.file.mimetype === "application/pdf" ? ".pdf" : req.file.mimetype === "image/png" ? ".png" : ".jpg";
+    const saved = await putFile({
+      category: "report",
+      studyId: String(visit._id),
+      fileName: `mr_conditional_${Date.now()}${ext}`,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      uploadedBy: req.user.id,
+      hospitalId: visit.hospitalId,
+      patientId: visit.patientId,
+    });
+    return res.status(201).json({ success: true, data: { fileId: saved.fileId, fileName: req.file.originalname || "giay-xac-nhan" } });
+  } catch (error) {
+    console.error("Lỗi tải giấy xác nhận MR-conditional:", error);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ" });
   }
 };
 

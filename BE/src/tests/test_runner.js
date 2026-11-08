@@ -212,6 +212,7 @@ async function runAllTests() {
     './mega_audit_v3_remediation.test.js',
     './v34_business_rules.test.js',
     './v34_security_hardening.test.js',
+    './mri_safety_v34.test.js',
   ];
 
   const startTime = Date.now();

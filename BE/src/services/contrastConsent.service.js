@@ -79,6 +79,18 @@ export const contrastConsentPending = async (visit) => {
   return !consent?.patientSigned;
 };
 
+export const CONTRAST_BLOCKED_MESSAGE = "Sàng lọc cản quang phát hiện nguy cơ cao, bác sĩ chưa xác nhận. Chưa thể bắt đầu chụp.";
+
+/** Bệnh nhân đã ký nhưng sàng lọc sau đó có nguy cơ cao mà bác sĩ chưa xác nhận → trả thông báo chặn, không thì null. */
+export const contrastRiskBlockMessage = async (visit) => {
+  if (!visit?.mriOrder?.withContrast) return null;
+  const consent = await ConsentForm.findOne({ visitId: visit._id, hospitalId: visit.hospitalId, procedureName: CONTRAST_PROCEDURE })
+    .select("isBlockedByChecklist isDoctorOverridden")
+    .setOptions({ bypassTenancy: true })
+    .lean();
+  return consent?.isBlockedByChecklist && !consent.isDoctorOverridden ? CONTRAST_BLOCKED_MESSAGE : null;
+};
+
 /** Tạo phiếu cho lượt khám nếu chưa có (bác sĩ chỉ định MRI có tiêm cản quang). */
 export const ensureContrastConsentForVisit = async (visit) => {
   const existing = await ConsentForm.findOne({ visitId: visit._id, hospitalId: visit.hospitalId, procedureName: CONTRAST_PROCEDURE });

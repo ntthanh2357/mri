@@ -427,7 +427,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: {
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false,
           hasPacemakerOrMetal: false,
           enforcePaymentGate: false,
         },
@@ -444,7 +444,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -462,7 +462,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -480,7 +480,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -506,7 +506,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(resCheck.visit.status).toBe("đang chụp");
@@ -530,7 +530,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: { hasPacemakerOrMetal: false },
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
       })
     ).rejects.toThrow("CHẶN CỔNG VIỆN PHÍ");
   });
@@ -558,7 +558,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: { hasPacemakerOrMetal: false },
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
       })
     ).rejects.toThrow("CHẶN CỔNG VIỆN PHÍ");
   });

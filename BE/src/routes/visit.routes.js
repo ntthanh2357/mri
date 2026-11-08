@@ -1,5 +1,6 @@
 import express from "express";
 import { protect, checkRole } from "../middlewares/auth.middleware.js";
+import { uploadSingle } from "../middlewares/upload.middleware.js";
 import {
   createVisit,
   getMyQueue,
@@ -13,6 +14,7 @@ import {
   updateStatus,
   getStaff,
   submitMriSafetyCheck,
+  uploadMriConditionalDoc,
   requestMriRescan,
   cancelMriOrder,
   approveVisitDebt,
@@ -53,7 +55,10 @@ router.put("/:id/mri-order", protect, checkRole(["doctor", "department_head"]), 
 router.put("/:id/status", protect, checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "system_admin", "hospital_admin"]), updateStatus);
 
 // [THỰC TẾ BV: NGHỊCH LÝ 3 & 4] Bảng kiểm an toàn MRI, Chụp lại & Hủy ca
-router.post("/:id/mri-safety-check", protect, checkRole(["technician", "nurse", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), submitMriSafetyCheck);
+router.post("/:id/mri-safety-check", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), submitMriSafetyCheck);
+// Lỗi định dạng/dung lượng của multer trả 400 thay vì 500
+const acceptMrConditionalDoc = (req, res, next) => uploadSingle(req, res, (err) => (err ? res.status(400).json({ success: false, message: err.message }) : next()));
+router.post("/:id/mri-conditional-doc", protect, checkRole(["radiologist"]), acceptMrConditionalDoc, uploadMriConditionalDoc);
 router.post("/:id/debt-approval", protect, checkRole(["hospital_admin"]), approveVisitDebt);
 router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), requestMriRescan);
 router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), cancelMriOrder);

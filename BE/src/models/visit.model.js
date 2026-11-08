@@ -141,7 +141,8 @@ const visitSchema = new Schema(
       overrideReason: { type: String, default: "" },
       overriddenBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       overriddenByName: { type: String, default: "" },
-      overriddenAt: { type: Date, default: null }
+      overriddenAt: { type: Date, default: null },
+      mrConditionalDocFileId: { type: String, default: "" } // giấy xác nhận thiết bị MR-conditional khi Bác sĩ CĐHA ghi đè
     },
     // [Q-BILLING-01] Phê duyệt nợ viện phí có thời hạn bởi Quản trị viên bệnh viện (Debt Approval Gate)
     debtApproval: {

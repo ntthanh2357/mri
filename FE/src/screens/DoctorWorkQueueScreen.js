@@ -4,6 +4,7 @@ import {
   ActivityIndicator, TextInput, Modal, Alert, Image, Platform, Pressable, useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { get, put, post, postFormData } from '../services/api.service';
 import { isRateLimitError } from '../utils/apiErrors';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -137,6 +138,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [metalDetails, setMetalDetails] = useState('');
   const [safetyNotes, setSafetyNotes] = useState('');
   const [submittingSafety, setSubmittingSafety] = useState(false);
+  // Bác sĩ xác nhận an toàn MRI: 'review' (thai kỳ / suy thận có cản quang) hoặc 'override' (Bác sĩ CĐHA, thiết bị MR-conditional)
+  const [confirmMode, setConfirmMode] = useState(null);
+  const [confirmReason, setConfirmReason] = useState('');
+  const [mrDoc, setMrDoc] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   // [THỰC TẾ BV: NGHỊCH LÝ 4] Yêu cầu Chụp lại (Rescan modal)
   const [rescanModal, setRescanModal] = useState(false);
@@ -303,28 +309,89 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const openSafetyModal = (visit) => {
     // Điền sẵn theo phiếu bệnh nhân tự khai trên app (nếu có); KTV vẫn phải hỏi lại và tự xác nhận
     const pre = prefillFromScreening(visit.patientMriScreening);
+    // Chưa có lời khai thì để trống (null): KTV phải chọn Có/Không cho từng câu, không mặc định "không"
+    const declared = Boolean(visit.patientMriScreening?.declaredAt);
     setSafetyVisit(visit);
-    setHasPacemakerOrMetal(pre.hasPacemakerOrMetal);
-    setHasClaustrophobia(pre.hasClaustrophobia);
+    setHasPacemakerOrMetal(declared ? pre.hasPacemakerOrMetal : null);
+    setHasClaustrophobia(declared ? pre.hasClaustrophobia : null);
     // [P2-3 FIX] Giữ tiền sử suy thận đã lưu của ca (mở lại bảng kiểm không được xóa trắng);
     // đây là yếu tố quyết định có được tiêm cản quang hay không.
-    setHasKidneyDisease(Boolean(visit.mriSafetyChecklist?.hasKidneyDisease));
-    setIsPregnant(pre.isPregnant);
+    setHasKidneyDisease(visit.mriSafetyChecklist?.isScreened ? Boolean(visit.mriSafetyChecklist?.hasKidneyDisease) : null);
+    setIsPregnant(declared ? pre.isPregnant : null);
     setMetalDetails('');
     setSafetyNotes(pre.safetyNotes);
+    setConfirmMode(null);
+    setConfirmReason('');
+    setMrDoc(null);
     setSafetyModal(true);
+  };
+
+  // Bác sĩ mở lại đúng câu trả lời KTV đã ghi, xem lại rồi xác nhận kèm lý do
+  const openConfirmModal = (visit, mode) => {
+    const c = visit.mriSafetyChecklist || {};
+    setSafetyVisit(visit);
+    setHasPacemakerOrMetal(Boolean(c.hasPacemakerOrMetal));
+    setHasClaustrophobia(Boolean(c.hasClaustrophobia));
+    setHasKidneyDisease(Boolean(c.hasKidneyDisease));
+    setIsPregnant(Boolean(c.isPregnant));
+    setMetalDetails(c.metalDetails || '');
+    setSafetyNotes(c.notes || '');
+    setConfirmMode(mode);
+    setConfirmReason('');
+    setMrDoc(null);
+    setSafetyModal(true);
+  };
+
+  // Giấy xác nhận MR-conditional (PDF hoặc ảnh) cho ca Bác sĩ CĐHA ghi đè
+  const uploadMrDoc = async (file) => {
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await postFormData(`/api/v1/visits/${safetyVisit._id}/mri-conditional-doc`, formData);
+      if (res?.success && res.data?.fileId) setMrDoc({ fileId: res.data.fileId, name: res.data.fileName || file.name || 'Giấy xác nhận' });
+      else throw new Error(res?.message || 'Không tải được giấy xác nhận.');
+    } catch (err) {
+      const msg = err.message || 'Không tải được giấy xác nhận.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Lỗi', msg);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+  const pickMrDoc = async () => {
+    if (!safetyVisit) return;
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/pdf,image/jpeg,image/png';
+      input.onchange = (e) => { const file = e.target.files?.[0]; if (file) uploadMrDoc(file); };
+      input.click();
+      return;
+    }
+    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
+    const asset = result?.assets?.[0];
+    if (result?.canceled || !asset) return;
+    uploadMrDoc({ uri: asset.uri, name: asset.name || 'giay-xac-nhan', type: asset.mimeType || 'application/pdf' });
   };
 
   const handleSubmitSafety = async () => {
     if (!safetyVisit) return;
-    if (hasPacemakerOrMetal) {
-      if (Platform.OS === 'web') {
-        alert('CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI!\nBệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính. Không được phép đưa vào buồng chụp MRI vì nguy cơ tử vong do lực hút từ trường.');
-      } else {
-        Alert.alert('CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI', 'Bệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính. Không được phép đưa vào buồng chụp MRI vì nguy cơ tử vong do lực hút từ trường.');
-      }
+    if ([hasPacemakerOrMetal, hasClaustrophobia, hasKidneyDisease, isPregnant].some((v) => v !== true && v !== false)) {
+      const msg = 'Vui lòng trả lời đủ 4 câu (Có/Không) sau khi hỏi lại bệnh nhân.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Chưa trả lời đủ', msg);
       return;
     }
+    if (confirmMode && confirmReason.trim().length < 10) {
+      const msg = 'Vui lòng ghi lý do xác nhận (tối thiểu 10 ký tự).';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Thiếu lý do', msg);
+      return;
+    }
+    if (confirmMode === 'override' && !mrDoc) {
+      const msg = 'Vui lòng tải lên giấy xác nhận thiết bị MR-conditional.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Thiếu giấy xác nhận', msg);
+      return;
+    }
+    // Có kim loại vẫn gửi lên máy chủ: máy chủ chặn và lưu vết chống chỉ định
 
     setSubmittingSafety(true);
     try {
@@ -338,11 +405,18 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         passed: true,
         enforcePaymentGate: true,
         screeningDeclaredAt: safetyVisit.patientMriScreening?.declaredAt || null, // lời khai KTV đang xem
+        ...(confirmMode ? { overrideReason: confirmReason.trim() } : {}),
+        ...(confirmMode === 'override' && mrDoc ? { mrConditionalDocFileId: mrDoc.fileId } : {}),
       });
 
       if (res && res.success && res.contrastConsentPending) {
         const msg = 'Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp.';
         if (Platform.OS === 'web') alert(msg); else Alert.alert('Đã lưu bảng kiểm', msg);
+        setSafetyModal(false);
+        fetchData();
+      } else if (res && res.success && res.contrastBlocked) {
+        const msg = res.message || 'Sàng lọc cản quang có nguy cơ cao, bác sĩ chưa xác nhận nên chưa thể bắt đầu chụp.';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('Chưa thể bắt đầu chụp', msg);
         setSafetyModal(false);
         fetchData();
       } else if (res && res.success && res.requiresDoctorReview) {
@@ -362,7 +436,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       const msg = err.message || 'Không thể lưu bảng kiểm an toàn.';
       if (Platform.OS === 'web') alert(msg); else Alert.alert('Lỗi', msg);
       // bệnh nhân vừa sửa phiếu tự khai: đóng bảng kiểm, tải lại để KTV mở lại với lời khai mới nhất
-      if (/vừa cập nhật phiếu tự khai/.test(msg)) { setSafetyModal(false); fetchData(); }
+      if (/vừa cập nhật phiếu tự khai|CHỐNG CHỈ ĐỊNH|chống chỉ định/.test(msg)) { setSafetyModal(false); fetchData(); }
     } finally {
       setSubmittingSafety(false);
     }
@@ -754,6 +828,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   };
   const safetyFlagOf = (v) => {
     if (v.mriSafetyChecklist?.passed) return { tone: 'success', icon: CheckCircle2, label: 'An toàn MRI: đạt' };
+    if (v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.hasPacemakerOrMetal) return { tone: 'warning', icon: AlertTriangle, label: 'Chờ xác nhận an toàn' };
     if (v.mriSafetyChecklist?.isScreened) return { tone: 'danger', icon: XCircle, label: 'Chống chỉ định MRI' };
     // KTV chưa kiểm tra: hiện lời khai của bệnh nhân trên app (nếu có)
     const declared = screeningBadge(v.patientMriScreening);
@@ -843,7 +918,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
     if ((isDoctor || isAdmin) && canOrderMri) list.push({ key: 'mri', variant: 'secondary', icon: Scan, label: 'Ra y lệnh MRI', onPress: () => openMriModal(v) });
     if ((isDoctor || isAdmin) && ['đang khám', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status)) list.push({ key: 'finish', variant: 'secondary', icon: CheckCircle2, label: 'Kết thúc khám', onPress: () => finishExam(v) });
-    if ((isTechnician || isAdmin) && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
+    // Bảng kiểm đã làm nhưng chưa đạt: bác sĩ xác nhận ca cần duyệt; ca có kim loại chỉ Bác sĩ CĐHA (trừ máy tạo nhịp bệnh nhân tự khai)
+    const awaitingConfirm = canStartMri && v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.passed;
+    if (awaitingConfirm && !v.mriSafetyChecklist?.hasPacemakerOrMetal && (isDoctor || isRadiologist)) list.push({ key: 'confirm', variant: 'primary', icon: ShieldCheck, label: 'Xác nhận an toàn MRI', onPress: () => openConfirmModal(v, 'review') });
+    if (awaitingConfirm && v.mriSafetyChecklist?.hasPacemakerOrMetal && isRadiologist && v.patientMriScreening?.answers?.pacemaker !== 'yes') list.push({ key: 'confirm', variant: 'primary', icon: ShieldCheck, label: 'Xác nhận an toàn MRI', onPress: () => openConfirmModal(v, 'override') });
+    if (isTechnician && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
     if ((isTechnician || isAdmin) && canUploadMri) list.push({ key: 'upload', variant: 'primary', icon: Upload, label: 'Nộp ảnh phim', onPress: () => openUploadModal(v) });
     if ((isDoctor || isRadiologist || isTechnician || isAdmin) && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
     if (isNurse && v.status === 'đang chờ') list.push({ key: 'vitals', variant: 'primary', icon: Activity, label: 'Nhập sinh hiệu', onPress: () => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } }) });
@@ -1018,6 +1097,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <CheckCircle2 size={12} color="#15803D" strokeWidth={2.4} />
                 <Text style={{ color: '#15803D', fontSize: 11, fontWeight: '600' }}>An toàn MRI: Đạt ({v.mriSafetyChecklist.screenedBy || 'KTV'})</Text>
+              </View>
+            ) : v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.passed && !v.mriSafetyChecklist?.hasPacemakerOrMetal ? (
+              <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <AlertTriangle size={12} color="#92400E" strokeWidth={2.4} />
+                <Text style={{ color: '#92400E', fontSize: 11, fontWeight: 'bold' }}>Chờ xác nhận an toàn</Text>
               </View>
             ) : v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.passed ? (
               <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FCA5A5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1593,6 +1677,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         patientScreening={safetyVisit?.patientMriScreening}
         onSubmit={handleSubmitSafety}
         submitting={submittingSafety}
+        confirmMode={confirmMode}
+        confirmReason={confirmReason}
+        setConfirmReason={setConfirmReason}
+        mrDocName={mrDoc?.name || ''}
+        onPickDoc={pickMrDoc}
+        uploadingDoc={uploadingDoc}
       />
 
       {/* ── [THỰC TẾ BV: NGHỊCH LÝ 4] MODAL YÊU CẦU CHỤP LẠI (RESCAN) ───────────────── */}
@@ -1612,7 +1702,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         onClose={() => setConsentVisit(null)}
         consent={consentVisit?.contrastConsent || null}
         patientName={consentVisit?.patientId?.profile?.name || 'Bệnh nhân'}
-        canOverride={isDoctor || isAdmin}
+        canOverride={isDoctor || isRadiologist}
         onChanged={fetchData}
       />
 

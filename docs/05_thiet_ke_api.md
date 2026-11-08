@@ -71,7 +71,9 @@ Toàn bộ hệ thống API của **NeuroScan AI** được thiết kế tuân t
 #### 2. Nộp Bảng kiểm An toàn buồng chụp MRI (Submit Safety Checklist)
 - **Endpoint:** `POST /api/v1/visits/:id/mri-safety-check`
 - **Quyền hạn:** `technician`, `doctor`
-- **Mô tả:** Thẩm định 4 tiêu chí an toàn trước buồng máy. Nếu có kim loại hoặc máy tạo nhịp tim, hệ thống từ chối ngay lập tức với cảnh báo chống chỉ định tuyệt đối.
+- **Mô tả:** Thẩm định 4 tiêu chí an toàn trước buồng máy; cả 4 câu bắt buộc trả lời Có/Không. Nếu có kim loại hoặc máy tạo nhịp tim, hệ thống từ chối với cảnh báo chống chỉ định.
+- **Ngoại lệ thiết bị MR-conditional:** chỉ Bác sĩ CĐHA (`radiologist`) được ghi đè, bắt buộc có lý do (tối thiểu 10 ký tự) và giấy xác nhận MR-conditional đã tải lên qua `POST /api/v1/visits/:id/mri-conditional-doc` (`mrConditionalDocFileId`). Hệ thống gửi thông báo trong ứng dụng tới mọi Trưởng khoa của viện và ghi nhật ký. Máy tạo nhịp do bệnh nhân tự khai không có ngoại lệ.
+- **Cần bác sĩ xác nhận:** thai kỳ, hoặc suy thận khi có cản quang. Bác sĩ, Trưởng khoa hoặc Bác sĩ CĐHA xác nhận kèm lý do tối thiểu 10 ký tự.
 - **Request Body mẫu:**
   ```json
   {

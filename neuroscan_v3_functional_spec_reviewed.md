@@ -92,7 +92,7 @@ Tự động dời lịch bệnh nhân thường sang slot khác hoàn toàn im 
 |---|---|---|
 | **Frontend Mobile** | React Native (Expo) | **Dành riêng cho Bệnh nhân** (đặt lịch, xem kết quả, sổ sức khỏe, QR chia sẻ, FCM Push) |
 | **Frontend Web** | React.js | **Dành cho Nhân viên y tế** (Bác sĩ, KTV, Điều dưỡng, Lễ tân, Admin) |
-| **Backend** | Node.js + Express.js | REST API, WebSocket (Socket.IO cho Web) |��────────────────────────────┼───────────────────┐
+| **Backend** | Node.js + Express.js | REST API, WebSocket (Socket.IO cho Web) |��────────────────────────────┼───────────────────┐
 │                      BACKEND LAYER (Node.js/Express)             │
 │  ┌──────────▼──────────────────────────────▼──────────────────┐  │
 │  │               REST API (Express.js)                         │  │
@@ -653,7 +653,10 @@ Bệnh nhân đến → Lễ tân tạo Visit → Bác sĩ khám → Chỉ đị
 - Đang cho con bú
 - Tiền sử bệnh thận mạn, hen phế quản nặng
 
-Nếu có yếu tố nguy cơ, chặn tiến hành và cảnh báo bác sĩ chỉ định. Bác sĩ có thể override với xác nhận lý do.<br>
+Phân 3 mức nguy cơ:
+- **Cao (`high`):** có tiền sử dị ứng thuốc cản quang, hoặc eGFR < 30. Chặn tiến hành, cảnh báo bác sĩ chỉ định; bác sĩ có thể override với xác nhận lý do.
+- **Trung bình (`moderate`):** eGFR 30–59, mang thai, cho con bú, bệnh thận mạn, hen phế quản nặng. Cảnh báo, không chặn. Riêng thai kỳ và suy thận có cản quang vẫn cần bác sĩ xác nhận ở bảng kiểm an toàn MRI.
+- **Thấp (`low`):** không có yếu tố nào ở trên. Cho phép tiếp tục.<br>
 *Đầu ra:* Cho phép/chặn tiếp tục, cảnh báo bác sĩ, ghi log.
 
 **S.2 — Lưu phiếu đồng thuận điện tử**<br>

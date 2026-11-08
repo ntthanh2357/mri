@@ -17,7 +17,7 @@ router.post(
 );
 router.post(
   "/:id/override",
-  checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]),
+  checkRole(["doctor", "radiologist", "department_head"]),
   overrideChecklistRisk
 );
 router.post("/:id/sign-patient", signPatientConsent);

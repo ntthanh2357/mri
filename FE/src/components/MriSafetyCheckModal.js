@@ -7,6 +7,23 @@ import {
 import { ClipboardCheck, AlertTriangle, XOctagon, Check } from 'lucide-react';
 import { flaggedAnswers, ANSWER_LABEL } from '../utils/mriScreening';
 
+// Mỗi câu phải chọn rõ Có hoặc Không. Giá trị null là chưa trả lời.
+const YesNo = ({ value, onChange }) => (
+  <View style={styles.yesNoRow}>
+    {[{ v: true, label: 'Có' }, { v: false, label: 'Không' }].map((o) => (
+      <TouchableOpacity
+        key={o.label}
+        style={[styles.yesNoBtn, value === o.v && (o.v ? styles.yesNoBtnYes : styles.yesNoBtnNo)]}
+        onPress={() => onChange(o.v)}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: value === o.v }}
+      >
+        <Text style={[styles.yesNoText, value === o.v && styles.yesNoTextActive]}>{o.label}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+
 /**
  * Component: Modal Bảng kiểm An toàn MRI trước buồng máy
  * 4 câu hỏi sinh mạng: Pacemaker/Kim loại, Claustrophobia, Thận eGFR, Thai kỳ
@@ -27,15 +44,23 @@ const MriSafetyCheckModal = ({
   setSafetyNotes,
   patientScreening,
   onSubmit,
-  submitting
+  submitting,
+  confirmMode = null, // null: KTV làm bảng kiểm; 'review' | 'override': bác sĩ xác nhận an toàn
+  confirmReason = '',
+  setConfirmReason = () => {},
+  mrDocName = '',
+  onPickDoc = () => {},
+  uploadingDoc = false
 }) => {
+  const allAnswered = [hasPacemakerOrMetal, hasClaustrophobia, hasKidneyDisease, isPregnant].every((v) => v === true || v === false);
+  const confirmReady = !confirmMode || (confirmReason.trim().length >= 10 && (confirmMode !== 'override' || Boolean(mrDocName)));
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={[styles.modalBox, { maxHeight: '92%' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
             <ClipboardCheck size={22} color={Colors.brandGreen} style={{ marginRight: 8 }} />
-            <Text style={[styles.modalTitle, { color: Colors.brandNavy, marginBottom: 0 }]}>Bảng kiểm an toàn MRI trước buồng máy</Text>
+            <Text style={[styles.modalTitle, { color: Colors.brandNavy, marginBottom: 0 }]}>{confirmMode ? 'Xác nhận an toàn MRI' : 'Bảng kiểm an toàn MRI trước buồng máy'}</Text>
           </View>
           <Text style={styles.modalSub}>
             Bệnh nhân: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{patientName || 'Bệnh nhân'}</Text> · Từ trường 1.5T/3.0T
@@ -75,7 +100,6 @@ const MriSafetyCheckModal = ({
                 styles.itemCard,
                 hasPacemakerOrMetal ? styles.itemCardDanger : styles.itemCardDefault
               ]}
-              onPress={() => setHasPacemakerOrMetal(!hasPacemakerOrMetal)}
             >
               <View style={styles.itemHeader}>
                 <View style={[styles.checkbox, hasPacemakerOrMetal && styles.checkboxDanger]}>
@@ -90,6 +114,7 @@ const MriSafetyCheckModal = ({
                   </Text>
                 </View>
               </View>
+              <YesNo value={hasPacemakerOrMetal} onChange={setHasPacemakerOrMetal} />
 
               {hasPacemakerOrMetal && (
                 <View style={styles.dangerAlertBox}>
@@ -109,7 +134,6 @@ const MriSafetyCheckModal = ({
                 styles.itemCard,
                 hasClaustrophobia ? styles.itemCardWarning : styles.itemCardDefault
               ]}
-              onPress={() => setHasClaustrophobia(!hasClaustrophobia)}
             >
               <View style={styles.itemHeader}>
                 <View style={[styles.checkbox, hasClaustrophobia && styles.checkboxWarning]}>
@@ -124,6 +148,7 @@ const MriSafetyCheckModal = ({
                   </Text>
                 </View>
               </View>
+              <YesNo value={hasClaustrophobia} onChange={setHasClaustrophobia} />
             </TouchableOpacity>
 
             {/* Câu 3: Bệnh thận eGFR */}
@@ -132,7 +157,6 @@ const MriSafetyCheckModal = ({
                 styles.itemCard,
                 hasKidneyDisease ? styles.itemCardWarning : styles.itemCardDefault
               ]}
-              onPress={() => setHasKidneyDisease(!hasKidneyDisease)}
             >
               <View style={styles.itemHeader}>
                 <View style={[styles.checkbox, hasKidneyDisease && styles.checkboxWarning]}>
@@ -147,6 +171,7 @@ const MriSafetyCheckModal = ({
                   </Text>
                 </View>
               </View>
+              <YesNo value={hasKidneyDisease} onChange={setHasKidneyDisease} />
             </TouchableOpacity>
 
             {/* Câu 4: Đang mang thai */}
@@ -155,7 +180,6 @@ const MriSafetyCheckModal = ({
                 styles.itemCard,
                 isPregnant ? styles.itemCardPink : styles.itemCardDefault
               ]}
-              onPress={() => setIsPregnant(!isPregnant)}
             >
               <View style={styles.itemHeader}>
                 <View style={[styles.checkbox, isPregnant && styles.checkboxPink]}>
@@ -170,6 +194,7 @@ const MriSafetyCheckModal = ({
                   </Text>
                 </View>
               </View>
+              <YesNo value={isPregnant} onChange={setIsPregnant} />
             </TouchableOpacity>
 
             {/* Ghi chú thêm */}
@@ -180,6 +205,30 @@ const MriSafetyCheckModal = ({
               value={safetyNotes}
               onChangeText={setSafetyNotes}
             />
+
+            {confirmMode ? (
+              <View style={styles.confirmBox}>
+                <Text style={styles.fieldLabel}>
+                  {confirmMode === 'override' ? 'Lý do cho phép chụp với thiết bị MR-conditional (tối thiểu 10 ký tự):' : 'Lý do bác sĩ xác nhận an toàn (tối thiểu 10 ký tự):'}
+                </Text>
+                <TextInput
+                  style={styles.textArea}
+                  placeholder={confirmMode === 'override' ? 'Ví dụ: Nẹp vít titan, nhà sản xuất xác nhận an toàn 1.5T' : 'Ví dụ: Đã cân nhắc lợi ích chẩn đoán và nguy cơ'}
+                  value={confirmReason}
+                  onChangeText={setConfirmReason}
+                  multiline
+                />
+                <Text style={styles.confirmHint}>{confirmReason.trim().length}/10 ký tự tối thiểu</Text>
+                {confirmMode === 'override' ? (
+                  <View style={{ marginTop: 10, gap: 6 }}>
+                    <TouchableOpacity style={styles.docBtn} onPress={onPickDoc} disabled={uploadingDoc}>
+                      {uploadingDoc ? <ActivityIndicator color={Colors.brandNavy} /> : <Text style={styles.docBtnText}>{mrDocName ? 'Chọn lại giấy xác nhận' : 'Tải giấy xác nhận MR-conditional (PDF hoặc ảnh)'}</Text>}
+                    </TouchableOpacity>
+                    <Text style={styles.confirmHint}>{mrDocName ? `Đã tải: ${mrDocName}` : 'Bắt buộc. Trưởng khoa sẽ nhận thông báo khi bạn xác nhận.'}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </ScrollView>
 
           <View style={styles.modalBtns}>
@@ -192,7 +241,7 @@ const MriSafetyCheckModal = ({
                 { backgroundColor: hasPacemakerOrMetal ? '#B91C1C' : Colors.brandGreen }
               ]}
               onPress={onSubmit}
-              disabled={submitting}
+              disabled={submitting || !allAnswered || !confirmReady}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
@@ -204,7 +253,7 @@ const MriSafetyCheckModal = ({
                     <Check size={16} color="#fff" strokeWidth={2.5} />
                   )}
                   <Text style={styles.btnConfirmText}>
-                    {hasPacemakerOrMetal ? 'Không thể cho chụp' : 'Đạt an toàn, vào buồng chụp'}
+                    {!allAnswered ? 'Trả lời đủ 4 câu để xác nhận' : confirmMode ? (confirmReady ? 'Xác nhận an toàn MRI' : 'Nhập lý do để xác nhận') : hasPacemakerOrMetal ? 'Ghi nhận chống chỉ định' : 'Đạt an toàn, vào buồng chụp'}
                   </Text>
                 </View>
               )}
@@ -251,6 +300,16 @@ const styles = StyleSheet.create({
   btnCancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },
   btnConfirm: { flex: 2, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   btnConfirmText: { fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  yesNoRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  yesNoBtn: { flex: 1, height: 36, borderRadius: 8, borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  yesNoBtnYes: { backgroundColor: '#B91C1C', borderColor: '#B91C1C' },
+  yesNoBtnNo: { backgroundColor: Colors.brandGreen, borderColor: Colors.brandGreen },
+  yesNoText: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  yesNoTextActive: { color: '#fff' },
+  confirmBox: { marginTop: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' },
+  confirmHint: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  docBtn: { height: 40, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.brandNavy, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10 },
+  docBtnText: { fontSize: 13, fontWeight: '600', color: Colors.brandNavy },
 });
 
 export default MriSafetyCheckModal;
