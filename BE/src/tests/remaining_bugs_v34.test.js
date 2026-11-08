@@ -47,6 +47,9 @@ import { EventEmitter } from "events";
 import { spawnSync } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
 import { installProcessGuards, postOpsAlert } from "../utils/processGuards.js";
+import express from "express";
+import bcrypt from "bcryptjs";
+import { deliverRefreshToken } from "../modules/auth/auth.controller.js";
 import { sanitizeNoSql } from "../middlewares/noSqlSanitize.middleware.js";
 import { inputErrorStatus } from "../utils/inputError.util.js";
 import { Notification } from "../models/notification.model.js";
@@ -540,5 +543,73 @@ describe("QA-21: lỗi cấp tiến trình không làm sập server", () => {
     expect(crash.status).toBe(1);
     expect(crash.stdout.includes("KHONG_DUOC_IN")).toBe(false);
     expect(crash.stderr.includes("uncaughtException")).toBe(true);
+  });
+});
+
+describe("QA-27 Phase 1: refresh token của web chỉ nằm trong cookie HttpOnly", () => {
+  let server, base;
+  const PASSWORD = "MatKhau@123";
+  const mkPatient = async () => User.create({ email: `rt_${oid()}@neuroscan.vn`, passwordHash: await bcrypt.hash(PASSWORD, 4), role: "patient", isVerified: true, profile: { name: "BN", fullName: "BN" } });
+  const post = (p, body, headers = {}) => fetch(base + p, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const signIn = async (user, headers) => {
+    const step1 = await post("/auth/login", { email: user.email, password: PASSWORD }, headers);
+    const j1 = await step1.json();
+    if (!j1.requires2FA) throw new Error("login không vào bước 2FA: " + JSON.stringify(j1).slice(0, 200));
+    const { otp2FACode } = await User.findById(user._id).select("otp2FACode").lean();
+    return post("/auth/verify-2fa", { email: user.email, otp: otp2FACode }, headers);
+  };
+  const cookieOf = (res) => (res.headers.getSetCookie?.() || []).find((c) => c.startsWith("refreshToken=")) || "";
+
+  beforeAll(async () => {
+    if (mongoose.connection.readyState === 0) await mongoose.connect(process.env.TEST_MONGO_URI);
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.cookies = {}; (req.headers.cookie || "").split(";").forEach((c) => { const [n, ...v] = c.split("="); if (n && n.trim()) req.cookies[n.trim()] = decodeURIComponent(v.join("=").trim()); }); next(); });
+    app.use("/auth", authRoutes);
+    server = await new Promise((r) => { const s = app.listen(0, "127.0.0.1", () => r(s)); });
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+  afterAll(async () => { await new Promise((r) => server.close(r)); });
+
+  test("web: body không có refreshToken; cookie HttpOnly, SameSite=Strict, Path=/auth", async () => {
+    const res = await signIn(await mkPatient(), { "X-Client-Platform": "web" });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(typeof body.accessToken).toBe("string");
+    expect(body.refreshToken === undefined).toBe(true);
+    const c = cookieOf(res);
+    expect(c.length > 20).toBe(true);
+    expect(/HttpOnly/i.test(c) && /SameSite=Strict/i.test(c) && /Path=\/auth/i.test(c)).toBe(true);
+  });
+
+  test("web: làm mới phiên chỉ bằng cookie; nhiều tab làm mới cùng lúc đều thành công", async () => {
+    const res = await signIn(await mkPatient(), { "X-Client-Platform": "web" });
+    const cookie = cookieOf(res).split(";")[0];
+    const one = await post("/auth/refresh", {}, { Cookie: cookie, "X-Client-Platform": "web" });
+    expect(one.status).toBe(200);
+    expect(typeof (await one.json()).accessToken).toBe("string");
+    const tabs = await Promise.all(Array.from({ length: 5 }, () => post("/auth/refresh", {}, { Cookie: cookie, "X-Client-Platform": "web" })));
+    expect(tabs.map((r) => r.status)).toEqual([200, 200, 200, 200, 200]);
+    const noCookie = await post("/auth/refresh", {}, { "X-Client-Platform": "web" });
+    expect(noCookie.status).toBe(400);
+  });
+
+  test("mobile / client cũ (không gửi header web): vẫn nhận refreshToken trong body và dùng được", async () => {
+    const res = await signIn(await mkPatient(), { "X-Client-Platform": "ios" });
+    const body = await res.json();
+    expect(typeof body.refreshToken).toBe("string");
+    const viaBody = await post("/auth/refresh", { refreshToken: body.refreshToken });
+    expect(viaBody.status).toBe(200);
+    const legacy = await signIn(await mkPatient(), {});
+    expect(typeof (await legacy.json()).refreshToken).toBe("string");
+  });
+
+  test("deliverRefreshToken: luôn đặt cookie; chỉ bỏ khỏi body khi là web", () => {
+    const set = [];
+    const res = { cookie: (n, v, o) => set.push([n, v, o.httpOnly, o.path]) };
+    expect(deliverRefreshToken({ headers: { "x-client-platform": "web" } }, res, "RT")).toBe(undefined);
+    expect(deliverRefreshToken({ headers: {} }, res, "RT")).toBe("RT");
+    expect(deliverRefreshToken({ headers: {} }, res, undefined)).toBe(undefined);
+    expect(set).toEqual([["refreshToken", "RT", true, "/auth"], ["refreshToken", "RT", true, "/auth"]]);
   });
 });

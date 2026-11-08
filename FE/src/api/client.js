@@ -73,12 +73,20 @@ export const setAuthToken = async (token, refreshToken = null) => {
     // hết phiên trên máy này: huỷ thông báo nhắc thuốc / lịch khám đã hẹn (máy dùng chung không lộ thông tin người trước)
     await cancelScheduled().catch((err) => console.warn('[client.js] Lỗi huỷ thông báo đã hẹn:', err?.message));
   }
-  if (refreshToken !== null) {
+  if (refreshToken) {
     await setRefreshToken(refreshToken);
-  } else if (!token) {
+  } else if (!token || Platform.OS === 'web') {
+    // Đăng xuất, hoặc web: refresh token nằm trong cookie HttpOnly → xoá bản cũ còn trong localStorage (QA-27)
     await setRefreshToken(null);
   }
 };
+
+// QA-27 Phase 1: trên web refresh token nằm trong cookie HttpOnly (path /auth) do BE đặt; JS không đọc/lưu nó.
+// Header X-Client-Platform cho BE biết không trả refreshToken trong body cho web. App mobile giữ nguyên luồng cũ.
+// Giai đoạn chuyển tiếp (1–2 sprint): refreshToken cũ còn trong localStorage vẫn được gửi kèm làm dự phòng.
+const IS_WEB = Platform.OS === 'web';
+export const clientPlatformHeaders = () => ({ 'X-Client-Platform': Platform.OS });
+const credentialsFor = (endpoint) => (IS_WEB && String(endpoint).startsWith('/auth') ? { credentials: 'include' } : {});
 
 // ── Silent Token Refresh Queue & Lock ──────────────────────────────────────────
 let isRefreshing = false;
@@ -95,15 +103,17 @@ const onRefreshed = (token) => {
 
 export const refreshAccessToken = async () => {
   const currentRefreshToken = await getRefreshToken();
-  if (!currentRefreshToken) {
+  // Web: cookie HttpOnly tự đi kèm nên vẫn gọi khi không còn token trong storage. Mobile: cần token đã lưu.
+  if (!currentRefreshToken && !IS_WEB) {
     return null;
   }
 
   try {
     const res = await fetch(`${Config.API_URL}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: currentRefreshToken })
+      headers: { 'Content-Type': 'application/json', ...clientPlatformHeaders() },
+      ...credentialsFor('/auth/refresh'),
+      body: JSON.stringify(currentRefreshToken ? { refreshToken: currentRefreshToken } : {})
     });
 
     if (!res.ok) {
@@ -130,6 +140,7 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   const url = `${Config.API_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    ...clientPlatformHeaders(),
     ...options.headers,
   };
   
@@ -139,6 +150,7 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   }
 
   const response = await fetch(url, {
+    ...credentialsFor(endpoint),
     ...options,
     headers,
     // [FIX 0014] no-store: tránh trình duyệt gửi conditional GET (If-None-Match)

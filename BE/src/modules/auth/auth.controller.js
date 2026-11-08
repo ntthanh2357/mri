@@ -80,6 +80,23 @@ const generateRefreshToken = (userId, role, tokenVersion, hospitalId) => {
   return jwt.sign({ id: userId, role, tokenVersion, hospitalId }, secret, { expiresIn: "7d", algorithm: "HS256" });
 };
 
+// QA-27 Phase 1: refresh token cho web chỉ đi qua cookie HttpOnly (JS trên trang không đọc được).
+// Web gửi header X-Client-Platform: web → body KHÔNG chứa refreshToken. App mobile / client cũ (không gửi header)
+// vẫn nhận refreshToken trong body như trước để không gãy phiên trong giai đoạn chuyển tiếp.
+export const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  path: "/auth",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+export const isWebClient = (req) => String(req?.headers?.["x-client-platform"] || "").toLowerCase() === "web";
+export const deliverRefreshToken = (req, res, refreshToken) => {
+  if (!refreshToken) return undefined;
+  if (typeof res.cookie === "function") res.cookie("refreshToken", refreshToken, REFRESH_COOKIE_OPTIONS);
+  return isWebClient(req) ? undefined : refreshToken;
+};
+
 // @desc    Register a new user
 // @route   POST /auth/register
 // @access  Public (nhưng có guard cho hospital_admin)
@@ -429,16 +446,8 @@ export const login = async (req, res) => {
     const accessToken = requiresVerification || requires2FA ? undefined : generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = requiresVerification || requires2FA ? undefined : generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
-    // Thiết lập cookie HttpOnly + Secure + SameSite cho phiên làm việc web an toàn
-    if (refreshToken && typeof res.cookie === "function") {
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/auth",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-    }
+    // Cookie HttpOnly cho web; body chỉ mang refreshToken cho mobile/client cũ (QA-27)
+    const bodyRefreshToken = deliverRefreshToken(req, res, refreshToken);
 
     if (!requiresVerification && !requires2FA) {
       authCache.setUserAuth(user._id.toString(), {
@@ -467,7 +476,7 @@ export const login = async (req, res) => {
         ? "Tài khoản của bạn chưa được kích hoạt. Mã OTP kích hoạt đã được gửi tới email của bạn."
         : "Đăng nhập thành công!",
       accessToken,
-      refreshToken,
+      refreshToken: bodyRefreshToken,
       requiresActivation,
       requiresVerification,
       requires2FA: false,
@@ -553,15 +562,7 @@ export const verify2FA = async (req, res) => {
     const accessToken = generateAccessToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
     const refreshToken = generateRefreshToken(user._id.toString(), user.role, user.tokenVersion || 0, user.hospitalId);
 
-    if (typeof res.cookie === "function") {
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/auth",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-    }
+    const bodyRefreshToken = deliverRefreshToken(req, res, refreshToken);
 
     authCache.setUserAuth(user._id.toString(), {
       tokenVersion: user.tokenVersion || 0,
@@ -573,7 +574,7 @@ export const verify2FA = async (req, res) => {
     res.status(200).json({
       message: "Xác thực 2 lớp thành công! Đăng nhập hoàn tất.",
       accessToken,
-      refreshToken,
+      refreshToken: bodyRefreshToken,
       user: {
         id: user._id,
         email: user.email,
@@ -1109,7 +1110,7 @@ export const changePassword = async (req, res) => {
       message: "Đổi mật khẩu thành công!",
       activated: wasActivated,
       accessToken,
-      refreshToken,
+      refreshToken: deliverRefreshToken(req, res, refreshToken),
       user: {
         id: user._id,
         email: user.email,
@@ -1391,7 +1392,7 @@ export const phoneLoginVerify = async (req, res) => {
       success: true,
       message: "Đăng nhập thành công!",
       accessToken,
-      refreshToken,
+      refreshToken: deliverRefreshToken(req, res, refreshToken),
       requiresActivation,
       user: {
         id: user._id,

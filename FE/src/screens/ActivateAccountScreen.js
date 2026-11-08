@@ -96,7 +96,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
       });
 
       if (res.accessToken) {
-        await setAuthToken(res.accessToken);
+        await setAuthToken(res.accessToken, res.refreshToken);
       }
 
       let destination = 'Home';
