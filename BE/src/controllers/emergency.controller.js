@@ -609,7 +609,7 @@ export const cancelStandDown = async (req, res) => {
     const { id } = req.params;
     const { cancelReason } = req.body;
 
-    if (!cancelReason || cancelReason.trim() === '') {
+    if (typeof cancelReason !== "string" || cancelReason.trim() === '') {
       return errorResponse(res, "Bắt buộc phải nhập lý do hủy báo động nhầm để lưu vết kiểm toán.", 400);
     }
 

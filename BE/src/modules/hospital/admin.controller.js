@@ -1347,7 +1347,7 @@ export const updateStaffImagingSignPermission = async (req, res) => {
 export const provisionHospital = async (req, res) => {
   try {
     const { hospitalName, itEmail } = req.body;
-    if (!hospitalName || !itEmail) {
+    if (typeof hospitalName !== "string" || !hospitalName.trim() || typeof itEmail !== "string" || !itEmail.trim()) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện và email IT." });
     }
 
@@ -1799,11 +1799,16 @@ export const exportRevenueCSV = async (req, res) => {
       totalOther += other;
       totalRevenue += invoice.totalAmount;
 
+      // Ô bắt đầu bằng = + - @ bị Excel hiểu là công thức: thêm dấu nháy đơn trước, rồi bọc ngoặc kép
+      const csvText = (value) => {
+        const s = String(value ?? "");
+        return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
+      };
       const row = [
         invoice._id,
-        `"${patientName.replace(/"/g, '""')}"`,
-        patientEmail,
-        paymentMethod,
+        csvText(patientName),
+        csvText(patientEmail),
+        csvText(paymentMethod),
         paidDate,
         exam,
         mri,
@@ -2147,7 +2152,7 @@ export const backupHospitalData = async (req, res) => {
 export const downloadHospitalBackup = async (req, res) => {
   try {
     const { id, fileName } = req.params;
-    if (!isValidObjectId(id) || !fileName) {
+    if (!isValidObjectId(id) || !fileName || typeof fileName !== "string") {
       return res.status(400).json({ success: false, message: "ID bệnh viện hoặc tên file không hợp lệ." });
     }
 
@@ -2179,7 +2184,7 @@ export const restoreHospitalData = async (req, res) => {
     const { id } = req.params;
     const { fileName } = req.body;
 
-    if (!isValidObjectId(id) || !fileName) {
+    if (!isValidObjectId(id) || !fileName || typeof fileName !== "string") {
       return res.status(400).json({ success: false, message: "ID bệnh viện hoặc tên file không hợp lệ." });
     }
 

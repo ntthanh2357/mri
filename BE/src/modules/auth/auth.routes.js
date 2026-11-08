@@ -25,6 +25,17 @@ import { protect, optionalProtect } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
+// Các trường định danh/xác thực luôn là chuỗi; kiểu khác (số, mảng, object) bị chặn 400 trước controller
+// để không rơi vào `email.trim is not a function` → 500.
+const AUTH_STRING_FIELDS = ["email", "password", "otp", "phone", "idToken", "roleType", "currentPassword", "newPassword", "newEmail", "name", "hospitalName"];
+router.use((req, res, next) => {
+  const body = req.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return next();
+  const bad = AUTH_STRING_FIELDS.find((k) => body[k] !== undefined && body[k] !== null && typeof body[k] !== "string");
+  if (bad) return res.status(400).json({ success: false, message: `Trường "${bad}" không hợp lệ.` });
+  return next();
+});
+
 router.post("/register", optionalProtect, register);
 router.post("/login", login);
 router.post("/verify-2fa", verify2FA);

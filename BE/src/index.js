@@ -22,6 +22,8 @@ import { sanitizeNoSql } from "./middlewares/noSqlSanitize.middleware.js";
 import { secureUploadsProtection } from "./middlewares/secureUploads.middleware.js";
 import { authRateLimiter, b2cRateLimiter } from "./middlewares/rateLimiter.middleware.js";
 import { requireSignedUpload, signUploadUrlsInResponse, stripUploadSignatures } from "./middlewares/uploadSignature.middleware.js";
+import { requireJwtBeforeLargeBody } from "./middlewares/largeBodyGuard.middleware.js";
+import { sanitizeServerErrors } from "./middlewares/sanitizeServerErrors.middleware.js";
 
 // Middlewares
 // 1. Gắn HTTP Security Headers chuẩn OWASP (Clickjacking, MIME-Sniffing, XSS)
@@ -44,11 +46,12 @@ app.use(cors({
 }));
 
 // 3. Body parsers
-// Phân hệ hình ảnh MRI / DICOM: Cho phép upload dữ liệu lát cắt lớn (đến 700MB)
-app.use("/api/v1/imaging", express.json({ limit: "700mb" }));
-app.use("/api/v1/imaging", express.urlencoded({ limit: "700mb", extended: true }));
-app.use("/api/v1/imaging-results", express.json({ limit: "700mb" }));
-app.use("/api/v1/imaging-results", express.urlencoded({ limit: "700mb", extended: true }));
+// Phân hệ hình ảnh MRI: JSON tới 50MB (ảnh base64 dự phòng); tệp lớn đi multipart hoặc chunked upload.
+// Kiểm tra token trước khi đọc body để người chưa đăng nhập không đẩy được body lớn vào bộ nhớ.
+app.use("/api/v1/imaging", requireJwtBeforeLargeBody, express.json({ limit: "50mb" }));
+app.use("/api/v1/imaging", express.urlencoded({ limit: "50mb", extended: true }));
+app.use("/api/v1/imaging-results", requireJwtBeforeLargeBody, express.json({ limit: "50mb" }));
+app.use("/api/v1/imaging-results", express.urlencoded({ limit: "50mb", extended: true }));
 
 // Các API thông thường (Auth, EMR, Bệnh nhân...): Giới hạn 20mb để chống tấn công cạn kiệt RAM / JSON Bomb
 app.use(express.json({ limit: "20mb" }));
@@ -81,6 +84,7 @@ app.use(sanitizeNoSql);
 // 4b. Link tệp y khoa có chữ ký: API trả link đã ký, dữ liệu client gửi lên được bỏ chữ ký trước khi lưu
 app.use(stripUploadSignatures);
 app.use(signUploadUrlsInResponse);
+app.use(sanitizeServerErrors);
 
 // 5. Cổng bảo vệ thư mục /uploads: chặn tải trực tiếp file sao lưu (.json), mã lệnh và path traversal
 app.use("/uploads", requireSignedUpload, secureUploadsProtection, express.static(path.join(__dirname, "../uploads")));

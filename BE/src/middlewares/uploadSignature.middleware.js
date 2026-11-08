@@ -40,9 +40,13 @@ export const signUploadUrlsInResponse = (req, res, next) => {
     } catch {
       return originalJson(body);
     }
-    if (!text || !(text.includes("/uploads/") || text.includes("/api/v1/storage/files/"))) return originalJson(body);
-    const signed = text.replace(UPLOAD_JSON_VALUE, (_, origin, filePath) => `"${origin}${signUploadPath(filePath)}"`);
-    return originalJson(JSON.parse(signed));
+    // Gửi luôn chuỗi đã có, không để res.json stringify lại lần nữa (danh sách lớn tốn gấp đôi bộ nhớ)
+    const sendText = (payload) => {
+      if (!res.get("Content-Type")) res.set("Content-Type", "application/json; charset=utf-8");
+      return res.send(payload);
+    };
+    if (!text || !(text.includes("/uploads/") || text.includes("/api/v1/storage/files/"))) return sendText(text);
+    return sendText(text.replace(UPLOAD_JSON_VALUE, (_, origin, filePath) => `"${origin}${signUploadPath(filePath)}"`));
   };
   next();
 };

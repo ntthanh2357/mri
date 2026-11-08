@@ -18,6 +18,7 @@ import { enqueueAiTask } from "../../services/storage/pacsQueue.service.js";
 import { loadImageBuffer } from "../../utils/imageSource.util.js";
 import { resolveClientImageUrl } from "../../middlewares/uploadSignature.middleware.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -64,7 +65,7 @@ export const getPatientResults = async (req, res) => {
     return successResponse(res, results, "Lấy danh sách kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy danh sách kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -101,7 +102,7 @@ export const getResultById = async (req, res) => {
     return successResponse(res, hideClinicalContentFor(req.user, result), "Lấy chi tiết kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy chi tiết kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -207,7 +208,7 @@ export const createImagingResult = async (req, res) => {
     return successResponse(res, newResult, "Tạo kết quả chẩn đoán hình ảnh mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi khi tạo kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tạo dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tạo dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -243,7 +244,7 @@ export const getResultsByPatientUserId = async (req, res) => {
     return successResponse(res, results, `Lấy danh sách phim chụp theo patientId thành công.`);
   } catch (error) {
     console.error("Lỗi khi lấy phim theo patientId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -263,7 +264,7 @@ export const getPatientResultsByMedicalId = async (req, res) => {
     return successResponse(res, hideClinicalContentFor(req.user, results), `Lấy danh sách phim chụp của bệnh nhân mã ${medicalId} thành công.`);
   } catch (error) {
     console.error("Lỗi khi lấy phim của bệnh nhân theo medicalId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -294,7 +295,7 @@ export const uploadImagingImage = async (req, res) => {
     } else {
       // ── 2. Fallback: Base64 JSON (req.body.fileData) ───────────────────
       const { fileData, fileName, imagingType } = req.body;
-      if (!fileData) {
+      if (!fileData || typeof fileData !== "string") {
         return errorResponse(res, "Thiếu dữ liệu tệp tin. Vui lòng tải lên tệp tin hợp lệ.", 400);
       }
 
@@ -431,7 +432,7 @@ export const uploadImagingImage = async (req, res) => {
     );
   } catch (error) {
     console.error("Lỗi khi tải ảnh/tệp lên:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi lưu tệp tin.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi lưu tệp tin.", inputErrorStatus(res, error));
   }
 };
 
@@ -471,6 +472,11 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
   }
 
   const aiData = await aiResponse.json();
+  if (!aiData || typeof aiData.class_name !== "string" || !aiData.class_name) {
+    const err = new Error("Dịch vụ AI trả kết quả không hợp lệ (thiếu nhóm phân loại).");
+    err.statusCode = 502;
+    throw err;
+  }
 
   // ── Upload annotated heatmap image to Firebase (base64 → public URL) ──
   if (aiData.annotated_image && aiData.annotated_image.startsWith('data:image')) {
@@ -835,7 +841,7 @@ export const explainImagingResultAI = async (req, res) => {
     return successResponse(res, { explanation: aiData.translated_report }, "Giải thích kết quả AI thành công.");
   } catch (error) {
     console.error("Lỗi giải thích kết quả AI:", error);
-    return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, 500);
+    return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, inputErrorStatus(res, error));
   }
 };
 
@@ -855,7 +861,7 @@ export const getAllImagingResults = async (req, res) => {
     return successResponse(res, results, "Lấy tất cả kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy tất cả kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -1016,7 +1022,7 @@ export const createKtvImagingResult = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi KTV tạo kết quả chụp:", error);
-    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1398,7 +1404,7 @@ export const updateImagingResult = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật kết quả phim chụp:", error);
-    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1443,7 +1449,7 @@ export const getImagingResultByVisitId = async (req, res) => {
     return successResponse(res, hideClinicalContentFor(req.user, result), "Lấy thông tin phim chụp theo lượt khám thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy phim theo visitId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", inputErrorStatus(res, error));
   }
 };
 
@@ -1477,7 +1483,7 @@ export const acknowledgeCriticalFinding = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1502,7 +1508,7 @@ export const getImagingSignPermission = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1577,7 +1583,7 @@ export const addImagingAddendum = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1634,7 +1640,7 @@ export const acknowledgeImagingReport = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1720,7 +1726,7 @@ export const getPatientRanoTimeline = async (req, res) => {
       timeline
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ khi tính chuỗi RANO", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ khi tính chuỗi RANO", error: error.message });
   }
 };
 

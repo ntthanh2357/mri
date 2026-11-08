@@ -26,6 +26,7 @@ import { normalizeTemperature } from "../services/vitalSign.service.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
+import { inputErrorStatus } from "../utils/inputError.util.js";
 // ── UC-REC-01: băm định danh (cùng salt với auth.controller để khớp dữ liệu cũ) ──
 const hmac = (salt, value) => crypto.createHmac("sha256", salt).update(String(value)).digest("hex");
 const hashPhone = (phone) => hmac(process.env.PHONE_SALT || "neuroscan_phone_salt", phone);
@@ -111,7 +112,7 @@ export const createPatientAtDesk = async (req, res) => {
     return successResponse(res, safe, `Đã tạo hồ sơ bệnh nhân mới — mã y tế ${medicalId}.`, 201);
   } catch (error) {
     console.error("Lỗi tạo hồ sơ bệnh nhân tại quầy:", error);
-    return errorResponse(res, "Không thể tạo hồ sơ bệnh nhân: " + error.message, 500);
+    return errorResponse(res, "Không thể tạo hồ sơ bệnh nhân: " + error.message, inputErrorStatus(res, error));
   }
 };
 export { checkPatientTenancy };
@@ -135,7 +136,7 @@ export const updatePatientEmail = async (req, res) => {
     await patient.save();
     return successResponse(res, { _id: patient._id, email: patient.email }, "Đã cập nhật email nhận thông báo.");
   } catch (error) {
-    return errorResponse(res, "Không thể cập nhật email: " + error.message, 500);
+    return errorResponse(res, "Không thể cập nhật email: " + error.message, inputErrorStatus(res, error));
   }
 };
 
@@ -322,7 +323,7 @@ export const getPatients = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi lấy danh sách bệnh nhân:", error);
-    return errorResponse(res, "Lỗi lấy danh sách bệnh nhân.", 500);
+    return errorResponse(res, "Lỗi lấy danh sách bệnh nhân.", inputErrorStatus(res, error));
   }
 };
 
@@ -338,7 +339,7 @@ export const getPatientById = async (req, res) => {
     return successResponse(res, safePatient, "Lấy thông tin bệnh nhân thành công.");
   } catch (error) {
     console.error("Lỗi lấy chi tiết bệnh nhân:", error);
-    return errorResponse(res, "Lỗi lấy chi tiết bệnh nhân.", 500);
+    return errorResponse(res, "Lỗi lấy chi tiết bệnh nhân.", inputErrorStatus(res, error));
   }
 };
 
@@ -356,7 +357,7 @@ export const getPatientVitals = async (req, res) => {
     return successResponse(res, vitals, "Lấy lịch sử sinh hiệu thành công.");
   } catch (error) {
     console.error("Lỗi lấy lịch sử sinh hiệu:", error);
-    return errorResponse(res, "Lỗi lấy lịch sử sinh hiệu.", 500);
+    return errorResponse(res, "Lỗi lấy lịch sử sinh hiệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -397,7 +398,7 @@ export const addPatientVitals = async (req, res) => {
     return successResponse(res, newVital, "Ghi nhận sinh hiệu mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi thêm sinh hiệu mới:", error);
-    return errorResponse(res, "Lỗi thêm sinh hiệu mới.", 500);
+    return errorResponse(res, "Lỗi thêm sinh hiệu mới.", inputErrorStatus(res, error));
   }
 };
 
@@ -414,7 +415,7 @@ export const getPatientLabOrders = async (req, res) => {
     return successResponse(res, orders, "Lấy danh sách phiếu xét nghiệm thành công.");
   } catch (error) {
     console.error("Lỗi lấy danh sách phiếu xét nghiệm:", error);
-    return errorResponse(res, "Lỗi lấy danh sách phiếu xét nghiệm.", 500);
+    return errorResponse(res, "Lỗi lấy danh sách phiếu xét nghiệm.", inputErrorStatus(res, error));
   }
 };
 
@@ -457,7 +458,7 @@ export const createPatientLabOrder = async (req, res) => {
     return successResponse(res, newOrder, "Tạo chỉ định xét nghiệm mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi tạo chỉ định xét nghiệm:", error);
-    return errorResponse(res, "Lỗi tạo chỉ định xét nghiệm.", 500);
+    return errorResponse(res, "Lỗi tạo chỉ định xét nghiệm.", inputErrorStatus(res, error));
   }
 };
 
@@ -474,7 +475,7 @@ export const getPatientPrescriptions = async (req, res) => {
     return successResponse(res, items, "Lấy danh sách đơn thuốc thành công.");
   } catch (error) {
     console.error("Lỗi lấy danh sách đơn thuốc:", error);
-    return errorResponse(res, "Lỗi lấy danh sách đơn thuốc.", 500);
+    return errorResponse(res, "Lỗi lấy danh sách đơn thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -486,6 +487,10 @@ export const addPatientPrescription = async (req, res) => {
 
     if (!diagnosis || !drugs || !Array.isArray(drugs) || drugs.length === 0) {
       return errorResponse(res, "Thiếu thông tin chẩn đoán hoặc danh sách thuốc.", 400);
+    }
+    const badDrug = drugs.find((d) => !d || !(Number.isFinite(Number(d.quantity)) && Number(d.quantity) > 0));
+    if (badDrug) {
+      return errorResponse(res, `Số lượng thuốc${badDrug?.name ? ` ${badDrug.name}` : ""} phải lớn hơn 0.`, 400);
     }
 
     const patientExists = await checkPatientTenancy(patientId, req.user);
@@ -578,7 +583,7 @@ export const addPatientPrescription = async (req, res) => {
     return successResponse(res, newItem, "Thêm đơn thuốc mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi thêm đơn thuốc:", error);
-    return errorResponse(res, "Lỗi thêm đơn thuốc.", 500);
+    return errorResponse(res, "Lỗi thêm đơn thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -595,7 +600,7 @@ export const getPatientDischargePapers = async (req, res) => {
     return successResponse(res, items, "Lấy danh sách giấy ra viện thành công.");
   } catch (error) {
     console.error("Lỗi lấy danh sách giấy ra viện:", error);
-    return errorResponse(res, "Lỗi lấy danh sách giấy ra viện.", 500);
+    return errorResponse(res, "Lỗi lấy danh sách giấy ra viện.", inputErrorStatus(res, error));
   }
 };
 
@@ -604,6 +609,10 @@ export const addPatientDischargePaper = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { doctor_name, dischargeNo, hospitalNo, dateIn, dateOut, diagnosis, treatment, note } = req.body;
+    // Cùng điều kiện màn hình đang bắt buộc: chẩn đoán và phương pháp điều trị
+    if (typeof diagnosis !== "string" || !diagnosis.trim() || typeof treatment !== "string" || !treatment.trim()) {
+      return errorResponse(res, "Vui lòng nhập Chẩn đoán và Phương pháp điều trị.", 400);
+    }
 
     const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
@@ -626,7 +635,7 @@ export const addPatientDischargePaper = async (req, res) => {
     return successResponse(res, newItem, "Thêm giấy ra viện thành công.", 201);
   } catch (error) {
     console.error("Lỗi thêm giấy ra viện:", error);
-    return errorResponse(res, "Lỗi thêm giấy ra viện.", 500);
+    return errorResponse(res, "Lỗi thêm giấy ra viện.", inputErrorStatus(res, error));
   }
 };
 
@@ -643,7 +652,7 @@ export const getPatientTransferForms = async (req, res) => {
     return successResponse(res, items, "Lấy danh sách phiếu chuyển tuyến thành công.");
   } catch (error) {
     console.error("Lỗi lấy danh sách phiếu chuyển tuyến:", error);
-    return errorResponse(res, "Lỗi lấy danh sách phiếu chuyển tuyến.", 500);
+    return errorResponse(res, "Lỗi lấy danh sách phiếu chuyển tuyến.", inputErrorStatus(res, error));
   }
 };
 
@@ -652,6 +661,10 @@ export const addPatientTransferForm = async (req, res) => {
   try {
     const { patientId } = req.params;
     const fields = req.body;
+    // Cùng điều kiện màn hình đang bắt buộc: nơi chuyển đến và chẩn đoán
+    if (typeof fields?.transferTo !== "string" || !fields.transferTo.trim() || typeof fields?.diagnosis !== "string" || !fields.diagnosis.trim()) {
+      return errorResponse(res, "Vui lòng nhập nơi chuyển tuyến đến và chẩn đoán bệnh.", 400);
+    }
 
     const patientExists = await checkPatientTenancy(patientId, req.user);
     if (!patientExists) {
@@ -667,6 +680,6 @@ export const addPatientTransferForm = async (req, res) => {
     return successResponse(res, newItem, "Thêm phiếu chuyển tuyến thành công.", 201);
   } catch (error) {
     console.error("Lỗi thêm phiếu chuyển tuyến:", error);
-    return errorResponse(res, "Lỗi thêm phiếu chuyển tuyến.", 500);
+    return errorResponse(res, "Lỗi thêm phiếu chuyển tuyến.", inputErrorStatus(res, error));
   }
 };

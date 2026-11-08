@@ -10,6 +10,7 @@ import {
   readLocalBuffer,
   existsOnLocal,
   deleteLocalFile,
+  getLocalRoot,
 } from "./localAdapter.js";
 import {
   downloadEncryptedFile,
@@ -251,6 +252,13 @@ export const putFileFromPath = async ({
  * @param {string} fileId
  * @returns {Promise<{ stream: fs.ReadStream, file: StoredMedicalFile }>}
  */
+// localPath là đường dẫn tuyệt đối lúc ghi (vd. C:\\... trên Windows). Chạy ở máy khác thì tìm lại theo logicalPath dưới thư mục kho.
+export const resolveStoredLocalPath = (file) => {
+  if (file?.localPath && existsOnLocal(file.localPath)) return file.localPath;
+  const byLogical = file?.logicalPath ? path.join(getLocalRoot(), file.logicalPath) : null;
+  return byLogical && existsOnLocal(byLogical) ? byLogical : file?.localPath;
+};
+
 export const getFileStream = async (fileId) => {
   const file = await StoredMedicalFile.findOne({ fileId });
   if (!file) {
@@ -260,9 +268,10 @@ export const getFileStream = async (fileId) => {
   }
 
   // 1. Nếu file tồn tại trên Local ➔ Stream ngay lập tức
-  if (existsOnLocal(file.localPath)) {
+  const localPath = resolveStoredLocalPath(file);
+  if (existsOnLocal(localPath)) {
     return {
-      stream: createLocalReadStream(file.localPath),
+      stream: createLocalReadStream(localPath),
       file,
     };
   }
@@ -286,7 +295,7 @@ export const getFileStream = async (fileId) => {
       console.log(`✅ [Self-Healing] Đã tự động phục hồi thành công file "${file.fileName}" về Local Storage.`);
 
       return {
-        stream: createLocalReadStream(file.localPath),
+        stream: createLocalReadStream(resolveStoredLocalPath(file)),
         file,
       };
     } catch (restoreErr) {
@@ -309,7 +318,7 @@ export const getFileStream = async (fileId) => {
  */
 export const getFileBuffer = async (fileId) => {
   const { file } = await getFileStream(fileId);
-  const buffer = await readLocalBuffer(file.localPath);
+  const buffer = await readLocalBuffer(resolveStoredLocalPath(file));
   return { buffer, file };
 };
 

@@ -369,14 +369,16 @@ describe("v3.4 Vá lỗi bảo mật còn lại", () => {
   });
 
   test("NEW-04: API tự ký link trong response; dữ liệu gửi lên được bỏ chữ ký trước khi lưu", () => {
-    const res = { json(body) { this.sent = body; return this; } };
+    // Mô phỏng res của Express: middleware gửi chuỗi JSON đã ký qua res.send
+    const mockRes = () => ({ headers: {}, get(k) { return this.headers[k]; }, set(k, v) { this.headers[k] = v; }, send(text) { this.sent = JSON.parse(text); return this; }, json(body) { this.sent = body; return this; } });
+    const res = mockRes();
     signUploadUrlsInResponse({}, res, () => {});
     res.json({ data: { images: ["/uploads/a.png"], note: "xem /uploads/a.png trong hồ sơ", abs: "http://h:5000/uploads/b.pdf" } });
     expect(res.sent.data.images[0].startsWith("/uploads/a.png?exp=")).toBe(true);
     expect(res.sent.data.abs.startsWith("http://h:5000/uploads/b.pdf?exp=")).toBe(true);
     expect(res.sent.data.note).toBe("xem /uploads/a.png trong hồ sơ");
 
-    const stored = { json(body) { this.sent = body; return this; } };
+    const stored = mockRes();
     signUploadUrlsInResponse({}, stored, () => {});
     stored.json({ url: "/api/v1/storage/files/abc-123", meta: "/api/v1/storage/files/abc-123/metadata" });
     expect(stored.sent.url.includes("sig=")).toBe(true);

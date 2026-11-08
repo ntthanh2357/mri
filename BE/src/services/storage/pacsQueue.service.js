@@ -1,6 +1,7 @@
 import { AsyncResource } from "async_hooks";
 import StoredMedicalFile from "../../models/storedMedicalFile.model.js";
-import { readLocalBuffer, existsOnLocal } from "./localAdapter.js";
+import { readLocalBuffer, existsOnLocal, getLocalRoot } from "./localAdapter.js";
+import path from "path";
 import { uploadEncryptedFile, getDriveFolderLockStats } from "./driveMirrorAdapter.js";
 import { encryptBuffer } from "../../utils/cryptoStorage.util.js";
 
@@ -97,11 +98,14 @@ const executeSingleDriveSyncJob = async (job) => {
   }
 
   // 2. Chỉ đọc tệp từ ổ cứng cục bộ KHI ĐẾN LƯỢT UPLOAD (Zero-RAM-Hold trong lúc chờ Queue)
-  if (!existsOnLocal(record.localPath)) {
+  // Đường dẫn tuyệt đối ghi từ máy khác: tìm lại theo logicalPath dưới thư mục kho
+  const byLogical = record.logicalPath ? path.join(getLocalRoot(), record.logicalPath) : null;
+  const localPath = existsOnLocal(record.localPath) ? record.localPath : byLogical && existsOnLocal(byLogical) ? byLogical : null;
+  if (!localPath) {
     throw new Error(`Tệp cục bộ không còn tồn tại để đồng bộ lên Drive: ${record.localPath}`);
   }
 
-  const rawBuffer = await readLocalBuffer(record.localPath);
+  const rawBuffer = await readLocalBuffer(localPath);
   const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(rawBuffer);
   const driveFileName = `${fileName || record.fileName}.enc`;
 

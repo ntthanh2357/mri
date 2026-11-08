@@ -10,8 +10,10 @@ import { assessPrescriptionSafety } from "./services/drugSafety.service.js";
 import { generateRemindersForPrescription } from "../../controllers/patient.controller.js";
 import { deductStockForInvoice } from "../billing/invoice.controller.js";
 import { deductDrugStockFEFO, importDrugBatch, sortBatchesFEFO, sumBatches } from "./services/batchStock.service.js";
+import { acquireDistributedLock, releaseDistributedLock } from "../../models/systemLock.model.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
 // ── Helper: Ghi nhật ký kiểm toán trung tâm cho thao tác Dược (chuỗi băm chống giả mạo
 // theo HIPAA §164.312(b) & TT 13/2025/TT-BYT). Bọc try/catch: audit lỗi KHÔNG được phép
 // làm hỏng nghiệp vụ chính — cùng pattern đã dùng ở invoice/bhyt/hospitalBed service.
@@ -83,7 +85,7 @@ export const getDrugs = async (req, res) => {
     return successResponse(res, { drugs, total: drugs.length }, "Lấy danh sách thuốc thành công.");
   } catch (error) {
     console.error("Lỗi getDrugs:", error);
-    return errorResponse(res, "Lỗi hệ thống khi lấy danh sách thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi lấy danh sách thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -112,7 +114,7 @@ export const getDrugById = async (req, res) => {
     return successResponse(res, { drug }, "Lấy thông tin thuốc thành công.");
   } catch (error) {
     console.error("Lỗi getDrugById:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -164,12 +166,12 @@ export const createDrug = async (req, res) => {
       stock, bmiWarningThreshold
     } = req.body;
 
-    if (!name || !name.trim()) {
+    if (typeof name !== "string" || !name.trim()) {
       return errorResponse(res, "Tên thuốc không được để trống.", 400);
     }
 
     // Kiểm tra trùng tên trong cùng BV
-    const existing = await Drug.findOne({ hospitalId, name: { $regex: new RegExp(`^${name.trim()}$`, "i") } });
+    const existing = await Drug.findOne({ hospitalId, name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } });
     if (existing) {
       return errorResponse(res, `Thuốc "${name}" đã tồn tại trong danh mục bệnh viện.`, 409);
     }
@@ -238,7 +240,7 @@ export const createDrug = async (req, res) => {
     return successResponse(res, { drug }, "Thêm thuốc vào danh mục thành công!", 201);
   } catch (error) {
     console.error("Lỗi createDrug:", error);
-    return errorResponse(res, "Lỗi hệ thống khi tạo thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi tạo thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -302,7 +304,7 @@ export const updateDrug = async (req, res) => {
     return successResponse(res, { drug }, "Cập nhật thông tin thuốc thành công!");
   } catch (error) {
     console.error("Lỗi updateDrug:", error);
-    return errorResponse(res, "Lỗi hệ thống khi cập nhật thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi cập nhật thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -342,7 +344,7 @@ export const deleteDrug = async (req, res) => {
     return successResponse(res, { deletedId: id }, `Đã xóa thuốc "${drug.name}" khỏi danh mục.`);
   } catch (error) {
     console.error("Lỗi deleteDrug:", error);
-    return errorResponse(res, "Lỗi hệ thống khi xóa thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi xóa thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -375,6 +377,13 @@ export const updateStock = async (req, res) => {
     const qty = Number(quantity);
     if (isNaN(qty) || qty < 0) {
       return errorResponse(res, "Số lượng phải là số không âm.", 400);
+    }
+    // QA-19: số lượng thuốc là số nguyên trong giới hạn an toàn; không nhập lô đã hết hạn
+    if (!Number.isSafeInteger(qty)) {
+      return errorResponse(res, "Số lượng phải là số nguyên.", 400);
+    }
+    if ((action === "add" || action === "import") && expiryDate && !(new Date(expiryDate).getTime() >= new Date(new Date().toDateString()).getTime())) {
+      return errorResponse(res, "Không nhập lô thuốc đã hết hạn hoặc hạn dùng không hợp lệ.", 400);
     }
     if (qty === 0 && action !== "set") {
       return errorResponse(res, "Số lượng phải lớn hơn 0.", 400);
@@ -511,7 +520,7 @@ export const updateStock = async (req, res) => {
     }, "Cập nhật tồn kho thành công!");
   } catch (error) {
     console.error("Lỗi updateStock:", error);
-    return errorResponse(res, "Lỗi hệ thống khi cập nhật tồn kho.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi cập nhật tồn kho.", inputErrorStatus(res, error));
   }
 };
 
@@ -551,7 +560,7 @@ export const getLowStockAlerts = async (req, res) => {
     return successResponse(res, { alerts, total: alerts.length }, "Lấy danh sách cảnh báo tồn kho thành công.");
   } catch (error) {
     console.error("Lỗi getLowStockAlerts:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -635,7 +644,7 @@ export const getExpiryAlerts = async (req, res) => {
     );
   } catch (error) {
     console.error("Lỗi getExpiryAlerts:", error);
-    return errorResponse(res, "Lỗi hệ thống khi lấy cảnh báo hết hạn.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi lấy cảnh báo hết hạn.", inputErrorStatus(res, error));
   }
 };
 
@@ -665,6 +674,11 @@ export const checkPrescription = async (req, res) => {
     if (!patientId) {
       return errorResponse(res, "Thiếu thông tin bệnh nhân.", 400);
     }
+    const isMedItem = (m) => typeof m === "string" || (m && typeof m === "object" && !Array.isArray(m) && typeof m.name === "string");
+    if ((medications != null && (!Array.isArray(medications) || !medications.every(isMedItem))) ||
+        (orders != null && !Array.isArray(orders))) {
+      return errorResponse(res, "Danh sách thuốc/chỉ định không hợp lệ.", 400);
+    }
 
     const safetyResult = await assessPrescriptionSafety({
       patientId,
@@ -689,7 +703,7 @@ export const checkPrescription = async (req, res) => {
     }, "Kiểm tra dược lâm sàng thông minh thành công.");
   } catch (error) {
     console.error("Lỗi checkPrescription:", error);
-    return errorResponse(res, "Lỗi kiểm tra dược lâm sàng hệ thống.", 500);
+    return errorResponse(res, "Lỗi kiểm tra dược lâm sàng hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -737,7 +751,7 @@ export const getPharmacyQueue = async (req, res) => {
     return successResponse(res, { prescriptions, total: prescriptions.length }, "Lấy hàng đợi quầy Dược thành công.");
   } catch (error) {
     console.error("Lỗi getPharmacyQueue:", error);
-    return errorResponse(res, "Lỗi hệ thống khi lấy hàng đợi Dược.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi lấy hàng đợi Dược.", inputErrorStatus(res, error));
   }
 };
 
@@ -800,7 +814,7 @@ export const verifyPrescription = async (req, res) => {
     return successResponse(res, { prescription }, "Dược sĩ lâm sàng đã thẩm định và ký duyệt đơn thuốc thành công!");
   } catch (error) {
     console.error("Lỗi verifyPrescription:", error);
-    return errorResponse(res, "Lỗi hệ thống khi thẩm định đơn thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi thẩm định đơn thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -814,7 +828,7 @@ export const rejectPrescription = async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
 
-    if (!reason || reason.trim().length < 10) {
+    if (typeof reason !== "string" || reason.trim().length < 10) {
       return errorResponse(res, "Bắt buộc nhập lý do từ chối chuyên môn chi tiết (tối thiểu 10 ký tự).", 400);
     }
 
@@ -871,7 +885,7 @@ export const rejectPrescription = async (req, res) => {
     return successResponse(res, { prescription }, "Đã từ chối đơn thuốc và gửi phản hồi cho Bác sĩ điều trị.");
   } catch (error) {
     console.error("Lỗi rejectPrescription:", error);
-    return errorResponse(res, "Lỗi hệ thống khi từ chối đơn thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi từ chối đơn thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -881,7 +895,19 @@ export const rejectPrescription = async (req, res) => {
 // POST /api/drugs/prescriptions/:id/dispense
 // @access pharmacist, hospital_admin, admin
 // ─────────────────────────────────────────────────────────────────────────────
+// Bấm 2 lần hoặc 2 dược sĩ cùng phát một đơn: khóa theo đơn để kho chỉ bị trừ một lần
 export const dispensePrescription = async (req, res) => {
+  const lockKey = `dispense_${String(req.params.id)}`;
+  const lock = await acquireDistributedLock(lockKey, { ttlSeconds: 60 });
+  if (!lock.acquired) return errorResponse(res, "Đơn thuốc đang được xử lý ở phiên khác. Vui lòng tải lại sau ít giây.", 409);
+  try {
+    return await dispensePrescriptionLocked(req, res);
+  } finally {
+    await releaseDistributedLock(lockKey, lock.holder);
+  }
+};
+
+const dispensePrescriptionLocked = async (req, res) => {
   try {
     const { id } = req.params;
     const { partiallyDispensed = false, dispensedItems = [] } = req.body;
@@ -955,9 +981,12 @@ export const dispensePrescription = async (req, res) => {
     let linkedInvoice = null;
     if (prescription.invoiceId) {
       linkedInvoice = await Invoice.findById(prescription.invoiceId);
-    } else {
+    } else if (prescription.visitId) {
+      // Đơn chưa gắn hóa đơn: chỉ nhận hóa đơn thuốc của đúng lượt khám, không lấy hóa đơn cũ bất kỳ của bệnh nhân
       linkedInvoice = await Invoice.findOne({
+        hospitalId: prescription.hospitalId,
         patientId: prescription.patient_id,
+        visitId: prescription.visitId,
         "items.type": "drug"
       }).sort({ createdAt: -1 });
     }
@@ -1156,7 +1185,7 @@ export const dispensePrescription = async (req, res) => {
     return successResponse(res, { prescription, invoice: linkedInvoice }, `Đã hoàn tất xuất phát thuốc (${targetStatus}) cho người bệnh và kích hoạt lịch uống thuốc.`);
   } catch (error) {
     console.error("Lỗi dispensePrescription:", error);
-    return errorResponse(res, "Lỗi hệ thống khi phát thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi phát thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -1212,7 +1241,7 @@ export const postHocReviewPrescription = async (req, res) => {
     return successResponse(res, { prescription }, "Đã hoàn tất hậu kiểm dược cho đơn thuốc cấp cứu.");
   } catch (error) {
     console.error("Lỗi postHocReviewPrescription:", error);
-    return errorResponse(res, "Lỗi hệ thống khi hậu kiểm đơn thuốc.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi hậu kiểm đơn thuốc.", inputErrorStatus(res, error));
   }
 };
 
@@ -1300,6 +1329,6 @@ export const getDoctorOverrideStats = async (req, res) => {
     return successResponse(res, { stats, totalDoctors: stats.length }, "Lấy thống kê ghi đè lâm sàng theo bác sĩ thành công.");
   } catch (error) {
     console.error("Lỗi getDoctorOverrideStats:", error);
-    return errorResponse(res, "Lỗi hệ thống khi lấy thống kê ghi đè.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi lấy thống kê ghi đè.", inputErrorStatus(res, error));
   }
 };

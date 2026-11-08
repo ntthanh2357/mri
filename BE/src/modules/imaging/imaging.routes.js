@@ -56,7 +56,7 @@ router.post("/feedback-ai", protect, feedbackImagingResultAI);
 router.post("/approve-ai", protect, approveImagingResultAI);
 
 // Explain imaging result in simple, Hippocratic terms for patient (Requires login)
-router.post("/:id/explain-ai", protect, explainImagingResultAI);
+router.post("/:id/explain-ai", protect, checkRole(IMAGING_READ_ROLES.filter((role) => role !== "receptionist")), explainImagingResultAI);
 
 // Critical Finding Acknowledgment & Post-Signature Addendum
 router.post("/:id/acknowledge-critical", protect, checkRole(["doctor", "radiologist", "department_head", "admin", "hospital_admin"]), acknowledgeCriticalFinding);

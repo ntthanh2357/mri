@@ -38,6 +38,12 @@ export const sanitizeNoSql = (req, res, next) => {
 
   if (req.query && typeof req.query === "object") {
     req.query = sanitizeObject(req.query);
+    // `?status[$ne]=x` sau khi lọc còn `status: {}` → Mongoose CastError (500). Bỏ hẳn tham số rỗng đó.
+    for (const [key, value] of Object.entries(req.query)) {
+      if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) {
+        delete req.query[key];
+      }
+    }
   }
 
   if (req.params && typeof req.params === "object") {

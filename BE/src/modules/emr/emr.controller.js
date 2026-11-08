@@ -15,6 +15,7 @@ import { segregateMedicalRecord } from "../../utils/dataSegregation.util.js";
 import { encryptField } from "../../services/fieldCrypto.service.js";
 import { evaluateVitalSigns } from "../../services/vitalsSafety.service.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
 // --- Medical Record (HSBA) Controllers ---
 
 export const getRecords = async (req, res) => {
@@ -76,7 +77,7 @@ export const getRecords = async (req, res) => {
     res.status(200).json({ status: "success", data: safeRecords });
   } catch (error) {
     console.error("Lỗi lấy danh sách bệnh án:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách bệnh án." });
   }
 };
 
@@ -152,7 +153,7 @@ export const createRecord = async (req, res) => {
     res.status(201).json({ status: "success", data: newRecord });
   } catch (error) {
     console.error("Lỗi tạo bệnh án:", error);
-    res.status(500).json({ message: "Không thể tạo bệnh án mới." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo bệnh án mới." });
   }
 };
 
@@ -265,7 +266,7 @@ export const getRecordById = async (req, res) => {
     res.status(200).json({ status: "success", data: segregatedData });
   } catch (error) {
     console.error("Lỗi chi tiết bệnh án:", error);
-    res.status(500).json({ message: "Lỗi hệ thống khi lấy chi tiết bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi hệ thống khi lấy chi tiết bệnh án." });
   }
 };
 
@@ -380,7 +381,7 @@ export const updateRecord = async (req, res) => {
       return res.status(400).json({ message: `Thiếu hoặc sai thông tin bắt buộc của bệnh án: ${fields.join(", ")}.` });
     }
     console.error("Lỗi cập nhật bệnh án:", error);
-    res.status(500).json({ message: "Không thể cập nhật bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể cập nhật bệnh án." });
   }
 };
 
@@ -402,7 +403,7 @@ export const getRecordVersions = async (req, res) => {
     res.status(200).json({ status: "success", data: versions });
   } catch (error) {
     console.error("Lỗi lấy danh sách lịch sử sửa đổi bệnh án:", error);
-    res.status(500).json({ message: "Không thể lấy lịch sử sửa đổi bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy lịch sử sửa đổi bệnh án." });
   }
 };
 
@@ -427,7 +428,7 @@ export const getCareSheets = async (req, res) => {
     res.status(200).json({ status: "success", data: careSheets });
   } catch (error) {
     console.error("Lỗi lấy danh sách phiếu chăm sóc:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách phiếu chăm sóc." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách phiếu chăm sóc." });
   }
 };
 
@@ -529,8 +530,8 @@ export const createCareSheet = async (req, res) => {
           query = { "profile.medicalId": record.patientId };
         }
 
-        const { User } = await import("../models/user.model.js");
-        const { VitalSign } = await import("../models/vitalSign.model.js");
+        const { User } = await import("../../models/user.model.js");
+        const { VitalSign } = await import("./models/vitalSign.model.js");
 
         const patientUser = await User.findOne(query);
         if (patientUser) {
@@ -549,6 +550,7 @@ export const createCareSheet = async (req, res) => {
             }
 
             const newVital = new VitalSign({
+              hospitalId: record.hospitalId || req.user?.hospitalId,
               patient_id: patientUser._id,
               pulse: Number(pulse),
               blood_pressure: { systolic, diastolic },
@@ -571,7 +573,7 @@ export const createCareSheet = async (req, res) => {
     res.status(201).json({ status: "success", data: newCareSheet });
   } catch (error) {
     console.error("Lỗi tạo phiếu chăm sóc:", error);
-    res.status(500).json({ message: "Không thể lưu phiếu chăm sóc." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lưu phiếu chăm sóc." });
   }
 };
 
@@ -596,7 +598,7 @@ export const getConsultations = async (req, res) => {
     res.status(200).json({ status: "success", data: consultations });
   } catch (error) {
     console.error("Lỗi lấy danh sách hội chẩn:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách biên bản hội chẩn." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách biên bản hội chẩn." });
   }
 };
 
@@ -641,7 +643,7 @@ export const createConsultation = async (req, res) => {
     res.status(201).json({ status: "success", data: newConsultation });
   } catch (error) {
     console.error("Lỗi tạo biên bản hội chẩn:", error);
-    res.status(500).json({ message: "Không thể lưu biên bản hội chẩn." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lưu biên bản hội chẩn." });
   }
 };
 
@@ -666,7 +668,7 @@ export const getConsents = async (req, res) => {
     res.status(200).json({ status: "success", data: consents });
   } catch (error) {
     console.error("Lỗi lấy giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách giấy cam đoan." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách giấy cam đoan." });
   }
 };
 
@@ -701,7 +703,7 @@ export const createConsent = async (req, res) => {
     res.status(201).json({ status: "success", data: newConsent });
   } catch (error) {
     console.error("Lỗi tạo giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể tạo giấy cam đoan." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo giấy cam đoan." });
   }
 };
 
@@ -762,7 +764,7 @@ export const signConsent = async (req, res) => {
     res.status(200).json({ status: "success", data: consent });
   } catch (error) {
     console.error("Lỗi ký giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể thực hiện ký duyệt." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thực hiện ký duyệt." });
   }
 };
 
@@ -821,7 +823,7 @@ export const createRecordAddendum = async (req, res) => {
     res.status(201).json({ status: "success", data: record });
   } catch (error) {
     console.error("Lỗi tạo phụ lục bệnh án:", error);
-    res.status(500).json({ message: "Không thể tạo phụ lục bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo phụ lục bệnh án." });
   }
 };
 
@@ -881,7 +883,7 @@ export const signMedicalRecord = async (req, res) => {
     res.status(200).json({ status: "success", data: record });
   } catch (error) {
     console.error("Lỗi ký số bệnh án:", error);
-    res.status(500).json({ message: "Không thể thực hiện ký số bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thực hiện ký số bệnh án." });
   }
 };
 
@@ -911,7 +913,7 @@ export const getPrivacyConsents = async (req, res) => {
     res.status(200).json({ status: "success", data: safeConsents });
   } catch (error) {
     console.error("Lỗi lấy danh sách cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
   }
 };
 
@@ -980,7 +982,7 @@ export const createPrivacyConsent = async (req, res) => {
     res.status(201).json({ status: "success", data: consent });
   } catch (error) {
     console.error("Lỗi tạo cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể tạo bản cam kết bảo vệ dữ liệu cá nhân." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo bản cam kết bảo vệ dữ liệu cá nhân." });
   }
 };
 
@@ -1036,7 +1038,7 @@ export const revokePrivacyConsent = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi thu hồi cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
   }
 };
 
@@ -1141,6 +1143,6 @@ export const approveTumorBoard = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi phê duyệt Tumor Board:", error);
-    return res.status(500).json({ message: "Không thể phê duyệt biên bản Tumor Board.", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Không thể phê duyệt biên bản Tumor Board.", error: error.message });
   }
 };

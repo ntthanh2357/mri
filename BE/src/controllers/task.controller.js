@@ -75,8 +75,10 @@ export const getKanbanBoard = async (req, res) => {
     const filter = { hospitalId };
 
     // Bác sĩ/KTV/Lễ tân chỉ xem task thuộc vai trò mình (hoặc gán trực tiếp)
-    const userRole = role || req.user.role;
-    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(userRole)) {
+    // ?role= chỉ là bộ lọc cho nhóm quản lý; người khác không được tự nâng phạm vi xem bằng tham số này.
+    const LEAD_ROLES = ["admin", "system_admin", "hospital_admin", "department_head"];
+    const userRole = LEAD_ROLES.includes(req.user.role) && typeof role === "string" && role ? role : req.user.role;
+    if (!LEAD_ROLES.includes(userRole)) {
       filter.$or = [
         { roleRequired: userRole },
         { assignedToUserId: req.user.id }
@@ -86,6 +88,9 @@ export const getKanbanBoard = async (req, res) => {
     }
 
     if (date) {
+      if (typeof date !== "string" || Number.isNaN(new Date(date).getTime())) {
+        return errorResponse(res, "Ngày không hợp lệ.", 400);
+      }
       const { startOfDay: searchDate, endOfDay } = getDayRangeVN(date);
       filter.createdAt = { $gte: searchDate, $lte: endOfDay };
     }

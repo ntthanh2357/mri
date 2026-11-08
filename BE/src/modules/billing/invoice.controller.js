@@ -1,4 +1,5 @@
 import { Invoice } from "./models/invoice.model.js";
+import { acquireDistributedLock, releaseDistributedLock } from "../../models/systemLock.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { Hospital } from "../hospital/models/hospital.model.js";
 import { MedicalRecord } from "../emr/models/medicalRecord.model.js";
@@ -115,7 +116,24 @@ export const deductStockForInvoice = async ({ invoice, session = null, performed
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
 // @access  Private (Receptionist, Admin)
+const PAYMENT_METHOD_INPUTS = ["tiền mặt", "cash", "chuyển khoản", "transfer"];
+
+// Bấm 2 lần "tạo và thu tiền": khóa theo lượt khám để chỉ tạo một hóa đơn và trừ kho một lần
 export const createAndPayInvoice = async (req, res) => {
+  if (!PAYMENT_METHOD_INPUTS.includes(req.body?.paymentMethod)) {
+    return res.status(400).json({ success: false, message: "Vui lòng chọn phương thức thanh toán: tiền mặt hoặc chuyển khoản." });
+  }
+  const lockKey = `create_pay_${String(req.params.visitId)}`;
+  const lock = await acquireDistributedLock(lockKey, { ttlSeconds: 60 });
+  if (!lock.acquired) return res.status(409).json({ success: false, message: "Lượt khám đang được thu tiền ở phiên khác. Vui lòng tải lại." });
+  try {
+    return await createAndPayInvoiceLocked(req, res);
+  } finally {
+    await releaseDistributedLock(lockKey, lock.holder);
+  }
+};
+
+const createAndPayInvoiceLocked = async (req, res) => {
   try {
     const { visitId } = req.params;
     const { paymentMethod } = req.body;
@@ -317,12 +335,18 @@ export const getInvoices = async (req, res) => {
       filter.status = status;
     }
 
-    const invoices = await Invoice.find(filter)
+    // Phân trang tùy chọn (?limit, ?page, tối đa 500/trang); không truyền thì giữ nguyên hành vi cũ cho FE hiện tại
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 0, 0), 500);
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    let query = Invoice.find(filter)
       .populate("patientId", "email profile")
       .populate("visitId", "reason status")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+    if (limit) query = query.skip((page - 1) * limit).limit(limit);
+    const invoices = await query;
 
-    res.status(200).json({ invoices });
+    res.status(200).json(limit ? { invoices, page, limit, total: await Invoice.countDocuments(filter) } : { invoices });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
@@ -1763,6 +1787,15 @@ export const requestInvoiceRefund = async (req, res) => {
           message: "Số tiền yêu cầu hoàn không hợp lệ: phải lớn hơn 0 và không vượt quá giá trị hóa đơn.",
         });
       }
+    }
+
+    // QA-14: hoàn theo số tiền chỉ hỗ trợ hoàn toàn bộ; hoàn một phần phải chọn dòng (itemsToRefund)
+    const hasItems = Array.isArray(itemsToRefund) && itemsToRefund.length > 0;
+    if (requestedAmount !== undefined && requestedAmount !== null && !hasItems && Number(requestedAmount) !== amount) {
+      return res.status(400).json({
+        success: false,
+        message: `Hoàn một phần cần chọn dòng dịch vụ cần hoàn. Không chọn dòng thì số tiền hoàn phải bằng ${amount.toLocaleString("vi-VN")}đ.`,
+      });
     }
 
     if (amount < REFUND_DUAL_APPROVAL_THRESHOLD) {

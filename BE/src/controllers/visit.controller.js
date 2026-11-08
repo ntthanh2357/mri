@@ -1191,6 +1191,9 @@ export const requestMriRescan = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
+    if ((reason != null && typeof reason !== "string")) {
+      return res.status(400).json({ success: false, message: "Lý do không hợp lệ." });
+    }
     const visit = await requestMriRescanService({
       visitId: id,
       hospitalId: req.user.hospitalId,
@@ -1216,6 +1219,9 @@ export const cancelMriOrder = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason, returnToDoctor } = req.body;
+    if ((reason != null && typeof reason !== "string")) {
+      return res.status(400).json({ success: false, message: "Lý do không hợp lệ." });
+    }
     const visit = await cancelMriOrderService({
       visitId: id,
       hospitalId: req.user.hospitalId,

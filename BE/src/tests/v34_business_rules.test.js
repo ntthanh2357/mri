@@ -329,9 +329,13 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
     expect((await Invoice.findById(inv._id)).status).toBe("đã thanh toán");
 
     const inv2 = await makeInvoice(400_000_000);
+    // QA-14: số tiền khác toàn bộ mà không chọn dòng thì bị từ chối ngay, không mở yêu cầu với ngưỡng thấp
     const spoof = await call(requestInvoiceRefund, { user: actors.adminA, params: { id: String(inv2._id) }, body: { requestedAmount: 1 } });
-    expect(spoof.statusCode).toBe(202);
+    expect(spoof.statusCode).toBe(400);
     expect((await Invoice.findById(inv2._id)).status).toBe("đã thanh toán");
+    expect((await Invoice.findById(inv2._id)).refundApproval?.approvalStatus === "pending_second_approval").toBe(false);
+    const full = await call(requestInvoiceRefund, { user: actors.adminA, params: { id: String(inv2._id) }, body: { requestedAmount: 400_000_000 } });
+    expect(full.statusCode).toBe(202);
     expect((await Invoice.findById(inv2._id)).refundApproval.requestedAmount).toBe(400_000_000);
   });
 

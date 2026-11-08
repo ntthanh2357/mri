@@ -359,7 +359,7 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals, keepWai
     throw err;
   }
   
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác");
     err.statusCode = 403;
     throw err;
@@ -433,7 +433,7 @@ export const createMriOrderService = async ({
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -601,7 +601,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -789,7 +789,7 @@ export const requestMriRescanService = async ({ visitId, hospitalId, user, reaso
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -850,7 +850,7 @@ export const cancelMriOrderService = async ({ visitId, hospitalId, user, reason,
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;

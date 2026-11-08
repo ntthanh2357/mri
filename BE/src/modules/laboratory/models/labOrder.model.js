@@ -58,6 +58,8 @@ const labOrderSchema = new Schema({
   // Cảnh báo giá trị nguy kịch (critical value) — phải báo ngay cho bác sĩ điều trị
   hasCriticalValue: { type: Boolean, default: false, index: true },
   criticalValues: [{ type: String }],
+  // Kết quả cũ bị thay khi máy gửi lại trước lúc bác sĩ duyệt (giữ dấu vết, gồm giá trị nguy kịch)
+  resultHistory: { type: [Schema.Types.Mixed], default: [] },
   criticalNotifiedAt: { type: Date, default: null },
   results: [{
     biomarker_code: { type: String, required: true },

@@ -77,11 +77,24 @@ export const applyBhytCore = async (invoice, { bhyt = null, treatmentType = "out
     autoApplied: auto,
   };
   invoice.patientPayAmount = patientAmount; // Bệnh nhân chỉ trả phần đồng chi trả
-  await invoice.save();
 
+  // Cộng lũy kế có điều kiện: hai hóa đơn áp cùng lúc không được cùng dùng phần trần còn lại
+  const readUsed = card.usedThisYear || 0;
+  const reserved = await BhytInfo.updateOne(
+    { _id: card._id, usedThisYear: readUsed === 0 ? { $in: [0, null] } : readUsed },
+    { $set: { usedThisYear: usedBefore + bhytAmount, invoiceId: invoice._id } }
+  );
+  if (!reserved.matchedCount) {
+    return { ok: false, code: "CAP_CHANGED", message: "Hạn mức BHYT của thẻ vừa thay đổi do một hóa đơn khác. Vui lòng áp lại." };
+  }
+  try {
+    await invoice.save();
+  } catch (err) {
+    await BhytInfo.updateOne({ _id: card._id }, { $set: { usedThisYear: readUsed } });
+    throw err;
+  }
   card.invoiceId = invoice._id;
   card.usedThisYear = usedBefore + bhytAmount;
-  await card.save();
 
   return { ok: true, data: { invoiceId: invoice._id, totalAmount, bhytAmount, patientCopayAmount: patientAmount, coverageRate: effectiveRate } };
 };

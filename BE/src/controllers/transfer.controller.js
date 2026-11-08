@@ -508,14 +508,13 @@ export const rejectTransferRequest = async (req, res) => {
   }
 };
 
+// Xem chéo liên viện đã thay bằng gửi gói chuyển viện qua email: hai route cũ báo đã ngừng, không báo thành công giả
 export const grantCrossHospitalView = async (req, res) => {
-  return successResponse(res, {
-    message: "Chức năng xem chéo liên viện đã chuyển đổi sang gửi email gói chuyển viện trực tiếp cho bệnh nhân."
-  });
+  return errorResponse(res, "Chức năng xem chéo liên viện đã ngừng; hồ sơ chuyển viện được gửi qua email.", 410);
 };
 
 export const revokeCrossHospitalView = async (req, res) => {
-  return successResponse(res, { message: "Quyền xem liên viện đã được thu hồi." });
+  return errorResponse(res, "Chức năng xem chéo liên viện đã ngừng; hồ sơ chuyển viện được gửi qua email.", 410);
 };
 
 export const accessCrossHospitalView = async (req, res) => {

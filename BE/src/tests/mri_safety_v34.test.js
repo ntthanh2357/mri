@@ -311,9 +311,16 @@ describe("Module an toàn MRI: hồi quy sau sửa lỗi", () => {
     const bad = await call(submitMriSafetyCheck, { params: { id: "abc" }, user: userOf(tech), body: SAFE });
     expect(bad.statusCode).toBe(400);
     const v = await newVisit();
-    const crash = await call(submitMriSafetyCheck, { params: { id: String(v._id) }, user: { id: String(oid()), role: "technician", hospitalId: null }, body: SAFE });
+    // Tài khoản không gắn viện: từ chối 403 (trước đây .toString() trên null gây 500)
+    const noHospital = await call(submitMriSafetyCheck, { params: { id: String(v._id) }, user: { id: String(oid()), role: "technician", hospitalId: null }, body: SAFE });
+    expect(noHospital.statusCode).toBe(403);
+    // Lỗi máy chủ giả lập: vẫn 500 và không lộ chi tiết
+    const boom = { toString() { throw new Error("internal detail xyz"); } };
+    const crash = await call(submitMriSafetyCheck, { params: { id: String(v._id) }, user: { id: String(oid()), role: "technician", hospitalId: boom }, body: SAFE });
     expect(crash.statusCode).toBe(500);
     expect(crash.payload.message).toBe("Lỗi máy chủ");
     expect(crash.payload.error === undefined).toBe(true);
+    // Không một trường nào của phản hồi chứa chi tiết nội bộ của lỗi gốc
+    expect(JSON.stringify(crash.payload).includes("internal detail xyz")).toBe(false);
   });
 });

@@ -326,7 +326,7 @@ export const login = async (req, res) => {
 
       await User.findByIdAndUpdate(user._id, updateFields);
       res.status(400).json({
-        message: `Email hoặc mật khẩu không chính xác. Bạn còn ${5 - failedAttempts} lần thử trước khi tài khoản bị khóa tạm thời.`,
+        message: "Email hoặc mật khẩu không chính xác.",
       });
       return;
     }
@@ -1127,6 +1127,8 @@ export const changePassword = async (req, res) => {
 // @desc    Forgot password (request OTP)
 // @route   POST /auth/forgot-password
 // @access  Public
+const FORGOT_PASSWORD_SENT_MESSAGE = "Nếu email này đã đăng ký, mã OTP đã được gửi tới hộp thư của bạn.";
+
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -1138,7 +1140,8 @@ export const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(404).json({ message: "Email này không tồn tại trong hệ thống." });
+      // Trả cùng phản hồi như email có thật để không dò được email đã đăng ký
+      res.status(200).json({ message: FORGOT_PASSWORD_SENT_MESSAGE });
       return;
     }
 
@@ -1155,10 +1158,9 @@ export const forgotPassword = async (req, res) => {
     // Send OTP via email (falls back to console log if SMTP is not configured)
     const emailSent = await sendOtpEmail(email, otpCode);
 
+    if (!emailSent) console.warn("[Quên mật khẩu] Chưa cấu hình SMTP: mã OTP chỉ ghi ở log máy chủ.");
     res.status(200).json({
-      message: emailSent
-        ? "Mã OTP đã được gửi thành công đến Gmail của bạn."
-        : "Mã OTP đã được tạo thành công (Xem tại terminal của Server do chưa cấu hình SMTP).",
+      message: FORGOT_PASSWORD_SENT_MESSAGE,
       debugOtp: isDevOtpEnabled() ? otpCode : undefined,
     });
   } catch (error) {
