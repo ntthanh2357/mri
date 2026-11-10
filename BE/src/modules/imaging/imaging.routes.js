@@ -14,7 +14,9 @@ import {
   updateImagingResult,
   getImagingResultByVisitId,
   acknowledgeCriticalFinding,
+  acknowledgeImagingReport,
   addImagingAddendum,
+  addClinicalAddendum,
   getPatientRanoTimeline
 } from "./imaging.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
@@ -51,7 +53,9 @@ router.post("/:id/explain-ai", protect, explainImagingResultAI);
 
 // Critical Finding Acknowledgment & Post-Signature Addendum
 router.post("/:id/acknowledge-critical", protect, checkRole(["doctor", "radiologist", "department_head", "admin", "hospital_admin"]), acknowledgeCriticalFinding);
+router.post("/:id/acknowledge", protect, checkRole(["doctor", "radiologist", "department_head"]), acknowledgeImagingReport);
 router.post("/:id/addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), addImagingAddendum);
+router.post("/:id/clinical-addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), addClinicalAddendum);
 
 // Get imaging results by visit ID
 router.get("/by-visit/:visitId", protect, getImagingResultByVisitId);

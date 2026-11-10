@@ -100,6 +100,12 @@ const storedMedicalFileSchema = new Schema(
     },
 
     // Liên kết nghiệp vụ
+    hospitalId: {
+      type: Schema.Types.ObjectId,
+      ref: "Hospital",
+      default: null,
+      index: true,
+    },
     patientId: {
       type: Schema.Types.ObjectId,
       ref: "User",

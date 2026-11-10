@@ -139,6 +139,16 @@ const visitSchema = new Schema(
       overriddenByName: { type: String, default: "" },
       overriddenAt: { type: Date, default: null }
     },
+    // [Q-BILLING-01] Phê duyệt nợ viện phí có thời hạn bởi Quản trị viên bệnh viện (Debt Approval Gate)
+    debtApproval: {
+      isApproved: { type: Boolean, default: false },
+      approvedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      approvedByName: { type: String, default: "" },
+      approvedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null },
+      maxAmount: { type: Number, default: 0 },
+      reason: { type: String, default: "" }
+    },
     // Bệnh nhân tự khai sàng lọc an toàn MRI trên app trước khi tới chụp (services/mriPrep.service.js).
     // Chỉ để KTV biết trước; KTV vẫn tự hỏi lại và xác nhận ở mriSafetyChecklist.
     patientMriScreening: {

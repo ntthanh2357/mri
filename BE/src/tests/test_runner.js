@@ -208,6 +208,7 @@ async function runAllTests() {
     './single_device_and_geoip.test.js',
     './neuro_oncology_pacs_workflow.test.js',
     './pacs_concurrent_upload_and_drive_queue.test.js',
+    './mega_audit_v3_remediation.test.js',
   ];
 
   const startTime = Date.now();

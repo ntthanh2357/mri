@@ -283,9 +283,12 @@ export const getShiftOverviewDashboard = async (req, res) => {
       deadlineAt: { $lt: new Date() }
     });
 
-    // Thống kê phân bổ theo vai trò
+    // Thống kê phân bổ theo vai trò — [FIX BUG-TENANT-001]: Ép kiểu ObjectId cho aggregate($match)
+    const matchHospitalId = mongoose.Types.ObjectId.isValid(hospitalId)
+      ? new mongoose.Types.ObjectId(String(hospitalId))
+      : hospitalId;
     const pendingByRole = await Task.aggregate([
-      { $match: { hospitalId: req.user.hospitalId, status: { $in: ['pending', 'in_progress'] } } },
+      { $match: { hospitalId: matchHospitalId, status: { $in: ['pending', 'in_progress'] } } },
       { $group: { _id: "$roleRequired", count: { $sum: 1 } } }
     ]);
 

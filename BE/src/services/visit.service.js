@@ -9,6 +9,59 @@ import { createNotificationInternal } from "../controllers/notification.controll
 import { getDayRangeVN } from "../utils/date.util.js";
 import { contrastConsentPending } from "./contrastConsent.service.js";
 import { evaluateVitalSigns } from "./vitalsSafety.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "./auditLog.service.js";
+
+/**
+ * Helper: Đánh giá Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01)
+ */
+export const shouldEnforcePaymentGate = (visit, inv) => {
+  // 1. Cấp cứu — KHÔNG BAO GIỜ chặn
+  if (visit.priority === "khẩn cấp" || visit.isEmergency === true) {
+    return { enforce: false, reason: "EMERGENCY_BYPASS" };
+  }
+  // 2. Nội trú / Hậu phẫu —記 sổ nội trú, thanh toán khi ra viện
+  if (
+    visit.visitType === "inpatient" ||
+    visit.visitType === "nội trú" ||
+    visit.status === "chờ nhập viện" ||
+    visit.status === "chờ chụp sau phẫu thuật" ||
+    visit.mriOrder?.clinicalScenario === "post_op_72h"
+  ) {
+    return { enforce: false, reason: "INPATIENT_POSTOP_DEFERRED" };
+  }
+  if (!inv) {
+    return { enforce: false, reason: "NO_INVOICE_REQUIRED" };
+  }
+  // 3. BHYT 100% hoặc gói tài trợ / thử nghiệm lâm sàng
+  if (
+    inv.bhytInfo?.coverageRate === 100 ||
+    inv.paymentMethod === "BHYT chi trả" ||
+    ["clinical_trial", "sponsored", "charity"].includes(inv.billingType)
+  ) {
+    return { enforce: false, reason: "FULL_COVERAGE_OR_SPONSORED" };
+  }
+  // 4. Có Bảo lãnh nợ (Debt Approval) hợp lệ từ Ban Giám đốc / Hospital Admin
+  if (
+    visit.debtApproval?.isApproved === true &&
+    (!visit.debtApproval.expiresAt || new Date(visit.debtApproval.expiresAt) > new Date())
+  ) {
+    return { enforce: false, reason: "DEBT_APPROVED_BY_ADMIN" };
+  }
+  // 5. Đã thanh toán hoặc Đặt cọc / Thanh toán một phần (dư nợ còn lại <= 2.000.000 VNĐ)
+  const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+  if (inv.status === "đã thanh toán" || inv.status === "PAID" || owed <= 0) {
+    return { enforce: false, reason: "ALREADY_PAID" };
+  }
+  if (inv.status === "thanh toán một phần") {
+    const paidAmount = Number(inv.paidAmount || 0);
+    const remainingOwed = Math.max(0, owed - paidAmount);
+    if (remainingOwed <= 2_000_000) {
+      return { enforce: false, reason: "PARTIAL_PAYMENT_WITHIN_THRESHOLD" };
+    }
+  }
+  // Mặc định: Ngoại trú thường chưa đóng tiền -> BẮT BUỘC CHẶN (bất kể client gửi enforcePaymentGate gì)
+  return { enforce: true, reason: "OUTPATIENT_UNPAID", owed };
+};
 
 /**
  * Helper: Tra cứu chỉ số eGFR gần nhất từ LIS (LabOrder) của bệnh nhân
@@ -473,18 +526,35 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   const egfrLowRisk = withContrast && egfrValue !== null && egfrValue < 30;
   const kidneyDisease = Boolean(hasKidneyDisease) || egfrLowRisk;
 
-  // Kiểm tra Cổng Viện phí (Payment Gate) cho lượt khám thường (không phải cấp cứu)
+  // Kiểm tra Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01 / BUG-VISIT-001)
+  // Lưu ý: Không bao giờ tin cờ `checklistData.enforcePaymentGate = false` từ client!
   let paymentPending = false;
-  if (visit.priority !== "khẩn cấp" && visit.invoiceId) {
-    const inv = await Invoice.findById(visit.invoiceId).select("status totalAmount patientPayAmount bhytInfo").lean();
-    if (inv && inv.status === "chờ thanh toán") {
-      const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
-      if (owed > 0) paymentPending = true;
-    }
+  let inv = null;
+  if (visit.invoiceId) {
+    inv = await Invoice.findById(visit.invoiceId)
+      .select("status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
+      .lean();
+  }
+  const gateDecision = shouldEnforcePaymentGate(visit, inv);
+  paymentPending = gateDecision.enforce;
+
+  if (!gateDecision.enforce && inv && !["ALREADY_PAID", "NO_INVOICE_REQUIRED"].includes(gateDecision.reason)) {
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.PAYMENT_GATE_BYPASSED,
+      actorId: user.id || user._id || null,
+      actorRole: user.role,
+      hospitalId: visit.hospitalId,
+      targetModel: "Visit",
+      targetId: String(visit._id),
+      metadata: {
+        bypassReason: gateDecision.reason,
+        invoiceId: String(visit.invoiceId),
+      },
+    });
   }
 
-  if (checklistData.enforcePaymentGate === true && paymentPending) {
-    const err = new Error("CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu hoặc BHYT 100%).");
+  if (gateDecision.enforce) {
+    const err = new Error("CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu, Nội trú/Hậu phẫu, BHYT 100%, hoặc có Bảo lãnh viện phí của Ban Giám đốc).");
     err.statusCode = 402;
     err.code = "ERR_INVOICE_NOT_PAID";
     throw err;
