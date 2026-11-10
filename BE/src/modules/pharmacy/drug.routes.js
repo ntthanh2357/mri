@@ -16,11 +16,12 @@ import {
   postHocReviewPrescription,
   getDoctorOverrideStats,
 } from "./drug.controller.js";
-import { protect, checkRole } from "../../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
 router.use(protect);
+router.use(denyPlatformAdmin); // module lâm sàng: tài khoản nền tảng không truy cập
 
 // ⚠️ [P1-FIX Route Ordering] Các route GET có path CỤ THỂ (/queue, /alerts/...,
 // /audit/...) bắt buộc phải đăng ký TRƯỚC route generic /:id — Express khớp

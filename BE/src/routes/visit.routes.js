@@ -1,5 +1,5 @@
 import express from "express";
-import { protect, checkRole } from "../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../middlewares/auth.middleware.js";
 import { uploadSingle } from "../middlewares/upload.middleware.js";
 import {
   createVisit,
@@ -39,32 +39,32 @@ const ALL_STAFF_ROLES = [
   "system_admin",
 ];
 
-router.get("/staff", protect, checkRole(ALL_STAFF_ROLES), getStaff);
-router.get("/debt-candidates", protect, checkRole(["hospital_admin"]), getDebtApprovalCandidates);
-router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), createVisit);
-router.get("/my-queue", protect, checkRole(ALL_STAFF_ROLES), getMyQueue); // chỉ nhân viên: hàng đợi chứa lượt khám của cả bệnh viện
-router.post("/check-vitals", protect, checkRole(ALL_STAFF_ROLES), checkVitalsSafety);
+router.get("/staff", protect, checkRole(ALL_STAFF_ROLES), denyPlatformAdmin, getStaff);
+router.get("/debt-candidates", protect, checkRole(["hospital_admin"]), denyPlatformAdmin, getDebtApprovalCandidates);
+router.post("/", protect, checkRole(["nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, createVisit);
+router.get("/my-queue", protect, checkRole(ALL_STAFF_ROLES), denyPlatformAdmin, getMyQueue); // chỉ nhân viên: hàng đợi chứa lượt khám của cả bệnh viện
+router.post("/check-vitals", protect, checkRole(ALL_STAFF_ROLES), denyPlatformAdmin, checkVitalsSafety);
 // UC-NUR-01: gọi bệnh nhân vào phòng đo sinh hiệu — chỉ điều dưỡng
-router.put("/:id/call-vitals", protect, checkRole(["nurse"]), callPatientForVitals);
+router.put("/:id/call-vitals", protect, checkRole(["nurse"]), denyPlatformAdmin, callPatientForVitals);
 // UC-NUR-03: sàng lọc dị ứng & chống chỉ định — điều dưỡng ghi, nhân sự lâm sàng đọc trong bệnh án
-router.put("/:id/pre-screening", protect, checkRole(["nurse"]), savePreScreening);
-router.get("/pre-screening/latest", protect, checkRole(["nurse", "doctor", "radiologist", "department_head", "technician", "lab_technician", "pharmacist", "hospital_admin", "admin", "system_admin"]), getPatientPreScreening);
-router.put("/:id/vitals", protect, checkRole(["nurse", "receptionist", "doctor", "department_head", "admin", "system_admin", "hospital_admin"]), updateVitals);
-router.put("/:id/start-exam", protect, checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), startExam);
-router.put("/:id/mri-order", protect, checkRole(["doctor", "department_head"]), createMriOrder);
-router.put("/:id/status", protect, checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "system_admin", "hospital_admin"]), updateStatus);
+router.put("/:id/pre-screening", protect, checkRole(["nurse"]), denyPlatformAdmin, savePreScreening);
+router.get("/pre-screening/latest", protect, checkRole(["nurse", "doctor", "radiologist", "department_head", "technician", "lab_technician", "pharmacist", "hospital_admin", "admin", "system_admin"]), denyPlatformAdmin, getPatientPreScreening);
+router.put("/:id/vitals", protect, checkRole(["nurse", "receptionist", "doctor", "department_head", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, updateVitals);
+router.put("/:id/start-exam", protect, checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, startExam);
+router.put("/:id/mri-order", protect, checkRole(["doctor", "department_head"]), denyPlatformAdmin, createMriOrder);
+router.put("/:id/status", protect, checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, updateStatus);
 
 // [THỰC TẾ BV: NGHỊCH LÝ 3 & 4] Bảng kiểm an toàn MRI, Chụp lại & Hủy ca
-router.post("/:id/mri-safety-check", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), submitMriSafetyCheck);
+router.post("/:id/mri-safety-check", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), denyPlatformAdmin, submitMriSafetyCheck);
 // Lỗi định dạng/dung lượng của multer trả 400 thay vì 500
 const acceptMrConditionalDoc = (req, res, next) => uploadSingle(req, res, (err) => (err ? res.status(400).json({ success: false, message: err.message }) : next()));
-router.post("/:id/mri-conditional-doc", protect, checkRole(["radiologist"]), acceptMrConditionalDoc, uploadMriConditionalDoc);
-router.post("/:id/debt-approval", protect, checkRole(["hospital_admin"]), approveVisitDebt);
-router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), requestMriRescan);
-router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), cancelMriOrder);
+router.post("/:id/mri-conditional-doc", protect, checkRole(["radiologist"]), denyPlatformAdmin, acceptMrConditionalDoc, uploadMriConditionalDoc);
+router.post("/:id/debt-approval", protect, checkRole(["hospital_admin"]), denyPlatformAdmin, approveVisitDebt);
+router.post("/:id/mri-rescan", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, requestMriRescan);
+router.post("/:id/mri-cancel", protect, checkRole(["technician", "doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, cancelMriOrder);
 
 // Phiếu chỉ định dịch vụ & xem 1 lượt khám (đặt sau các route cố định như /staff, /my-queue)
-router.put("/:id/service-order", protect, checkRole(["nurse", "doctor", "department_head", "admin", "system_admin", "hospital_admin"]), saveServiceOrder);
-router.get("/:id", protect, checkRole(ALL_STAFF_ROLES), getVisitById);
+router.put("/:id/service-order", protect, checkRole(["nurse", "doctor", "department_head", "admin", "system_admin", "hospital_admin"]), denyPlatformAdmin, saveServiceOrder);
+router.get("/:id", protect, checkRole(ALL_STAFF_ROLES), denyPlatformAdmin, getVisitById);
 
 export default router;

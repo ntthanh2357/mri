@@ -1038,7 +1038,7 @@ export async function assessPrescriptionSafety({
             type: "TUMOR_PROTOCOL_MISMATCH",
             severity: "CRITICAL",
             drugName: hasChemo.name,
-            message: `[Cảnh báo Lệch Chỉ định Nghiêm trọng] Kết quả AI chẩn đoán hình ảnh kết luận KHÔNG PHÁT HIỆN KHỐI U NÃO (NOTUMOR) và không có tiền sử u não/hậu phẫu. Đơn thuốc đang kê hóa chất độc tế bào (${hasChemo.name}).`,
+            message: `[Cảnh báo Lệch Chỉ định Nghiêm trọng] Kết quả AI hỗ trợ sàng lọc trên ảnh KHÔNG PHÁT HIỆN KHỐI U NÃO (NOTUMOR) và không có tiền sử u não/hậu phẫu. Đơn thuốc đang kê hóa chất độc tế bào (${hasChemo.name}).`,
             recommendation: "Hội chẩn khẩn cấp trước khi cấp phát hóa chất cho người bệnh.",
             source: "Neuro-Oncology AI Protocol Guard"
           });
@@ -1096,7 +1096,7 @@ export async function assessPrescriptionSafety({
       patientId: patient?._id ? `ANON_${String(patient._id).slice(-6)}` : "ANON_PATIENT",
       name: "Bệnh nhân (Ẩn danh hóa)",
       age: patient?.profile?.dob ? (new Date().getFullYear() - new Date(patient.profile.dob).getFullYear()) : 45,
-      gender: patient?.profile?.gender || "Nam",
+      gender: patient?.profile?.gender || null, // chưa rõ thì để trống
       diagnosis: diagnosis || resolvedTumorAiResult?.predicted_class || "U não / Rối loạn thần kinh",
       allergies,
       bmi,

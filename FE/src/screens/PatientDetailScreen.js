@@ -41,6 +41,7 @@ import VitalsTab from '../components/patientDetail/VitalsTab';
 import LabOrdersTab from '../components/patientDetail/LabOrdersTab';
 import PrescriptionTab from '../components/patientDetail/PrescriptionTab';
 import DischargeTransferTab from '../components/patientDetail/DischargeTransferTab';
+import { isFeatureEnabled } from '../constants/featureScope';
 
 const calculateAge = (dob, birthYear) => {
   if (dob) {
@@ -505,8 +506,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const targetPatientId = patient?._id;
       const body = {
         doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
-        dischargeNo: dischargeNo || `GV-${Math.floor(1000 + Math.random() * 9000)}`,
-        hospitalNo: hospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
+        // số giấy/số bệnh án do phòng KHTH cấp: chưa có thì để trống (giấy in dòng chấm điền tay), không sinh số ngẫu nhiên
+        dischargeNo: dischargeNo || '',
+        hospitalNo: hospitalNo || '',
         dateIn: dateIn,
         dateOut: dateOut,
         diagnosis: dischargeDiagnosis,
@@ -549,8 +551,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const body = {
         patient_id: targetPatientId,
         doctor_name: currentUser?.profile?.name || currentUser?.name || "Bác sĩ điều trị",
-        transferNo: transferNo || `CV-${Math.floor(100000 + Math.random() * 900000)}`,
-        hospitalNo: transferHospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
+        transferNo: transferNo || '',
+        hospitalNo: transferHospitalNo || '',
         transferTo,
         dateIn,
         dateOut,
@@ -652,28 +654,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // Tự động điền các trị số bình thường theo giới tính
-  const handleAutoFillNormalLab = () => {
-    if (!selectedOrder || biomarkerList.length === 0) return;
-    const filled = { ...labInputValues };
-    biomarkerList.forEach(b => {
-      const ref = selectedOrder.patient_gender === 'Nam' ? b.reference_range?.male : b.reference_range?.female;
-      if (ref) {
-        let normalVal = 0;
-        const hasMin = ref.min !== null && ref.min !== undefined;
-        const hasMax = ref.max !== null && ref.max !== undefined;
-        if (hasMin && hasMax) {
-          normalVal = (ref.min + ref.max) / 2;
-        } else if (hasMax) {
-          normalVal = ref.max;
-        } else if (hasMin) {
-          normalVal = ref.min;
-        }
-        filled[b.code] = String(Number(normalVal.toFixed(2)));
-      }
-    });
-    setLabInputValues(filled);
-  };
 
   // Lưu kết quả xét nghiệm điền tay của bác sĩ
   const handleSaveManualLab = async () => {
@@ -749,7 +729,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
 
     try {
-      const barcode = `LIS-${category === 'HOA_SINH' ? 'HS' : 'HH'}-${Math.floor(1000 + Math.random() * 9000)}`;
+      // mã vạch phải duy nhất (máy LIS ghép kết quả theo mã vạch): thời điểm + chuỗi ngẫu nhiên, không chỉ 4 chữ số
+      const barcode = `LIS-${category === 'HOA_SINH' ? 'HS' : 'HH'}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       
       await post(`/api/patients/${targetPatientId}/lab-orders`, {
         category,
@@ -957,15 +938,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
               {selectedOrder.status === 'RESULTED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.autofillBtn}
-            onPress={handleAutoFillNormalLab}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={13} color={Colors.brandGreen} />
-              <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.manualLabGrid}>
@@ -1050,6 +1022,15 @@ const PatientDetailScreen = ({ route, navigation }) => {
   }
 
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
+
+  // Quay lại màn trước; mở thẳng bằng đường dẫn (không có lịch sử) thì về danh sách bệnh nhân
+  const handleBackNavigation = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(currentUser?.role === 'patient' ? 'PatientRecords' : 'DoctorPatientList');
+    }
+  };
 
   return (
     <ResponsiveLayout
@@ -1164,7 +1145,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               clinicalSources={clinicalSources}
               aiConsultationData={aiConsultationData}
               isConsultingAi={isConsultingAi}
-              onConsultAi={handleConsultAi}
+              onConsultAi={isFeatureEnabled('pharmacy') ? handleConsultAi : undefined}
               overrideReason={overrideReason}
               setOverrideReason={setOverrideReason}
               overrideCategory={overrideCategory}

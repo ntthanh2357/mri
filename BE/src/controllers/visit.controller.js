@@ -984,7 +984,7 @@ export const updateStatus = async (req, res) => {
             if (visit.mriOrder && visit.mriOrder.orderedAt && !visit.mriCancelReason) {
               items.push({ description: `Chụp MRI vùng ${visit.mriOrder.region || "Không xác định"}`, amount: mriFee, type: "mri" });
               if (visit.mriOrder.requestAiAnalysis) {
-                items.push({ description: "Phân tích AI chẩn đoán", amount: aiFee, type: "ai" });
+                items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
               }
             }
             items.push(...drugItems);

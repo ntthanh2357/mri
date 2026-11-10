@@ -15,7 +15,7 @@ import {
   getPatientTransferForms,
   addPatientTransferForm
 } from "../controllers/patient.controller.js";
-import { protect, checkRole } from "../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -39,6 +39,7 @@ const checkSelfOrRoles = (allowedRoles) => {
 };
 
 router.use(protect);
+router.use(denyPlatformAdmin); // module lâm sàng: tài khoản nền tảng không truy cập
 
 // Lấy danh sách bệnh nhân (Chỉ cho nhân viên lâm sàng)
 router.get("/", checkRole(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "admin", "hospital_admin"]), getPatients);

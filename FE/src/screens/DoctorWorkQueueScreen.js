@@ -24,6 +24,7 @@ import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../compone
 import { Hourglass as QStatWait, ScanLine as QStatMri, Siren as QStatEmergency, LayoutList as QStatAll, RefreshCw as QBtnRefresh } from 'lucide-react';
 import PageContainer from '../components/layout/PageContainer';
 import Layout from '../constants/layout';
+import { isFeatureEnabled } from '../constants/featureScope';
 import { 
   Scan, 
   RotateCcw, 
@@ -1075,10 +1076,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 <Flame size={12} color="#DC2626" strokeWidth={2.5} />
                 <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: 'bold' }}>CẤP CỨU: Chụp trước, thu sau</Text>
               </View>
-            ) : (v.patientId?.profile?.hasBhyt || v.visitType === 'BHYT') ? (
+            ) : isFeatureEnabled('bhyt') && (v.patientId?.profile?.hasBhyt || v.visitType === 'BHYT') ? (
               <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#86EFAC', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <ShieldCheck size={12} color="#166534" strokeWidth={2.4} />
-                <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>BHYT: Đã bảo lãnh chi trả</Text>
+                <Text style={{ color: '#166534', fontSize: 11, fontWeight: 'bold' }}>Có thẻ BHYT</Text>
               </View>
             ) : v.invoiceId?.status === 'đã thanh toán' ? (
               <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center', gap: 4 }}>

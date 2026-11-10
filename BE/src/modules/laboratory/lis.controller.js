@@ -113,6 +113,9 @@ export const receiveLisResults = async (req, res) => {
     order.status = "RESULTED";
     order.specimenStatus = "RESULTED";
     order.resulted_at = new Date();
+    const fromMachine = req.user?.role === "system";
+    order.resulted_by = fromMachine ? null : (req.user.id || req.user._id);
+    order.resulted_source = fromMachine ? "lis_machine" : "manual";
     if (!order.received_at) order.received_at = new Date();
 
     const criticalResults = processedResults.filter((r) => r.is_critical);
@@ -165,6 +168,7 @@ export const receiveLisResults = async (req, res) => {
 // @route POST /api/lis/orders/:id/collect
 export const collectLabSpecimen = async (req, res) => {
   try {
+    if (!req.user?.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const order = await LabOrder.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
     if (!order) return errorResponse(res, "Không tìm thấy phiếu xét nghiệm.", 404);
     if (order.status !== "PENDING") {
@@ -200,6 +204,7 @@ export const collectLabSpecimen = async (req, res) => {
 // @route POST /api/lis/orders/:id/verify
 export const verifyLisResults = async (req, res) => {
   try {
+    if (!req.user?.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     let order = await LabOrder.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
     if (!order) return errorResponse(res, "Không tìm thấy phiếu xét nghiệm.", 404);
     if (order.status === "VERIFIED" || order.status === "COMPLETED") {
@@ -211,10 +216,16 @@ export const verifyLisResults = async (req, res) => {
     if (!order.results || order.results.length === 0) {
       return errorResponse(res, "Phiếu xét nghiệm chưa có kết quả để duyệt.", 400);
     }
+    // Người nhập kết quả (nhập tay) không tự duyệt kết quả của mình
+    const verifierId = String(req.user.id || req.user._id);
+    if (order.resulted_by && String(order.resulted_by) === verifierId) {
+      return errorResponse(res, "Bạn đã nhập kết quả phiếu này nên không tự duyệt được. Cần bác sĩ khác duyệt.", 403);
+    }
 
-    // Giành trạng thái nguyên tử: nhiều người duyệt cùng lúc chỉ một người thành công
+    // Giành trạng thái nguyên tử: nhiều người duyệt cùng lúc chỉ một người thành công;
+    // điều kiện resulted_by chặn cả trường hợp kết quả vừa được chính người duyệt nhập lại
     const claimed = await LabOrder.findOneAndUpdate(
-      { _id: order._id, hospitalId: order.hospitalId, status: "RESULTED" },
+      { _id: order._id, hospitalId: order.hospitalId, status: "RESULTED", ...(/^[a-f0-9]{24}$/i.test(verifierId) ? { resulted_by: { $ne: verifierId } } : {}) },
       { $set: { status: "VERIFIED", specimenStatus: "VERIFIED", verified_at: new Date(), verified_by: req.user.id || req.user._id } },
       { new: true }
     );

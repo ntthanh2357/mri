@@ -162,7 +162,7 @@ const createAndPayInvoiceLocked = async (req, res) => {
     if (visit.mriOrder && visit.mriOrder.orderedAt) {
       items.push({ description: "Chụp MRI", amount: mriFee, type: "mri" });
       if (visit.mriOrder.requestAiAnalysis) {
-        items.push({ description: "Phân tích AI chẩn đoán", amount: aiFee, type: "ai" });
+        items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
       }
     }
 

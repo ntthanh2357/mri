@@ -14,6 +14,9 @@ export const FEATURES = {
   ENABLE_DATA_SEGREGATION: process.env.ENABLE_DATA_SEGREGATION !== "false",     // Mặc định: BẬT (Non-breaking masking)
   ENABLE_FIELD_LEVEL_ENCRYPTION: process.env.ENABLE_FIELD_LEVEL_ENCRYPTION !== "false", // Mặc định: BẬT
 
+  // Phạm vi đồ án (góp ý hội đồng): BHYT, giường bệnh nằm ngoài phạm vi → API tắt, trừ khi bật cờ này
+  ENABLE_OUT_OF_SCOPE: process.env.ENABLE_OUT_OF_SCOPE === "true",                // Mặc định: TẮT
+
   // P2 Flags
   ENABLE_RETENTION_ENGINE: process.env.ENABLE_RETENTION_ENGINE !== "false",     // Mặc định: BẬT
 };

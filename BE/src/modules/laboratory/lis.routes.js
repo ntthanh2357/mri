@@ -34,13 +34,15 @@ const lisOrStaffAuth = (req, res, next) => {
 router.use(lisOrStaffAuth);
 
 // Endpoint: POST /api/lis/receiver — Tiếp nhận kết quả từ máy LIS
-router.post("/receiver", checkRole(["doctor", "department_head", "technician", "lab_technician", "admin", "system_admin", "system"]), receiveLisResults);
+// Kết quả do máy LIS (system) hoặc KTV xét nghiệm nhập; bác sĩ được nhập tay khi máy không gửi được.
+// KTV chẩn đoán hình ảnh (technician) và tài khoản nền tảng không nhập kết quả xét nghiệm.
+router.post("/receiver", checkRole(["doctor", "department_head", "lab_technician", "system"]), receiveLisResults);
 
 // Vòng đời mẫu: ghi nhận lấy mẫu
-router.post("/orders/:id/collect", checkRole(["nurse", "technician", "lab_technician", "doctor", "department_head", "admin", "hospital_admin"]), collectLabSpecimen);
+router.post("/orders/:id/collect", checkRole(["nurse", "technician", "lab_technician", "doctor", "department_head", "hospital_admin"]), collectLabSpecimen);
 
-// Duyệt kết quả: RESULTED → VERIFIED (bác sĩ xét nghiệm/người được phân công)
-router.post("/orders/:id/verify", checkRole(["doctor", "department_head", "technician", "lab_technician", "admin", "hospital_admin"]), verifyLisResults);
+// Duyệt kết quả: RESULTED → VERIFIED — chỉ bác sĩ duyệt (KTV nhập kết quả, không tự duyệt)
+router.post("/orders/:id/verify", checkRole(["doctor", "department_head"]), verifyLisResults);
 
 // Endpoint: GET /api/lis/biomarkers — Lấy danh mục chỉ số xét nghiệm (mọi user đã đăng nhập đều xem được)
 router.get("/biomarkers", async (req, res) => {

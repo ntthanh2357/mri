@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 3: THIẾT KẾ KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 3.1. TỔNG QUAN KIẾN TRÚC VÀ MÔ HÌNH C4
@@ -15,7 +17,7 @@ graph TD
     classDef system fill:#059669,stroke:#047857,stroke-width:2px,color:#ffffff;
     classDef external fill:#4b5563,stroke:#374151,stroke-width:2px,color:#ffffff;
 
-    BN("👤 Người Bệnh & Thân Nhân<br/>[Bệnh nhân B2C / BHYT]"):::person
+    BN("👤 Người Bệnh & Thân Nhân<br/>[Bệnh nhân B2C]"):::person
     BS("👨‍⚕️ Bác Sĩ Lâm Sàng & Thần Kinh<br/>[Nhân viên y tế]"):::person
     BSCĐ("🩺 Bác Sĩ Chẩn Đoán Hình Ảnh<br/>[Bác sĩ CĐHA]"):::person
     KTV("🔬 Kỹ Thuật Viên MRI<br/>[Kỹ thuật viên phòng máy]"):::person
@@ -29,11 +31,11 @@ graph TD
     SIEM("🚨 Trung Tâm Giám Sát An Ninh SIEM<br/>[Cảnh báo vi phạm & can thiệp CSDL]"):::external
 
     BN -->|Tra cứu kết quả bệnh án điện tử, quét mã VietQR| NEURO
-    BS -->|Khám lâm sàng, ra y lệnh MRI, hội chẩn Tumor Board, xếp giường| NEURO
+    BS -->|Khám lâm sàng, ra y lệnh MRI, hội chẩn Tumor Board| NEURO
     BSCĐ -->|Đọc phim DICOM/Key Slices, xem gợi ý MAICS, ký số TT46| NEURO
     KTV -->|Kiểm tra an toàn buồng chụp, nộp ảnh cắt lớp qua stream| NEURO
-    DD -->|Tiếp đón, phân luồng bệnh nhân, quản lý sơ đồ buồng giường nội trú| NEURO
-    ADMIN -->|Quản lý danh mục khoa phòng, nhân sự, bảng giá BHYT, đối soát| NEURO
+    DD -->|Tiếp đón, phân luồng bệnh nhân, phiếu chăm sóc, thu viện phí| NEURO
+    ADMIN -->|Quản lý danh mục khoa phòng, nhân sự, bảng giá dịch vụ, đối soát| NEURO
     PACS_DEV -.->|Xuất chuỗi ảnh cắt lớp DICOM gốc| KTV
     NEURO -->|Khởi tạo link thanh toán VietQR, nhận Webhook đối soát| PAYOS
     NEURO -.->|Phát cảnh báo khi đứt gãy chuỗi băm hoặc vi phạm EMR| SIEM
@@ -58,12 +60,12 @@ graph TB
     end
 
     subgraph AppLayer ["Lớp Xử Lý Nghiệp Vụ Y Tế (Application Core Services)"]
-        BE["⚙️ Node.js Express HIS/EMR Core Backend<br/>(Clean Layered: Auth, EMR, PACS, FSM, Billing, Bed Engine)<br/>Port: 5000"]:::backend
+        BE["⚙️ Node.js Express HIS/EMR Core Backend<br/>(Clean Layered: Auth, EMR, PACS, FSM, Billing)<br/>Port: 5000"]:::backend
         AI["🧠 Python FastAPI MAICS Consensus Engine<br/>(Bayesian CNN Ensemble + YOLOv8 + Gemini 3.1 Flash-Lite)<br/>Port: 8000"]:::ai
     end
 
     subgraph DataLayer ["Lớp Lưu Trữ & Toàn Vẹn Dữ Liệu (Storage & Integrity Layer)"]
-        MONGO[("🍃 MongoDB 7.0 Multi-Tenant Cluster<br/>(Collections: Tenants, Users, Visits, EMR, Beds, HashChain)"):]::db
+        MONGO[("🍃 MongoDB 7.0 Multi-Tenant Cluster<br/>(Collections: Tenants, Users, Visits, EMR, HashChain)"):]::db
         STORAGE[("📁 Multi-Tier Storage (Local SSD / Google Cloud / S3)<br/>(Fast Access Key-Slices & Long-term DICOM Archives)"):]::db
         SQLITE[("📜 SQLite Audit DB<br/>(Cục bộ AI Engine: audit_logs.db)"):]::db
     end
@@ -94,7 +96,7 @@ graph TB
 |  - Hospital A: Bệnh viện Bạch Mai - Hà Nội (hospitalId: HOSP_A)             |
 |  - Hospital B: Bệnh viện Chợ Rẫy - TP.HCM (hospitalId: HOSP_B)              |
 +-----------------------------------------------------------------------------+
-| [Tenancy-Isolated Collections: Visits, Patients, EMRs, Beds, Invoices]      |
+| [Tenancy-Isolated Collections: Visits, Patients, EMRs, Invoices]            |
 |  - Document 1: { hospitalId: ObjectId("HOSP_A"), patientId: P01, ... }      |
 |  - Document 2: { hospitalId: ObjectId("HOSP_B"), patientId: P02, ... }      |
 +-----------------------------------------------------------------------------+
@@ -169,16 +171,15 @@ Nhằm khắc phục tình trạng Fat Controller và tăng cường khả năng
 │ 3. Service Layer (Nghiệp Vụ Lâm Sàng & Pháp Lý Cốt Lõi)│
 │    - Finite State Machine (ALLOWED_TRANSITIONS)        │
 │    - Kiểm tra An toàn buồng chụp MRI                   │
-│    - Khóa nguyên tử buồng giường nội trú (4h lock)     │
-│    - Tính toán viện phí, thẩm định điều kiện BHYT      │
-│    - Hoàn kho thuốc tự động khi hoàn tiền hóa đơn      │
+│    - Khóa nguyên tử: ký báo cáo CĐHA, duyệt hoàn tiền  │
+│    - Tính toán viện phí tự chi trả                     │
 │    - Ghi nhận chuỗi băm Tamper-Evident Hash Chain      │
 └────────────────────────────────────────────────────────┘
                    │
                    ▼
 ┌────────────────────────────────────────────────────────┐
 │ 4. Model / Data Access Layer (Truy Cập Dữ Liệu)        │
-│    - Mongoose Models & Schemas (Visit, EMR, Bed, ...)  │
+│    - Mongoose Models & Schemas (Visit, EMR, Invoice)   │
 │    - Compound Indexes (idx_tenant_queue, ...)          │
 │    - Atomic Operators ($findOneAndUpdate, $inc, $set)  │
 └────────────────────────────────────────────────────────┘
@@ -242,7 +243,7 @@ Hệ thống cung cấp API xác thực tính toàn vẹn `GET /api/v1/audit/has
 1. **Mã hóa Trường Dữ Liệu Nhạy Cảm (Field-Level Encryption - AES-256-GCM):**
    - Các trường chẩn đoán phân tử ung thư (IDH mutation, MGMT methylation status, 1p/19q codeletion) và ghi chú di truyền cá nhân được mã hóa tại tầng ứng dụng trước khi lưu vào MongoDB bằng thuật toán AES-256-GCM kèm vector khởi tạo ngẫu nhiên (IV) và khóa xác thực toàn vẹn (Auth Tag).
 2. **Phòng chống Tấn công Token (Algorithm Confusion & `alg: none` Defense):**
-   - Bộ giải mã JWT từ chối tuyệt đối các token chứa trường tiêu đề `alg: "none"` hoặc các token ký bằng thuật toán đối xứng giả danh bất đối xứng.
+   - Bộ giải mã JWT từ chối các token chứa trường tiêu đề `alg: "none"` hoặc các token ký bằng thuật toán đối xứng giả danh bất đối xứng.
 3. **Phân Tách Dữ Liệu Theo Quyền Hạn Tối Thiểu (HIPAA Minimum Necessary):**
    - Nhân viên tiếp tân và thu ngân chỉ được xem thông tin hành chính và trạng thái viện phí; các trường chẩn đoán lâm sàng chuyên sâu tự động được làm sạch (Sanitized) nhưng vẫn bảo toàn cấu trúc JSON (Non-Breaking Data Segregation) để giao diện không bị lỗi hiển thị.
 4. **Quy Trình Truy Cập Cấp Cứu Khẩn Cấp (Break-Glass Protocol):**
@@ -293,31 +294,19 @@ graph LR
 
 ---
 
-## 3.7. CƠ CHẾ KIỂM SOÁT TRANH CHẤP BUỒNG GIƯỜNG (ATOMIC CONCURRENCY CONTROL)
+## 3.7. CƠ CHẾ KIỂM SOÁT TRANH CHẤP KHI KÝ BÁO CÁO CĐHA (ATOMIC CONCURRENCY CONTROL)
 
-Trong môi trường nội trú, tình trạng nhiều điều dưỡng tại các khoa khác nhau cùng giữ chỗ hoặc xếp bệnh nhân vào một giường bệnh trống được giải quyết triệt để bằng kỹ thuật **Khóa Điều Kiện Nguyên Tử (Atomic Conditional Update)** trên MongoDB:
+Hai bác sĩ CĐHA có thể cùng mở một ca và bấm ký gần như đồng thời. Nếu kiểm tra `isSigned` rồi mới ghi (đọc rồi ghi hai bước), người ký sau sẽ ghi đè kết luận của người ký trước. Hệ thống giành quyền ký bằng **một thao tác cập nhật có điều kiện** trên MongoDB (`BE/src/controllers/clinicalView.controller.js`):
 
 ```javascript
-// Thao tác giữ chỗ giường bệnh chống Race Condition tuyệt đối
-const reservedBed = await HospitalBed.findOneAndUpdate(
-  {
-    _id: bedId,
-    hospitalId: hospitalId,
-    status: 'available' // Điều kiện tiên quyết: Giường phải thực sự trống
-  },
-  {
-    $set: {
-      status: 'reserved',
-      reservedByUserId: userId,
-      reservedForPatientId: patientId,
-      reservedUntil: new Date(Date.now() + 4 * 60 * 60 * 1000) // Giữ chỗ 4 giờ cho cấp cứu
-    }
-  },
+// Chỉ ghi khi báo cáo CHƯA được ký; người đến sau nhận null → 409
+const signedImaging = await ImagingResult.findOneAndUpdate(
+  { _id: imaging._id, isSigned: { $ne: true } },
+  { $set: { isSigned: true, conclusion: effectiveConclusion, radiologist: signerName, signedBy: req.user.id, signedAt } },
   { new: true }
 );
-
-if (!reservedBed) {
-  return { success: false, status: 409, message: 'Giường bệnh này vừa được giữ chỗ bởi nhân viên khác!' };
+if (!signedImaging) {
+  return errorResponse(res, "Báo cáo CĐHA vừa được ký bởi người khác. Vui lòng tải lại và tạo Phụ lục nếu cần đính chính.", 409);
 }
 ```
-Giải pháp này vận hành ở mức cơ sở dữ liệu (Engine-level), không phụ thuộc vào khóa phân tán (Redis/ZooKeeper), mang lại hiệu năng cao và đảm bảo tính nhất quán dữ liệu ACID trong hệ thống bệnh viện.
+Cùng kỹ thuật này được dùng khi duyệt hoàn tiền (hai người duyệt cùng lúc chỉ một người thực thi) và khi duyệt kết quả xét nghiệm. Giải pháp vận hành ở mức cơ sở dữ liệu (Engine-level), không phụ thuộc khóa phân tán (Redis/ZooKeeper).

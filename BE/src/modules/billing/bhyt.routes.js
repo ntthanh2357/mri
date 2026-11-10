@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect, checkRole } from "../../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../../middlewares/auth.middleware.js";
 import {
   saveBhytInfo,
   getBhytInfo,
@@ -12,6 +12,7 @@ import {
 
 const router = Router();
 router.use(protect);
+router.use(denyPlatformAdmin); // module lâm sàng: tài khoản nền tảng không truy cập
 
 // QUAN TRỌNG: route tĩnh PHẢI đứng TRƯỚC route tham số /:patientId, nếu không
 // Express sẽ khớp POST /export-claims (và /calculate-copay) vào /:patientId →

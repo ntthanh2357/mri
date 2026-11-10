@@ -177,7 +177,7 @@ const RegisterScreen = ({ navigation }) => {
                 {/* Title */}
                 <View style={styles.desktopTitleContainer}>
                   <Text style={styles.desktopTitle}>Đăng ký tài khoản</Text>
-                  <Text style={styles.desktopSubtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+                  <Text style={styles.desktopSubtitle}>Tạo tài khoản mới để dùng AI hỗ trợ sàng lọc u não</Text>
                 </View>
 
                 {/* Form */}
@@ -316,7 +316,7 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* Title */}
           <Text style={styles.title}>Đăng ký tài khoản</Text>
-          <Text style={styles.subtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+          <Text style={styles.subtitle}>Tạo tài khoản mới để dùng AI hỗ trợ sàng lọc u não</Text>
 
           {/* Form */}
           <View style={styles.form}>

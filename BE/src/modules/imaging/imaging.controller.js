@@ -145,7 +145,7 @@ export const createImagingResult = async (req, res) => {
     }
 
     // 2. Validate required fields
-    if (!medicalId || !patientName || !gender || !orderDate || !procedure || !findings || !conclusion || !radiologist || !reportDate || !imagingType) {
+    if (!medicalId || !patientName || !orderDate || !procedure || !findings || !conclusion || !radiologist || !reportDate || !imagingType) {
       return errorResponse(res, "Vui lòng nhập đầy đủ các trường bắt buộc.", 400);
     }
 
@@ -610,7 +610,7 @@ export const analyzeImagingResultAI = async (req, res) => {
     console.error("Lỗi khi phân tích AI:", error);
     return errorResponse(
       res,
-      `Không thể hoàn thành chẩn đoán AI: ${error.message}. Hãy đảm bảo dịch vụ AI FastAPI đã được khởi chạy trên cổng 8000.`,
+      `Không thể hoàn thành phân tích AI: ${error.message}. Hãy đảm bảo dịch vụ AI FastAPI đã được khởi chạy trên cổng 8000.`,
       500
     );
   }
@@ -870,7 +870,7 @@ export const getAllImagingResults = async (req, res) => {
 // @access  Private (Technician, Admin)
 export const createKtvImagingResult = async (req, res) => {
   try {
-    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin"].includes(req.user?.role)) {
       return res.status(403).json({ message: "Chỉ Kỹ thuật viên hoặc Bác sĩ mới được phép tạo kết quả chụp." });
     }
 
@@ -902,8 +902,7 @@ export const createKtvImagingResult = async (req, res) => {
     }
 
     // [SECURITY FIX BUG-IMG-001]: Kiểm tra cô lập bệnh viện (Tenancy check)
-    const isSysAdmin = ["admin", "system_admin"].includes(req.user.role);
-    if (!isSysAdmin && (!req.user.hospitalId || String(visit.hospitalId) !== String(req.user.hospitalId))) {
+    if (!req.user.hospitalId || String(visit.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Không có quyền tạo kết quả chụp cho ca khám của bệnh viện khác." });
     }
 
@@ -932,16 +931,16 @@ export const createKtvImagingResult = async (req, res) => {
       visitId: visit._id,
       medicalId: patientMedicalId,
       patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
-      birthYear: patient.profile?.birthYear || 1990,
-      gender: patient.profile?.gender === "Nữ" ? "Nữ" : patient.profile?.gender === "Khác" ? "Khác" : "Nam",
-      address: patient.profile?.address || "Đà Nẵng",
+      birthYear: patient.profile?.birthYear || undefined, // chưa có thì để trống
+      gender: ["Nam", "Nữ", "Khác"].includes(patient.profile?.gender) ? patient.profile.gender : "", // chưa rõ thì để trống
+      address: patient.profile?.address || "",
       orderDate: visit.mriOrder?.orderedAt || new Date(),
       orderingDoctor: doctorName,
-      orderingDepartment: "Chẩn đoán hình ảnh",
+      orderingDepartment: "", // khoa chỉ định do bác sĩ chỉ định ghi, không tự gán
       medicalRecordNumber: "BA" + visit._id.toString().substring(18),
-      diagnosis: visit.reason || "Theo dõi u não",
+      diagnosis: visit.reason || "",
       procedure: "Chụp MRI vùng " + (region || visit.mriOrder?.region || "Não bộ"),
-      technique: "Cộng hưởng từ (MRI) " + (region || visit.mriOrder?.region || "Não bộ") + " không thuốc cản quang.",
+      technique: "Cộng hưởng từ (MRI) " + (region || visit.mriOrder?.region || "Não bộ") + ".", // có/không cản quang do bác sĩ CĐHA ghi
       findings: techNotes ? `Kỹ thuật viên ghi chú: ${techNotes}` : "Chờ bác sĩ đọc mô tả hình ảnh.",
       conclusion: "Chờ kết quả chẩn đoán từ bác sĩ.",
       radiologist: "Chờ bác sĩ CĐHA đọc & ký duyệt",
@@ -1463,7 +1462,8 @@ export const acknowledgeCriticalFinding = async (req, res) => {
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
-    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+    // Tài khoản không gắn viện không được xác nhận thay bác sĩ của viện (trước đây bỏ qua kiểm tra khi thiếu hospitalId)
+    if (!req.user.hospitalId || (result.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
     }
     if (!result.criticalFinding?.isCritical) {

@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK } from '../../utils/paperFields';
 import React from 'react';
 import {
   View,
@@ -7,6 +8,11 @@ import {
 } from 'react-native';
 import Colors from '../../constants/colors';
 import { FlaskConical, Droplets, Edit2 } from 'lucide-react';
+
+// Khớp BE /api/lis/receiver: KTV xét nghiệm nhập; bác sĩ nhập tay khi máy LIS không gửi được
+const LAB_RESULT_ENTRY_ROLES = ['doctor', 'department_head', 'lab_technician'];
+// Người nhập kết quả không tự duyệt (khớp BE verifyLisResults)
+const enteredByMe = (order, user) => Boolean(order?.resulted_by) && String(order.resulted_by) === String(user?._id || user?.id || '');
 
 const LabOrdersTab = ({
   isDesktop,
@@ -106,8 +112,8 @@ const LabOrdersTab = ({
               {/* Tiêu đề biểu mẫu */}
               <View style={styles.reportHeader}>
                 <View style={styles.reportHeaderLeft}>
-                  <Text style={styles.hospitalName}>SỞ Y TẾ HÀ NỘI</Text>
-                  <Text style={styles.hospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                  <Text style={styles.hospitalName}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                  <Text style={styles.hospitalSub}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
                 </View>
                 <View style={styles.reportHeaderRight}>
                   <Text style={styles.departmentName}>KHOA XÉT NGHIỆM CHI NHÁNH 1</Text>
@@ -153,12 +159,15 @@ const LabOrdersTab = ({
                   <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Ghi nhận đã lấy mẫu</Text>
                 </TouchableOpacity>
               )}
-              {selectedOrder.status === 'RESULTED' && ['doctor', 'department_head', 'technician', 'lab_technician', 'hospital_admin'].includes(currentUser?.role) && (
+              {selectedOrder.status === 'RESULTED' && ['doctor', 'department_head'].includes(currentUser?.role) && enteredByMe(selectedOrder, currentUser) && (
+                <Text style={styles.emptyText}>Bạn đã nhập kết quả phiếu này nên không tự duyệt được. Cần bác sĩ khác duyệt.</Text>
+              )}
+              {selectedOrder.status === 'RESULTED' && ['doctor', 'department_head'].includes(currentUser?.role) && !enteredByMe(selectedOrder, currentUser) && (
                 <TouchableOpacity style={styles.saveManualBtn} onPress={() => advanceLabOrder(selectedOrder, 'verify', 'Đã duyệt kết quả xét nghiệm.')}>
                   <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Duyệt kết quả xét nghiệm</Text>
                 </TouchableOpacity>
               )}
-              {selectedOrder.status === 'RESULTED' && !isEditingLab && currentUser?.role !== 'patient' && (
+              {selectedOrder.status === 'RESULTED' && !isEditingLab && LAB_RESULT_ENTRY_ROLES.includes(currentUser?.role) && (
                 <TouchableOpacity
                   style={[styles.editLabResultsBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: Colors.brandGreen }]}
                   onPress={() => setIsEditingLab(true)}
@@ -213,7 +222,7 @@ const LabOrdersTab = ({
                     );
                   })}
                 </View>
-              ) : currentUser?.role !== 'patient' && !['VERIFIED', 'COMPLETED'].includes(selectedOrder.status) ? (
+              ) : LAB_RESULT_ENTRY_ROLES.includes(currentUser?.role) && !['VERIFIED', 'COMPLETED'].includes(selectedOrder.status) ? (
                 renderManualLabForm()
               ) : (
                 <View style={styles.pendingReportBox}>

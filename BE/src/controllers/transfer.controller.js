@@ -47,7 +47,7 @@ const buildImagingPackageSnapshot = (imagingResult) => {
 // @access Private (Doctor, Admin, Hospital Admin)
 export const createTransferRequest = async (req, res) => {
   try {
-    if (!["doctor", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới có quyền khởi tạo gói chuyển viện.", 403);
     }
 
@@ -212,7 +212,7 @@ export const createTransferRequest = async (req, res) => {
 // @access Private (Receptionist, Doctor, Admin, Hospital Admin)
 export const sendTransferEmail = async (req, res) => {
   try {
-    if (!["receptionist", "doctor", "department_head", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["receptionist", "doctor", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền thực hiện gửi hồ sơ chuyển viện.", 403);
     }
 
@@ -225,7 +225,7 @@ export const sendTransferEmail = async (req, res) => {
     }
 
     // Kiểm tra quyền sở hữu viện
-    if (req.user.role !== "admin" && transfer.hospitalId?._id?.toString() !== req.user.hospitalId?.toString()) {
+    if (!req.user.hospitalId || transfer.hospitalId?._id?.toString() !== req.user.hospitalId?.toString()) {
       return errorResponse(res, "Không có quyền gửi hồ sơ của cơ sở y tế khác.", 403);
     }
 
@@ -341,7 +341,8 @@ export const sendTransferEmail = async (req, res) => {
 // @access Private (Doctor, Nurse, Receptionist, Admin, Hospital Admin)
 export const getTransfers = async (req, res) => {
   try {
-    if (!["doctor", "nurse", "admin", "hospital_admin", "receptionist"].includes(req.user?.role)) {
+    // khớp route: bác sĩ, trưởng khoa, CĐHA, điều dưỡng, BGĐ, lễ tân (trước đây chặn nhầm trưởng khoa, CĐHA)
+    if (!["doctor", "department_head", "radiologist", "nurse", "hospital_admin", "receptionist"].includes(req.user?.role)) {
       return errorResponse(res, "Không có quyền xem danh sách chuyển viện của cơ sở y tế.", 403);
     }
 
@@ -349,7 +350,10 @@ export const getTransfers = async (req, res) => {
     const { status, search, type } = req.query;
 
     const filter = {};
-    if (req.user.role !== "admin" && hospitalId) {
+    if (!hospitalId) {
+      return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
+    }
+    {
       // Type incoming / outgoing để tương thích
       if (type === "incoming") {
         filter.targetHospitalId = hospitalId;
@@ -409,6 +413,12 @@ export const getTransferById = async (req, res) => {
     if (!transfer) {
       return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
     }
+    // Chỉ viện gửi hoặc viện nhận được xem; tài khoản chưa gán viện bị chặn
+    const mine = String(req.user.hospitalId || "");
+    const owners = [transfer.hospitalId?._id || transfer.hospitalId, transfer.targetHospitalId?._id || transfer.targetHospitalId].map((x) => String(x || ""));
+    if (!mine || !owners.includes(mine)) {
+      return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
+    }
 
     return successResponse(res, transfer, "Lấy chi tiết hồ sơ chuyển viện thành công.");
   } catch (err) {
@@ -425,7 +435,7 @@ export const deleteTransfer = async (req, res) => {
     const transfer = await TransferForm.findById(id);
     if (!transfer) return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
 
-    if (transfer.status === "sent" && req.user.role !== "admin") {
+    if (transfer.status === "sent") {
       return errorResponse(res, "Hồ sơ đã được gửi email cho bệnh nhân, không thể hủy bỏ trực tiếp.", 400);
     }
 

@@ -27,12 +27,15 @@ const medicalRecordSchema = new Schema(
     },
     gender: {
       type: String,
-      enum: ["Nam", "Nữ", "Khác"],
-      default: "Nam",
+      enum: ["Nam", "Nữ", "Khác", ""], // để trống khi chưa có giới tính (không tự gán "Nam")
+      default: "",
     },
+    // Để trống (null) khi chưa có tuổi — không tự điền giá trị giả.
     age: {
       type: Number,
-      required: true,
+      default: null,
+      min: 0,
+      max: 150,
     },
 
     admissionType: {
@@ -50,9 +53,9 @@ const medicalRecordSchema = new Schema(
       enum: ["BHYT", "Viện phí", "Dịch vụ"],
       default: "Viện phí",
     },
+    // Để trống khi bác sĩ chưa ghi chẩn đoán; ký số bệnh án yêu cầu có chẩn đoán (emr.controller).
     diagnosis: {
       type: String,
-      required: true,
       default: "",
     },
     treatmentPlan: {
@@ -70,7 +73,7 @@ const medicalRecordSchema = new Schema(
     },
     doctorInCharge: {
       type: String,
-      required: true,
+      default: "",
     },
     signStatus: {
       type: String,
@@ -185,11 +188,12 @@ const medicalRecordSchema = new Schema(
     digitalSignatureMetadata: {
       signatureType: {
         type: String,
-        enum: ["pki_token", "cloud_hsm", "smartcard", "electronic"],
+        // 'internal_hash': mã băm toàn vẹn nội bộ, KHÔNG phải chữ ký số có chứng thư CA
+        enum: ["pki_token", "cloud_hsm", "smartcard", "electronic", "internal_hash"],
         default: "electronic",
       },
       certificateSerial: { type: String, default: "" },
-      signingAlgorithm: { type: String, default: "SHA256withRSA" },
+      signingAlgorithm: { type: String, default: "" },
       timestampToken: { type: String, default: "" },
       caProvider: { type: String, default: "" },
       signedHash: { type: String, default: "" },

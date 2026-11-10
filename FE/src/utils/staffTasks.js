@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from '../constants/featureScope.js';
 // Trang chủ nhân viên — "Việc cần làm hôm nay".
 // Hàm thuần (không gọi API, không import react-native) để test được bằng node.
 
@@ -49,7 +50,7 @@ export const buildStaffTasks = (role, { visits = [], emr = [], invoices = [], pr
       task('billing', 'Hóa đơn chờ thu', 'Thu tiền mặt, PayOS hoặc áp dụng BHYT', invoices.filter(i => i.status === 'chờ thanh toán').length, 'NurseReception', { tab: 'billing' }),
       task('today', 'Lượt tiếp đón hôm nay', 'Lượt khám đã tạo trong ngày', visits.length, 'NurseReception', { tab: 'myQueue' }),
     ];
-  } else if (role === 'pharmacist') {
+  } else if (role === 'pharmacist' && isFeatureEnabled('pharmacy')) {
     // [P1-PharmacyQueue] Việc cần làm của Dược sĩ từ hàng đợi Khoa Dược (GET /api/drugs/queue)
     const countDisp = (statuses) => prescriptions.filter(p => statuses.includes(p.dispenseStatus)).length;
     list = [

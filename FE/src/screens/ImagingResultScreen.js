@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK } from '../utils/paperFields';
 import React, { useState, useEffect } from 'react';
 import {
   Animated,
@@ -581,8 +582,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
             <View style={styles.hospitalHeader}>
               <View style={styles.hospitalInfo}>
-                <Text style={styles.deptText}>SỞ Y TẾ ĐÀ NẴNG</Text>
-                <Text style={styles.hospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                <Text style={styles.deptText}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                <Text style={styles.hospitalName}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
               </View>
               <View style={styles.recordMeta}>
                 <Text style={styles.metaLabelText}>Mã y tế: <Text style={styles.metaValText}>{result.medicalId}</Text></Text>

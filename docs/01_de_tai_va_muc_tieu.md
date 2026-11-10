@@ -1,6 +1,10 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 1: TỔNG QUAN ĐỀ TÀI VÀ MỤC TIÊU NGHIÊN CỨU
 
+> **Tên đề tài (VN):** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử  
+> **Tên đề tài (EN):** NeuroScan AI – A Brain MRI Tumor Screening Support and Electronic Medical Record Platform  
+> *(Tên đề tài được điều chỉnh theo góp ý của hội đồng: định vị AI là công cụ **hỗ trợ sàng lọc**, kết luận cuối cùng thuộc về bác sĩ.)*
+
 ---
 
 ## 1.1. ĐẶT VẤN ĐỀ VÀ BỐI CẢNH THỰC TIỄN
@@ -37,31 +41,30 @@ Việc nghiên cứu, thiết kế và xây dựng hệ thống **NeuroScan AI**
 ## 1.3. MỤC TIÊU CỦA ĐỀ TÀI
 
 ### 1.3.1. Mục tiêu tổng quát
-Thiết kế, xây dựng và đánh giá thực nghiệm hệ thống phần mềm hoàn chỉnh **NeuroScan AI** phục vụ quản lý bệnh viện đa cơ sở (Multi-Tenant HIS/RIS/EMR/Mini-PACS) tích hợp Hệ thống Trọng tài Đồng thuận Đa mô hình (**MAICS**: Bayesian CNN Ensemble + YOLOv8 Spatial Localization + Gemini 3.1 Flash-Lite VLM Arbitration) hỗ trợ chẩn đoán chính xác u não trên phim chụp cộng hưởng từ MRI sọ não, đáp ứng toàn diện các tiêu chuẩn pháp lý y tế Việt Nam và quốc tế.
+Thiết kế, xây dựng và đánh giá thực nghiệm hệ thống phần mềm hoàn chỉnh **NeuroScan AI** phục vụ quy trình chẩn đoán hình ảnh và bệnh án điện tử đa cơ sở (Multi-Tenant RIS/EMR/Mini-PACS, kèm phần HIS tối thiểu gồm tiếp đón và thu viện phí) tích hợp Hệ thống Trọng tài Đồng thuận Đa mô hình (**MAICS**: Bayesian CNN Ensemble + YOLOv8 Spatial Localization + Gemini 3.1 Flash-Lite VLM Arbitration) hỗ trợ sàng lọc u não trên ảnh chụp cộng hưởng từ MRI sọ não, đáp ứng toàn diện các tiêu chuẩn pháp lý y tế Việt Nam và quốc tế.
 
 ### 1.3.2. Mục tiêu cụ thể
 1. **Về mặt nghiệp vụ y tế & quy trình khám chữa bệnh lâm sàng:**
-   - Chuẩn hóa luồng quy trình khép kín 10 bước lâm sàng: Tiếp đón bệnh nhân $\rightarrow$ Khám lâm sàng $\rightarrow$ Bảng kiểm an toàn buồng chụp MRI $\rightarrow$ Kỹ thuật viên chụp & truyền ảnh qua luồng nhị phân $\rightarrow$ AI tiền chẩn đoán $\rightarrow$ Bác sĩ CĐHA thẩm định & Ký số điện tử $\rightarrow$ Bác sĩ lâm sàng ra phác đồ & Xếp buồng giường nội trú $\rightarrow$ Hội chẩn đa chuyên khoa Tumor Board $\rightarrow$ Người bệnh tra cứu hồ sơ bệnh án điện tử.
+   - Chuẩn hóa luồng quy trình khép kín 10 bước lâm sàng: Tiếp đón bệnh nhân $\rightarrow$ Khám lâm sàng $\rightarrow$ Bảng kiểm an toàn buồng chụp MRI $\rightarrow$ Kỹ thuật viên chụp & truyền ảnh qua luồng nhị phân $\rightarrow$ AI hỗ trợ sàng lọc $\rightarrow$ Bác sĩ CĐHA thẩm định & Ký số điện tử $\rightarrow$ Bác sĩ lâm sàng ra phác đồ điều trị $\rightarrow$ Hội chẩn đa chuyên khoa Tumor Board $\rightarrow$ Người bệnh tra cứu hồ sơ bệnh án điện tử.
    - Hiện thực hóa Máy trạng thái hữu hạn (Clinical Finite State Machine - FSM) với ma trận chuyển trạng thái hợp lệ `ALLOWED_TRANSITIONS`, ngăn chặn tình trạng nhảy cóc quy trình.
    - Xử lý chuẩn xác múi giờ y tế Việt Nam `Asia/Ho_Chi_Minh` (+07:00), đảm bảo các ca khám cấp cứu ban đêm (00:00 - 06:59) không bị trôi dữ liệu trên máy chủ UTC.
-   - Tuân thủ chính sách tài chính y tế Việt Nam: Phân loại viện phí tự chi trả (VietQR / PayOS), bảo lãnh thanh toán BHYT (đúng tuyến, trái tuyến, trần chi trả 40 tháng lương cơ sở, duyệt trước thuốc đặc trị theo Thông tư 30/2018/TT-BYT), và chính sách Cấp cứu ngoại lệ ("Chụp trước, thu sau").
+   - Thu viện phí tự chi trả (tiền mặt, VietQR / PayOS) và chính sách Cấp cứu ngoại lệ ("Chụp trước, thu sau"). Thanh toán qua BHYT nằm ngoài phạm vi đồ án (xem mục 1.4.3).
 2. **Về mặt công nghệ, kiến trúc phần mềm & bảo mật dữ liệu:**
    - Xây dựng kiến trúc phân tầng sạch (**Layered Clean Architecture**: Route $\rightarrow$ Controller $\rightarrow$ Service $\rightarrow$ Model) đảm bảo tính độc lập, dễ bảo trì và khả năng kiểm thử tự động toàn diện.
-   - Hiện thực hóa mô hình **Đa cơ sở thuê bao (Multi-Tenancy)** với cơ chế cô lập dữ liệu tuyệt đối (`hospitalId`), hàm thẩm định `checkPatientTenancy` và ranh giới bảo mật riêng cho bệnh nhân tự do B2C.
-   - Tối ưu hóa hiệu năng truyền tải ảnh y tế bằng kỹ thuật **Multer Streaming nhị phân ghi trực tiếp xuống đĩa**, loại bỏ hoàn toàn nguy cơ tràn RAM (Out-Of-Memory) khi tải các tập ảnh dung lượng lớn.
-   - Triển khai cơ chế kiểm soát tranh chấp tài nguyên đồng thời (**Concurrency Control**) bằng thao tác khóa nguyên tử trên MongoDB (`findOneAndUpdate`), loại bỏ hoàn toàn hiện tượng cướp giường bệnh giữ chỗ tạm thời (Bed Reservation Hijacking).
+   - Hiện thực hóa mô hình **Đa cơ sở thuê bao (Multi-Tenancy)** với cơ chế cô lập dữ liệu theo từng bệnh viện (`hospitalId`), hàm thẩm định `checkPatientTenancy` và ranh giới bảo mật riêng cho bệnh nhân tự do B2C.
+   - Tối ưu hóa hiệu năng truyền tải ảnh y tế bằng kỹ thuật **Multer Streaming nhị phân ghi trực tiếp xuống đĩa**, giảm nguy cơ tràn RAM (Out-Of-Memory) khi tải các tập ảnh dung lượng lớn.
+   - Triển khai cơ chế kiểm soát tranh chấp tài nguyên đồng thời (**Concurrency Control**) bằng thao tác khóa nguyên tử trên MongoDB (`findOneAndUpdate`), ngăn hai người cùng ký một báo cáo CĐHA hoặc cùng duyệt một khoản hoàn tiền.
    - Thiết lập chuỗi băm mật mã **Cryptographic Tamper-Evident Hash Chain** (SHA-256) bảo vệ tính toàn vẹn hồ sơ bệnh án EMR, phát hiện can thiệp CSDL trái phép và kết nối cảnh báo SIEM.
    - Áp dụng tiêu chuẩn bảo mật y tế **HIPAA**: Khử định danh hình ảnh DICOM theo Safe Harbor 18 tiêu chí, mã hóa trường nhạy cảm bằng AES-256-GCM, và cơ chế truy cập cấp cứu Break-Glass Protocol có kiểm toán.
 3. **Về mặt Trí tuệ nhân tạo (AI Engine - Kiến trúc MAICS):**
    - Xây dựng hệ thống trọng tài đồng thuận đa tầng MAICS kết hợp bộ 3 Bayesian CNN Ensemble (ResNet50 với Cost-Sensitive Risk Loss $\alpha=5.0$, EfficientNetV2, DenseNet121 + BayTTA với Temperature Scaling $T=1.3$), mô hình định vị không gian YOLOv8 và Gemini 3.1 Flash-Lite VLM.
-   - Tích hợp bộ lọc **Anatomical Privacy Guard** nhận diện mặt cắt giải phẫu Axial vs Coronal/Sagittal, chặn gửi dữ liệu lộ khuôn mặt lên đám mây, giảm $79.5\%$ chi phí gọi API ngoài.
-   - Đạt độ chính xác tổng thể $\ge 91\%$ và kéo giảm tỷ lệ bỏ sót u ác tính (Fatal False Negative Rate - Glioma thành Không u) xuống mức kỷ lục **$0.43\%$** (giảm thiểu 49.4% nguy cơ lâm sàng) trên tập kiểm thử độc lập gồm 3.461 ảnh (trong đó có 1.861 ảnh thực tế từ Bệnh viện Đa khoa Tâm Trí Đà Nẵng).
+   - Tích hợp bộ lọc **Anatomical Privacy Guard** nhận diện mặt cắt giải phẫu Axial vs Coronal/Sagittal, chặn gửi dữ liệu lộ khuôn mặt lên đám mây, và đo mức giảm số lần gọi API ngoài so với khi không dùng bộ lọc.
+   - Đánh giá mô hình trên **tập kiểm thử độc lập** bằng các chỉ số: độ chính xác tổng thể (accuracy), Macro F1, độ nhạy (recall) theo từng lớp và đặc biệt là **tỷ lệ bỏ sót u ác tính** (Glioma bị phân loại thành Không u — chỉ số an toàn quan trọng nhất). Kết quả đo được trình bày ở Chương 6; nguồn dữ liệu kiểm thử phải có văn bản cho phép sử dụng (xem mục 1.4.4).
    - Tích hợp phân hệ Hỗ trợ ra quyết định lâm sàng (Rule-based CDSS) theo Quyết định 1514/QĐ-BYT của Bộ Y Tế và hướng dẫn WHO CNS 2021.
 4. **Về mặt kiểm thử, chất lượng phần mềm & triển khai:**
-   - Xây dựng bộ kiểm thử tự động toàn diện đạt tỷ lệ vượt qua **100% (166/166 ca kiểm thử)** bao gồm:
-     - **152 ca Backend** (30 ca Clinical Unit/Workflow, 35 ca OWASP Top 10 Security, 53 ca Audit Remediation, 34 ca Comprehensive Compliance & Neuro-Oncology).
-     - **14 ca Frontend** (Định dạng dữ liệu lâm sàng, cấu trúc EMR và kho 12 biểu mẫu Bộ Y Tế).
-   - Đo lường độ bao phủ mã nguồn thực tế đạt **~78%** trên các module lõi bằng công cụ chuẩn `c8` của V8 Engine.
+   - Xây dựng bộ kiểm thử tự động cho Backend và Frontend, chạy trong CI trên cơ sở dữ liệu MongoDB tạm (không chạm dữ liệu thật), cùng kiểm thử đầu-cuối (E2E) cho 5 luồng nghiệp vụ trọng yếu: cấp cứu Code Red, ký báo cáo CĐHA, y lệnh miệng thuốc gây nghiện, hoàn tiền từ 10 triệu đồng, cảnh báo xét nghiệm nguy kịch.
+   - Tiêu chí chấp nhận: 100% ca kiểm thử đạt trước mỗi lần phát hành và không còn lỗi mức CRITICAL/HIGH chưa xử lý. Số liệu kiểm thử đo được trình bày ở Chương 8.
+   - Đo và báo cáo độ bao phủ mã nguồn trên các module lõi bằng công cụ `c8`.
    - Đóng gói toàn bộ hệ thống (Node.js Backend, FastAPI AI Engine, Expo Web Frontend, Nginx Gateway, MongoDB) dưới dạng Docker Compose và script 1-click `run_all.bat`.
 
 ---
@@ -80,11 +83,36 @@ Thiết kế, xây dựng và đánh giá thực nghiệm hệ thống phần m�
   1. *Phân hệ Bác sĩ Khám lâm sàng (Doctor Workstation)*
   2. *Phân hệ Kỹ thuật viên Hình ảnh (Technician Imaging Console)*
   3. *Phân hệ Bác sĩ Chẩn đoán hình ảnh (Radiologist Workstation)*
-  4. *Phân hệ Điều dưỡng & Tiếp đón (Nurse Reception & Bed Management Console)*
+  4. *Phân hệ Điều dưỡng & Tiếp đón (Nurse Reception Console)*: tiếp đón, sinh hiệu, phiếu chăm sóc, thu viện phí
   5. *Phân hệ Người bệnh (Patient Portal)*
   6. *Phân hệ Quản trị Bệnh viện (Hospital Admin Dashboard)*
-- **Phạm vi chẩn đoán AI:** Tập trung phát hiện và phân loại 3 nhóm u não phổ biến nhất: U thần kinh đệm (Glioma), U màng não (Meningioma), U tuyến yên (Pituitary Adenoma) và trường hợp nhu mô não bình thường (No Tumor).
-- **Phạm vi pháp lý & bảo mật:** Áp dụng nghiêm ngặt các quy định về lưu trữ bệnh án tối thiểu 10 - 30 năm (cấm xóa cứng vật lý), bảo mật định danh PII/BHYT/CCCD và kiểm soát phiên làm việc liên tục cho nhân viên y tế.
+- **Phạm vi hỗ trợ sàng lọc của AI:** Tập trung phát hiện và phân loại 3 nhóm u não phổ biến nhất: U thần kinh đệm (Glioma), U màng não (Meningioma), U tuyến yên (Pituitary Adenoma) và trường hợp nhu mô não bình thường (No Tumor).
+- **Phạm vi pháp lý & bảo mật:** Áp dụng nghiêm ngặt các quy định về lưu trữ bệnh án tối thiểu 10 - 30 năm (cấm xóa cứng vật lý), bảo mật định danh PII/CCCD và kiểm soát phiên làm việc liên tục cho nhân viên y tế.
+
+### 1.4.3. Ngoài phạm vi đồ án
+Theo góp ý của hội đồng, đồ án thu hẹp phần hệ thống thông tin bệnh viện (HIS) để tập trung vào hai trụ cột: hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử. Các phần sau **không thuộc phạm vi thực hiện và đánh giá** của đồ án:
+- **Bảo hiểm y tế (BHYT):** khai báo và xác minh thẻ, tính mức hưởng và đồng chi trả, xuất dữ liệu giám định.
+- **Quản lý giường bệnh:** sơ đồ giường, giữ chỗ và phân bổ giường nội trú (kể cả đề xuất giữ giường Neuro-ICU).
+- **Phân hệ Dược:** dược sĩ thẩm định và phát thuốc, quản lý kho và hạn dùng, hậu kiểm đơn thuốc, "Dược sĩ AI".
+
+Kê đơn thuốc trong bệnh án điện tử vẫn thuộc phạm vi (là một phần của hồ sơ bệnh án), kèm cảnh báo tương tác thuốc cơ bản khi kê đơn.
+
+Mã nguồn hiện có một số chức năng kể trên từ giai đoạn phát triển trước. Trong phiên bản đồ án, chúng được tắt trên giao diện bằng một công tắc phạm vi duy nhất (`FE/src/constants/featureScope.js`) và được liệt kê ở hướng phát triển (Chương 10).
+
+### 1.4.4. Hiện trạng trước đồ án và phần việc thực hiện trong đồ án
+Theo góp ý của hội đồng, phần đã có và phần làm mới được tách riêng. Lịch sử mã nguồn (git) của dự án ghi nhận các giai đoạn sau:
+
+| Giai đoạn | Nội dung chính (theo lịch sử commit) |
+| :--- | :--- |
+| 06/2026 – 07/2026 | Khởi tạo dự án; tiếp đón, hóa đơn và thanh toán; biểu mẫu hồ sơ; kích hoạt tài khoản và điều hướng theo vai trò. Thư mục mô hình AI (`MRIteam_team5`) bắt đầu từ 19/06/2026. |
+| 09/2026 | Cập nhật luồng lâm sàng HIS/EMR, tích hợp PACS và bộ đánh giá AI; bắt buộc xác thực 2 lớp cho đăng nhập Google; câu hỏi thường gặp theo vai trò; kiểm tra an toàn thuốc và đối soát thanh toán PayOS. |
+| 10/2026 | Nghiệp vụ lễ tân và điều dưỡng (phiếu chăm sóc, theo dõi tri giác Glasgow); bản sao bệnh án có ký số PDF; quản lý phiên đăng nhập một thiết bị. |
+| 11/2026 | Kiểm toán toàn diện và khắc phục lỗi (v3.4): an toàn buồng chụp MRI, phân quyền, cảnh báo nguy kịch, bảo vệ phiên đăng nhập; kiểm thử E2E 5 luồng trọng yếu; thu hẹp phạm vi theo góp ý hội đồng. |
+
+> **[CẦN NHÓM BỔ SUNG TRƯỚC KHI NỘP]**
+> 1. Mốc bắt đầu chính thức của đồ án, và danh sách phần việc **mới** sẽ thực hiện trong 15 tuần (phần nào trong bảng trên là kết quả có sẵn được kế thừa).
+> 2. Văn bản hợp tác hoặc cho phép sử dụng dữ liệu đã khử định danh của Bệnh viện Đa khoa Tâm Trí Đà Nẵng cho 1.861 ảnh MRI nêu ở Chương 6, đính kèm ở phụ lục. Nếu chưa có văn bản, cần ghi rõ chỉ dùng bộ dữ liệu công khai và loại 1.861 ảnh này khỏi phần đánh giá.
+> 3. Phạm vi mô hình AI trong 15 tuần: giữ cả 3 tầng của MAICS, hay tập trung vào 1 mô hình chính và 1 mô hình đối chứng.
 
 ---
 
@@ -95,7 +123,7 @@ Báo cáo đồ án tốt nghiệp được tổ chức thành 10 chương chuy�
 - **Chương 3:** Thiết kế Kiến trúc Hệ thống (System Architecture)
 - **Chương 4:** Thiết kế Cơ sở Dữ liệu (Database Design)
 - **Chương 5:** Đặc tả Kỹ thuật API RESTful và Cơ chế Tích hợp
-- **Chương 6:** Hệ thống Trọng tài Đồng thuận Đa mô hình (MAICS) và Thị giác Máy tính trong Chẩn đoán U não MRI
+- **Chương 6:** Hệ thống Trọng tài Đồng thuận Đa mô hình (MAICS) và Thị giác Máy tính trong Hỗ trợ Sàng lọc U não trên ảnh MRI
 - **Chương 7:** Thiết kế Trải nghiệm Người dùng và Giao diện Đa nền tảng (UI/UX Design)
 - **Chương 8:** Kiểm thử Chất lượng Phần mềm và Thẩm định Lâm sàng
 - **Chương 9:** Đóng gói, Triển khai và Vận hành Hệ thống (DevOps & Deployment)

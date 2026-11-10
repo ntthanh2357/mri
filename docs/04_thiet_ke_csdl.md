@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 4: THIẾT KẾ CƠ SỞ DỮ LIỆU (DATABASE DESIGN)
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 4.1. SƠ ĐỒ MỐI QUAN HỆ THỰC THỂ (ENTITY RELATIONSHIP DIAGRAM - ERD)
@@ -12,9 +14,8 @@ erDiagram
     Hospital ||--o{ User : "quản lý nhân sự"
     Hospital ||--o{ Patient : "quản lý bệnh nhân"
     Hospital ||--o{ Visit : "tiếp nhận khám"
-    Hospital ||--o{ HospitalBed : "bố trí buồng giường"
     Hospital ||--o{ Invoice : "phát hành hóa đơn"
-    Hospital ||--o{ Drug : "quản lý kho dược"
+    Hospital ||--o{ Drug : "danh mục thuốc phục vụ kê đơn"
     Hospital ||--o{ HashChainAuditLog : "lưu vết kiểm toán"
 
     Patient ||--o{ Visit : "thực hiện lượt khám"
@@ -22,15 +23,11 @@ erDiagram
     
     Visit ||--o| ImagingResult : "chỉ định chụp MRI"
     Visit ||--o| Invoice : "phát sinh chi phí"
-    Visit ||--o| HospitalBed : "nằm điều trị nội trú"
 
     ImagingResult ||--o| User : "bác sĩ CĐHA ký duyệt"
-    HospitalBed ||--o| User : "điều dưỡng giữ chỗ"
-    HospitalBed ||--o| Patient : "giữ chỗ cho bệnh nhân"
 
     Hospital ||--o{ TransferForm : "chuyển viện đi/đến"
     Patient ||--o{ TransferForm : "được chuyển viện"
-    Invoice ||--o{ Drug : "kê đơn và cấp phát"
 
     Hospital {
         ObjectId _id PK
@@ -54,7 +51,6 @@ erDiagram
         ObjectId hospitalId FK "Null nếu là bệnh nhân tự do B2C"
         string fullName
         string identityCard "CCCD / Định danh cá nhân"
-        string insuranceNumber "Số thẻ BHYT"
         date dateOfBirth
         string gender "Nam / Nữ / Khác"
         string phone "Số điện thoại liên lạc"
@@ -93,27 +89,13 @@ erDiagram
         string clinicalConclusion "Kết luận chẩn đoán xác định"
     }
 
-    HospitalBed {
-        ObjectId _id PK
-        ObjectId hospitalId FK
-        string bedCode "Mã số giường"
-        string roomCode "Số phòng điều trị"
-        string department "Khoa lâm sàng"
-        string status "available/reserved/occupied/cleaning"
-        ObjectId reservedByUserId FK "Điều dưỡng giữ chỗ"
-        ObjectId reservedForPatientId FK "Bệnh nhân được giữ chỗ riêng"
-        ObjectId patientId FK "Bệnh nhân đang nằm thực tế"
-        date reservedUntil "Hạn giữ chỗ (4 giờ)"
-    }
-
     Invoice {
         ObjectId _id PK
         ObjectId hospitalId FK
         ObjectId visitId FK
         ObjectId patientId FK
         number totalAmount "Tổng chi phí viện phí"
-        number insuranceCoverage "BHYT chi trả bảo lãnh"
-        number patientCoPay "Người bệnh đồng chi trả"
+        number patientCoPay "Số tiền người bệnh phải trả"
         string status "chờ thanh toán/đã thanh toán/hoàn tiền/đã hủy"
         string paymentMethod "tiền mặt/vietqr/payos"
         number payosOrderCode "Mã đơn hàng PayOS"
@@ -128,19 +110,18 @@ erDiagram
         string activeIngredient "Hoạt chất"
         string unit "Đơn vị tính (Viên/Lọ)"
         number price "Đơn giá"
-        object stock "Số lượng tồn kho: quantity, balanceAfter"
-        boolean requiresPriorAuth "Yêu cầu duyệt trước BHYT"
     }
 
     TransferForm {
         ObjectId _id PK
-        ObjectId fromHospitalId FK "Bệnh viện chuyển đi"
-        ObjectId toHospitalId FK "Bệnh viện tiếp nhận"
-        ObjectId patientId FK
-        string reason "Lý do chuyên môn chuyển viện"
-        string crossViewToken "Token mã hóa xem bệnh án"
-        date crossViewExpiresAt "Thời hạn hết hiệu lực (7 ngày)"
-        string status "pending/accepted/rejected"
+        ObjectId hospitalId FK "Bệnh viện chuyển đi"
+        ObjectId targetHospitalId FK "Bệnh viện tiếp nhận (nếu có trong hệ thống)"
+        ObjectId patient_id FK
+        string transferTo "Nơi chuyển đến"
+        string reason "Lý do chuyển tuyến (1 hoặc 2)"
+        string recipientEmail "Email người nhận hồ sơ"
+        date sentAt "Thời điểm gửi hồ sơ"
+        string status "draft/sent/failed/pending/accepted/rejected/completed/cancelled"
     }
 
     HashChainAuditLog {
@@ -148,9 +129,9 @@ erDiagram
         number sequenceNumber UK "Số thứ tự tuần tự"
         string previousHash "Mã băm bản ghi trước"
         string currentHash "Mã băm SHA-256 bản ghi hiện tại"
-        string action "CREATE_VISIT/SIGN_EMR/OCCUPY_BED/..."
+        string action "CREATE_VISIT/SIGN_EMR/..."
         ObjectId entityId "ID bản ghi nghiệp vụ"
-        string entityType "Visit/ImagingResult/HospitalBed/..."
+        string entityType "Visit/ImagingResult/Invoice/..."
         ObjectId performedBy FK "Người dùng thực hiện"
         ObjectId hospitalId FK
         date timestamp "Thời điểm thực hiện chính xác"
@@ -216,21 +197,8 @@ Thực thể quản trị kết quả đọc phim, gợi ý của trí tuệ nh�
 
 ---
 
-### 4.2.3. Bộ Sưu Tập `hospitalbeds` (Quản Lý Buồng Giường Bệnh Nội Trú)
-Quản trị sơ đồ buồng giường với cơ chế khóa nguyên tử và chống cướp giường:
-
-| Tên trường (Field) | Kiểu dữ liệu | Bắt buộc | Mô tả & Ràng buộc nghiệp vụ |
-| :--- | :--- | :---: | :--- |
-| `_id` | ObjectId | Có | Khóa chính của giường bệnh. |
-| `hospitalId` | ObjectId | Có | Mã cơ sở y tế quản lý giường bệnh. |
-| `bedCode` | String | Có | Mã số giường (ví dụ: "G-101", "G-102"). |
-| `roomCode` | String | Có | Số phòng bệnh (ví dụ: "P-302"). |
-| `department` | String | Có | Khoa điều trị nội trú (ví dụ: "Khoa Phẫu thuật Thần kinh"). |
-| `status` | String (Enum) | Có | `'available'` (Trống), `'reserved'` (Đang giữ chỗ), `'occupied'` (Đang nằm điều trị), `'cleaning'` (Đang khử khuẩn). |
-| `reservedByUserId`| ObjectId | Không | Tham chiếu điều dưỡng/bác sĩ thao tác giữ chỗ. |
-| `reservedForPatientId`| ObjectId | Không | Tham chiếu **duy nhất** tới bệnh nhân được giữ chỗ riêng. |
-| `patientId` | ObjectId | Không | Bệnh nhân đang thực tế nằm trên giường. |
-| `reservedUntil` | Date | Không | Thời hạn hết hiệu lực giữ chỗ (mặc định 4 giờ cho ca cấp cứu). |
+### 4.2.3. Bộ Sưu Tập `hospitalbeds` — Ngoài phạm vi đồ án
+Collection quản lý buồng giường nội trú còn trong mã nguồn từ giai đoạn trước nhưng không thuộc phạm vi đồ án (mục 1.4.3), nên không trình bày thiết kế chi tiết ở đây.
 
 ---
 
@@ -243,9 +211,9 @@ Thực thể bảo vệ tính toàn vẹn và chống giả mạo hồ sơ y t�
 | `sequenceNumber` | Number | Có | Số thứ tự tuần tự không gián đoạn (0, 1, 2, ...), đánh chỉ mục `unique`. |
 | `previousHash` | String | Có | Chuỗi băm SHA-256 của bản ghi $L_{i-1}$ (Genesis = 64 ký tự '0'). |
 | `currentHash` | String | Có | Chuỗi băm SHA-256 của bản ghi hiện tại $L_i$. |
-| `action` | String | Có | Hành động nghiệp vụ: `'CREATE_VISIT'`, `'SUBMIT_SAFETY_CHECK'`, `'SIGN_EMR'`, `'OCCUPY_BED'`, `'PAYOS_PAYMENT_SUCCESS'`. |
+| `action` | String | Có | Hành động nghiệp vụ: `'CREATE_VISIT'`, `'SUBMIT_SAFETY_CHECK'`, `'SIGN_EMR'`, `'PAYOS_PAYMENT_SUCCESS'`. |
 | `entityId` | ObjectId | Có | Khóa ngoại tới thực thể bị tác động. |
-| `entityType` | String | Có | Tên thực thể (`'Visit'`, `'ImagingResult'`, `'HospitalBed'`, `'Invoice'`). |
+| `entityType` | String | Có | Tên thực thể (`'Visit'`, `'ImagingResult'`, `'Invoice'`). |
 | `performedBy` | ObjectId | Có | Tham chiếu `User` thực hiện thao tác. |
 | `hospitalId` | ObjectId | Có | Cơ sở y tế phát sinh sự kiện kiểm toán. |
 | `timestamp` | Date | Có | Thời điểm chính xác phát sinh sự kiện. |
@@ -263,7 +231,7 @@ db.visits.createIndex(
   { name: "idx_tenant_clinical_queue" }
 );
 
-// 2. Chỉ mục định danh duy nhất Bệnh nhân theo CCCD/BHYT trong từng Cơ sở
+// 2. Chỉ mục định danh duy nhất Bệnh nhân theo CCCD trong từng Cơ sở
 db.patients.createIndex(
   { hospitalId: 1, identityCard: 1 },
   { unique: true, sparse: true, name: "idx_unique_patient_cccd" }
@@ -281,16 +249,10 @@ db.imagingresults.createIndex(
   { name: "idx_tenant_pacs_history" }
 );
 
-// 5. Chỉ mục Khóa nguyên tử Trạng thái Buồng giường Nội trú
-db.hospitalbeds.createIndex(
-  { hospitalId: 1, status: 1, department: 1, reservedUntil: 1 },
-  { name: "idx_tenant_bed_concurrency" }
-);
-
-// 6. Chỉ mục Đối soát Hóa đơn Viện phí PayOS
+// 5. Chỉ mục Đối soát Hóa đơn Viện phí PayOS
 db.invoices.createIndex(
   { hospitalId: 1, payosOrderCode: 1, status: 1 },
   { name: "idx_tenant_payos_reconcile" }
 );
 ```
-Các chỉ mục phức hợp trên giải quyết triệt để vấn đề Table Scan, giúp toàn bộ các thao tác nghiệp vụ lâm sàng đạt hiệu năng tối ưu ngay cả khi hệ thống chịu tải cao điểm.
+Các chỉ mục phức hợp trên tránh quét toàn bảng (Table Scan), giúp toàn bộ các thao tác nghiệp vụ lâm sàng đạt hiệu năng tối ưu ngay cả khi hệ thống chịu tải cao điểm.

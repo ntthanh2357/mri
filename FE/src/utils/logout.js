@@ -17,6 +17,7 @@
  */
 import { Platform } from 'react-native';
 import Config from '../constants/config.js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, getRefreshToken } from '../api/client.js';
 
 /**
@@ -58,8 +59,30 @@ export const performLogout = () => {
     } catch (e) {
       console.warn('[logout] Lỗi xóa token local:', e?.message);
     }
+
+    // 3) Xóa thông tin người dùng và bản nháp bệnh án lưu trên máy (máy bệnh viện dùng chung nhiều người)
+    try {
+      await clearLocalClinicalData();
+    } catch (e) {
+      console.warn('[logout] Lỗi xóa dữ liệu nháp local:', e?.message);
+    }
   })();
   return lastLogoutPromise;
+};
+
+// Khóa lưu trên máy có dữ liệu bệnh nhân: bản nháp form bệnh án, bản nháp phiếu khám điều dưỡng, thông tin người dùng
+export const LOCAL_CLINICAL_KEY_PREFIXES = ['@neuroscan_medical_record_form', 'emr_detail_'];
+export const LOCAL_CLINICAL_KEYS = ['user'];
+export const isLocalClinicalKey = (k) => LOCAL_CLINICAL_KEYS.includes(k) || LOCAL_CLINICAL_KEY_PREFIXES.some((p) => String(k).startsWith(p));
+
+export const clearLocalClinicalData = async () => {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    Object.keys(localStorage).filter(isLocalClinicalKey).forEach((k) => localStorage.removeItem(k));
+  }
+  try {
+    const keys = (await AsyncStorage.getAllKeys()).filter(isLocalClinicalKey);
+    if (keys.length) await AsyncStorage.multiRemove(keys);
+  } catch { /* AsyncStorage không có trên môi trường này */ }
 };
 
 export default performLogout;

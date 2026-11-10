@@ -269,7 +269,7 @@ export const buildShareCatalog = async (patientId) => {
     })),
     ...cap("vitals", vitals).map((v) => entry("vitals", v, {
       title: "Sinh hiệu",
-      sub: [v.blood_pressure ? `huyết áp ${v.blood_pressure}` : "", v.pulse ? `mạch ${v.pulse}` : "", v.spo2 ? `SpO₂ ${v.spo2}%` : "", v.temperature ? `nhiệt độ ${v.temperature} °C` : ""].filter(Boolean).join(", "),
+      sub: [v.blood_pressure ? `huyết áp ${typeof v.blood_pressure === "object" ? [v.blood_pressure.systolic, v.blood_pressure.diastolic].filter((x) => x != null).join("/") : v.blood_pressure}` : "", v.pulse ? `mạch ${v.pulse}` : "", v.spo2 ? `SpO₂ ${v.spo2}%` : "", v.temperature ? `nhiệt độ ${v.temperature} °C` : ""].filter(Boolean).join(", "),
       date: v.recorded_at,
     })),
     entry("safety", "allergies", { title: "Dị ứng thuốc", sub: safety.drugAllergies.length ? safety.drugAllergies.join(", ") : "Chưa khai báo", source: "self" }),

@@ -20,7 +20,7 @@ import {
   getPatientRanoTimeline,
   getImagingSignPermission
 } from "./imaging.controller.js";
-import { protect, checkRole } from "../../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../../middlewares/auth.middleware.js";
 import { uploadImagingFile } from "../../middlewares/imagingUpload.middleware.js";
 
 const router = Router();
@@ -32,52 +32,52 @@ const IMAGING_STAFF_READ_ROLES = ["doctor", "radiologist", "department_head", "t
 const IMAGING_READ_ROLES = [...IMAGING_STAFF_READ_ROLES, "patient"];
 
 // Get all imaging results (Doctor/Admin/Nurse/Technician/Receptionist only)
-router.get("/", protect, checkRole(IMAGING_STAFF_READ_ROLES), getAllImagingResults);
+router.get("/", protect, checkRole(IMAGING_STAFF_READ_ROLES), denyPlatformAdmin, getAllImagingResults);
 
 // Get patient's own imaging results (Requires login)
-router.get("/my-results", protect, getPatientResults);
+router.get("/my-results", protect, denyPlatformAdmin, getPatientResults);
 
 // Longitudinal RANO tumor trajectory by medicalId
-router.get("/patient/:medicalId/rano-timeline", protect, checkRole(["doctor", "radiologist", "department_head", "technician", "nurse", "hospital_admin"]), getPatientRanoTimeline);
+router.get("/patient/:medicalId/rano-timeline", protect, checkRole(["doctor", "radiologist", "department_head", "technician", "nurse", "hospital_admin"]), denyPlatformAdmin, getPatientRanoTimeline);
 
 // Get specific patient's results (Requires login - Doctor/Admin only)
-router.get("/patient/:medicalId", protect, checkRole(IMAGING_STAFF_READ_ROLES), getPatientResultsByMedicalId);
+router.get("/patient/:medicalId", protect, checkRole(IMAGING_STAFF_READ_ROLES), denyPlatformAdmin, getPatientResultsByMedicalId);
 
 // Upload imaging scan image or DICOM archive — chỉ KTV/bác sĩ của bệnh viện (P0-4)
-router.post("/upload", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), uploadImagingFile, uploadImagingImage);
+router.post("/upload", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), denyPlatformAdmin, uploadImagingFile, uploadImagingImage);
 
 // Analyze imaging scan using AI (Requires login)
-router.post("/analyze-ai", protect, analyzeImagingResultAI);
+router.post("/analyze-ai", protect, denyPlatformAdmin, analyzeImagingResultAI);
 
 // Submit doctor feedback on AI results (Requires login)
-router.post("/feedback-ai", protect, feedbackImagingResultAI);
+router.post("/feedback-ai", protect, denyPlatformAdmin, feedbackImagingResultAI);
 
 // Doctor approves AI result as correct (Requires login - Doctor/Admin/Technician only)
-router.post("/approve-ai", protect, approveImagingResultAI);
+router.post("/approve-ai", protect, denyPlatformAdmin, approveImagingResultAI);
 
 // Explain imaging result in simple, Hippocratic terms for patient (Requires login)
-router.post("/:id/explain-ai", protect, checkRole(IMAGING_READ_ROLES.filter((role) => role !== "receptionist")), explainImagingResultAI);
+router.post("/:id/explain-ai", protect, checkRole(IMAGING_READ_ROLES.filter((role) => role !== "receptionist")), denyPlatformAdmin, explainImagingResultAI);
 
 // Critical Finding Acknowledgment & Post-Signature Addendum
-router.post("/:id/acknowledge-critical", protect, checkRole(["doctor", "radiologist", "department_head", "admin", "hospital_admin"]), acknowledgeCriticalFinding);
-router.post("/:id/acknowledge", protect, checkRole(["doctor", "department_head"]), acknowledgeImagingReport);
-router.post("/:id/addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), addImagingAddendum);
-router.post("/:id/clinical-addendum", protect, checkRole(["doctor", "department_head"]), addClinicalAddendum);
-router.get("/:id/sign-permission", protect, checkRole(["doctor", "radiologist", "department_head"]), getImagingSignPermission);
+router.post("/:id/acknowledge-critical", protect, checkRole(["doctor", "radiologist", "department_head"]), denyPlatformAdmin, acknowledgeCriticalFinding);
+router.post("/:id/acknowledge", protect, checkRole(["doctor", "department_head"]), denyPlatformAdmin, acknowledgeImagingReport);
+router.post("/:id/addendum", protect, checkRole(["doctor", "radiologist", "department_head"]), denyPlatformAdmin, addImagingAddendum);
+router.post("/:id/clinical-addendum", protect, checkRole(["doctor", "department_head"]), denyPlatformAdmin, addClinicalAddendum);
+router.get("/:id/sign-permission", protect, checkRole(["doctor", "radiologist", "department_head"]), denyPlatformAdmin, getImagingSignPermission);
 
 // Get imaging results by visit ID
-router.get("/by-visit/:visitId", protect, checkRole(IMAGING_READ_ROLES), getImagingResultByVisitId);
+router.get("/by-visit/:visitId", protect, checkRole(IMAGING_READ_ROLES), denyPlatformAdmin, getImagingResultByVisitId);
 
 // Get imaging results by patient User ID (ObjectId) - fallback for patients without medicalId
-router.get("/by-patient/:patientId", protect, checkRole(IMAGING_STAFF_READ_ROLES), getResultsByPatientUserId);
+router.get("/by-patient/:patientId", protect, checkRole(IMAGING_STAFF_READ_ROLES), denyPlatformAdmin, getResultsByPatientUserId);
 
 // Get single imaging result details (Requires login)
-router.get("/:id", protect, checkRole(IMAGING_READ_ROLES), getResultById);
+router.get("/:id", protect, checkRole(IMAGING_READ_ROLES), denyPlatformAdmin, getResultById);
 
 // Ký báo cáo CĐHA: controller xét thẩm quyền cụ thể theo evaluateImagingSignPermission
-router.put("/:id", protect, checkRole(["doctor", "radiologist", "department_head"]), updateImagingResult);
+router.put("/:id", protect, checkRole(["doctor", "radiologist", "department_head"]), denyPlatformAdmin, updateImagingResult);
 
 // Tạo kết quả CĐHA — KTV tạo ca chụp, bác sĩ đọc phim. Bệnh nhân KHÔNG được tạo (P0-3)
-router.post("/", protect, checkRole(["doctor", "radiologist", "department_head", "technician"]), createImagingResult);
+router.post("/", protect, checkRole(["doctor", "radiologist", "department_head", "technician"]), denyPlatformAdmin, createImagingResult);
 
 export default router;

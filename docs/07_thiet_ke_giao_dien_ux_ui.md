@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 7: THIẾT KẾ TRẢI NGHIỆM NGƯỜI DÙNG VÀ GIAO DIỆN ĐA NỀN TẢNG (UI/UX DESIGN)
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 7.1. NGUYÊN TẮC CÔNG THÁI HỌC VÀ THIẾT KẾ GIAO DIỆN Y TẾ
@@ -8,10 +10,10 @@
 Thiết kế giao diện phần mềm trong môi trường y tế (Healthcare UX/UI) có những đòi hỏi khắt khe vượt trội so với các ứng dụng thương mại thông thường, do liên quan trực tiếp đến tính mạng người bệnh và áp lực công việc của nhân viên y tế:
 
 1. **Giảm thiểu Tải trọng Nhận thức (Cognitive Load Reduction):**
-   - Bác sĩ và điều dưỡng thường xuyên làm việc trong trạng thái căng thẳng cao độ. Mọi thông tin sinh mạng trọng yếu (Tiền sử dị ứng, Cảnh báo chống chỉ định MRI, Dấu hiệu sinh tồn, Trạng thái BHYT) phải được bố trí tại các vị trí thị giác chiến lược với hệ thống màu cảnh báo y tế chuẩn quốc tế:
+   - Bác sĩ và điều dưỡng thường xuyên làm việc trong trạng thái căng thẳng cao độ. Mọi thông tin sinh mạng trọng yếu (Tiền sử dị ứng, Cảnh báo chống chỉ định MRI, Dấu hiệu sinh tồn, Trạng thái viện phí) phải được bố trí tại các vị trí thị giác chiến lược với hệ thống màu cảnh báo y tế chuẩn quốc tế:
      - **Đỏ rực (`#ef4444` / Crimson Alert):** Báo động khẩn cấp, chống chỉ định buồng MRI, u thần kinh đệm ác tính.
-     - **Vàng hổ phách (`#f59e0b` / Amber Warning):** Cảnh báo chưa đóng viện phí, ca chụp yêu cầu chụp lại do cử động nhòe ảnh, giường đang giữ chỗ tạm thời.
-     - **Xanh ngọc / Xanh lá y tế (`#10b981` / Medical Green):** An toàn, đã đóng viện phí BHYT bảo lãnh, con dấu ký số điện tử hợp lệ, giường bệnh sẵn sàng tiếp nhận.
+     - **Vàng hổ phách (`#f59e0b` / Amber Warning):** Cảnh báo chưa đóng viện phí, ca chụp yêu cầu chụp lại do cử động nhòe ảnh.
+     - **Xanh ngọc / Xanh lá y tế (`#10b981` / Medical Green):** An toàn, đã đóng viện phí, con dấu ký số điện tử hợp lệ.
 2. **Tối ưu Hóa Độ Tương Phản Phòng Đọc Phim (High Contrast Reading Mode):**
    - Phân hệ Chẩn đoán hình ảnh được thiết kế chuyên biệt trên nền tối (Deep Slate / Dark Room Theme `#0f172a` và `#1e293b`), giúp giảm mỏi mắt tối đa cho bác sĩ CĐHA khi làm việc trong phòng đọc phim thiếu sáng, đồng thời làm nổi bật độ tương phản xám - trắng của các lát cắt MRI não và bản đồ nhiệt Grad-CAM.
 3. **Thiết Kế Đa Nền Tảng Thống Nhất (Universal Cross-Platform Architecture):**
@@ -28,22 +30,22 @@ Thiết kế giao diện phần mềm trong môi trường y tế (Healthcare UX
 | [1. Bác sĩ Khám]       | [2. Kỹ thuật viên MRI]    | [3. Bác sĩ CĐHA (PACS)]            |
 | - Hàng đợi phân luồng  | - Hàng đợi phòng chụp     | - Dual Viewer (Ảnh gốc & BBox AI)  |
 | - Ra Y lệnh MRI        | - Bảng kiểm 4 câu hỏi     | - Con dấu Ký số Điện tử TT46       |
-| - Xếp giường nội trú   | - Upload nhị phân stream  | - Nhập mô tả & kết luận chẩn đoán  |
+| - Ra phác đồ điều trị  | - Upload nhị phân stream  | - Nhập mô tả & kết luận chẩn đoán  |
 +------------------------+---------------------------+------------------------------------+
 | [4. Điều dưỡng/Tiếp đón]                           | [5. Người Bệnh (Patient Portal)]   |
-| - Sơ đồ buồng giường với đồng hồ đếm ngược 4 giờ   | - Bệnh án điện tử cá nhân (PHR)    |
+| - Sinh hiệu, phiếu chăm sóc, thu viện phí          | - Bệnh án điện tử cá nhân (PHR)    |
 | - Tiếp đón, phân luồng, tìm kiếm debounce an toàn  | - Quét mã VietQR thanh toán 24/7   |
 +----------------------------------------------------+------------------------------------+
 | [6. Quản Trị Viện & Kế Toán (Admin Dashboard)]                                          |
-| - Quản trị nhân sự & CCHN, bảng giá dịch vụ, cấu hình trần BHYT, đối soát PayOS        |
+| - Quản trị nhân sự & CCHN, bảng giá dịch vụ, đối soát PayOS                            |
 +-----------------------------------------------------------------------------------------+
 ```
 
 ### 7.2.1. Phân hệ Bàn làm việc Bác sĩ Khám Lâm sàng (`DoctorWorkQueueScreen.js`)
 - **Hàng đợi khám lâm sàng trực quan:** Tự động sắp xếp bệnh nhân theo thứ tự ưu tiên y khoa: `Khẩn cấp (Cấp cứu)` $\rightarrow$ `Ưu tiên` $\rightarrow$ `Thường`.
-- **Huy hiệu viện phí đa năng:** Bác sĩ nhận biết tức thì bệnh nhân thuộc diện `🟢 BHYT: Đã bảo lãnh` hay `🚨 CẤP CỨU: Chụp trước, thu sau` mà không cần gọi điện thoại đối soát với phòng tài chính.
+- **Huy hiệu viện phí đa năng:** Bác sĩ nhận biết tức thì bệnh nhân thuộc diện `🚨 CẤP CỨU: Chụp trước, thu sau` hay `⚠️ CHƯA ĐÓNG PHÍ MRI` mà không cần gọi điện thoại đối soát với phòng tài chính.
 - **Ra y lệnh cận lâm sàng 1 chạm:** Chọn gói chụp MRI não, hệ thống tự động sinh hồ sơ ca khám (`cho_chup`), tạo hóa đơn tương ứng và đẩy ca sang phân hệ tiếp đón/phòng máy.
-- **Tiếp nhận kết quả & Điều chuyển giường nội trú:** Khi bác sĩ CĐHA ký số xong, nút "🛏️ Xếp giường nội trú" sáng lên, cho phép bác sĩ điều trị chọn trực tiếp buồng giường trống theo khoa để giữ chỗ cho người bệnh.
+- **Tiếp nhận kết quả CĐHA:** Khi bác sĩ CĐHA ký số xong, bác sĩ điều trị nhận thông báo, xem báo cáo đã ký và bấm xác nhận đã đọc (lưu lịch sử người xác nhận).
 
 ### 7.2.2. Phân hệ Bàn điều khiển Kỹ thuật viên Phòng chụp MRI
 - **Hàng đợi phòng chụp chuyên dụng:** Danh sách các ca chờ chụp trong ngày, đồng bộ chính xác theo múi giờ Việt Nam (+07:00).
@@ -72,13 +74,8 @@ Thiết kế giao diện phần mềm trong môi trường y tế (Healthcare UX
     +---------------------------------------------------------+
     ```
 
-### 7.2.4. Phân hệ Điều dưỡng Tiếp đón & Sơ đồ Buồng giường (`NurseReceptionScreen.js`)
-- **Sơ đồ Buồng giường Nội trú Trực quan:**
-  - Hiển thị toàn bộ giường bệnh theo từng khoa phòng với mã màu phân định rõ ràng:
-    - *Xanh lá:* Giường trống sẵn sàng tiếp nhận.
-    - *Cam hổ phách:* Giường đang giữ chỗ, **hiển thị đồng hồ đếm ngược thời gian giữ chỗ 4 giờ** và họ tên bệnh nhân được giữ chỗ riêng.
-    - *Đỏ:* Giường đang có bệnh nhân nằm điều trị.
-    - *Xám:* Giường đang trong chu trình khử khuẩn.
+### 7.2.4. Phân hệ Điều dưỡng Tiếp đón (`NurseReceptionScreen.js`)
+- **Tiếp đón và thu ngân:** tạo lượt khám, phân luồng thường/cấp cứu, thu viện phí tự chi trả bằng tiền mặt hoặc VietQR PayOS. (Sơ đồ buồng giường và khai báo BHYT nằm ngoài phạm vi đồ án — mục 1.4.3 — và được ẩn trên giao diện.)
 - **Tìm kiếm an toàn có Debounce:** Ô tìm kiếm bệnh nhân được tích hợp cơ chế trễ 400ms (Debounce) và escape ký tự đặc biệt, chống nghẽn sự kiện gọi API và phòng ngừa tấn công ReDoS.
 - **Phân trang dữ liệu thông minh:** Hiển thị danh sách bệnh nhân theo từng trang 20 bản ghi kèm nút chuyển trang mượt mà, giải quyết dứt điểm lỗi lễ tân không tìm thấy bệnh nhân mới đăng ký.
 
@@ -89,8 +86,8 @@ Thiết kế giao diện phần mềm trong môi trường y tế (Healthcare UX
 
 ### 7.2.6. Phân hệ Bảng điều khiển Quản trị Bệnh viện (Hospital Admin Dashboard)
 - Quản trị danh mục khoa phòng, nhân sự y tế, phân quyền tài khoản và quản lý Chứng chỉ hành nghề (CCHN).
-- Cấu hình bảng giá dịch vụ khám chữa bệnh, giá chụp MRI và tỷ lệ đồng chi trả BHYT.
-- Báo cáo thống kê lưu lượng bệnh nhân theo ngày, tỷ lệ sử dụng buồng giường và đối soát tài chính viện phí trực tuyến.
+- Cấu hình bảng giá dịch vụ khám chữa bệnh và giá chụp MRI.
+- Báo cáo thống kê lưu lượng bệnh nhân theo ngày và đối soát tài chính viện phí trực tuyến.
 
 ---
 
@@ -122,4 +119,4 @@ sequenceDiagram
     BE-->>Client: HTTP 200 OK (Lưu bệnh án thành công)
     Client-->>UI: Cập nhật giao diện mượt mà (Bác sĩ không bị văng phiên!)
 ```
-Cơ chế trên bảo đảm tính liên tục tuyệt đối cho phiên làm việc lâm sàng, ngăn chặn triệt để nguy cơ mất dữ liệu hồ sơ bệnh án đang nhập dở.
+Cơ chế trên giúp duy trì phiên làm việc lâm sàng liên tục, giảm nguy cơ mất dữ liệu hồ sơ bệnh án đang nhập dở.

@@ -14,7 +14,7 @@ import { evaluateImagingSignPermission, validateSignReason } from "../services/i
 // @access Private (Doctor, Technician, Admin)
 export const getDicomViewerData = async (req, res) => {
   try {
-    const allowedRoles = ["doctor", "radiologist", "department_head", "technician", "admin", "system_admin", "hospital_admin", "nurse"];
+    const allowedRoles = ["doctor", "radiologist", "department_head", "technician", "hospital_admin", "nurse"];
     if (!allowedRoles.includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem trình chiếu DICOM.", 403);
     }
@@ -23,7 +23,7 @@ export const getDicomViewerData = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem dữ liệu DICOM của cơ sở y tế khác.", 403);
     }
 
@@ -76,7 +76,7 @@ export const getDicomViewerData = async (req, res) => {
 // @access Private (Doctor)
 export const getAiOverlays = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới được xem overlay AI.", 403);
     }
 
@@ -84,7 +84,7 @@ export const getAiOverlays = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem overlay AI của cơ sở y tế khác.", 403);
     }
 
@@ -133,7 +133,7 @@ export const getAiOverlays = async (req, res) => {
 // @access Private (Doctor, Admin)
 export const getFullAiReport = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin", "technician"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem báo cáo AI chi tiết.", 403);
     }
 
@@ -143,7 +143,7 @@ export const getFullAiReport = async (req, res) => {
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem báo cáo AI của cơ sở y tế khác.", 403);
     }
 
@@ -211,7 +211,7 @@ export const getFullAiReport = async (req, res) => {
 // @access Private (Doctor)
 export const get3dModelUrl = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem mô hình 3D.", 403);
     }
 
@@ -221,7 +221,7 @@ export const get3dModelUrl = async (req, res) => {
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem mô hình 3D của cơ sở y tế khác.", 403);
     }
 
@@ -394,7 +394,7 @@ export const signImagingReport = async (req, res) => {
 // @access Private (Doctor)
 export const getFollowUpComparison = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem dữ liệu so sánh.", 403);
     }
 
@@ -407,9 +407,9 @@ export const getFollowUpComparison = async (req, res) => {
     if (!medicalId) return errorResponse(res, "Bệnh nhân chưa có mã y tế.", 400);
 
     const followUpFilter = { medicalId };
-    if (!["admin", "system_admin"].includes(req.user.role) && req.user.hospitalId) {
-      followUpFilter.hospitalId = req.user.hospitalId;
-    }
+    // Chỉ xem phim của chính viện mình; tài khoản không gắn viện không xem được (fail-closed)
+    if (!req.user.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
+    followUpFilter.hospitalId = req.user.hospitalId;
     const results = await ImagingResult.find(followUpFilter)
       .sort({ orderDate: 1 })
       .select("orderDate procedure aiReport representativeSliceUrl isSigned signedAt")

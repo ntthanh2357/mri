@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK } from '../utils/paperFields';
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
@@ -410,9 +411,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       }
       if (!foundRecord && pName && pName !== "Bệnh nhân") {
         const resSearch = await get(`/emr/records?search=${encodeURIComponent(pName)}`);
-        if (resSearch?.data && resSearch.data.length > 0) {
-          foundRecord = resSearch.data.find(r => r.patientName?.trim()?.toLowerCase() === pName.trim()?.toLowerCase()) || resSearch.data[0];
-        }
+        // Chỉ gắn khi trùng đúng 1 hồ sơ cùng họ tên — không lấy kết quả tìm kiếm gần đúng (tránh ghi nhầm bệnh nhân)
+        const exact = (resSearch?.data || []).filter(r => r.patientName?.trim()?.toLowerCase() === pName.trim().toLowerCase());
+        if (exact.length === 1) foundRecord = exact[0];
       }
 
       if (foundRecord?._id) {
@@ -420,16 +421,18 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         return foundRecord._id;
       }
 
-      // 2. Chỉ tạo mới nếu bệnh nhân CHƯA CÓ bất kỳ hồ sơ bệnh án nào trong hệ thống
+      // 2. Chỉ tạo mới nếu bệnh nhân CHƯA CÓ bất kỳ hồ sơ bệnh án nào trong hệ thống.
+      // Không tự điền tuổi, chẩn đoán, bác sĩ phụ trách: để trống cho bác sĩ ghi khi khám.
+      if (!pCode && !pId) return null;
       const newRes = await post('/emr/records', {
-        patientId: pCode || pId || `BN_${Date.now()}`,
-        patientName: pName || "Bệnh nhân",
-        gender: gender || "Nam",
-        age: Number(age) || 30,
+        patientId: pCode || pId,
+        patientName: pName,
+        gender: gender || "",
+        ...(Number(patient.age) >= 0 && String(patient.age ?? "").trim() !== "" ? { age: Number(patient.age) } : {}),
         admissionType: "Ngoại trú",
         department: department || "Khoa Ung Thư Não",
-        diagnosis: patient.diagnosis || "Khám chuyên khoa ngoại thần kinh",
-        doctorInCharge: doctor || "Bác sĩ điều trị",
+        diagnosis: patient.diagnosis || "",
+        doctorInCharge: patient.doctorInCharge || "",
       });
 
       const newId = newRes?.data?._id || newRes?.data?.data?._id;
@@ -786,7 +789,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     { key: "fee",   label: "Viện phí", Icon: CreditCard },
   ];
 
-  const QUICK_SERVICES = ["Khám chuyên khoa thần kinh", "Chụp MRI sọ não", "Phân tích AI chẩn đoán"];
+  const QUICK_SERVICES = ["Khám chuyên khoa thần kinh", "Chụp MRI sọ não", "Phân tích AI hỗ trợ sàng lọc"];
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="EMRDashboard">
@@ -884,8 +887,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 <View style={s.docPaper}>
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.docHospitalName}>SỞ Y TẾ ĐÀ NẴNG</Text>
-                      <Text style={s.docHospitalSub}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                      <Text style={s.docHospitalName}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                      <Text style={s.docHospitalSub}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
                     </View>
                     <Building2 size={26} color={Colors.brandGreen} />
                   </View>
@@ -1834,8 +1837,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 <View style={s.docPaper}>
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
-                      <Text style={s.docHospitalSub}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
+                      <Text style={s.docHospitalName}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
+                      <Text style={s.docHospitalSub}>SỞ Y TẾ: {SHORT_BLANK}</Text>
                     </View>
                     <FileText size={26} color={Colors.brandGreen} />
                   </View>
@@ -1979,14 +1982,14 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                 <View style={s.docPaper}>
                   <View style={s.docHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.docHospitalName}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                      <Text style={s.docHospitalName}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
                       <Text style={s.docHospitalAddress}>Khu Công Nghệ Cao Y Tế & Chuyên Khoa U Não Đà Nẵng</Text>
                     </View>
                     <CreditCard size={26} color={Colors.brandGreen} />
                   </View>
                   
                   <Text style={s.docTitle}>PHIẾU THU VIỆN PHÍ</Text>
-                  <Text style={[s.docSubtitle, { marginBottom: 12 }]}>Số phiếu: {patientName ? patientName.slice(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900) : 'VP'}</Text>
+                  <Text style={[s.docSubtitle, { marginBottom: 12 }]}>Số phiếu: {SHORT_BLANK}</Text>
                   
                   <View style={s.docDivider} />
                   

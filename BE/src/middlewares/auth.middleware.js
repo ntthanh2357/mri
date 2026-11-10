@@ -166,6 +166,16 @@ export const optionalProtect = async (req, res, next) => {
   }
 };
 
+// Tài khoản quản trị nền tảng (admin, system_admin) không gắn bệnh viện và không truy cập dữ liệu lâm sàng
+// của bệnh nhân (RELEASE_v3.4). Đặt sau protect ở các router lâm sàng.
+export const PLATFORM_ADMIN_ROLES = ["admin", "system_admin"];
+export const denyPlatformAdmin = (req, res, next) => {
+  if (PLATFORM_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: "Tài khoản quản trị nền tảng không truy cập dữ liệu lâm sàng của bệnh nhân." });
+  }
+  return next();
+};
+
 export const checkRole = (...roles) => {
   const allowedRoles = roles.flat().filter(Boolean);
   return (req, res, next) => {

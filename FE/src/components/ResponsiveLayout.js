@@ -13,6 +13,7 @@ import { setAuthToken } from '../services/api.service';
 import Colors from '../constants/colors';
 import PressableScale from './PressableScale';
 import { portalLoginRoute } from '../utils/navigationRef';
+import { filterMenuInScope, isFeatureEnabled } from '../constants/featureScope';
 import performLogout from '../utils/logout';
 import { 
   LayoutDashboard, 
@@ -80,6 +81,12 @@ const ResponsiveLayout = ({
 
   const fetchEmergencyAlerts = async () => {
     if (isPollingStoppedRef.current) return;
+    // Banner cấp cứu chỉ dành cho nhân viên bệnh viện (BE ALERT_BANNER_ROLES): bệnh nhân, tài khoản nền tảng không gọi
+    try {
+      const { safeStorage } = require('../utils/safeStorage');
+      const r = JSON.parse(safeStorage.getItem('user') || 'null')?.role;
+      if (['patient', 'admin', 'system_admin'].includes(r)) { isPollingStoppedRef.current = true; return; }
+    } catch { /* chưa có thông tin vai trò — gọi như cũ */ }
     try {
       const { get } = require('../services/api.service');
       const res = await get('/api/v1/emergency/alerts?recentHours=24');
@@ -198,7 +205,7 @@ const ResponsiveLayout = ({
   // (trước đây mọi role đều bị đưa sang hàng đợi đọc MRI của Bác sĩ).
   const canActOnEmergency = !['cleaner', 'lab_technician'].includes(localUser?.role);
   const emergencyNavTarget = () => {
-    if (localUser?.role === 'pharmacist') return { route: 'PharmacyQueue', params: {} };
+    if (localUser?.role === 'pharmacist') return isFeatureEnabled('pharmacy') ? { route: 'PharmacyQueue', params: {} } : { route: 'Home', params: {} };
     if (localUser?.role === 'receptionist') return { route: 'NurseReception', params: { tab: 'myQueue' } };
     return { route: 'DoctorWorkQueue', params: { tab: 'mriQueue' } };
   };
@@ -270,7 +277,6 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Danh sách Bệnh nhân (LIS)', route: 'DoctorPatientList', icon: Users },
           { label: 'Bệnh án & Xét nghiệm', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
-          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -306,7 +312,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Tiếp nhận bệnh nhân', route: 'NurseReception', params: { tab: 'createVisit' }, icon: ClipboardList },
           { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
-          { label: 'Khai báo BHYT & Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
+          { label: isFeatureEnabled('bhyt') ? 'Khai báo BHYT & Thu ngân' : 'Thu ngân', route: 'NurseReception', params: { tab: 'billing' }, icon: CreditCard },
           { label: 'Hồ sơ Chuyển viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Duyệt hoàn tiền', route: 'FinanceApprovals', icon: CreditCard },
           { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
@@ -321,7 +327,7 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Hàng đợi Khoa Dược', route: 'PharmacyQueue', icon: Package },
           { label: 'Hậu kiểm dược', route: 'PharmacyOversight', icon: FileSearch },
-          { label: 'Hóa đơn kẹt trừ kho', route: 'FinanceApprovals', icon: CreditCard },
+          ...(isFeatureEnabled('pharmacy') ? [{ label: 'Hóa đơn kẹt trừ kho', route: 'FinanceApprovals', icon: CreditCard }] : []),
           { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Pill },
           { label: 'Thuốc hết hạn', route: 'DrugManagement', params: { tab: 'expiry' }, icon: AlertTriangle },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -362,9 +368,7 @@ const ResponsiveLayout = ({
           { label: 'Nhật ký hệ thống', route: 'AdminBackoffice', params: { tab: 'audit-logs' }, icon: ClipboardList },
           { label: 'SaaS Suite (nâng cao)', route: 'AdminBackoffice', params: { tab: 'saas-suite' }, icon: Sliders },
           { label: 'Huấn luyện & Chatbot AI', route: 'AdminBackoffice', params: { tab: 'ai-config' }, icon: Brain },
-          { label: 'Quản lý giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Báo cáo tài chính & BHYT', route: 'Financials', icon: DollarSign },
+          { label: isFeatureEnabled('bhyt') ? 'Báo cáo tài chính & BHYT' : 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
           { label: 'Yêu cầu hỗ trợ', route: 'SupportTicketsAdmin', icon: MessageCircle },
           { label: 'Tuân thủ và dữ liệu', route: 'ComplianceCenter', icon: FileSearch },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
@@ -377,7 +381,7 @@ const ResponsiveLayout = ({
     }
   };
 
-  const menuItems = localUser ? getMenuItems(localUser.role).filter(Boolean) : [];
+  const menuItems = localUser ? filterMenuInScope(getMenuItems(localUser.role).filter(Boolean)) : [];
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -655,7 +659,7 @@ const ResponsiveLayout = ({
           />
           <View>
             <Text style={styles.brandName}>NeuroScan AI</Text>
-            <Text style={[styles.brandSub, { color: theme.accent }]}>HỆ THỐNG CHẨN ĐOÁN LÂM SÀNG</Text>
+            <Text style={[styles.brandSub, { color: theme.accent }]}>HỖ TRỢ SÀNG LỌC U NÃO & EMR</Text>
           </View>
         </View>
 

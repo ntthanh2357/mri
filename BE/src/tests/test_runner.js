@@ -214,6 +214,7 @@ async function runAllTests() {
     './v34_security_hardening.test.js',
     './mri_safety_v34.test.js',
     './remaining_bugs_v34.test.js',
+    './e2e_critical_flows.test.js',
   ];
 
   const startTime = Date.now();

@@ -311,11 +311,11 @@ export const listVisits = async (userId) => {
     return {
       ...visit,
       date: visit.createdAt,
-      facility: visit.hospitalId?.name || "Bệnh viện đa khoa NeuroScan",
+      facility: visit.hospitalId?.name || "",
       visitType: "ngoai_tru",
-      diagnosis: visit.reason || "Khám thần kinh",
+      diagnosis: visit.reason || "",
       medicalId: medicalId || "Chưa có",
-      doctor: visit.doctorId?.profile?.name || "Bác sĩ phụ trách",
+      doctor: visit.doctorId?.profile?.name || "",
       documents: docList
     };
   }));

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { get, post, put, patch } from '../services/api.service';
 import { useCurrentRole } from '../controllers/useCurrentRole';
+import { isFeatureEnabled } from '../constants/featureScope';
 
 export default function InpatientEmergencyModal({
   isOpen,
@@ -44,7 +45,8 @@ export default function InpatientEmergencyModal({
   const [isControlledSubstance, setIsControlledSubstance] = useState(false);
   const role = useCurrentRole();
   const canPrescribe = ['doctor', 'department_head'].includes(role);
-  const canLeadEmergency = ['doctor', 'department_head', 'hospital_admin', 'admin', 'system_admin'].includes(role);
+  // Khớp DOCTOR_LEAD_ROLES phía BE: chỉ Bác sĩ hoặc Trưởng khoa
+  const canLeadEmergency = ['doctor', 'department_head'].includes(role);
   const [nurses, setNurses] = useState([]);
   const [nurseReceivedId, setNurseReceivedId] = useState('');
 
@@ -391,7 +393,7 @@ export default function InpatientEmergencyModal({
           </button>
 )}
 
-          {canLeadEmergency && (
+          {canLeadEmergency && isFeatureEnabled('beds') && (
 <button
             onClick={() => setActiveTab('icu_bed')}
             className={`px-3.5 py-2 rounded-t-xl transition-all flex items-center gap-1.5 ${
@@ -829,7 +831,7 @@ export default function InpatientEmergencyModal({
               )}
 
               {/* TAB 5: ICU BED PROPOSAL */}
-              {activeTab === 'icu_bed' && (
+              {activeTab === 'icu_bed' && isFeatureEnabled('beds') && (
                 <div className="space-y-4">
                   <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-900 leading-relaxed">
                     <b>Đề xuất giữ giường Hồi sức U Não (Neuro-ICU):</b> Hệ thống gửi yêu cầu sang Bác sĩ trực Đơn nguyên Hồi sức Cấp cứu U Não để phê duyệt giữ giường tạm thời trong 4 giờ.

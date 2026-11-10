@@ -31,9 +31,10 @@ const DigitalSignatureBadge = ({ isSigned, radiologist, signedAt, doctorCchn, di
             Chứng chỉ hành nghề: <Text style={styles.stampBold}>{doctorCchn}</Text>
           </Text>
         )}
-        {Boolean(pki.certificateSerial) && (
+        {/* Chỉ hiện khi có chứng thư thật — không mặc định tên nhà cung cấp CA */}
+        {Boolean(pki.certificateSerial) && Boolean(pki.caProvider) && pki.caProvider !== 'NONE' && (
           <Text style={styles.stampText}>
-            Chứng thư số: <Text style={styles.stampBold}>{pki.caProvider || 'VNPT-CA'} ({pki.certificateSerial})</Text>
+            Chứng thư số: <Text style={styles.stampBold}>{pki.caProvider} ({pki.certificateSerial})</Text>
           </Text>
         )}
         {Boolean(pki.signedHash) && (

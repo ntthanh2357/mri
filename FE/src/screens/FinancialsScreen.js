@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isFeatureEnabled } from '../constants/featureScope';
 import Colors from '../constants/colors';
 import {
   StyleSheet,
@@ -546,7 +547,7 @@ const FinancialsScreen = ({ navigation }) => {
                 title="Báo cáo tài chính"
                 subtitle="Doanh thu, giao dịch và báo cáo thuốc của bệnh viện."
               >
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{<HeaderAction
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18, marginBottom: 30 }}>{isFeatureEnabled('bhyt') && <HeaderAction
               variant="primary"
               icon="file-text"
               label={exportingBhyt ? 'Đang xuất…' : 'Xuất BHYT XML 4210'}

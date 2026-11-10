@@ -27,6 +27,8 @@ import { useQueueDesk } from '../controllers/useQueueDesk';
 import QRCodeLib from 'qrcode';
 import { Reveal } from '../components/ui/Motion';
 import { useAppDialog } from '../components/ui/AppDialog';
+import { isFeatureEnabled } from '../constants/featureScope';
+import { can } from '../constants/clinicalPermissions';
 import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, formatVnd, personName } from '../components/reception/ReceptionUI';
 
 // UC-REC-03 — Phòng khám chuyên khoa Thần kinh để phân luồng
@@ -160,6 +162,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [activeCards, setActiveCards] = useState({});
 
   const fetchActiveCards = async () => {
+    if (!isFeatureEnabled('bhyt')) return; // BHYT ngoài phạm vi đồ án (constants/featureScope.js)
     try {
       const res = await get('/api/v1/bhyt/active-cards');
       const map = {};
@@ -836,7 +839,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   );
 
   // Chưa tải xong thông tin người dùng thì vẫn hiện nút (backend luôn kiểm tra quyền lại)
-  const canApplyBhyt = !user?.role || ['receptionist', 'admin', 'hospital_admin'].includes(user.role);
+  const canApplyBhyt = isFeatureEnabled('bhyt') && (!user?.role || ['receptionist', 'admin', 'hospital_admin'].includes(user.role));
   const canDeclareBhyt = canApplyBhyt; // UC-REC-02: khai báo / xác minh thẻ cũng chỉ lễ tân
   const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' :
                       user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
@@ -920,8 +923,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     { key: 'createVisit', label: 'Tiếp nhận', icon: UserPlus },
     { key: 'callQueue', label: 'Gọi số', icon: Ticket, count: queueWaiting, warn: true },
     { key: 'myQueue', label: 'Lượt khám hôm nay', icon: ClipboardList, count: visits.length },
-    { key: 'billing', label: 'Thu ngân & BHYT', icon: Wallet, count: pendingInvoicesCount, warn: true },
-  ];
+    { key: 'billing', label: isFeatureEnabled('bhyt') ? 'Thu ngân & BHYT' : 'Thu ngân', icon: Wallet, count: pendingInvoicesCount, warn: true },
+  ].filter((t) => t.key !== 'billing' || !user?.role || can(user.role, 'invoicePay')); // BE chỉ cho lễ tân, BGĐ thu tiền
 
   const banner = activeTab === 'createVisit' ? (
     <ReceptionBanner
@@ -975,8 +978,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
       image={RECEPTION_IMAGES.payment}
       tone="amber"
       eyebrow="Quầy thu ngân"
-      title="Thu ngân & BHYT"
-      subtitle="Áp dụng BHYT, thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn."
+      title={isFeatureEnabled('bhyt') ? 'Thu ngân & BHYT' : 'Thu ngân'}
+      subtitle={isFeatureEnabled('bhyt') ? 'Áp dụng BHYT, thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn.' : 'Thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn.'}
       right={(
         <View style={st.bannerStat}>
           <Text style={st.bannerStatLabel}>Tổng cần thu</Text>
@@ -1497,7 +1500,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 <Text style={[st.lineAmount, { color: '#0B7A53' }]}>-{formatVnd(inv.bhytInfo.bhytAmount)}</Text>
                               </View>
                             ) : (
-                              <Text style={st.receiptNote}>Chưa khấu trừ BHYT cho hóa đơn này.</Text>
+                              isFeatureEnabled('bhyt') ? <Text style={st.receiptNote}>Chưa khấu trừ BHYT cho hóa đơn này.</Text> : null
                             )}
                           </View>
 
@@ -1578,7 +1581,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 </TouchableOpacity>
                               )}
                               {/* Khấu trừ BHYT là nghiệp vụ của tiếp đón/viện phí (backend chỉ cho lễ tân & quản trị) */}
-                              {!bhytCovered && !canApplyBhyt && (
+                              {isFeatureEnabled('bhyt') && !bhytCovered && !canApplyBhyt && (
                                 <View style={[st.bhytApply, { opacity: 0.6 }]}>
                                   <Lock size={15} color="#64748B" />
                                   <Text style={[st.bhytApplyText, { color: '#64748B' }]}>Chỉ lễ tân / thu ngân được áp dụng BHYT</Text>
@@ -1957,7 +1960,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                 </View>
               )}
               <Text style={st.qrAmount}>{formatVnd(qrPayment.amount)}</Text>
-              <Text style={st.hintText}>Phần bệnh nhân đồng chi trả (đã trừ BHYT)</Text>
+              <Text style={st.hintText}>{isFeatureEnabled('bhyt') ? 'Phần bệnh nhân đồng chi trả (đã trừ BHYT)' : 'Số tiền bệnh nhân cần thanh toán'}</Text>
               <View style={st.qrWaiting}>
                 <ActivityIndicator size="small" color="#1A5FD0" />
                 <Text style={{ color: '#1A5FD0', fontWeight: '700', fontSize: 13 }}>Đang chờ thanh toán — tự cập nhật khi tiền về</Text>

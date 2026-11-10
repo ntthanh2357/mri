@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK, orBlank, orDash, dateOr } from '../../utils/paperFields';
 import React from 'react';
 import {
   StyleSheet,
@@ -383,12 +384,12 @@ const PrescriptionTab = ({
                       <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>NHẬN ĐỊNH DƯỢC SĨ AI (GEMINI 3.1 FLASH-LITE):</Text>
                     </View>
                     <Text style={{ fontSize: 11, color: '#4C1D95', lineHeight: 16, marginBottom: 4 }}>
-                      {aiConsultationData.summary || 'Đơn thuốc đã được AI đối soát với tiền sử bệnh án và phác đồ u não.'}
+                      {aiConsultationData.summary || 'AI không trả về nhận định tóm tắt.'}
                     </Text>
                     {aiConsultationData.tumor_protocol_compatibility && (
                       <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 4, borderWidth: 1, borderColor: '#DDD6FE' }}>
                         <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
-                          Tương thích Khối u AI ({aiConsultationData.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
+                          Tương thích Khối u AI ({orDash(aiConsultationData.tumor_protocol_compatibility.detected_tumor)} - {aiConsultationData.tumor_protocol_compatibility.compatibility_status}):
                         </Text>
                         <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                           {aiConsultationData.tumor_protocol_compatibility.clinical_rationale}
@@ -644,7 +645,7 @@ const PrescriptionTab = ({
                         }}
                       >
                         <Text style={{ fontSize: 11, fontWeight: '500', color: isSel ? '#FFF' : '#334155' }}>
-                          Đơn #{idx + 1} ({new Date(p.recorded_at || p.createdAt || Date.now()).toLocaleDateString('vi-VN')})
+                          Đơn #{idx + 1} ({dateOr(p.recorded_at || p.createdAt, 'chưa ghi ngày')})
                         </Text>
                       </TouchableOpacity>
                     );
@@ -667,8 +668,8 @@ const PrescriptionTab = ({
               {/* Header bệnh viện */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: 'extrabold', color: '#1E3A8A' }}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
                   <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>Hotline: 1900 571 563 - ĐT Cấp cứu: 0236 3615 115</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -683,11 +684,11 @@ const PrescriptionTab = ({
               {/* Thông tin bệnh nhân */}
               <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#3B82F6' }}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
-                  <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.name || 'N/A'}</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>{calculateAge ? calculateAge(patient?.profile?.dob, patient?.profile?.birthYear) : '30'}</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Giới tính: <Text style={{ fontWeight: 'bold' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
+                  <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold' }}>{orBlank(patient?.profile?.name || patient?.profile?.fullName)}</Text></Text>
+                  <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Tuổi: <Text style={{ fontWeight: 'bold' }}>{calculateAge ? orBlank(calculateAge(patient?.profile?.dob, patient?.profile?.birthYear), SHORT_BLANK) : SHORT_BLANK}</Text></Text>
+                  <Text style={{ fontSize: 13, color: '#334155', flex: 0.8 }}>Giới tính: <Text style={{ fontWeight: 'bold' }}>{orBlank(patient?.profile?.gender, SHORT_BLANK)}</Text></Text>
                 </View>
-                <Text style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
+                <Text style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.address)}</Text></Text>
                 <Text style={{ fontSize: 13, color: '#334155' }}>Chẩn đoán lâm sàng: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activePres.diagnosis}</Text></Text>
               </View>
 
@@ -757,7 +758,7 @@ const PrescriptionTab = ({
                         fontWeight: 'bold',
                         color: activePres.clinicalSafety.safetyScore >= 90 ? '#15803D' : activePres.clinicalSafety.safetyScore >= 70 ? '#B45309' : '#B91C1C'
                       }}>
-                        Điểm an toàn: {activePres.clinicalSafety.safetyScore}/100 ({activePres.clinicalSafety.status || 'SAFE'})
+                        Điểm an toàn: {activePres.clinicalSafety.safetyScore}/100 ({orDash(activePres.clinicalSafety.status)})
                       </Text>
                     </View>
                   </View>
@@ -772,13 +773,13 @@ const PrescriptionTab = ({
                         </Text>
                       </View>
                       <Text style={{ fontSize: 11, color: '#4C1D95', lineHeight: 16 }}>
-                        {activePres.clinicalSafety.aiConsultation.summary || 'Đơn thuốc đã được AI đối soát chuyên sâu với tiền sử bệnh án và phác đồ u não.'}
+                        {activePres.clinicalSafety.aiConsultation.summary || 'AI không trả về nhận định tóm tắt.'}
                       </Text>
 
                       {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility && (
                         <View style={{ backgroundColor: '#EDE9FE', padding: 6, borderRadius: 6, marginTop: 6 }}>
                           <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#5B21B6' }}>
-                            Tương thích Khối u AI ({activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.detected_tumor || 'U NÃO'} - {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.compatibility_status}):
+                            Tương thích Khối u AI ({orDash(activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.detected_tumor)} - {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.compatibility_status}):
                           </Text>
                           <Text style={{ fontSize: 10, color: '#4C1D95', marginTop: 2 }}>
                             {activePres.clinicalSafety.aiConsultation.tumor_protocol_compatibility.clinical_rationale}

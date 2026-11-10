@@ -95,7 +95,7 @@ const MriSafetyCheckModal = ({
 
           <ScrollView style={{ maxHeight: 400 }}>
             {/* Câu 1: Máy tạo nhịp & Kim loại */}
-            <TouchableOpacity
+            <View
               style={[
                 styles.itemCard,
                 hasPacemakerOrMetal ? styles.itemCardDanger : styles.itemCardDefault
@@ -126,10 +126,10 @@ const MriSafetyCheckModal = ({
                   </View>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
 
             {/* Câu 2: Hội chứng sợ buồng kín */}
-            <TouchableOpacity
+            <View
               style={[
                 styles.itemCard,
                 hasClaustrophobia ? styles.itemCardWarning : styles.itemCardDefault
@@ -149,10 +149,10 @@ const MriSafetyCheckModal = ({
                 </View>
               </View>
               <YesNo value={hasClaustrophobia} onChange={setHasClaustrophobia} />
-            </TouchableOpacity>
+            </View>
 
             {/* Câu 3: Bệnh thận eGFR */}
-            <TouchableOpacity
+            <View
               style={[
                 styles.itemCard,
                 hasKidneyDisease ? styles.itemCardWarning : styles.itemCardDefault
@@ -172,10 +172,10 @@ const MriSafetyCheckModal = ({
                 </View>
               </View>
               <YesNo value={hasKidneyDisease} onChange={setHasKidneyDisease} />
-            </TouchableOpacity>
+            </View>
 
             {/* Câu 4: Đang mang thai */}
-            <TouchableOpacity
+            <View
               style={[
                 styles.itemCard,
                 isPregnant ? styles.itemCardPink : styles.itemCardDefault
@@ -195,7 +195,7 @@ const MriSafetyCheckModal = ({
                 </View>
               </View>
               <YesNo value={isPregnant} onChange={setIsPregnant} />
-            </TouchableOpacity>
+            </View>
 
             {/* Ghi chú thêm */}
             <Text style={styles.fieldLabel}>Ghi chú rà soát an toàn của KTV:</Text>

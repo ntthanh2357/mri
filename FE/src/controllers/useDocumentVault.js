@@ -1,12 +1,24 @@
 import { useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VAULT_KEY } from '../models/documentVault.model';
+import { safeStorage } from '../utils/safeStorage';
+
+// Mỗi tài khoản một kho riêng trên máy: người dùng sau không thấy giấy tờ của người trước
+const vaultKey = () => {
+  try {
+    const u = JSON.parse(safeStorage.getItem('user') || 'null');
+    const id = u?._id || u?.id;
+    return id ? `${VAULT_KEY}_${id}` : `${VAULT_KEY}_guest`;
+  } catch {
+    return `${VAULT_KEY}_guest`;
+  }
+};
 
 const generateId = () => `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const loadFromStorage = async () => {
   try {
-    const raw = await AsyncStorage.getItem(VAULT_KEY);
+    const raw = await AsyncStorage.getItem(vaultKey());
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -26,7 +38,7 @@ export const useDocumentVault = () => {
 
   const persist = useCallback(async (next) => {
     setVault(next);
-    await AsyncStorage.setItem(VAULT_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(vaultKey(), JSON.stringify(next));
   }, []);
 
   const saveDocument = useCallback(async (type, formData, source = 'manual', imageUri = null, meta = {}) => {

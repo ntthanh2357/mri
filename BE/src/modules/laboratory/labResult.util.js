@@ -31,7 +31,10 @@ export const evaluateLabValue = ({ value, gender, biomarker }) => {
   if (!biomarker || Number.isNaN(num)) return result;
 
   const ref = biomarker.reference_range;
-  const range = ref ? (gender === "Nam" ? ref.male : ref.female) : null;
+  // Chưa rõ giới tính: chỉ dùng khoảng tham chiếu khi nam và nữ trùng nhau; không mặc định theo giới nào.
+  // Ngưỡng nguy kịch (critical_low/high) không phụ thuộc giới nên vẫn luôn được kiểm tra bên dưới.
+  const sameRange = (a, b) => Boolean(a && b) && a.min === b.min && a.max === b.max;
+  const range = !ref ? null : gender === "Nam" ? ref.male : gender === "Nữ" ? ref.female : sameRange(ref.male, ref.female) ? ref.male : null;
   if (range) {
     if (range.min !== undefined && range.min !== null && num < range.min) {
       result.is_abnormal = true;
@@ -42,6 +45,8 @@ export const evaluateLabValue = ({ value, gender, biomarker }) => {
       result.abnormal_direction = "HIGH";
     }
     result.reference_range_display = formatReferenceRange(range);
+  } else if (ref && gender !== "Nam" && gender !== "Nữ") {
+    result.reference_range_display = "Chưa có giới tính — chưa đối chiếu khoảng tham chiếu";
   }
 
   const unit = biomarker.unit || "";

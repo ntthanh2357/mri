@@ -150,7 +150,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             <Text style={styles.brandName}>
               Neuro<Text style={styles.brandNameAccent}>Scan</Text> AI
             </Text>
-            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
+            <Text style={styles.brandSub}>HỖ TRỢ SÀNG LỌC U NÃO & EMR</Text>
           </View>
         </View>
 

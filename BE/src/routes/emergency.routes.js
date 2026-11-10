@@ -29,6 +29,7 @@ import {
 const router = Router();
 router.use(protect);
 
+// Kíp lâm sàng cấp cứu của bệnh viện; tài khoản nền tảng (admin, system_admin) không xem/thao tác sự kiện cấp cứu.
 const CLINICAL_EMERGENCY_ROLES = [
   "doctor",
   "department_head",
@@ -36,16 +37,10 @@ const CLINICAL_EMERGENCY_ROLES = [
   "technician",
   "radiologist",
   "hospital_admin",
-  "admin",
-  "system_admin",
 ];
-const DOCTOR_LEAD_ROLES = [
-  "doctor",
-  "department_head",
-  "hospital_admin",
-  "admin",
-  "system_admin",
-];
+// Giải trừ báo động, đề xuất chèn lịch MRI/giữ giường, đóng sự kiện, đóng cảnh báo là quyết định chuyên môn:
+// chỉ Bác sĩ hoặc Trưởng khoa (khớp thông báo lỗi). Tài khoản quản trị không tham gia.
+const DOCTOR_LEAD_ROLES = ["doctor", "department_head"];
 // Y lệnh là thao tác chuyên môn của người hành nghề: tài khoản quản trị không tham gia.
 const VERBAL_ORDER_PRESCRIBER_ROLES = ["doctor", "department_head"];
 // Banner cấp cứu cho mọi nhân viên. Vai trò ngoài kíp lâm sàng chỉ nhận vị trí và mức độ (xem getActiveAlerts).

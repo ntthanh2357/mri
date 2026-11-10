@@ -8,6 +8,7 @@ import PageHeader, { HeaderAction } from '../layout/PageHeader';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import useStaffHome from '../../controllers/useStaffHome';
 import { SHIFT_LABELS } from '../../utils/staffTasks';
+import { isFeatureEnabled } from '../../constants/featureScope';
 
 const ROLE_LABEL = {
   doctor: 'Bác sĩ',
@@ -22,7 +23,10 @@ const PRIMARY_ACTION = {
   technician: { label: 'Nhập kết quả chụp', icon: 'upload-cloud', route: 'CreateImagingResult' },
   nurse: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
   receptionist: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
-  pharmacist: { label: 'Mở hàng đợi Khoa Dược', icon: 'package', route: 'PharmacyQueue' },
+  // Phân hệ Dược ngoài phạm vi đồ án → dược sĩ chỉ còn lịch làm việc (constants/featureScope.js)
+  pharmacist: isFeatureEnabled('pharmacy')
+    ? { label: 'Mở hàng đợi Khoa Dược', icon: 'package', route: 'PharmacyQueue' }
+    : { label: 'Lịch làm việc', icon: 'calendar', route: 'StaffScheduling' },
 };
 const NEXT_TITLE = {
   doctor: 'Bệnh nhân tiếp theo',
@@ -67,7 +71,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
   const openVisit = (v) => {
     if (role === 'receptionist') return navigation.navigate('NurseReception', { tab: 'myQueue' });
     if (role === 'nurse') return navigation.navigate('NurseTriage');
-    if (role === 'pharmacist') return navigation.navigate('PharmacyQueue');
+    if (role === 'pharmacist') return isFeatureEnabled('pharmacy') ? navigation.navigate('PharmacyQueue') : null;
     return navigation.navigate('DoctorWorkQueue', { tab: MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
   };
 

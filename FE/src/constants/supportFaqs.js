@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from './featureScope.js';
 /**
  * Câu hỏi thường gặp (FAQ) theo từng vai trò cho màn hình Hỗ trợ kỹ thuật.
  * Mỗi role gồm các nhóm chủ đề { category, items: [{ q, a }] }.
@@ -332,4 +333,18 @@ const FAQS_BY_ROLE = {
   system_admin: SYSTEM_ADMIN_FAQS,
 };
 
-export const getFaqsForRole = (role) => [...(FAQS_BY_ROLE[role] || []), COMMON_FAQS];
+// Phạm vi đồ án (constants/featureScope.js): bỏ câu hỏi về BHYT, giường bệnh, phân hệ Dược khi các phần này đang tắt.
+const OUT_OF_SCOPE_FAQ = [
+  ['bhyt', /BHYT|bảo hiểm y tế/i],
+  ['beds', /giường/i],
+  ['pharmacy', /kho thuốc|dược sĩ|khoa dược|phát thuốc|hạn dùng|hết hạn/i],
+];
+const SCOPED_CATEGORY_NAMES = { 'BHYT & thu ngân': ['bhyt', 'Thu ngân'], 'Cơ sở vật chất & kho thuốc': ['pharmacy', 'Cơ sở vật chất'] };
+const inScope = (item) => !OUT_OF_SCOPE_FAQ.some(([key, re]) => !isFeatureEnabled(key) && re.test(item.q));
+const scopeGroup = (group) => {
+  const rename = SCOPED_CATEGORY_NAMES[group.category];
+  const category = rename && !isFeatureEnabled(rename[0]) ? rename[1] : group.category;
+  return { ...group, category, items: group.items.filter(inScope) };
+};
+
+export const getFaqsForRole = (role) => [...(FAQS_BY_ROLE[role] || []), COMMON_FAQS].map(scopeGroup).filter((g) => g.items.length > 0);

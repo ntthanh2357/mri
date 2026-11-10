@@ -29,8 +29,10 @@ const inspect = (pdf) => {
   const m = /\/ByteRange \[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/.exec(text);
   if (!m) return null;
   const [a, b, c, d] = m.slice(1).map(Number);
-  const hex = pdf.subarray(a + b + 1, c - 1).toString('latin1').replace(/0+$/, '');
-  const p7 = forge.pkcs7.messageFromAsn1(forge.asn1.fromDer(forge.util.hexToBytes(hex.length % 2 ? `${hex}0` : hex)));
+  // Đọc DER theo độ dài khai báo, bỏ qua phần đệm 0 của /Contents. Không cắt "0" ở cuối chuỗi hex:
+  // chữ ký có thể kết thúc bằng byte 0x00 thật (đo được 4/600 lần fail với cách cắt cũ).
+  const hex = pdf.subarray(a + b + 1, c - 1).toString('latin1');
+  const p7 = forge.pkcs7.messageFromAsn1(forge.asn1.fromDer(forge.util.hexToBytes(hex), { parseAllBytes: false }));
   const digestAttr = p7.rawCapture.authenticatedAttributes
     .map((attr) => forge.asn1.derToOid(attr.value[0].value) === forge.pki.oids.messageDigest ? attr.value[1].value[0].value : null)
     .find(Boolean);

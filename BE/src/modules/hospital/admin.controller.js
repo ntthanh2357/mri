@@ -1050,7 +1050,7 @@ export const saveChatbotConfig = async (req, res) => {
 
     const effectivePrompt = (typeof system_prompt === "string" && system_prompt.trim().length > 0)
       ? system_prompt
-      : (currentConfig.system_prompt || "Bạn là trợ lý chẩn đoán AI y tế chuyên nghiệp, hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
+      : (currentConfig.system_prompt || "Bạn là trợ lý AI y tế hỗ trợ sàng lọc (không đưa ra chẩn đoán), hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
 
     const updatedConfig = {
       ...currentConfig,

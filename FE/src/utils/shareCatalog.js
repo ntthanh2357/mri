@@ -139,7 +139,7 @@ export const flattenSharedRecord = (data) => {
   })));
   (d.vitals || []).forEach((v, i) => out.push(row('vitals', i, v, {
     title: 'Sinh hiệu', date: v.recorded_at,
-    sub: join([v.blood_pressure ? `huyết áp ${v.blood_pressure}` : '', v.pulse ? `mạch ${v.pulse}` : '', v.spo2 ? `SpO₂ ${v.spo2}%` : '', v.temperature ? `nhiệt độ ${v.temperature} °C` : '']),
+    sub: join([v.blood_pressure ? `huyết áp ${typeof v.blood_pressure === 'object' ? [v.blood_pressure.systolic, v.blood_pressure.diastolic].filter((x) => x != null).join('/') : v.blood_pressure}` : '', v.pulse ? `mạch ${v.pulse}` : '', v.spo2 ? `SpO₂ ${v.spo2}%` : '', v.temperature ? `nhiệt độ ${v.temperature} °C` : '']),
   })));
   const shared = d.safety ? (d.safety.shared || ['allergies', 'emergencyContact']) : [];
   if (shared.includes('allergies')) {

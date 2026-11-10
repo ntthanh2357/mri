@@ -37,9 +37,9 @@ export const checkPatientTenancy = async (patientId, userOrHospitalId, roleArg, 
   }
   if (!patient || patient.role !== "patient") return null;
 
-  // 1. Quản trị viên cấp cao có quyền giám sát hệ thống
+  // 1. Tài khoản quản trị nền tảng (admin, system_admin) không có quyền với hồ sơ bệnh nhân (RELEASE_v3.4)
   if (userRole === "admin" || userRole === "system_admin") {
-    return patient;
+    return null;
   }
 
   // 2. Chính bệnh nhân đang tự truy xuất hồ sơ của mình (Token cá nhân B2C)

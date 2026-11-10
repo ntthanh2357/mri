@@ -50,6 +50,9 @@ import { installProcessGuards, postOpsAlert } from "../utils/processGuards.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import { deliverRefreshToken } from "../modules/auth/auth.controller.js";
+import { evaluateLabValue } from "../modules/laboratory/labResult.util.js";
+import { ImagingResult } from "../modules/imaging/models/imagingResult.model.js";
+import { createPatientLabOrder } from "../controllers/patient.controller.js";
 import { sanitizeNoSql } from "../middlewares/noSqlSanitize.middleware.js";
 import { inputErrorStatus } from "../utils/inputError.util.js";
 import { Notification } from "../models/notification.model.js";
@@ -611,5 +614,45 @@ describe("QA-27 Phase 1: refresh token của web chỉ nằm trong cookie HttpOn
     expect(deliverRefreshToken({ headers: {} }, res, "RT")).toBe("RT");
     expect(deliverRefreshToken({ headers: {} }, res, undefined)).toBe(undefined);
     expect(set).toEqual([["refreshToken", "RT", true, "/auth"], ["refreshToken", "RT", true, "/auth"]]);
+  });
+});
+
+describe("IT1-06: chưa có giới tính thì để trống, không tự gán \"Nam\"", () => {
+  let hospitalId, doctor, patient;
+  beforeAll(async () => {
+    if (mongoose.connection.readyState === 0) await mongoose.connect(process.env.TEST_MONGO_URI);
+    hospitalId = (await Hospital.create({ name: "BV giới tính", code: `GT-${oid()}` }))._id;
+    doctor = await User.create({ email: `gt_doc_${oid()}@neuroscan.vn`, passwordHash: "x", role: "doctor", hospitalId, profile: { name: "BS", fullName: "BS" } });
+    patient = await User.create({ email: `gt_bn_${oid()}@neuroscan.vn`, passwordHash: "x", role: "patient", hospitalId, profile: { name: "BN chưa rõ giới", fullName: "BN chưa rõ giới" } });
+  });
+
+  test("xét nghiệm: chưa rõ giới thì không mặc định khoảng tham chiếu của nam hay nữ; ngưỡng nguy kịch vẫn bắt", () => {
+    const hb = { unit: "g/dL", critical_low: 7, critical_high: 20, reference_range: { male: { min: 13, max: 17 }, female: { min: 12, max: 15 } } };
+    const unknown = evaluateLabValue({ value: 16, gender: null, biomarker: hb });
+    expect(unknown.is_abnormal).toBe(false);
+    expect(unknown.reference_range_display.startsWith("Chưa có giới tính")).toBe(true);
+    expect(evaluateLabValue({ value: 25, gender: null, biomarker: hb }).is_critical).toBe(true);
+    expect(evaluateLabValue({ value: 6, gender: "", biomarker: hb }).is_critical).toBe(true);
+    expect(evaluateLabValue({ value: 16, gender: "Nữ", biomarker: hb }).abnormal_direction).toBe("HIGH");
+    expect(evaluateLabValue({ value: 16, gender: "Nam", biomarker: hb }).is_abnormal).toBe(false);
+    const same = { reference_range: { male: { min: 3.5, max: 5 }, female: { min: 3.5, max: 5 } } };
+    expect(evaluateLabValue({ value: 6, gender: null, biomarker: same }).abnormal_direction).toBe("HIGH");
+  });
+
+  test("phiếu xét nghiệm: không có giới trong body và hồ sơ thì để trống; có trong hồ sơ thì lấy từ hồ sơ", async () => {
+    const r = await call(createPatientLabOrder, { params: { patientId: String(patient._id) }, user: { id: String(doctor._id), role: "doctor", hospitalId: String(hospitalId) }, body: { category: "HOA_SINH", barcode: `GT-${oid()}` } });
+    expect(r.statusCode).toBe(201);
+    const order = await LabOrder.findOne({ patient_id: patient._id, hospitalId }).sort({ createdAt: -1 }).lean();
+    expect(order.patient_gender === null).toBe(true);
+    const female = await User.create({ email: `gt_nu_${oid()}@neuroscan.vn`, passwordHash: "x", role: "patient", hospitalId, profile: { name: "BN nữ", gender: "Nữ" } });
+    await call(createPatientLabOrder, { params: { patientId: String(female._id) }, user: { id: String(doctor._id), role: "doctor", hospitalId: String(hospitalId) }, body: { category: "HOA_SINH", barcode: `GT-${oid()}` } });
+    expect((await LabOrder.findOne({ patient_id: female._id, hospitalId }).lean()).patient_gender).toBe("Nữ");
+  });
+
+  test("bệnh án và kết quả CĐHA tạo khi chưa có giới tính được lưu để trống", async () => {
+    const record = await MedicalRecord.create({ hospitalId, patientId: String(patient._id), userId: patient._id, patientName: "BN chưa rõ giới", age: 40, birthYear: 1986, doctorInCharge: "BS", diagnosis: "Theo dõi", status: "Đang điều trị" });
+    expect(record.gender).toBe("");
+    const img = await ImagingResult.create({ hospitalId, medicalId: "GT-1", patientName: "BN chưa rõ giới", birthYear: 1986, address: "HN", orderDate: new Date().toISOString(), orderingDoctor: "BS", orderingDepartment: "K", diagnosis: "U não", procedure: "MRI", findings: "x", conclusion: "x", radiologist: "BS", reportDate: new Date().toISOString(), imagingType: "MRI" });
+    expect(img.gender).toBe("");
   });
 });

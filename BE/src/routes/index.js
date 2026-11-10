@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { FEATURES } from "../config/features.config.js";
 import authRoutes from "./auth.routes.js";
 import adminRoutes from "./admin.routes.js";
 import emrRoutes from "./emr.routes.js";
@@ -47,6 +48,11 @@ import storageRoutes from "../modules/storage/storage.routes.js";
 
 const router = Router();
 
+// Chức năng ngoài phạm vi đồ án: trả 404 thay vì chạy API (FE đã ẩn bằng EXPO_PUBLIC_ENABLE_OUT_OF_SCOPE)
+const outOfScope = (name) => (req, res, next) => (FEATURES.ENABLE_OUT_OF_SCOPE
+  ? next()
+  : res.status(404).json({ success: false, message: `Chức năng ${name} nằm ngoài phạm vi phiên bản hiện tại.` }));
+
 router.use("/auth", authRoutes);
 router.use("/api/v1/patient", patientRecordRoutes);
 
@@ -84,7 +90,7 @@ router.use("/api/v1/ai-pipeline", aiPipelineRoutes);
 router.use("/api/v1/assignments", assignmentRoutes);
 router.use("/api/v1/emergency", emergencyRoutes);
 router.use("/api/v1/peer-reviews", peerReviewRoutes);
-router.use("/api/v1/hospital-beds", hospitalBedRoutes);
+router.use("/api/v1/hospital-beds", outOfScope("Quản lý giường bệnh"), hospitalBedRoutes);
 
 // Mount v3.2 Phase 2 routes
 router.use("/api/v1/tasks", taskRoutes);
@@ -99,7 +105,7 @@ router.use("/api/v1/reports", reportRoutes);
 // Mount v3.2 Phase 4 — B2C Patient, Clinical View (G), BHYT (R)
 router.use("/api/v1/patient-b2c", patientB2cRoutes);
 router.use("/api/v1/clinical-view", clinicalViewRoutes);
-router.use("/api/v1/bhyt", bhytRoutes);
+router.use("/api/v1/bhyt", outOfScope("BHYT"), bhytRoutes);
 router.use("/api/v1/storage", storageRoutes);
 
 // Health check endpoint under /api/v1

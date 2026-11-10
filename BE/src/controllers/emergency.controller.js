@@ -10,6 +10,7 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { sendOtpEmail } from "../services/email.service.js";
 
+// Kíp lâm sàng cấp cứu của bệnh viện; tài khoản nền tảng (admin, system_admin) không xem/thao tác sự kiện cấp cứu.
 const CLINICAL_EMERGENCY_ROLES = [
   "doctor",
   "department_head",
@@ -17,17 +18,11 @@ const CLINICAL_EMERGENCY_ROLES = [
   "technician",
   "radiologist",
   "hospital_admin",
-  "admin",
-  "system_admin",
 ];
 
-const DOCTOR_LEAD_ROLES = [
-  "doctor",
-  "department_head",
-  "hospital_admin",
-  "admin",
-  "system_admin",
-];
+// Giải trừ báo động, đề xuất chèn lịch MRI/giữ giường, đóng sự kiện, đóng cảnh báo là quyết định chuyên môn:
+// chỉ Bác sĩ hoặc Trưởng khoa (khớp thông báo lỗi). Tài khoản quản trị không tham gia.
+const DOCTOR_LEAD_ROLES = ["doctor", "department_head"];
 
 /**
  * Tra cứu kíp trực Roster hiện tại theo WorkSchedule & isOnCall
@@ -396,9 +391,9 @@ export const edHandoff = async (req, res) => {
         profile: {
           patientId: generatedCode,
           name: patientName || (isUnidentifiedPatient ? `Bệnh nhân Vô Danh (${generatedCode})` : "Bệnh nhân cấp cứu ED"),
-          age: age || 40,
-          gender: gender || "Nam",
-          phone: "0000000000"
+          age: Number(age) > 0 ? Number(age) : null, // chưa rõ thì để trống
+          gender: ["Nam", "Nữ", "Khác"].includes(gender) ? gender : "", // chưa rõ thì để trống
+          phone: ""
         }
       });
       await patient.save();
@@ -412,7 +407,7 @@ export const edHandoff = async (req, res) => {
       priority: 'khẩn cấp',
       status: 'đang khám',
       reason: situation || "Tiếp nhận cấp cứu chuyển từ Khoa Cấp Cứu",
-      diagnosis: assessment || "Nghi ngờ tổn thương u não nguy kịch"
+      diagnosis: assessment || ""
     });
     await visit.save();
 
@@ -480,7 +475,7 @@ export const edHandoff = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 export const edAccept = async (req, res) => {
   try {
-    if (!["doctor", "department_head", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!DOCTOR_LEAD_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ Bác sĩ Ngoại Thần Kinh mới có thẩm quyền chấp thuận nhận bệnh.", 403);
     }
 
@@ -1335,6 +1330,7 @@ export const closeEmergencyEvent = async (req, res) => {
 export const getActiveAlerts = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const { status } = req.query;
 
     const query = {
@@ -1397,7 +1393,7 @@ export const getActiveEvents = getActiveAlerts;
 // ══════════════════════════════════════════════════════════════════════════════
 export const triggerEmergency = async (req, res) => {
   try {
-    if (!["doctor", "department_head", "radiologist", "technician", "admin", "hospital_admin", "nurse"].includes(req.user.role)) {
+    if (!CLINICAL_EMERGENCY_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ nhân viên y tế mới có thể kích hoạt cấp cứu.", 403);
     }
 
@@ -1501,6 +1497,7 @@ export const resolveAlert = async (req, res) => {
 export const getAlertHistory = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const { page = 1, limit = 20, status } = req.query;
 
     const filter = { hospitalId };

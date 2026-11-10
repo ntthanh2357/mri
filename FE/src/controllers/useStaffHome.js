@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get } from '../services/api.service';
 import { buildStaffTasks, nextUpVisits, nextUpPrescriptions } from '../utils/staffTasks';
+import { isFeatureEnabled } from '../constants/featureScope';
 
 /** Dữ liệu trang chủ nhân viên: hàng đợi, bệnh án, hóa đơn (lễ tân), ca trực hôm nay.
  *  [P1-PharmacyQueue] Dược sĩ load hàng đợi Khoa Dược (GET /api/drugs/queue)
@@ -15,11 +16,12 @@ const useStaffHome = (user) => {
     setData(d => ({ ...d, loading: true }));
     const isPharmacist = user.role === 'pharmacist';
     const isDoctor = ['doctor', 'department_head', 'radiologist'].includes(user.role);
+    const isCleaner = user.role === 'cleaner'; // BE không cho vệ sinh đọc hàng đợi, bệnh án, lịch trực
     const [queueRes, pharmRes, emrRes, schedRes, invRes, assignRes] = await Promise.all([
-      isPharmacist ? null : get('/api/v1/visits/my-queue').catch(() => null),
-      isPharmacist ? get('/api/drugs/queue').catch(() => null) : null,
-      get('/emr/records').catch(() => null),
-      get('/api/v1/schedules/my-schedule').catch(() => null),
+      isPharmacist || isCleaner ? null : get('/api/v1/visits/my-queue').catch(() => null),
+      isPharmacist && isFeatureEnabled('pharmacy') ? get('/api/drugs/queue').catch(() => null) : null,
+      isCleaner ? null : get('/emr/records').catch(() => null),
+      isCleaner ? null : get('/api/v1/schedules/my-schedule').catch(() => null),
       user.role === 'receptionist' ? get('/api/v1/invoices').catch(() => null) : null,
       isDoctor ? get('/api/v1/assignments/my').catch(() => null) : null,
     ]);

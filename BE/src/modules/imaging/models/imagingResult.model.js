@@ -26,8 +26,8 @@ const imagingResultSchema = new Schema(
     },
     gender: {
       type: String,
-      enum: ["Nam", "Nữ", "Khác"],
-      required: true,
+      enum: ["Nam", "Nữ", "Khác", ""], // để trống khi hồ sơ chưa có giới tính (không tự gán)
+      default: "",
     },
     address: {
       type: String,
@@ -139,9 +139,9 @@ const imagingResultSchema = new Schema(
         default: 'electronic',
       },
       certificateSerial: { type: String, default: "" },
-      signingAlgorithm: { type: String, default: "SHA256withRSA" },
+      signingAlgorithm: { type: String, default: "" },
       timestampToken: { type: String, default: "" },
-      caProvider: { type: String, default: "VNPT-CA" },
+      caProvider: { type: String, default: "" }, // không mặc định nhà cung cấp CA khi chưa có chứng thư thật
       signedHash: { type: String, default: "" },
       signedBy: { type: String, default: "" },
       signedAt: { type: Date, default: null },

@@ -1,3 +1,5 @@
+import { PAPER_BLANK, SHORT_BLANK, orBlank, orDash, dayMonthYear, dateTimeOrBlank } from '../../utils/paperFields';
+import { isFeatureEnabled } from '../../constants/featureScope';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -124,15 +126,12 @@ const DischargeTransferTab = ({
     setTransferReasonDetail('Vượt quá năng lực phẫu thuật thần kinh chuyên sâu tại cơ sở. Khối u não xâm lấn phức tạp, cần vi phẫu thần kinh và xạ trị chuyên sâu tại tuyến trên.');
     setTransferDirection('Hội chẩn liên viện, phẫu thuật bóc tách u vi phẫu dưới định vị neuronavigation, xạ trị gia tốc tuyến trên.');
     setTransferTransportation('Xe cấp cứu chuyên dụng (Monitor theo dõi + Bình oxy)');
-    setTransferPatientStatus('Tỉnh táo, tiếp xúc chậm, đau đầu tăng, sinh hiệu kiểm soát ổn định.');
     if (!transferDiagnosis && selectedImaging?.aiReport?.tumorType) {
-      setTransferDiagnosis(`U não (${selectedImaging.aiReport.tumorType} - WHO Grade ${selectedImaging.aiReport.whoGrade || 'IV'})`);
-    } else if (!transferDiagnosis) {
-      setTransferDiagnosis('U tế bào thần kinh đệm độ ác tính cao (High-grade Glioma) vượt quá khả năng phẫu thuật của viện');
+      setTransferDiagnosis(`U não (${selectedImaging.aiReport.tumorType}${selectedImaging.aiReport.whoGrade ? ` - WHO Grade ${selectedImaging.aiReport.whoGrade}` : ''})`);
     }
     Alert.alert(
       'Đã thiết lập ca phẫu thuật phức tạp',
-      'Đã điền tự động lý do chuyển viện, hướng điều trị và phương tiện vận chuyển cấp cứu cho ca u não vượt quá năng lực cơ sở.'
+      'Đã điền gợi ý lý do chuyển viện, hướng điều trị và phương tiện vận chuyển. Vui lòng tự nhập chẩn đoán (nếu chưa có) và tình trạng người bệnh khi chuyển.'
     );
   };
 
@@ -256,8 +255,8 @@ const DischargeTransferTab = ({
               <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#10B981' }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                   <View>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
                     <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeDisc.dischargeNo}/GV</Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
@@ -274,25 +273,25 @@ const DischargeTransferTab = ({
                 <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 20 }}>GIẤY RA VIỆN</Text>
 
                 <View style={{ gap: 10, marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || 'N/A'}</Text></Text>
+                  <Text style={{ fontSize: 13, color: '#334155' }}>Họ tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{orBlank(patient?.profile?.name || patient?.profile?.fullName)}</Text></Text>
                   
                   <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).toLocaleDateString('vi-VN') : patient?.profile?.birthYear || 'N/A'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>{calculateAge ? calculateAge(patient?.profile?.dob, patient?.profile?.birthYear) : '30'}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>Ngày sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).toLocaleDateString('vi-VN') : orBlank(patient?.profile?.birthYear, SHORT_BLANK)}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Tuổi: <Text style={{ fontWeight: '500' }}>{calculateAge ? orBlank(calculateAge(patient?.profile?.dob, patient?.profile?.birthYear), SHORT_BLANK) : SHORT_BLANK}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Giới tính: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.gender, SHORT_BLANK)}</Text></Text>
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: 20 }}>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Dân tộc: <Text style={{ fontWeight: '500' }}>Kinh</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Nghề nghiệp: <Text style={{ fontWeight: '500' }}>Kỹ sư</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Dân tộc: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.ethnicity, SHORT_BLANK)}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>Nghề nghiệp: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.occupation, SHORT_BLANK)}</Text></Text>
                   </View>
 
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Mã số BHXH / Thẻ BHYT số: <Text style={{ fontWeight: '500' }}>GD4797921800244</Text></Text>
-                  <Text style={{ fontSize: 13, color: '#334155' }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text></Text>
+                  {isFeatureEnabled('bhyt') && <Text style={{ fontSize: 13, color: '#334155' }}>Mã số BHXH / Thẻ BHYT số: <Text style={{ fontWeight: '500' }}>{PAPER_BLANK}</Text></Text>}
+                  <Text style={{ fontSize: 13, color: '#334155' }}>Địa chỉ: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.address)}</Text></Text>
                   
                   <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4, gap: 8 }}>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Vào viện lúc: <Text style={{ fontWeight: '600' }}>08:30 ngày {new Date(activeDisc.dateIn || Date.now()).toLocaleDateString('vi-VN')}</Text></Text>
-                    <Text style={{ fontSize: 13, color: '#334155' }}>• Ra viện lúc: <Text style={{ fontWeight: '600' }}>16:00 ngày {new Date(activeDisc.dateOut || Date.now()).toLocaleDateString('vi-VN')}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155' }}>• Vào viện lúc: <Text style={{ fontWeight: '600' }}>{dateTimeOrBlank(null)}</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#334155' }}>• Ra viện lúc: <Text style={{ fontWeight: '600' }}>{dateTimeOrBlank(null)}</Text></Text>
                     
                     <Text style={{ fontSize: 13, color: '#334155', marginTop: 4 }}>• Chẩn đoán ra viện: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeDisc.diagnosis}</Text></Text>
                     <Text style={{ fontSize: 13, color: '#334155' }}>• Phương pháp điều trị: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeDisc.treatment}</Text></Text>
@@ -311,7 +310,7 @@ const DischargeTransferTab = ({
                   </View>
                   
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {new Date(activeDisc.recorded_at || Date.now()).getDate()} tháng {new Date(activeDisc.recorded_at || Date.now()).getMonth() + 1} năm {new Date(activeDisc.recorded_at || Date.now()).getFullYear()}</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Ngày {dayMonthYear(activeDisc.recorded_at || activeDisc.createdAt)}</Text>
                     <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN ĐƠN VỊ KCB</Text>
                     <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
                     <View style={[styles.signatureSigned, { marginTop: 15 }]}>
@@ -354,7 +353,7 @@ const DischargeTransferTab = ({
     if (selectedImaging?.aiReport) {
       const ai = selectedImaging.aiReport;
       parts.push(
-        `- Hình ảnh MRI Não & Phân tích AI: ${selectedImaging.procedure || 'Chụp MRI sọ não'}. Phát hiện tổn thương ${ai.tumorType || 'khối u não'}, phân độ ác tính WHO Grade ${ai.whoGrade || 'IV'}, thể tích ước tính ${ai.volumeCm3 || 'N/A'} cm³, vị trí ${ai.location || 'Bán cầu não'}. Độ tin cậy AI: ${Math.round((ai.confidence || 0.95) * 100)}%.`
+        `- Hình ảnh MRI Não & Phân tích AI: ${[selectedImaging.procedure, ai.tumorType && `phát hiện tổn thương ${ai.tumorType}`, ai.whoGrade && `phân độ ác tính WHO Grade ${ai.whoGrade}`, ai.volumeCm3 && `thể tích ước tính ${ai.volumeCm3} cm³`, ai.location && `vị trí ${ai.location}`, typeof ai.confidence === 'number' && `độ tin cậy AI ${Math.round(ai.confidence * 100)}%`].filter(Boolean).join('; ') || 'chưa có dữ liệu phân tích'}.`
       );
     } else if (selectedImaging?.conclusion) {
       parts.push(`- MRI Sọ não: ${selectedImaging.conclusion}`);
@@ -442,7 +441,7 @@ const DischargeTransferTab = ({
                   >
                     {imagingResults.map((img) => (
                       <option key={img._id} value={img._id}>
-                        {img.procedure || 'Chụp MRI sọ não'} - {img.orderDate ? new Date(img.orderDate).toLocaleDateString('vi-VN') : 'Mới nhất'}
+                        {img.procedure || 'Ca chụp (chưa ghi tên kỹ thuật)'} - {img.orderDate ? new Date(img.orderDate).toLocaleDateString('vi-VN') : 'chưa ghi ngày'}
                         {img.aiReport ? ' (Đã có Báo cáo AI)' : ''}
                       </option>
                     ))}
@@ -450,7 +449,7 @@ const DischargeTransferTab = ({
                 ) : (
                   <View style={styles.readOnlyBox}>
                     <Text style={{ fontSize: 12, color: '#334155' }}>
-                      {selectedImaging?.procedure || 'Chụp MRI sọ não (Mới nhất)'}
+                      {selectedImaging?.procedure || 'Ca chụp (chưa ghi tên kỹ thuật)'}
                     </Text>
                   </View>
                 )}
@@ -674,7 +673,7 @@ const DischargeTransferTab = ({
                         selectedTransferIndex === idx && styles.transferPillTextActive,
                       ]}
                     >
-                      Phiếu #{idx + 1} ({item.transferNo || 'CV'})
+                      Phiếu #{idx + 1}{item.transferNo ? ` (${item.transferNo})` : ''}
                       {item.status === 'sent' ? ' • Đã gửi' : ' • Chờ Lễ tân'}
                     </Text>
                   </TouchableOpacity>
@@ -710,7 +709,7 @@ const DischargeTransferTab = ({
                     </Text>
                     <Text style={{ fontSize: 11, color: activeTrans.status === 'sent' ? '#15803D' : '#B45309', marginTop: 2 }}>
                       {activeTrans.status === 'sent'
-                        ? `Đã gửi tới: ${activeTrans.recipientEmail || 'Bệnh nhân'} • Lúc: ${activeTrans.sentAt ? new Date(activeTrans.sentAt).toLocaleString('vi-VN') : 'Vừa xong'}`
+                        ? `Đã gửi tới: ${orDash(activeTrans.recipientEmail)} • Lúc: ${activeTrans.sentAt ? new Date(activeTrans.sentAt).toLocaleString('vi-VN') : '—'}`
                         : `Gói hồ sơ đã lập xong. Lễ tân sẽ đối chiếu email [${activeTrans.recipientEmail || patient?.email || 'Chưa có email'}] và bấm gửi.`}
                     </Text>
                   </View>
@@ -780,9 +779,9 @@ const DischargeTransferTab = ({
             <View style={[styles.labReportSheet, { borderTopWidth: 6, borderTopColor: '#0284C7' }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingBottom: 12, marginBottom: 16 }}>
                 <View>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ TP ĐÀ NẴNG</Text>
-                  <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {activeTrans.transferNo || 'CV-XXXXXX'}/GCT</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#475569' }}>SỞ Y TẾ: {SHORT_BLANK}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 'extrabold', color: '#1E3A8A' }}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
+                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 4 }}>Số: {orBlank(activeTrans.transferNo, SHORT_BLANK)}/GCT</Text>
                 </View>
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#1E293B' }}>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</Text>
@@ -791,8 +790,8 @@ const DischargeTransferTab = ({
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ fontSize: 9, color: '#475569' }}>Mẫu số: <Text style={{ fontWeight: 'bold' }}>06/GCT</Text></Text>
-                  <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{activeTrans.hospitalNo || 'BA-XXXX'}</Text></Text>
-                  <Text style={{ fontSize: 9, color: '#475569' }}>Vào sổ chuyển số: <Text style={{ fontWeight: 'bold' }}>{activeTrans.transferNo || 'CV-XXXX'}</Text></Text>
+                  <Text style={{ fontSize: 9, color: '#475569' }}>Số hồ sơ: <Text style={{ fontWeight: 'bold' }}>{orBlank(activeTrans.hospitalNo, SHORT_BLANK)}</Text></Text>
+                  <Text style={{ fontSize: 9, color: '#475569' }}>Vào sổ chuyển số: <Text style={{ fontWeight: 'bold' }}>{orBlank(activeTrans.transferNo, SHORT_BLANK)}</Text></Text>
                 </View>
               </View>
 
@@ -805,40 +804,40 @@ const DischargeTransferTab = ({
 
               <View style={{ gap: 10, marginBottom: 20 }}>
                 <Text style={{ fontSize: 13, color: '#334155' }}>
-                  Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>Bệnh viện Chuyên Khoa Ung Thư Não NeuroScan</Text> trân trọng giới thiệu:
+                  Cơ sở khám bệnh, chữa bệnh: <Text style={{ fontWeight: 'bold' }}>{PAPER_BLANK}</Text> trân trọng giới thiệu:
                 </Text>
                 <Text style={{ fontSize: 13, color: '#334155' }}>
-                  - Họ và tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{patient?.profile?.name || patient?.profile?.fullName || 'N/A'}</Text>
+                  - Họ và tên người bệnh: <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{orBlank(patient?.profile?.name || patient?.profile?.fullName)}</Text>
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: 20 }}>
                   <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>
-                    - Giới tính: <Text style={{ fontWeight: '500' }}>{patient?.profile?.gender || 'Nam'}</Text>
+                    - Giới tính: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.gender, SHORT_BLANK)}</Text>
                   </Text>
                   <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>
-                    - Năm sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).getFullYear() : patient?.profile?.birthYear || 'N/A'}</Text>
+                    - Năm sinh: <Text style={{ fontWeight: '500' }}>{patient?.profile?.dob ? new Date(patient.profile.dob).getFullYear() : orBlank(patient?.profile?.birthYear, SHORT_BLANK)}</Text>
                   </Text>
                 </View>
 
                 <Text style={{ fontSize: 13, color: '#334155' }}>
-                  - Địa chỉ: <Text style={{ fontWeight: '500' }}>{patient?.profile?.address || 'Liên Chiểu, Đà Nẵng'}</Text>
+                  - Địa chỉ: <Text style={{ fontWeight: '500' }}>{orBlank(patient?.profile?.address)}</Text>
                 </Text>
 
-                <Text style={{ fontSize: 13, color: '#334155' }}>
-                  - Số thẻ Bảo hiểm y tế: <Text style={{ fontWeight: 'bold', color: '#1E3A8A' }}>GD4797921800244</Text>
-                </Text>
+                {isFeatureEnabled('bhyt') && (<Text style={{ fontSize: 13, color: '#334155' }}>
+                  - Số thẻ Bảo hiểm y tế: <Text style={{ fontWeight: 'bold', color: '#1E3A8A' }}>{PAPER_BLANK}</Text>
+                </Text>)}
 
                 <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4 }}>
                   <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B', marginBottom: 6 }}>TÓM TẮT BỆNH ÁN:</Text>
 
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    1. Tóm tắt dấu hiệu lâm sàng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.clinicalSummary || 'N/A'}</Text>
+                    1. Tóm tắt dấu hiệu lâm sàng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{orBlank(activeTrans.clinicalSummary)}</Text>
                   </Text>
 
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>2. Tóm tắt kết quả xét nghiệm, cận lâm sàng chính: </Text>
                   <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginLeft: 12, marginBottom: 8 }}>
                     <Text style={{ fontSize: 11, color: '#334155', fontFamily: 'monospace', lineHeight: 16 }}>
-                      {activeTrans.labSummary || 'N/A'}
+                      {orBlank(activeTrans.labSummary)}
                     </Text>
                   </View>
 
@@ -846,30 +845,30 @@ const DischargeTransferTab = ({
                     3. Chẩn đoán bệnh chính: <Text style={{ fontWeight: 'bold', color: '#B91C1C' }}>{activeTrans.diagnosis}</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    4. Phương pháp, thủ thuật đã thực hiện: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.treatment || 'Chưa can thiệp phẫu thuật'}</Text>
+                    4. Phương pháp, thủ thuật đã thực hiện: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{orBlank(activeTrans.treatment)}</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    5. Thuốc điều trị chính đã sử dụng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.drugsUsed || 'N/A'}</Text>
+                    5. Thuốc điều trị chính đã sử dụng: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{orBlank(activeTrans.drugsUsed)}</Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    6. Tình trạng bệnh nhân khi chuyển tuyến: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{activeTrans.patientStatus || 'Ổn định'}</Text>
+                    6. Tình trạng bệnh nhân khi chuyển tuyến: <Text style={{ fontWeight: '500', color: '#0F172A' }}>{orBlank(activeTrans.patientStatus)}</Text>
                   </Text>
                 </View>
 
                 <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10, marginTop: 4, gap: 4 }}>
                   <Text style={{ fontSize: 13, color: '#334155' }}>
-                    - Lý do chuyển tuyến: <Text style={{ fontWeight: 'bold', color: '#D97706' }}>Mục [{activeTrans.reason || '1'}] — {activeTrans.reasonDetail}</Text>
+                    - Lý do chuyển tuyến: <Text style={{ fontWeight: 'bold', color: '#D97706' }}>Mục [{orBlank(activeTrans.reason, '....')}] — {orBlank(activeTrans.reasonDetail)}</Text>
                   </Text>
                   <Text style={{ fontSize: 13, color: '#334155' }}>
-                    - Hướng điều trị tiếp theo: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{activeTrans.treatmentDirection || 'Theo chỉ định của tuyến trên'}</Text>
+                    - Hướng điều trị tiếp theo: <Text style={{ fontWeight: '500', color: '#1E3A8A' }}>{orBlank(activeTrans.treatmentDirection)}</Text>
                   </Text>
                   <Text style={{ fontSize: 13, color: '#334155' }}>
-                    - Thời gian chuyển tuyến: <Text style={{ fontWeight: '500' }}>{new Date(activeTrans.transferTime || activeTrans.createdAt || Date.now()).toLocaleString('vi-VN')}</Text>
+                    - Thời gian chuyển tuyến: <Text style={{ fontWeight: '500' }}>{dateTimeOrBlank(activeTrans.transferTime || activeTrans.createdAt)}</Text>
                   </Text>
 
                   <View style={{ flexDirection: 'row', gap: 20, marginTop: 4 }}>
                     <Text style={{ fontSize: 13, color: '#334155', flex: 1.5 }}>
-                      - Phương tiện vận chuyển: <Text style={{ fontWeight: '500' }}>{activeTrans.transportation || 'Xe cấp cứu'}</Text>
+                      - Phương tiện vận chuyển: <Text style={{ fontWeight: '500' }}>{orBlank(activeTrans.transportation)}</Text>
                     </Text>
                     {activeTrans.escort ? (
                       <Text style={{ fontSize: 13, color: '#334155', flex: 1 }}>
@@ -885,13 +884,13 @@ const DischargeTransferTab = ({
                   <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155' }}>Y BÁC SĨ ĐIỀU TRỊ</Text>
                   <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký, ghi rõ họ tên)</Text>
                   <Text style={{ fontSize: 11, color: '#1E3A8A', fontWeight: 'bold', marginTop: 25 }}>
-                    {activeTrans.doctor_name || 'Bác sĩ điều trị'}
+                    {orBlank(activeTrans.doctor_name)}
                   </Text>
                 </View>
 
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
-                    Ngày {new Date(activeTrans.recorded_at || activeTrans.createdAt || Date.now()).getDate()} tháng {new Date(activeTrans.recorded_at || activeTrans.createdAt || Date.now()).getMonth() + 1} năm {new Date(activeTrans.recorded_at || activeTrans.createdAt || Date.now()).getFullYear()}
+                    Ngày {dayMonthYear(activeTrans.recorded_at || activeTrans.createdAt)}
                   </Text>
                   <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#334155', marginTop: 2 }}>ĐẠI DIỆN CƠ SỞ KCB</Text>
                   <Text style={{ fontSize: 9, color: '#64748B', fontStyle: 'italic' }}>(Ký tên, đóng dấu)</Text>
@@ -951,16 +950,16 @@ const DischargeTransferTab = ({
                           • Loại u: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{modalPackageData.aiReport.tumorType || 'N/A'}</Text>
                         </Text>
                         <Text style={styles.modalLine}>
-                          • Phân độ WHO: <Text style={{ fontWeight: '700', color: '#DC2626' }}>Grade {modalPackageData.aiReport.whoGrade || 'IV'}</Text>
+                          • Phân độ WHO: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{modalPackageData.aiReport.whoGrade ? `Grade ${modalPackageData.aiReport.whoGrade}` : '—'}</Text>
                         </Text>
                         <Text style={styles.modalLine}>
                           • Thể tích u ước tính: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{modalPackageData.aiReport.volumeCm3 || 'N/A'} cm³</Text>
                         </Text>
                         <Text style={styles.modalLine}>
-                          • Vị trí giải phẫu: <Text style={{ fontWeight: '500', color: '#334155' }}>{modalPackageData.aiReport.location || 'Bán cầu não'}</Text>
+                          • Vị trí giải phẫu: <Text style={{ fontWeight: '500', color: '#334155' }}>{orDash(modalPackageData.aiReport.location)}</Text>
                         </Text>
                         <Text style={styles.modalLine}>
-                          • Độ tin cậy AI: <Text style={{ fontWeight: '700', color: '#16A34A' }}>{Math.round((modalPackageData.aiReport.confidence || 0.95) * 100)}%</Text>
+                          • Độ tin cậy AI: <Text style={{ fontWeight: '700', color: '#16A34A' }}>{typeof modalPackageData.aiReport.confidence === 'number' ? `${Math.round(modalPackageData.aiReport.confidence * 100)}%` : '—'}</Text>
                         </Text>
                       </View>
                     </View>
@@ -975,13 +974,13 @@ const DischargeTransferTab = ({
                       </Text>
                     </View>
                     <Text style={styles.modalLine}>
-                      • File nén: <Text style={{ fontWeight: '500' }}>{modalPackageData.dicom?.filename || 'DICOM_Series.zip'}</Text>
+                      • File nén: <Text style={{ fontWeight: '500' }}>{orDash(modalPackageData.dicom?.filename)}</Text>
                     </Text>
                     <Text style={styles.modalLine}>
                       • Dung lượng: <Text style={{ fontWeight: '500' }}>{modalPackageData.dicom?.sizeBytes ? `${(modalPackageData.dicom.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : 'Khoảng 45 MB'}</Text>
                     </Text>
                     <Text style={styles.modalLine}>
-                      • Study UID: <Text style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748B' }}>{modalPackageData.dicom?.studyInstanceUID || '1.2.840.113619.2.xxx'}</Text>
+                      • Study UID: <Text style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748B' }}>{orDash(modalPackageData.dicom?.studyInstanceUID)}</Text>
                     </Text>
                   </View>
 

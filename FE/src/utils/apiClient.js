@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../constants/config.js';
+import { request } from '../api/client.js';
 import { goToPortalLogin } from './navigationRef.js';
 
 async function getToken() {
@@ -32,57 +33,12 @@ async function clearToken() {
  *
  * - Reads base URL from Config.API_URL
  * - Automatically attaches Authorization: Bearer <token> if a token is stored
- * - On 401: clears token and navigates to "Login" (no throw)
+ * - On 401: thử làm mới token (refresh); hết phiên thì xóa token, về màn đăng nhập và ném lỗi
  * - On non-2xx (non-401): throws Error with message from response body
  * - On 2xx: returns parsed JSON
  */
 export async function apiRequest(path, options) {
-  const url = `${Config.API_URL}${path}`;
-
-  const token = await getToken();
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options?.headers),
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    cache: 'no-store', // [FIX 0014] tránh 304 conditional GET bị coi là lỗi
-  });
-
-  if (response.status === 401) {
-    await clearToken();
-    goToPortalLogin();
-    // Resolve silently — caller does not need to handle this case
-    return undefined;
-  }
-
-  if (!response.ok) {
-    // [FIX 0014] Gắn status + code để caller phân biệt 429 với 401/403
-    let message = 'Request failed';
-    let code;
-    try {
-      const body = await response.json();
-      if (body?.message) {
-        message = body.message;
-      }
-      if (body?.code) {
-        code = body.code;
-      }
-    } catch {
-      // ignore JSON parse errors — keep default message
-    }
-    const err = new Error(message);
-    err.status = response.status;
-    if (code) err.code = code;
-    throw err;
-  }
-
-  return response.json();
+  // Dùng chung request() của api/client.js: 401 thì thử làm mới token trước khi đăng xuất,
+  // gửi header X-Client-Platform, lỗi có err.status / err.code như các màn khác.
+  return request(path, options || {});
 }

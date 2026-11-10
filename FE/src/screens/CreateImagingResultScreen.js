@@ -43,23 +43,23 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
 
   // Pre-fill fields from visit if technician launched this screen from the queue
-  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '26025699';
+  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '';
   const initialPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || '';
-  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || 'Nam';
-  const initialAddress = visit?.patientId?.profile?.address || '., Phường Hòa Xuân, Tp Đà Nẵng';
-  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)';
+  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || ''; // chưa có thì để trống
+  const initialAddress = visit?.patientId?.profile?.address || patientInfo?.address || ''; // chưa có thì để trống
+  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ (MRI) sọ não';
 
   const [medicalId, setMedicalId] = useState(initialMedicalId);
   const [patientName, setPatientName] = useState(initialPatientName);
-  const [birthYear, setBirthYear] = useState('1995');
+  const [birthYear, setBirthYear] = useState(String(visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || ''));
   const [gender, setGender] = useState(initialGender);
   const [address, setAddress] = useState(initialAddress);
   const [imagingType, setImagingType] = useState('MRI');
   const [procedure, setProcedure] = useState(initialProcedure);
-  const [technique, setTechnique] = useState('Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.');
+  const [technique, setTechnique] = useState(''); // KTV ghi kỹ thuật thực tế của ca chụp
   const [findings, setFindings] = useState('');
   const [conclusion, setConclusion] = useState('');
-  const [radiologist, setRadiologist] = useState('Bác sĩ Gia Huy');
+  const [radiologist, setRadiologist] = useState(''); // tên bác sĩ CĐHA thật, bắt buộc nhập
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -148,14 +148,13 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     setImages(images.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // Simulated OCR & Fill function
+  // Điền thông tin hành chính có thật từ lượt khám/hồ sơ bệnh nhân. Không bịa mô tả, kết luận hay thông tin bệnh nhân.
   const handleOcrFill = () => {
-    // [BUG-KTV-07 FIX]: Ưu tiên bảo toàn thông tin bệnh nhân thực từ lượt khám, không ghi đè dữ liệu giả
-    const realMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || medicalId || 'BN-26025699';
-    const realPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || patientName || 'Bệnh nhân';
-    const realBirthYear = (visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || birthYear || '1995').toString();
-    const realGender = visit?.patientId?.profile?.gender || patientInfo?.gender || gender || 'Nam';
-    const realAddress = visit?.patientId?.profile?.address || patientInfo?.address || address || 'Đà Nẵng';
+    const realMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || medicalId || '';
+    const realPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || patientName || '';
+    const realBirthYear = String(visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || birthYear || '');
+    const realGender = visit?.patientId?.profile?.gender || patientInfo?.gender || gender || '';
+    const realAddress = visit?.patientId?.profile?.address || patientInfo?.address || address || '';
 
     setMedicalId(realMedicalId);
     setPatientName(realPatientName);
@@ -163,24 +162,8 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     setGender(realGender);
     setAddress(realAddress);
     setImagingType('MRI');
-    if (!procedure) setProcedure('Chụp cộng hưởng từ sọ não (MRI) có cản từ');
-    if (!technique) setTechnique('Chụp cộng hưởng từ sọ não đa xung, lát cắt mỏng qua các bể sọ và nhu mô não thất.');
-    setFindings(findings || 'Phát hiện khối u vùng thùy trán bên trái, kích thước tương đương 15x18mm. Khối u có ranh giới rõ ràng, bắt thuốc cản từ mạnh và đồng nhất sau tiêm, gây phù nề nhẹ xung quanh.');
-    setConclusion(conclusion || 'U màng não thùy trán trái (Meningioma) lành tính. Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.');
-    if (!radiologist) setRadiologist('Bs. Chẩn Đoán Hình Ảnh');
-
-    // Clear validation errors when template fields are filled
-    setErrors(prev => ({
-      ...prev,
-      medicalId: null,
-      patientName: null,
-      procedure: null,
-      findings: null,
-      conclusion: null,
-      radiologist: null,
-    }));
-
-    showAlert('Điền mẫu OCR', 'Đã tự động trích xuất và điền nội dung mô tả hình ảnh & kết luận từ mẫu scan.');
+    setErrors(prev => ({ ...prev, medicalId: realMedicalId ? null : prev.medicalId, patientName: realPatientName ? null : prev.patientName }));
+    showAlert('Đã điền thông tin bệnh nhân', 'Đã điền thông tin hành chính từ lượt khám. Mô tả hình ảnh và kết luận do Bác sĩ CĐHA ghi.');
   };
 
   // ── Điều hướng sang màn hình AI chuyên biệt ──
@@ -227,10 +210,10 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         gender,
         address,
         orderDate: new Date(),
-        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ chỉ định',
-        orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
+        orderingDoctor: visit?.doctorId?.profile?.name || '',
+        orderingDepartment: '', // không suy khoa từ loại chụp
         medicalRecordNumber: generatedMrn,
-        diagnosis: visit?.reason || 'Theo dõi u não',
+        diagnosis: visit?.reason || '',
         procedure,
         technique,
         findings,
@@ -517,8 +500,8 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 <TouchableOpacity style={L.toolBtn} onPress={handleOcrFill} dataSet={{ hover: 'tint' }}>
                   <View style={[L.toolIcon, { backgroundColor: 'rgba(111,221,178,0.16)' }]}><Zap size={16} color="#6FDDB2" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={L.toolBtnTitle}>Điền thử bằng OCR</Text>
-                    <Text style={L.toolBtnHint}>Giả lập trích xuất từ phiếu scan</Text>
+                    <Text style={L.toolBtnTitle}>Điền thông tin bệnh nhân</Text>
+                    <Text style={L.toolBtnHint}>Lấy từ lượt khám, không điền kết luận</Text>
                   </View>
                 </TouchableOpacity>
                 <TouchableOpacity style={[L.toolBtn, images.length === 0 && { opacity: 0.5 }]} onPress={handleAiAnalysis} disabled={images.length === 0} dataSet={{ hover: 'tint' }}>

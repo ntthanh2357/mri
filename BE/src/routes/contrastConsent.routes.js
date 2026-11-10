@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect, checkRole } from "../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../middlewares/auth.middleware.js";
 import {
   submitScreeningChecklist,
   overrideChecklistRisk,
@@ -9,6 +9,7 @@ import {
 
 const router = Router();
 router.use(protect);
+router.use(denyPlatformAdmin); // module lâm sàng: tài khoản nền tảng không truy cập
 
 router.post(
   "/screening",

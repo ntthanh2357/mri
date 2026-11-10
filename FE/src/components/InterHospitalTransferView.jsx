@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { can } from '../constants/clinicalPermissions';
 import {
   Send,
   CheckCircle2,
@@ -49,7 +50,7 @@ export default function InterHospitalTransferView({ currentUser }) {
   const [detailModalItem, setDetailModalItem] = useState(null);
 
   const isReceptionistOrStaff = useMemo(() => {
-    return ['receptionist', 'doctor', 'department_head', 'admin', 'hospital_admin'].includes(currentUser?.role);
+    return can(currentUser?.role, 'transferSendEmail');
   }, [currentUser?.role]);
 
   // Fetch danh sách hồ sơ chuyển viện
@@ -401,7 +402,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                     Xem chi tiết gói
                   </button>
 
-                  {isDraft && (
+                  {isDraft && can(currentUser?.role, 'transferCancel') && (
                     <button
                       onClick={() => handleCancelTransfer(item._id)}
                       disabled={actionLoading}
@@ -492,7 +493,7 @@ export default function InterHospitalTransferView({ currentUser }) {
                     <strong>Chẩn đoán:</strong> {sendModalItem.diagnosis}
                   </p>
                   <p className="text-slate-600">
-                    <strong>Gói tệp đính kèm:</strong> Báo cáo chẩn đoán AI (HTML), File DICOM nén, Mô hình 3D u não (.gltf), 5 ảnh cắt lớp quan trọng.
+                    <strong>Gói tệp đính kèm:</strong> Báo cáo AI hỗ trợ sàng lọc (HTML), File DICOM nén, Mô hình 3D u não (.gltf), 5 ảnh cắt lớp quan trọng.
                   </p>
                 </div>
 

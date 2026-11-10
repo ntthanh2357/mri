@@ -14,6 +14,7 @@ const IMG = {
 };
 export const LANDING_IMAGES = IMG;
 import { Reveal, CountUp, FloatingOrb } from '../ui/Motion';
+import { isFeatureEnabled } from '../../constants/featureScope';
 
 const isWeb = Platform.OS === 'web';
 const C = {
@@ -72,7 +73,7 @@ export const HeroIntro = ({ isDesktop, onExplore, onStart }) => (
     <Reveal>
       <View style={s.heroChip}>
         <View style={s.pingDot} dataSet={{ anim: 'ping' }} />
-        <Text style={s.heroChipText}>AI hỗ trợ chẩn đoán u não · trực 24/7</Text>
+        <Text style={s.heroChipText}>AI hỗ trợ sàng lọc u não · trực 24/7</Text>
       </View>
     </Reveal>
     <Reveal delay={120}>
@@ -132,11 +133,11 @@ const SERVICES = [
   { icon: Brain, color: C.blue, bg: C.blueLight, title: 'Chụp MRI sọ não', desc: 'Máy cộng hưởng từ 1.5T/3T, bảng kiểm an toàn bắt buộc trước buồng chụp và lưu trữ DICOM trên Mini-PACS.' },
   { icon: Sparkles, color: C.green, bg: C.greenLight, title: 'Phân tích AI tức thì', desc: 'Phân loại Glioma, Meningioma, Pituitary hoặc không có u kèm bản đồ nhiệt và vùng khoanh tổn thương.' },
   { icon: FileText, color: '#7C3AED', bg: '#F3EEFF', title: 'Bệnh án điện tử', desc: 'Hồ sơ EMR có phiên bản, ký số theo Thông tư 13/2025/TT-BYT và chia sẻ liên viện bằng mã QR.' },
-  { icon: HeartPulse, color: '#E11D48', bg: '#FFF0F3', title: 'Điều trị & nội trú', desc: 'Kê đơn có kiểm tra tương tác thuốc, sơ đồ giường Neuro-ICU và quy trình báo động cấp cứu.' },
+  { icon: HeartPulse, color: '#E11D48', bg: '#FFF0F3', title: 'Điều trị & nội trú', desc: isFeatureEnabled('beds') ? 'Kê đơn có kiểm tra tương tác thuốc, sơ đồ giường Neuro-ICU và quy trình báo động cấp cứu.' : 'Kê đơn có kiểm tra tương tác thuốc, phiếu chăm sóc và quy trình báo động cấp cứu.' },
 ];
 
 const STEPS = [
-  { icon: ClipboardList, title: 'Tiếp đón & BHYT', desc: 'Đăng ký lượt khám, khai báo thẻ BHYT và thanh toán bằng VietQR.' },
+  { icon: ClipboardList, title: isFeatureEnabled('bhyt') ? 'Tiếp đón & BHYT' : 'Tiếp đón & thu ngân', desc: isFeatureEnabled('bhyt') ? 'Đăng ký lượt khám, khai báo thẻ BHYT và thanh toán bằng VietQR.' : 'Đăng ký lượt khám và thanh toán bằng VietQR.' },
   { icon: Stethoscope, title: 'Khám & chỉ định', desc: 'Bác sĩ khám lâm sàng, đo sinh hiệu và ra y lệnh chụp MRI.' },
   { icon: ScanLine, title: 'Chụp MRI & AI', desc: 'Kỹ thuật viên chụp phim, AI phân tích ngay khi ảnh được tải lên.' },
   { icon: BadgeCheck, title: 'Ký duyệt & trả kết quả', desc: 'Bác sĩ đối chiếu, ký số và gửi kết quả về cổng bệnh nhân.' },
@@ -146,7 +147,7 @@ const ROLES = [
   { icon: User, title: 'Bệnh nhân', points: ['Xem phim MRI & kết luận đã ký', 'Tải báo cáo PDF, chia sẻ bằng QR', 'Sổ sức khỏe cá nhân'] },
   { icon: Stethoscope, title: 'Bác sĩ', points: ['Hàng chờ khám theo ưu tiên', 'Đối chiếu kết quả AI', 'Kê đơn an toàn & ký số EMR'] },
   { icon: ScanLine, title: 'Kỹ thuật viên', points: ['Bảng kiểm an toàn MRI', 'Nộp ảnh & DICOM lên Mini-PACS', 'Yêu cầu chụp lại, hủy ca'] },
-  { icon: Building2, title: 'Bệnh viện', points: ['Quản lý nhân sự & lịch trực', 'Sơ đồ giường, chuyển viện', 'Báo cáo doanh thu & BHYT'] },
+  { icon: Building2, title: 'Bệnh viện', points: ['Quản lý nhân sự & lịch trực', isFeatureEnabled('beds') ? 'Sơ đồ giường, chuyển viện' : 'Chuyển viện', isFeatureEnabled('bhyt') ? 'Báo cáo doanh thu & BHYT' : 'Báo cáo doanh thu'] },
 ];
 
 const AI_BARS = [
@@ -220,7 +221,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
         <View style={s.container}>
           <SectionHead
             eyebrow="DỊCH VỤ"
-            title="Toàn bộ hành trình chẩn đoán u não trên một nền tảng"
+            title="Toàn bộ hành trình khám, sàng lọc và điều trị u não trên một nền tảng"
             sub="Mỗi bước được số hóa và kết nối, giúp người bệnh được chẩn đoán nhanh hơn và bác sĩ có đủ thông tin để ra quyết định."
           />
           <View style={s.grid}>

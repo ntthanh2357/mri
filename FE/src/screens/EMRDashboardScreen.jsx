@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK } from '../utils/paperFields';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -71,9 +72,15 @@ import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
 import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
 import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
+import { isFeatureEnabled } from '../constants/featureScope';
+import { can, isPlatformAdminRole, PLATFORM_ADMIN_NOTICE } from '../constants/clinicalPermissions';
 
 const EMRDashboardScreen = ({ navigation, route }) => {
-  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
+  // Quản lý giường ngoài phạm vi đồ án (constants/featureScope.js): tab 'beds' quy về hồ sơ bệnh án
+  const scopedTab = (tab) => (tab === 'beds' && !isFeatureEnabled('beds') ? 'records' : tab);
+  // Tài khoản nền tảng (admin, system_admin) không xem dữ liệu lâm sàng, kể cả hồ sơ chuyển viện
+  const isPlatformAdmin = (u) => isPlatformAdminRole(u?.role);
+  const [activeTab, setActiveTab] = useState(scopedTab(route?.params?.tab || 'records'));
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -92,21 +99,22 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (route?.params?.tab) {
-      setActiveTab(route.params.tab);
+      setActiveTab(scopedTab(route.params.tab));
     }
   }, [route?.params?.tab]);
 
   const handleSignRecord = async (record) => {
-    if (!confirm(`Xác nhận ký số điện tử cho hồ sơ bệnh án của bệnh nhân ${record.patientName}? Hồ sơ sau khi ký sẽ được xác thực toàn vẹn chống sửa đổi theo quy định Bộ Y Tế.`)) return;
+    if (!confirm(`Xác nhận ký hồ sơ bệnh án của bệnh nhân ${record.patientName}? Sau khi ký, hồ sơ bị khóa, chỉ bổ sung bằng phụ lục. Hệ thống ghi mã băm toàn vẹn SHA-256, chưa dùng chứng thư số của tổ chức chứng thực (CA).`)) return;
     try {
       const res = await apiRequest(`/emr/records/${record._id}/sign`, {
         method: 'PUT',
       });
-      if (res && res.success) {
-        Alert.alert('Thành công', 'Đã ký số hồ sơ bệnh án điện tử thành công!');
+      // BE trả { status: "success" } — trước đây kiểm tra res.success nên ký xong vẫn báo lỗi
+      if (res && (res.success || res.status === 'success')) {
+        Alert.alert('Thành công', 'Đã ký hồ sơ bệnh án (mã băm toàn vẹn nội bộ).');
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể ký số bệnh án.');
+        Alert.alert('Lỗi', res?.message || 'Không thể ký bệnh án.');
       }
     } catch (err) {
       Alert.alert('Lỗi', err.message || 'Ký số thất bại.');
@@ -122,8 +130,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   };
 
   const handleCreateAddendum = async () => {
-    if (!addendumTitle.trim() || !addendumContent.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
+    if (!addendumTitle.trim() || !addendumReason.trim() || !addendumContent.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề, lý do bổ sung và nội dung phụ lục.');
       return;
     }
     setSubmittingAddendum(true);
@@ -132,16 +140,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
         method: 'POST',
         body: JSON.stringify({
           title: addendumTitle.trim(),
-          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 13/2025/TT-BYT',
+          reason: addendumReason.trim(),
           content: addendumContent.trim(),
         }),
       });
-      if (res && res.success) {
+      if (res && (res.success || res.status === 'success')) {
         Alert.alert('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
         setAddendumModal(false);
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể tạo phụ lục.');
+        Alert.alert('Lỗi', res?.message || 'Không thể tạo phụ lục.');
       }
     } catch (err) {
       Alert.alert('Lỗi', err.message || 'Tạo phụ lục thất bại.');
@@ -193,21 +201,22 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   // Fetch drugs for autocomplete
   useEffect(() => {
+    if (!can(localUser?.role, 'prescriptionCreate')) return; // chỉ form kê đơn dùng danh mục thuốc
     get('/api/drugs').then(res => {
       if(res && res.success) setAvailableDrugs(res.data?.drugs || []);
     }).catch(err => console.log('Error fetching drugs:', err));
-  }, []);
+  }, [localUser?.role]);
   
   // Fetch imaging
   useEffect(() => {
-    if (selectedRecord && selectedRecord.patientId) {
+    if (selectedRecord && selectedRecord.patientId && can(localUser?.role, 'imagingStaffRead')) {
       get(`/api/v1/imaging/patient/${selectedRecord.patientId}`)
         .then(res => {
           if (res && res.success) setImagingResults(res.data || []);
         })
         .catch(err => console.log('Error fetching imaging:', err));
     }
-  }, [selectedRecord]);
+  }, [selectedRecord, localUser?.role]);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -235,15 +244,17 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   };
 
   // Fetch care sheets, consultations, consents for a specific record
-  const fetchRecordDetails = async (recordId) => {
+  const fetchRecordDetails = async (recordId, patientId = selectedRecord?.patientId) => {
     setLoading(true);
     try {
+      const role = localUser?.role;
+      const ifAllowed = (perm, url) => (can(role, perm) ? apiRequest(url).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }));
       const [careData, consultData, consentData, versionData, rxData] = await Promise.all([
-        apiRequest(`/emr/records/${recordId}/care-sheets`).catch(() => ({ data: [] })),
-        apiRequest(`/emr/records/${recordId}/consultations`).catch(() => ({ data: [] })),
-        apiRequest(`/emr/records/${recordId}/consents`).catch(() => ({ data: [] })),
-        apiRequest(`/emr/records/${recordId}/versions`).catch(() => ({ data: [] })),
-        get(`/api/patients/${selectedRecord.patientId}/prescriptions`).catch(() => null),
+        ifAllowed('careRead', `/emr/records/${recordId}/care-sheets`),
+        ifAllowed('consultRead', `/emr/records/${recordId}/consultations`),
+        ifAllowed('consentRead', `/emr/records/${recordId}/consents`),
+        ifAllowed('versionsRead', `/emr/records/${recordId}/versions`),
+        patientId && can(role, 'prescriptionCreate') ? get(`/api/patients/${patientId}/prescriptions`).catch(() => null) : null,
       ]);
       setCareSheets(careData.data || []);
       setConsultations(consultData.data || []);
@@ -264,17 +275,20 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   // Số liệu banner (hồ sơ / nội trú / chưa ký) — tải nhẹ 1 lần, không ảnh hưởng nội dung tab đang mở
   const [bannerRecords, setBannerRecords] = useState([]);
   useEffect(() => {
+    if (!localUser || isPlatformAdmin(localUser)) return;
     get('/emr/records').then((res) => { if (Array.isArray(res?.data)) setBannerRecords(res.data); }).catch(() => {});
-  }, []);
+  }, [localUser?.role]);
 
   // Load records when tab changes
   useEffect(() => {
+    // Chờ biết vai trò (đọc từ bộ nhớ đệm ngay khi mở màn) để tài khoản nền tảng không gọi API bệnh án
+    if (!localUser || isPlatformAdmin(localUser)) return;
     if (activeTab === 'records') {
       fetchRecords();
     } else if (selectedRecord) {
       fetchRecordDetails(selectedRecord._id);
     }
-  }, [activeTab]);
+  }, [activeTab, localUser?.role]);
 
   // Create new record
   const handleCreateRecord = async (formData) => {
@@ -394,24 +408,41 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     serverMatchIds.includes(r.patientId)
   );
 
-  const isDoctorLike = ['doctor', 'department_head', 'admin'].includes(localUser?.role);
-  const emrTabs = [
-    localUser?.role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
-    { key: 'records', label: 'Hồ sơ bệnh án' },
-    { key: 'care', label: 'Phiếu chăm sóc' },
+  const isDoctorLike = ['doctor', 'department_head'].includes(localUser?.role);
+  const role = localUser?.role;
+  // Tab chỉ hiện khi vai trò được BE cho phép (constants/clinicalPermissions.js); tài khoản nền tảng không có tab nào
+  const emrTabs = isPlatformAdmin(localUser) ? [] : [
+    role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
+    can(role, 'emrRead') && { key: 'records', label: 'Hồ sơ bệnh án' },
+    can(role, 'careRead') && { key: 'care', label: 'Phiếu chăm sóc' },
     isDoctorLike && { key: 'consult', label: 'Hội chẩn' },
     isDoctorLike && { key: 'consent', label: 'Giấy cam đoan' },
     isDoctorLike && { key: 'prescriptions', label: 'Kê đơn thuốc' },
-    { key: 'versions', label: 'Lịch sử sửa đổi' },
-    (isDoctorLike || localUser?.role === 'radiologist') && { key: 'imaging', label: 'Phim MRI & CT' },
-    { key: 'beds', label: 'Giường bệnh' },
-    { key: 'transfers', label: 'Chuyển viện' },
+    can(role, 'versionsRead') && { key: 'versions', label: 'Lịch sử sửa đổi' },
+    (isDoctorLike || role === 'radiologist') && { key: 'imaging', label: 'Phim MRI & CT' },
+    isFeatureEnabled('beds') && { key: 'beds', label: 'Giường bệnh' },
+    can(role, 'transfersRead') && { key: 'transfers', label: 'Chuyển viện' },
   ].filter(Boolean);
+  const allowedTabKeys = emrTabs.map((t) => t.key).join(',');
+  useEffect(() => {
+    // mở bằng đường dẫn tới tab vai trò không được dùng → chuyển về tab đầu tiên được phép
+    if (localUser && allowedTabKeys && !allowedTabKeys.split(',').includes(activeTab)) setActiveTab(allowedTabKeys.split(',')[0]);
+  }, [localUser, allowedTabKeys, activeTab]);
 
   const tabMeta = EMR_TAB_META[activeTab] || EMR_TAB_META.records;
   const statRecords = records.length ? records : bannerRecords;
   const inpatientCount = statRecords.filter((r) => r.admissionType === 'Nội trú').length;
   const unsignedCount = statRecords.filter((r) => r.signStatus === 'Chưa duyệt').length;
+
+  if (isPlatformAdmin(localUser)) {
+    return (
+      <ResponsiveLayout navigation={navigation} activeRoute="EMRDashboard">
+        <View style={{ padding: 24 }}>
+          <Text style={{ fontSize: 15, color: '#334155' }}>{PLATFORM_ADMIN_NOTICE}</Text>
+        </View>
+      </ResponsiveLayout>
+    );
+  }
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
@@ -478,7 +509,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                     }}
                     onViewRecord={(record) => {
                       setSelectedRecord(record);
-                      fetchRecordDetails(record._id);
+                      fetchRecordDetails(record._id, record.patientId);
                       if (localUser?.role === 'nurse') {
                         navigation.navigate('NursePatientDetail', {
                           patient: record,
@@ -491,6 +522,9 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                     onRefresh={fetchRecords}
                     onSign={handleSignRecord}
                     onAddendum={handleOpenAddendum}
+                    canCreate={can(localUser?.role, 'emrCreate')}
+                    canSign={can(localUser?.role, 'emrSign')}
+                    canAddendum={can(localUser?.role, 'emrAddendum')}
                   />
                 )}
 
@@ -498,6 +532,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   <CareTab
                     careSheets={careSheets}
                     selectedRecord={selectedRecord}
+                    canCreate={can(localUser?.role, 'careCreate')}
                     onNewCare={() => {
                       setModalType('newCareSheet');
                       setIsModalVisible(true);
@@ -543,6 +578,10 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                     availableDrugs={availableDrugs}
                     selectedRecord={selectedRecord}
                     onNewPrescription={() => {
+                      if (!selectedRecord) {
+                        Alert.alert('Chưa chọn bệnh án', 'Chọn một hồ sơ ở tab "Hồ sơ bệnh án" trước khi kê đơn.');
+                        return;
+                      }
                       setModalType('newPrescription');
                       setIsModalVisible(true);
                     }}
@@ -557,7 +596,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   />
                 )}
 
-                {activeTab === 'beds' && (
+                {activeTab === 'beds' && isFeatureEnabled('beds') && (
                   <HospitalBedManagementView currentUser={localUser} />
                 )}
 
@@ -1202,7 +1241,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.brandNavy, marginBottom: 4 }}>
                 PHIẾU CHỈ ĐỊNH DỊCH VỤ
               </Text>
-              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 16 }}>SỞ Y TẾ: {SHORT_BLANK} • CƠ SỞ KCB: {PAPER_BLANK}</Text>
 
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                 {['Thường', 'Cấp Cứu'].map(p => (
@@ -1289,7 +1328,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.brandNavy, marginBottom: 4 }}>
                 PHIẾU THU VIỆN PHÍ
               </Text>
-              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 12 }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 12 }}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
 
               {/* Patient info summary */}
               <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -1411,7 +1450,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 };
 
 // Tab Components
-const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum }) => {
+const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum, canCreate, canSign, canAddendum }) => {
 
   return (
     <View style={styles.tabContainer}>
@@ -1424,9 +1463,11 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
           <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
             <RefreshCw size={14} color="#64748B" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={onNewRecord}>
-            <Text style={styles.actionButtonText}>+ Thêm mới</Text>
-          </TouchableOpacity>
+          {canCreate && (
+            <TouchableOpacity style={styles.actionButton} onPress={onNewRecord}>
+              <Text style={styles.actionButtonText}>+ Thêm mới</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1455,6 +1496,8 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
               onPress={() => onViewRecord(record)}
               onSign={onSign}
               onAddendum={onAddendum}
+              canSign={canSign}
+              canAddendum={canAddendum}
             />
           ))
         )}
@@ -1463,7 +1506,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
   );
 };
 
-const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
+const RecordCard = ({ record, onPress, onSign, onAddendum, canSign, canAddendum }) => (
   <View style={styles.card}>
     <TouchableOpacity onPress={onPress}>
       <View style={styles.cardHeader}>
@@ -1492,7 +1535,7 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
 
     {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 13/2025 */}
     <View style={styles.cardActions}>
-      {record.signStatus !== 'Đã ký số' ? (
+      {record.signStatus !== 'Đã ký số' ? (canSign &&
         <TouchableOpacity
           style={styles.signBtn}
           onPress={() => onSign && onSign(record)}
@@ -1506,27 +1549,29 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
           <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>Đã ký số</Text>
         </View>
       )}
-      <TouchableOpacity
+      {canAddendum && (<TouchableOpacity
         style={styles.addendumBtn}
         onPress={() => onAddendum && onAddendum(record)}
         accessibilityRole="button"
       >
-        <Text style={styles.addendumBtnText}>Lập phụ lục (TT 46)</Text>
-      </TouchableOpacity>
+        <Text style={styles.addendumBtnText}>Lập phụ lục</Text>
+      </TouchableOpacity>)}
     </View>
   </View>
 );
 
-const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
+const CareTab = ({ careSheets, selectedRecord, onNewCare, canCreate }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <FileText size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Phiếu chăm sóc Điều dưỡng</Text>
       </View>
-      <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
-        <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
-      </TouchableOpacity>
+      {canCreate && (
+        <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
+          <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
+        </TouchableOpacity>
+      )}
     </View>
 
     {!selectedRecord ? (
@@ -2041,7 +2086,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
 };
 
 // Modal Component
-const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent }) => {
+const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent, onCreatePrescription, availableDrugs }) => {
   return (
     <Modal
       animationType="fade"
@@ -2070,12 +2115,12 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     patientId: '',
     patientName: '',
-    gender: 'Nam',
+    gender: '',
     age: '',
     bhytNumber: '',
     admissionType: 'Ngoại trú',
     department: 'Khoa Ung Thư Não',
-    paymentMethod: 'BHYT',
+    paymentMethod: '',
     doctorInCharge: '',
     diagnosis: '',
     treatmentPlan: '',
@@ -2086,27 +2131,13 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc!');
       return;
     }
-    onSubmit({
-      ...formData,
-      age: Number(formData.age),
-    });
+    // Ô giới tính / thanh toán để trống thì không gửi (BE để trống giới tính, thanh toán theo mặc định của viện)
+    const { bhytNumber, ...payload } = formData;
+    if (!String(payload.gender || '').trim()) delete payload.gender;
+    if (!String(payload.paymentMethod || '').trim()) delete payload.paymentMethod;
+    onSubmit({ ...payload, age: Number(formData.age) });
   };
 
-  const handleOcrFill = () => {
-    setFormData({
-      patientId: 'PT-' + Math.floor(1000 + Math.random() * 9000),
-      patientName: 'Lê Trần Gia Huy',
-      gender: 'Nam',
-      age: '48',
-      admissionType: 'Nội trú',
-      department: 'Khoa Ung Thư Não',
-      paymentMethod: 'BHYT',
-      doctorInCharge: 'BS. CKII Nguyễn Thế Thành',
-      diagnosis: 'U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải',
-      treatmentPlan: 'Chỉ định phẫu thuật mở sọ cắt u vi phẫu dưới định vị Neuronavigation, sau mổ chuyển Neuro-ICU theo dõi ICP và lập phác đồ Stupp (Hóa xạ trị kết hợp Temozolomide).',
-    });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin bệnh án mẫu Khoa Ung Thư Não!');
-  };
 
   return (
     <View style={styles.formContainer}>
@@ -2117,10 +2148,6 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
-        </TouchableOpacity>
         <FormField
           label="Mã bệnh nhân"
           placeholder="VD: PT-1234"
@@ -2161,7 +2188,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         />
         <FormField
           label="Phương thức thanh toán"
-          placeholder="BHYT/Viện phí/Dịch vụ"
+          placeholder={isFeatureEnabled('bhyt') ? 'BHYT/Viện phí/Dịch vụ' : 'Viện phí/Dịch vụ (để trống nếu chưa rõ)'}
           value={formData.paymentMethod}
           onChangeText={(text) => setFormData({ ...formData, paymentMethod: text })}
         />
@@ -2283,26 +2310,6 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
     onSubmit(payload);
   };
 
-  const handleOcrFill = () => {
-    // Simulate realistic post-op cranial surgery care sheet
-    setCareLevel('1'); setPulse('78'); setBloodPressure('125/80'); setTemperature('36.8');
-    setRespiratoryRate('18'); setSpo2('98'); setNurse('Đd. Lê Thị Hoa');
-    setProgressNotes('Bệnh nhân tỉnh táo (GCS 14đ E4V4M6), hậu phẫu mở sọ cắt u não ngày thứ 2, đồng tử 2 bên đều 2mm phản xạ ánh sáng tốt (+), vết mổ khô, dẫn lưu EVD ra 40ml dịch não tủy hồng nhạt/8h.');
-    setCareActions('Đầu cao 30° giảm phù não, thay băng vô trùng vết mổ, sát trùng chân dẫn lưu EVD, tiêm Dexamethasone 4mg TM theo y lệnh, truyền Mannitol 20% 250ml/30 phút, theo dõi tri giác và áp lực nội sọ mỗi 2h.');
-    // GCS 14 = E4V4M6
-    setGcsEye('4'); setGcsVerbal('4'); setGcsMotor('6');
-    // Pupils
-    setPupilLeftSize('2'); setPupilRightSize('2'); setPupilLeftReflex('+'); setPupilRightReflex('+'); setPupilShape('Tròn đều 2 bên');
-    // Drainage
-    setDrainageSite('EVD - Dẫn lưu não thất ngoài'); setDrainageVolume('40'); setDrainageColor('Hồng nhạt'); setDrainageCondition('Chân ống khô ráo, băng dính cố định tốt, không rỉ dịch');
-    // Fluid Infusions
-    setFluidInfusions([
-      { fluidName: 'Mannitol 20%', volume: '250', rate: '40 giọt/phút', status: 'đã hoàn thành' },
-      { fluidName: 'NaCl 0.9%', volume: '500', rate: '20 giọt/phút', status: 'đang truyền' },
-      { fluidName: 'Dexamethasone 4mg + NaCl', volume: '100', rate: 'Tiêm chậm TM', status: 'đã hoàn thành' },
-    ]);
-    Alert.alert('Giả lập OCR', '✅ Đã tự động điền đầy đủ phiếu chăm sóc hậu phẫu u não (GCS, đồng tử, EVD, truyền dịch)!');
-  };
 
   const REFLEX_OPTIONS = ['+', 'chậm', '-'];
   const FLUID_STATUSES = ['đang truyền', 'đã hoàn thành', 'tạm dừng'];
@@ -2316,10 +2323,6 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động - Hậu phẫu U Não (Simulated OCR)</Text>
-        </TouchableOpacity>
 
         {/* ── SECTION 1: Sinh hiệu ── */}
         <SectionLabel icon={HeartPulse} title="1. Sinh hiệu lâm sàng (Vital Signs)" color="#DC2626" />
@@ -2460,7 +2463,7 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
           {fluidInfusions.length === 0 ? (
             <View style={{ paddingVertical: 12, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
-                Chưa có chai truyền dịch nào. Bấm nút "+ Thêm dịch truyền" bên dưới để nhập hoặc bấm "Giả lập Quét tự động".
+                Chưa có chai truyền dịch nào. Bấm nút "+ Thêm dịch truyền" bên dưới để nhập.
               </Text>
             </View>
           ) : (
@@ -2549,16 +2552,6 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
     });
   };
 
-  const handleOcrFill = () => {
-    setFormData({
-      meetingDate: new Date().toISOString().split('T')[0],
-      participants: 'BS. CKII Nguyễn Thế Thành (Chủ trì KUTN), BS. Lê Văn Minh (CĐHA), ThS. BS. Phan Hoàng Đức (Phẫu thuật Thần kinh U Não)',
-      clinicalSummary: 'Bệnh nhân nam 48 tuổi, hội chứng tăng áp lực nội sọ (đau đầu dữ dội, nôn vọt, phù gai thị) kèm liệt nửa người trái tiến triển 3 tuần. MRI phát hiện khối u vùng trán - đỉnh phải kích thước 4.2 x 3.8 cm, phù não quanh u diện rộng, đè đẩy đường giữa 8mm.',
-      diagnosis: 'Hội chẩn u não đa mô thức: U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải / Phù não nặng có nguy cơ thoát vị não.',
-      treatmentConclusion: '1. Điều trị cấp cứu: Truyền Mannitol 20% + Dexamethasone 8mg tiêm tĩnh mạch giảm phù não. 2. Phẫu thuật: Mổ mở sọ vi phẫu cắt u tối đa có hỗ trợ kính vi phẫu và Neuronavigation. 3. Hậu phẫu chuyển Neuro-ICU theo dõi ICP. 4. Chuyển Khoa Hóa Xạ Trị U Não thực hiện Phác đồ Stupp (Temozolomide).',
-    });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền nội dung từ Biên bản hội chẩn U Não đa mô thức!');
-  };
 
   return (
     <View style={styles.formContainer}>
@@ -2569,10 +2562,6 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
-        </TouchableOpacity>
         <FormField
           label="Ngày hội chẩn"
           placeholder="YYYY-MM-DD"

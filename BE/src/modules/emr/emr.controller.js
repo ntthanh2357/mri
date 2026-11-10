@@ -104,8 +104,15 @@ export const createRecord = async (req, res) => {
       hivStatusNotes,
     } = req.body;
 
-    if (!patientId || !patientName || !age || !diagnosis || !doctorInCharge) {
-      return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin bắt buộc." });
+    // Chỉ bắt buộc định danh bệnh nhân. Tuổi, chẩn đoán, bác sĩ phụ trách để trống khi chưa có
+    // (điều dưỡng mở hồ sơ lúc đo sinh hiệu) — không điền giá trị giả. Ký số bắt buộc có chẩn đoán.
+    if (!patientId || !String(patientName || "").trim()) {
+      return res.status(400).json({ message: "Vui lòng điền mã và họ tên bệnh nhân." });
+    }
+    const hasAge = age !== undefined && age !== null && String(age).trim() !== "";
+    const ageValue = hasAge ? Number(age) : null;
+    if (hasAge && !(Number.isFinite(ageValue) && ageValue >= 0 && ageValue <= 150)) {
+      return res.status(400).json({ message: "Tuổi không hợp lệ." });
     }
 
     // [TT 13/2025/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
@@ -117,13 +124,13 @@ export const createRecord = async (req, res) => {
       patientId,
       patientName,
       gender,
-      age,
+      age: ageValue,
       admissionType,
       department,
       paymentMethod,
-      diagnosis,
+      diagnosis: diagnosis || "",
       treatmentPlan,
-      doctorInCharge,
+      doctorInCharge: doctorInCharge || "",
       status: "Đang điều trị",
       signStatus: "Chưa duyệt",
       retentionCategory,
@@ -174,7 +181,7 @@ export const checkBreakGlassRateLimit = (userId) => {
 // Helper thẩm định quyền truy cập hồ sơ bệnh án EMR/EHR đa cơ sở (Kèm cơ chế Break-Glass Cấp cứu)
 const canAccessMedicalRecord = async (record, user, breakGlassReason = "") => {
   if (!record || !user) return false;
-  if (user.role === "admin" || user.role === "system_admin") return true;
+  // Tài khoản nền tảng (admin, system_admin) không có quyền mặc định với bệnh án (RELEASE_v3.4).
 
   // Nếu là bệnh nhân: Bắt buộc phải là chính bệnh nhân của hồ sơ đó
   if (user.role === "patient") {
@@ -292,7 +299,13 @@ export const updateRecord = async (req, res) => {
       });
     }
 
-    const updates = req.body;
+    // Chỉ nhận trường nội dung lâm sàng. Trường do hệ thống quản lý (viện, bệnh nhân, trạng thái ký, chữ ký,
+    // phiên bản, hạn lưu trữ, phong tỏa pháp lý, phụ lục, y lệnh miệng, ngày ra viện) không nhận từ client.
+    const EDITABLE_FIELDS = ["patientName", "gender", "age", "admissionType", "department", "paymentMethod", "diagnosis",
+      "treatmentPlan", "status", "doctorInCharge", "allergies", "wardId", "whoGrade", "tumorType", "molecularMarkers",
+      "isClinicalTrial", "clinicalTrialProtocolId", "psychiatricNotes", "hivStatusNotes", "geneticNotes"];
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const updates = Object.fromEntries(EDITABLE_FIELDS.filter((k) => body[k] !== undefined).map((k) => [k, body[k]]));
     
     // So sánh sự khác biệt để ghi nhận phiên bản EMR
     const changes = {};
@@ -318,7 +331,7 @@ export const updateRecord = async (req, res) => {
       emrVersion = new EMRVersion({
         medicalRecordId: record._id,
         version: record.currentVersion || 1, // Lưu trạng thái hiện tại trước khi lên ver mới
-        modifiedBy: req.user?.profile?.name || "Bác sĩ điều trị",
+        modifiedBy: req.user?.profile?.name || req.user?.profile?.fullName || req.user?.email || "",
         changes,
       });
       updates.currentVersion = nextVersion;
@@ -729,23 +742,11 @@ export const signConsent = async (req, res) => {
     const signerName = req.user?.profile?.name || req.user?.name;
 
     // [SECURITY FIX]: Xác thực vai trò ký từ req.user.role đã được định danh, ngăn chặn mạo danh
-    if (["doctor", "department_head", "admin", "hospital_admin"].includes(userRole)) {
+    if (["doctor", "department_head", "hospital_admin"].includes(userRole)) {
       consent.doctorSigned = true;
-      consent.doctorSignature = signature || signerName || "Bs. Phụ trách";
+      consent.doctorSignature = signature || signerName || "";
       consent.signedAt = new Date();
-
-      // Lưu trữ thông số Chữ ký số y tế (PKI / SmartCard / Cloud HSM)
-      if (digitalSignature && typeof digitalSignature === "object") {
-        consent.digitalSignatureMetadata = {
-          signatureType: digitalSignature.signatureType || "pki_token",
-          certificateSerial: digitalSignature.certificateSerial || "",
-          signingAlgorithm: digitalSignature.signingAlgorithm || "SHA256withRSA",
-          timestampToken: digitalSignature.timestampToken || "",
-          caProvider: digitalSignature.caProvider || "VNPT-CA / Viettel-CA",
-          signedHash: digitalSignature.signedHash || "",
-          signedAt: new Date(),
-        };
-      }
+      // Chưa tích hợp CA: không ghi thông tin chứng thư số (client tự khai không kiểm chứng được).
     } else if (userRole === "patient") {
       // Bệnh nhân chỉ được ký cam đoan cho chính mình
       const isOwnConsent = (record.patientId && record.patientId.toString() === req.user.id.toString()) ||
@@ -841,25 +842,29 @@ export const signMedicalRecord = async (req, res) => {
     }
 
     const userRole = req.user?.role;
-    if (!["doctor", "admin", "hospital_admin"].includes(userRole)) {
-      return res.status(403).json({ message: "Chỉ bác sĩ điều trị hoặc quản trị viên mới có thẩm quyền ký số bệnh án." });
+    if (!["doctor", "department_head", "hospital_admin"].includes(userRole)) {
+      return res.status(403).json({ message: "Chỉ bác sĩ điều trị, trưởng khoa hoặc quản lý bệnh viện mới có thẩm quyền ký bệnh án." });
     }
-
-    const { certificateSerial, caProvider, signatureType, signingAlgorithm, timestampToken } = req.body || {};
+    if (!String(record.diagnosis || "").trim()) {
+      return res.status(400).json({ message: "Bệnh án chưa có chẩn đoán. Bác sĩ cần ghi chẩn đoán trước khi ký số." });
+    }
 
     // Tính toán mã băm toàn vẹn nội dung bệnh án lâm sàng
     const clinicalDigest = `${record._id}|${record.patientId}|${record.diagnosis}|${record.treatmentPlan}|${record.department}|${record.hospitalId}`;
     const signedHash = crypto.createHash("sha256").update(clinicalDigest).digest("hex");
 
+    // Hệ thống chưa tích hợp tổ chức chứng thực (CA): chỉ ghi mã băm toàn vẹn SHA-256 và tài khoản đã đăng nhập,
+    // không ghi số chứng thư, nhà cung cấp CA hay dấu thời gian (giống ký báo cáo CĐHA, P0-2).
+    // Thông tin chứng thư do client tự gửi không kiểm chứng được nên bị bỏ qua.
     record.signStatus = "Đã ký số";
     record.digitalSignatureMetadata = {
-      signatureType: signatureType || "cloud_hsm",
-      certificateSerial: certificateSerial || "VNPT_SMARTCA_2026_DEFAULT",
-      signingAlgorithm: signingAlgorithm || "SHA256withRSA",
-      timestampToken: timestampToken || "RFC3161_TSA_VERIFIED",
-      caProvider: caProvider || "VNPT-CA / Viettel-CA",
+      signatureType: "internal_hash",
+      certificateSerial: "",
+      signingAlgorithm: "SHA-256",
+      timestampToken: "",
+      caProvider: "",
       signedHash,
-      signedBy: req.user?.profile?.name || req.user?.name || "Bác sĩ điều trị",
+      signedBy: req.user?.profile?.name || req.user?.profile?.fullName || req.user?.name || req.user?.email || String(req.user?.id || ""),
       signedAt: new Date(),
     };
 
@@ -899,6 +904,10 @@ export const getPrivacyConsents = async (req, res) => {
     } else if (req.query.patientId) {
       filter.patientId = req.query.patientId;
     }
+    if (req.user.role !== 'patient' && !req.user.hospitalId) {
+      // Không trả cam kết của mọi viện cho tài khoản chưa gán viện
+      return res.status(403).json({ message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
     if (req.user.hospitalId) {
       filter.hospitalId = req.user.hospitalId;
     }
@@ -923,7 +932,11 @@ export const createPrivacyConsent = async (req, res) => {
   try {
     const { purposes, signerName, signerNationalId, signerRelationship, medicalId } = req.body;
     const patientId = req.user.role === 'patient' ? (req.user.id || req.user._id) : req.body.patientId;
-    let hospitalId = req.user.hospitalId || req.body.hospitalId;
+    if (req.user.role !== "patient" && !req.user.hospitalId) {
+      return res.status(403).json({ message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
+    // Nhân viên chỉ lập cam kết trong viện của mình (không nhận hospitalId từ body)
+    let hospitalId = req.user.role === "patient" ? (req.user.hospitalId || req.body.hospitalId) : req.user.hospitalId;
     // Tài khoản bệnh nhân không gắn viện: lấy viện từ lượt khám gần nhất của chính họ
     if (!hospitalId && req.user.role === "patient") {
       const latestVisit = await Visit.findOne({ patientId }).sort({ createdAt: -1 }).select("hospitalId").lean();
@@ -1004,8 +1017,8 @@ export const revokePrivacyConsent = async (req, res) => {
     if (req.user.role === 'patient' && consent.patientId.toString() !== (req.user.id || req.user._id).toString()) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết này." });
     }
-    if (!["admin", "system_admin", "patient"].includes(req.user.role)
-      && String(consent.hospitalId) !== String(req.user.hospitalId)) {
+    if (req.user.role !== "patient"
+      && (!req.user.hospitalId || String(consent.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết của bệnh viện khác." });
     }
 
@@ -1064,7 +1077,7 @@ export const approveTumorBoard = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy biên bản hội chẩn." });
     }
 
-    if (!["admin", "system_admin"].includes(req.user.role) && String(consultation.hospitalId) !== String(req.user.hospitalId)) {
+    if (!req.user.hospitalId || String(consultation.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Không có quyền phê duyệt hội chẩn của bệnh viện khác." });
     }
 
