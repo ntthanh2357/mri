@@ -40,37 +40,40 @@ const careSheetSchema = new Schema(
       type: Number, // SpO2 (%)
       required: true,
     },
-    // UC-NUR-04: Tri giác (Thang điểm hôn mê Glasgow - GCS)
+    // UC-NUR-04: Tri giác (Thang điểm hôn mê Glasgow - GCS), phản xạ đồng tử, dẫn lưu, truyền dịch.
+    // KHÔNG đặt giá trị mặc định: Mongoose áp mặc định cho trường lồng nhau cả khi không gửi, nên trước đây
+    // mọi phiếu chỉ đo sinh hiệu đều lưu GCS 15 "Tỉnh táo", đồng tử 2.5mm "Tròn đều 2 bên", chân ống "khô ráo".
+    // Chỉ lưu khi điều dưỡng thật sự đánh giá (controller kiểm tra đủ thành phần).
     glasgow: {
-      eye: { type: Number, min: 1, max: 4, default: 4 }, // Mở mắt (1-4)
-      verbal: { type: Number, min: 1, max: 5, default: 5 }, // Lời nói (1-5)
-      motor: { type: Number, min: 1, max: 6, default: 6 }, // Vận động (1-6)
-      totalScore: { type: Number, min: 3, max: 15, default: 15 }, // Tổng điểm (3-15)
-      classification: { type: String, default: "Tỉnh táo / Tri giác tốt" }
+      eye: { type: Number, min: 1, max: 4 }, // Mở mắt (1-4)
+      verbal: { type: Number, min: 1, max: 5 }, // Lời nói (1-5)
+      motor: { type: Number, min: 1, max: 6 }, // Vận động (1-6)
+      totalScore: { type: Number, min: 3, max: 15 }, // Tổng điểm (3-15)
+      classification: { type: String }
     },
     // UC-NUR-04: Phản xạ đồng tử
     pupils: {
-      leftSize: { type: Number, default: 2.5 }, // Kích thước đồng tử mắt trái (mm)
-      rightSize: { type: Number, default: 2.5 }, // Kích thước đồng tử mắt phải (mm)
-      leftLightReflex: { type: String, default: "+" }, // +, chậm, -
-      rightLightReflex: { type: String, default: "+" }, // +, chậm, -
-      shape: { type: String, default: "Tròn đều 2 bên" },
-      notes: { type: String, default: "" }
+      leftSize: { type: Number }, // Kích thước đồng tử mắt trái (mm)
+      rightSize: { type: Number }, // Kích thước đồng tử mắt phải (mm)
+      leftLightReflex: { type: String }, // +, chậm, -
+      rightLightReflex: { type: String }, // +, chậm, -
+      shape: { type: String },
+      notes: { type: String }
     },
     // UC-NUR-04: Đo lượng dịch dẫn lưu phẫu thuật sọ não
     surgicalDrainage: {
-      site: { type: String, default: "" }, // Dẫn lưu não thất EVD, ngoài màng cứng, dưới màng cứng, hố mổ...
-      volume: { type: Number, default: 0 }, // Lượng dịch (ml)
-      color: { type: String, default: "" }, // Hồng nhạt, đỏ tươi, dịch não tủy trong, vàng chanh...
-      condition: { type: String, default: "Chân ống khô ráo, cố định tốt" },
-      notes: { type: String, default: "" }
+      site: { type: String }, // Dẫn lưu não thất EVD, ngoài màng cứng, dưới màng cứng, hố mổ...
+      volume: { type: Number }, // Lượng dịch (ml)
+      color: { type: String }, // Hồng nhạt, đỏ tươi, dịch não tủy trong, vàng chanh...
+      condition: { type: String },
+      notes: { type: String }
     },
     // UC-NUR-04: Lịch truyền dịch
     fluidInfusions: [
       {
         fluidName: { type: String, default: "" }, // Mannitol 20%, NaCl 0.9%, Ringer Lactate...
-        volume: { type: Number, default: 500 }, // ml
-        rate: { type: String, default: "40 giọt/phút" },
+        volume: { type: Number }, // ml — do điều dưỡng nhập, không mặc định
+        rate: { type: String, default: "" },
         startTime: { type: String, default: "" },
         endTime: { type: String, default: "" },
         status: { type: String, enum: ["đang truyền", "đã hoàn thành", "tạm dừng"], default: "đang truyền" },

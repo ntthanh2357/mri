@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import { apiRequest } from '../utils/apiClient';
+import { initialsOf } from '../utils/initials';
 
 function mapApiUser(u) {
   return {
@@ -21,8 +22,7 @@ function mapApiUser(u) {
     phone: u.profile?.phone || u.phone || '',
     role: u.role,
     avatarUrl:
-      u.profile?.photoUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(u.profile?.name || u.email)}&background=e2e8f0&color=475569&bold=true`,
+      u.profile?.photoUrl || null, // không gửi tên sang dịch vụ ảnh bên ngoài; hiển thị chữ viết tắt
     status: u.isLocked ? 'Locked' : 'Active',
     lastActive: u.createdAt,
   };
@@ -68,6 +68,10 @@ const STATUS_FILTERS = [
   { value: 'Active', label: 'Đang hoạt động' },
   { value: 'Locked', label: 'Đã bị khóa' },
 ];
+
+// BE (services/user.service.js canModerateRole) chỉ cho khóa/mở khóa tài khoản hạng THẤP hơn:
+// màn này chỉ admin/system_admin dùng, nên không hiện nút khóa với tài khoản quản trị nền tảng (trước đây bấm vào bị 403)
+const canModerate = (targetRole) => !['admin', 'system_admin'].includes(targetRole);
 
 export default function AdminUsersView() {
   const [usersList, setUsersList] = useState([]);
@@ -231,7 +235,9 @@ export default function AdminUsersView() {
               onPress={() => handleSelectUser(user.id)}
               style={[styles.userRow, user.status === 'Locked' && styles.userRowLocked]}
             >
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+              {user.avatarUrl ? <Image source={{ uri: user.avatarUrl }} style={styles.avatar} /> : (
+                <View style={[styles.avatar, styles.avatarInitials]}><Text style={styles.avatarInitialsText}>{initialsOf(user.name)}</Text></View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
                 <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
@@ -246,12 +252,14 @@ export default function AdminUsersView() {
                   </View>
                 </View>
               </View>
-              <TouchableOpacity
-                onPress={(e) => { e.stopPropagation?.(); user.status === 'Active' ? handleLockUser(user.id) : handleUnlockUser(user.id); }}
-                style={styles.lockBtn}
-              >
-                <Text style={{ fontSize: 14 }}>{user.status === 'Active' ? '🔒' : '🔓'}</Text>
-              </TouchableOpacity>
+              {canModerate(user.role) ? (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation?.(); user.status === 'Active' ? handleLockUser(user.id) : handleUnlockUser(user.id); }}
+                  style={styles.lockBtn}
+                >
+                  <Text style={{ fontSize: 14 }}>{user.status === 'Active' ? '🔒' : '🔓'}</Text>
+                </TouchableOpacity>
+              ) : null}
             </TouchableOpacity>
           ))
         )}
@@ -278,14 +286,13 @@ export default function AdminUsersView() {
                   {actionError && <Text style={styles.errorText}>{actionError}</Text>}
 
                   <View style={styles.detailHeaderRow}>
-                    <Image
-                      source={{
-                        uri:
-                          selectedUserDetail.profile?.photoUrl ||
-                          `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUserDetail.profile?.name || selectedUserDetail.email)}&background=e2e8f0&color=475569&bold=true`,
-                      }}
-                      style={styles.detailAvatar}
-                    />
+                    {selectedUserDetail.profile?.photoUrl ? (
+                      <Image source={{ uri: selectedUserDetail.profile.photoUrl }} style={styles.detailAvatar} />
+                    ) : (
+                      <View style={[styles.detailAvatar, styles.avatarInitials]}>
+                        <Text style={styles.avatarInitialsText}>{initialsOf(selectedUserDetail.profile?.name || selectedUserDetail.email)}</Text>
+                      </View>
+                    )}
                     <View>
                       <Text style={styles.detailName}>{selectedUserDetail.profile?.name || selectedUserDetail.email}</Text>
                       <Text style={styles.detailRole}>{roleLabel(selectedUserDetail.role)}</Text>
@@ -310,7 +317,7 @@ export default function AdminUsersView() {
                   />
 
                   <View style={{ gap: 8, marginTop: 8 }}>
-                    {selectedUserDetail.isLocked ? (
+                    {!canModerate(selectedUserDetail.role) ? null : selectedUserDetail.isLocked ? (
                       <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.success }]} onPress={() => handleUnlockUser(selectedUserDetail._id)}>
                         <Text style={styles.actionBtnText}>🔓 Mở khóa tài khoản</Text>
                       </TouchableOpacity>
@@ -405,6 +412,8 @@ const styles = StyleSheet.create({
   },
   userRowLocked: { backgroundColor: '#fff5f5' },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#e2e8f0' },
+  avatarInitials: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#e2e8f0' },
+  avatarInitialsText: { color: '#475569', fontWeight: '700' },
   userName: { fontSize: 13, fontWeight: '700', color: Colors.black },
   userEmail: { fontSize: 12, color: Colors.secondary, marginTop: 1 },
   userMetaRow: { flexDirection: 'row', gap: 6, marginTop: 5 },

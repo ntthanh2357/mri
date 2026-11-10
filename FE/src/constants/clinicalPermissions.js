@@ -1,6 +1,6 @@
 /**
  * Vai trò được phép theo từng thao tác lâm sàng trên giao diện — khớp phân quyền route BE:
- * emr.routes.js, transfer.routes.js, patient.routes.js, imaging.routes.js, sharedRecord.routes.js, invoice.routes.js.
+ * emr.routes.js, transfer.routes.js, patient.routes.js, imaging.routes.js, sharedRecord.routes.js, invoice.routes.js, mriRoom.routes.js.
  * Tài khoản nền tảng (admin, system_admin) không truy cập dữ liệu lâm sàng (RELEASE_v3.4).
  * Test src/tests/fe_clinical_permissions.test.mjs đối chiếu tự động danh sách này với route BE.
  */
@@ -19,6 +19,12 @@ export const PERMS = Object.freeze({
   transferSendEmail: ['receptionist', 'doctor', 'department_head', 'hospital_admin'],
   prescriptionCreate: ['doctor', 'department_head', 'hospital_admin'],
   imagingStaffRead: ['doctor', 'radiologist', 'department_head', 'technician', 'nurse', 'receptionist', 'hospital_admin'],
+  imagingCreate: ['doctor', 'radiologist', 'department_head', 'technician'],
+  mriEmergencySchedule: ['technician', 'radiologist', 'doctor', 'department_head', 'hospital_admin', 'receptionist'],
+  preScreeningRead: ['nurse', 'doctor', 'radiologist', 'department_head', 'technician', 'lab_technician', 'pharmacist', 'hospital_admin'],
+  // giấy ra viện / phiếu chuyển tuyến của bệnh nhân (bệnh nhân tự xem của mình qua checkSelfOrRoles)
+  dischargeRead: ['doctor', 'department_head', 'radiologist', 'nurse', 'receptionist', 'pharmacist', 'hospital_admin'],
+  transferFormRead: ['doctor', 'department_head', 'radiologist', 'nurse', 'pharmacist', 'hospital_admin', 'receptionist'],
   shareRedeemStaff: ['doctor', 'department_head', 'nurse', 'receptionist', 'technician'],
   invoicePay: ['receptionist', 'hospital_admin'],
 });

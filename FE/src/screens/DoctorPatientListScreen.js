@@ -20,6 +20,7 @@ import { Search } from 'lucide-react';
 import styles from './DoctorPatientListScreen.styles';
 import Colors from '../constants/colors';
 import { initialsOf } from '../utils/initials';
+import { can } from '../constants/clinicalPermissions';
 
 
 // [BUG-03 FIX] Tính tuổi thật từ ngày sinh hoặc năm sinh
@@ -131,6 +132,9 @@ const DoctorPatientListScreen = ({ navigation }) => {
   const xnCount = patients.filter(p => p.statusCode === 'XN').length;
   const trackingCount = patients.filter(p => p.statusCode === 'TRACKING').length;
 
+  // Phim: chỉ vai trò BE cho đọc/nhập (KTV xét nghiệm, dược sĩ không có quyền phim — trước đây bấm vào bị 403)
+  const canReadFilms = can(user?.role, 'imagingStaffRead');
+  const canCreateFilm = can(user?.role, 'imagingCreate');
   const openDetail = (patient) => navigation.navigate('PatientDetail', { patientId: patient.dbId, activeRoute: 'DoctorPatientList' });
   const openFilms = (patient) => navigation.navigate('ImagingHistory', { patientMedicalId: patient.id, patientName: patient.name });
   const newFilm = (patient) => navigation.navigate('CreateImagingResult', { patientInfo: { id: patient.id, name: patient.name, gender: patient.gender } });
@@ -236,12 +240,16 @@ const DoctorPatientListScreen = ({ navigation }) => {
                       </View>
                     </View>
                     <View style={[styles.cActions, styles.rowActions]}>
-                      <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
-                        <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
-                        <Text style={styles.btnGhostText}>Nhập phim</Text>
-                      </TouchableOpacity>
+                      {canReadFilms ? (
+                        <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
+                          <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {canCreateFilm ? (
+                        <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
+                          <Text style={styles.btnGhostText}>Nhập phim</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </Pressable>
                 ))}
@@ -265,12 +273,16 @@ const DoctorPatientListScreen = ({ navigation }) => {
                       <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => openDetail(patient)} accessibilityRole="button">
                         <Text style={styles.btnPrimaryText}>Mở hồ sơ</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
-                        <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
-                        <Text style={styles.btnGhostText}>Nhập phim</Text>
-                      </TouchableOpacity>
+                      {canReadFilms ? (
+                        <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => openFilms(patient)} accessibilityRole="button">
+                          <Text style={styles.btnSecondaryText}>Phim MRI/CT</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {canCreateFilm ? (
+                        <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => newFilm(patient)} accessibilityRole="button">
+                          <Text style={styles.btnGhostText}>Nhập phim</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </View>
                 ))}

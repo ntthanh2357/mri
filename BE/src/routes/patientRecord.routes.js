@@ -27,22 +27,35 @@ const blockPatientWrite = (req, res, next) => {
   next();
 };
 
+// Nhân viên truy cập hồ sơ bệnh nhân (kèm ?patientId=): chỉ vai trò có nghiệp vụ với bệnh nhân.
+// Trước đây mọi tài khoản cùng viện (kể cả nhân viên vệ sinh, KTV xét nghiệm) đọc và GHI ĐÈ được
+// dị ứng thuốc, liên hệ khẩn cấp, CCCD/BHYT; tài khoản nền tảng không có quyền lâm sàng (RELEASE_v3.4).
+// Bệnh nhân luôn được thao tác trên hồ sơ của chính mình (controller ép patientId = chính mình).
+const PATIENT_RECORD_READ_ROLES = ["doctor", "department_head", "radiologist", "nurse", "technician", "lab_technician", "pharmacist", "receptionist", "hospital_admin"];
+const PATIENT_RECORD_WRITE_ROLES = ["doctor", "department_head", "nurse", "receptionist", "hospital_admin"];
+const allowPatientOr = (staffRoles) => (req, res, next) => {
+  if (req.user?.role === "patient" || staffRoles.includes(req.user?.role)) return next();
+  return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập hồ sơ bệnh nhân." });
+};
+const canRead = allowPatientOr(PATIENT_RECORD_READ_ROLES);
+const canWrite = allowPatientOr(PATIENT_RECORD_WRITE_ROLES);
+
 // Identity card
-router.get("/profile/identity", ctrl.getIdentity);
-router.put("/profile/identity", ctrl.updateIdentity);
-router.put("/profile/identity/bhyt-review", ctrl.reviewDeclaredBhyt);
+router.get("/profile/identity", canRead, ctrl.getIdentity);
+router.put("/profile/identity", canWrite, ctrl.updateIdentity);
+router.put("/profile/identity/bhyt-review", canWrite, ctrl.reviewDeclaredBhyt);
 
 // Visits
-router.get("/records", ctrl.listVisits);
-router.post("/records", blockPatientWrite, ctrl.createVisit);
-router.get("/records/:visitId", ctrl.getVisit);
-router.put("/records/:visitId", blockPatientWrite, ctrl.updateVisit);
-router.delete("/records/:visitId", blockPatientWrite, ctrl.deleteVisit);
+router.get("/records", canRead, ctrl.listVisits);
+router.post("/records", blockPatientWrite, canWrite, ctrl.createVisit);
+router.get("/records/:visitId", canRead, ctrl.getVisit);
+router.put("/records/:visitId", blockPatientWrite, canWrite, ctrl.updateVisit);
+router.delete("/records/:visitId", blockPatientWrite, canWrite, ctrl.deleteVisit);
 
 // Documents
-router.post("/records/:visitId/documents/upload", blockPatientWrite, uploadSingle, ctrl.uploadDocument);
-router.post("/records/:visitId/documents/manual", blockPatientWrite, ctrl.saveManualDocument);
-router.delete("/records/:visitId/documents/:docId", blockPatientWrite, ctrl.deleteDocument);
+router.post("/records/:visitId/documents/upload", blockPatientWrite, canWrite, uploadSingle, ctrl.uploadDocument);
+router.post("/records/:visitId/documents/manual", blockPatientWrite, canWrite, ctrl.saveManualDocument);
+router.delete("/records/:visitId/documents/:docId", blockPatientWrite, canWrite, ctrl.deleteDocument);
 
 // Phiếu đồng thuận tiêm cản quang (UC-PAT-06) — chỉ bệnh nhân, trên phiếu của chính mình
 router.get("/consents", consentCtrl.listMyConsents);
@@ -91,10 +104,10 @@ router.put("/chat/consent", checkRole(["patient"]), chatCtrl.grantConsentMine);
 router.delete("/chat/consent", checkRole(["patient"]), chatCtrl.revokeConsentMine);
 
 // Medicine Reminders
-router.get("/reminders/today", ctrl.getTodayReminders);
-router.get("/reminders/settings", ctrl.getReminderSettings);
-router.put("/reminders/settings", ctrl.updateReminderSettings);
-router.put("/reminders/:id/done", ctrl.markReminderDone);
-router.delete("/reminders/:id", ctrl.skipReminder);
+router.get("/reminders/today", canRead, ctrl.getTodayReminders);
+router.get("/reminders/settings", canRead, ctrl.getReminderSettings);
+router.put("/reminders/settings", canWrite, ctrl.updateReminderSettings);
+router.put("/reminders/:id/done", canWrite, ctrl.markReminderDone);
+router.delete("/reminders/:id", canWrite, ctrl.skipReminder);
 
 export default router;

@@ -31,6 +31,8 @@ const files = [];
 })(SRC);
 
 const problems = [];
+const tdz = [];
+const rel = (f) => path.relative(SRC, f).replace(/\\/g, '/');
 for (const f of files) {
   const ast = parser.parse(fs.readFileSync(f, 'utf8'), { sourceType: 'module', plugins: ['jsx'] });
   traverse(ast, {
@@ -47,6 +49,20 @@ for (const f of files) {
       problems.push(`${path.relative(SRC, f).replace(/\\/g, '/')}:${p.node.loc.start.line} ${name}`);
     },
   });
+  // TDZ: dùng biến const/let TRƯỚC dòng khai báo trong cùng thân hàm (không phải trong closure chạy sau) → sập lúc render
+  traverse(ast, {
+    Scope(sp) {
+      for (const b of Object.values(sp.scope.bindings)) {
+        if (!['const', 'let'].includes(b.kind)) continue;
+        const declFn = b.scope.getFunctionParent() || b.scope.getProgramParent();
+        for (const r of b.referencePaths) {
+          const refFn = r.scope.getFunctionParent() || r.scope.getProgramParent();
+          if (r.node === b.identifier || !r.isIdentifier() && !r.isJSXIdentifier()) continue; // export const X: Babel tính cả nút export là tham chiếu
+          if (refFn === declFn && r.node.start < b.identifier.start) tdz.push(`${rel(f)}:${r.node.loc.start.line} ${b.identifier.name}`);
+        }
+      }
+    },
+  });
 }
 
 let failed = 0;
@@ -54,8 +70,15 @@ try {
   assert.deepStrictEqual(problems, []);
   console.log(`  ✔ ${files.length} tệp, không có định danh chưa khai báo`);
 } catch {
-  failed = 1;
+  failed += 1;
   console.log(`  ✖ định danh chưa khai báo (màn sẽ sập lúc chạy):\n    ${problems.join('\n    ')}`);
 }
-console.log(`\nSUMMARY: ${1 - failed}/1 UNDEFINED IDENTIFIER TESTS PASSED${failed ? ' (1 failed)' : ' (100%)'}`);
+try {
+  assert.deepStrictEqual([...new Set(tdz)], []);
+  console.log('  ✔ không dùng biến const/let trước khi khai báo (TDZ)');
+} catch {
+  failed += 1;
+  console.log(`  ✖ dùng biến trước khi khai báo (ReferenceError lúc render):\n    ${[...new Set(tdz)].join('\n    ')}`);
+}
+console.log(`\nSUMMARY: ${2 - failed}/2 UNDEFINED IDENTIFIER TESTS PASSED${failed ? ` (${failed} failed)` : ' (100%)'}`);
 process.exit(failed);

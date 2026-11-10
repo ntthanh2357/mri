@@ -73,6 +73,7 @@ import safeStorage from '../utils/safeStorage.js';
 import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
 import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
 import { isFeatureEnabled } from '../constants/featureScope';
+import { buildCareAssessment } from '../utils/careSheetPayload';
 import { can, isPlatformAdminRole, PLATFORM_ADMIN_NOTICE } from '../constants/clinicalPermissions';
 
 const EMRDashboardScreen = ({ navigation, route }) => {
@@ -1588,7 +1589,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare, canCreate }) => (
           </View>
         ) : (
           careSheets.map(cs => {
-            const gcs = cs.glasgow;
+            const gcs = cs.glasgow?.totalScore ? cs.glasgow : null; // phiếu không đánh giá GCS → không hiển thị
             const gcsCritical = gcs && gcs.totalScore <= 8;
             const gcsMedium = gcs && gcs.totalScore > 8 && gcs.totalScore <= 12;
             return (
@@ -2280,8 +2281,17 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh!');
       return;
     }
+    const assessment = buildCareAssessment({
+      careLevel, gcsEye, gcsVerbal, gcsMotor,
+      pupilLeftSize, pupilRightSize, pupilLeftReflex, pupilRightReflex, pupilShape,
+      drainageSite, drainageVolume, drainageColor, drainageCondition, fluidInfusions,
+    });
+    if (assessment.error) {
+      Alert.alert('Lỗi', assessment.error);
+      return;
+    }
     const payload = {
-      careLevel: Number(careLevel) || 1,
+      ...assessment.value,
       pulse: Number(pulse),
       bloodPressure,
       temperature: Number(temperature),
@@ -2290,22 +2300,6 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
       nurse,
       progressNotes,
       careActions,
-      // UC-NUR-04 fields
-      glasgow: { eye: parseInt(gcsEye)||4, verbal: parseInt(gcsVerbal)||5, motor: parseInt(gcsMotor)||6 },
-      pupils: {
-        leftSize: parseFloat(pupilLeftSize)||2.5, rightSize: parseFloat(pupilRightSize)||2.5,
-        leftLightReflex: pupilLeftReflex, rightLightReflex: pupilRightReflex,
-        shape: pupilShape
-      },
-      surgicalDrainage: drainageSite ? {
-        site: drainageSite,
-        volume: Number(drainageVolume)||0,
-        color: drainageColor,
-        condition: drainageCondition
-      } : undefined,
-      fluidInfusions: fluidInfusions.filter(f => f.fluidName).map(f => ({
-        ...f, volume: Number(f.volume)||0
-      })),
     };
     onSubmit(payload);
   };

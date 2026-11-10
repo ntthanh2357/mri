@@ -91,21 +91,24 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
           }
         />
 
-        <View style={styles.shift}>
-          <Feather name="clock" size={16} color={Colors.brandGreen} />
-          <Text style={styles.shiftText}>
-            {schedule ? (
-              <>
-                Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
-                {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
-                {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
-              </>
-            ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
-          </Text>
-          <Pressable onPress={() => navigation.navigate('StaffScheduling')} accessibilityRole="link" hitSlop={8}>
-            {({ hovered }) => <Text style={[styles.link, hovered && styles.linkHover]}>Xem lịch trực</Text>}
-          </Pressable>
-        </View>
+        {/* Nhân viên vệ sinh không có lịch trực trong module lịch (BE từ chối) — không hiện ca trực / liên kết bị 403 */}
+        {role !== 'cleaner' ? (
+          <View style={styles.shift}>
+            <Feather name="clock" size={16} color={Colors.brandGreen} />
+            <Text style={styles.shiftText}>
+              {schedule ? (
+                <>
+                  Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
+                  {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
+                  {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
+                </>
+              ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
+            </Text>
+            <Pressable onPress={() => navigation.navigate('StaffScheduling')} accessibilityRole="link" hitSlop={8}>
+              {({ hovered }) => <Text style={[styles.link, hovered && styles.linkHover]}>Xem lịch trực</Text>}
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={[styles.columns, wide && styles.columnsWide]}>
           <View style={wide ? styles.colMain : null}>

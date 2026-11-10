@@ -9,6 +9,7 @@ import { ConsentForm } from "../models/consentForm.model.js";
 import { syncVisitVitals } from "../services/vitalSign.service.js";
 import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPending, contrastRiskBlockMessage, CONTRAST_UNSIGNED_MESSAGE } from "../services/contrastConsent.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { buildVisitPrescriptionFilter } from "../utils/prescriptionScope.util.js";
 import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.js";
 import {
@@ -456,9 +457,16 @@ export const savePreScreening = async (req, res) => {
 // @access  Private (Nurse, Doctor, Technician, Hospital admin)
 export const getPatientPreScreening = async (req, res) => {
   try {
-    const { patientId } = req.query;
-    if (!patientId || !mongoose.Types.ObjectId.isValid(patientId)) {
+    const raw = typeof req.query.patientId === "string" ? req.query.patientId.trim() : "";
+    if (!raw) {
       return res.status(400).json({ message: "Thiếu hoặc sai mã bệnh nhân." });
+    }
+    // Nhận cả ObjectId lẫn mã y tế (BN...) như thẻ an toàn trên màn bệnh án gửi; kiểm tra quyền theo viện
+    let patientId = raw;
+    if (!mongoose.Types.ObjectId.isValid(raw)) {
+      const patient = await checkPatientTenancy(raw, req.user);
+      if (!patient) return res.status(404).json({ message: "Không tìm thấy bệnh nhân thuộc bệnh viện của bạn." });
+      patientId = String(patient._id);
     }
     const visits = await Visit.find({
       hospitalId: req.user.hospitalId,

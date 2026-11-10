@@ -72,6 +72,9 @@ export const receiveLisResults = async (req, res) => {
 
     const gender = order.patient_gender; // 'Nam' hoặc 'Nữ'
     const processedResults = [];
+    // Nạp danh mục chỉ số một lần cho cả phiếu (trước đây mỗi dòng một truy vấn: 5000 dòng ≈ 5000 lượt đọc DB)
+    const codes = [...new Set(rawResults.map((r) => (typeof r?.code === "string" ? r.code.trim().toUpperCase() : null)).filter(Boolean))];
+    const biomarkerByCode = new Map((await Biomarker.find({ code: { $in: codes } }).lean()).map((b) => [b.code, b]));
 
     for (const item of rawResults) {
       const { code, value } = item;
@@ -81,7 +84,7 @@ export const receiveLisResults = async (req, res) => {
       const num = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
       if (!Number.isFinite(num)) return errorResponse(res, `Giá trị xét nghiệm của ${code} phải là số.`, 400);
 
-      const biomarker = await Biomarker.findOne({ code: code.toUpperCase() });
+      const biomarker = biomarkerByCode.get(code.trim().toUpperCase()) || null;
 
       const evaluation = evaluateLabValue({ value: num, gender, biomarker });
 

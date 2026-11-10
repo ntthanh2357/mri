@@ -10,6 +10,8 @@
  *   - Bình duyệt phim có kết quả đọc nhưng thiếu reviewerIds: khôi phục người đọc, chuyển sang chờ kết luận
  * Chỉ báo cáo, cần người quyết định:
  *   - Cảnh báo cấp cứu mở quá 24 giờ, lịch MRI không có lượt khám, đơn thuốc thiếu trạng thái phát
+ *   - Dữ liệu do mặc định cũ tự điền: phiếu chăm sóc GCS 15/đồng tử 2.5mm, tên chung "Bác sĩ điều trị",
+ *     nơi chuyển đến tự điền, nhật ký thiếu email người thao tác
  */
 import dotenv from "dotenv";
 import mongoose from "mongoose";
@@ -67,6 +69,20 @@ const run = async () => {
     visitId: null,
   });
   report["[Chỉ báo cáo] Đơn thuốc thiếu trạng thái phát"] = await col("prescriptions").countDocuments({ dispenseStatus: { $exists: false } });
+
+  // Dữ liệu do mặc định cũ tự điền (bản sửa vòng crawler): chỉ đếm, không đoán lại được đâu là đánh giá thật.
+  // Phiếu có ĐỦ cả 3 khối mặc định (GCS 15 "Tỉnh táo", đồng tử 2.5mm "Tròn đều 2 bên", chân ống "khô ráo" khi không có dẫn lưu)
+  // gần như chắc chắn điều dưỡng không đánh giá thần kinh. Cần hội đồng chuyên môn quyết định cách ghi chú.
+  const defaultGcs = { "glasgow.eye": 4, "glasgow.verbal": 5, "glasgow.motor": 6, "glasgow.totalScore": 15, "glasgow.classification": "Tỉnh táo / Tri giác tốt" };
+  const defaultPupils = { "pupils.leftSize": 2.5, "pupils.rightSize": 2.5, "pupils.shape": "Tròn đều 2 bên" };
+  report["[Chỉ báo cáo] Phiếu chăm sóc có GCS 15 (có thể do mặc định cũ)"] = await col("caresheets").countDocuments(defaultGcs);
+  report["[Chỉ báo cáo] Phiếu chăm sóc đủ 3 khối mặc định (GCS, đồng tử, chân ống) — gần như chắc không đánh giá"] = await col("caresheets").countDocuments({
+    ...defaultGcs, ...defaultPupils, "surgicalDrainage.site": { $in: ["", null] }, "surgicalDrainage.condition": "Chân ống khô ráo, cố định tốt",
+  });
+  report["[Chỉ báo cáo] Đơn thuốc ghi tên chung \"Bác sĩ điều trị\""] = await col("prescriptions").countDocuments({ doctor_name: "Bác sĩ điều trị" });
+  report["[Chỉ báo cáo] Giấy ra viện ghi tên chung \"Bác sĩ điều trị\""] = await col("dischargepapers").countDocuments({ doctor_name: "Bác sĩ điều trị" });
+  report["[Chỉ báo cáo] Phiếu chuyển viện ghi nơi đến tự điền \"Bệnh viện tuyến trên\""] = await col("transferforms").countDocuments({ transferTo: "Bệnh viện tuyến trên (Chuyên khoa Ngoại Thần Kinh)" });
+  report["[Chỉ báo cáo] Nhật ký kiểm toán có chữ \"undefined\" (email người thao tác bị thiếu)"] = await col("auditlogs").countDocuments({ details: /\bundefined\b/ });
 
   console.log(apply ? "[ĐÃ GHI]" : "[CHẠY THỬ, không ghi gì]");
   for (const [label, count] of Object.entries(report)) console.log(`  ${label}: ${count}`);

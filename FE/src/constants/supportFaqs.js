@@ -18,7 +18,7 @@ const COMMON_FAQS = {
     },
     {
       q: 'Thời gian phản hồi của ticket hỗ trợ là bao lâu? Theo dõi trạng thái ticket ở đâu?',
-      a: 'Đội kỹ thuật phản hồi trong vòng 2 giờ (trường hợp khẩn cấp gọi Hotline 1800 1234, hoạt động 24/7). Trạng thái ticket hiển thị ở mục "Yêu cầu hỗ trợ của tôi (Ticket)" ngay trên trang này: Đang mở → Đang xử lý → Đã giải quyết / Đã đóng. Bấm "Làm mới" để cập nhật trạng thái mới nhất.',
+      a: 'Đội kỹ thuật phản hồi trong vòng 2 giờ (trường hợp khẩn cấp gọi Hotline 0236 3650 676, 8:00–17:00 các ngày làm việc). Trạng thái ticket hiển thị ở mục "Yêu cầu hỗ trợ của tôi (Ticket)" ngay trên trang này: Đang mở → Đang xử lý → Đã giải quyết / Đã đóng. Bấm "Làm mới" để cập nhật trạng thái mới nhất.',
     },
   ],
 };

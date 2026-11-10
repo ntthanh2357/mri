@@ -19,6 +19,7 @@ import { MedicineReminder } from "../models/medicineReminder.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { hasRealEmail } from "../services/email.service.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
+import { actorDisplayName } from "../utils/actorName.util.js";
 import { scheduleFor, getReminderTimes } from "../services/medicineReminder.service.js";
 import { getDayRangeVN } from "../utils/date.util.js";
 import { assessPrescriptionSafety } from "../modules/pharmacy/services/drugSafety.service.js";
@@ -561,7 +562,7 @@ export const addPatientPrescription = async (req, res) => {
     const newItem = new Prescription({
       patient_id: patientId, visitId: await resolveVisitId(req, patientId), hospitalId: req.user?.hospitalId || null,
       doctorId: req.user?.id || null,
-      doctor_name: doctor_name || req.user?.profile?.name || "Bác sĩ điều trị",
+      doctor_name: actorDisplayName(req.user),
       diagnosis,
       drugs,
       note: note || "",
@@ -575,7 +576,7 @@ export const addPatientPrescription = async (req, res) => {
         isOverridden: hasSevereWarning && isMeaningful,
         overrideCategory: overrideCategory || (hasSevereWarning ? "CLINICAL_DISCRETION" : ""),
         overrideReason: cleanOverride,
-        overriddenBy: cleanOverride ? (doctor_name || req.user?.profile?.name || "Bác sĩ điều trị") : "",
+        overriddenBy: cleanOverride ? actorDisplayName(req.user) : "",
         overriddenAt: cleanOverride ? new Date() : null,
         requiresDualSign: hasCriticalWarning,
         dualSignStatus: hasCriticalWarning ? "PENDING_PHARMACY_VERIFICATION" : "NONE"
@@ -630,7 +631,7 @@ export const addPatientDischargePaper = async (req, res) => {
 
     const newItem = new DischargePaper({
       patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
-      doctor_name: doctor_name || "Bác sĩ điều trị",
+      doctor_name: actorDisplayName(req.user),
       dischargeNo: dischargeNo || "",
       hospitalNo: hospitalNo || "",
       dateIn: dateIn || new Date(),

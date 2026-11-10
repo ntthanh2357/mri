@@ -16,6 +16,7 @@ import { encryptField } from "../../services/fieldCrypto.service.js";
 import { evaluateVitalSigns } from "../../services/vitalsSafety.service.js";
 
 import { inputErrorStatus } from "../../utils/inputError.util.js";
+import { normalizeCareAssessment } from "../../utils/careSheetAssessment.util.js";
 // --- Medical Record (HSBA) Controllers ---
 
 export const getRecords = async (req, res) => {
@@ -116,7 +117,9 @@ export const createRecord = async (req, res) => {
     }
 
     // [TT 13/2025/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
-    const categoryToUse = userRetentionCat || (admissionType === "Ngoại trú" ? "ngoai_tru" : "noi_tru");
+    // Không gửi loại nhập viện → model lưu "Ngoại trú" (mặc định), thời hạn lưu trữ phải tính theo đúng giá trị đó
+    const effectiveAdmission = admissionType || "Ngoại trú";
+    const categoryToUse = userRetentionCat || (effectiveAdmission === "Ngoại trú" ? "ngoai_tru" : "noi_tru");
     const { retentionCategory, retentionYears, retentionExpiresAt } = calculateRetentionExpiry(categoryToUse, new Date());
 
     const newRecord = new MedicalRecord({
@@ -476,26 +479,11 @@ export const createCareSheet = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh." });
     }
 
-    // Tính điểm và phân loại thang điểm hôn mê Glasgow (UC-NUR-04)
-    let calculatedGlasgow = undefined;
-    if (glasgow) {
-      const eye = Math.max(1, Math.min(4, Number(glasgow.eye) || 4));
-      const verbal = Math.max(1, Math.min(5, Number(glasgow.verbal) || 5));
-      const motor = Math.max(1, Math.min(6, Number(glasgow.motor) || 6));
-      const totalScore = eye + verbal + motor;
-      let classification = "Tỉnh táo / Tri giác tốt";
-      if (totalScore <= 8) classification = "Hôn mê sâu / Nguy kịch (Cảnh báo)";
-      else if (totalScore <= 12) classification = "Hôn mê vừa";
-      else if (totalScore <= 14) classification = "Hôn mê nhẹ / Lú lẫn";
-
-      calculatedGlasgow = {
-        eye,
-        verbal,
-        motor,
-        totalScore,
-        classification
-      };
-    }
+    // Glasgow, đồng tử, dẫn lưu, truyền dịch (UC-NUR-04): chỉ lưu phần điều dưỡng thật sự đánh giá,
+    // không tự điền mức "bình thường" cho thành phần còn thiếu.
+    const assessment = normalizeCareAssessment({ careLevel, glasgow, pupils, surgicalDrainage, fluidInfusions });
+    if (assessment.error) return res.status(400).json({ message: assessment.error });
+    const care = assessment.value;
 
     // Đánh giá ngưỡng an toàn sinh hiệu theo phân tầng tuổi & giới tính của hồ sơ bệnh án
     const vitalsEvaluation = evaluateVitalSigns(
@@ -515,16 +503,16 @@ export const createCareSheet = async (req, res) => {
     const newCareSheet = new CareSheet({
       hospitalId: record.hospitalId || req.user?.hospitalId,
       medicalRecordId: req.params.id,
-      careLevel: careLevel || 3,
+      careLevel: care.careLevel,
       pulse: Number(pulse),
       bloodPressure: String(bloodPressure).trim(),
       temperature: Number(temperature),
       respiratoryRate: Number(respiratoryRate),
       spo2: Number(spo2),
-      glasgow: calculatedGlasgow,
-      pupils: pupils || undefined,
-      surgicalDrainage: surgicalDrainage || undefined,
-      fluidInfusions: Array.isArray(fluidInfusions) ? fluidInfusions : undefined,
+      ...(care.glasgow ? { glasgow: care.glasgow } : {}),
+      ...(care.pupils ? { pupils: care.pupils } : {}),
+      ...(care.surgicalDrainage ? { surgicalDrainage: care.surgicalDrainage } : {}),
+      ...(care.fluidInfusions ? { fluidInfusions: care.fluidInfusions } : {}),
       vitalsEvaluation,
       progressNotes,
       careActions,

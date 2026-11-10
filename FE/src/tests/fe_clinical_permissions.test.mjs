@@ -61,6 +61,11 @@ test('chuyển viện, kê đơn, phim, quét mã, thu tiền khớp route BE', 
   same('transferSendEmail', rolesOf('routes/transfer.routes.js', 'sendTransferEmail'));
   same('prescriptionCreate', rolesOf('routes/patient.routes.js', 'addPatientPrescription'));
   same('imagingStaffRead', new Set(resolveRoles(be('modules/imaging/imaging.routes.js'), 'IMAGING_STAFF_READ_ROLES')));
+  same('imagingCreate', rolesOf('modules/imaging/imaging.routes.js', 'createImagingResult'));
+  same('mriEmergencySchedule', rolesOf('modules/hospital/mriRoom.routes.js', 'handleEmergencyOverride'));
+  same('preScreeningRead', rolesOf('routes/visit.routes.js', 'getPatientPreScreening'));
+  same('dischargeRead', rolesOf('routes/patient.routes.js', 'getPatientDischargePapers'));
+  same('transferFormRead', rolesOf('routes/patient.routes.js', 'getPatientTransferForms'));
   same('shareRedeemStaff', rolesOf('routes/sharedRecord.routes.js', 'ctrl.redeemAsStaff'.split('.')[1]));
   same('invoicePay', rolesOf('modules/billing/invoice.routes.js', 'payInvoice'));
 });

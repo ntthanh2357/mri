@@ -5,6 +5,7 @@ import Colors from '../../constants/colors';
 import { usePatientSafety } from '../../controllers/usePatientSafety';
 import { usePatientPreScreening } from '../../controllers/usePatientPreScreening';
 import { ANSWER_LABEL, RISK_META, SCREEN_QUESTIONS } from '../../utils/preScreening';
+import { can } from '../../constants/clinicalPermissions';
 
 const RISK_TONE = {
   success: { bg: Colors.successBg, fg: Colors.successText, border: Colors.successBg },
@@ -58,8 +59,10 @@ const PreScreeningStrip = ({ patientId }) => {
 
 // Dải an toàn đầu trang chi tiết bệnh nhân: dị ứng thuốc (nổi bật khi có) + liên hệ khẩn cấp.
 // Phân biệt "chưa ghi nhận" với "không tải được" để bác sĩ không hiểu nhầm là bệnh nhân không dị ứng.
-const PatientSafetyStrip = ({ patientId }) => {
+// role: vai trò người xem — chỉ gọi kết quả sàng lọc khi vai trò được BE cho đọc (lễ tân không có quyền → trước đây 403)
+const PatientSafetyStrip = ({ patientId, role }) => {
   const { loading, data, error } = usePatientSafety(patientId);
+  const showPreScreening = !role || can(role, 'preScreeningRead');
   if (!patientId || loading) return null;
 
   if (error) {
@@ -69,7 +72,7 @@ const PatientSafetyStrip = ({ patientId }) => {
           <Feather name="alert-circle" size={16} color={Colors.slateMuted} />
           <Text style={styles.mutedText}>Không tải được thông tin dị ứng thuốc. Hỏi lại bệnh nhân trước khi kê đơn.</Text>
         </View>
-        <PreScreeningStrip patientId={patientId} />
+        {showPreScreening ? <PreScreeningStrip patientId={patientId} /> : null}
       </View>
     );
   }
@@ -102,7 +105,7 @@ const PatientSafetyStrip = ({ patientId }) => {
           </Text>
         </View>
       ) : null}
-      <PreScreeningStrip patientId={patientId} />
+      {showPreScreening ? <PreScreeningStrip patientId={patientId} /> : null}
     </View>
   );
 };

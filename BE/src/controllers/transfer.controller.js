@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import crypto from "crypto";
 import { TransferForm } from "../models/transferForm.model.js";
 import { Hospital } from "../models/hospital.model.js";
@@ -8,6 +9,7 @@ import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { sendReferralPackageEmail } from "../services/email.service.js";
+import { actorDisplayName } from "../utils/actorName.util.js";
 
 // Helper: Tự động gom dữ liệu chẩn đoán hình ảnh thành package snapshot
 const buildImagingPackageSnapshot = (imagingResult) => {
@@ -91,18 +93,17 @@ export const createTransferRequest = async (req, res) => {
     const finalRecipientEmail = (recipientEmail || patient.email || patient.profile?.email || "").trim();
 
     // 2. Tìm hoặc tự động phát hiện ca chụp MRI / CT mới nhất của bệnh nhân
+    // Chỉ nhận phim CỦA ĐÚNG bệnh nhân này (theo mã bệnh nhân / mã y tế). Trước đây: phim theo id do client gửi
+    // không kiểm tra chủ, và nếu chưa có phim thì lấy phim mới nhất của NGƯỜI TRÙNG TÊN trong viện để gửi kèm email.
+    const ownsImaging = [{ patientId: patient_id }, ...(patient.profile?.medicalId ? [{ medicalId: patient.profile.medicalId }] : [])];
     let imagingDoc = null;
     if (imagingResultId) {
-      imagingDoc = await ImagingResult.findById(imagingResultId).lean();
+      if (!mongoose.Types.ObjectId.isValid(String(imagingResultId))) return errorResponse(res, "Mã ca chụp không hợp lệ.", 400);
+      imagingDoc = await ImagingResult.findOne({ _id: imagingResultId, $or: ownsImaging }).lean();
+      if (!imagingDoc) return errorResponse(res, "Ca chụp không thuộc bệnh nhân này.", 400);
     }
     if (!imagingDoc) {
-      imagingDoc = await ImagingResult.findOne({
-        $or: [
-          { patientId: patient_id },
-          { medicalId: patient.profile?.medicalId || "__no_match__" },
-          { patientName: patient.profile?.fullName || patient.profile?.name }
-        ]
-      })
+      imagingDoc = await ImagingResult.findOne({ $or: ownsImaging })
         .sort({ createdAt: -1 })
         .lean();
     }
@@ -116,8 +117,9 @@ export const createTransferRequest = async (req, res) => {
       const targetHosp = await Hospital.findById(targetHospitalId).lean();
       if (targetHosp) destinationName = targetHosp.name;
     }
-    if (!destinationName) {
-      destinationName = "Bệnh viện tuyến trên (Chuyên khoa Ngoại Thần Kinh)";
+    // Nơi chuyển đến ghi trên giấy chuyển tuyến: bác sĩ phải chọn, không điền sẵn "Bệnh viện tuyến trên"
+    if (!String(destinationName).trim()) {
+      return errorResponse(res, "Vui lòng chọn hoặc nhập nơi chuyển đến.", 400);
     }
 
     // 4. Tạo bản ghi TransferForm ở trạng thái 'draft' (chờ Lễ tân kiểm tra & gửi email)
@@ -127,9 +129,9 @@ export const createTransferRequest = async (req, res) => {
       patient_id,
       visitId: visitId || null,
       imagingResultId: imagingDoc ? imagingDoc._id : null,
-      doctor_name: req.user.name || req.user.profile?.name || "Bác sĩ điều trị",
+      doctor_name: actorDisplayName(req.user),
       transferNo: transferNo || `CV-${Date.now().toString().slice(-6)}`,
-      hospitalNo: hospitalNo || `BA-${Date.now().toString().slice(-6)}`,
+      hospitalNo: hospitalNo || "", // số bệnh án do phòng KHTH cấp: chưa có thì để trống, không sinh số
       transferTo: destinationName,
       dateIn: dateIn || new Date(),
       dateOut: dateOut || new Date(),

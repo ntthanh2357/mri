@@ -26,6 +26,9 @@ import { buildMedicalRecordPayload } from "../../../FE/src/utils/medicalRecordPa
 import { LabOrder } from "../modules/laboratory/models/labOrder.model.js";
 import { Biomarker } from "../modules/laboratory/models/biomarker.model.js";
 import { getJwtSecret } from "../config/jwt.config.js";
+import { CareSheet } from "../modules/emr/models/careSheet.model.js";
+import { Task } from "../models/task.model.js";
+import { PatientProfile } from "../models/patientProfile.model.js";
 
 const BE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LOCAL_DB = /^mongodb:\/\/(127\.0\.0\.1|localhost)[:/]/;
@@ -601,4 +604,109 @@ describe("E2E 5 luồng critical trên server thật (Mongo local)", () => {
     expect(cat.text.includes("[object Object]")).toBe(false);
     expect(cat.text.includes("huyết áp 128/82")).toBe(true);
   });
+  test("IT5-01 Phiếu chăm sóc: không tự ghi GCS 15/đồng tử 2.5mm/thể tích khi điều dưỡng chưa đánh giá; GCS thiếu thành phần bị từ chối", async () => {
+    const record = await MedicalRecord.create({ hospitalId: H, patientId: `BN-CS-${String(oid()).slice(-6)}`, patientName: "BN Chăm sóc", gender: "Nam", diagnosis: "U não" });
+    const vitals = { pulse: 88, bloodPressure: "130/85", temperature: 37.2, respiratoryRate: 20, spo2: 96, progressNotes: "Lơ mơ nhẹ", careActions: "Theo dõi", nurse: "ĐD A" };
+    const url = `/emr/records/${record._id}/care-sheets`;
+    const only = await api(A.nurse, "POST", url, vitals);
+    if (![200, 201].includes(only.status)) throw new Error(`phiếu chỉ sinh hiệu: ${only.status} — ${only.text.slice(0, 200)}`);
+    const saved = await CareSheet.findOne({ medicalRecordId: record._id }).setOptions({ bypassTenancy: true }).lean();
+    expect(saved.glasgow?.totalScore === undefined && saved.glasgow?.classification === undefined).toBe(true);
+    expect(saved.pupils?.leftSize === undefined && saved.pupils?.shape === undefined).toBe(true);
+    expect(saved.surgicalDrainage?.condition === undefined && saved.surgicalDrainage?.volume === undefined).toBe(true);
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, glasgow: { eye: 1 } }), 400, "GCS chỉ có mở mắt");
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, glasgow: { eye: 4, verbal: 5 } }), 400, "GCS thiếu vận động (không được coi là đủ)");
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, pupils: { leftSize: 3 } }), 400, "đồng tử một bên");
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, surgicalDrainage: { site: "EVD" } }), 400, "dẫn lưu không thể tích");
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, fluidInfusions: [{ fluidName: "Mannitol 20%" }] }), 400, "dịch truyền không thể tích");
+    expectStatus(await api(A.nurse, "POST", url, { ...vitals, careLevel: 7 }), 400, "cấp chăm sóc ngoài 1-3");
+    const full = await api(A.nurse, "POST", url, { ...vitals, careLevel: 1, glasgow: { eye: 3, verbal: 4, motor: 5 }, pupils: { leftSize: 3, rightSize: 4, leftLightReflex: "chậm", rightLightReflex: "+" } });
+    if (![200, 201].includes(full.status)) throw new Error(`phiếu đủ GCS: ${full.status} — ${full.text.slice(0, 200)}`);
+    const last = await CareSheet.findOne({ medicalRecordId: record._id, careLevel: 1 }).setOptions({ bypassTenancy: true }).lean();
+    expect(last.glasgow.totalScore).toBe(12);
+    expect(last.glasgow.classification).toBe("Hôn mê vừa");
+    expect(last.pupils.rightSize).toBe(4);
+  });
+
+  test("IT5-02 Điều dưỡng mở bệnh nhân từ bệnh án (mã y tế BN...): xem được dị ứng/liên hệ khẩn cấp, không tạo hồ sơ theo mã y tế", async () => {
+    const medicalId = `BN-ID-${String(oid()).slice(-6)}`;
+    const pt = await mk("patient", H, "BN dị ứng");
+    await User.updateOne({ _id: pt._id }, { $set: { "profile.medicalId": medicalId } });
+    const r = await api(A.nurse, "GET", `/api/v1/patient/profile/identity?patientId=${medicalId}`);
+    expectStatus(r, 200, "điều dưỡng xem thông tin an toàn bằng mã y tế");
+    expect(String(r.json.data.userId)).toBe(String(pt._id));
+    expect(await PatientProfile.countDocuments({ userId: medicalId }).setOptions({ bypassTenancy: true }).catch(() => 0)).toBe(0);
+    expectStatus(await api(A.doctorOther, "GET", `/api/v1/patient/profile/identity?patientId=${medicalId}`), 403, "viện khác bằng mã y tế");
+    expectStatus(await api(A.nurse, "GET", `/api/v1/visits/pre-screening/latest?patientId=${medicalId}`), 200, "điều dưỡng xem sàng lọc trước khám bằng mã y tế");
+    expectStatus(await api(A.doctorOther, "GET", `/api/v1/visits/pre-screening/latest?patientId=${medicalId}`), 404, "viện khác xem sàng lọc bằng mã y tế");
+  });
+
+  test("IT5-03 Công việc ca trực: bước đã giao cho bác sĩ khác bị từ chối với lý do dễ hiểu (FE không hiện nút)", async () => {
+    const visit = await Visit.create({ hospitalId: H, patientId: A.patient._id, doctorId: A.doctor2._id, status: "đang chờ", reason: "Khám" });
+    const task = await Task.create({ hospitalId: H, visitId: visit._id, patientId: A.patient._id, stepNumber: 6, title: "Đọc phim", roleRequired: "doctor", status: "pending", assignedToUserId: A.doctor2._id });
+    const r = await api(A.doctor, "PUT", `/api/v1/tasks/${task._id}/status`, { status: "in_progress" });
+    expectStatus(r, 403, "bác sĩ cập nhật bước của bác sĩ khác");
+    expect(/giao cho người khác/.test(r.json.message)).toBe(true);
+    expectStatus(await api(A.doctor2, "PUT", `/api/v1/tasks/${task._id}/status`, { status: "in_progress" }), 200, "bác sĩ được giao");
+  });
+
+  test("IT5-04 Tạo bệnh án không gửi loại nhập viện: lưu Ngoại trú và hạn lưu trữ theo ngoại trú (trước đây phân loại nội trú)", async () => {
+    const r = await api(A.nurse, "POST", "/emr/records", { patientId: `BN-RT-${String(oid()).slice(-6)}`, patientName: "BN lưu trữ" });
+    if (![200, 201].includes(r.status)) throw new Error(`tạo bệnh án: ${r.status} — ${r.text.slice(0, 200)}`);
+    const rec = await MedicalRecord.findById(r.json.data._id).setOptions({ bypassTenancy: true }).lean();
+    expect(rec.admissionType).toBe("Ngoại trú");
+    expect(rec.retentionCategory).toBe("ngoai_tru");
+  });
+  test("IT5-05 Hồ sơ bệnh nhân (định danh, dị ứng, lượt khám, nhắc thuốc): nhân viên vệ sinh/KTV xét nghiệm/dược sĩ không ghi đè được; vệ sinh, tài khoản nền tảng không đọc được", async () => {
+    const pid = String(A.patient._id);
+    const q = `?patientId=${pid}`;
+    for (const r of ["cleaner", "admin", "system_admin"]) {
+      expectStatus(await api(A[r], "GET", `/api/v1/patient/profile/identity${q}`), 403, `${r} đọc định danh bệnh nhân`);
+      expectStatus(await api(A[r], "GET", `/api/v1/patient/records${q}`), 403, `${r} đọc lượt khám bệnh nhân`);
+      expectStatus(await api(A[r], "GET", `/api/v1/patient/reminders/today${q}`), 403, `${r} đọc lịch uống thuốc`);
+    }
+    for (const r of ["cleaner", "lab_technician", "pharmacist", "technician", "radiologist"]) {
+      expectStatus(await api(A[r], "PUT", `/api/v1/patient/profile/identity${q}`, { patientId: pid, drugAllergies: [] }), 403, `${r} ghi đè dị ứng/định danh`);
+    }
+    expectStatus(await api(A.pharmacist, "GET", `/api/v1/patient/profile/identity${q}`), 200, "dược sĩ xem dị ứng");
+    expectStatus(await api(A.nurse, "PUT", `/api/v1/patient/profile/identity${q}`, { patientId: pid }), 200, "điều dưỡng cập nhật định danh");
+    expectStatus(await api(A.patient, "GET", "/api/v1/patient/profile/identity"), 200, "bệnh nhân xem hồ sơ của mình");
+  });
+  test("IT5-06 Tên trên đơn thuốc / ghi đè cảnh báo lấy từ tài khoản đăng nhập (không theo tên client gửi); route xác thực tùy chọn không làm mất hồ sơ trong cache", async () => {
+    const doc = await mk("doctor", H, "BS Thật Sự");
+    // /auth/register dùng optionalProtect: trước đây ghi bản người dùng rút gọn (mất profile, email) vào cache dùng chung
+    await api(doc, "POST", "/auth/register", {});
+    const medicalId = `BN-NM-${String(oid()).slice(-6)}`;
+    const pt = await mk("patient", H, "BN tên bác sĩ");
+    await User.updateOne({ _id: pt._id }, { $set: { "profile.medicalId": medicalId } });
+    const r = await api(doc, "POST", `/api/patients/${medicalId}/prescriptions`, { doctor_name: "BS Giả Mạo", diagnosis: "U màng não", drugs: [{ name: "Paracetamol 500mg", quantity: 5, unit: "Viên", dosage: "1 viên" }], aiConsultation: "Không dùng AI" });
+    if (![200, 201].includes(r.status)) throw new Error(`kê đơn: ${r.status} — ${r.text.slice(0, 200)}`);
+    expect(r.json.data.doctor_name).toBe("BS Thật Sự");
+    const lock = await api(A.hospital_admin, "PUT", `/api/v1/hospital/staff/${A.cleaner._id}/toggle-lock`, {});
+    expectStatus(lock, 200, "BGĐ khóa tài khoản nhân sự");
+    const log = await AuditLog.findOne({ entityId: { $in: [String(A.cleaner._id), A.cleaner._id] }, details: /tài khoản nhân sự/ }).sort({ createdAt: -1 }).setOptions({ bypassTenancy: true }).lean();
+    expect(Boolean(log)).toBe(true);
+    expect(String(log.details).includes("undefined")).toBe(false);
+    expect(String(log.details).includes(A.hospital_admin.email)).toBe(true);
+    await api(A.hospital_admin, "PUT", `/api/v1/hospital/staff/${A.cleaner._id}/toggle-lock`, {});
+  });
+
+  test("IT5-07 Gói chuyển viện: chỉ đính kèm phim của đúng bệnh nhân (không lấy phim người trùng tên), bắt buộc nơi chuyển đến, không sinh số bệnh án", async () => {
+    const same = "Nguyễn Văn Trùng Tên";
+    const a = await mk("patient", H, same);
+    const b = await mk("patient", H, same);
+    await User.updateOne({ _id: a._id }, { $set: { "profile.fullName": same } });
+    const imgB = await ImagingResult.create({ hospitalId: H, patientId: b._id, medicalId: `BN-B-${String(oid()).slice(-6)}`, patientName: same, birthYear: 1970, gender: "Nam", address: "HN", orderDate: new Date().toISOString(),
+      orderingDoctor: "BS", orderingDepartment: "Ngoại thần kinh", diagnosis: "U não", procedure: "MRI", findings: "x", conclusion: "y", radiologist: "z", reportDate: new Date().toISOString(), imagingType: "MRI", isSigned: false });
+    const body = { patient_id: String(a._id), diagnosis: "U não", transferTo: "BV Trung ương Huế" };
+    expectStatus(await api(A.doctor, "POST", "/api/v1/transfers", { ...body, imagingResultId: String(imgB._id) }), 400, "đính kèm phim của bệnh nhân khác");
+    expectStatus(await api(A.doctor, "POST", "/api/v1/transfers", { patient_id: String(a._id), diagnosis: "U não" }), 400, "không có nơi chuyển đến");
+    const ok = await api(A.doctor, "POST", "/api/v1/transfers", body);
+    if (![200, 201].includes(ok.status)) throw new Error(`tạo gói chuyển viện: ${ok.status} — ${ok.text.slice(0, 200)}`);
+    const tf = await TransferForm.findOne({ patient_id: a._id }).setOptions({ bypassTenancy: true }).lean();
+    expect(tf.imagingResultId == null).toBe(true);
+    expect(tf.hospitalNo).toBe("");
+    expect(tf.transferTo).toBe("BV Trung ương Huế");
+  });
 });
+

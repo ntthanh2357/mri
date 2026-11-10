@@ -368,7 +368,7 @@ const ResponsiveLayout = ({
           { label: 'Nhật ký hệ thống', route: 'AdminBackoffice', params: { tab: 'audit-logs' }, icon: ClipboardList },
           { label: 'SaaS Suite (nâng cao)', route: 'AdminBackoffice', params: { tab: 'saas-suite' }, icon: Sliders },
           { label: 'Huấn luyện & Chatbot AI', route: 'AdminBackoffice', params: { tab: 'ai-config' }, icon: Brain },
-          { label: isFeatureEnabled('bhyt') ? 'Báo cáo tài chính & BHYT' : 'Báo cáo tài chính', route: 'Financials', icon: DollarSign },
+          // Báo cáo tài chính là số liệu của từng viện: tài khoản nền tảng không gắn viện và không đọc hóa đơn (RELEASE v3.4) → bỏ khỏi menu
           { label: 'Yêu cầu hỗ trợ', route: 'SupportTicketsAdmin', icon: MessageCircle },
           { label: 'Tuân thủ và dữ liệu', route: 'ComplianceCenter', icon: FileSearch },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },

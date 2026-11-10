@@ -8,6 +8,7 @@ import Colors from '../constants/colors';
 import { useAppDialog } from '../components/ui/AppDialog';
 import { get, post, put } from '../services/api.service';
 import { WorkButton, WorkCard, StatTiles, EmptyNote, fmtDateTime, personName, workStyles as w } from '../components/staff/WorkUI';
+import { canUpdateTask } from '../utils/taskPermission';
 
 // Công việc theo ca: các bước của từng lượt khám, phân theo vai trò, kèm số liệu tổng quan ca trực.
 
@@ -82,12 +83,16 @@ const TaskBoardScreen = ({ navigation }) => {
         </View>
         <Text style={w.meta}>Bệnh nhân: {personName(task.patientId)}{task.assignedToUserId ? ` · Phụ trách: ${personName(task.assignedToUserId)}` : ''}</Text>
         {task.deadlineAt ? <Text style={w.meta}>Hạn: {fmtDateTime(task.deadlineAt)}</Text> : null}
-        <View style={w.actions}>
-          {task.status === 'pending' ? <WorkButton label="Bắt đầu" busy={busyId === task._id} onPress={() => updateStatus(task, 'in_progress')} /> : null}
-          {task.status === 'in_progress' ? <WorkButton label="Hoàn thành" busy={busyId === task._id} onPress={() => updateStatus(task, 'completed')} /> : null}
-          {task.status === 'pending' ? <WorkButton label="Bỏ qua bước này" variant="ghost" disabled={busyId === task._id} onPress={() => updateStatus(task, 'skipped')} /> : null}
-          {task.status === 'in_progress' ? <WorkButton label="Trả về chờ" variant="ghost" disabled={busyId === task._id} onPress={() => updateStatus(task, 'pending')} /> : null}
-        </View>
+        {canUpdateTask(task, me) ? (
+          <View style={w.actions}>
+            {task.status === 'pending' ? <WorkButton label="Bắt đầu" busy={busyId === task._id} onPress={() => updateStatus(task, 'in_progress')} /> : null}
+            {task.status === 'in_progress' ? <WorkButton label="Hoàn thành" busy={busyId === task._id} onPress={() => updateStatus(task, 'completed')} /> : null}
+            {task.status === 'pending' ? <WorkButton label="Bỏ qua bước này" variant="ghost" disabled={busyId === task._id} onPress={() => updateStatus(task, 'skipped')} /> : null}
+            {task.status === 'in_progress' ? <WorkButton label="Trả về chờ" variant="ghost" disabled={busyId === task._id} onPress={() => updateStatus(task, 'pending')} /> : null}
+          </View>
+        ) : task.status !== 'completed' && me ? (
+          <Text style={w.meta}>{task.roleRequired === 'auto' ? 'Bước do hệ thống tự cập nhật.' : 'Bước này do người khác phụ trách.'}</Text>
+        ) : null}
       </WorkCard>
     );
   };

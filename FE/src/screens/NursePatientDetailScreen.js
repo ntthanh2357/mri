@@ -10,6 +10,8 @@ import PatientSafetyStrip from "../components/staff/PatientSafetyStrip";
 import { get, post, put } from "../services/api.service";
 import safeStorage from "../utils/safeStorage.js";
 import { useAppDialog } from "../components/ui/AppDialog";
+import { isFeatureEnabled } from "../constants/featureScope";
+import { buildCareAssessment } from "../utils/careSheetPayload";
 import {
   User,
   ClipboardList,
@@ -59,10 +61,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   );
   const patientName  = patient.patientName || patient?.profile?.name || "Bệnh nhân";
   const patientIdStr = (isRecordObj ? (patient.patientId || patient._id) : (patient.patientId || patient._id)) || "";
+  // Mã bệnh nhân cho thẻ dị ứng/sàng lọc: bản ghi bệnh án → patientId (ObjectId hoặc mã y tế BN...); hồ sơ người dùng → _id
+  const safetyPatientId = String((isRecordObj ? patient.patientId : (patient.patientId || patient._id)) || "").trim();
   const gender       = patient.gender      || patient?.profile?.gender || "";
   const age          = patient.age         || "";
   const department   = patient.department  || "Khoa Ung Thư Não";
-  const doctor       = patient.doctorInCharge || "Bác sĩ điều trị";
+  const doctor       = patient.doctorInCharge || "";
 
   const { dialog, notify } = useAppDialog();
   // Medical Record ID (chống duplicate hồ sơ bệnh án khi lập phiếu)
@@ -90,13 +94,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   const [examBreath, setExamBreath] = useState("");
   const [examTemp,   setExamTemp]   = useState("");
   const [examSpo2,   setExamSpo2]   = useState("");
-  const [examRequest,setExamRequest]= useState("Khám và đánh giá u não chuyên sâu");
+  const [examRequest,setExamRequest]= useState("");
   const [examObject, setExamObject] = useState("Thu phí");
 
   // ── Phiếu chỉ định dịch vụ (Service Order) ──
   const [orderPriority,   setOrderPriority]   = useState("Thường");
   const [orderDiagnosis,  setOrderDiagnosis]  = useState("");
-  const [orderServices,   setOrderServices]   = useState(["Chụp MRI sọ não"]);
+  const [orderServices,   setOrderServices]   = useState([]);
   const [orderNewService, setOrderNewService] = useState("");
 
   // ── Phiếu thu viện phí (Fee Items) — trống cho tới khi lưu phiếu chỉ định ──
@@ -268,13 +272,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         setExamBreath("");
         setExamTemp("");
         setExamSpo2("");
-        setExamRequest("Khám sức khỏe tổng quát");
+        setExamRequest("");
         setExamObject("Thu phí");
         
         setOrderDone(false);
         setOrderPriority("Thường");
         setOrderDiagnosis("");
-        setOrderServices(["Chụp MRI sọ não lát cắt mỏng", "Xét nghiệm máu"]);
+        setOrderServices([]);
         
         setFeeItems([]); // Viện phí chỉ sinh ra từ phiếu chỉ định đã lưu
         setFeeNote("");
@@ -449,8 +453,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   // 4. Save Clinical Exam (Vitals) to Backend EMR (UC-NUR-02)
   const handleSaveExamToBackend = async () => {
-    if (!examPulse || !examBP || !examTemp || !examSpo2) {
-      notify("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu chính (Mạch, Huyết áp, Thân nhiệt, SpO₂).");
+    if (!examPulse || !examBP || !examTemp || !examSpo2 || !examBreath) {
+      notify("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu chính (Mạch, Huyết áp, Thân nhiệt, Nhịp thở, SpO₂).");
       return;
     }
     setSubmitting(true);
@@ -462,11 +466,11 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         pulse: parseInt(examPulse),
         bloodPressure: examBP,
         temperature: parseFloat(examTemp),
-        respiratoryRate: examBreath ? parseInt(examBreath) : 18,
+        respiratoryRate: parseInt(examBreath),
         spo2: parseInt(examSpo2),
-        progressNotes: "Yêu cầu khám: " + examRequest,
-        careActions: `Đối tượng: ${examObject}. Chiều cao: ${examHeight}cm, Cân nặng: ${examWeight}kg.`,
-        nurse: localUser?.profile?.name || "Điều dưỡng y tá"
+        progressNotes: examRequest.trim() ? "Yêu cầu khám: " + examRequest.trim() : "Đo sinh hiệu",
+        careActions: [`Đối tượng: ${examObject}`, examHeight ? `Chiều cao: ${examHeight}cm` : "", examWeight ? `Cân nặng: ${examWeight}kg` : ""].filter(Boolean).join(". ") + ".",
+        nurse: localUser?.profile?.name || localUser?.profile?.fullName || localUser?.email || ""
       });
 
       // Update visit vitals if visitId exists (PUT /visits/:id/vitals)
@@ -479,7 +483,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
             bloodPressure: examBP,
             temperature: parseFloat(examTemp),
             spo2: parseInt(examSpo2),
-            respiratoryRate: examBreath ? parseInt(examBreath) : 18
+            respiratoryRate: parseInt(examBreath)
           }
         });
         if (vitalsRes?.alerts && vitalsRes.alerts.length > 0) {
@@ -649,40 +653,31 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
       notify("Thông báo", "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh nhân.");
       return;
     }
+    const assessment = buildCareAssessment({
+      careLevel: csCareLevel,
+      gcsEye: csGlasgowEye, gcsVerbal: csGlasgowVerbal, gcsMotor: csGlasgowMotor,
+      pupilLeftSize: csPupilLeftSize, pupilRightSize: csPupilRightSize,
+      pupilLeftReflex: csPupilLeftReflex, pupilRightReflex: csPupilRightReflex, pupilShape: csPupilShape,
+      drainageSite: csDrainageSite, drainageVolume: csDrainageVolume, drainageColor: csDrainageColor, drainageCondition: csDrainageCondition,
+      fluidInfusions: csFluidInfusions,
+    });
+    if (assessment.error) {
+      notify("Thông báo", assessment.error);
+      return;
+    }
     setCsSubmitting(true);
     try {
       const recordId = await getOrCreateMedicalRecordId();
       const payload = {
-        careLevel: Number(csCareLevel) || 1,
+        ...assessment.value,
         pulse: Number(csPulse),
         bloodPressure: csBP.trim(),
         temperature: Number(csTemp),
         respiratoryRate: Number(csBreath),
         spo2: Number(csSpo2),
-        nurse: csNurse || localUser?.profile?.name || "Điều dưỡng trực",
+        nurse: csNurse || localUser?.profile?.name || localUser?.profile?.fullName || localUser?.email || "",
         progressNotes: csProgressNotes,
         careActions: csCareActions,
-        glasgow: hasGcsInput ? {
-          eye: csGcsEyeNum || 4,
-          verbal: csGcsVerbalNum || 5,
-          motor: csGcsMotorNum || 6
-        } : undefined,
-        pupils: (csPupilLeftSize || csPupilRightSize || csPupilShape) ? {
-          leftSize: parseFloat(csPupilLeftSize) || 2.5,
-          rightSize: parseFloat(csPupilRightSize) || 2.5,
-          leftLightReflex: csPupilLeftReflex,
-          rightLightReflex: csPupilRightReflex,
-          shape: csPupilShape
-        } : undefined,
-        surgicalDrainage: csDrainageSite ? {
-          site: csDrainageSite,
-          volume: Number(csDrainageVolume) || 0,
-          color: csDrainageColor,
-          condition: csDrainageCondition
-        } : undefined,
-        fluidInfusions: csFluidInfusions.filter(f => f.fluidName).map(f => ({
-          ...f, volume: Number(f.volume) || 0
-        }))
       };
 
       await post(`/emr/records/${recordId}/care-sheets`, payload);
@@ -840,7 +835,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-          {/^[0-9a-fA-F]{24}$/.test(patient._id) && <PatientSafetyStrip patientId={patient._id} />}
+          {safetyPatientId ? <PatientSafetyStrip patientId={safetyPatientId} role={localUser?.role} /> : null}
 
           {/* ───────────────────────────────────────────────────────────────────
               1. TAB INFO (Thông Tin Bệnh Nhân)
@@ -856,8 +851,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   ["Tuổi", age ? age + " tuổi" : "N/A"],
                   ["Khoa / Phòng", department || "N/A"],
                   ["Bác sĩ phụ trách", doctor || "N/A"],
-                  ["Trạng thái hiện tại", patient.status || "Đang điều trị"],
-                  ["Loại nhập viện", patient.visitType || patient.admissionType || "Ngoại trú"],
+                  ["Trạng thái hiện tại", patient.status || "N/A"],
+                  ["Loại nhập viện", patient.visitType || patient.admissionType || "N/A"],
                 ].map(([label, val]) => (
                   <View key={label} style={s.infoRow}>
                     <Text style={s.infoLabel}>{label}</Text>
@@ -906,7 +901,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     </View>
                     <View style={s.docCol}>
                       <Text style={s.docLabel}>Đối tượng / Class: <Text style={s.docVal}>{examObject}</Text></Text>
-                      <Text style={s.docLabel}>Yêu cầu khám / Request: <Text style={s.docVal}>{examRequest || 'Khám tổng quát'}</Text></Text>
+                      <Text style={s.docLabel}>Yêu cầu khám / Request: <Text style={s.docVal}>{examRequest || '—'}</Text></Text>
                     </View>
                   </View>
                   
@@ -1077,7 +1072,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     
                     <Text style={s.fieldLabel}>Đối tượng chi trả</Text>
                     <View style={{ flexDirection: "row", gap: 8 }}>
-                      {["Thu phí", "BHYT", "Miễn phí"].map(o => (
+                      {["Thu phí", ...(isFeatureEnabled('bhyt') ? ["BHYT"] : []), "Miễn phí"].map(o => (
                         <TouchableOpacity key={o} onPress={() => setExamObject(o)}
                           style={[s.toggleBtn, examObject === o && s.toggleBtnActive]}>
                           <Text style={[s.toggleBtnText, examObject === o && s.toggleBtnTextActive]}>{o}</Text>
@@ -1141,7 +1136,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                     onPress={() => {
                       if (!showCareSheetForm) {
                         handleResetCareSheetForm();
-                        setCsNurse(localUser?.profile?.name || "Điều dưỡng trực");
+                        setCsNurse(localUser?.profile?.name || localUser?.profile?.fullName || "");
                       }
                       setShowCareSheetForm(prev => !prev);
                     }}
@@ -1657,7 +1652,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </View>
 
                   {careSheets.map((cs, idx) => {
-                    const gcs = cs.glasgow;
+                    const gcs = cs.glasgow?.totalScore ? cs.glasgow : null; // phiếu không đánh giá GCS → không hiển thị
                     const isCritical = gcs && gcs.totalScore <= 8;
                     const isMedium = gcs && gcs.totalScore > 8 && gcs.totalScore <= 12;
 
@@ -1878,7 +1873,7 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                         <Text style={[s.docTableCell, { flex: 1, textAlign: 'center' }]}>{idx + 1}</Text>
                         <Text style={[s.docTableCell, { flex: 4, fontWeight: '500' }]}>{svc}</Text>
                         <Text style={[s.docTableCell, { flex: 2, textAlign: 'right', color: '#475569' }]}>
-                          {(svc.toLowerCase().includes('mri') ? 1500000 : svc.toLowerCase().includes('siêu âm') ? 250000 : 150000).toLocaleString('vi-VN')}
+                          {(() => { const fee = feeItems.find((it) => it.name === svc); return fee && Number.isFinite(Number(fee.amount)) ? Number(fee.amount).toLocaleString('vi-VN') : '—'; })()}
                         </Text>
                       </View>
                     ))}

@@ -15,6 +15,7 @@ const IMG = {
 export const LANDING_IMAGES = IMG;
 import { Reveal, CountUp, FloatingOrb } from '../ui/Motion';
 import { isFeatureEnabled } from '../../constants/featureScope';
+import { SUPPORT_HOTLINE, SUPPORT_HOURS_SHORT } from '../../constants/supportContact';
 
 const isWeb = Platform.OS === 'web';
 const C = {
@@ -73,7 +74,7 @@ export const HeroIntro = ({ isDesktop, onExplore, onStart }) => (
     <Reveal>
       <View style={s.heroChip}>
         <View style={s.pingDot} dataSet={{ anim: 'ping' }} />
-        <Text style={s.heroChipText}>AI hỗ trợ sàng lọc u não · trực 24/7</Text>
+        <Text style={s.heroChipText}>AI hỗ trợ sàng lọc u não</Text>
       </View>
     </Reveal>
     <Reveal delay={120}>
@@ -363,7 +364,6 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             { node: <CountUp value={4} style={s.bandVal} />, label: 'nhóm u não được phân loại' },
             { node: <CountUp value={3461} style={s.bandVal} />, label: 'ca MRI dùng để kiểm chứng' },
             { node: <CountUp value={92.04} decimals={2} suffix="%" style={s.bandVal} />, label: 'chỉ số F1 trung bình' },
-            { node: <Text style={s.bandVal}>24/7</Text>, label: 'hỗ trợ kỹ thuật & cấp cứu' },
           ].map((it, i) => (
             <Reveal key={it.label} delay={i * 100} style={[s.bandItem, col(4)]}>
               {it.node}
@@ -437,7 +437,7 @@ export const LandingBody = ({ isDesktop, onSectionLayout, onLogin, onRegister = 
             title="Cần hỗ trợ?"
             style={isDesktop ? { flex: 1 } : { marginTop: 20 }}
             links={[
-              { label: 'Hotline 24/7: 1800 1234', onPress: onCall },
+              { label: `Hotline ${SUPPORT_HOTLINE} (${SUPPORT_HOURS_SHORT})`, onPress: onCall },
               { label: 'support@neuroscan.com', onPress: onEmail },
               { label: 'Câu hỏi thường gặp', onPress: onLogin },
             ]}
