@@ -816,10 +816,8 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
               const IconComponent = t.Icon;
               const isDone = (t.key === 'exam' && examDone) || (t.key === 'order' && orderDone) || (t.key === 'fee' && invoiceDone) || (t.key === 'careSheet' && careSheets.length > 0);
               const isActive = activeForm === t.key;
-              // Làm theo thứ tự: Khám bệnh (sinh hiệu) → Chỉ định → Viện phí
-              const lockReason = t.key === 'order' && !examDone ? 'Cần lưu tab Khám bệnh (sinh hiệu) trước khi chỉ định dịch vụ.'
-                : t.key === 'fee' && !orderDone ? (!examDone ? 'Cần lưu tab Khám bệnh và tab Chỉ định trước khi lập phiếu thu.' : 'Cần lưu tab Chỉ định trước khi lập phiếu thu.')
-                : null;
+              // Các tab mở tự do, không bắt làm theo thứ tự
+              const lockReason = null;
 
               return (
                 <TouchableOpacity key={t.key}

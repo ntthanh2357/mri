@@ -24,6 +24,7 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
   const isNurse = role === 'nurse';
   const { width } = useWindowDimensions();
   const isWide = width > 1180;
+  const isPhone = width < 640; // điện thoại: lề hẹp, dòng ca cấp cứu xuống hàng
   const [loading, setLoading] = useState(true);
   const [visits, setVisits] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -115,7 +116,7 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
   const openVisit = (v) => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } });
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.pageContent}>
+    <ScrollView style={s.page} contentContainerStyle={[s.pageContent, isPhone && s.pageContentPhone]}>
       <ReceptionBanner
         image={RECEPTION_IMAGES.waiting}
         tone="ocean"
@@ -202,9 +203,9 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
           {data.emergencies.length > 0 && (
             <Reveal delay={60} style={[s.card, s.emergencyCard]}>
               <View style={s.cardHead}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={s.emergencyIcon}><Siren size={18} color="#FFFFFF" /></View>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={s.cardTitle}>Ca cấp cứu cần chụp MRI</Text>
                     <Text style={s.cardSub}>Hệ thống chèn vào khung giờ trống gần nhất; nếu kín lịch sẽ đề xuất dời một ca thường</Text>
                   </View>
@@ -213,12 +214,12 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
               {data.emergencies.map((v) => {
                 const booked = v.status === 'chờ chụp';
                 return (
-                  <View key={v._id} style={s.row}>
+                  <View key={v._id} style={[s.row, isPhone && s.rowWrap]}>
                     <View style={[s.ticketNo, { backgroundColor: '#DC2626' }]}>
                       <Text style={[s.ticketNoText, { color: '#FFFFFF', fontSize: 13 }]}>{data.numberOf.get(v._id)}</Text>
                     </View>
                     <Avatar name={personName(v.patientId)} size={38} />
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={s.rowName} numberOfLines={1}>{personName(v.patientId)}</Text>
                       <Text style={s.rowMeta} numberOfLines={1}>BS. {personName(v.doctorId)} · {v.reason || 'Cấp cứu'}</Text>
                     </View>
@@ -241,7 +242,7 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
           {/* Danh sách chờ */}
           <Reveal delay={120} style={s.card}>
             <View style={s.cardHead}>
-              <View>
+              <View style={{ flex: 1, minWidth: 200 }}>
                 <Text style={s.cardTitle}>Danh sách chờ khám</Text>
                 <Text style={s.cardSub}>Ca cấp cứu luôn được ưu tiên lên đầu · thời gian chờ tự cập nhật</Text>
               </View>
@@ -259,12 +260,12 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
               const wait = minutesSince(v.createdAt, now);
               const level = wait >= 45 ? 'high' : wait >= 20 ? 'mid' : 'low';
               return (
-                <TouchableOpacity key={v._id} style={[s.row, v.priority === 'khẩn cấp' && s.rowUrgent]} onPress={() => openVisit(v)} dataSet={{ hover: 'tint' }}>
+                <TouchableOpacity key={v._id} style={[s.row, isPhone && s.rowWrap, v.priority === 'khẩn cấp' && s.rowUrgent]} onPress={() => openVisit(v)} dataSet={{ hover: 'tint' }}>
                   <View style={[s.ticketNo, idx === 0 && s.ticketNoFirst]}>
                     <Text style={[s.ticketNoText, idx === 0 && { color: '#FFFFFF' }]}>{data.numberOf.get(v._id)}</Text>
                   </View>
                   <Avatar name={personName(v.patientId)} size={38} />
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
                     <Text style={s.rowName} numberOfLines={1}>{personName(v.patientId)}</Text>
                     <Text style={s.rowMeta} numberOfLines={1}>BS. {personName(v.doctorId)} · {v.reason || 'Khám tổng quát'}</Text>
                   </View>
@@ -293,8 +294,8 @@ const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#F3F7FC' },
   pageContent: { padding: 28, paddingBottom: 56, maxWidth: 1360, width: '100%', alignSelf: 'center', gap: 22 },
 
-  bannerStats: { flexDirection: 'row', gap: 10 },
-  bannerStat: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 16, minWidth: 104, gap: 2 },
+  bannerStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  bannerStat: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, minWidth: 86, flexGrow: 1, gap: 2 },
   bannerStatValue: { color: '#FFFFFF', fontSize: 26, fontWeight: '800' },
   bannerStatLabel: { color: '#BFE5D6', fontSize: 11, fontWeight: '600' },
   bannerActions: { flexDirection: 'row', gap: 10, marginTop: 18, flexWrap: 'wrap' },
@@ -325,9 +326,11 @@ const s = StyleSheet.create({
   nextName: { color: '#E2E8F0', fontSize: 13, flex: 1 },
 
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', ...shadow },
-  cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardHead: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
   cardSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  pageContentPhone: { padding: 14, paddingBottom: 40, gap: 16 },
+  rowWrap: { flexWrap: 'wrap' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   rowUrgent: { backgroundColor: '#FEF2F2' },
   ticketNo: { width: 58, paddingVertical: 8, borderRadius: 12, backgroundColor: '#E7F6F0', alignItems: 'center' },

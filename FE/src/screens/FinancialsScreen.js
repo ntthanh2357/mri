@@ -859,7 +859,7 @@ const FinancialsScreen = ({ navigation }) => {
             <View>
               <View style={styles.recentHeaderRow}>
                 <Text style={styles.sectionTitle}>Danh sách báo cáo doanh thu tháng</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
                     <Text style={{ fontSize: 12, color: '#475569', fontWeight: 'bold' }}>Tháng:</Text>
                     <TextInput

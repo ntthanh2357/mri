@@ -35,6 +35,7 @@ import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../compone
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, post } from '../services/api.service';
+import { phonePad } from '../utils/phonePad';
 import {
   Pill,
   ShieldCheck,
@@ -553,7 +554,7 @@ export default function PharmacyQueueScreen({ navigation, route }) {
     <ResponsiveLayout navigation={navigation} activeRoute="PharmacyQueue">
       <SafeAreaView style={styles.container}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, phonePad()]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

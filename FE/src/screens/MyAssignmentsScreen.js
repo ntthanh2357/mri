@@ -40,6 +40,7 @@ import { Hourglass as TabPending, Loader as TabDoing, CheckCircle2 as TabDone, L
 
 const ASSIGN_TAB_ICON = { pending: TabPending, active: TabDoing, done: TabDone, all: TabAll };
 import { get, put } from '../services/api.service';
+import { phonePad } from '../utils/phonePad';
 import {
   ClipboardCheck,
   Stethoscope,
@@ -379,7 +380,7 @@ export default function MyAssignmentsScreen({ navigation, route }) {
     <ResponsiveLayout navigation={navigation} activeRoute="MyAssignments">
       <SafeAreaView style={styles.container}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, phonePad()]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={Colors.brandGreen} />
           }

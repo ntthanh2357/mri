@@ -21,6 +21,7 @@ import Layout from '../constants/layout';
 import { get, post, put, del } from '../services/api.service';
 import { Pill, AlertTriangle, Plus, Search, Edit2, Trash2, CheckCircle2, Save, Package, Clock, ChevronUp, ChevronDown } from 'lucide-react';
 import { batchesOf, batchCountOf, daysLeftOf, displayExpiry, earliestActiveBatch, expiryStatus } from '../utils/batchUtils';
+import { phonePad } from '../utils/phonePad';
 
 const CATEGORY_LABELS = {
   chemotherapy: 'Hóa trị & Điều trị đích U Não',
@@ -345,7 +346,7 @@ export default function DrugManagementScreen({ navigation, route }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab !== 'list' ? `DrugManagement_${activeTab}` : 'DrugManagement'}>
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={[styles.scroll, phonePad()]}>
           <PageContainer>
           <View style={styles.bannerBlock}>
             <StaffBanner

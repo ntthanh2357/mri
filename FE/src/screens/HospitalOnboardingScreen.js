@@ -11,6 +11,7 @@ import PageContainer from '../components/layout/PageContainer';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '../constants/colors';
 import { FileText, Upload, CheckCircle2, Clock } from 'lucide-react';
+import { phonePad } from '../utils/phonePad';
 
 const FIELD = (label, key, opts = {}) => ({ label, key, ...opts });
 
@@ -296,7 +297,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="HospitalOnboarding">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, phonePad()]} showsVerticalScrollIndicator={false}>
           <PageContainer>
             <View style={{ marginBottom: 18 }}>
               <StaffBanner

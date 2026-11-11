@@ -35,6 +35,7 @@ import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs } from '../compone
 import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get } from '../services/api.service';
+import { phonePad } from '../utils/phonePad';
 import {
   FileSearch,
   ShieldAlert,
@@ -321,7 +322,7 @@ export default function ClinicalAuditScreen({ navigation }) {
     <ResponsiveLayout navigation={navigation} activeRoute="ClinicalAudit">
       <SafeAreaView style={styles.container}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, phonePad()]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={Colors.brandGreen} />
           }

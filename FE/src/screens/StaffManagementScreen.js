@@ -19,6 +19,7 @@ import PageTabs from '../components/layout/PageTabs';
 import PageContainer from '../components/layout/PageContainer';
 import { get, post, put } from '../services/api.service';
 import { Plus, Save, Users, Search, Lock, Unlock } from 'lucide-react';
+import { phonePad } from '../utils/phonePad';
 
 const ROLE_LABELS = {
   department_head: 'Trưởng khoa Ung Thư Não',
@@ -153,7 +154,7 @@ export default function StaffManagementScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffManagement">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={[styles.scroll, phonePad()]}>
           <PageContainer>
             <View style={{ marginBottom: 18 }}>
               <StaffBanner

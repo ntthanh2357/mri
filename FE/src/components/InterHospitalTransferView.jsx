@@ -160,17 +160,17 @@ export default function InterHospitalTransferView({ currentUser }) {
   };
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] p-4 md:p-6 overflow-y-auto space-y-6">
+    <div className="flex-1 bg-[#F8FAFC] p-0 sm:p-4 md:p-6 overflow-y-auto space-y-6">
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-700 border border-blue-100">
+            <div className="hidden sm:block p-2.5 bg-blue-50 rounded-xl text-blue-700 border border-blue-100">
               <Mail className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
                   Quản Lý Hồ Sơ Chuyển Viện &amp; Gửi Email Bệnh Nhân
                 </h1>
                 <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-extrabold rounded-md uppercase tracking-wider">

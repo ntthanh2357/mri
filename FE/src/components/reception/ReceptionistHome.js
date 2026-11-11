@@ -7,7 +7,8 @@ import {
 import { get } from '../../services/api.service';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal, CountUp } from '../ui/Motion';
-import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, formatVnd, personName } from './ReceptionUI';
+import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, formatVnd, personName, LiveClock as SharedLiveClock } from './ReceptionUI';
+import { phonePad } from '../../utils/phonePad';
 
 const isWeb = Platform.OS === 'web';
 const SHIFT_LABELS = { 'sáng': 'Ca Sáng', 'chiều': 'Ca Chiều', 'tối': 'Ca Tối', 'cả ngày': 'Cả Ngày' };
@@ -49,6 +50,7 @@ const LiveClock = ({ shift }) => {
 
 const ReceptionistHome = ({ user, navigation }) => {
   const { width } = useWindowDimensions();
+  const isPhone = width < 640;
   const isWide = width > 1100;
   const [loading, setLoading] = useState(true);
   const [visits, setVisits] = useState([]);
@@ -111,14 +113,14 @@ const ReceptionistHome = ({ user, navigation }) => {
   ];
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.pageContent}>
+    <ScrollView style={s.page} contentContainerStyle={[s.pageContent, phonePad()]}>
       <ReceptionBanner
         image={RECEPTION_IMAGES.lobby}
         tone="navy"
         eyebrow={`${greetingOf(new Date())},`}
         title={name}
         subtitle="Bàn làm việc Tiếp đón & Thu ngân — mọi việc trong ngày ở một nơi."
-        right={<LiveClock shift={shift} />}
+        right={isPhone ? <SharedLiveClock label="Quầy đang mở" shift={shift} /> : <LiveClock shift={shift} />}
       >
         <TouchableOpacity style={s.bannerBtn} onPress={() => go('createVisit')} dataSet={{ hover: 'glow' }}>
           <UserPlus size={16} color="#0B2A55" />
@@ -166,7 +168,7 @@ const ReceptionistHome = ({ user, navigation }) => {
         })}
       </View>
 
-      <View style={[s.twoCol, isWide && { flexDirection: 'row' }]}>
+      <View style={[s.twoCol, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
         {/* Dòng tiếp đón */}
         <Reveal style={[s.panel, isWide && { flex: 1.45 }]}>
           <View style={s.panelHead}>

@@ -9,6 +9,28 @@ import './src/utils/embedFeatherFont';
 import AppNavigator from './src/navigation/AppNavigator';
 import AppErrorBoundary from './src/components/AppErrorBoundary';
 
+// Điện thoại (Safari iOS): không tự phóng to khi bấm vào ô nhập chữ — phóng to xong trang bị lệch sang một bên
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  let vp = document.querySelector('meta[name="viewport"]');
+  if (!vp) { vp = document.createElement('meta'); vp.name = 'viewport'; document.head.appendChild(vp); }
+  vp.content = 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover';
+
+  // Thêm vào Màn hình chính trên iPhone thì mở toàn màn hình như app (không có cử chỉ vuốt lùi/tiến của Safari)
+  [['apple-mobile-web-app-capable', 'yes'], ['mobile-web-app-capable', 'yes'], ['apple-mobile-web-app-title', 'NeuroScan AI'], ['apple-mobile-web-app-status-bar-style', 'default']].forEach(([name, content]) => {
+    if (document.querySelector(`meta[name="${name}"]`)) return;
+    const m = document.createElement('meta'); m.name = name; m.content = content; document.head.appendChild(m);
+  });
+
+  // Safari iOS: vuốt từ mép trái/phải màn hình là lùi/tiến trang. Chặn cú chạm bắt đầu sát mép (vùng 14px,
+  // chỉ là lề trống của trang) để vuốt ngang không vô tình đổi trang.
+  const EDGE = 14;
+  document.addEventListener('touchstart', (ev) => {
+    const t = ev.touches && ev.touches[0];
+    if (!t) return;
+    if (t.clientX < EDGE || t.clientX > window.innerWidth - EDGE) ev.preventDefault();
+  }, { passive: false });
+}
+
 // Custom high-fidelity Alert.alert Web Polyfill
 if (Platform.OS === 'web') {
   Alert.alert = (title, message, buttons) => {

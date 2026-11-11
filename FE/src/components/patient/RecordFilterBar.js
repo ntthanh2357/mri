@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, minWidth: 0, fontSize: 15, color: Colors.slateDark, paddingVertical: 10 },
   clear: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14 },
   pair: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 24, rowGap: 12 },
-  group: { gap: 6 },
+  group: { gap: 6, flexShrink: 1, maxWidth: '100%' },
   groupLabel: { fontSize: 13, fontWeight: '600', color: Colors.slateMuted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 18, borderWidth: 1, borderColor: Colors.borderStrong, backgroundColor: Colors.surface },

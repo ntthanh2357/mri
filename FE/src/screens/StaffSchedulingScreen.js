@@ -21,6 +21,7 @@ import {
   PlusCircle as BtnRegister, RefreshCw as BtnRefresh, Hourglass as StatPending, BadgeCheck as StatConfirmed,
 } from 'lucide-react';
 import { get, post, put, del } from '../services/api.service';
+import { phonePad } from '../utils/phonePad';
 import {
   User,
   RefreshCw,
@@ -675,7 +676,7 @@ export default function StaffSchedulingScreen({ navigation }) {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="StaffScheduling">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={[styles.scroll, phonePad()]}>
           <PageContainer spaced>
           <View>
             <StaffBanner
@@ -963,7 +964,7 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'my-schedule' && !isReceptionistUser && (
             <View style={styles.card}>
               <View style={styles.myScheduleHeader}>
-                <View>
+                <View style={{ flex: 1, minWidth: 220 }}>
                   <Text style={styles.cardTitle}>Lịch làm việc cá nhân</Text>
                   <Text style={styles.cardSub}>
                     Kíp trực cá nhân của bạn trong tuần. Bạn có thể đăng ký thêm ca hoặc xin đổi ca trực.
@@ -1128,7 +1129,7 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'registrations' && (
             <View style={styles.card}>
               <View style={styles.registrationsHeader}>
-                <View>
+                <View style={{ flex: 1, minWidth: 220 }}>
                   <Text style={styles.cardTitle}>
                     {isHospitalAdmin ? 'Hộp thư phê duyệt phiếu đăng ký ca' : 'Lịch sử đăng ký ca trực'}
                   </Text>
@@ -1209,7 +1210,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                   .toUpperCase()}
                               </Text>
                             </View>
-                            <View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
                               <Text style={styles.regStaffName}>
                                 {reg.staffId?.profile?.name || reg.staffId?.email || 'Nhân sự'}
                               </Text>
@@ -1321,7 +1322,7 @@ export default function StaffSchedulingScreen({ navigation }) {
           {activeTab === 'swap' && (
             <View style={styles.card}>
               <View style={styles.registrationsHeader}>
-                <View>
+                <View style={{ flex: 1, minWidth: 220 }}>
                   <Text style={styles.cardTitle}>Phê duyệt đổi ca trực</Text>
                   <Text style={styles.cardSub}>
                     {isHospitalAdmin
@@ -1364,7 +1365,7 @@ export default function StaffSchedulingScreen({ navigation }) {
                                   .toUpperCase()}
                               </Text>
                             </View>
-                            <View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
                               <Text style={styles.regStaffName}>
                                 {req.requesterId?.profile?.name || 'Nhân sự'}
                               </Text>
@@ -2019,6 +2020,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   weekNavGroup: {
+    flexShrink: 1,
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -2051,6 +2054,8 @@ const styles = StyleSheet.create({
   weekRangeTitle: { fontSize: 13, fontWeight: '700', color: Colors.brandNavy, marginLeft: 8 },
 
   filterBox: {
+    flexShrink: 1,
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -2339,7 +2344,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 16,
   },
-  filterPillsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  filterPillsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' },
   filterPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -2372,7 +2377,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 3,
   },
-  registrationCardLeft: { flex: 1, minWidth: 260 },
+  registrationCardLeft: { flex: 1, minWidth: 220 },
   regStaffHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   regStaffName: { fontSize: 13, fontWeight: 'bold', color: Colors.brandNavy },
   regStaffRole: { fontSize: 12, color: '#64748B', marginTop: 1 },

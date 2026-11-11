@@ -1031,6 +1031,13 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
 
+  // Nút "Quay lại": lùi về màn trước; mở thẳng bằng đường dẫn (không có màn trước) thì về danh sách bệnh nhân
+  const isStaffRole = ['doctor', 'technician', 'nurse', 'receptionist'].includes(currentUser?.role);
+  const handleBackNavigation = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate(isStaffRole ? 'DoctorPatientList' : 'PatientRecords');
+  };
+
   return (
     <ResponsiveLayout
       navigation={navigation}

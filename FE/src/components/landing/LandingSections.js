@@ -171,20 +171,25 @@ const ZigzagRow = ({ isDesktop, reverse, image, title, text, cta, onPress, bubbl
   const imageCol = bubbles ? (
     <Reveal variant="zoom-in" delay={120} style={[s.bubbleWrap, isDesktop && { flex: 1.1 }]}>
       <View style={s.bubbleHalo} />
-      <Image source={image} style={s.bubbleImage} resizeMode="cover" />
+      {/* Khung giữ tỉ lệ ảnh (aspectRatio đặt trên Image bị bỏ qua trên web → ảnh lấy chiều cao gốc, bị cắt) */}
+      <View style={s.bubbleImage}>
+        <Image source={image} style={s.imgFill} resizeMode="cover" />
+      </View>
       {bubbles.map((b, i) => {
         const Icon = b.icon;
         return (
-          <View key={b.label} style={[s.bubble, b.pos]} dataSet={{ anim: i % 2 ? 'float-slow' : 'float', hover: 'lift' }}>
-            <Icon size={24} color={b.color} strokeWidth={2.2} />
-            <Text style={[s.bubbleText, { color: b.color }]}>{b.label}</Text>
+          <View key={b.label} style={[s.bubble, b.pos, !isDesktop && s.bubbleSmall]} dataSet={{ anim: i % 2 ? 'float-slow' : 'float', hover: 'lift' }}>
+            <Icon size={isDesktop ? 24 : 18} color={b.color} strokeWidth={2.2} />
+            <Text style={[s.bubbleText, !isDesktop && s.bubbleTextSmall, { color: b.color }]}>{b.label}</Text>
           </View>
         );
       })}
     </Reveal>
   ) : (
     <Reveal variant="zoom-in" delay={120} style={[s.zzImageWrap, isDesktop && { flex: 1.1 }]}>
-      <Image source={image} style={s.zzImage} resizeMode="cover" />
+      <View style={s.zzImage}>
+        <Image source={image} style={s.imgFill} resizeMode="cover" />
+      </View>
     </Reveal>
   );
   return (
@@ -600,14 +605,18 @@ const s = StyleSheet.create({
   zzBtn: { alignSelf: 'flex-start', backgroundColor: C.blue, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 6 },
   zzBtnText: { color: C.white, fontSize: 15, fontWeight: '700' },
   zzImageWrap: { width: '100%', borderRadius: 4, overflow: 'hidden', ...shadow(20, 50, 0.18) },
-  zzImage: { width: '100%', aspectRatio: 1.25 },
+  zzImage: { width: '100%', aspectRatio: 1.25, overflow: 'hidden' },
+  imgFill: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
 
   // Ảnh có bong bóng dịch vụ
   bubbleWrap: { width: '100%', position: 'relative', paddingTop: 40 },
   bubbleHalo: { position: 'absolute', top: 0, left: '6%', right: '6%', aspectRatio: 1, borderRadius: 9999, backgroundColor: '#E7F6F0' },
-  bubbleImage: { width: '100%', aspectRatio: 1.35, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
+  bubbleImage: { width: '100%', aspectRatio: 1.35, overflow: 'hidden', borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
   bubble: { position: 'absolute', width: 118, height: 118, borderRadius: 59, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center', gap: 6, ...shadow(12, 30, 0.16) },
   bubbleText: { fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 16 },
+  // Điện thoại: bong bóng nhỏ hơn để không che ảnh
+  bubbleSmall: { width: 78, height: 78, borderRadius: 39, gap: 3 },
+  bubbleTextSmall: { fontSize: 10.5, lineHeight: 13 },
 
   // Thẻ hỗ trợ
   helpBand: { backgroundColor: '#F1F4F8', paddingVertical: 64 },

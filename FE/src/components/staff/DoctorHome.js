@@ -9,6 +9,7 @@ import useStaffHome from '../../controllers/useStaffHome';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal, CountUp } from '../ui/Motion';
 import { StaffBanner, RECEPTION_IMAGES, LiveClock, Avatar, EmptyState, personName } from '../reception/ReceptionUI';
+import { phonePad } from '../../utils/phonePad';
 
 const isWeb = Platform.OS === 'web';
 const MRI_STATUSES = ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'];
@@ -92,7 +93,7 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
   const openVisit = (v) => isPharm ? navigation.navigate('PharmacyQueue') : navigation.navigate('DoctorWorkQueue', { tab: isTech || MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.pageContent}>
+    <ScrollView style={s.page} contentContainerStyle={[s.pageContent, phonePad()]}>
       <StaffBanner
         image={RECEPTION_IMAGES[cfg.image]}
         tone={cfg.tone}
@@ -152,7 +153,7 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
         })}
       </View>
 
-      <View style={[s.twoCol, isWide && { flexDirection: 'row' }]}>
+      <View style={[s.twoCol, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
         {/* Bệnh nhân tiếp theo */}
         <Reveal style={[s.panel, isWide && { flex: 1.35 }]}>
           <View style={s.panelHead}>

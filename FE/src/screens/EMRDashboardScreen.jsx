@@ -71,6 +71,7 @@ import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
 import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
 import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
+import { phonePad } from '../utils/phonePad';
 
 const EMRDashboardScreen = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
@@ -407,7 +408,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
       <SafeAreaView style={styles.container}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.emrPage}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.emrPage, phonePad()]}>
           <StaffBanner
             compact
             image={RECEPTION_IMAGES[tabMeta.image]}
@@ -751,7 +752,7 @@ const NurseQueueTab = ({ navigation }) => {
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
           <Stethoscope size={22} color={Colors.brandGreen} />
           <Text style={styles.tabTitle}>Hàng đợi đo sinh hiệu</Text>
         </View>
@@ -1404,7 +1405,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
           <ClipboardList size={22} color={Colors.brandGreen} />
           <Text style={styles.tabTitle}>Hồ sơ bệnh án</Text>
         </View>
@@ -1508,7 +1509,7 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
 const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
         <FileText size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Phiếu chăm sóc Điều dưỡng</Text>
       </View>
@@ -1674,7 +1675,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
           <Brain size={18} color={Colors.brandGreen} />
           <Text style={styles.tabTitle}>Hội chẩn Đa chuyên khoa Ung thư Não (Tumor Board — MTB)</Text>
         </View>
@@ -1749,7 +1750,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
 const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
         <PenTool size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Giấy cam đoan</Text>
       </View>
@@ -1795,7 +1796,7 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
 const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewPrescription }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
         <Pill size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Kê đơn thuốc</Text>
       </View>
@@ -1839,7 +1840,7 @@ const PrescriptionTab = ({ prescriptions, availableDrugs, selectedRecord, onNewP
 const VersionTab = ({ versions, selectedRecord }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
         <History size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Lịch sử sửa đổi bệnh án (Audit Trail)</Text>
       </View>
@@ -1936,7 +1937,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 200 }}>
           <Brain size={18} color={Colors.brandGreen} />
           <Text style={styles.tabTitle}>Lịch sử Chẩn đoán Hình ảnh</Text>
         </View>
@@ -2788,6 +2789,8 @@ const styles = StyleSheet.create({
   },
   tabHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
@@ -2797,6 +2800,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tabTitle: {
+    flexShrink: 1,
     fontSize: 22,
     fontWeight: '700',
     color: Colors.brandNavy,

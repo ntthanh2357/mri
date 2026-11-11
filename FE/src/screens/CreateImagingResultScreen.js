@@ -20,6 +20,7 @@ import Config from '../constants/config';
 import styles from './CreateImagingResultScreen.styles';
 import Colors from '../constants/colors';
 import { Zap, Brain, Edit3, CheckCircle2, RotateCw, X, Upload, UploadCloud, Image as ImgIcon, ScanLine as ScanIcon, ListChecks as ListIcon } from 'lucide-react';
+import { phonePad } from '../utils/phonePad';
 
 // Thẻ biểu mẫu có số mục — đặt ngoài component để ô nhập không bị mất con trỏ khi gõ
 const SectionCard = ({ no, title, hint, children }) => (
@@ -288,7 +289,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="CreateImagingResult">
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={L.page}>
+        <ScrollView contentContainerStyle={[L.page, phonePad()]}>
           <StaffBanner
             compact
             image={RECEPTION_IMAGES.mriFilms}

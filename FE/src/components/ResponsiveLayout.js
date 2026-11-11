@@ -476,9 +476,9 @@ const ResponsiveLayout = ({
             }}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.darkRaised }}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                     <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
-                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
+                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }} numberOfLines={2}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
                   </View>
                   <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
                     <X size={20} color="#94A3B8" />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { FloatingOrb } from '../ui/Motion';
+import { phonePad } from '../../utils/phonePad';
 
 const isWeb = Platform.OS === 'web';
 
@@ -34,7 +35,7 @@ export const PATIENT_ILLUS = {
 
 /** Khung trang bệnh nhân: dùng hết bề rộng (tối đa 1320) thay vì cột hẹp ở giữa. */
 export const PatientPage = ({ children, style }) => (
-  <ScrollView style={s.page} contentContainerStyle={[s.pageContent, style]} keyboardShouldPersistTaps="handled">
+  <ScrollView style={s.page} contentContainerStyle={[s.pageContent, style, phonePad()]} keyboardShouldPersistTaps="handled">
     {children}
   </ScrollView>
 );

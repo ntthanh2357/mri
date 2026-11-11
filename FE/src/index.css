@@ -60,6 +60,9 @@
 /* Đảm bảo html & body chiếm đầy màn hình — tương thích với expo-reset */
 html {
   height: 100%;
+  /* Điện thoại: không cho trang trượt ngang (Safari iOS vẫn cho kéo ngang nếu chỉ chặn ở body) */
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -71,6 +74,11 @@ body {
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  overscroll-behavior: none;
+  /* Ghim trang: Safari iOS không kéo lệch cả trang sang trái/phải được nữa (nội dung cuộn trong app) */
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 /* Expo Web gắn app vào #root — phải chiếm đủ 100% chiều cao */

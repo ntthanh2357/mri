@@ -10,6 +10,7 @@ import { StaffBanner, RECEPTION_IMAGES, BannerStats, PillTabs, Avatar } from '..
 import { useQueueDesk } from '../controllers/useQueueDesk';
 import PreScreeningModal from '../components/staff/PreScreeningModal';
 import { RISK_META } from '../utils/preScreening';
+import { phonePad } from '../utils/phonePad';
 
 // UC-NUR-01 — Tiếp nhận & gọi bệnh nhân đo sinh hiệu (chỉ role điều dưỡng).
 // Xem danh sách bệnh nhân đã tiếp đón trong ngày → gọi người bệnh vào phòng đo sinh hiệu ban đầu.
@@ -297,7 +298,7 @@ const NurseTriageScreen = ({ navigation }) => {
     );
   } else {
     body = (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.pageContent}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.pageContent, phonePad()]}>
           <StaffBanner
             image={RECEPTION_IMAGES.waiting}
             tone="teal"
@@ -453,8 +454,8 @@ const styles = StyleSheet.create({
   stateTitle: { fontSize: 18, fontWeight: '700', color: Colors.brandNavy },
 
   hero: { padding: 22, borderRadius: 22, backgroundColor: '#0A1A33', gap: 14, borderWidth: 1, borderColor: '#13305A', ...(Platform.OS === 'web' ? { boxShadow: '0 24px 50px -28px rgba(10,26,51,0.8)' } : {}) },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   heroBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 1.6 },
   live: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(52,211,153,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#34D399' },
@@ -463,8 +464,8 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 12, fontWeight: '800', color: '#94A3B8', letterSpacing: 1.4, textTransform: 'uppercase' },
   heroNumber: { fontSize: 64, lineHeight: 72, fontWeight: '900', color: '#34D399', fontVariant: ['tabular-nums'], ...(Platform.OS === 'web' ? { textShadow: '0 0 24px rgba(52,211,153,0.55)' } : {}) },
   heroSub: { fontSize: 14, color: Colors.onDarkMuted },
-  heroRight: { gap: 8, alignItems: 'flex-start' },
-  heroHint: { fontSize: 13, color: Colors.onDarkMuted },
+  heroRight: { gap: 8, alignItems: 'flex-start', flexShrink: 1, maxWidth: '100%' },
+  heroHint: { maxWidth: '100%', fontSize: 13, color: Colors.onDarkMuted },
   callBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 22, borderRadius: 999, backgroundColor: Colors.brandMint },
   callBtnHover: { backgroundColor: '#FFFFFF' },
   callBtnText: { fontSize: 15, fontWeight: '700', color: Colors.brandNavy },
@@ -513,7 +514,7 @@ const styles = StyleSheet.create({
   stageTextHigh: { color: Colors.errorText },
   stageTextCaution: { color: Colors.warningText },
   stageTextOk: { color: Colors.successText },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' },
 
   btn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 999 },
   btnPrimary: { backgroundColor: Colors.brandGreen },

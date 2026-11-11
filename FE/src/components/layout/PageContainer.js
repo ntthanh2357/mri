@@ -22,6 +22,8 @@ const PageContainer = ({ width = 'default', spaced = false, style, children }) =
         },
         width !== 'full' && { maxWidth: Layout.maxWidth[width] || Layout.maxWidth.default },
         style,
+        // Điện thoại: lề gọn, không để style riêng của màn đẩy lề rộng ra
+        screen < 640 && { paddingHorizontal: Layout.gutter.mobile, paddingTop: Layout.gutter.mobile },
       ]}
     >
       {children}

@@ -22,6 +22,7 @@ import { get, post } from '../services/api.service';
 import { getFaqsForRole } from '../constants/supportFaqs';
 import { Reveal } from '../components/ui/Motion';
 import { ReceptionBanner, EmptyState } from '../components/reception/ReceptionUI';
+import { phonePad } from '../utils/phonePad';
 
 const SUPPORT_IMAGES = {
   hero: require('../../assets/reception/support_headset.jpg'),
@@ -149,7 +150,7 @@ const SupportScreen = ({ navigation }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute="Support" user={user}>
-      <ScrollView style={s.page} contentContainerStyle={s.pageContent} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.page} contentContainerStyle={[s.pageContent, phonePad()]} keyboardShouldPersistTaps="handled">
         <ReceptionBanner
           image={SUPPORT_IMAGES.hero}
           tone="navy"
@@ -197,7 +198,7 @@ const SupportScreen = ({ navigation }) => {
           })}
         </View>
 
-        <View style={[s.twoCol, isWide && { flexDirection: 'row' }]}>
+        <View style={[s.twoCol, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
           {/* FAQ theo vai trò */}
           <View style={[{ gap: 14 }, isWide && { flex: 1.35 }]}>
             <View style={s.sectionHead}>

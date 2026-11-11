@@ -912,6 +912,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const { width } = useWindowDimensions();
   const isWide = width > 1180;
   const bhytWide = width >= 900; // modal BHYT 2 cột khi đủ rộng
+  const isPhone = width < 640; // điện thoại: lề hẹp, thanh tab trải đủ ngang
 
   const TABS = [
     { key: 'createVisit', label: 'Tiếp nhận', icon: UserPlus },
@@ -992,18 +993,18 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
   return (
     <ResponsiveLayout navigation={navigation} title={headerTitle} user={user} activeRoute={currentActiveRoute}>
-      <ScrollView style={st.page} contentContainerStyle={st.pageContent} keyboardShouldPersistTaps="handled">
+      <ScrollView style={st.page} contentContainerStyle={[st.pageContent, isPhone && st.pageContentPhone]} keyboardShouldPersistTaps="handled">
         {banner}
 
         {/* Thanh tab dạng viên thuốc, nổi lên trên banner */}
-        <View style={st.tabBar}>
+        <View style={[st.tabBar, isPhone && st.tabBarPhone]}>
           {TABS.map(t => {
             const Icon = t.icon;
             const active = activeTab === t.key;
             return (
               <TouchableOpacity
                 key={t.key}
-                style={[st.tab, active && st.tabActive]}
+                style={[st.tab, isPhone && st.tabPhone, active && st.tabActive]}
                 onPress={() => setActiveTab(t.key)}
                 dataSet={active ? undefined : { hover: 'tint' }}
               >
@@ -1028,7 +1029,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
 
             {/* ═════════════ TAB 1: TIẾP NHẬN (WIZARD) ═════════════ */}
             {activeTab === 'createVisit' && (
-              <View style={[st.wizard, isWide && { flexDirection: 'row' }]}>
+              <View style={[st.wizard, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
                 <View style={[{ gap: 18 }, isWide && { flex: 1.65 }]}>
                   {/* Bước 1 */}
                   <Reveal style={st.stepCard}>
@@ -1070,7 +1071,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                         return (
                           <TouchableOpacity
                             key={p._id}
-                            style={[st.patientCard, active && st.patientCardActive, { width: isWide ? '31.8%' : '48.5%' }]}
+                            style={[st.patientCard, active && st.patientCardActive, { width: isWide ? '31.8%' : isPhone ? '100%' : '48.5%' }]}
                             onPress={() => setSelectedPatientId(p._id)}
                             dataSet={active ? undefined : { hover: 'lift' }}
                           >
@@ -1308,7 +1309,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             {activeTab === 'myQueue' && (
               <View style={{ gap: 16 }}>
                 <View style={st.toolbar}>
-                  <View style={[st.searchBox, { flex: 1, marginBottom: 0 }]}>
+                  <View style={[st.searchBox, { flex: 1, minWidth: 240, marginBottom: 0 }]}>
                     <Search size={16} color="#94A3B8" />
                     <TextInput
                       style={st.searchInput}
@@ -1340,7 +1341,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     />
                   </View>
                 ) : (
-                  <View style={[st.board, isWide && { flexDirection: 'row' }]}>
+                  <View style={[st.board, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
                     {BOARD.map((col, ci) => {
                       const ColIcon = col.icon;
                       const items = queueFiltered.filter(v => columnOf(v.status) === col.key).sort(sortForColumn(col.key));
@@ -1427,7 +1428,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     <EmptyState icon={BadgeCheck} tint="#0F9D6B" title="Không có hóa đơn nào ở mục này" text="Hóa đơn mới sẽ xuất hiện khi điều dưỡng hoặc bác sĩ gửi phiếu thu sang quầy." />
                   </View>
                 ) : (
-                  <View style={[st.pos, isWide && { flexDirection: 'row' }]}>
+                  <View style={[st.pos, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
                     {/* Danh sách hóa đơn */}
                     <View style={[{ gap: 10 }, isWide && { flex: 1 }]}>
                       {shownInvoices.map((inv, i) => {
@@ -1441,7 +1442,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                               dataSet={active ? undefined : { hover: 'lift' }}
                             >
                               <Avatar name={personName(inv.patientId)} size={40} />
-                              <View style={{ flex: 1 }}>
+                              <View style={{ flex: 1, minWidth: 0 }}>
                                 <Text style={st.invName} numberOfLines={1}>{personName(inv.patientId)}</Text>
                                 <Text style={st.invMeta}>{new Date(inv.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })} · {(inv.items || []).length} dịch vụ</Text>
                               </View>
@@ -2071,7 +2072,8 @@ const StepHead = ({ n, done, title, hint, children }) => (
     <View style={[st.stepNum, done && st.stepNumDone]}>
       {done ? <Check size={16} color="#FFFFFF" strokeWidth={3} /> : <Text style={st.stepNumText}>{n}</Text>}
     </View>
-    <View style={{ flex: 1 }}>
+    {/* minWidth: màn hẹp thì các nút ở children tự xuống dòng thay vì bóp tiêu đề */}
+    <View style={{ flex: 1, minWidth: 190 }}>
       <Text style={st.stepTitle}>{title}</Text>
       {hint ? <Text style={st.stepHint}>{hint}</Text> : null}
     </View>
@@ -2085,6 +2087,7 @@ const cardShadow = isWebPlatform ? { boxShadow: '0 12px 30px -20px rgba(11,42,91
 const st = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#F3F7FC' },
   pageContent: { padding: 28, paddingBottom: 56, maxWidth: 1360, width: '100%', alignSelf: 'center', gap: 20 },
+  pageContentPhone: { padding: 14, paddingBottom: 40, gap: 16 },
   muted: { color: '#94A3B8', fontSize: 13 },
 
   // Banner phụ
@@ -2100,6 +2103,8 @@ const st = StyleSheet.create({
 
   // Thanh tab
   tabBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 999, marginTop: -44, marginLeft: 24, zIndex: 3, ...(isWebPlatform ? { boxShadow: '0 14px 30px -14px rgba(11,42,91,0.45)' } : { elevation: 4 }) },
+  tabBarPhone: { alignSelf: 'stretch', marginLeft: 0, marginTop: -30, borderRadius: 24 },
+  tabPhone: { flexGrow: 1, flexBasis: '45%', justifyContent: 'center', paddingHorizontal: 10 },
   tab: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999 },
   tabActive: { backgroundColor: '#0B2A5B' },
   tabText: { fontSize: 13, fontWeight: '700', color: '#475569' },
@@ -2112,7 +2117,7 @@ const st = StyleSheet.create({
   // Wizard tiếp nhận
   wizard: { gap: 18, alignItems: 'flex-start' },
   stepCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', width: '100%', ...cardShadow },
-  stepHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  stepHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 16 },
   stepNum: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#0F9D6B', alignItems: 'center', justifyContent: 'center' },
   stepNumDone: { backgroundColor: '#0F9D6B' },
   stepNumText: { color: '#0F9D6B', fontWeight: '800' },

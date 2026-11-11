@@ -7,6 +7,7 @@ import {
 import { get } from '../../services/api.service';
 import { Reveal, CountUp } from '../ui/Motion';
 import { StaffBanner, RECEPTION_IMAGES, LiveClock, Avatar, EmptyState, personName } from '../reception/ReceptionUI';
+import { phonePad } from '../../utils/phonePad';
 
 const isWeb = Platform.OS === 'web';
 
@@ -81,7 +82,7 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
   ];
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.pageContent}>
+    <ScrollView style={s.page} contentContainerStyle={[s.pageContent, phonePad()]}>
       <StaffBanner
         image={RECEPTION_IMAGES.tabletScan}
         tone="teal"
@@ -140,7 +141,7 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
         })}
       </View>
 
-      <View style={[s.twoCol, isWide && { flexDirection: 'row' }]}>
+      <View style={[s.twoCol, isWide ? { flexDirection: 'row' } : { alignItems: 'stretch' }]}>
         {/* Hàng chờ đo sinh hiệu */}
         <Reveal style={[s.panel, isWide && { flex: 1.45 }]}>
           <View style={s.panelHead}>

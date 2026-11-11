@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, ScrollView, useWindowDimensions } from 'react-native';
 import { CalendarClock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FloatingOrb } from '../ui/Motion';
 
@@ -61,15 +61,16 @@ export const Avatar = ({ name, size = 40, ring = false }) => {
 /** Banner đầu trang có ảnh nền + gradient theo tông màu. */
 export const ReceptionBanner = ({ image, tone = 'navy', eyebrow, title, subtitle, children, right, compact = false }) => {
   const t = TONES[tone] || TONES.navy;
+  const isPhone = useWindowDimensions().width < 640; // điện thoại: xếp dọc, ô bên phải trải đủ ngang
   return (
     <View style={[s.banner, compact && s.bannerCompact]} dataSet={{ anim: 'fade-up' }}>
       <Image source={image} style={s.bannerImage} resizeMode="cover" />
       <View style={[s.bannerOverlay, { backgroundColor: t.mid }]} dataSet={{ tone }} />
       <FloatingOrb size={260} color="rgba(255,255,255,0.10)" style={{ top: -110, right: '22%' }} slow />
-      <View style={s.bannerContent}>
-        <View style={{ flex: 1, minWidth: 260 }}>
+      <View style={[s.bannerContent, isPhone && s.bannerContentPhone]}>
+        <View style={isPhone ? null : { flex: 1, minWidth: 260 }}>
           {eyebrow ? <Text style={[s.bannerEyebrow, { color: t.accent }]}>{eyebrow}</Text> : null}
-          <Text style={[s.bannerTitle, compact && { fontSize: 26 }]}>{title}</Text>
+          <Text style={[s.bannerTitle, (compact || isPhone) && { fontSize: 26 }]}>{title}</Text>
           {subtitle ? <Text style={s.bannerSub}>{subtitle}</Text> : null}
           {children}
         </View>
@@ -86,11 +87,29 @@ const SHIFT_LABELS = { 'sáng': 'Ca Sáng', 'chiều': 'Ca Chiều', 'tối': 'C
 
 /** Đồng hồ chạy theo giây + ca trực hôm nay, đặt ở góc phải banner. */
 export const LiveClock = ({ label = 'Đang làm việc', shift }) => {
+  const isPhone = useWindowDimensions().width < 640;
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+  const shiftText = shift ? `${SHIFT_LABELS[shift.shift] || shift.shift}${shift.startTime ? ` · ${shift.startTime} - ${shift.endTime}` : ''}` : 'Hôm nay chưa có ca đăng ký';
+  // Điện thoại: dải ngang gọn — giờ bên trái, trạng thái + ngày + ca bên phải
+  if (isPhone) {
+    return (
+      <View style={[s.clock, s.clockPhone]}>
+        <Text style={s.clockTimePhone}>{now.toLocaleTimeString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit' })}</Text>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <View style={s.clockRow}>
+            <View style={s.liveDot} dataSet={{ anim: 'ping' }} />
+            <Text style={s.clockLabel} numberOfLines={1}>{label}</Text>
+          </View>
+          <Text style={[s.clockDate, { fontSize: 12 }]} numberOfLines={1}>{now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</Text>
+          {shift === false ? null : <Text style={[s.clockShiftText, { fontSize: 11, opacity: 0.9 }]} numberOfLines={1}>{shiftText}</Text>}
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={s.clock}>
       <View style={s.clockRow}>
@@ -103,7 +122,7 @@ export const LiveClock = ({ label = 'Đang làm việc', shift }) => {
       <View style={s.clockShift}>
         <CalendarClock size={14} color="#6FDDB2" />
         <Text style={s.clockShiftText}>
-          {shift ? `${SHIFT_LABELS[shift.shift] || shift.shift}${shift.startTime ? ` · ${shift.startTime} - ${shift.endTime}` : ''}` : 'Hôm nay chưa có ca đăng ký'}
+          {shiftText}
         </Text>
       </View>
       )}
@@ -112,23 +131,27 @@ export const LiveClock = ({ label = 'Đang làm việc', shift }) => {
 };
 
 /** Ô số liệu kính mờ trên banner: [{ icon, value, label }]. */
-export const BannerStats = ({ items = [] }) => (
+export const BannerStats = ({ items = [] }) => {
+  const isPhone = useWindowDimensions().width < 640;
+  return (
   <View style={s.bStats}>
     {items.map((it) => {
       const Icon = it.icon;
       return (
-        <View key={it.label} style={s.bStat}>
+        <View key={it.label} style={[s.bStat, isPhone && (items.length > 3 ? s.bStatPhoneGrid : s.bStatPhone)]}>
           {Icon ? <Icon size={15} color="rgba(255,255,255,0.85)" /> : null}
-          <Text style={s.bStatValue}>{it.value}</Text>
-          <Text style={s.bStatLabel}>{it.label}</Text>
+          <Text style={[s.bStatValue, isPhone && { fontSize: 22 }]}>{it.value}</Text>
+          <Text style={s.bStatLabel} numberOfLines={2}>{it.label}</Text>
         </View>
       );
     })}
   </View>
-);
+  );
+};
 
 /** Thanh tab dạng viên nổi lên mép dưới banner: tabs = [{ key, label, icon?, count?, warn? }]. */
 export const PillTabs = ({ tabs = [], value, onChange, overlap = true }) => {
+  const isPhone = useWindowDimensions().width < 640;
   // Luôn 1 dòng: nhiều tab thì cuộn ngang (nút ‹ › ở 2 đầu) — không xuống dòng tràn khỏi banner
   const ref = useRef(null);
   const [edge, setEdge] = useState({ left: false, right: false });
@@ -149,7 +172,7 @@ export const PillTabs = ({ tabs = [], value, onChange, overlap = true }) => {
     if (el?.querySelector) el.querySelector('[data-pill-active="1"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [value, tabs.length]);
   return (
-    <View style={[s.tabBar, overlap && s.tabBarOverlap]}>
+    <View style={[s.tabBar, overlap && s.tabBarOverlap, isPhone && s.tabBarPhone, overlap && isPhone && s.tabBarOverlapPhone]}>
       {edge.left ? (
         <TouchableOpacity style={[s.tabArrow, { left: 4 }]} onPress={() => scrollBy(-260)}><ChevronLeft size={16} color="#0B2A5B" /></TouchableOpacity>
       ) : null}
@@ -166,7 +189,7 @@ export const PillTabs = ({ tabs = [], value, onChange, overlap = true }) => {
           const Icon = t.icon;
           const active = value === t.key;
           return (
-            <TouchableOpacity key={t.key} style={[s.tab, active && s.tabActive]} onPress={() => onChange?.(t.key)} dataSet={active ? { pillActive: '1' } : { hover: 'tint' }}>
+            <TouchableOpacity key={t.key} style={[s.tab, isPhone && s.tabPhone, active && s.tabActive]} onPress={() => onChange?.(t.key)} dataSet={active ? { pillActive: '1' } : { hover: 'tint' }}>
               {Icon ? <Icon size={16} color={active ? '#FFFFFF' : '#475569'} /> : null}
               <Text style={[s.tabText, active && s.tabTextActive]} numberOfLines={1}>{t.label}</Text>
               {t.count > 0 ? (
@@ -209,11 +232,14 @@ const s = StyleSheet.create({
   bannerImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
   bannerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   bannerContent: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 20, padding: 32 },
+  bannerContentPhone: { flexDirection: 'column', alignItems: 'stretch', gap: 16, padding: 22 },
   bannerEyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8, textTransform: 'uppercase' },
   bannerTitle: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
   bannerSub: { color: '#D3EFE4', fontSize: 15, marginTop: 8, lineHeight: 22, maxWidth: 560 },
 
   clock: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', borderRadius: 20, padding: 18, minWidth: 240, ...(isWeb ? { backdropFilter: 'blur(8px)' } : {}) },
+  clockPhone: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16 },
+  clockTimePhone: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', fontVariant: ['tabular-nums'] },
   clockRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399' },
   clockLabel: { color: '#A7F3D0', fontSize: 12, fontWeight: '700' },
@@ -224,11 +250,16 @@ const s = StyleSheet.create({
 
   bStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   bStat: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 16, minWidth: 104, ...(isWeb ? { backdropFilter: 'blur(8px)' } : {}) },
+  bStatPhone: { flex: 1, minWidth: 0, flexBasis: 0, paddingHorizontal: 12, paddingVertical: 10 },
+  bStatPhoneGrid: { flexGrow: 1, flexBasis: '40%', minWidth: 0, paddingHorizontal: 12, paddingVertical: 10 },
   bStatValue: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', marginTop: 4, fontVariant: ['tabular-nums'] },
   bStatLabel: { color: 'rgba(255,255,255,0.82)', fontSize: 11, fontWeight: '600' },
 
   tabBar: { position: 'relative', alignSelf: 'flex-start', maxWidth: '100%', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 999, overflow: 'hidden', zIndex: 3, ...(isWeb ? { boxShadow: '0 14px 30px -14px rgba(11,42,91,0.45)' } : { elevation: 4 }) },
   tabBarOverlap: { marginTop: -44, marginLeft: 24, maxWidth: isWeb ? 'calc(100% - 48px)' : '92%' },
+  tabBarPhone: { alignSelf: 'stretch' },
+  tabBarOverlapPhone: { marginTop: -30, marginLeft: 0, maxWidth: '100%' },
+  tabPhone: { paddingHorizontal: 14 },
   tabRow: { flexDirection: 'row', gap: 6 },
   tabArrow: { position: 'absolute', top: 6, bottom: 6, width: 34, zIndex: 5, borderRadius: 999, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', ...(isWeb ? { boxShadow: '0 0 12px 6px #FFFFFF' } : {}) },
   tab: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999 },
