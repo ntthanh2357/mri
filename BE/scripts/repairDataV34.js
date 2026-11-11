@@ -25,6 +25,11 @@ const apply = process.argv.includes("--apply");
 const report = {};
 
 const run = async () => {
+  // --apply mã hóa CCCD/BHYT bằng FIELD_ENCRYPTION_KEY: thiếu khóa thì fieldCrypto (ngoài production) dùng khóa DEV
+  // công khai, dữ liệu thật sẽ bị "mã hóa" bằng khóa ai cũng biết. Dừng trước khi kết nối DB.
+  if (apply && !process.env.FIELD_ENCRYPTION_KEY) {
+    throw new Error("Không chạy --apply: thiếu FIELD_ENCRYPTION_KEY (khóa production). Đặt khóa trong BE/.env hoặc biến môi trường rồi chạy lại.");
+  }
   if (!process.env.MONGO_URI) throw new Error("Thiếu MONGO_URI");
   await mongoose.connect(process.env.MONGO_URI, { autoIndex: false });
   const col = (name) => mongoose.connection.collection(name);

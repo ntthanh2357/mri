@@ -32,7 +32,7 @@
 3. **Đường dẫn tệp:** `localPath` đang là đường dẫn tuyệt đối Windows, sẽ không đọc được khi chạy trong Docker Linux.
 4. **Nhân sự CĐHA:** không viện nào có Bác sĩ CĐHA. Tạo tài khoản hoặc bật chính sách bác sĩ chỉ định, nếu không sẽ không ai ký được báo cáo.
 5. **Tài khoản thử nghiệm:** toàn bộ nhân viên và admin là tài khoản `isTestAccount`. Phải thay trước khi dùng thật.
-6. **Sửa dữ liệu cũ:** chạy thử `node BE/scripts/repairDataV34.js`, sao lưu, rồi thêm `--apply`. Script mã hóa CCCD và số thẻ BHYT còn dạng chữ thường, khôi phục bình duyệt thiếu người đọc.
+6. **Sửa dữ liệu cũ:** **đặt `FIELD_ENCRYPTION_KEY` trước** (script từ chối `--apply` khi thiếu khóa, để không mã hóa dữ liệu thật bằng khóa DEV), chạy thử `node BE/scripts/repairDataV34.js`, sao lưu, rồi thêm `--apply`. Lượt chạy thử chỉ đọc ngày 11/11/2026: 3 CCCD và 3 số thẻ BHYT còn chữ thường, chưa trường nào đã mã hóa (không cần chuyển khóa), 1 bình duyệt thiếu người đọc, 0 OTP chữ thường; chỉ báo cáo: 4 cảnh báo cấp cứu mở quá 24 giờ, 2 lịch MRI không có lượt khám, 2 đơn thuốc thiếu trạng thái phát, 1 phiếu chăm sóc đủ 3 khối mặc định. Script mã hóa CCCD và số thẻ BHYT còn dạng chữ thường, khôi phục bình duyệt thiếu người đọc.
 7. **Đóng sự kiện còn treo:** 4 cảnh báo cấp cứu mở 39 ngày, 2 lịch MRI giữ 40 ngày không có lượt khám.
 8. **Cần quyết định: tên bệnh nhân trong đường dẫn tệp.** Cả 351 tệp có đường dẫn dạng `study_<mã>_<Họ_Tên>`, và đường dẫn này dùng làm tên thư mục trên Google Drive. Nội dung tệp được mã hóa, nhưng tên thư mục thì không.
 9. **Lưu ý khi bật Firebase Admin:** `executeAiPredictionInternal` gọi `makePublic()` cho heatmap AI. Hiện chưa có heatmap nào trên bucket công khai và cấu hình chỉ có `FIREBASE_API_KEY`; phải bỏ lệnh này trước khi cấp service account.
