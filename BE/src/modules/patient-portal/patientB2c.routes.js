@@ -17,14 +17,18 @@ import {
 
 const router = Router();
 
+// H.4–H.6 chỉ dành cho bệnh nhân: trước đây mọi tài khoản (kể cả bác sĩ, admin nền tảng) đặt được "lịch tái khám"
+// dưới tên chính mình và lượt khám giả đó hiện trong hàng chờ lễ tân. Nhân viên đã có FCM ở /api/v1/notifications.
+const patientOnly = checkRole(["patient"]);
+
 // H.5 — Lịch sử các lần khám (bệnh nhân đăng nhập)
-router.get("/my-visits", protect, getMyVisits);
+router.get("/my-visits", protect, patientOnly, getMyVisits);
 
 // H.4 — Đặt lịch tái khám
-router.post("/book-followup", protect, bookFollowUp);
+router.post("/book-followup", protect, patientOnly, bookFollowUp);
 
 // H.6 — Cập nhật FCM token
-router.put("/fcm-token", protect, updateFcmToken);
+router.put("/fcm-token", protect, patientOnly, updateFcmToken);
 
 // H.1 — Xem ảnh kết quả MRI
 router.get("/imaging/:imagingResultId", protect, checkRole(B2C_IMAGING_ROLES), getPatientMriResult);

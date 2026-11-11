@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { Visit } from "../models/visit.model.js";
 
@@ -668,6 +669,7 @@ export const getPatientTransferForms = async (req, res) => {
 };
 
 // Thêm phiếu chuyển tuyến mới
+const TRANSFER_FORM_CONTENT_FIELDS = ["transferNo", "hospitalNo", "transferTo", "dateIn", "dateOut", "clinicalSummary", "labSummary", "diagnosis", "treatment", "drugsUsed", "patientStatus", "reason", "reasonDetail", "treatmentDirection", "transferTime", "isOneYearValid", "transportation", "escort"];
 export const addPatientTransferForm = async (req, res) => {
   try {
     let { patientId } = req.params;
@@ -683,9 +685,23 @@ export const addPatientTransferForm = async (req, res) => {
       return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền truy cập.", 403);
     }
 
+    // Chỉ nhận trường nội dung của giấy chuyển tuyến. Bệnh nhân, viện, viện nhận, trạng thái, người duyệt do máy chủ
+    // đặt: trước đây `...req.body` ghi đè được các trường này (phiếu "còn hiệu lực" mở quyền xem hồ sơ xuyên viện).
+    const content = Object.fromEntries(TRANSFER_FORM_CONTENT_FIELDS.filter((k) => fields[k] !== undefined).map((k) => [k, fields[k]]));
+    let visitId = null;
+    if (fields.visitId) {
+      const visit = mongoose.Types.ObjectId.isValid(String(fields.visitId))
+        ? await Visit.findOne({ _id: fields.visitId, patientId, hospitalId: req.user?.hospitalId }).select("_id").lean()
+        : null;
+      if (!visit) return errorResponse(res, "Lượt khám không thuộc bệnh nhân này.", 400);
+      visitId = visit._id;
+    }
     const newItem = new TransferForm({
-      patient_id: patientId, visitId: req.body?.visitId || null, hospitalId: req.user?.hospitalId || null,
-      ...fields
+      ...content,
+      patient_id: patientId,
+      visitId,
+      hospitalId: req.user?.hospitalId || null,
+      doctor_name: actorDisplayName(req.user),
     });
 
     await newItem.save();

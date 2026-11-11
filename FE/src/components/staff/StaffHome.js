@@ -8,7 +8,7 @@ import PageHeader, { HeaderAction } from '../layout/PageHeader';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import useStaffHome from '../../controllers/useStaffHome';
 import { SHIFT_LABELS } from '../../utils/staffTasks';
-import { isFeatureEnabled } from '../../constants/featureScope';
+import { isFeatureEnabled, OUT_OF_SCOPE_NOTICE } from '../../constants/featureScope';
 
 const ROLE_LABEL = {
   doctor: 'Bác sĩ',
@@ -16,6 +16,7 @@ const ROLE_LABEL = {
   nurse: 'Điều dưỡng',
   receptionist: 'Tiếp đón & thu ngân',
   pharmacist: 'Dược sĩ Bệnh viện',
+  cleaner: 'Nhân viên vệ sinh',
 };
 // 1 hành động chính mỗi role — phần còn lại đã có ở menu bên trái
 const PRIMARY_ACTION = {
@@ -90,6 +91,13 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
             </>
           }
         />
+
+        {/* Vai trò vệ sinh chỉ phục vụ bước hoàn tất dọn giường; quản lý giường ngoài phạm vi thì nói rõ thay vì để trang trống */}
+        {role === 'cleaner' && !isFeatureEnabled('beds') ? (
+          <View style={[styles.panel, { padding: 14, marginBottom: 16 }]}>
+            <Text style={styles.sub}>{OUT_OF_SCOPE_NOTICE} Tài khoản Nhân viên vệ sinh chỉ dùng cho bước hoàn tất dọn giường thuộc phân hệ quản lý giường bệnh.</Text>
+          </View>
+        ) : null}
 
         {/* Nhân viên vệ sinh không có lịch trực trong module lịch (BE từ chối) — không hiện ca trực / liên kết bị 403 */}
         {role !== 'cleaner' ? (

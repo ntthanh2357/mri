@@ -1,6 +1,6 @@
+import "./config/env.js"; // PHẢI đứng đầu: nạp BE/.env trước khi các module đọc process.env lúc import
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
@@ -11,8 +11,6 @@ import "./config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-dotenv.config();
 
 // QA-21: chốt lỗi cấp tiến trình (unhandledRejection không còn làm sập server)
 import { installProcessGuards, setGuardedServer } from "./utils/processGuards.js";
@@ -125,6 +123,14 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 import { startBackgroundJobs } from "./jobs/scheduler.js";
+import { checkRequiredSecrets } from "./config/requiredSecrets.js";
+
+// Production thiếu khóa mã hóa thì dừng ngay khi khởi động, không để lỗi 500 lúc lưu CCCD/BHYT hay tệp y tế
+const secretProblems = checkRequiredSecrets();
+if (secretProblems.length) {
+  for (const problem of secretProblems) console.error(`[startup] ${problem}`);
+  process.exit(1);
+}
 
 // Database connection & start server
 connectDB()

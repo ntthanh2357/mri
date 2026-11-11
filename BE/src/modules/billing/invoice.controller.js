@@ -389,7 +389,8 @@ export const payInvoice = async (req, res) => {
     // Bệnh nhân có thẻ BHYT hợp lệ mà hóa đơn chưa áp (hoặc áp trên tổng cũ) → tự áp trước khi thu
     if (invoice.status === "chờ thanh toán" && (["admin", "system_admin"].includes(req.user.role) || String(invoice.hospitalId) === String(req.user.hospitalId))) {
       const auto = await autoApplyBhytIfEligible(invoice);
-      if (auto.code === "PAID_BEFORE_BHYT" || auto.code === "PAYOS_IN_FLIGHT") {
+      // APPLY_IN_PROGRESS: BHYT đang được áp ở thao tác khác → chưa thu, tránh thu đủ tiền khi phần BHYT sắp trừ
+      if (auto.code === "PAID_BEFORE_BHYT" || auto.code === "PAYOS_IN_FLIGHT" || auto.code === "APPLY_IN_PROGRESS") {
         return res.status(409).json({ code: auto.code, message: auto.reason });
       }
       if (auto.applied && paymentMethod !== "bhyt") {
@@ -887,6 +888,10 @@ export const resolveProcessingInvoice = async (req, res) => {
       return res.status(400).json({ message: `Hóa đơn không ở trạng thái 'đang xử lý' (Hiện tại: ${invoice.status}).` });
     }
 
+    if (invoice.refundApproval?.approvalStatus === "pending_second_approval") {
+      return res.status(409).json({ message: "Hóa đơn đang có yêu cầu hoàn tiền chờ duyệt. Chờ người duyệt xử lý (duyệt hoặc từ chối) trước." });
+    }
+
     if (action === "retry_deduct") {
       // Dược sĩ đã nhập thêm thuốc vào kho, thử trừ kho lại
       await executeWithTransaction(async (session) => {
@@ -920,27 +925,22 @@ export const resolveProcessingInvoice = async (req, res) => {
 
       return res.status(200).json({ success: true, message: "Đã trừ kho bù thành công và chuyển hóa đơn sang 'đã thanh toán'.", invoice });
     } else if (action === "cancel_refund") {
-      // Không thể cấp thuốc -> hoàn tiền cho người bệnh
-      invoice.status = "hoàn trả";
-      invoice.refundReason = note || "Kho không thể cung ứng thuốc sau thanh toán VietQR.";
-      invoice.refundedAt = new Date();
-      invoice.refundedBy = req.user.id;
-      await invoice.save();
-
-      try {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.REFUND_APPROVED,
-          entity: "Invoice",
-          entityId: invoice._id,
-          performedBy: req.user.id,
-          hospitalId: req.user.hospitalId || invoice.hospitalId,
-          details: `Xử lý gỡ kẹt hóa đơn PayOS: Hủy đơn và phê duyệt hoàn trả viện phí do kho thiếu thuốc không thể cấp phát. Ghi chú: ${note || 'N/A'}`
-        });
-      } catch (auditErr) {
-        console.warn("[AuditLog Warn]", auditErr.message);
+      // Không thể cấp thuốc -> hoàn tiền cho người bệnh. Hoàn tiền là quyết định tài chính: KHÔNG cho một người
+      // tự hủy và hoàn (trước đây dược sĩ một mình hoàn được hóa đơn bất kỳ, không ghi số tiền). Mở yêu cầu theo
+      // quy trình Maker-Checker chung: người khác duyệt (từ 50 triệu BGĐ duyệt, từ 300 triệu thêm người kiểm tra),
+      // hoàn tiền ghi đúng số đã thu. Bị từ chối thì hóa đơn vẫn "đang xử lý" để trừ kho lại.
+      if (!isSameHospital(invoice, req.user)) {
+        return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
       }
-
-      return res.status(200).json({ success: true, message: "Đã hủy hóa đơn và chuyển sang trạng thái hoàn trả cho người bệnh.", invoice });
+      const opened = await openRefundRequest(invoice, req.user, { refundReason: note || "Kho không thể cung ứng thuốc sau thanh toán VietQR." }, ["đang xử lý"]);
+      if (!opened) return res.status(409).json(REFUND_ALREADY_PENDING);
+      return res.status(202).json({
+        success: true,
+        message: "Đã lập yêu cầu hoàn tiền do kho không cấp được thuốc. Chờ người thứ hai phê duyệt độc lập.",
+        approvalStatus: "pending_second_approval",
+        requiredRole: opened.refundApproval.requiredRole,
+        invoice: opened,
+      });
     } else {
       return res.status(400).json({ message: "action phải là 'retry_deduct' hoặc 'cancel_refund'." });
     }
@@ -1211,14 +1211,15 @@ const isSameHospital = (invoice, user) => String(invoice.hospitalId) === String(
 
 // Mở yêu cầu hoàn tiền chờ người thứ hai. Trả null nếu đã có yêu cầu đang chờ: yêu cầu mới
 // không được ghi đè, nếu không maker gốc có thể tự duyệt sau khi người khác lập lại yêu cầu.
-const openRefundRequest = async (invoice, user, { refundReason, itemsToRefund }) => {
+// fromStatuses: hóa đơn "đang xử lý" (đã thu tiền, kẹt trừ kho) chỉ vào đây qua resolveProcessingInvoice → cancel_refund.
+const openRefundRequest = async (invoice, user, { refundReason, itemsToRefund }, fromStatuses = ["đã thanh toán"]) => {
   const amount = refundThresholdAmount(invoice);
   const requiredRole = amount >= REFUND_ADMIN_APPROVAL_THRESHOLD ? "hospital_admin" : "receptionist";
   const requestedReason = String(refundReason || "Theo yêu cầu khách hàng").trim();
   const opened = await Invoice.findOneAndUpdate(
     {
       _id: invoice._id,
-      status: "đã thanh toán",
+      status: { $in: fromStatuses },
       "refundApproval.approvalStatus": { $nin: ["pending_second_approval", "approved"] },
     },
     {
@@ -1368,15 +1369,19 @@ const performRefund = async (req, res, invoice, { refundReason, itemsToRefund })
       const allItemsRefunded = invoice.items.every(i => i.isRefunded);
       invoice.status = allItemsRefunded ? "hoàn trả" : "đã thanh toán";
     } else {
-      // Hoàn toàn bộ: trả lại đúng số bệnh nhân đã thanh toán (không gồm phần BHYT)
-      refundedAmount = Math.round(patientPaid);
-      invoice.items.forEach(item => {
+      // Hoàn toàn bộ PHẦN CÒN LẠI: trả lại số bệnh nhân đã thanh toán (không gồm phần BHYT) trừ phần đã hoàn trước đó.
+      // Trước đây hoàn một phần rồi hoàn toàn bộ thì trả lại cả hóa đơn lần nữa (hoàn 800.000đ trên hóa đơn 500.000đ),
+      // ghi đè refundAmount và nhập kho lại cả dòng thuốc đã hoàn.
+      const alreadyRefunded = Math.max(0, Number(invoice.refundAmount || 0));
+      refundedAmount = Math.max(0, Math.round(patientPaid) - alreadyRefunded);
+      const remainingItems = (invoice.items || []).filter((item) => !item.isRefunded);
+      remainingItems.forEach(item => {
         item.isRefunded = true;
         item.refundedQuantity = item.quantity;
       });
-      targetDrugItems = (invoice.items || []).filter(item => item.type === "drug");
+      targetDrugItems = remainingItems.filter(item => item.type === "drug");
       invoice.isPartialRefund = false;
-      invoice.refundAmount = refundedAmount;
+      invoice.refundAmount = alreadyRefunded + refundedAmount;
       invoice.status = "hoàn trả";
     }
 
@@ -1738,7 +1743,8 @@ export const getPendingRefundRequests = async (req, res) => {
   try {
     const requests = await Invoice.find({
       hospitalId: req.user.hospitalId,
-      status: "đã thanh toán",
+      // gồm cả hóa đơn kẹt trừ kho có yêu cầu hoàn do dược sĩ/BGĐ lập (cancel_refund)
+      status: { $in: ["đã thanh toán", "đang xử lý"] },
       "refundApproval.approvalStatus": "pending_second_approval",
     })
       .select("patientId totalAmount patientPayAmount refundApproval largeRefundReview createdAt")
@@ -1895,7 +1901,7 @@ export const approveInvoiceRefund = async (req, res) => {
     const claimed = await Invoice.findOneAndUpdate(
       {
         _id: invoice._id,
-        status: "đã thanh toán",
+        status: { $in: ["đã thanh toán", "đang xử lý"] },
         "refundApproval.approvalStatus": "pending_second_approval",
         "refundApproval.firstApproverId": { $ne: currentUserId },
       },

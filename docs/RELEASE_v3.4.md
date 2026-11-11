@@ -14,7 +14,16 @@
    - SMTP (`EMAIL_USER`, `EMAIL_PASS`): bắt buộc, vì MFA duyệt hoàn tiền gửi mã qua email.
 3. **Biến môi trường tùy chọn:** `UPLOAD_URL_SECRET`, `AUDIT_ANCHOR_SECRET`, `GEOIP_LOOKUP_URL`, `DRIVE_TOTAL_CAPACITY_MB`. Xem `BE/.env.example`.
 4. **Phạm vi đồ án:** BHYT và giường bệnh nằm ngoài phạm vi, API `/api/v1/bhyt` và `/api/v1/hospital-beds` trả 404. Muốn bật lại phải đặt **cùng lúc** `ENABLE_OUT_OF_SCOPE=true` (backend) và `EXPO_PUBLIC_ENABLE_OUT_OF_SCOPE=true` (khi build frontend).
+   Từ bản này các cờ (`ENABLE_OUT_OF_SCOPE`, `ENABLE_*`, `STORAGE_MODE`…) đặt trong `BE/.env` có hiệu lực cả khi chạy `npm start`. Trước đây `.env` được nạp sau khi các module đã đọc cờ, nên chỉ biến môi trường hệ thống hoặc `env_file` của docker mới có tác dụng.
 5. **Môi trường dev:** mã OTP `123456` và trả OTP trong response chỉ hoạt động khi đặt `ENABLE_DEBUG_OTP=true`. AI service chạy không có khóa cần `ALLOW_INSECURE_AI=true`.
+
+### Khóa mã hóa tệp (bắt buộc từ bản này)
+
+- Production phải đặt cả `FIELD_ENCRYPTION_KEY` (mã hóa CCCD, số thẻ BHYT) và `FILE_ENCRYPTION_KEY`. Thiếu một trong hai thì backend dừng ngay lúc khởi động, log ghi tên biến thiếu (không in giá trị khóa). `BE/.env` hiện tại **chưa có** `FIELD_ENCRYPTION_KEY`, nên chạy `docker compose` (ép `NODE_ENV=production`) sẽ không lên tới khi thêm khóa.
+- [THIẾU DỮ LIỆU] Chưa biết CCCD/BHYT trên DB thật đang mã hóa bằng khóa DEV hay khóa thật. Nếu là khóa DEV thì phải giải mã và mã hóa lại bằng khóa mới trước khi đặt khóa, nếu không sẽ không đọc lại được. Cần một lượt kiểm chỉ đọc trên DB thật (được cấp phép riêng) để biết.
+- Production phải đặt `FILE_ENCRYPTION_KEY` (64 ký tự hex) trong `BE/.env`; thiếu khóa thì mã hóa tệp và sao lưu báo lỗi dừng (trước đây âm thầm dùng khóa dev công khai `0123…cdef`).
+- Nếu máy chủ thật đã từng chạy thiếu khóa, các bản sao lưu Drive và tệp PACS mã hóa trước đó dùng khóa dev: giải mã bằng khóa dev rồi mã hóa lại bằng khóa mới trước khi đổi, nếu không sẽ không đọc lại được.
+- Bản sao lưu theo viện và cron sao lưu CSDL giờ là tệp mã hóa AES-256-GCM; khôi phục cần đúng khóa. Tệp sao lưu JSON bản rõ đời cũ vẫn đọc được để khôi phục, nên xóa sau khi đã có bản mã hóa.
 
 ## Phát hiện từ rà soát DB thật (chỉ đọc, 06/11/2026), cần xử lý trước khi phát hành
 
@@ -67,6 +76,28 @@
 - Thông tin định danh, dị ứng, liên hệ khẩn cấp, lượt khám, lịch uống thuốc của bệnh nhân: nhân viên vệ sinh và tài khoản nền tảng không truy cập được; chỉ Bác sĩ, Trưởng khoa, Điều dưỡng, Lễ tân, Ban Giám đốc sửa được. Lễ tân không xem kết quả sàng lọc trước khám.
 - Nút chỉ hiện khi có quyền: bước công việc giao cho người khác, xếp lịch MRI cấp cứu (điều dưỡng chỉ thấy trạng thái; lễ tân chỉ xếp ca đã có chỉ định MRI của bác sĩ), Phim MRI/CT và Nhập phim ở danh sách bệnh nhân (KTV xét nghiệm không thấy), khóa tài khoản quản trị, lịch trực của nhân viên vệ sinh.
 - Ảnh đại diện trong quản lý người dùng là chữ viết tắt tạo trên máy; không còn gửi tên, email người dùng sang ui-avatars.com. Hotline, email, giờ hỗ trợ lấy từ một chỗ (`FE/src/constants/supportContact.js`): 0236 3650 676, 8:00–17:00 các ngày làm việc; không còn ghi "trực 24/7". Bỏ kênh "Chat trực tiếp" chưa có. Nhóm vận hành xác nhận số, email, giờ thật rồi sửa ở file này.
+- Mã OTP (kích hoạt, quên mật khẩu, đăng nhập SĐT, 2FA) lưu dạng băm HMAC và không còn trả về trong danh sách người dùng của quản trị (trước đây admin đọc được mã đang hiệu lực). Mã gửi trước khi cập nhật hết hiệu lực: người dùng bấm gửi lại mã. Chạy `repairDataV34.js` để vô hiệu mã chữ thường còn trong DB.
+- Mật khẩu tự đặt (đăng ký, đổi, đặt lại, quản trị tạo tài khoản) phải có 8–128 ký tự, gồm cả chữ và số. Mật khẩu đang dùng không bị bắt đổi.
+- "Hủy và hoàn tiền" ở mục Hóa đơn kẹt trừ kho chỉ lập yêu cầu hoàn; người khác phê duyệt theo quy trình hoàn tiền chung (từ 50 triệu Ban Giám đốc duyệt, có bước OTP). Bị từ chối thì hóa đơn vẫn chờ trừ kho lại. Hoàn toàn bộ sau khi đã hoàn một phần chỉ hoàn số còn lại.
+- Đường dẫn tệp gửi lên máy chủ phải là link hệ thống cấp còn hạn (12 giờ). Trang mở quá lâu sẽ báo "Liên kết tệp không hợp lệ hoặc đã hết hạn": tải lại trang.
+- Đặt lịch tái khám, lịch sử khám, FCM của cổng bệnh nhân chỉ dành cho tài khoản bệnh nhân; bác sĩ chọn phải thuộc đúng cơ sở.
+- Giấy chuyển tuyến (`POST /api/patients/:id/transfer-forms`) chỉ nhận nội dung giấy; bệnh nhân, viện, viện nhận, trạng thái, người lập do máy chủ đặt theo tài khoản đăng nhập. Lượt khám gắn kèm phải thuộc đúng bệnh nhân.
+- Tài khoản nền tảng không tải được tệp y tế trong kho lưu trữ (trước đây `admin` đọc được mọi tệp).
+- Ký báo cáo CĐHA ở màn kết quả (clinical-view) ghi mã băm toàn vẹn như khi ký ở màn sửa báo cáo.
+- Chỉ định MRI khi hóa đơn khám đã thu: hệ thống lập hóa đơn MRI riêng chờ thanh toán, cổng viện phí chặn tới khi đóng phí MRI (trừ các trường hợp miễn như cũ). Không lập được hóa đơn thì y lệnh báo lỗi, không lưu.
+- Gói chuyển viện chỉ tạo cho bệnh nhân của viện mình; viện nhận phải khác viện gửi; chỉ viện nhận chấp nhận hoặc từ chối (trước đây viện gửi tự chấp nhận, mở quyền xem hồ sơ xuyên viện). Viện gửi của phiếu không còn bị đổi khi viện nhận cập nhật.
+- Bị đăng xuất do hết phiên hoặc tài khoản/viện bị khóa cũng xóa bản nháp bệnh án lưu trên máy như đăng xuất thường; các thao tác đang chờ báo lỗi thay vì treo.
+- Nút thu tiền mặt khóa trong lúc xử lý (không gửi 2 lần).
+- BHYT (khi bật lại phạm vi): áp BHYT có khóa theo hóa đơn, áp đồng thời nhiều lần cho cùng hóa đơn không còn cộng trùng lũy kế thẻ (QA C6); thao tác trùng lúc nhận thông báo "đang áp BHYT, thử lại sau vài giây", quầy thu ngân không thu khi BHYT đang được áp.
+- Viện nhận xem được danh sách phiếu chuyển viện gửi tới mình (`GET /api/v1/transfers?type=incoming`) và chi tiết phiếu kèm ca chụp. Trước đây danh sách luôn rỗng và chi tiết báo không tìm thấy. FE chưa có màn hình cho viện nhận.
+- Ký đồng thuận cản quang thay bệnh nhân (`POST /api/v1/contrast-consents/:id/sign-patient`): chỉ bệnh nhân ký phiếu của chính mình, hoặc KTV, điều dưỡng, bác sĩ, CĐHA, trưởng khoa ghi nhận chữ ký tại phòng chụp. Phiếu đã ký không ký đè được.
+- Kết luận cuối bình duyệt phim: chỉ Bác sĩ, Bác sĩ CĐHA, Trưởng khoa; phải có ít nhất một lần đọc độc lập; bác sĩ đọc ban đầu không tự kết luận ca của mình; Ban Giám đốc không còn ra kết luận chuyên môn. Ca chưa có người đọc thì không kết luận được.
+- Sao lưu, dọn tệp, tạo thư mục trên Google Drive (`/api/v1/drive-storage/*`) trả "Chưa hỗ trợ" (501) vì chưa tích hợp Drive thật. Trước đây các nút này báo thành công với dữ liệu mô phỏng. Màn Tuân thủ bỏ 2 nút này. Dung lượng Drive của Ban Giám đốc chỉ tính tệp của viện mình.
+- Phạm vi thu hẹp: tạm không tạo mới tài khoản Nhân viên vệ sinh (chỉ dùng cho dọn giường) và Dược sĩ (phân hệ Dược). Máy chủ từ chối, form cấp tài khoản bỏ tab Dược sĩ, số nhân sự trên thống kê không tính 2 vai trò này. Tài khoản đã có vẫn đăng nhập được, trang chủ báo chức năng ngoài phạm vi. Bật lại cùng cờ `ENABLE_OUT_OF_SCOPE=true` / `EXPO_PUBLIC_ENABLE_OUT_OF_SCOPE=true` với BHYT và giường.
+- Form cấp tài khoản của Ban Giám đốc hiện đúng tên tab Trưởng khoa, BS CĐHA, KTV xét nghiệm (trước đây đều hiện "Lễ tân").
+- Kiểm tra an toàn kê đơn nhận ra thuốc trong danh mục viện khi tên có ngoặc đơn, dấu cộng, % (ví dụ "Mannitol 20% (250ml)"). Trước đây các thuốc này bị tính là "chưa đánh giá".
+- Màn thống kê SLA ghi "Phân bố kết quả gợi ý sàng lọc"; trang tài liệu API của dịch vụ AI đổi tên thành "NeuroScan AI – Brain MRI Tumor Screening Support API" (chỉ đổi tên hiển thị, không đổi luồng AI).
+- Chưa đổi: lễ tân vẫn nhập sinh hiệu và lập giấy chuyển tuyến được (BUG-RBAC-001), chờ quyết định của bệnh viện.
 
 ## Kiểm thử tay theo vai trò
 

@@ -71,9 +71,11 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
+    // HMAC của mã OTP (utils/accountOtp.util.js), không lưu mã gốc; ẩn khỏi mọi truy vấn mặc định
     otpCode: {
       type: String,
       default: null,
+      select: false,
     },
     otpExpires: {
       type: Date,
@@ -121,6 +123,7 @@ const userSchema = new Schema(
     otp2FACode: {
       type: String,
       default: null,
+      select: false,
     },
     otp2FAExpires: {
       type: Date,

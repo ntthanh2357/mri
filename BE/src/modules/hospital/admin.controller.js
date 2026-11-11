@@ -1,5 +1,9 @@
 import { isValidObjectId } from "mongoose";
+import { isRoleInScope, OUT_OF_SCOPE_ROLE_MESSAGE } from "../../config/roleScope.js";
 import { aiFetch } from "../../utils/aiClient.util.js";
+import { passwordPolicyError } from "../../utils/passwordPolicy.util.js";
+import { escapeRegex } from "../../utils/escapeRegex.util.js";
+import { writeEncryptedBackup, readEncryptedBackup, readBackupEnvelope, BACKUP_FORMAT } from "../../utils/encryptedBackup.util.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -489,12 +493,17 @@ export const createUser = async (req, res) => {
     if (!email || !password || !name || !role) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
+    const pwError = passwordPolicyError(password);
+    if (pwError) return res.status(400).json({ success: false, message: pwError });
 
     // [P2-17] Bổ sung pharmacist — trước đây backoffice không tạo được dược sĩ.
     // system_admin không cho tạo từ màn hình bệnh viện (tránh tự nâng quyền nền tảng).
     const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
+    }
+    if (!isRoleInScope(role)) {
+      return res.status(400).json({ success: false, message: OUT_OF_SCOPE_ROLE_MESSAGE });
     }
 
     const userExists = await User.findOne({ email });
@@ -510,7 +519,7 @@ export const createUser = async (req, res) => {
       }
 
       const cleanName = hospitalName.trim();
-      let hospital = await Hospital.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, "i") } });
+      let hospital = await Hospital.findOne({ name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, "i") } }); // escape: tên viện là chuỗi, không phải biểu thức
       
       if (!hospital) {
         // Generate a simple unique code based on the initials
@@ -2126,7 +2135,8 @@ export const backupHospitalData = async (req, res) => {
     
     const fileName = `backup_${hospital.code}_${Date.now()}.json`;
     const filePath = path.join(backupDir, fileName);
-    fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2), "utf8");
+    // Mã hóa AES-256-GCM: tệp tải về không đọc được nếu không có FILE_ENCRYPTION_KEY (trước đây JSON bản rõ)
+    writeEncryptedBackup(filePath, backupData, { hospitalId: String(hospital._id), hospitalCode: hospital.code, kind: "tenant" });
 
     // Log the backup
     await recordAuditLog({
@@ -2167,9 +2177,9 @@ export const downloadHospitalBackup = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy file sao lưu trên hệ thống." });
     }
 
-    const raw = fs.readFileSync(filePath, "utf8");
-    const backupData = JSON.parse(raw);
-    if (backupData.hospital?._id?.toString() !== id) {
+    const envelope = readBackupEnvelope(filePath);
+    const ownerId = envelope?.format === BACKUP_FORMAT ? envelope.meta?.hospitalId : envelope?.hospital?._id?.toString();
+    if (String(ownerId || "") !== id) {
       return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập tệp sao lưu của cơ sở khác." });
     }
 
@@ -2208,8 +2218,7 @@ export const restoreHospitalData = async (req, res) => {
     // Đọc và parse file backup
     let backupData;
     try {
-      const raw = fs.readFileSync(filePath, "utf8");
-      backupData = JSON.parse(raw);
+      backupData = readEncryptedBackup(filePath).payload;
     } catch {
       return res.status(400).json({ success: false, message: "File sao lưu bị hỏng hoặc không đúng định dạng JSON." });
     }

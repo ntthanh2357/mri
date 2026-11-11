@@ -576,7 +576,7 @@ const AIAnalysisScreen = ({ route, navigation }) => {
                             <CheckCircle2 size={20} color="#FFFFFF" strokeWidth={2.5} />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.confirmBtnTitle}>AI đúng — Duyệt chẩn đoán & Điền kết quả</Text>
+                            <Text style={styles.confirmBtnTitle}>AI đúng — Xác nhận gợi ý & Điền kết quả</Text>
                             <Text style={styles.confirmBtnSub}>Điền sẵn hình ảnh lát cắt, heatmap và kết luận vào hồ sơ</Text>
                           </View>
                         </>

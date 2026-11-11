@@ -59,28 +59,48 @@ const isValidSignature = (filePath, expires, provided) => {
 
 const SIGNED_FILE_SUFFIX = /((?:\/uploads\/|\/api\/v1\/storage\/files\/)[^?#]*)\?exp=(\d+)&sig=([\w-]+)$/;
 
-const stripSignature = (value, verifiedPaths) => {
+const INTERNAL_FILE_URL = /^(?:https?:\/\/[^/?#]+)?(\/uploads\/[^?#]+|\/api\/v1\/storage\/files\/[^/?#]+)$/i;
+
+// mentioned: mọi đường dẫn tệp nội bộ xuất hiện NGUYÊN GIÁ TRỊ trong body (đã ký hay chưa)
+const stripSignature = (value, verifiedPaths, mentioned) => {
   if (typeof value === "string") {
-    return value.replace(SIGNED_FILE_SUFFIX, (_, filePath, exp, sig) => {
+    const stripped = value.replace(SIGNED_FILE_SUFFIX, (_, filePath, exp, sig) => {
       const expires = Number(exp);
       if (expires >= Date.now() && isValidSignature(filePath, expires, sig)) verifiedPaths.add(filePath);
       return filePath;
     });
+    const internal = stripped.trim().match(INTERNAL_FILE_URL);
+    if (internal) mentioned.add(internal[1]);
+    return stripped;
   }
-  if (Array.isArray(value)) return value.map((item) => stripSignature(item, verifiedPaths));
+  if (Array.isArray(value)) return value.map((item) => stripSignature(item, verifiedPaths, mentioned));
   if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
-    for (const key of Object.keys(value)) value[key] = stripSignature(value[key], verifiedPaths);
+    for (const key of Object.keys(value)) value[key] = stripSignature(value[key], verifiedPaths, mentioned);
   }
   return value;
 };
 
+/**
+ * Chống "signing oracle": phản hồi tự ký mọi giá trị là đường dẫn tệp (signUploadUrlsInResponse), nên trước đây
+ * client gửi một đường dẫn tùy ý (vd. đặt tên hồ sơ = "/uploads/<tệp người khác>") là nhận lại link đã ký và tải được tệp.
+ * Đường dẫn tệp nội bộ trong body chỉ hợp lệ khi kèm chữ ký còn hạn do chính máy chủ cấp cho người gọi.
+ * Link hết hạn (trang mở quá 12 giờ) cũng bị từ chối: tải lại trang để nhận link mới.
+ */
 export const stripUploadSignatures = (req, res, next) => {
   req.signedFilePaths = new Set();
-  if (req.body && typeof req.body === "object") req.body = stripSignature(req.body, req.signedFilePaths);
+  const mentioned = new Set();
+  if (req.body && typeof req.body === "object") req.body = stripSignature(req.body, req.signedFilePaths, mentioned);
+  for (const filePath of mentioned) {
+    if (!req.signedFilePaths.has(filePath)) {
+      return res.status(403).json({
+        success: false,
+        code: "UPLOAD_LINK_INVALID",
+        message: "Liên kết tệp không hợp lệ hoặc đã hết hạn, vui lòng tải lại trang.",
+      });
+    }
+  }
   next();
 };
-
-const INTERNAL_FILE_URL = /^(?:https?:\/\/[^/?#]+)?(\/uploads\/[^?#]+|\/api\/v1\/storage\/files\/[^/?#]+)$/i;
 
 /**
  * Ảnh client gửi để máy chủ tự đọc từ đĩa thì không đi qua kiểm tra chữ ký của route tệp.

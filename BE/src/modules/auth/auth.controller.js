@@ -10,8 +10,11 @@ import crypto from "crypto";
 import { authCache } from "../../utils/authCache.util.js";
 import { getJwtSecret, getRefreshSecret, generateSecureOtp } from "../../config/jwt.config.js";
 import { FEATURES } from "../../config/features.config.js";
+import { isRoleInScope, OUT_OF_SCOPE_ROLE_MESSAGE } from "../../config/roleScope.js";
 import { recordUserLoginSession } from "../../utils/geoIp.util.js";
 import { issueStepUpOtp, verifyStepUpCode } from "../../services/stepUp.service.js";
+import { hashAccountOtp, accountOtpMatches, OTP_SECRET_FIELDS } from "../../utils/accountOtp.util.js";
+import { passwordPolicyError } from "../../utils/passwordPolicy.util.js";
 
 const hashPhone = (phone) => {
   if (!phone) return null;
@@ -33,7 +36,7 @@ const isOtpResendBlocked = (user) =>
 const OTP_RESEND_BLOCKED_MESSAGE = "Bạn vừa yêu cầu mã OTP. Vui lòng chờ 60 giây rồi thử lại.";
 
 const stampNewOtp = (user, otpCode) => {
-  user.otpCode = otpCode;
+  user.otpCode = hashAccountOtp(user._id, otpCode);
   user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
   user.otpAttempts = 0;
   user.otpLastSentAt = new Date();
@@ -57,7 +60,7 @@ const verifyAccountOtp = async (user, otp) => {
       message: `Bạn đã nhập sai mã OTP quá ${OTP_MAX_ATTEMPTS} lần. Mã hiện tại đã bị vô hiệu, vui lòng yêu cầu mã mới.`,
     };
   }
-  if (!user.otpCode || String(user.otpCode) !== String(otp)) {
+  if (!accountOtpMatches(user.otpCode, user._id, otp)) {
     const remaining = Math.max(0, OTP_MAX_ATTEMPTS - counted.otpAttempts);
     return { ok: false, status: 400, message: `Mã OTP không chính xác. Bạn còn ${remaining} lần thử.` };
   }
@@ -110,11 +113,20 @@ export const register = async (req, res) => {
       res.status(400).json({ message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, password, name, role)." });
       return;
     }
+    const pwError = passwordPolicyError(password);
+    if (pwError) {
+      res.status(400).json({ message: pwError });
+      return;
+    }
 
     // [P0-Pharmacist + Mini-PACS] Thêm "pharmacist", "radiologist", "department_head" vào danh sách role hợp lệ
     const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist"];
     if (!rolesAvailable.includes(role)) {
       res.status(400).json({ message: "Vai trò (role) không hợp lệ." });
+      return;
+    }
+    if (!isRoleInScope(role)) {
+      res.status(400).json({ message: OUT_OF_SCOPE_ROLE_MESSAGE });
       return;
     }
 
@@ -184,7 +196,7 @@ export const register = async (req, res) => {
       hospitalId: role !== "patient" ? hospitalId : undefined,
       departmentId: departmentId || (role === "patient" ? undefined : "KUTN"),
       isVerified: isAutoVerified, // Bệnh nhân tự kích hoạt trong dev/demo
-      otpCode: (isPatient && !isAutoVerified) ? otpCode : undefined,
+      otpCode: undefined,
       otpExpires: (isPatient && !isAutoVerified) ? otpExpires : undefined,
       profile: {
         name,
@@ -195,6 +207,7 @@ export const register = async (req, res) => {
       },
     });
 
+    if (isPatient && !isAutoVerified) newUser.otpCode = hashAccountOtp(newUser._id, otpCode);
     await newUser.save();
 
     // Log the change
@@ -264,14 +277,14 @@ export const login = async (req, res) => {
         res.status(400).json({ message: "Tài khoản tạm thời đã hết hạn sử dụng. Vui lòng đăng nhập bằng Email đăng nhập chính thức của bệnh viện." });
         return;
       }
-      user = await User.findOne({ hospitalId: hospital._id, role: 'hospital_admin' });
+      user = await User.findOne({ hospitalId: hospital._id, role: 'hospital_admin' }).select(OTP_SECRET_FIELDS);
     } else {
       user = await User.findOne({
         $or: [
           { email: email.toLowerCase() },
           { phone: hashPhone(email) }
         ]
-      });
+      }).select(OTP_SECRET_FIELDS);
     }
     if (!user) {
       res.status(400).json({ message: "Email hoặc mật khẩu không chính xác." });
@@ -375,7 +388,7 @@ export const login = async (req, res) => {
     // If patient requires verification and has provided the OTP code, verify it right here!
     if (requiresVerification && req.body.otp) {
       const isMasterOtp = isDevOtpEnabled() && req.body.otp === "123456";
-      if (isMasterOtp || (user.otpCode === req.body.otp && user.otpExpires >= new Date())) {
+      if (isMasterOtp || (accountOtpMatches(user.otpCode, user._id, req.body.otp) && user.otpExpires >= new Date())) {
         user.isVerified = true;
         user.otpCode = undefined;
         user.otpExpires = undefined;
@@ -407,7 +420,7 @@ export const login = async (req, res) => {
     let otpCode;
     if (requiresVerification) {
       otpCode = generateSecureOtp();
-      user.otpCode = otpCode;
+      user.otpCode = hashAccountOtp(user._id, otpCode);
       user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
       await user.save();
       try {
@@ -426,7 +439,7 @@ export const login = async (req, res) => {
     const requires2FA = !requiresVerification && !requiresActivation && !justActivated;
     if (requires2FA) {
       otp2FaCode = generateSecureOtp();
-      user.otp2FACode = otp2FaCode;
+      user.otp2FACode = hashAccountOtp(user._id, otp2FaCode, "2fa");
       user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
       user.otp2FAAttempts = 0;
       await user.save({ validateBeforeSave: false });
@@ -512,7 +525,7 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase() }).select(OTP_SECRET_FIELDS);
     if (!user) {
       res.status(404).json({ message: "Không tìm thấy yêu cầu đăng nhập cho email này. Vui lòng đăng nhập lại." });
       return;
@@ -535,7 +548,7 @@ export const verify2FA = async (req, res) => {
     }
 
     const isMasterOtp = isDevOtpEnabled() && otp === "123456";
-    if (!isMasterOtp && (!user.otp2FACode || user.otp2FACode !== otp)) {
+    if (!isMasterOtp && !accountOtpMatches(user.otp2FACode, user._id, otp, "2fa")) {
       user.otp2FAAttempts = (user.otp2FAAttempts || 0) + 1;
       await user.save({ validateBeforeSave: false });
       const remaining = 5 - user.otp2FAAttempts;
@@ -618,7 +631,7 @@ export const resend2FA = async (req, res) => {
     }
 
     const otp2FaCode = generateSecureOtp();
-    user.otp2FACode = otp2FaCode;
+    user.otp2FACode = hashAccountOtp(user._id, otp2FaCode, "2fa");
     user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000);
     user.otp2FAAttempts = 0;
     await user.save({ validateBeforeSave: false });
@@ -727,7 +740,7 @@ export const refresh = async (req, res) => {
 // — dùng chung cho login mật khẩu và SSO Google để mọi luồng đều qua đúng chính sách 2FA.
 const issue2FAChallenge = async (user, res, message) => {
   const otp2FaCode = generateSecureOtp();
-  user.otp2FACode = otp2FaCode;
+  user.otp2FACode = hashAccountOtp(user._id, otp2FaCode, "2fa");
   user.otp2FAExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
   user.otp2FAAttempts = 0;
   await user.save({ validateBeforeSave: false });
@@ -1040,6 +1053,11 @@ export const changePassword = async (req, res) => {
       res.status(400).json({ message: "Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới." });
       return;
     }
+    const newPwError = passwordPolicyError(newPassword);
+    if (newPwError) {
+      res.status(400).json({ message: newPwError });
+      return;
+    }
 
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -1225,8 +1243,14 @@ export const verifyOtp = async (req, res) => {
       res.status(400).json({ message: "Vui lòng cung cấp đầy đủ email, mã OTP và mật khẩu mới." });
       return;
     }
+    // Kiểm tra trước khi so OTP: mật khẩu yếu không làm tốn lượt thử mã
+    const resetPwError = passwordPolicyError(newPassword);
+    if (resetPwError) {
+      res.status(400).json({ message: resetPwError });
+      return;
+    }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select(OTP_SECRET_FIELDS);
     if (!user) {
       res.status(404).json({ message: "Email này không tồn tại trong hệ thống." });
       return;
@@ -1350,7 +1374,7 @@ export const phoneLoginVerify = async (req, res) => {
         { phone: phone },
         { phone: altPhone }
       ]
-    });
+    }).select(OTP_SECRET_FIELDS);
     if (!user) {
       return res.status(404).json({ message: "Số điện thoại chưa được đăng ký." });
     }
@@ -1474,7 +1498,7 @@ export const verifyActivation = async (req, res) => {
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase() }).select(OTP_SECRET_FIELDS);
     if (!user) {
       res.status(404).json({ message: "Email này không tồn tại trong hệ thống." });
       return;

@@ -88,11 +88,12 @@ const GATE_MESSAGES = {
  * Dùng chung cho mọi đường đưa bệnh nhân vào buồng chụp. Ném lỗi 402 khi bị chặn.
  */
 export const assertPaymentGateOpen = async (visit, user, req = null) => {
-  const inv = visit.invoiceId
-    ? await Invoice.findById(visit.invoiceId)
-        .select("status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
-        .lean()
+  const GATE_FIELDS = "status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo";
+  // Hóa đơn chứa phí MRI của lượt khám (có thể là hóa đơn MRI riêng khi hóa đơn khám đã thu trước)
+  const mriInvoice = visit._id
+    ? await Invoice.findOne({ visitId: visit._id, hospitalId: visit.hospitalId, "items.type": "mri" }).sort({ createdAt: -1 }).select(GATE_FIELDS).lean()
     : null;
+  const inv = mriInvoice || (visit.invoiceId ? await Invoice.findById(visit.invoiceId).select(GATE_FIELDS).lean() : null);
   const hospital = await Hospital.findById(visit.hospitalId).select("billingPolicy").lean();
   const decision = shouldEnforcePaymentGate(visit, inv, {
     partialDebtThreshold: Number(hospital?.billingPolicy?.partialPaymentDebtThreshold || 0),
@@ -411,6 +412,82 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals, keepWai
 /**
  * Service: Ra y lệnh chụp MRI và tạo hóa đơn tạm tính
  */
+/**
+ * Hóa đơn tạm tính khi ra y lệnh MRI. Chưa có hóa đơn → lập hóa đơn khám + MRI; hóa đơn còn chờ thanh toán → thêm dòng MRI;
+ * hóa đơn khám đã thu/đã đóng → lập hóa đơn MRI riêng. Lỗi thì ném ra (không nuốt), vì y lệnh không có hóa đơn
+ * sẽ bị cổng viện phí coi là "không cần hóa đơn". Cập nhật visit.invoiceId khi lập hóa đơn đầu tiên (chưa lưu visit).
+ */
+export const ensureMriInvoice = async (visit, { region, requestAiAnalysis } = {}) => {
+  try {
+    if (!visit.invoiceId) {
+      const hospital = await Hospital.findById(visit.hospitalId);
+      const examFee = hospital?.pricing?.examFee ?? 50000;
+      const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+      const aiFee = hospital?.pricing?.aiFee ?? 200000;
+
+      const items = [
+        { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
+        { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
+      ];
+      if (requestAiAnalysis) {
+        items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+      }
+      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+      const draftInvoice = new Invoice({
+        hospitalId: visit.hospitalId,
+        patientId: visit.patientId,
+        visitId: visit._id,
+        items,
+        totalAmount,
+        status: "chờ thanh toán"
+      });
+      await draftInvoice.save();
+      visit.invoiceId = draftInvoice._id;
+    } else {
+      const existingInvoice = await Invoice.findById(visit.invoiceId);
+      if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
+        const hospital = await Hospital.findById(visit.hospitalId);
+        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+        const aiFee = hospital?.pricing?.aiFee ?? 200000;
+        if (!existingInvoice.items.some((i) => i.type === "mri")) {
+          existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
+        }
+        if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
+          existingInvoice.items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+        }
+        existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        await existingInvoice.save();
+      } else if (!existingInvoice?.items?.some((i) => i.type === "mri")) {
+        // Hóa đơn khám đã thu (hoặc đã đóng): lập hóa đơn MRI riêng chờ thanh toán. Trước đây không lập gì,
+        // cổng viện phí xét hóa đơn khám đã trả nên bệnh nhân vào chụp khi chưa đóng phí MRI.
+        const hasMriInvoice = await Invoice.exists({ visitId: visit._id, hospitalId: visit.hospitalId, "items.type": "mri", status: { $ne: "hủy" } });
+        if (!hasMriInvoice) {
+          const hospital = await Hospital.findById(visit.hospitalId);
+          const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+          const aiFee = hospital?.pricing?.aiFee ?? 200000;
+          const items = [{ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" }];
+          if (requestAiAnalysis) items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+          await new Invoice({
+            hospitalId: visit.hospitalId,
+            patientId: visit.patientId,
+            visitId: visit._id,
+            items,
+            totalAmount: items.reduce((sum, item) => sum + item.amount, 0),
+            status: "chờ thanh toán",
+          }).save();
+        }
+      }
+    }
+  } catch (invErr) {
+    // Không nuốt lỗi: y lệnh MRI không có hóa đơn thì cổng viện phí sẽ coi là "không cần hóa đơn" và cho vào chụp
+    console.error("Không thể lập hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
+    const err = new Error("Chưa lập được hóa đơn tạm tính chụp MRI. Vui lòng thử lại.");
+    err.statusCode = 500;
+    throw err;
+  }
+};
+
 export const createMriOrderService = async ({
   visitId,
   hospitalId,
@@ -490,52 +567,8 @@ export const createMriOrderService = async ({
   };
   visit.status = clinicalScenario === "post_op_72h" ? "chờ chụp sau phẫu thuật" : "chờ chụp";
 
-  // Lập hóa đơn tạm tính
-  try {
-    if (!visit.invoiceId) {
-      const hospital = await Hospital.findById(visit.hospitalId);
-      const examFee = hospital?.pricing?.examFee ?? 50000;
-      const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-      const aiFee = hospital?.pricing?.aiFee ?? 200000;
-
-      const items = [
-        { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
-        { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
-      ];
-      if (requestAiAnalysis) {
-        items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-      }
-      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-
-      const draftInvoice = new Invoice({
-        hospitalId: visit.hospitalId,
-        patientId: visit.patientId,
-        visitId: visit._id,
-        items,
-        totalAmount,
-        status: "chờ thanh toán"
-      });
-      await draftInvoice.save();
-      visit.invoiceId = draftInvoice._id;
-    } else {
-      const existingInvoice = await Invoice.findById(visit.invoiceId);
-      if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
-        const hospital = await Hospital.findById(visit.hospitalId);
-        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-        const aiFee = hospital?.pricing?.aiFee ?? 200000;
-        if (!existingInvoice.items.some((i) => i.type === "mri")) {
-          existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
-        }
-        if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
-          existingInvoice.items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-        }
-        existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-        await existingInvoice.save();
-      }
-    }
-  } catch (invErr) {
-    console.warn("⚠️ Không thể tạo hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
-  }
+  // Lập hóa đơn tạm tính (dùng chung với controller createMriOrder)
+  await ensureMriInvoice(visit, { region, requestAiAnalysis });
 
   await visit.save();
   return visit;

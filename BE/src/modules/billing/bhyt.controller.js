@@ -388,7 +388,7 @@ export const applyBhytToInvoice = async (req, res) => {
 
     const result = await applyBhytCore(invoice, { bhyt, treatmentType, isOutOfNetwork, hasTransferForm });
     if (!result.ok) {
-      const status = { NO_CARD: 404, PAID_BEFORE_BHYT: 409, PAYOS_IN_FLIGHT: 409, CAP_CHANGED: 409 }[result.code] || 400;
+      const status = { NO_CARD: 404, PAID_BEFORE_BHYT: 409, PAYOS_IN_FLIGHT: 409, CAP_CHANGED: 409, APPLY_IN_PROGRESS: 409 }[result.code] || 400;
       return res.status(status).json({ success: false, code: result.code, message: result.message });
     }
 

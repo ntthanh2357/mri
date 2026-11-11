@@ -226,7 +226,7 @@ export default function SlaReportScreen({ navigation }) {
         </View>
         {tumorTotal > 0 ? (
           <View style={styles.tumorBox}>
-            <Text style={styles.tumorTitle}>Phân bố kết quả chẩn đoán ({tumorTotal} ca có báo cáo AI)</Text>
+            <Text style={styles.tumorTitle}>Phân bố kết quả gợi ý sàng lọc ({tumorTotal} ca có báo cáo AI)</Text>
             {Object.entries(ai.tumorDistribution || {}).map(([k, v]) => (
               <View key={k} style={styles.tumorRow}>
                 <Text style={styles.tumorLabel}>{TUMOR_LABELS[k] || k}</Text>

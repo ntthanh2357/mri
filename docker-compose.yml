@@ -37,6 +37,10 @@ services:
       dockerfile: Dockerfile
     container_name: neuroscan-backend
     restart: unless-stopped
+    # BẮT BUỘC trong ./BE/.env (hoặc biến môi trường) khi chạy production — thiếu thì backend dừng ngay lúc khởi động:
+    #   FIELD_ENCRYPTION_KEY  32 byte (64 hex hoặc base64 44 ký tự) — mã hóa CCCD/số thẻ BHYT
+    #   FILE_ENCRYPTION_KEY   64 ký tự hex — mã hóa tệp y tế và bản sao lưu
+    # Không đổi khóa khi đã có dữ liệu: dữ liệu mã hóa bằng khóa cũ sẽ không giải mã được.
     env_file:
       - ./BE/.env
     environment:

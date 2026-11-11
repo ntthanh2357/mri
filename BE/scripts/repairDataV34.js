@@ -8,6 +8,7 @@
  *   - CCCD trong dataprivacyconsents còn dạng chữ thường: mã hóa, lưu 4 số cuối
  *   - Số thẻ BHYT còn dạng chữ thường: mã hóa, tạo hash tra cứu, lưu 4 số cuối
  *   - Bình duyệt phim có kết quả đọc nhưng thiếu reviewerIds: khôi phục người đọc, chuyển sang chờ kết luận
+ *   - Mã OTP còn lưu dạng chữ thường (trước bản băm HMAC): vô hiệu, người dùng xin mã mới
  * Chỉ báo cáo, cần người quyết định:
  *   - Cảnh báo cấp cứu mở quá 24 giờ, lịch MRI không có lượt khám, đơn thuốc thiếu trạng thái phát
  *   - Dữ liệu do mặc định cũ tự điền: phiếu chăm sóc GCS 15/đồng tử 2.5mm, tên chung "Bác sĩ điều trị",
@@ -46,6 +47,12 @@ const run = async () => {
     if (apply) await col("bhytinfos").updateOne({ _id: doc._id }, { $set: encryptBhytCardNumber(doc.cardNumber) });
   }
   report["Số thẻ BHYT chữ thường"] = n;
+
+  // Mã OTP còn lưu dạng chữ thường (trước bản băm HMAC): vô hiệu để không ai đọc được mã đang hiệu lực; người dùng xin mã mới
+  const plainOtp = { $or: [{ otpCode: { $type: "string", $not: /^[a-f0-9]{64}$/ } }, { otp2FACode: { $type: "string", $not: /^[a-f0-9]{64}$/ } }] };
+  n = await col("users").countDocuments(plainOtp);
+  if (apply && n) await col("users").updateMany(plainOtp, { $set: { otpCode: null, otpExpires: null, otp2FACode: null, otp2FAExpires: null } });
+  report["Mã OTP còn lưu chữ thường (vô hiệu, người dùng xin mã mới)"] = n;
 
   n = 0;
   for await (const doc of col("peerreviews").find({ "readings.0": { $exists: true }, "reviewerIds.0": { $exists: false } })) {

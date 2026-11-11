@@ -26,6 +26,7 @@ import { buildMedicalRecordPayload } from "../../../FE/src/utils/medicalRecordPa
 import { LabOrder } from "../modules/laboratory/models/labOrder.model.js";
 import { Biomarker } from "../modules/laboratory/models/biomarker.model.js";
 import { getJwtSecret } from "../config/jwt.config.js";
+import { signUploadPath } from "../middlewares/uploadSignature.middleware.js";
 import { CareSheet } from "../modules/emr/models/careSheet.model.js";
 import { Task } from "../models/task.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
@@ -206,7 +207,8 @@ describe("E2E 5 luồng critical trên server thật (Mongo local)", () => {
   test("IT1-07/08 Tạo kết quả CĐHA từ ca KTV: admin không tạo được; thiếu năm sinh/địa chỉ/chẩn đoán thì để trống, không ghi cứng 'không cản quang'", async () => {
     const bare = await User.create({ email: `e2e_bare_${oid()}@e2e.local`, passwordHash: "x", role: "patient", hospitalId: H, profile: { name: "BN thiếu hồ sơ" } });
     const visit = await Visit.create({ hospitalId: H, patientId: bare._id, doctorId: A.doctor._id, status: "đang chụp", mriOrder: { orderedAt: new Date(), region: "Não", mriStatus: "ordered" } });
-    const body = { visitId: String(visit._id), imageUrl: "/uploads/e2e_slice.png", requestAiAnalysis: false };
+    // đường dẫn tệp trong body phải là link đã ký do máy chủ cấp (chống signing oracle)
+    const body = { visitId: String(visit._id), imageUrl: signUploadPath("/uploads/e2e_slice.png"), requestAiAnalysis: false };
     expectStatus(await api(A.admin, "POST", "/api/v1/imaging-results", body), 403, "admin tạo kết quả CĐHA");
     expectStatus(await api(A.system_admin, "POST", "/api/v1/imaging-results", body), 403, "system_admin tạo kết quả CĐHA");
     const created = await api(A.technician, "POST", "/api/v1/imaging-results", body);
@@ -708,5 +710,458 @@ describe("E2E 5 luồng critical trên server thật (Mongo local)", () => {
     expect(tf.hospitalNo).toBe("");
     expect(tf.transferTo).toBe("BV Trung ương Huế");
   });
+  test("IT6-01 OTP lưu dạng HMAC, không lộ qua GET /admin/users; mã đúng vẫn đặt lại được mật khẩu", async () => {
+    const u = await mk("patient", H, "BN quên mật khẩu");
+    const fp = await api(null, "POST", "/auth/forgot-password", { email: u.email });
+    expectStatus(fp, 200, "xin OTP quên mật khẩu");
+    const code = fp.json.debugOtp;
+    expect(/^\d{6}$/.test(String(code))).toBe(true);
+    const raw = await User.collection.findOne({ _id: u._id });
+    expect(raw.otpCode !== code && /^[a-f0-9]{64}$/.test(raw.otpCode)).toBe(true);
+    for (const r of ["admin", "system_admin"]) {
+      const list = await api(A[r], "GET", "/admin/users");
+      expectStatus(list, 200, `${r} xem danh sách người dùng`);
+      expect(list.text.includes(code) || list.text.includes(raw.otpCode) || list.text.includes("otpCode") || list.text.includes("otp2FACode")).toBe(false);
+    }
+    expectStatus(await api(null, "POST", "/auth/verify-otp", { email: u.email, otp: "000000", newPassword: "MatKhau2026" }), 400, "OTP sai");
+    expectStatus(await api(null, "POST", "/auth/verify-otp", { email: u.email, otp: code, newPassword: "MatKhau2026" }), 200, "OTP đúng đặt lại mật khẩu");
+  });
+
+  test("IT6-02 Mật khẩu tự đặt: ≥ 8 ký tự, có chữ và số (đăng ký, đổi, đặt lại, quản trị tạo tài khoản)", async () => {
+    const base = { name: "BN Mật khẩu", role: "patient" };
+    for (const pw of ["abc123", "abcdefgh", "12345678"]) {
+      const r = await api(null, "POST", "/auth/register", { ...base, email: `e2e_pw_${oid()}@e2e.local`, password: pw });
+      expectStatus(r, 400, `đăng ký mật khẩu yếu ${pw}`);
+      expect(/8.*ký tự.*chữ và số/.test(r.json.message)).toBe(true);
+    }
+    expect([200, 201].includes((await api(null, "POST", "/auth/register", { ...base, email: `e2e_pw_${oid()}@e2e.local`, password: "Benhnhan2026" })).status)).toBe(true);
+    expectStatus(await api(A.nurse, "PUT", "/auth/password", { currentPassword: "x", newPassword: "short1" }), 400, "đổi sang mật khẩu yếu");
+    const u = await mk("patient", H, "BN đặt lại yếu");
+    const fp = await api(null, "POST", "/auth/forgot-password", { email: u.email });
+    expectStatus(await api(null, "POST", "/auth/verify-otp", { email: u.email, otp: fp.json.debugOtp, newPassword: "khongcoso" }), 400, "đặt lại mật khẩu không có số");
+    expectStatus(await api(A.admin, "POST", "/admin/users", { email: `e2e_adm_${oid()}@e2e.local`, password: "1234", name: "NV", role: "patient" }), 400, "quản trị tạo tài khoản mật khẩu yếu");
+  });
+
+  test("IT6-03 Hóa đơn kẹt trừ kho: 'hủy và hoàn' chỉ mở yêu cầu, người khác duyệt, ghi đúng số tiền; không trừ kho lại khi đang chờ", async () => {
+    const inv = await Invoice.create({ hospitalId: H, patientId: A.patient._id, totalAmount: 50_000_000, patientPayAmount: 50_000_000, status: "đang xử lý", paidAt: new Date(), paymentMethod: "vietqr",
+      stockDeductionStatus: "SHORTAGE_FLAGGED", items: [{ description: "Thuốc hóa trị", amount: 50_000_000, quantity: 1, type: "drug" }] });
+    const r = await api(A.pharmacist, "POST", `/api/v1/invoices/${inv._id}/resolve-processing`, { action: "cancel_refund", note: "Kho không cấp được" });
+    expectStatus(r, 202, "dược sĩ lập yêu cầu hoàn");
+    let d = await Invoice.findById(inv._id).setOptions({ bypassTenancy: true }).lean();
+    expect(d.status).toBe("đang xử lý");
+    expect(d.refundApproval.approvalStatus).toBe("pending_second_approval");
+    expectStatus(await api(A.pharmacist, "POST", `/api/v1/invoices/${inv._id}/resolve-processing`, { action: "retry_deduct" }), 409, "trừ kho lại khi đang chờ duyệt hoàn");
+    const pending = await api(A.hospital_admin, "GET", "/api/v1/invoices/refund-requests/pending");
+    expect((pending.json.requests || []).some((x) => String(x._id) === String(inv._id))).toBe(true);
+    expectStatus(await api(A.receptionist, "POST", `/api/v1/invoices/${inv._id}/refund/approve`, {}), 403, "lễ tân duyệt khoản 50tr");
+    const director = await mk("hospital_admin", H, "BGĐ duyệt hoàn kẹt kho"); // tài khoản riêng: không vướng giãn cách xin mã step-up của test khác
+    const q = await api(director, "POST", "/auth/step-up/request", {});
+    expectStatus(q, 200, "xin mã step-up");
+    expectStatus(await api(director, "POST", "/auth/step-up/verify", { otp: q.json.debugOtp }), 200, "step-up");
+    expectStatus(await api(director, "POST", `/api/v1/invoices/${inv._id}/refund/approve`, {}), 200, "BGĐ duyệt hoàn");
+    d = await Invoice.findById(inv._id).setOptions({ bypassTenancy: true }).lean();
+    expect(d.status).toBe("hoàn trả");
+    expect(d.refundAmount).toBe(50_000_000);
+  });
+
+  test("IT6-04 Hoàn một phần rồi hoàn toàn bộ: chỉ hoàn phần còn lại, refundAmount cộng dồn (không hoàn trùng)", async () => {
+    const inv = await Invoice.create({ hospitalId: H, patientId: A.patient._id, totalAmount: 500_000, patientPayAmount: 500_000, status: "đã thanh toán", paidAt: new Date(), paymentMethod: "tiền mặt",
+      items: [{ description: "Khám A", amount: 300_000, quantity: 1, type: "exam" }, { description: "Khám B", amount: 200_000, quantity: 1, type: "exam" }] });
+    expectStatus(await api(A.receptionist, "PUT", `/api/v1/invoices/${inv._id}/refund`, { refundReason: "Hủy khám A", itemsToRefund: [{ itemIndex: 0 }] }), 200, "hoàn một phần");
+    expectStatus(await api(A.receptionist, "PUT", `/api/v1/invoices/${inv._id}/refund`, { refundReason: "Hủy nốt" }), 200, "hoàn toàn bộ phần còn lại");
+    const d = await Invoice.findById(inv._id).setOptions({ bypassTenancy: true }).lean();
+    expect(d.refundAmount).toBe(500_000);
+    expect(d.status).toBe("hoàn trả");
+    expect(String(d.notes).includes("200.000")).toBe(true);
+  });
+
+  test("IT6-05 Chống signing oracle: đường dẫn tệp chưa ký trong body bị từ chối (hồ sơ, kết quả chụp); link đã ký vẫn dùng được", async () => {
+    const p = await api(A.patient, "PUT", "/auth/profile", { name: "/uploads/tep_cua_nguoi_khac.png" });
+    expectStatus(p, 403, "đặt tên hồ sơ là đường dẫn tệp");
+    expect(p.json.code).toBe("UPLOAD_LINK_INVALID");
+    const visit = await Visit.create({ hospitalId: H, patientId: A.patient._id, doctorId: A.doctor._id, status: "đang chụp", mriOrder: { orderedAt: new Date(), region: "Não", mriStatus: "ordered" } });
+    expectStatus(await api(A.technician, "POST", "/api/v1/imaging-results", { visitId: String(visit._id), images: ["/uploads/tep_cua_nguoi_khac.png"] }), 403, "KTV gửi ảnh chưa ký");
+    expectStatus(await api(A.technician, "POST", "/api/v1/imaging-results", { visitId: String(visit._id), images: ["/uploads/a.png?exp=1&sig=abc"] }), 403, "link hết hạn/giả");
+    const ok = await api(A.technician, "POST", "/api/v1/imaging-results", { visitId: String(visit._id), images: [signUploadPath("/uploads/e2e_signed.png")] });
+    expect([200, 201].includes(ok.status)).toBe(true);
+  });
+
+  test("IT6-06 Đặt lịch tái khám B2C chỉ cho bệnh nhân; bác sĩ phải thuộc đúng cơ sở", async () => {
+    for (const r of ["doctor", "admin", "system_admin", "receptionist"]) {
+      expectStatus(await api(A[r], "POST", "/api/v1/patient-b2c/book-followup", { reason: "thử", hospitalId: String(H) }), 403, `${r} đặt lịch tái khám`);
+    }
+    expectStatus(await api(A.doctor, "GET", "/api/v1/patient-b2c/my-visits"), 403, "bác sĩ xem lịch sử khám B2C");
+    expectStatus(await api(A.patient, "POST", "/api/v1/patient-b2c/book-followup", { reason: "thử", hospitalId: String(H), doctorId: String(A.doctorOther._id) }), 400, "chọn bác sĩ viện khác");
+    // hospitalId trong body chỉ dùng cho bệnh nhân B2C chưa gắn viện (BUG-06): bệnh nhân gắn viện luôn đặt lịch tại viện của mình
+    const b2c = await mk("patient", null, "BN B2C");
+    expectStatus(await api(b2c, "POST", "/api/v1/patient-b2c/book-followup", { reason: "thử", hospitalId: String(oid()) }), 400, "cơ sở không tồn tại");
+    expectStatus(await api(b2c, "POST", "/api/v1/patient-b2c/book-followup", { reason: "thử", hospitalId: "khong-phai-id" }), 400, "mã cơ sở sai định dạng");
+    const ok = await api(A.patient, "POST", "/api/v1/patient-b2c/book-followup", { reason: "Tái khám sau mổ", hospitalId: String(H), doctorId: String(A.doctor._id) });
+    expectStatus(ok, 201, "bệnh nhân đặt lịch đúng");
+  });
+  test("IT7-01 Giấy chuyển tuyến chỉ nhận trường nội dung; bệnh nhân, viện, viện nhận, trạng thái, người lập do máy chủ đặt", async () => {
+    const pt = await mk("patient", H, "BN chuyển tuyến");
+    const r = await api(A.doctor, "POST", `/api/patients/${pt._id}/transfer-forms`, {
+      transferTo: "BV Trung ương Huế", diagnosis: "U màng não", clinicalSummary: "Tóm tắt",
+      patient_id: String(A.patient._id), hospitalId: String(otherH), targetHospitalId: String(otherH),
+      status: "accepted", acceptedByUserId: String(A.doctorOther._id), doctor_name: "Tên tự khai",
+    });
+    if (![200, 201].includes(r.status)) throw new Error(`lập giấy chuyển tuyến: ${r.status} — ${r.text.slice(0, 200)}`);
+    const tf = await TransferForm.findById(r.json.data._id).setOptions({ bypassTenancy: true }).lean();
+    expect(String(tf.patient_id)).toBe(String(pt._id));
+    expect(String(tf.hospitalId)).toBe(String(H));
+    expect(tf.targetHospitalId == null).toBe(true);
+    expect(tf.status === "accepted").toBe(false);
+    expect(tf.acceptedByUserId == null).toBe(true);
+    expect(tf.doctor_name).toBe(A.doctor.profile.fullName);
+    expect(tf.clinicalSummary).toBe("Tóm tắt");
+    expectStatus(await api(A.doctor, "POST", `/api/patients/${pt._id}/transfer-forms`, { transferTo: "BV", diagnosis: "U", visitId: String(oid()) }), 400, "lượt khám không thuộc bệnh nhân");
+  });
+
+  test("IT7-02 Ký báo cáo CĐHA qua clinical-view ghi mã băm toàn vẹn như PUT /imaging/:id", async () => {
+    const img = await ImagingResult.create({ hospitalId: H, medicalId: `BN-SIG-${String(oid()).slice(-6)}`, patientName: "BN ký", birthYear: 1980, gender: "Nam", address: "HN", orderDate: new Date().toISOString(),
+      orderingDoctor: "BS", orderingDepartment: "Ngoại thần kinh", diagnosis: "U não", procedure: "MRI", findings: "Khối thùy trán", conclusion: "Chờ", radiologist: "Chưa ký", reportDate: new Date().toISOString(), imagingType: "MRI", isSigned: false });
+    expectStatus(await api(A.radiologist, "POST", `/api/v1/clinical-view/imaging/${img._id}/sign`, { finalConclusion: "U thần kinh đệm độ II" }), 200, "CĐHA ký");
+    const saved = await ImagingResult.findById(img._id).setOptions({ bypassTenancy: true }).lean();
+    expect(saved.isSigned).toBe(true);
+    expect(/^[a-f0-9]{64}$/.test(saved.digitalSignatureMetadata?.signedHash || "")).toBe(true);
+    expect(saved.digitalSignatureMetadata.signatureType).toBe("internal_hash");
+  });
+
+  test("IT7-03 Chỉ định MRI khi hóa đơn khám đã thu: lập hóa đơn MRI riêng, cổng viện phí chặn tới khi đóng phí MRI", async () => {
+    const { assertPaymentGateOpen } = await import("../services/visit.service.js");
+    const pt = await mk("patient", H, "BN MRI sau khám");
+    const visit = await Visit.create({ hospitalId: H, patientId: pt._id, doctorId: A.doctor._id, status: "đang khám", reason: "Đau đầu" });
+    const exam = await Invoice.create({ hospitalId: H, patientId: pt._id, visitId: visit._id, totalAmount: 50_000, patientPayAmount: 50_000, status: "đã thanh toán", paidAt: new Date(), paymentMethod: "tiền mặt",
+      items: [{ description: "Khám bệnh", amount: 50_000, quantity: 1, type: "exam" }] });
+    await Visit.updateOne({ _id: visit._id }, { $set: { invoiceId: exam._id } });
+    const order = await api(A.doctor, "PUT", `/api/v1/visits/${visit._id}/mri-order`, { region: "Não" });
+    if (order.status !== 200) throw new Error(`chỉ định MRI: ${order.status} — ${order.text.slice(0, 200)}`);
+    const mriInv = await Invoice.findOne({ visitId: visit._id, "items.type": "mri" }).setOptions({ bypassTenancy: true }).lean();
+    expect(Boolean(mriInv)).toBe(true);
+    expect(mriInv.status).toBe("chờ thanh toán");
+    expect(String(mriInv._id) !== String(exam._id)).toBe(true);
+    const fresh = await Visit.findById(visit._id).setOptions({ bypassTenancy: true });
+    let gate = null;
+    try { await assertPaymentGateOpen(fresh, { id: String(A.technician._id), role: "technician" }); } catch (err) { gate = err.statusCode; }
+    expect(gate).toBe(402);
+    await Invoice.updateOne({ _id: mriInv._id }, { $set: { status: "đã thanh toán", paidAt: new Date() } }).setOptions({ bypassTenancy: true });
+    gate = null;
+    try { await assertPaymentGateOpen(fresh, { id: String(A.technician._id), role: "technician" }); } catch (err) { gate = err.statusCode; }
+    expect(gate).toBe(null);
+    const again = await api(A.doctor, "PUT", `/api/v1/visits/${visit._id}/mri-order`, { region: "Não" });
+    expect([200, 400, 409].includes(again.status)).toBe(true);
+    expect(await Invoice.countDocuments({ visitId: visit._id, "items.type": "mri" }).setOptions({ bypassTenancy: true })).toBe(1);
+  });
+  test("IT8-01 Chuyển viện: chỉ tạo cho bệnh nhân viện mình; viện nhận phải khác viện gửi; chỉ viện nhận chấp nhận/từ chối", async () => {
+    const foreign = await mk("patient", otherH, "BN viện khác");
+    const own = await mk("patient", H, "BN viện mình");
+    const base = { diagnosis: "U não", transferTo: "BV tuyến trên" };
+    expectStatus(await api(A.doctor, "POST", "/api/v1/transfers", { ...base, patient_id: String(foreign._id), targetHospitalId: String(otherH) }), 404, "tạo phiếu cho bệnh nhân viện khác");
+    expectStatus(await api(A.doctor, "POST", "/api/v1/transfers", { ...base, patient_id: String(own._id), targetHospitalId: String(H) }), 400, "viện nhận trùng viện gửi");
+    const created = await api(A.doctor, "POST", "/api/v1/transfers", { ...base, patient_id: String(own._id), targetHospitalId: String(otherH) });
+    expectStatus(created, 201, "tạo phiếu chuyển viện hợp lệ");
+    const id = String(created.json.data.transferForm._id);
+    expectStatus(await api(A.doctor, "PUT", `/api/v1/transfers/${id}/accept`, {}), 403, "viện gửi tự chấp nhận");
+    expectStatus(await api(A.hospital_admin, "PUT", `/api/v1/transfers/${id}/reject`, {}), 403, "viện gửi tự từ chối");
+    expectStatus(await api(A.doctorOther, "PUT", `/api/v1/transfers/${id}/accept`, {}), 200, "viện nhận chấp nhận");
+    const after = await TransferForm.findById(id).setOptions({ bypassTenancy: true }).lean();
+    expect(String(after.hospitalId)).toBe(String(H)); // viện gửi giữ nguyên (tenancy plugin trước đây ghi đè khi viện nhận lưu)
+    expect(after.status).toBe("accepted");
+    expectStatus(await api(A.doctorOther, "PUT", `/api/v1/transfers/${id}/reject`, {}), 409, "xử lý lại phiếu đã chấp nhận");
+  });
+
+  test("IT8-02 Sao lưu theo viện ghi tệp mã hóa AES-256-GCM (không còn JSON bản rõ); giải mã lại đúng, sửa tệp thì phát hiện", async () => {
+    const fs = await import("fs");
+    const { readEncryptedBackup } = await import("../utils/encryptedBackup.util.js");
+    const marker = `BN-Sao-Luu-${String(oid()).slice(-6)}`;
+    const pt = await mk("patient", H, marker);
+    await Visit.create({ hospitalId: H, patientId: pt._id, doctorId: A.doctor._id, status: "đang chờ", reason: `Khám ${marker}` });
+    const r = await api(A.system_admin, "POST", `/admin/hospitals/${H}/backup`, {});
+    expectStatus(r, 200, "sao lưu viện");
+    const file = path.join(BE_DIR, "src", "secure_backups", r.json.fileName) // admin.controller: __dirname/../../secure_backups;
+    const raw = fs.readFileSync(file, "utf8");
+    try {
+      expect(raw.includes(marker)).toBe(false);
+      expect(JSON.parse(raw).format).toBe("neuroscan-encrypted-backup-v1");
+      expect(JSON.parse(raw).meta.hospitalId).toBe(String(H));
+      const { payload } = readEncryptedBackup(file);
+      expect(payload.visits.some((v) => String(v.reason).includes(marker))).toBe(true);
+      const env = JSON.parse(raw);
+      const flipped = Buffer.from(env.data, "base64"); flipped[0] ^= 1;
+      fs.writeFileSync(file, JSON.stringify({ ...env, data: flipped.toString("base64") }));
+      let tampered = false;
+      try { readEncryptedBackup(file); } catch { tampered = true; }
+      expect(tampered).toBe(true);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
+  test("IT8-03 Khóa mã hóa tệp: production thiếu FILE_ENCRYPTION_KEY thì dừng, không dùng khóa công khai", async () => {
+    const { getEncryptionKey } = await import("../utils/cryptoStorage.util.js");
+    const saved = { env: process.env.NODE_ENV, key: process.env.FILE_ENCRYPTION_KEY };
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.FILE_ENCRYPTION_KEY;
+      let threw = false;
+      try { getEncryptionKey(); } catch { threw = true; }
+      expect(threw).toBe(true);
+      process.env.FILE_ENCRYPTION_KEY = "ab".repeat(32);
+      expect(getEncryptionKey().length).toBe(32);
+    } finally {
+      process.env.NODE_ENV = saved.env;
+      if (saved.key === undefined) delete process.env.FILE_ENCRYPTION_KEY; else process.env.FILE_ENCRYPTION_KEY = saved.key;
+    }
+  });
+  test("IT8-04 Tenancy plugin: lưu bản ghi đã có trong phiên của viện khác không đổi viện của bản ghi; bản ghi mới vẫn nhận viện theo phiên", async () => {
+    const { tenantStorage } = await import("../middlewares/tenant.middleware.js");
+    const tf = await TransferForm.create({ hospitalId: H, patient_id: A.patient._id, transferTo: "BV khác", diagnosis: "U", targetHospitalId: otherH });
+    await tenantStorage.run({ hospitalId: String(otherH), role: "doctor", userId: String(A.doctorOther._id) }, async () => {
+      const doc = await TransferForm.findById(tf._id).setOptions({ bypassTenancy: true });
+      doc.clinicalSummary = "Viện nhận ghi chú";
+      await doc.save();
+      const fresh = await TransferForm.create({ patient_id: A.patient._id, transferTo: "BV", diagnosis: "U" });
+      expect(String(fresh.hospitalId)).toBe(String(otherH));
+    });
+    const saved = await TransferForm.findById(tf._id).setOptions({ bypassTenancy: true }).lean();
+    expect(String(saved.hospitalId)).toBe(String(H));
+    expect(saved.clinicalSummary).toBe("Viện nhận ghi chú");
+  });
+  test("IT8-05 BHYT: 10 lần áp cùng một thẻ cho một hóa đơn chạy song song không cộng trùng lũy kế (QA C6)", async () => {
+    const { applyBhytCore } = await import("../modules/billing/bhytApply.service.js");
+    const { BhytInfo } = await import("../modules/billing/models/bhytInfo.model.js");
+    const pt = await mk("patient", H, "BN BHYT song song");
+    const card = await BhytInfo.collection.insertOne({ hospitalId: H, patientId: pt._id, cardNumber: "enc", coverageRate: 80, isValid: true, isActive: true, manuallyVerified: true,
+      expiresAt: new Date(Date.now() + 86400000 * 100), usedThisYear: 0, annualCap: 72000000, createdAt: new Date(), updatedAt: new Date() });
+    const inv = await Invoice.create({ hospitalId: H, patientId: pt._id, totalAmount: 1_000_000, status: "chờ thanh toán", items: [{ description: "Chụp MRI", amount: 1_000_000, quantity: 1, type: "mri" }] });
+    const results = await Promise.all(Array.from({ length: 10 }, async () => {
+      const doc = await Invoice.findById(inv._id).setOptions({ bypassTenancy: true });
+      const c = await BhytInfo.findById(card.insertedId).setOptions({ bypassTenancy: true });
+      return applyBhytCore(doc, { bhyt: c, treatmentType: "outpatient" });
+    }));
+    const saved = await BhytInfo.collection.findOne({ _id: card.insertedId });
+    const savedInv = await Invoice.findById(inv._id).setOptions({ bypassTenancy: true }).lean();
+    expect(saved.usedThisYear).toBe(800_000); // 80% × 1.000.000 đúng một lần
+    expect(savedInv.bhytInfo.bhytAmount).toBe(800_000);
+    expect(results.filter((r) => r.ok).length >= 1).toBe(true);
+    expect(results.every((r) => r.ok || ["APPLY_IN_PROGRESS", "CAP_CHANGED"].includes(r.code))).toBe(true);
+    // Tái hiện đúng khe hở của C6: request B đọc hóa đơn TRƯỚC khi A lưu, đọc thẻ SAU khi A đã cộng lũy kế
+    const pt2 = await mk("patient", H, "BN BHYT khe hở");
+    const card2 = await BhytInfo.collection.insertOne({ hospitalId: H, patientId: pt2._id, cardNumber: "enc", coverageRate: 80, isValid: true, isActive: true, manuallyVerified: true,
+      expiresAt: new Date(Date.now() + 86400000 * 100), usedThisYear: 0, annualCap: 72000000, createdAt: new Date(), updatedAt: new Date() });
+    const inv2 = await Invoice.create({ hospitalId: H, patientId: pt2._id, totalAmount: 1_000_000, status: "chờ thanh toán", items: [{ description: "Chụp MRI", amount: 1_000_000, quantity: 1, type: "mri" }] });
+    const staleInvoice = await Invoice.findById(inv2._id).setOptions({ bypassTenancy: true }); // đọc trước, chưa có BHYT
+    const first = await applyBhytCore(await Invoice.findById(inv2._id).setOptions({ bypassTenancy: true }), { bhyt: await BhytInfo.findById(card2.insertedId).setOptions({ bypassTenancy: true }) });
+    expect(first.ok).toBe(true);
+    await applyBhytCore(staleInvoice, { bhyt: await BhytInfo.findById(card2.insertedId).setOptions({ bypassTenancy: true }) });
+    expect((await BhytInfo.collection.findOne({ _id: card2.insertedId })).usedThisYear).toBe(800_000);
+    // áp lại tuần tự cho cùng hóa đơn vẫn không cộng dồn
+    const again = await applyBhytCore(await Invoice.findById(inv._id).setOptions({ bypassTenancy: true }), { bhyt: await BhytInfo.findById(card.insertedId).setOptions({ bypassTenancy: true }) });
+    expect(again.ok).toBe(true);
+    expect((await BhytInfo.collection.findOne({ _id: card.insertedId })).usedThisYear).toBe(800_000);
+  });
+
+  test("IT9-01 Chuyển viện: viện nhận thấy phiếu gửi tới mình (danh sách incoming + chi tiết kèm ca chụp); viện thứ ba không thấy", async () => {
+    const pt = await mk("patient", H, "BN chuyển tới viện nhận");
+    const medicalId = `BN-TR-${String(oid()).slice(-6)}`; // ca chụp gắn bệnh nhân qua mã bệnh nhân
+    await User.updateOne({ _id: pt._id }, { $set: { "profile.medicalId": medicalId } });
+    const img = await ImagingResult.create({ hospitalId: H, medicalId, patientName: "BN chuyển", birthYear: 1970, gender: "Nam", address: "HN", orderDate: new Date().toISOString(),
+      orderingDoctor: "BS", orderingDepartment: "Ngoại thần kinh", diagnosis: "U não", procedure: "MRI", findings: "Khối thùy thái dương", conclusion: "Theo dõi u", radiologist: "BS CĐHA", reportDate: new Date().toISOString(), imagingType: "MRI", isSigned: true });
+    const created = await api(A.doctor, "POST", "/api/v1/transfers", { patient_id: String(pt._id), targetHospitalId: String(otherH), diagnosis: "U não", transferTo: "BV E2E khác", imagingResultId: String(img._id) });
+    expectStatus(created, 201, "tạo phiếu chuyển viện");
+    const id = String(created.json.data.transferForm._id);
+    const ids = (r) => (Array.isArray(r.json?.data) ? r.json.data : []).map((t) => String(t._id));
+
+    const incoming = await api(A.doctorOther, "GET", "/api/v1/transfers?type=incoming");
+    expectStatus(incoming, 200, "viện nhận xem danh sách incoming");
+    expect(ids(incoming).includes(id)).toBe(true);
+    const detail = await api(A.doctorOther, "GET", `/api/v1/transfers/${id}`);
+    expectStatus(detail, 200, "viện nhận xem chi tiết phiếu");
+    expect(String(detail.json.data.imagingResultId?._id)).toBe(String(img._id));
+
+    // viện gửi: phiếu nằm ở outgoing, không lẫn vào incoming của chính mình
+    expect(ids(await api(A.doctor, "GET", "/api/v1/transfers")).includes(id)).toBe(true);
+    expect(ids(await api(A.doctor, "GET", "/api/v1/transfers?type=incoming")).includes(id)).toBe(false);
+    expectStatus(await api(A.doctor, "GET", `/api/v1/transfers/${id}`), 200, "viện gửi xem chi tiết");
+
+    // viện thứ ba: không thấy ở đâu cả
+    const thirdH = (await Hospital.create({ name: "BV E2E thứ ba", code: `E2E3-${oid()}` }))._id;
+    const third = await mk("doctor", thirdH, "BS viện thứ ba");
+    expect(ids(await api(third, "GET", "/api/v1/transfers?type=incoming")).includes(id)).toBe(false);
+    expectStatus(await api(third, "GET", `/api/v1/transfers/${id}`), 404, "viện thứ ba xem chi tiết");
+    expectStatus(await api(A.doctorOther, "GET", "/api/v1/transfers/khong-phai-id"), 404, "mã phiếu sai định dạng");
+  });
+
+  test("IT9-02 Đồng thuận cản quang: chỉ bệnh nhân chủ phiếu hoặc nhân viên lâm sàng ghi nhận chữ ký; không ký đè", async () => {
+    const { ConsentForm } = await import("../modules/emr/models/consentForm.model.js");
+    const owner = await mk("patient", H, "BN chủ phiếu");
+    const form = (patientId) => ConsentForm.create({ hospitalId: H, medicalRecordId: oid(), patientId, visitId: oid(), procedureName: "Tiêm thuốc cản quang Gadolinium",
+      risks: "Dị ứng thuốc cản quang", doctorExplanation: "Đã giải thích" });
+    const f1 = await form(owner._id);
+    const sign = (actor, id, name = "Nguyễn Văn Chủ") => api(actor, "POST", `/api/v1/contrast-consents/${id}/sign-patient`, { patientName: name });
+    for (const role of ["receptionist", "pharmacist", "hospital_admin", "lab_technician"]) expectStatus(await sign(A[role], f1._id), 403, `${role} ký thay bệnh nhân`);
+    expectStatus(await sign(A.patient, f1._id, "Người khác"), 404, "bệnh nhân khác cùng viện ký phiếu không phải của mình");
+    expect((await ConsentForm.findById(f1._id).setOptions({ bypassTenancy: true }).lean()).patientSigned).toBe(false);
+    expectStatus(await sign(owner, f1._id), 200, "bệnh nhân chủ phiếu tự ký");
+    expectStatus(await sign(A.nurse, f1._id, "Ghi đè"), 409, "ký đè phiếu đã ký");
+    expect((await ConsentForm.findById(f1._id).setOptions({ bypassTenancy: true }).lean()).patientSignature).toBe("Nguyễn Văn Chủ");
+    const f2 = await form(owner._id);
+    expectStatus(await sign(A.technician, f2._id, "Đại diện gia đình"), 200, "KTV ghi nhận chữ ký tại phòng chụp");
+    const f3 = await form(owner._id);
+    const both = await Promise.all([sign(A.nurse, f3._id, "Lần A"), sign(A.technician, f3._id, "Lần B")]);
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+  });
+
+  test("IT9-03 Bình duyệt: kết luận cuối cần ≥1 lần đọc, chỉ bác sĩ, không phải bác sĩ đọc ban đầu, chỉ một kết luận", async () => {
+    const { PeerReview } = await import("../models/peerReview.model.js");
+    const review = () => PeerReview.create({ hospitalId: H, imagingResultId: oid(), requestType: "conflict", primaryDoctorId: A.doctor._id, reviewerIds: [A.radiologist._id], status: "in_review" });
+    const fin = (actor, id, text = "Kết luận thống nhất: u thần kinh đệm") => api(actor, "PUT", `/api/v1/peer-reviews/${id}/finalize`, { finalConclusion: text });
+    const r1 = await review();
+    expectStatus(await fin(A.department_head, r1._id), 409, "kết luận khi chưa có lần đọc nào");
+    expectStatus(await api(A.radiologist, "POST", `/api/v1/peer-reviews/${r1._id}/submit-reading`, { conclusion: "Nghi u bậc cao", malignancyLevel: "high" }), 200, "đọc độc lập");
+    expectStatus(await fin(A.hospital_admin, r1._id), 403, "BGĐ ra kết luận chuyên môn");
+    expectStatus(await fin(A.doctor, r1._id), 403, "bác sĩ đọc ban đầu tự kết luận");
+    expectStatus(await fin(A.department_head, r1._id), 200, "trưởng khoa kết luận");
+    expectStatus(await fin(A.doctor2, r1._id), 400, "kết luận lần hai");
+    const saved = await PeerReview.findById(r1._id).setOptions({ bypassTenancy: true }).lean();
+    expect(saved.status).toBe("completed");
+    expect(String(saved.finalBy)).toBe(String(A.department_head._id));
+
+    const r2 = await review();
+    await PeerReview.updateOne({ _id: r2._id }, { $set: { status: "cancelled", readings: [{ reviewerId: A.radiologist._id, conclusion: "U", malignancyLevel: "high", submittedAt: new Date() }] } }).setOptions({ bypassTenancy: true });
+    expectStatus(await fin(A.department_head, r2._id), 400, "kết luận phiếu đã hủy");
+
+    const r3 = await review();
+    await PeerReview.updateOne({ _id: r3._id }, { $set: { status: "awaiting_final", readings: [{ reviewerId: A.radiologist._id, conclusion: "U", malignancyLevel: "high", submittedAt: new Date() }] } }).setOptions({ bypassTenancy: true });
+    const both = await Promise.all([fin(A.department_head, r3._id, "KL A"), fin(A.doctor2, r3._id, "KL B")]);
+    expect(both.filter((r) => r.status === 200).length).toBe(1);
+  });
+
+  test("IT9-04 Drive: sao lưu/dọn tệp/tạo thư mục trả 501 (không báo thành công giả); dung lượng chỉ tính tệp của viện mình", async () => {
+    for (const [actor, url] of [[A.hospital_admin, "/api/v1/drive-storage/run-backup"], [A.system_admin, "/api/v1/drive-storage/run-backup"],
+      [A.hospital_admin, "/api/v1/drive-storage/cleanup-orphans"], [A.doctor, "/api/v1/drive-storage/patient-folders"]]) {
+      const r = await api(actor, "POST", url, { backupType: "daily", patientId: String(A.patient._id) });
+      expectStatus(r, 501, `${url} (${actor.role})`);
+      expect(r.json.code).toBe("DRIVE_NOT_INTEGRATED");
+    }
+    const { StoredMedicalFile } = await import("../models/storedMedicalFile.model.js");
+    const used = async () => {
+      const r = await api(A.hospital_admin, "GET", "/api/v1/drive-storage/capacity-check");
+      expectStatus(r, 200, "BGĐ xem dung lượng");
+      return r.json.data.usedCapacityMb;
+    };
+    const before = await used();
+    const MB = 1024 * 1024;
+    await StoredMedicalFile.collection.insertMany([
+      { hospitalId: H, fileId: `f-${oid()}`, driveFileId: `drv-${oid()}`, sizeBytes: 10 * MB },
+      { hospitalId: otherH, fileId: `f-${oid()}`, driveFileId: `drv-${oid()}`, sizeBytes: 500 * MB },
+    ]);
+    expect((await used()) - before).toBe(10);
+  });
+
+  test("IT9-05 Khởi động production thiếu khóa mã hóa: dừng ngay, nêu tên biến, không in giá trị khóa", async () => {
+    const boot = (extra) => new Promise((resolve) => {
+      const env = { ...process.env, NODE_ENV: "production", MONGO_URI: dbUri(), PORT: "0", JWT_SECRET: "x".repeat(40), JWT_REFRESH_SECRET: "y".repeat(40), ...extra };
+      for (const k of EXTERNAL_BLANK) env[k] = "";
+      const p = spawn(process.execPath, ["src/index.js"], { cwd: BE_DIR, env, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      p.stdout.on("data", (d) => { out += d; });
+      p.stderr.on("data", (d) => { out += d; });
+      const t = setTimeout(() => { p.kill("SIGTERM"); }, 20000);
+      p.on("exit", (code) => { clearTimeout(t); resolve({ code, out }); });
+    });
+    const FILE_KEY = "ab".repeat(32);
+    const noField = await boot({ FIELD_ENCRYPTION_KEY: "", FILE_ENCRYPTION_KEY: FILE_KEY });
+    expect(noField.code).toBe(1);
+    expect(noField.out).toContain("[startup] FIELD_ENCRYPTION_KEY");
+    expect(noField.out.includes(FILE_KEY)).toBe(false);
+    const noFile = await boot({ FIELD_ENCRYPTION_KEY: "cd".repeat(32), FILE_ENCRYPTION_KEY: "" });
+    expect(noFile.code).toBe(1);
+    expect(noFile.out).toContain("[startup] FILE_ENCRYPTION_KEY");
+    expect(noFile.out.includes("cd".repeat(32))).toBe(false);
+    const { checkRequiredSecrets } = await import("../config/requiredSecrets.js");
+    expect(checkRequiredSecrets()).toEqual([]); // ngoài production không chặn (dev dùng khóa DEV kèm cảnh báo)
+  }, 60000);
+
+  test("IT9-06 Phạm vi thu hẹp: không tạo mới tài khoản vệ sinh/dược sĩ, không tính vào số nhân sự; tài khoản cũ vẫn đăng nhập", async () => {
+    expect(process.env.ENABLE_OUT_OF_SCOPE === "true").toBe(false);
+    const pw = "Nhanvien2026";
+    const reg = (role) => api(A.hospital_admin, "POST", "/auth/register", { email: `e2e_scope_${role}_${oid()}@e2e.local`, password: pw, name: `NV ${role}`, role });
+    for (const role of ["pharmacist", "cleaner"]) {
+      const r = await reg(role);
+      expectStatus(r, 400, `BGĐ tạo tài khoản ${role}`);
+      if (role === "pharmacist") expect(r.text.includes("ngoài phạm vi")).toBe(true); // vệ sinh vốn không đăng ký được qua /auth/register
+      const a = await api(A.system_admin, "POST", "/admin/users", { email: `e2e_scope_adm_${role}_${oid()}@e2e.local`, password: pw, name: `NV ${role}`, role, hospitalName: "BV E2E" });
+      expectStatus(a, 400, `quản trị nền tảng tạo tài khoản ${role}`);
+      expect(a.text.includes("ngoài phạm vi")).toBe(true);
+    }
+    expect([200, 201].includes((await reg("nurse")).status)).toBe(true); // vai trò trong phạm vi vẫn tạo được
+
+    // tài khoản vệ sinh/dược sĩ đã có vẫn đăng nhập được (trang chủ báo ngoài phạm vi)
+    expectStatus(await api(A.pharmacist, "GET", "/auth/me"), 200, "dược sĩ cũ đăng nhập");
+
+    const { getSystemStats } = await import("../services/user.service.js");
+    const staff = async () => (await getSystemStats()).userDistribution.staff;
+    const before = await staff();
+    await mk("cleaner", H, "Vệ sinh mới");
+    await mk("pharmacist", H, "Dược sĩ mới");
+    expect(await staff()).toBe(before);
+    await mk("nurse", H, "Điều dưỡng mới");
+    expect(await staff()).toBe(before + 1);
+  });
+
+  test("IT9-07 Kiểm tra an toàn kê đơn nhận ra thuốc trong danh mục viện có ký tự đặc biệt trong tên (ngoặc, dấu cộng)", async () => {
+    const { Drug } = await import("../modules/pharmacy/models/drug.model.js");
+    const tag = String(oid()).slice(-6);
+    const names = [`Thuốc thử ${tag} 20% (250ml)`, `Thuốc phối hợp ${tag} + Clavulanat`, `Thuốc lẻ ${tag} (`];
+    await Drug.collection.insertMany(names.map((name) => ({ hospitalId: H, name, category: "other", createdAt: new Date(), updatedAt: new Date() })));
+    const r = await api(A.doctor, "POST", "/api/drugs/check-prescription", { patientId: String(A.patient._id), medications: names.map((name) => ({ name })) });
+    expectStatus(r, 200, "kiểm tra an toàn kê đơn");
+    const cov = r.json.data.evaluationCoverage;
+    expect(cov.total).toBe(3);
+    expect(cov.unassessed.length).toBe(0); // trước đây cả 3 rơi vào "chưa đánh giá" do regex không khớp/ném lỗi
+    expect(cov.evaluated).toBe(3);
+  });
+
+  test("IT9-08 Cờ đặt trong .env có hiệu lực khi chạy `node src/index.js` (nạp .env trước các module đọc cờ lúc import)", async () => {
+    const fs = await import("fs");
+    const indexSrc = fs.readFileSync(path.join(BE_DIR, "src", "index.js"), "utf8");
+    expect(/^import "\.\/config\/env\.js";/.test(indexSrc.split(/\r?\n/).find((l) => l.startsWith("import")))).toBe(true);
+    // chạy server thật trong thư mục tạm có .env riêng (dotenv đọc .env theo thư mục chạy); biến hệ thống không có cờ
+    const boot = async (envFileText) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "neuroscan_envtest_"));
+      if (envFileText) fs.writeFileSync(path.join(dir, ".env"), envFileText);
+      const port = await freePort();
+      const env = { ...process.env, PORT: String(port), MONGO_URI: dbUri(), NODE_ENV: "test", STORAGE_MODE: "local",
+        STORAGE_LOCAL_DIR: path.join(dir, "storage"), AI_SERVER_URL: "http://127.0.0.1:9", ENABLE_RATE_LIMIT: "false" };
+      for (const k of EXTERNAL_BLANK) env[k] = "";
+      delete env.ENABLE_OUT_OF_SCOPE;
+      const p = spawn(process.execPath, [path.join(BE_DIR, "src", "index.js")], { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      p.stdout.on("data", (d) => { out += d; });
+      p.stderr.on("data", (d) => { out += d; });
+      const url = `http://127.0.0.1:${port}`;
+      try {
+        for (let i = 0; i < 120; i += 1) {
+          if (p.exitCode !== null) throw new Error(`server dừng: ${out.slice(-800)}`);
+          try { if ((await fetch(`${url}/api/v1/__e2e_ready__`, { signal: AbortSignal.timeout(1000) })).status === 404) break; } catch { /* chưa lên */ }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        const r = await fetch(`${url}/api/v1/hospital-beds`, { signal: AbortSignal.timeout(5000) });
+        return { status: r.status, text: await r.text() };
+      } finally {
+        p.kill("SIGTERM");
+        await new Promise((r) => { const t = setTimeout(r, 8000); p.once("exit", () => { clearTimeout(t); r(); }); });
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    };
+    const off = await boot(null);
+    expect(off.status).toBe(404);
+    expect(off.text.includes("ngoài phạm vi")).toBe(true);
+    const on = await boot("ENABLE_OUT_OF_SCOPE=true\n");
+    expect(on.text.includes("ngoài phạm vi")).toBe(false); // route giường đã bật (tới bước xác thực)
+    expect(on.status).toBe(401);
+  }, 120000);
 });
 

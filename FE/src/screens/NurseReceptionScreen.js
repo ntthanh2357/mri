@@ -600,7 +600,13 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   };
 
+  const payingRef = React.useRef(null);
+  const [payingInvoiceId, setPayingInvoiceId] = useState(null);
   const handlePayInvoice = async (invoiceId, confirmNoTransfer = false) => {
+    // chống bấm đúp: đang thu hóa đơn này thì bỏ qua lần bấm sau (lần gọi lại sau xác nhận vẫn đi qua)
+    if (payingRef.current === invoiceId && !confirmNoTransfer) return;
+    payingRef.current = invoiceId;
+    setPayingInvoiceId(invoiceId);
     try {
       await put(`/api/v1/invoices/${invoiceId}/pay`, { paymentMethod: 'cash', confirmNoTransfer: confirmNoTransfer === true });
       const res = await get('/api/v1/invoices');
@@ -649,6 +655,9 @@ const NurseReceptionScreen = ({ route, navigation }) => {
       } else {
         notify('Lỗi', msg || 'Xác nhận thanh toán thất bại');
       }
+    } finally {
+      payingRef.current = null;
+      setPayingInvoiceId(null);
     }
   };
 
@@ -1565,7 +1574,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 </TouchableOpacity>
                               ) : (
                               <View style={st.payRow}>
-                                <TouchableOpacity style={[st.payBtn, { backgroundColor: '#0F9D6B' }]} onPress={() => handlePayInvoice(inv._id)} dataSet={{ hover: 'glow' }}>
+                                <TouchableOpacity style={[st.payBtn, { backgroundColor: '#0F9D6B' }, payingInvoiceId === inv._id && { opacity: 0.6 }]} disabled={payingInvoiceId === inv._id} onPress={() => handlePayInvoice(inv._id)} dataSet={{ hover: 'glow' }}>
                                   <Banknote size={18} color="#FFFFFF" />
                                   <Text style={st.payBtnText}>Thu tiền mặt</Text>
                                 </TouchableOpacity>

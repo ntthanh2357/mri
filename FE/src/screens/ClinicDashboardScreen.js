@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Colors from '../constants/colors';
+import { isFeatureEnabled } from '../constants/featureScope';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { post, get } from '../services/api.service';
 import styles from './ClinicDashboardScreen.styles';
@@ -95,7 +96,8 @@ const ClinicDashboardScreen = ({ navigation }) => {
     department_head: 'Trưởng khoa',
     doctor: 'Bác sĩ',
     radiologist: 'BS CĐHA',
-    pharmacist: 'Dược sĩ',
+    // Phân hệ Dược ngoài phạm vi: không cấp tài khoản dược sĩ mới (máy chủ cũng từ chối)
+    ...(isFeatureEnabled('pharmacy') ? { pharmacist: 'Dược sĩ' } : {}),
     lab_technician: 'KTV Xét nghiệm',
     nurse: 'Điều dưỡng',
     technician: 'Kỹ thuật viên',
@@ -491,7 +493,7 @@ const ClinicDashboardScreen = ({ navigation }) => {
                         <Briefcase size={14} color={activeRoleTab === role ? Colors.brandGreen : '#64748B'} />
                       )}
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: activeRoleTab === role ? Colors.brandGreen : '#64748B' }}>
-                        {role === 'doctor' ? 'Bác sĩ' : role === 'nurse' ? 'Điều dưỡng' : role === 'technician' ? 'Kỹ thuật viên' : 'Lễ tân'}
+                        {ROLE_LABELS[role]}
                       </Text>
                     </View>
                   </TouchableOpacity>

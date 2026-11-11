@@ -110,9 +110,9 @@ export default function AdminAuditLogsView() {
     const q = searchQuery.toLowerCase();
     const matchesSearch =
       !searchQuery ||
-      log.action.toLowerCase().includes(q) ||
-      log.entity.toLowerCase().includes(q) ||
-      log.performedBy.toLowerCase().includes(q) ||
+      String(log.action ?? '').toLowerCase().includes(q) ||
+      String(log.entity ?? '').toLowerCase().includes(q) ||
+      String(log.performedBy ?? '').toLowerCase().includes(q) ||
       (log.details ?? '').toLowerCase().includes(q);
 
     const matchesEntity = entityFilter === 'all' || log.entity === entityFilter;

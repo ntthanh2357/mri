@@ -21,7 +21,13 @@ router.post(
   checkRole(["doctor", "radiologist", "department_head"]),
   overrideChecklistRisk
 );
-router.post("/:id/sign-patient", signPatientConsent);
+// Bệnh nhân tự ký phiếu của chính mình, hoặc nhân viên lâm sàng tại phòng chụp ghi nhận chữ ký của bệnh nhân/đại diện.
+// Trước đây chỉ có protect: lễ tân, dược sĩ, thu ngân… cũng "ký thay" được.
+router.post(
+  "/:id/sign-patient",
+  checkRole(["patient", "technician", "nurse", "doctor", "radiologist", "department_head"]),
+  signPatientConsent
+);
 router.get("/visit/:visitId", checkRole(["patient", "technician", "nurse", "doctor", "radiologist", "department_head", "receptionist", "admin", "system_admin", "hospital_admin"]), getConsentByVisit);
 
 export default router;

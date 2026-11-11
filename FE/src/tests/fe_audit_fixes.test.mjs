@@ -68,11 +68,51 @@ test('F-05/F-07/F-11/F-12: menu, tab thu ngân, cách gọi AI', () => {
 
 test('LOW: đăng xuất xóa bản nháp bệnh án; kho giấy tờ theo tài khoản; apiRequest dùng client chính; BHYT badge theo phạm vi', () => {
   const lo = read('utils/logout.js');
-  assert.ok(lo.includes('await clearLocalClinicalData()') && lo.includes("'@neuroscan_medical_record_form'") && lo.includes("'emr_detail_'") && lo.includes("['user']"));
+  // danh sách khóa nằm ở utils/localClinicalData.js (client.js cũng dùng khi đăng xuất cưỡng bức)
+  const lcd = read('utils/localClinicalData.js');
+  assert.ok(lo.includes('await clearLocalClinicalData()') && lcd.includes("'@neuroscan_medical_record_form'") && lcd.includes("'emr_detail_'") && lcd.includes("['user']"));
   assert.ok(/`\$\{VAULT_KEY\}_\$\{id\}`/.test(read('controllers/useDocumentVault.js')), 'kho giấy tờ chưa tách theo tài khoản');
   assert.ok(/return request\(path, options \|\| \{\}\);/.test(read('utils/apiClient.js')));
   assert.ok(/isFeatureEnabled\('bhyt'\) && \(v\.patientId\?\.profile\?\.hasBhyt/.test(read('screens/DoctorWorkQueueScreen.js')));
   assert.ok(!fs.existsSync(path.join(SRC, 'components/PatientsView.jsx')), 'code chết PatientsView');
+});
+
+test('Bình duyệt: nút "Kết luận cuối" chỉ cho bác sĩ, không phải bác sĩ đọc ban đầu, khi đã có lần đọc (khớp máy chủ)', () => {
+  const pr = read('screens/PeerReviewScreen.js');
+  assert.ok(/const canFinalize = open && READER_ROLES\.includes\(me\?\.role\) && !isPrimary && \(review\.readings \|\| \[\]\)\.some\(\(r\) => r\.submittedAt\);/.test(pr), 'thiếu điều kiện canFinalize');
+  assert.ok(pr.includes("review.status === 'awaiting_final' && canFinalize ? <WorkButton"), 'nút kết luận chưa theo canFinalize');
+  assert.ok(/const READER_ROLES = \['doctor', 'radiologist', 'department_head'\];/.test(pr));
+});
+
+test('Phạm vi thu hẹp: không cấp tài khoản Dược sĩ khi tắt phân hệ Dược; nhãn tab theo đúng vai trò; trang vệ sinh báo ngoài phạm vi', () => {
+  const cd = read('screens/ClinicDashboardScreen.js');
+  assert.ok(cd.includes("...(isFeatureEnabled('pharmacy') ? { pharmacist: 'Dược sĩ' } : {}),"), 'tab Dược sĩ chưa theo phạm vi');
+  assert.ok(!/^\s*pharmacist: 'Dược sĩ',\s*$/m.test(cd), 'còn tab Dược sĩ cố định');
+  assert.ok(cd.includes('{ROLE_LABELS[role]}') && !cd.includes(": 'Lễ tân'}"), 'nhãn tab còn mặc định "Lễ tân" cho mọi vai trò khác');
+  const sh = read('components/staff/StaffHome.js');
+  assert.ok(sh.includes("role === 'cleaner' && !isFeatureEnabled('beds')") && sh.includes('{OUT_OF_SCOPE_NOTICE}'), 'trang vệ sinh chưa báo ngoài phạm vi');
+  // form TẠO tài khoản (ô lọc danh sách vẫn giữ Dược sĩ để tìm tài khoản cũ)
+  const au = read('components/AdminUsersView.jsx');
+  const start = au.indexOf('value={newRole}');
+  const createSelect = start >= 0 ? au.slice(start, au.indexOf('</select>', start)) : '';
+  assert.ok(createSelect && !/value="(pharmacist|cleaner)"/.test(createSelect), 'form tạo tài khoản còn vai trò ngoài phạm vi');
+});
+
+test('Góp ý hội đồng: AI là "hỗ trợ sàng lọc", không ghi AI chẩn đoán hay "giải pháp hàng đầu"', () => {
+  for (const f of ['screens/LoginScreen.js', 'screens/RegisterScreen.js', 'screens/CreateImagingResultScreen.js', 'screens/ImagingResultScreen.js']) {
+    const src = read(f);
+    for (const bad of ['chẩn đoán AI', 'Không thể chẩn đoán', 'Giải pháp AI hàng đầu', 'quyết định chẩn đoán chính xác']) assert.ok(!src.includes(bad), `${f}: ${bad}`);
+  }
+  assert.ok(read('screens/LoginScreen.js').includes('hỗ trợ sàng lọc u não trên ảnh MRI'));
+  const sla = read('screens/SlaReportScreen.js');
+  assert.ok(!sla.includes('Phân bố kết quả chẩn đoán') && sla.includes('Phân bố kết quả gợi ý sàng lọc'), 'nhãn thống kê SLA');
+});
+
+test('Trung tâm tuân thủ: không còn nút sao lưu/dọn tệp Drive báo thành công giả', () => {
+  const cc = read('screens/ComplianceCenterScreen.js');
+  for (const s of ['/api/v1/drive-storage/run-backup', '/api/v1/drive-storage/cleanup-orphans', 'Đã tạo bản sao lưu', 'Đã dọn tệp']) assert.ok(!cc.includes(s), s);
+  assert.ok(cc.includes('/api/v1/drive-storage/capacity-check'), 'vẫn hiển thị dung lượng thật');
+  assert.ok(cc.includes('chưa được kích hoạt'), 'thiếu ghi chú tình trạng');
 });
 
 console.log(`\nSUMMARY: ${passed}/${passed + failed} FE AUDIT FIX TESTS PASSED${failed ? ` (${failed} failed)` : ' (100%)'}`);

@@ -10,6 +10,7 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { sendReferralPackageEmail } from "../services/email.service.js";
 import { actorDisplayName } from "../utils/actorName.util.js";
+import { checkPatientTenancy } from "../utils/tenancy.util.js";
 
 // Helper: Tự động gom dữ liệu chẩn đoán hình ảnh thành package snapshot
 const buildImagingPackageSnapshot = (imagingResult) => {
@@ -79,16 +80,24 @@ export const createTransferRequest = async (req, res) => {
       recipientEmail
     } = req.body;
 
-    const patient_id = rawPatientId;
+    let patient_id = rawPatientId;
 
     if (!patient_id || !diagnosis) {
       return errorResponse(res, "Vui lòng cung cấp đầy đủ ID bệnh nhân và chẩn đoán bệnh chính.", 400);
     }
 
-    // 1. Tìm thông tin bệnh nhân để lấy email nhận hồ sơ
-    const patient = await User.findById(patient_id).lean();
-    if (!patient) {
-      return errorResponse(res, "Không tìm thấy hồ sơ bệnh nhân.", 404);
+    // 1. Bệnh nhân phải thuộc phạm vi viện gửi (User không có tenancy plugin: trước đây tìm được bệnh nhân viện bất kỳ)
+    const patientDoc = await checkPatientTenancy(patient_id, req.user);
+    if (!patientDoc) {
+      return errorResponse(res, "Không tìm thấy hồ sơ bệnh nhân thuộc bệnh viện của bạn.", 404);
+    }
+    const patient = typeof patientDoc.toObject === "function" ? patientDoc.toObject() : patientDoc;
+    patient_id = String(patient._id); // nhận cả mã y tế (BN...), lưu bằng _id thật
+    // Viện nhận (nếu chọn) phải tồn tại và khác viện gửi
+    if (targetHospitalId) {
+      if (!mongoose.Types.ObjectId.isValid(String(targetHospitalId))) return errorResponse(res, "Bệnh viện nhận không hợp lệ.", 400);
+      if (String(targetHospitalId) === String(hospitalId)) return errorResponse(res, "Bệnh viện nhận phải khác bệnh viện gửi.", 400);
+      if (!(await Hospital.exists({ _id: targetHospitalId }))) return errorResponse(res, "Không tìm thấy bệnh viện nhận.", 400);
     }
     const finalRecipientEmail = (recipientEmail || patient.email || patient.profile?.email || "").trim();
 
@@ -355,13 +364,14 @@ export const getTransfers = async (req, res) => {
     if (!hospitalId) {
       return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     }
-    {
-      // Type incoming / outgoing để tương thích
-      if (type === "incoming") {
-        filter.targetHospitalId = hospitalId;
-      } else {
-        filter.hospitalId = hospitalId;
-      }
+    // incoming: phiếu viện khác gửi TỚI viện mình. Phiếu lưu hospitalId = viện gửi, nên bộ lọc tenancy (ép hospitalId = viện
+    // mình) làm danh sách này luôn rỗng; bỏ qua tenancy có chủ đích và lọc tường minh theo viện nhận.
+    const incoming = type === "incoming";
+    if (incoming) {
+      filter.targetHospitalId = hospitalId;
+      filter.hospitalId = { $ne: hospitalId };
+    } else {
+      filter.hospitalId = hospitalId;
     }
 
     if (status && status !== "all") {
@@ -372,9 +382,10 @@ export const getTransfers = async (req, res) => {
       .populate("patient_id", "profile.name profile.fullName profile.phone profile.gender profile.dob email")
       .populate("hospitalId", "name code")
       .populate("targetHospitalId", "name code")
-      .populate("imagingResultId")
+      .populate({ path: "imagingResultId", options: incoming ? { bypassTenancy: true } : {} })
       .populate("sentBy", "profile.name email")
       .sort({ createdAt: -1 });
+    if (incoming) query = query.setOptions({ bypassTenancy: true });
 
     const transfers = await query.lean();
 
@@ -404,11 +415,17 @@ export const getTransfers = async (req, res) => {
 export const getTransferById = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(String(id))) {
+      return errorResponse(res, "Không tìm thấy hồ sơ chuyển viện.", 404);
+    }
+    // Bỏ qua tenancy có chủ đích để viện NHẬN cũng đọc được phiếu; quyền xem kiểm tra tường minh ngay bên dưới
+    // (chỉ viện gửi hoặc viện nhận). Trước đây tenancy ép hospitalId = viện mình nên viện nhận luôn nhận 404.
     const transfer = await TransferForm.findById(id)
+      .setOptions({ bypassTenancy: true })
       .populate("patient_id", "profile.name profile.fullName profile.phone profile.gender profile.dob email")
       .populate("hospitalId", "name code address phone")
       .populate("targetHospitalId", "name code address")
-      .populate("imagingResultId")
+      .populate({ path: "imagingResultId", options: { bypassTenancy: true } })
       .populate("sentBy", "profile.name email")
       .lean();
 
@@ -494,15 +511,38 @@ export const checkSurgeryCapacity = async (req, res) => {
   }
 };
 
+// Chỉ viện NHẬN (targetHospitalId) được chấp nhận/từ chối, và viện nhận phải khác viện gửi.
+// Trước đây viện gửi tự chấp nhận phiếu của mình (tenancy plugin chỉ cho viện gửi thấy phiếu), mà phiếu "accepted"
+// lại là căn cứ checkPatientTenancy cấp quyền xem hồ sơ xuyên viện.
+const findTransferForReceiver = async (req) => {
+  if (!mongoose.Types.ObjectId.isValid(String(req.params.id))) return { status: 404 };
+  const transfer = await TransferForm.findById(req.params.id).setOptions({ bypassTenancy: true });
+  const mine = String(req.user?.hospitalId || "");
+  if (!transfer || !mine) return { status: 404 };
+  const isReceiver = transfer.targetHospitalId && String(transfer.targetHospitalId) === mine && String(transfer.hospitalId) !== mine;
+  if (!isReceiver) return { status: String(transfer.hospitalId) === mine ? 403 : 404 };
+  if (["accepted", "rejected", "completed", "cancelled"].includes(transfer.status)) return { status: 409, transfer };
+  return { transfer };
+};
+// Cập nhật nguyên tử, chỉ khi phiếu chưa được xử lý (2 người bấm cùng lúc thì một người nhận 409); không đổi viện gửi
+const decideTransfer = (transfer, set) => TransferForm.findOneAndUpdate(
+  { _id: transfer._id, targetHospitalId: transfer.targetHospitalId, status: { $nin: ["accepted", "rejected", "completed", "cancelled"] } },
+  { $set: set },
+  { new: true }
+).setOptions({ bypassTenancy: true });
+const RECEIVER_ERRORS = {
+  403: "Chỉ bệnh viện nhận mới được chấp nhận hoặc từ chối hồ sơ chuyển viện.",
+  404: "Không tìm thấy yêu cầu chuyển viện.",
+  409: "Hồ sơ chuyển viện đã được xử lý.",
+};
+
 export const acceptTransferRequest = async (req, res) => {
   try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-    transfer.status = "accepted";
-    transfer.acceptedAt = new Date();
-    transfer.acceptedByUserId = req.user.id;
-    await transfer.save();
-    return successResponse(res, { transfer }, "Đã cập nhật trạng thái chấp nhận.");
+    const { transfer, status } = await findTransferForReceiver(req);
+    if (status) return errorResponse(res, RECEIVER_ERRORS[status], status);
+    const updated = await decideTransfer(transfer, { status: "accepted", acceptedAt: new Date(), acceptedByUserId: req.user.id });
+    if (!updated) return errorResponse(res, RECEIVER_ERRORS[409], 409);
+    return successResponse(res, { transfer: updated }, "Đã cập nhật trạng thái chấp nhận.");
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
@@ -510,11 +550,11 @@ export const acceptTransferRequest = async (req, res) => {
 
 export const rejectTransferRequest = async (req, res) => {
   try {
-    const transfer = await TransferForm.findById(req.params.id);
-    if (!transfer) return errorResponse(res, "Không tìm thấy yêu cầu chuyển viện.", 404);
-    transfer.status = "rejected";
-    await transfer.save();
-    return successResponse(res, { transfer }, "Đã từ chối yêu cầu.");
+    const { transfer, status } = await findTransferForReceiver(req);
+    if (status) return errorResponse(res, RECEIVER_ERRORS[status], status);
+    const updated = await decideTransfer(transfer, { status: "rejected" });
+    if (!updated) return errorResponse(res, RECEIVER_ERRORS[409], 409);
+    return successResponse(res, { transfer: updated }, "Đã từ chối yêu cầu.");
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }

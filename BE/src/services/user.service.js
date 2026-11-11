@@ -6,6 +6,7 @@ import { Dataset } from "../models/dataset.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { authCache } from "../utils/authCache.util.js";
+import { isRoleInScope } from "../config/roleScope.js";
 
 export const getAllUsers = async () => {
   // [P2-4] Tài khoản đã xóa mềm không còn xuất hiện trong danh sách quản trị
@@ -240,7 +241,9 @@ export const getSystemStats = async () => {
 
   // User role distribution counts
   const patientsCount = await User.countDocuments({ role: "patient", isDeleted: { $ne: true } });
-  const staffCount = await User.countDocuments({ role: { $in: ["admin", "system_admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist", "cleaner"] }, isDeleted: { $ne: true } });
+  // Vai trò ngoài phạm vi (vệ sinh, dược sĩ) không tính vào số nhân sự khi phạm vi đồ án đang thu hẹp
+  const staffRoles = ["admin", "system_admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist", "cleaner"].filter(isRoleInScope);
+  const staffCount = await User.countDocuments({ role: { $in: staffRoles }, isDeleted: { $ne: true } });
 
   const userDistribution = {
     patient: patientsCount,

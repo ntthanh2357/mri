@@ -5,6 +5,7 @@ import { VitalSign } from "../../../models/vitalSign.model.js";
 import { LabOrder } from "../../../models/labOrder.model.js";
 import { Prescription } from "../../../models/prescription.model.js";
 import { Drug } from "../../../models/drug.model.js";
+import { escapeRegex } from "../../../utils/escapeRegex.util.js";
 import { ImagingResult } from "../../../models/imagingResult.model.js";
 
 // In-memory cache cho openFDA để tối ưu tốc độ và tránh rate limit
@@ -642,7 +643,9 @@ export async function assessPrescriptionSafety({
   if (isDbConnected && medNames.length > 0) {
     try {
       dbDrugs = await Drug.find({ 
-        name: { $in: medNames.map(n => new RegExp(`^${n.trim()}$`, "i")) } 
+        // escape: tên thuốc như "Mannitol 20% (250ml)", "Amoxicillin + Clavulanat" có ký tự regex; trước đây không khớp
+        // (hoặc ném SyntaxError bị catch nuốt) nên bỏ sót thông tin thuốc trong danh mục viện khi kiểm tra an toàn kê đơn
+        name: { $in: medNames.map(n => new RegExp(`^${escapeRegex(String(n || "").trim())}$`, "i")) } 
       }).lean();
     } catch (e) {}
   }

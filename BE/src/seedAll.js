@@ -1931,7 +1931,7 @@ const seedComprehensiveDatabase = async () => {
       console.log("\n📢 Step 22: Seeding Announcements, Notifications, Support, and Datasets...");
       await Announcement.insertMany([
         {
-          title: "Triển khai phần mềm chẩn đoán tổn thương u não NeuroScan AI thế hệ mới",
+          title: "Triển khai phần mềm hỗ trợ sàng lọc u não NeuroScan AI thế hệ mới",
           content: "Khoa Ung Thư Não và Khoa Chẩn đoán Hình ảnh chính thức vận hành hệ thống AI hỗ trợ phát hiện ranh giới khối u trên chuỗi xung MRI 3.0T.",
           type: "info",
           author: users[3]._id,

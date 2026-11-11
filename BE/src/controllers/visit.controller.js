@@ -19,8 +19,7 @@ import {
   assertPaymentGateOpen,
   shouldEnforcePaymentGate,
   syncMriSlotWithVisit,
-  parseEgfrInput
-} from "../services/visit.service.js";
+  parseEgfrInput, ensureMriInvoice } from "../services/visit.service.js";
 import { Task } from "../models/task.model.js";
 import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
@@ -749,51 +748,8 @@ export const createMriOrder = async (req, res) => {
     }
 
     // ── [THỰC TẾ BV: NGHỊCH LÝ 1] Lập hóa đơn viện phí tạm tính khi ra y lệnh MRI ──
-    try {
-      if (!visit.invoiceId) {
-        const hospital = await Hospital.findById(visit.hospitalId);
-        const examFee = hospital?.pricing?.examFee ?? 50000;
-        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-        const aiFee = hospital?.pricing?.aiFee ?? 200000;
-
-        const items = [
-          { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
-          { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
-        ];
-        if (requestAiAnalysis) {
-          items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-        }
-        const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-
-        const draftInvoice = new Invoice({
-          hospitalId: visit.hospitalId,
-          patientId: visit.patientId,
-          visitId: visit._id,
-          items,
-          totalAmount,
-          status: "chờ thanh toán"
-        });
-        await draftInvoice.save();
-        visit.invoiceId = draftInvoice._id;
-      } else {
-        const existingInvoice = await Invoice.findById(visit.invoiceId);
-        if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
-          const hospital = await Hospital.findById(visit.hospitalId);
-          const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-          const aiFee = hospital?.pricing?.aiFee ?? 200000;
-          if (!existingInvoice.items.some((i) => i.type === "mri")) {
-            existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
-          }
-          if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
-            existingInvoice.items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-          }
-          existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-          await existingInvoice.save();
-        }
-      }
-    } catch (invErr) {
-      console.warn("⚠️ Không thể tạo hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
-    }
+    // Hóa đơn khám đã thu → lập hóa đơn MRI riêng; lỗi lập hóa đơn không còn bị nuốt (xem ensureMriInvoice)
+    await ensureMriInvoice(visit, { region, requestAiAnalysis });
     // ─────────────────────────────────────────────────────────────────────────────
 
     await visit.save();

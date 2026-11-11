@@ -1,4 +1,5 @@
 import { BhytInfo } from "./models/bhytInfo.model.js";
+import { acquireDistributedLock, releaseDistributedLock } from "../../models/systemLock.model.js";
 import { isCardExpired, fmtDateVN } from "./bhytCard.util.js";
 import { bhytCardLast4 } from "./bhytCrypto.util.js";
 import { getPayOSLink, releasePayOSLink, markInvoicePaidByPayOS, inFlightMessage, MONEY_IN_FLIGHT } from "./payosLink.util.js";
@@ -13,7 +14,29 @@ export const findActiveCard = (hospitalId, patientId) =>
  * Áp BHYT vào hóa đơn chờ thu (dùng chung: nút "Áp dụng BHYT" & tự áp khi phiếu thu sang quầy / trước khi thu).
  * Trả về { ok, code, message, data }. Không gửi response — nơi gọi tự xử lý.
  */
-export const applyBhytCore = async (invoice, { bhyt = null, treatmentType = "outpatient", isOutOfNetwork = false, hasTransferForm = false, auto = false } = {}) => {
+// Áp BHYT có khóa theo HÓA ĐƠN: thẻ và phần BHYT của hóa đơn được đọc lại TRONG khóa. Trước đây hai request áp
+// cùng lúc cho một hóa đơn đọc thẻ và hóa đơn ở hai thời điểm khác nhau → lũy kế thẻ bị cộng trùng (QA C6).
+// Hai hóa đơn khác nhau dùng chung thẻ vẫn do điều kiện cộng lũy kế (CAS trên usedThisYear) chặn.
+export const applyBhytCore = async (invoice, options = {}) => {
+  const lockKey = `bhyt_apply_${invoice._id}`;
+  const lock = await acquireDistributedLock(lockKey, { ttlSeconds: 30 });
+  if (!lock.acquired) {
+    return { ok: false, code: "APPLY_IN_PROGRESS", message: "Hóa đơn đang được áp BHYT ở một thao tác khác. Vui lòng đợi vài giây rồi thử lại." };
+  }
+  try {
+    const fresh = await invoice.constructor.findById(invoice._id).select("status bhytInfo").setOptions({ bypassTenancy: true }).lean();
+    if (fresh) {
+      invoice.status = fresh.status;
+      invoice.bhytInfo = fresh.bhytInfo;
+    }
+    const bhyt = options.bhyt?._id ? (await BhytInfo.findById(options.bhyt._id).setOptions({ bypassTenancy: true })) || options.bhyt : options.bhyt;
+    return await applyBhytCoreUnlocked(invoice, { ...options, bhyt });
+  } finally {
+    await releaseDistributedLock(lockKey, lock.holder);
+  }
+};
+
+const applyBhytCoreUnlocked = async (invoice, { bhyt = null, treatmentType = "outpatient", isOutOfNetwork = false, hasTransferForm = false, auto = false } = {}) => {
   if (invoice.status !== "chờ thanh toán") {
     return { ok: false, code: "NOT_PENDING", message: "Không thể chỉnh sửa hóa đơn đã thanh toán." };
   }
@@ -121,7 +144,7 @@ export const autoApplyBhytIfEligible = async (invoice) => {
 export const reconcileBhytAfterTotalChange = async (invoice) => {
   const auto = await autoApplyBhytIfEligible(invoice);
   if (!auto.applied && !auto.upToDate && invoice.bhytInfo?.bhytId && invoice.bhytInfo.appliedOnTotal !== invoice.totalAmount
-      && !["PAID_BEFORE_BHYT", "PAYOS_IN_FLIGHT"].includes(auto.code)) {
+      && !["PAID_BEFORE_BHYT", "PAYOS_IN_FLIGHT", "APPLY_IN_PROGRESS"].includes(auto.code)) { // đang áp ở thao tác khác: không gỡ BHYT
     const card = await BhytInfo.findById(invoice.bhytInfo.bhytId);
     if (card) {
       card.usedThisYear = Math.max(0, (card.usedThisYear || 0) - (invoice.bhytInfo.bhytAmount || 0));

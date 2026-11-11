@@ -29,6 +29,7 @@ import Colors from '../constants/colors';
 import PressableScale from './PressableScale';
 import { KeyRound, MailCheck, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { post } from '../services/api.service';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 const ForgotPasswordModal = ({
   visible,
@@ -112,8 +113,8 @@ const ForgotPasswordModal = ({
       setError('Vui lòng nhập mã OTP gồm 6 chữ số.');
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      setError('Mật khẩu mới phải có tối thiểu 6 ký tự.');
+    if (passwordPolicyError(newPassword)) {
+      setError(passwordPolicyError(newPassword));
       return;
     }
     if (newPassword !== confirmPassword) {

@@ -169,7 +169,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   // ── Điều hướng sang màn hình AI chuyên biệt ──
   const handleAiAnalysis = () => {
     if (images.length === 0) {
-      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi thực hiện chẩn đoán AI.');
+      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi chạy phân tích AI hỗ trợ sàng lọc.');
       return;
     }
     navigation.navigate('AIAnalysis', {

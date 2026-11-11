@@ -4,7 +4,7 @@
 
 ---
 
-> **Đề tài:** Hệ Thống Quản Lý Bệnh Án Điện Tử (EMR), Điều Phối Quy Trình Bệnh Viện & Phân Hệ Mini-PACS Hỗ Trợ Chẩn Đoán U Não Bằng Trí Tuệ Nhân Tạo (NeuroScan AI)  
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử (EN: NeuroScan AI – A Brain MRI Tumor Screening Support and Electronic Medical Record Platform). AI chỉ hỗ trợ sàng lọc, kết luận do bác sĩ.
 > 📌 **BẢN HỢP NHẤT TOÀN DIỆN DỰ ÁN:** Toàn bộ nội dung đồ án, cài đặt, API và quy trình y khoa đã được gộp tại **[README.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/README.md)**.  
 > **Chuyên ngành:** Kỹ thuật Phần mềm / Hệ thống Thông tin Y tế (Healthcare Information Systems)  
 > **Phiên bản hệ thống:** NeuroScan AI v3.2 Core Foundation (Đã chuẩn hóa toàn diện)  

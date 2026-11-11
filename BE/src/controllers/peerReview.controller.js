@@ -171,8 +171,8 @@ export const submitReview = async (req, res) => {
 // @access Private (Admin, Hospital_admin, Doctor with head_of_dept)
 export const finalizePeerReview = async (req, res) => {
   try {
-    if (!["admin", "system_admin", "hospital_admin", "department_head", "doctor", "radiologist"].includes(req.user.role)) {
-      return errorResponse(res, "Không có quyền kết luận bình duyệt.", 403);
+    if (!["department_head", "doctor", "radiologist"].includes(req.user.role)) {
+      return errorResponse(res, "Chỉ bác sĩ mới được ra kết luận cuối của bình duyệt.", 403);
     }
 
     const peerReview = await PeerReview.findOne({
@@ -181,17 +181,30 @@ export const finalizePeerReview = async (req, res) => {
     });
     if (!peerReview) return errorResponse(res, "Không tìm thấy yêu cầu bình duyệt.", 404);
     if (peerReview.status === 'completed') return errorResponse(res, "Đã có kết luận cuối.", 400);
+    if (peerReview.status === 'cancelled') return errorResponse(res, "Yêu cầu bình duyệt này đã hủy.", 400);
+
+    // Bình duyệt phải có ít nhất một lần đọc độc lập trước khi kết luận
+    const submittedReadings = (peerReview.readings || []).filter((r) => r.submittedAt);
+    if (submittedReadings.length === 0) {
+      return errorResponse(res, "Chưa có kết quả đọc độc lập nào, chưa thể kết luận cuối.", 409);
+    }
+    // Bác sĩ đọc ban đầu không tự kết luận bình duyệt ca của chính mình
+    if (peerReview.primaryDoctorId && String(peerReview.primaryDoctorId) === String(req.user.id)) {
+      return errorResponse(res, "Bác sĩ đọc ban đầu không được tự kết luận bình duyệt ca của mình.", 403);
+    }
 
     const { finalConclusion } = req.body;
-    if (!finalConclusion) return errorResponse(res, "Thiếu kết luận cuối.", 400);
+    if (!finalConclusion || !String(finalConclusion).trim()) return errorResponse(res, "Thiếu kết luận cuối.", 400);
 
-    peerReview.finalConclusion = finalConclusion;
-    peerReview.finalBy = req.user.id;
-    peerReview.finalAt = new Date();
-    peerReview.status = 'completed';
-    await peerReview.save();
+    // Ghi nguyên tử: hai người kết luận cùng lúc thì chỉ một kết luận được lưu
+    const finalized = await PeerReview.findOneAndUpdate(
+      { _id: peerReview._id, hospitalId: peerReview.hospitalId, status: { $nin: ['completed', 'cancelled'] } },
+      { $set: { finalConclusion: String(finalConclusion).trim(), finalBy: req.user.id, finalAt: new Date(), status: 'completed' } },
+      { new: true }
+    );
+    if (!finalized) return errorResponse(res, "Đã có kết luận cuối.", 409);
 
-    return successResponse(res, { peerReview }, "Đã lưu kết luận cuối của bình duyệt lần 2.");
+    return successResponse(res, { peerReview: finalized }, "Đã lưu kết luận cuối của bình duyệt lần 2.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

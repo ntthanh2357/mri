@@ -80,7 +80,7 @@ def infer_anatomical_location(bbox: dict, img_shape: tuple) -> tuple:
         return "deep white matter / intra-axial region", "GLIOMA (intra-axial parenchymal location)"
 
 
-app = FastAPI(title="Brain Tumor Diagnosis API")
+app = FastAPI(title="NeuroScan AI – Brain MRI Tumor Screening Support API")
 
 # [SECURITY FIX BUG-INFRA-001]: Xác thực khóa nội bộ X-Internal-Api-Key cho các tác vụ quản trị mô hình AI
 from fastapi.responses import JSONResponse

@@ -17,7 +17,8 @@ const PEER_REVIEW_ROLES = ["doctor", "radiologist", "department_head", "admin", 
 router.get("/", checkRole(PEER_REVIEW_ROLES), getPeerReviews);
 router.post("/", checkRole(PEER_REVIEW_ROLES), flagForPeerReview);
 router.post("/:id/submit-reading", checkRole(["doctor", "radiologist", "department_head"]), submitReview);
-router.put("/:id/finalize", checkRole(PEER_REVIEW_ROLES), finalizePeerReview);
+// Kết luận cuối là kết luận chuyên môn: chỉ bác sĩ (BGĐ/quản trị không ra kết luận y khoa)
+router.put("/:id/finalize", checkRole(["doctor", "radiologist", "department_head"]), finalizePeerReview);
 router.post("/random-qa-sampling", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), runRandomQaSampling);
 
 export default router;

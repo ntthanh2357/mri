@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
 import { localAvatarUri } from '../utils/localAvatar';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 // "KS. Huy Hoàng (Quản trị Hệ thống)" → { name: "KS. Huy Hoàng", title: "Quản trị Hệ thống" }
 const splitTitle = (full = '') => {
@@ -229,6 +230,10 @@ export default function AdminUsersView() {
     setCreateSuccess(null);
     if (!newEmail || !newPassword || !newName || !newRole) {
       setCreateError('Vui lòng nhập đầy đủ các trường bắt buộc.');
+      return;
+    }
+    if (passwordPolicyError(newPassword)) {
+      setCreateError(passwordPolicyError(newPassword));
       return;
     }
     

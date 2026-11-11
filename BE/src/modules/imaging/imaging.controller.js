@@ -1,5 +1,6 @@
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { aiFetch } from "../../utils/aiClient.util.js";
+import { buildImagingSignatureMetadata } from "../../utils/imagingSignature.util.js";
 import { User } from "../auth/models/user.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { Hospital } from "../../models/hospital.model.js";
@@ -1261,20 +1262,11 @@ export const updateImagingResult = async (req, res) => {
     result.signedAt = new Date();
 
     // [P0-2] Hệ thống hiện chỉ có hạch toàn vẹn nội bộ (SHA-256), KHÔNG phải chữ ký PKI/PAdES.
-    const signaturePayload = `${result._id}|${result.medicalId}|${result.patientName}|${result.findings}|${result.conclusion}|${result.signedAt.toISOString()}|${req.user.id}`;
-    const signedHash = crypto.createHash("sha256").update(signaturePayload).digest("hex");
-
-    result.digitalSignatureMetadata = {
-      signatureType: "internal_hash",
-      certificateSerial: null,
-      signingAlgorithm: "SHA-256",
-      timestampToken: null,
-      caProvider: "NONE",
-      signedHash,
-      signedBy: signingDoctorName,
-      signedAt: result.signedAt,
-      isTampered: false,
-    };
+    result.digitalSignatureMetadata = buildImagingSignatureMetadata({
+      imagingId: result._id, medicalId: result.medicalId, patientName: result.patientName, findings: result.findings,
+      conclusion: result.conclusion, signedAt: result.signedAt, signerId: req.user.id, signerName: signingDoctorName,
+    });
+    const signedHash = result.digitalSignatureMetadata.signedHash;
 
     try {
       await result.save();

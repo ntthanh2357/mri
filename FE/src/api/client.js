@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goToPortalLogin } from '../utils/navigationRef.js';
 import { cancelScheduled } from '../services/localNotifications';
+import { clearLocalClinicalData } from '../utils/localClinicalData.js';
 
 // Helper functions for cross-platform token persistence (Web & Native Mobile)
 export const getToken = async () => {
@@ -96,6 +97,14 @@ const subscribeTokenRefresh = (cb) => {
   refreshSubscribers.push(cb);
 };
 
+// Bị đăng xuất cưỡng bức (401 sau khi làm mới thất bại, 403 tài khoản/viện bị khóa): xóa token VÀ dữ liệu
+// bệnh nhân lưu trên máy như đăng xuất thường (trước đây bản nháp bệnh án còn lại trên máy dùng chung)
+const forceLogout = async () => {
+  await setAuthToken(null);
+  try { await clearLocalClinicalData(); } catch (_) { /* không chặn việc đăng xuất */ }
+  goToPortalLogin();
+};
+
 const onRefreshed = (token) => {
   refreshSubscribers.forEach((cb) => cb(token));
   refreshSubscribers = [];
@@ -171,16 +180,23 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   if (response.status === 401 && !isRetry && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
     if (!isRefreshing) {
       isRefreshing = true;
-      const newToken = await refreshAccessToken();
-      isRefreshing = false;
+      let newToken = null;
+      try {
+        newToken = await refreshAccessToken();
+      } catch (_) {
+        newToken = null;
+      } finally {
+        // luôn trả cờ, kể cả khi làm mới ném lỗi (trước đây kẹt true → mọi 401 sau đó treo)
+        isRefreshing = false;
+      }
 
       if (newToken) {
         onRefreshed(newToken);
         return request(endpoint, options, true);
       } else {
-        // Refresh token cũng đã hết hạn → bắt buộc đăng xuất
-        await setAuthToken(null);
-        goToPortalLogin();
+        // Refresh token cũng đã hết hạn → báo cho các request đang chờ (trước đây treo vĩnh viễn) rồi đăng xuất
+        onRefreshed(null);
+        await forceLogout();
         throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
       }
     } else {
@@ -198,16 +214,14 @@ export const request = async (endpoint, options = {}, isRetry = false) => {
   }
 
   if (response.status === 401) {
-    await setAuthToken(null);
-    goToPortalLogin();
+    await forceLogout();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
   // Xử lý mã 403 trên các endpoint xác thực cốt lõi (/auth/me): Tài khoản bị khóa hoặc gói bệnh viện hết hạn
   // Xóa token để giải phóng trạng thái zombie loop
   if (response.status === 403 && endpoint === '/auth/me') {
-    await setAuthToken(null);
-    goToPortalLogin();
+    await forceLogout();
     throw new Error(data?.message || 'Tài khoản hoặc bệnh viện của bạn đang bị khóa hoặc hết hạn dịch vụ.');
   }
 
@@ -250,14 +264,12 @@ export const postFormData = async (endpoint, formData, isRetry = false) => {
     if (newToken) {
       return postFormData(endpoint, formData, true);
     }
-    await setAuthToken(null);
-    goToPortalLogin();
+    await forceLogout();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 
   if (response.status === 401) {
-    await setAuthToken(null);
-    goToPortalLogin();
+    await forceLogout();
     throw new Error(data?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
   }
 

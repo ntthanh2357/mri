@@ -176,6 +176,14 @@ export const signPatientConsent = async (req, res) => {
       hospitalId: req.user.hospitalId
     });
     if (!consentForm) return errorResponse(res, "Không tìm thấy phiếu đồng thuận.", 404);
+    // Tài khoản bệnh nhân chỉ ký phiếu của chính mình (cùng viện không có nghĩa là cùng người)
+    if (req.user.role === "patient" && String(consentForm.patientId || "") !== String(req.user.id)) {
+      return errorResponse(res, "Không tìm thấy phiếu đồng thuận.", 404);
+    }
+    // Đã ký thì không ghi đè chữ ký cũ (kể cả chữ ký tay bệnh nhân tự ký trên app)
+    if (consentForm.patientSigned) {
+      return errorResponse(res, "Phiếu đồng thuận này đã được ký.", 409);
+    }
 
     if (consentForm.isBlockedByChecklist && !consentForm.isDoctorOverridden) {
       return errorResponse(res, "Phiếu này đang bị CHẶN do nguy cơ dị ứng chưa được bác sĩ duyệt override.", 400);
@@ -184,12 +192,15 @@ export const signPatientConsent = async (req, res) => {
     const { patientName } = req.body;
     if (!patientName) return errorResponse(res, "Thiếu họ tên người ký xác nhận.", 400);
 
-    consentForm.patientSigned = true;
-    consentForm.patientSignature = patientName;
-    consentForm.signedAt = new Date();
-    await consentForm.save();
+    // Ghi nguyên tử: hai lần ký đồng thời thì chỉ một lần được ghi
+    const signed = await ConsentForm.findOneAndUpdate(
+      { _id: consentForm._id, hospitalId: consentForm.hospitalId, patientSigned: { $ne: true } },
+      { $set: { patientSigned: true, patientSignature: patientName, signedAt: new Date() } },
+      { new: true }
+    );
+    if (!signed) return errorResponse(res, "Phiếu đồng thuận này đã được ký.", 409);
 
-    return successResponse(res, { consentForm }, "Bệnh nhân đã ký đồng thuận điện tử thành công.");
+    return successResponse(res, { consentForm: signed }, "Bệnh nhân đã ký đồng thuận điện tử thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }

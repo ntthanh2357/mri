@@ -251,8 +251,8 @@ const ImagingResultScreen = ({ route, navigation }) => {
         setAiResult(response.data);
         setCorrectClass(response.data.class_name);
       } else {
-        if (Platform.OS === 'web') alert('Lỗi phân tích AI: ' + (response.message || 'Không thể chẩn đoán.'));
-        else Alert.alert('Lỗi phân tích AI', response.message || 'Không thể chẩn đoán ảnh chụp.');
+        if (Platform.OS === 'web') alert('Lỗi phân tích AI: ' + (response.message || 'Không phân tích được ảnh.'));
+        else Alert.alert('Lỗi phân tích AI', response.message || 'Không phân tích được ảnh chụp.');
       }
     } catch (err) {
       console.error('AI Analysis error:', err);

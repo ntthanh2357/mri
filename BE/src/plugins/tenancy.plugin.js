@@ -74,7 +74,9 @@ export const tenancyPlugin = (schema) => {
   // Hook lưu bản ghi mới (Luôn ép buộc hospitalId từ context nếu đang trong phiên đa viện)
   schema.pre("validate", function(next) {
     const store = tenantStorage.getStore();
-    if (store && store.hospitalId) {
+    // Chỉ điền viện cho bản ghi MỚI (hoặc chưa có viện). Trước đây ghi đè cả bản ghi đã có: viện nhận chấp nhận
+    // phiếu chuyển viện là phiếu đổi sang viện nhận, mất dấu viện gửi.
+    if (store && store.hospitalId && (this.isNew || !this.hospitalId)) {
       this.hospitalId = store.hospitalId;
     }
     next();

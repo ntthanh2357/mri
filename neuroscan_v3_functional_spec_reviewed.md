@@ -1,4 +1,6 @@
-# NeuroScan AI v3.0 — Đặc tả Chức năng (Bản Review & Hoàn thiện)
+# NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử — Đặc tả Chức năng v3.2 (Bản Review & Hoàn thiện)
+
+> Tên chính thức của đề tài như trên; các mục "chẩn đoán" trong tài liệu này là của bác sĩ, AI chỉ hỗ trợ sàng lọc.
 
 **Phiên bản:** 3.2 (hoàn chỉnh) &nbsp;|&nbsp; **Ngày:** 07/08/2026 &nbsp;|&nbsp; **Dựa trên:** bản đặc tả v3.1 (70 chức năng, module A–T) + đối chiếu codebase thực tế
 

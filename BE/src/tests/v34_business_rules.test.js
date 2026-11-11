@@ -4,6 +4,9 @@ import mongoose from "mongoose";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { User } from "../models/user.model.js";
+import { hashAccountOtp } from "../utils/accountOtp.util.js";
+// Mã OTP lưu dạng HMAC (utils/accountOtp.util.js): fixture ghi đúng định dạng đó để "mã đúng" vẫn là mã đúng
+const seedOtpUser = async (doc, otp) => { const u = await User.create(doc); await User.updateOne({ _id: u._id }, { $set: { otpCode: hashAccountOtp(u._id, otp) } }); return u; };
 import { Hospital } from "../models/hospital.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 import { MedicalRecord } from "../modules/emr/models/medicalRecord.model.js";
@@ -815,7 +818,7 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
   // ── OTP và rate limit ────────────────────────────────────────────────────────────────────
   test("OPEN-04: OTP đặt lại mật khẩu bị khóa sau 5 lần sai, kể cả mã đúng", async () => {
     const email = `v34_otp_${oid()}@neuroscan.vn`;
-    await User.create({ email, passwordHash: "hashed", role: "patient", otpCode: "654321", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } });
+    await seedOtpUser({ email, passwordHash: "hashed", role: "patient", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } }, "654321");
     for (let i = 0; i < 5; i += 1) {
       expect((await call(verifyOtp, { body: { email, otp: "000000", newPassword: "Abcd@1234" } })).statusCode).toBe(400);
     }
@@ -826,7 +829,7 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
 
   test("OPEN-04: request song song không vượt được 5 lần thử", async () => {
     const email = `v34_otp_${oid()}@neuroscan.vn`;
-    await User.create({ email, passwordHash: "hashed", role: "patient", otpCode: "654321", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } });
+    await seedOtpUser({ email, passwordHash: "hashed", role: "patient", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } }, "654321");
     const results = await Promise.all(Array.from({ length: 12 }, () => call(verifyOtp, { body: { email, otp: "000000", newPassword: "Abcd@1234" } })));
     expect(results.filter((r) => r.statusCode === 400).length).toBe(5);
     expect(results.filter((r) => r.statusCode === 429).length).toBe(7);
@@ -834,7 +837,7 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
 
   test("OPEN-04: OTP đăng nhập SĐT cũng bị giới hạn", async () => {
     const phone = `09${String(Date.now()).slice(-8)}`;
-    await User.create({ email: `v34_phone_${oid()}@neuroscan.vn`, phone, passwordHash: "hashed", role: "patient", otpCode: "654321", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } });
+    await seedOtpUser({ email: `v34_phone_${oid()}@neuroscan.vn`, phone, passwordHash: "hashed", role: "patient", otpExpires: new Date(Date.now() + 60000), profile: { name: "BN" } }, "654321");
     for (let i = 0; i < 5; i += 1) {
       expect((await call(phoneLoginVerify, { body: { phone, otp: "000000" } })).statusCode).toBe(400);
     }
@@ -852,7 +855,7 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
     const saved = process.env.ENABLE_DEBUG_OTP;
     delete process.env.ENABLE_DEBUG_OTP;
     const email = `v34_master_${oid()}@neuroscan.vn`;
-    await User.create({ email, passwordHash: "hashed", role: "hospital_admin", hospitalId, otpCode: "654321", otpExpires: new Date(Date.now() + 60000), profile: { name: "QT" } });
+    await seedOtpUser({ email, passwordHash: "hashed", role: "hospital_admin", hospitalId, otpExpires: new Date(Date.now() + 60000), profile: { name: "QT" } }, "654321");
     const res = await call(verifyOtp, { body: { email, otp: "123456", newPassword: "Abcd@1234" } });
     expect(res.statusCode).toBe(400);
     expect((await User.findOne({ email })).passwordHash).toBe("hashed");

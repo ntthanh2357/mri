@@ -118,9 +118,14 @@ describe("v3.4 Vá lỗi bảo mật còn lại", () => {
   });
 
   // ── Luồng AI với dữ liệu đúng dạng DB thật ────────────────────────────────────────────────
+  // Đường dẫn tệp chưa ký / hết hạn bị chặn ngay ở middleware (chống signing oracle) hoặc ở resolveClientImageUrl:
+  // middlewareStatus ghi mã từ chối của middleware (null nếu cho qua)
   const signedRequest = (imageUrl, extra = {}) => {
     const req = { body: { imageUrl, ...extra } };
-    stripUploadSignatures(req, {}, () => {});
+    const res = { statusCode: null, status(code) { this.statusCode = code; return this; }, json() { return this; } };
+    let passed = false;
+    stripUploadSignatures(req, res, () => { passed = true; });
+    req.middlewareStatus = passed ? null : res.statusCode;
     return req;
   };
 
@@ -129,8 +134,10 @@ describe("v3.4 Vá lỗi bảo mật còn lại", () => {
     const other = "/uploads/x.png";
     const reject = (value) => {
       const req = signedRequest(value);
-      let status = null;
-      try { resolveClientImageUrl(req, req.body.imageUrl); } catch (err) { status = err.statusCode; }
+      let status = req.middlewareStatus;
+      if (status === null) {
+        try { resolveClientImageUrl(req, req.body.imageUrl); } catch (err) { status = err.statusCode; }
+      }
       expect(status).toBe(403);
     };
 
@@ -457,8 +464,10 @@ describe("v3.4 Vá lỗi bảo mật còn lại", () => {
   });
 
   test("Dung lượng Drive tính từ dữ liệu thật", async () => {
-    const res = await call(checkDriveCapacity, { user: { role: "hospital_admin" } });
+    const res = await call(checkDriveCapacity, { user: { role: "hospital_admin", hospitalId } });
     expect(res.statusCode).toBe(200);
+    // hospital_admin chưa gán viện không xem được dung lượng (trước đây trả tổng mọi viện)
+    expect((await call(checkDriveCapacity, { user: { role: "hospital_admin" } })).statusCode).toBe(403);
     expect(res.payload.data.usedCapacityMb === 1680000).toBe(false);
   });
 

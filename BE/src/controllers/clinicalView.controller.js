@@ -8,6 +8,7 @@ import { User } from "../models/user.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { evaluateImagingSignPermission, validateSignReason } from "../services/imagingSignPolicy.service.js";
+import { buildImagingSignatureMetadata } from "../utils/imagingSignature.util.js";
 
 // ─── G.1 — Trình xem DICOM — lấy danh sách series và signed URLs ─────────────
 // @route GET /api/v1/clinical-view/imaging/:imagingResultId/dicom-viewer
@@ -293,6 +294,7 @@ export const signImagingReport = async (req, res) => {
     // Giành quyền ký atomic: 2 bác sĩ ký cùng lúc thì người sau nhận 409, không ghi đè kết luận của người trước
     const signerName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
     const signedAt = new Date();
+    const finalFindings = doctorNote ? (imaging.findings || "") + "\n\nGhi chú bác sĩ: " + doctorNote : imaging.findings;
     const signedImaging = await ImagingResult.findOneAndUpdate(
       { _id: imaging._id, isSigned: { $ne: true } },
       {
@@ -305,7 +307,12 @@ export const signImagingReport = async (req, res) => {
           signedAt,
           signMode: permission.mode,
           ...(permission.requiresReason ? { actingRadiologistReason: String(actingRadiologistReason).trim() } : {}),
-          ...(doctorNote ? { findings: (imaging.findings || "") + "\n\nGhi chú bác sĩ: " + doctorNote } : {}),
+          ...(doctorNote ? { findings: finalFindings } : {}),
+          // Mã băm toàn vẹn giống PUT /imaging/:id (trước đây đường ký này không ghi signedHash)
+          digitalSignatureMetadata: buildImagingSignatureMetadata({
+            imagingId: imaging._id, medicalId: imaging.medicalId, patientName: imaging.patientName, findings: finalFindings,
+            conclusion: effectiveConclusion, signedAt, signerId: req.user.id, signerName,
+          }),
         },
       },
       { new: true }

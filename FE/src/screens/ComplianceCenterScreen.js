@@ -6,11 +6,10 @@ import PageContainer from '../components/layout/PageContainer';
 import Colors from '../constants/colors';
 import { useAppDialog } from '../components/ui/AppDialog';
 import { get, post } from '../services/api.service';
-import { WorkButton, WorkCard, ChoiceChips, StatTiles, fmtDate, workStyles as w } from '../components/staff/WorkUI';
+import { WorkButton, WorkCard, StatTiles, fmtDate, workStyles as w } from '../components/staff/WorkUI';
 
 // Ban Giám đốc: gói dịch vụ, dung lượng và sao lưu. Quản trị nền tảng: toàn vẹn nhật ký và chuẩn hóa dữ liệu.
 
-const BACKUP_TYPES = [{ value: 'daily', label: 'Hằng ngày' }, { value: 'weekly', label: 'Hằng tuần' }];
 const PLATFORM_ROLES = ['admin', 'system_admin'];
 const STORAGE_ROLES = ['admin', 'hospital_admin'];
 
@@ -20,7 +19,6 @@ const ComplianceCenterScreen = ({ navigation }) => {
   const [subscription, setSubscription] = useState(null);
   const [capacity, setCapacity] = useState(null);
   const [integrity, setIntegrity] = useState(null);
-  const [backupType, setBackupType] = useState('daily');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
 
@@ -85,16 +83,6 @@ const ComplianceCenterScreen = ({ navigation }) => {
     if (ok) await run('migrate', () => post('/admin/compliance/migrate-emr', {}), 'Đã chuẩn hóa');
   };
 
-  const cleanup = async () => {
-    const ok = await confirm({
-      title: 'Dọn tệp mồ côi',
-      message: 'Xóa các tệp tạm không còn liên kết với hồ sơ nào.',
-      confirmText: 'Dọn tệp',
-      type: 'danger',
-    });
-    if (ok) await run('cleanup', () => post('/api/v1/drive-storage/cleanup-orphans', {}), 'Đã dọn tệp');
-  };
-
   const sub = subscription?.subscription;
   const usage = subscription?.usage;
 
@@ -136,12 +124,10 @@ const ComplianceCenterScreen = ({ navigation }) => {
                     <Text style={w.meta}>{capacity.alertMessage}</Text>
                   </WorkCard>
                 ) : null}
+                {/* Sao lưu/dọn tệp lên Google Drive chưa được tích hợp (máy chủ trả 501). Trước đây nút bấm báo
+                    thông báo sao lưu thành công dù không có gì được ghi, nên bỏ nút và nói rõ tình trạng. */}
                 <WorkCard>
-                  <ChoiceChips label="Loại bản sao lưu" options={BACKUP_TYPES} value={backupType} onChange={setBackupType} />
-                  <View style={w.actions}>
-                    <WorkButton label="Tạo bản sao lưu" busy={busy === 'backup'} onPress={() => run('backup', () => post('/api/v1/drive-storage/run-backup', { backupType }), 'Đã tạo bản sao lưu')} />
-                    <WorkButton label="Dọn tệp mồ côi" variant="ghost" busy={busy === 'cleanup'} onPress={cleanup} />
-                  </View>
+                  <Text style={w.meta}>Sao lưu dữ liệu của viện được thực hiện tự động (bản mã hóa) và theo yêu cầu bởi quản trị nền tảng. Đồng bộ và dọn tệp trên Google Drive chưa được kích hoạt.</Text>
                 </WorkCard>
               </>
             ) : null}

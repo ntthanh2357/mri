@@ -45,6 +45,13 @@ describe('Quyền đọc tệp y tế /api/v1/storage/files (P1-8)', () => {
     expect(canAccessStoredFile(file, user, [])).toBe(false);
   });
 
+  it('tài khoản nền tảng (admin, system_admin) không đọc được tệp y tế, kể cả có viện (Q-V4-06)', () => {
+    const file = { patientId: 'patient-1', uploadedBy: 'doctor-1' };
+    expect(canAccessStoredFile(file, { id: 'admin-1', role: 'admin' }, ['hospital-A'])).toBe(false);
+    expect(canAccessStoredFile(file, { id: 'admin-1', role: 'admin', hospitalId: 'hospital-A' }, ['hospital-A'])).toBe(false);
+    expect(canAccessStoredFile(file, { id: 'sa-1', role: 'system_admin', hospitalId: 'hospital-A' }, ['hospital-A'])).toBe(false);
+  });
+
   it('request không có user bị từ chối', () => {
     expect(canAccessStoredFile({ patientId: 'p' }, null, ['hospital-A'])).toBe(false);
   });

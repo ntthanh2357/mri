@@ -5,6 +5,7 @@ import path from "path";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
+import { hashAccountOtp } from "../utils/accountOtp.util.js";
 import { Hospital } from "../models/hospital.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
@@ -558,8 +559,9 @@ describe("QA-27 Phase 1: refresh token của web chỉ nằm trong cookie HttpOn
     const step1 = await post("/auth/login", { email: user.email, password: PASSWORD }, headers);
     const j1 = await step1.json();
     if (!j1.requires2FA) throw new Error("login không vào bước 2FA: " + JSON.stringify(j1).slice(0, 200));
-    const { otp2FACode } = await User.findById(user._id).select("otp2FACode").lean();
-    return post("/auth/verify-2fa", { email: user.email, otp: otp2FACode }, headers);
+    // mã 2FA lưu dạng HMAC: đặt mã đã biết theo đúng định dạng hệ thống lưu rồi xác thực bằng mã đó
+    await User.updateOne({ _id: user._id }, { $set: { otp2FACode: hashAccountOtp(user._id, "246810", "2fa") } });
+    return post("/auth/verify-2fa", { email: user.email, otp: "246810" }, headers);
   };
   const cookieOf = (res) => (res.headers.getSetCookie?.() || []).find((c) => c.startsWith("refreshToken=")) || "";
 

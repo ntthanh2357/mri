@@ -137,6 +137,9 @@ const PeerReviewScreen = ({ navigation }) => {
     const open = !['completed', 'cancelled'].includes(review.status);
     const canRead = isReader && !submitted && open;
     const conflicting = (review.readings || []).some((r) => r.isConflicting);
+    // Khớp máy chủ: chỉ bác sĩ, đã có ít nhất một lần đọc, và không phải bác sĩ đọc ban đầu của ca
+    const isPrimary = !!review.primaryDoctorId && String(review.primaryDoctorId?._id || review.primaryDoctorId) === myId;
+    const canFinalize = open && READER_ROLES.includes(me?.role) && !isPrimary && (review.readings || []).some((r) => r.submittedAt);
     const image = review.imagingResultId || {};
     return (
       <WorkCard key={review._id} tone={conflicting && open ? 'alert' : undefined}>
@@ -181,7 +184,7 @@ const PeerReviewScreen = ({ navigation }) => {
         ) : (
           <View style={w.actions}>
             {canRead ? <WorkButton label="Đọc độc lập" onPress={() => { setForm(emptyForm); setReadingFor(review._id); }} /> : null}
-            {review.status === 'awaiting_final' ? <WorkButton label="Kết luận cuối" variant={canRead ? 'ghost' : 'primary'} onPress={() => { setFinalText(''); setFinalFor(review._id); }} /> : null}
+            {review.status === 'awaiting_final' && canFinalize ? <WorkButton label="Kết luận cuối" variant={canRead ? 'ghost' : 'primary'} onPress={() => { setFinalText(''); setFinalFor(review._id); }} /> : null}
           </View>
         )}
       </WorkCard>

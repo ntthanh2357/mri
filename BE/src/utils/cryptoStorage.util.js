@@ -11,10 +11,19 @@ export const generateRandomKey = () => {
 /**
  * Lấy khóa mã hóa 32-byte từ biến môi trường hoặc khóa ngẫu nhiên dự phòng
  */
+const DEV_ONLY_FILE_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+let warnedDevKey = false;
+
 export const getEncryptionKey = (customKey = null) => {
-  const hexKey = customKey || process.env.FILE_ENCRYPTION_KEY || "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  // Khóa dự phòng công khai chỉ dùng cho dev/test. Production thiếu khóa thì dừng (trước đây âm thầm mã hóa
+  // bản sao lưu Drive/PACS bằng khóa ai cũng biết).
+  const hexKey = customKey || process.env.FILE_ENCRYPTION_KEY || (process.env.NODE_ENV === "production" ? "" : DEV_ONLY_FILE_KEY);
   if (!hexKey) {
-    throw new Error("Chưa cấu hình FILE_ENCRYPTION_KEY trong .env");
+    throw new Error("FATAL BẢO MẬT: Thiếu FILE_ENCRYPTION_KEY (64 ký tự hex) để mã hóa tệp y tế và bản sao lưu.");
+  }
+  if (!customKey && !process.env.FILE_ENCRYPTION_KEY && !warnedDevKey) {
+    warnedDevKey = true;
+    console.warn("⚠️ FILE_ENCRYPTION_KEY chưa cấu hình: đang dùng khóa dev công khai (KHÔNG dùng cho dữ liệu thật).");
   }
   const keyBuffer = Buffer.from(hexKey, "hex");
   if (keyBuffer.length !== 32) {

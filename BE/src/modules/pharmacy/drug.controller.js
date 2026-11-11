@@ -14,6 +14,7 @@ import { acquireDistributedLock, releaseDistributedLock } from "../../models/sys
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 import { inputErrorStatus } from "../../utils/inputError.util.js";
+import { escapeRegex } from "../../utils/escapeRegex.util.js";
 // ── Helper: Ghi nhật ký kiểm toán trung tâm cho thao tác Dược (chuỗi băm chống giả mạo
 // theo HIPAA §164.312(b) & TT 13/2025/TT-BYT). Bọc try/catch: audit lỗi KHÔNG được phép
 // làm hỏng nghiệp vụ chính — cùng pattern đã dùng ở invoice/bhyt/hospitalBed service.
@@ -272,7 +273,7 @@ export const updateDrug = async (req, res) => {
 
     // Kiểm tra trùng tên nếu đổi tên
     if (name && name.trim().toLowerCase() !== drug.name.toLowerCase()) {
-      const dup = await Drug.findOne({ hospitalId: drug.hospitalId, name: { $regex: new RegExp(`^${name.trim()}$`, "i") }, _id: { $ne: id } });
+      const dup = await Drug.findOne({ hospitalId: drug.hospitalId, name: { $regex: new RegExp(`^${escapeRegex(name.trim())}$`, "i") }, _id: { $ne: id } });
       if (dup) return errorResponse(res, `Thuốc "${name}" đã tồn tại trong danh mục.`, 409);
       drug.name = name.trim();
     }
