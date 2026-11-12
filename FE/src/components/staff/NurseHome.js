@@ -125,7 +125,7 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
         {actions.map((a, i) => {
           const Icon = a.icon;
           return (
-            <Reveal key={a.title} delay={i * 100} style={{ width: isWide ? '23.9%' : '48.5%' }}>
+            <Reveal key={a.title} delay={i * 100} style={{ width: isWide ? '23.9%' : (actions.length % 2 === 1 && i === actions.length - 1 ? '100%' : '48.5%') }}>
               <TouchableOpacity style={[s.action, { backgroundColor: a.bg }]} onPress={a.go} dataSet={{ hover: 'lift' }}>
                 <View style={[s.actionBlob, { backgroundColor: a.shade }]} />
                 <View style={s.actionIcon}><Icon size={24} color="#FFFFFF" /></View>
@@ -233,12 +233,12 @@ const s = StyleSheet.create({
 
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0B2A55', marginBottom: -8 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
-  action: { borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
+  action: { flex: 1, borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
   actionBlob: { position: 'absolute', width: 180, height: 180, borderRadius: 90, right: -50, top: -60, opacity: 0.7 },
   actionIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   actionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
   actionDesc: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4, lineHeight: 19 },
-  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
+  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 16 },
   actionGoText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   twoCol: { gap: 18, alignItems: 'flex-start' },

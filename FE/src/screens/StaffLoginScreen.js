@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: LIGHT_BG,
     ...web({ backgroundImage: 'radial-gradient(900px 640px at 92% 8%, rgba(110, 200, 255, 0.45), transparent 60%), linear-gradient(135deg, #072A6E 0%, #0B3F9C 38%, #1660C9 70%, #2D7FE0 100%)' }),
   },
-  containerMobile: { flexGrow: 1, alignItems: 'center', paddingTop: 36, paddingBottom: 28, paddingHorizontal: 16 },
+  containerMobile: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 36, paddingBottom: 28, paddingHorizontal: 16 }, // logo + thẻ nằm giữa màn hình
 
   // ----- Thẻ -----
   cardStack: { width: '100%', maxWidth: 420, alignSelf: 'center' },

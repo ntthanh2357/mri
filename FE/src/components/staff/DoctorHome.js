@@ -120,7 +120,7 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
         {kpis.map((k, i) => {
           const Icon = k.icon;
           return (
-            <Reveal key={k.key} delay={i * 90} style={[s.kpiWrap, { width: !isWide ? '48.5%' : kpis.length === 3 ? '32.2%' : kpis.length > 3 ? '23.6%' : '48.5%' }]}>
+            <Reveal key={k.key} delay={i * 90} style={[s.kpiWrap, { width: !isWide ? (kpis.length % 2 === 1 && i === kpis.length - 1 ? '100%' : '48.5%') : kpis.length === 3 ? '32.2%' : kpis.length > 3 ? '23.6%' : '48.5%' }]}>
               <TouchableOpacity style={s.kpi} onPress={() => k.task && navigation.navigate(k.task.route, k.task.params)} dataSet={{ hover: 'lift' }}>
                 <View style={[s.kpiIcon, { backgroundColor: k.bg }]}><Icon size={20} color={k.color} /></View>
                 <CountUp value={k.value} style={[s.kpiValue, { color: k.color }]} />
@@ -137,7 +137,7 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
         {actions.map((a, i) => {
           const Icon = a.icon;
           return (
-            <Reveal key={a.title} delay={i * 100} style={{ width: isWide ? (actions.length === 3 ? '32.2%' : '23.9%') : '48.5%' }}>
+            <Reveal key={a.title} delay={i * 100} style={{ width: isWide ? (actions.length === 3 ? '32.2%' : '23.9%') : (actions.length % 2 === 1 && i === actions.length - 1 ? '100%' : '48.5%') }}>
               <TouchableOpacity style={[s.action, { backgroundColor: a.bg }]} onPress={a.go} dataSet={{ hover: 'lift' }}>
                 <View style={[s.actionBlob, { backgroundColor: a.shade }]} />
                 <View style={s.actionIcon}><Icon size={24} color="#FFFFFF" /></View>
@@ -232,7 +232,7 @@ const s = StyleSheet.create({
 
   kpiRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
   kpiWrap: {},
-  kpi: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', ...shadow },
+  kpi: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', ...shadow },
   kpiIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   kpiValue: { fontSize: 28, fontWeight: '800' },
   kpiLabel: { fontSize: 13, color: '#475569', marginTop: 2, fontWeight: '600' },
@@ -240,12 +240,12 @@ const s = StyleSheet.create({
 
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1E1B4B', marginBottom: -8 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
-  action: { borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
+  action: { flex: 1, borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
   actionBlob: { position: 'absolute', width: 180, height: 180, borderRadius: 90, right: -50, top: -60, opacity: 0.7 },
   actionIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   actionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
   actionDesc: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4, lineHeight: 19 },
-  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
+  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 16 },
   actionGoText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   twoCol: { gap: 18, alignItems: 'flex-start' },

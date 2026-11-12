@@ -280,12 +280,12 @@ const s = StyleSheet.create({
 
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0B2A55', marginBottom: -8 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
-  action: { borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
+  action: { flex: 1, borderRadius: 20, padding: 22, minHeight: 168, overflow: 'hidden', position: 'relative' },
   actionBlob: { position: 'absolute', width: 180, height: 180, borderRadius: 90, right: -50, top: -60, opacity: 0.7 },
   actionIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   actionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   actionDesc: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4, lineHeight: 19 },
-  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
+  actionGo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 16 },
   actionGoText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   twoCol: { gap: 18, alignItems: 'flex-start' },
