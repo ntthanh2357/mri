@@ -38,9 +38,11 @@ export const getEncryptionKey = (customKey = null) => {
  * @param {string} [customKeyHex] - Khóa hex tùy chọn (nếu có)
  * @returns {{ encryptedBuffer: Buffer, ivHex: string, authTagHex: string }}
  */
-export const encryptBuffer = (buffer, customKeyHex = null) => {
+export const encryptBuffer = (buffer, customKeyHex = null, ivHex = null) => {
   const key = getEncryptionKey(customKeyHex);
-  const iv = crypto.randomBytes(12); // Chuẩn GCM dùng 12 bytes IV
+  // ivHex chỉ truyền khi mã hóa lại ĐÚNG nội dung đã mã hóa trước đó (di trú bản chính về đúng bản sao trên Drive):
+  // cùng khóa + IV + nội dung → cùng bản mã, không phải dùng lại IV cho nội dung khác.
+  const iv = ivHex ? Buffer.from(ivHex, "hex") : crypto.randomBytes(12); // Chuẩn GCM dùng 12 bytes IV
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
 
   const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
@@ -51,6 +53,26 @@ export const encryptBuffer = (buffer, customKeyHex = null) => {
     ivHex: iv.toString("hex"),
     authTagHex: authTag.toString("hex"),
   };
+};
+
+/**
+ * Bộ mã hóa dạng stream (AES-256-GCM) cho tệp lớn: không nạp cả tệp vào RAM.
+ * getAuthTagHex() chỉ gọi được SAU khi stream đã kết thúc.
+ */
+export const createEncryptionStream = (customKeyHex = null) => {
+  const key = getEncryptionKey(customKeyHex);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  return { cipher, ivHex: iv.toString("hex"), getAuthTagHex: () => cipher.getAuthTag().toString("hex") };
+};
+
+/**
+ * Bộ giải mã dạng stream. Thẻ xác thực được kiểm tra khi stream kết thúc: tệp bị sửa thì stream báo lỗi.
+ */
+export const createDecryptionStream = (ivHex, authTagHex, customKeyHex = null) => {
+  const decipher = crypto.createDecipheriv("aes-256-gcm", getEncryptionKey(customKeyHex), Buffer.from(ivHex, "hex"));
+  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+  return decipher;
 };
 
 /**

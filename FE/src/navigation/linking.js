@@ -42,6 +42,7 @@ export const linkingConfig = {
       ImagingHistory: 'imaging-history',
       ImagingResult: 'imaging-result',
       CreateImagingResult: 'create-imaging-result',
+      DicomViewer: 'dicom-viewer',
       DoctorPatientList: 'doctor-patient-list',
       NurseReception: 'nurse-reception',
       NurseTriage: 'nurse-triage',

@@ -86,9 +86,18 @@ const storedMedicalFileSchema = new Schema(
     },
 
     // Bảo mật mã hóa AES-256-GCM trên Drive
+    // Bản chính trên máy chủ đã mã hóa AES-256-GCM (FILE_ENCRYPTION_KEY) hay chưa.
+    // true: tệp trên đĩa là bản mã; encryptionIv/encryptionAuthTag là tham số của bản mã đó, bản sao Drive y hệt từng byte.
+    // false (dữ liệu cũ): tệp trên đĩa là bản rõ; encryptionIv/encryptionAuthTag (nếu có) chỉ thuộc về bản sao trên Drive.
+    localEncrypted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    // Giữ để tương thích: trước đây luôn ghi true kể cả khi bản chính là bản rõ. Bản ghi mới = localEncrypted.
     isEncrypted: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     encryptionIv: {
       type: String,

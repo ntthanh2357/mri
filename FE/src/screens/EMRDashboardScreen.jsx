@@ -86,6 +86,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [detailRecord, setDetailRecord] = useState(null);
   const [localUser, setLocalUser] = useState(null);
   // Nurse workflow: selected patient for detail panel
   const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
@@ -517,7 +518,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                           recordId: record._id,
                         });
                       } else {
-                        Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
+                        setDetailRecord(record);
                       }
                     }}
                     onRefresh={fetchRecords}
@@ -681,6 +682,219 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal Chi tiết Hồ sơ bệnh án */}
+        <Modal
+          visible={Boolean(detailRecord)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDetailRecord(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { maxWidth: 680, width: '95%', maxHeight: '88%', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', padding: 0 }]}>
+              {detailRecord && (() => {
+                const markers = detailRecord.molecularMarkers || {};
+                const markerList = [
+                  markers.idhStatus && `IDH: ${markers.idhStatus}`,
+                  markers.mgmtMethylation && `MGMT: ${markers.mgmtMethylation}`,
+                  markers.codeletion1p19q && `1p/19q: ${markers.codeletion1p19q}`,
+                  markers.tertPromoter && `TERT: ${markers.tertPromoter}`,
+                  markers.atrxStatus && `ATRX: ${markers.atrxStatus}`,
+                  markers.egfrAmplification && `EGFR: ${markers.egfrAmplification}`,
+                  markers.h3k27mStatus && `H3K27M: ${markers.h3k27mStatus}`,
+                  markers.brafMutation && `BRAF: ${markers.brafMutation}`,
+                ].filter(Boolean);
+                const sig = detailRecord.digitalSignatureMetadata || {};
+                const addendums = Array.isArray(detailRecord.addendums) ? detailRecord.addendums : [];
+                const goToTab = (tabKey) => {
+                  setDetailRecord(null);
+                  setActiveTab(tabKey);
+                };
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '800', color: Colors.brandNavy }}>
+                          {detailRecord.patientName}
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+                          Mã BN: {detailRecord.patientId || '—'} • {detailRecord.gender || 'Chưa rõ giới tính'} • {detailRecord.age != null ? `${detailRecord.age} tuổi` : 'Chưa rõ tuổi'} • Phiên bản v{detailRecord.currentVersion || 1}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setDetailRecord(null)} style={{ padding: 6 }}>
+                        <X size={20} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <StatusBadge status={detailRecord.status} />
+                        <SignBadge signStatus={detailRecord.signStatus} />
+                        <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
+                            {detailRecord.admissionType || 'Ngoại trú'} • {detailRecord.department || 'Khoa Ung Thư Não'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, gap: 6 }}>
+                        <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Bác sĩ phụ trách: </Text>
+                          {detailRecord.doctorInCharge || 'Chưa phân công'}
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Dị ứng: </Text>
+                          {Array.isArray(detailRecord.allergies) && detailRecord.allergies.length > 0 ? detailRecord.allergies.join(', ') : 'Chưa ghi nhận'}
+                        </Text>
+                        {(detailRecord.tumorType || detailRecord.whoGrade) ? (
+                          <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                            <Text style={{ fontWeight: '700', color: '#0F172A' }}>Phân loại u / WHO CNS5: </Text>
+                            {[detailRecord.tumorType, detailRecord.whoGrade].filter(Boolean).join(' • ')}
+                          </Text>
+                        ) : null}
+                        {markerList.length > 0 ? (
+                          <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                            <Text style={{ fontWeight: '700', color: '#0F172A' }}>Dấu ấn phân tử: </Text>
+                            {markerList.join(' | ')}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 14, gap: 10 }}>
+                        <View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 4 }}>Chẩn đoán lâm sàng</Text>
+                          <Text style={{ fontSize: 14, color: '#0F172A', lineHeight: 20 }}>
+                            {detailRecord.diagnosis || 'Chưa ghi nhận chẩn đoán.'}
+                          </Text>
+                        </View>
+                        <View style={{ height: 1, backgroundColor: '#F1F5F9' }} />
+                        <View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 4 }}>Kế hoạch điều trị</Text>
+                          <Text style={{ fontSize: 14, color: '#0F172A', lineHeight: 20 }}>
+                            {detailRecord.treatmentPlan || 'Chưa có kế hoạch điều trị.'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {addendums.length > 0 && (
+                        <View style={{ borderWidth: 1, borderColor: '#FDE68A', backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, gap: 8 }}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E' }}>
+                            Phụ lục bệnh án đã bổ sung ({addendums.length})
+                          </Text>
+                          {addendums.map((ad, idx) => (
+                            <View key={ad._id || idx} style={{ borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#FDE68A', paddingTop: idx > 0 ? 8 : 0 }}>
+                              <Text style={{ fontSize: 13, color: '#1E293B', fontWeight: '600' }}>{ad.content}</Text>
+                              <Text style={{ fontSize: 11.5, color: '#78350F', marginTop: 2 }}>
+                                Lý do: {ad.reason || '—'} • BS: {ad.author || '—'}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {detailRecord.signStatus === 'Đã ký số' && sig.signedBy ? (
+                        <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 10, padding: 10 }}>
+                          <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700' }}>
+                            ✓ Đã ký khóa bởi {sig.signedBy}
+                            {sig.signedAt ? ` (${new Date(sig.signedAt).toLocaleString('vi-VN')})` : ''}
+                          </Text>
+                          {sig.signedHash ? (
+                            <Text style={{ fontSize: 11, color: '#15803D', marginTop: 2 }} numberOfLines={1}>
+                              SHA-256: {sig.signedHash}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      <View>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>
+                          Chuyển nhanh dữ liệu liên quan của hồ sơ này:
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('imaging')}
+                          >
+                            <Text style={{ color: '#3730A3', fontSize: 12.5, fontWeight: '700' }}>Phim MRI & CT</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('care')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Phiếu chăm sóc ({careSheets.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('consult')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Hội chẩn ({consultations.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('prescriptions')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Đơn thuốc ({prescriptions.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('versions')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Lịch sử ({versions.length})</Text>
+                          </TouchableOpacity>
+                          {detailRecord.userId && (
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                              onPress={() => {
+                                const targetUid = typeof detailRecord.userId === 'object' ? detailRecord.userId._id : detailRecord.userId;
+                                setDetailRecord(null);
+                                navigation.navigate('PatientDetail', { patientId: targetUid });
+                              }}
+                            >
+                              <Text style={{ color: '#065F46', fontSize: 12.5, fontWeight: '700' }}>Mở trang Bệnh nhân</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    </ScrollView>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                      {detailRecord.signStatus !== 'Đã ký số' && can(localUser?.role, 'emrSign') && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: Colors.brandGreen, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8 }}
+                          onPress={() => {
+                            const r = detailRecord;
+                            setDetailRecord(null);
+                            handleSignRecord(r);
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Ký số bệnh án</Text>
+                        </TouchableOpacity>
+                      )}
+                      {can(localUser?.role, 'emrAddendum') && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8 }}
+                          onPress={() => {
+                            const r = detailRecord;
+                            setDetailRecord(null);
+                            handleOpenAddendum(r);
+                          }}
+                        >
+                          <Text style={{ color: '#1D4ED8', fontSize: 13, fontWeight: '700' }}>Lập phụ lục</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8 }}
+                        onPress={() => setDetailRecord(null)}
+                      >
+                        <Text style={{ color: '#334155', fontSize: 13, fontWeight: '700' }}>Đóng</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                );
+              })()}
             </View>
           </View>
         </Modal>
@@ -1225,7 +1439,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Đối tượng</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Thu phí / BHYT..."
+                  placeholder={isFeatureEnabled('bhyt') ? 'Thu phí / BHYT...' : 'Viện phí / Dịch vụ...'}
                   placeholderTextColor={Colors.secondary}
                   value={examDiagnosis}
                   onChangeText={setExamDiagnosis}
@@ -1532,10 +1746,24 @@ const RecordCard = ({ record, onPress, onSign, onAddendum, canSign, canAddendum 
           <Text style={styles.footerText}>{record.department}, {record.admissionType}</Text>
         </View>
       </View>
+      {record.diagnosis ? (
+        <Text style={{ fontSize: 13, color: '#334155', marginTop: 6 }} numberOfLines={2}>
+          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Chẩn đoán: </Text>
+          {record.diagnosis}
+        </Text>
+      ) : null}
     </TouchableOpacity>
 
-    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 13/2025 */}
+    {/* Nút Xem chi tiết, Ký Số EMR & Lập Phụ Lục theo TT 13/2025 */}
     <View style={styles.cardActions}>
+      <TouchableOpacity
+        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+        onPress={onPress}
+        accessibilityRole="button"
+      >
+        <Eye size={13} color="#334155" />
+        <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>Xem chi tiết</Text>
+      </TouchableOpacity>
       {record.signStatus !== 'Đã ký số' ? (canSign &&
         <TouchableOpacity
           style={styles.signBtn}

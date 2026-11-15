@@ -12,7 +12,7 @@ import { AuditLog } from "../models/auditLog.model.js";
 import { MedicalRecord } from "../modules/emr/models/medicalRecord.model.js";
 import { EmergencyAlert } from "../models/emergencyAlert.model.js";
 import { ImagingResult } from "../modules/imaging/models/imagingResult.model.js";
-import { shouldEnforcePaymentGate, isInpatientVisitType } from "../services/visit.service.js";
+import { shouldEnforcePaymentGate, isInpatientVisitType, submitMriSafetyCheckService } from "../services/visit.service.js";
 import { updateStatus, approveVisitDebt } from "../controllers/visit.controller.js";
 import {
   refundInvoice,
@@ -40,7 +40,9 @@ import {
   getPatientResults,
 } from "../modules/imaging/imaging.controller.js";
 import { tenantStorage } from "../middlewares/tenant.middleware.js";
-import { handleEmergencyOverride } from "../modules/hospital/mriRoom.controller.js";
+import { MriRoom } from "../modules/hospital/models/mriRoom.model.js";
+import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
+import { createRoom, updateRoom, deleteRoom, handleEmergencyOverride, confirmReschedule } from "../modules/hospital/mriRoom.controller.js";
 import { verifyOtp, phoneLoginVerify, forgotPassword, requestStepUpOtp, verifyStepUpOtp } from "../modules/auth/auth.controller.js";
 import { createRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 import invoiceRoutes from "../modules/billing/invoice.routes.js";
@@ -876,5 +878,126 @@ describe("v3.4 Quy tắc nghiệp vụ sau rà soát", () => {
     expect(results.filter((r) => r === 429).length).toBe(2);
     if (savedFlag === undefined) delete process.env.ENABLE_RATE_LIMIT;
     else process.env.ENABLE_RATE_LIMIT = savedFlag;
+  });
+
+  test("MRI-ROOM-RBAC: KTV được cập nhật trạng thái/thông số phòng MRI nhưng không được tạo/xóa hoặc đổi tên phòng", async () => {
+    expect(routeAllows(mriRoomRoutes, "put", "/:id", "technician")).toBe(true);
+    expect(routeAllows(mriRoomRoutes, "post", "/", "technician")).toBe(false);
+    expect(routeAllows(mriRoomRoutes, "delete", "/:id", "technician")).toBe(false);
+    expect(routeAllows(mriRoomRoutes, "post", "/", "system_admin")).toBe(true);
+    expect(routeAllows(mriRoomRoutes, "put", "/:id", "system_admin")).toBe(true);
+
+    const tech = await makeActor(`tech_room_${oid()}`, "technician");
+    const sysAdmin = await makeActor(`sys_room_${oid()}`, "system_admin");
+    const doctor = await makeActor(`doc_room_${oid()}`, "doctor");
+
+    const techCreate = await call(createRoom, { user: tech, body: { name: "Phòng lậu" } });
+    expect(techCreate.statusCode).toBe(403);
+
+    const created = await call(createRoom, {
+      user: sysAdmin,
+      body: { name: "Phòng MRI Test", modelMachine: "Siemens 3T", location: "Tầng 1", maxSlotsPerDay: 12, slotDurationMinutes: 30 },
+    });
+    expect(created.statusCode).toBe(201);
+    const roomId = String(created.data._id);
+
+    const badDoc = await call(updateRoom, { user: doctor, params: { id: roomId }, body: { status: "maintenance" } });
+    expect(badDoc.statusCode).toBe(403);
+
+    const badStatus = await call(updateRoom, { user: tech, params: { id: roomId }, body: { status: "broken" } });
+    expect(badStatus.statusCode).toBe(400);
+
+    const badNum = await call(updateRoom, { user: tech, params: { id: roomId }, body: { maxSlotsPerDay: 0 } });
+    expect(badNum.statusCode).toBe(400);
+
+    const techUpdate = await call(updateRoom, {
+      user: tech,
+      params: { id: roomId },
+      body: { name: "Tên bị đổi trái phép", status: "maintenance", maxSlotsPerDay: 8, slotDurationMinutes: 45, location: "Tầng 2" },
+    });
+    expect(techUpdate.statusCode).toBe(200);
+    const inDb = await MriRoom.findById(roomId);
+    expect(inDb.name).toBe("Phòng MRI Test");
+    expect(inDb.status).toBe("maintenance");
+    expect(inDb.maxSlotsPerDay).toBe(8);
+    expect(inDb.slotDurationMinutes).toBe(45);
+    expect(inDb.location).toBe("Tầng 2");
+
+    const techDelete = await call(deleteRoom, { user: tech, params: { id: roomId } });
+    expect(techDelete.statusCode).toBe(403);
+    expect((await MriRoom.findById(roomId)).status).toBe("maintenance");
+
+    const adminDelete = await call(deleteRoom, { user: sysAdmin, params: { id: roomId } });
+    expect(adminDelete.statusCode).toBe(200);
+    expect((await MriRoom.findById(roomId)).status).toBe("inactive");
+  });
+
+  test("MRI-ROOM-MAINT-GUARD: Bảo trì tự dời ca hoặc chặn hết phòng, chặn cấp cứu & đang chụp vào phòng ngừng dùng", async () => {
+    const tech = await makeActor(`tech_guard_${oid()}`, "technician");
+    const roomA = await MriRoom.create({ hospitalId, name: "MRI A", status: "active", maxSlotsPerDay: 10, slotDurationMinutes: 30, operatingHours: { start: "07:00", end: "22:00" } });
+    const roomB = await MriRoom.create({ hospitalId, name: "MRI B", status: "active", maxSlotsPerDay: 10, slotDurationMinutes: 30, operatingHours: { start: "07:00", end: "22:00" } });
+    const createdSlots = [];
+    try {
+      const { visit: v1 } = await makeVisit({
+        invoice: { status: "đã thanh toán" },
+        visit: { status: "chờ chụp", mriOrder: { orderedAt: new Date(), region: "Não" }, mriSafetyChecklist: { isScreened: true, passed: true } },
+      });
+      const futureStart = new Date(Date.now() + 2 * 3600000);
+      const slot1 = await MriSlot.create({
+        hospitalId,
+        roomId: roomA._id,
+        visitId: v1._id,
+        patientId: v1.patientId,
+        startTime: futureStart,
+        endTime: new Date(futureStart.getTime() + 1800000),
+        status: "booked",
+        priority: 5,
+      });
+      createdSlots.push(slot1._id);
+
+      // 1. Chuyển Room A sang bảo trì khi Room B còn trống -> tự dời slot1 sang Room B
+      const maintA = await call(updateRoom, { user: tech, params: { id: String(roomA._id) }, body: { status: "maintenance", notes: "Bảo trì cuộn RF" } });
+      expect(maintA.statusCode).toBe(200);
+      expect(maintA.data.rescheduledCount).toBe(1);
+      const movedSlot = await MriSlot.findById(slot1._id);
+      expect(String(movedSlot.roomId)).toBe(String(roomB._id));
+      expect((await MriRoom.findById(roomA._id)).status).toBe("maintenance");
+
+      // 2. Không còn phòng active nào khác -> chuyển Room B sang bảo trì khi còn slot1 bị chặn 409
+      const blockedB = await call(updateRoom, { user: tech, params: { id: String(roomB._id) }, body: { status: "maintenance" } });
+      expect(blockedB.statusCode).toBe(409);
+      expect((await MriRoom.findById(roomB._id)).status).toBe("active");
+
+      // 3. Nếu slot gắn với phòng bảo trì (hoặc toàn viện hết phòng active) thì không thể đưa vào 'đang chụp'
+      await MriSlot.updateOne({ _id: slot1._id }, { $set: { roomId: roomA._id } });
+      const enterMaint = await call(updateStatus, { user: tech, params: { id: String(v1._id) }, body: { status: "đang chụp" } });
+      expect(enterMaint.statusCode).toBe(409);
+      expect((await Visit.findById(v1._id)).status).toBe("chờ chụp");
+
+      // 4. Khi tất cả phòng đều maintenance, emergency override & safety-check auto-enter đều bị chặn
+      await MriRoom.updateOne({ _id: roomB._id }, { $set: { status: "maintenance" } });
+      const { visit: vEmerg } = await makeVisit({ visit: { priority: "khẩn cấp", status: "chờ chụp", mriOrder: { orderedAt: new Date(), region: "Sọ não" } } });
+      const emRes = await call(handleEmergencyOverride, { user: actors.receptionistA || tech, body: { visitId: String(vEmerg._id) } });
+      expect(emRes.statusCode).toBe(400);
+
+      const confMaint = await call(confirmReschedule, { user: actors.receptionistA || tech, body: { slotId: String(slot1._id), emergencyVisitId: String(vEmerg._id) } });
+      expect(confMaint.statusCode).toBe(409);
+
+      const { visit: vCheck } = await makeVisit({
+        invoice: { status: "đã thanh toán" },
+        visit: { status: "chờ chụp", mriOrder: { orderedAt: new Date(), region: "Não" } },
+      });
+      const safetyBlocked = await submitMriSafetyCheckService({
+        visitId: String(vCheck._id),
+        hospitalId,
+        user: tech,
+        checklistData: { hasPacemakerOrMetal: false, hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, passed: true },
+      });
+      expect(safetyBlocked.roomBlocked).toBe(true);
+      expect((await Visit.findById(vCheck._id)).status).toBe("chờ chụp");
+    } finally {
+      await MriSlot.deleteMany({ _id: { $in: createdSlots } });
+      await MriRoom.deleteMany({ _id: { $in: [roomA._id, roomB._id] } });
+    }
   });
 });

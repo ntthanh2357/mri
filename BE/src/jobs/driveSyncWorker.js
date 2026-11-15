@@ -1,8 +1,15 @@
 import path from "path";
 import StoredMedicalFile from "../models/storedMedicalFile.model.js";
-import { readLocalBuffer, existsOnLocal } from "../services/storage/localAdapter.js";
+import { readLocalBuffer, existsOnLocal, getLocalRoot } from "../services/storage/localAdapter.js";
 import { uploadEncryptedFile } from "../services/storage/driveMirrorAdapter.js";
 import { encryptBuffer } from "../utils/cryptoStorage.util.js";
+
+// localPath lưu tuyệt đối lúc ghi (vd. C:\... trên Windows): chạy trong Docker Linux phải tìm lại theo logicalPath dưới thư mục kho
+const resolveLocal = (file) => {
+  if (file.localPath && existsOnLocal(file.localPath)) return file.localPath;
+  const byLogical = file.logicalPath ? path.join(getLocalRoot(), file.logicalPath) : null;
+  return byLogical && existsOnLocal(byLogical) ? byLogical : null;
+};
 
 let isSyncRunning = false;
 
@@ -41,17 +48,23 @@ export const runSyncBatch = async () => {
 
     for (const file of pendingFiles) {
       try {
-        if (!existsOnLocal(file.localPath)) {
+        const localPath = resolveLocal(file);
+        if (!localPath) {
           file.syncStatus = "FAILED";
           file.syncError = "Không tìm thấy tệp tin trên ổ cứng cục bộ để đồng bộ.";
           file.lastSyncAttemptAt = new Date();
+          // Tính vào số lần thử: trước đây không tăng nên tệp mất bị thử lại mãi, 3 phút một lần
+          file.syncRetries += 1;
           await file.save();
           failedCount++;
           continue;
         }
 
-        const buffer = await readLocalBuffer(file.localPath);
-        const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(buffer);
+        const buffer = await readLocalBuffer(localPath);
+        // Bản chính đã mã hóa: đẩy nguyên bản mã (giữ IV/tag). Dữ liệu cũ bản rõ: mã hóa cho bản sao Drive.
+        const { encryptedBuffer, ivHex, authTagHex } = file.localEncrypted
+          ? { encryptedBuffer: buffer, ivHex: file.encryptionIv, authTagHex: file.encryptionAuthTag }
+          : encryptBuffer(buffer);
 
         const relativeDir = path.dirname(file.logicalPath);
         const driveFileName = `${file.fileName}.enc`;
@@ -68,7 +81,6 @@ export const runSyncBatch = async () => {
         file.syncStatus = "SYNCED";
         file.encryptionIv = ivHex;
         file.encryptionAuthTag = authTagHex;
-        file.isEncrypted = true;
         file.syncError = null;
         file.lastSyncAttemptAt = new Date();
         await file.save();

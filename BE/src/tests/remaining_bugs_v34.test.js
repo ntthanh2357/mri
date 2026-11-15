@@ -221,6 +221,9 @@ describe("Lỗi còn tồn v3.4: hồi quy sau sửa", () => {
     const token = jwt.sign({ id: String(oid()), role: "technician" }, getJwtSecret(), { algorithm: "HS256" });
     requireJwtBeforeLargeBody({ method: "POST", headers: { authorization: `Bearer ${token}` } }, makeRes(), () => { passed = true; });
     expect(passed).toBe(true);
+    let getPassed = false;
+    requireJwtBeforeLargeBody({ method: "GET", headers: {} }, makeRes(), () => { getPassed = true; });
+    expect(getPassed).toBe(true);
   });
 
   test("QA-11: lỗi sai định dạng trả 400, lỗi 5xx không lộ chi tiết nội bộ", () => {

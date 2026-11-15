@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Colors from '../../constants/colors';
-import { FolderArchive } from 'lucide-react';
+import { FolderArchive, Brain } from 'lucide-react';
 
 const ImagingTab = ({
   imagingResults = [],
@@ -34,16 +34,73 @@ const ImagingTab = ({
               onPress={() => navigation.navigate('ImagingResult', { resultId: item._id })}
             >
               <View style={styles.cardHeader}>
-                <View style={[
-                  styles.badge,
-                  { backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF' }
-                ]}>
-                  <Text style={[
-                    styles.badgeText,
-                    { color: item.imagingType === 'MRI' ? Colors.info : '#C026D3' }
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <View style={[
+                    styles.badge,
+                    { backgroundColor: item.imagingType === 'MRI' ? '#EFF6FF' : '#FDF4FF' }
                   ]}>
-                    {item.imagingType}
-                  </Text>
+                    <Text style={[
+                      styles.badgeText,
+                      { color: item.imagingType === 'MRI' ? Colors.info : '#C026D3' }
+                    ]}>
+                      {item.imagingType}
+                    </Text>
+                  </View>
+
+                  {item.aiReport?.class_name ? (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: item.aiReport.class_name === 'notumor' ? '#ECFDF5' : '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: item.aiReport.class_name === 'notumor' ? '#A7F3D0' : '#FECACA',
+                    }}>
+                      <Brain size={12} color={item.aiReport.class_name === 'notumor' ? '#059669' : '#DC2626'} />
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: '700',
+                        color: item.aiReport.class_name === 'notumor' ? '#065F46' : '#991B1B'
+                      }}>
+                        AI: {item.aiReport.class_name.toUpperCase()} {item.aiReport.confidence ? `(${item.aiReport.confidence}%)` : ''}
+                      </Text>
+                    </View>
+                  ) : item.aiStatus === 'pending' ? (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: '#EFF6FF',
+                      borderWidth: 1,
+                      borderColor: '#BFDBFE',
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#1D4ED8' }}>
+                        AI đang xử lý...
+                      </Text>
+                    </View>
+                  ) : item.aiStatus === 'failed' ? (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: '#FECACA',
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#DC2626' }}>
+                        Lỗi AI
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={styles.dateText}>{dateStr}</Text>
               </View>

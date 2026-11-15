@@ -38,6 +38,8 @@ const notificationSchema = new Schema(
         // QA-30: các loại đang được gọi nhưng thiếu trong enum (thông báo bị mất im lặng)
         "critical_lab_value", "prescription_rejected", "deadline_warning", "mri_scheduled",
         "slot_rescheduled", "emergency_slot_override", "dicom_uploaded",
+        // Phân tích AI thất bại: báo bác sĩ đọc phim trực tiếp / chạy lại AI (trước đây im lặng)
+        "ai_failed",
         "other",
       ],
       default: "other",

@@ -214,12 +214,16 @@ async function runAllTests() {
     './v34_security_hardening.test.js',
     './mri_safety_v34.test.js',
     './remaining_bugs_v34.test.js',
+    './ai_storage_remediation.test.js',
+    './triage_and_multislice_ai.test.js',
     './e2e_critical_flows.test.js',
   ];
 
   const startTime = Date.now();
 
-  for (const file of testFiles) {
+  const targetFiles = process.env.ONLY ? testFiles.filter((f) => f.includes(process.env.ONLY)) : testFiles;
+
+  for (const file of targetFiles) {
     // Reset per-file suites collection
     suites.length = 0;
     

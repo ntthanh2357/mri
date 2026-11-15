@@ -1,17 +1,29 @@
 import { AiJob } from "./models/aiJob.model.js";
-import { aiFetch } from "../../utils/aiClient.util.js";
-import { DicomStudy } from "./models/dicomStudy.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { EmergencyAlert } from "../../models/emergencyAlert.model.js";
 import { Hospital } from "../../models/hospital.model.js";
-import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { aiQueueManager } from "../../jobs/aiQueue.manager.js";
-import { loadImageBuffer } from "../../utils/imageSource.util.js";
+import { tenantStorage } from "../../middlewares/tenant.middleware.js";
+import { executeAiPredictionInternal, AI_DOCTOR_READ_FROM_STATUSES } from "./imaging.controller.js";
+import { buildAiReport, applyAiResultToImaging, markAiAnalysisFailed } from "./aiResult.util.js";
+import { applyMultiSliceAiResultToImaging } from "./multiSliceAi.util.js";
+import { analyzeMultipleSlicesInternal } from "./multiSliceRunner.service.js";
 
-const rawAiUrl = process.env.AI_SERVER_URL || "http://localhost:8000";
-const AI_SERVER_URL = rawAiUrl.replace(/\/predict\/?$/, '').replace(/\/+$/, '');
+const isObjectId = (v) => /^[a-f\d]{24}$/i.test(String(v || ""));
+
+/**
+ * Đưa AI job vào hàng đợi xử lý (giới hạn luồng đồng thời, ưu tiên ca cấp cứu).
+ * Dùng chung cho kích hoạt thủ công và upload DICOM (trước đây upload DICOM tạo job nhưng không bao giờ xếp hàng).
+ */
+export const enqueueAiPipelineJob = (aiJob) =>
+  aiQueueManager.enqueue({
+    jobId: aiJob._id.toString(),
+    hospitalId: aiJob.hospitalId,
+    priority: aiJob.priority || 5,
+    executeFn: processAiJobAsync,
+  });
 
 // ─── C.8 — Kích hoạt AI Job (thường qua DICOM upload, hoặc thủ công) ─────────
 // @route POST /api/v1/ai-pipeline/trigger
@@ -26,9 +38,21 @@ export const triggerAiJob = async (req, res) => {
     const { visitId, studyId, imagingResultId, priority } = req.body;
 
     if (!visitId) return errorResponse(res, "Thiếu visitId.", 400);
+    if (!isObjectId(visitId) || (imagingResultId && !isObjectId(imagingResultId))) {
+      return errorResponse(res, "Mã lượt khám hoặc mã kết quả chụp không hợp lệ.", 400);
+    }
 
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
+
+    // Kết quả chụp phải thuộc ĐÚNG lượt khám và viện này (trước đây nhận mã tùy ý: AI có thể ghi vào hồ sơ khác)
+    const targetImagingId = imagingResultId || visit.mriOrder?.imagingResultId || null;
+    const imaging = targetImagingId
+      ? await ImagingResult.findOne({ _id: targetImagingId, hospitalId, visitId: visit._id }).select("images isSigned").lean()
+      : null;
+    if (!imaging) return errorResponse(res, "Lượt khám chưa có kết quả chụp để phân tích AI.", 404);
+    if (!imaging.images?.length) return errorResponse(res, "Kết quả chụp chưa có ảnh lát cắt để phân tích AI.", 400);
+    if (imaging.isSigned) return errorResponse(res, "Báo cáo đã ký: không chạy lại AI ghi vào báo cáo.", 409);
 
     // Kiểm tra đã có job đang chạy chưa
     const existingJob = await AiJob.findOne({
@@ -39,12 +63,12 @@ export const triggerAiJob = async (req, res) => {
       return errorResponse(res, `AI job đang trong hàng đợi (${existingJob.status}). Không thể tạo job mới.`, 409);
     }
 
-    const jobPriority = priority || (visit.priority === 'khẩn cấp' ? 1 : 5);
+    const jobPriority = Number(priority) >= 1 && Number(priority) <= 5 ? Number(priority) : (visit.priority === 'khẩn cấp' ? 1 : 5);
 
     const aiJob = new AiJob({
       hospitalId,
       visitId,
-      imagingResultId: imagingResultId || visit.mriOrder?.imagingResultId || null,
+      imagingResultId: imaging._id,
       studyId: studyId || null,
       triggeredBy: req.user.id,
       priority: jobPriority,
@@ -52,18 +76,13 @@ export const triggerAiJob = async (req, res) => {
       currentStep: "Đang chờ trong hàng đợi AI",
     });
     await aiJob.save();
+    await ImagingResult.updateOne({ _id: imaging._id, hospitalId, isSigned: { $ne: true } }, { $set: { aiJobId: aiJob._id, aiStatus: "pending", aiError: "" } });
 
     // Cập nhật trạng thái Visit
     visit.status = 'chờ kết quả AI';
     await visit.save();
 
-    // Đưa job vào hàng đợi AI Queue Manager (giới hạn 2 luồng đồng thời và ưu tiên ca cấp cứu)
-    aiQueueManager.enqueue({
-      jobId: aiJob._id.toString(),
-      hospitalId,
-      priority: jobPriority,
-      executeFn: processAiJobAsync
-    });
+    enqueueAiPipelineJob(aiJob);
 
     return successResponse(res, { aiJob, queue: aiQueueManager.getStats() }, "AI job đã được tạo và đang chờ xử lý trong hàng đợi.", 201);
   } catch (err) {
@@ -160,10 +179,7 @@ export const retryAiJob = async (req, res) => {
     job.lastErrorAt = new Date();
     await job.save();
 
-    // Kích hoạt lại
-    processAiJobAsync(job._id.toString(), req.user.hospitalId).catch(err => {
-      console.error(`[AiJob Retry ${job._id}] Error:`, err.message);
-    });
+    enqueueAiPipelineJob(job);
 
     return successResponse(res, { job }, `Đã tạo lại AI job (lần retry ${job.retryCount}).`);
   } catch (err) {
@@ -203,10 +219,24 @@ export const getAiQueueStats = (req, res) => {
 
 // ─── Internal — Xử lý AI Job thực tế (bridge tới Python FastAPI service) ─────
 /**
- * Hàm chạy nền kết nối trực tiếp với Python AI Service (YOLOv8 + Ensemble Deep Learning).
- * Nhận diện lát cắt MRI, gửi dự đoán và cập nhật kết quả lâm sàng vào EMR.
+ * Hàng đợi không giữ ngữ cảnh request (job có thể chạy trong ngữ cảnh của request/job khác): luôn chạy job trong
+ * đúng ngữ cảnh viện của chính job, để mọi truy vấn có bộ lọc tenancy đúng viện.
  */
-async function processAiJobAsync(jobId, hospitalId) {
+async function processAiJobAsync(jobId) {
+  const meta = await AiJob.findById(jobId).setOptions({ bypassTenancy: true }).select("hospitalId triggeredBy").lean();
+  if (!meta?.hospitalId) return;
+  return tenantStorage.run(
+    { hospitalId: String(meta.hospitalId), isSuperAdmin: false, role: "technician", userId: String(meta.triggeredBy || "") },
+    () => runAiJob(jobId)
+  );
+}
+
+/**
+ * Nạp ảnh của hồ sơ CĐHA → AI service (Ensemble + YOLOv8) → ghi kết quả vào hồ sơ (chỉ khi chưa ký).
+ * AI lỗi / không có ảnh → job FAILED (có tự thử lại), lượt khám "lỗi AI", báo bác sĩ ở lần thất bại cuối.
+ * Trước đây mọi lỗi đều bị nuốt và job vẫn "completed" với kết quả mặc định "notumor" 0%.
+ */
+async function runAiJob(jobId) {
   let job;
   try {
     job = await AiJob.findById(jobId);
@@ -218,189 +248,145 @@ async function processAiJobAsync(jobId, hospitalId) {
     job.progress = 10;
     await job.save();
 
-    // 1. Tìm thông tin ca khám và kết quả hình ảnh
+    // 1. Tìm kết quả hình ảnh của đúng viện
     const imagingResult = job.imagingResultId
-      ? await ImagingResult.findById(job.imagingResultId)
+      ? await ImagingResult.findOne({ _id: job.imagingResultId, hospitalId: job.hospitalId })
       : null;
-    const visit = job.visitId
-      ? await Visit.findById(job.visitId)
-      : null;
+    if (!imagingResult) throw new Error("Không tìm thấy kết quả chụp của lượt khám.");
 
     job.currentStep = "Nạp và kiểm tra dữ liệu hình ảnh MRI";
     job.progress = 25;
     await job.save();
 
-    // 2. Trích xuất file ảnh phục vụ phân tích
-    let fileBuffer = null;
-    let fileName = "mri_scan.jpg";
-    let mimeType = "image/jpeg";
+    const targetUrls = (Array.isArray(imagingResult.images) ? imagingResult.images : [])
+      .map((item) => (typeof item === "string" ? item : (item?.url || item?.filepath || null)))
+      .filter(Boolean);
+    if (targetUrls.length === 0) throw new Error("Chưa có ảnh lát cắt để phân tích AI.");
 
-    if (imagingResult?.images && imagingResult.images.length > 0) {
-      const imgObj = imagingResult.images[0];
-      const targetUrl = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.filepath);
-      if (targetUrl) {
-        // Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
-        try {
-          const loaded = await loadImageBuffer(targetUrl);
-          fileBuffer = loaded.buffer;
-          fileName = loaded.fileName;
-          mimeType = loaded.mimeType;
-        } catch (loadErr) {
-          console.warn(`[AiJob ${jobId}] Không thể tải ảnh (${targetUrl}):`, loadErr.message);
-        }
-      }
-    }
-
-    // 3. Kết nối thực tế tới AI FastAPI Microservice (Ensemble + YOLOv8)
-    job.currentStep = "Gửi ảnh sang AI Diagnostic Engine (YOLOv8 & Ensemble CNN)";
+    // 2. Gửi toàn bộ lát cắt đã chọn sang AI service (Option A: Full Consensus đa lát cắt)
+    job.currentStep = `Gửi ${targetUrls.length} lát cắt sang AI Engine (YOLOv8 & Ensemble CNN)`;
     job.progress = 50;
     await job.save();
 
-    let aiResult = null;
-    if (fileBuffer) {
-      try {
-        const formData = new FormData();
-        const blob = new Blob([fileBuffer], { type: mimeType });
-        formData.append("file", blob, fileName);
+    const actor = { id: String(job.triggeredBy || ""), hospitalId: String(job.hospitalId), role: "technician" };
+    const aiReport = await analyzeMultipleSlicesInternal({
+      imageUrls: targetUrls,
+      user: actor,
+      visitId: null,
+      source: "pipeline",
+      executeSingleFn: executeAiPredictionInternal,
+    });
+    if (!aiReport) throw new Error("Không phân tích được lát cắt nào trong bộ ảnh.");
 
-        const predictUrl = `${AI_SERVER_URL}/predict`;
-        console.log(`[AiJob ${jobId}] Gửi ảnh tới AI Engine: ${predictUrl}`);
-
-        const aiResponse = await aiFetch(predictUrl, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (aiResponse.ok) {
-          aiResult = await aiResponse.json();
-          console.log(`[AiJob ${jobId}] Nhận kết quả AI thành công:`, aiResult?.class_name || aiResult);
-        } else {
-          const errBody = await aiResponse.text();
-          console.warn(`[AiJob ${jobId}] AI server trả mã ${aiResponse.status}: ${errBody}`);
-        }
-      } catch (netErr) {
-        console.warn(`[AiJob ${jobId}] Không thể kết nối tới AI Engine tại ${AI_SERVER_URL}: ${netErr.message}`);
-        job.errorLog.push({
-          step: "AI_CONNECT",
-          message: `AI Engine chưa phản hồi: ${netErr.message}. Sử dụng kết quả phân tích tiêu chuẩn.`,
-          timestamp: new Date()
-        });
-      }
-    }
-
-    job.currentStep = "Trích xuất Bounding Box khối u & Báo cáo chẩn đoán";
+    job.currentStep = "Lưu kết quả AI vào hồ sơ";
     job.progress = 80;
     await job.save();
 
-    // 4. Lưu kết quả suy luận vào ImagingResult & Job stepResults
-    if (aiResult && imagingResult) {
-      imagingResult.aiReport = {
-        predictedClass: aiResult.class_name || "notumor",
-        // [FIX] FastAPI /predict trả confidence dạng % (VD 94.37) — không nhân thêm 100
-        confidence: aiResult.confidence !== undefined ? aiResult.confidence : 0, // giữ nguyên giá trị % từ AI service
-        // [FIX] Service thật trả về `all_probabilities`; một số client dùng `probabilities`
-        probabilities: aiResult.probabilities || aiResult.all_probabilities || {},
-        annotatedImage: aiResult.annotated_image || null,
-        analyzedAt: new Date()
-      };
-      if (aiResult.class_name && aiResult.class_name !== "notumor") {
-        imagingResult.findings = (imagingResult.findings ? imagingResult.findings + "\n\n" : "") +
-          `[AI Gợi ý]: Phát hiện tổn thương nghi ngờ (${aiResult.class_name}) với độ tin cậy ${Number(aiResult.confidence || 0).toFixed(1)}%.`;
-      }
-      await imagingResult.save();
-    }
+    // 3. Ghi kết quả (chỉ khi hồ sơ chưa ký)
+    const applied = await applyMultiSliceAiResultToImaging({
+      imagingResultId: imagingResult._id,
+      hospitalId: job.hospitalId,
+      multiReport: aiReport,
+    });
 
     job.stepResults = {
       ...job.stepResults,
       combined: {
-        predictedClass: aiResult?.class_name || "notumor",
-        confidence: aiResult?.confidence || 0,
+        predictedClass: aiReport.class_name,
+        confidence: aiReport.confidence,
+        boundingBox: aiReport.bounding_box,
+        appliedToReport: applied.applied,
         analyzedAt: new Date(),
-        serverUrl: AI_SERVER_URL
-      }
+      },
     };
 
     // Kiểm tra ngưỡng cấp cứu (E.1)
-    await checkEmergencyThresholds(job, hospitalId);
+    await checkEmergencyThresholds(job, job.hospitalId);
 
     job.status = 'completed';
     job.progress = 100;
     job.completedAt = new Date();
-    job.currentStep = 'Hoàn tất phân tích AI';
+    job.currentStep = applied.applied ? 'Hoàn tất phân tích AI' : 'Hoàn tất (báo cáo đã ký — không ghi kết quả AI vào báo cáo)';
     await job.save();
 
-    // Cập nhật Visit → chờ bác sĩ đọc
+    // Lượt khám đang chờ AI (hoặc đã từng lỗi AI) → chờ bác sĩ đọc
     if (job.visitId) {
-      await Visit.findByIdAndUpdate(job.visitId, { status: 'chờ bác sĩ đọc' });
+      await Visit.updateOne(
+        { _id: job.visitId, hospitalId: job.hospitalId, status: { $in: AI_DOCTOR_READ_FROM_STATUSES } },
+        { $set: { status: 'chờ bác sĩ đọc' } }
+      );
     }
-
   } catch (err) {
-    if (job) {
-      job.status = 'failed';
-      job.errorLog.push({ step: 'system', message: err.message, timestamp: new Date() });
-      job.lastErrorAt = new Date();
-      await job.save();
+    if (!job) return;
+    job.status = 'failed';
+    job.errorLog.push({ step: 'AI', message: err.message, timestamp: new Date() });
+    job.lastErrorAt = new Date();
+    job.currentStep = 'Phân tích AI thất bại';
+    await job.save().catch(() => {});
 
-      // Cập nhật Visit → lỗi AI
-      if (job.visitId) {
-        await Visit.findByIdAndUpdate(job.visitId, { status: 'lỗi AI' });
-      }
+    const willRetry = job.retryCount < job.maxRetries;
+    const visit = job.visitId ? await Visit.findOne({ _id: job.visitId, hospitalId: job.hospitalId }).select("doctorId").lean() : null;
+    await markAiAnalysisFailed({
+      imagingResultId: job.imagingResultId,
+      hospitalId: job.hospitalId,
+      visitId: job.visitId,
+      // Chỉ báo bác sĩ ở lần thất bại cuối (các lần tự thử lại không gửi thông báo trùng)
+      doctorId: willRetry ? null : visit?.doctorId,
+      reason: err.message,
+    }).catch(() => {});
 
-      // C.9 — Auto retry nếu chưa đạt max
-      if (job.retryCount < job.maxRetries) {
-        const delay = Math.pow(2, job.retryCount) * 15000;
-        console.log(`[AiJob ${jobId}] Tự retry sau ${delay/1000}s (lần ${job.retryCount + 1}/${job.maxRetries})...`);
-        setTimeout(async () => {
-          try {
-            job.retryCount += 1;
-            job.status = 'queued';
-            job.progress = 0;
-            await job.save();
-            await processAiJobAsync(jobId, hospitalId);
-          } catch (retryErr) {
-            console.error(`[AiJob ${jobId}] Retry thất bại:`, retryErr.message);
-          }
-        }, delay);
-      } else {
-        console.error(`[AiJob ${jobId}] Đã hết ${job.maxRetries} lần retry. Job thất bại.`);
-      }
+    // C.9 — Auto retry nếu chưa đạt max
+    if (willRetry) {
+      const delay = Math.pow(2, job.retryCount) * 15000;
+      console.log(`[AiJob ${jobId}] Tự retry sau ${delay / 1000}s (lần ${job.retryCount + 1}/${job.maxRetries})...`);
+      setTimeout(async () => {
+        try {
+          const fresh = await AiJob.findOne({ _id: jobId, hospitalId: job.hospitalId, status: 'failed' });
+          if (!fresh) return;
+          fresh.retryCount += 1;
+          fresh.status = 'queued';
+          fresh.progress = 0;
+          await fresh.save();
+          enqueueAiPipelineJob(fresh);
+        } catch (retryErr) {
+          console.error(`[AiJob ${jobId}] Retry thất bại:`, retryErr.message);
+        }
+      }, delay).unref?.();
+    } else {
+      console.error(`[AiJob ${jobId}] Đã hết ${job.maxRetries} lần retry. Job thất bại.`);
     }
   }
 }
 
 // ─── E.1 — Kiểm tra ngưỡng cấp cứu từ kết quả AI ─────────────────────────────
+// Chỉ kích hoạt khi AI THẬT SỰ trả số đo (lệch đường giữa, thể tích u). Mô hình hiện tại chưa đo các chỉ số này
+// nên hàm không tạo cảnh báo nào — không suy diễn số đo.
 async function checkEmergencyThresholds(job, hospitalId) {
   try {
+    const report = job.stepResults?.combined;
+    const midlineShift = Number(report?.midlineShiftMm);
+    const tumorVolume = Number(report?.tumorVolumeCm3);
+    if (!Number.isFinite(midlineShift) && !Number.isFinite(tumorVolume)) return;
+
     const hospital = await Hospital.findById(hospitalId).lean();
     const thresholds = hospital?.aiThresholds || {};
     const midlineThreshold = thresholds.midlineShiftMm || 5;
     const volumeThreshold = thresholds.tumorVolumeCm3 || 50;
 
-    const report = job.stepResults?.combined;
-    if (!report) return;
-
-    const midlineShift = report.midlineShiftMm || 0;
-    const tumorVolume = report.tumorVolumeCm3 || 0;
-
-    if (midlineShift > midlineThreshold || tumorVolume > volumeThreshold) {
-      // Tạo EmergencyAlert
+    if ((Number.isFinite(midlineShift) && midlineShift > midlineThreshold) || (Number.isFinite(tumorVolume) && tumorVolume > volumeThreshold)) {
       const alert = new EmergencyAlert({
         hospitalId,
         visitId: job.visitId,
         imagingResultId: job.imagingResultId,
         level: 'RED',
         triggeredBy: 'ai',
-        midlineShiftMm: midlineShift,
-        tumorVolumeCm3: tumorVolume,
+        midlineShiftMm: Number.isFinite(midlineShift) ? midlineShift : null,
+        tumorVolumeCm3: Number.isFinite(tumorVolume) ? tumorVolume : null,
         triggerReason: `AI phát hiện: midline shift ${midlineShift}mm (ngưỡng ${midlineThreshold}mm), thể tích u ${tumorVolume}cm³ (ngưỡng ${volumeThreshold}cm³).`,
         status: 'active',
       });
       await alert.save();
-
-      // Cập nhật Visit priority
-      await Visit.findByIdAndUpdate(job.visitId, { priority: 'khẩn cấp' });
-
-      console.log(`🚨 [Emergency E.1] Phát hiện ca cấp cứu: visitId=${job.visitId}, midline=${midlineShift}mm, volume=${tumorVolume}cm³`);
+      await Visit.updateOne({ _id: job.visitId, hospitalId }, { $set: { priority: 'khẩn cấp' } });
     }
   } catch (err) {
     console.warn("[E.1] Lỗi kiểm tra ngưỡng cấp cứu:", err.message);

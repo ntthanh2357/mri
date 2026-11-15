@@ -25,6 +25,8 @@ import { evaluateVitalSigns } from "../services/vitalsSafety.service.js";
 import { evaluatePreScreening, sanitizePreScreening } from "../services/preScreening.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { putFile } from "../services/storage/storageService.js";
+import { getMriRoomBlockMessage } from "../services/mriRoomGuard.service.js";
+import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -261,7 +263,7 @@ export const getMyQueue = async (req, res) => {
       filter.$or = [
         { doctorId: id },
         { 
-          status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] },
+          status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "lỗi AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] },
           "mriOrder.orderedAt": { $exists: true }
         }
       ];
@@ -269,7 +271,7 @@ export const getMyQueue = async (req, res) => {
       // Bác sĩ CĐHA (Khoa CĐHA): đọc phim MRI & kết quả AI, và ca chờ chụp có bảng kiểm chưa đạt cần xác nhận an toàn
       // Dùng $and để nhánh ?today=true bên dưới (ghi đè filter.$or) không làm mất giới hạn này
       filter.$and = [{ $or: [
-        { status: { $in: ["đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "hoàn tất"] } },
+        { status: { $in: ["đang chụp", "chờ kết quả AI", "lỗi AI", "chờ bác sĩ đọc", "chờ hội chẩn", "hoàn tất"] } },
         { status: { $in: MRI_WAITING_STATUSES }, "mriSafetyChecklist.isScreened": true, "mriSafetyChecklist.passed": false },
       ] }];
       filter["mriOrder.orderedAt"] = { $exists: true };
@@ -277,7 +279,7 @@ export const getMyQueue = async (req, res) => {
       // Trưởng khoa Ung thư Não: giám sát toàn khoa + hội chẩn Tumor Board + ca nguy kịch
       filter.$or = [
         { doctorId: id },
-        { status: { $in: ["đang chờ", "đang khám", "chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] } }
+        { status: { $in: ["đang chờ", "đang khám", "chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "lỗi AI", "chờ bác sĩ đọc", "chờ hội chẩn", "chờ nhập viện", "tái khám định kỳ", "hoàn tất"] } }
       ];
     } else if (role === "nurse") {
       // Điều dưỡng kiêm Lễ tân: Thấy lượt khám đang chờ khám (vai trò ĐD) HOẶC tất cả trong ngày (vai trò Lễ tân)
@@ -295,7 +297,7 @@ export const getMyQueue = async (req, res) => {
           status: { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật"] }
         }
       ];
-      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "chờ bác sĩ đọc", "hoàn tất"] };
+      filter.status = { $in: ["chờ chụp", "chờ chụp lại", "chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "lỗi AI", "chờ bác sĩ đọc", "hoàn tất"] };
     }
 
     // Lễ tân hoặc Admin lấy hết theo hospitalId nhưng giới hạn trong ngày hôm nay để tránh quá tải
@@ -317,6 +319,7 @@ export const getMyQueue = async (req, res) => {
       .populate("nurseId", "profile.name")
       .populate("technicianId", "profile.name")
       .populate("invoiceId", "status totalAmount items paymentMethod paidAt")
+      .populate("mriOrder.imagingResultId", "aiReport aiStatus isSigned imagingType")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -328,6 +331,21 @@ export const getMyQueue = async (req, res) => {
         .lean();
       const byVisit = new Map(consents.map((c) => [String(c.visitId), c]));
       for (const v of visits) if (v.mriOrder?.withContrast) v.contrastConsent = byVisit.get(String(v._id)) || null;
+    }
+
+    const mriVisitIds = visits.filter((v) => v.mriOrder?.orderedAt).map((v) => v._id);
+    if (mriVisitIds.length) {
+      const mriSlots = await MriSlot.find({ visitId: { $in: mriVisitIds }, hospitalId, status: { $in: ["booked", "in_progress"] } })
+        .sort({ startTime: -1 })
+        .populate("roomId", "name status location")
+        .select("visitId roomId startTime endTime status priority")
+        .lean();
+      const slotByVisit = new Map();
+      for (const s of mriSlots) {
+        const key = String(s.visitId);
+        if (!slotByVisit.has(key)) slotByVisit.set(key, s);
+      }
+      for (const v of visits) if (v.mriOrder?.orderedAt) v.mriSlot = slotByVisit.get(String(v._id)) || null;
     }
 
     res.status(200).json({ visits });
@@ -876,6 +894,10 @@ export const updateStatus = async (req, res) => {
           });
         }
         await assertPaymentGateOpen(visit, req.user, req);
+        const roomBlockMessage = await getMriRoomBlockMessage(visit);
+        if (roomBlockMessage) {
+          return res.status(409).json({ code: "ERR_MRI_ROOM_UNAVAILABLE", message: roomBlockMessage });
+        }
       }
       oldStatus = visit.status;
       visit.status = status;
@@ -1084,6 +1106,8 @@ export const submitMriSafetyCheck = async (req, res) => {
       message = "Đã lưu bảng kiểm. Trường hợp thai kỳ hoặc suy thận có cản quang: bác sĩ cần ghi lý do xác nhận (tối thiểu 10 ký tự) trước khi vào buồng chụp.";
     } else if (result.requiresDoctorReview) {
       message = "Đã lưu bảng kiểm. Trường hợp này cần bác sĩ xác nhận trước khi vào buồng chụp (thai kỳ hoặc suy thận có cản quang).";
+    } else if (result.roomBlocked && result.roomBlockMessage) {
+      message = result.roomBlockMessage;
     }
 
     return res.status(200).json({
@@ -1092,6 +1116,8 @@ export const submitMriSafetyCheck = async (req, res) => {
       contrastConsentPending: result.contrastConsentPending,
       contrastBlocked: Boolean(result.contrastBlocked),
       requiresDoctorReview: Boolean(result.requiresDoctorReview),
+      roomBlocked: Boolean(result.roomBlocked),
+      roomBlockMessage: result.roomBlockMessage || null,
       paymentPending: Boolean(result.paymentPending),
       creatinineEgfr: result.creatinineEgfr ?? null,
       checklist: result.checklist,

@@ -2,8 +2,6 @@ import mongoose from "mongoose";
 import { normalizeIdentityUpdate } from "./patientIdentity.service.js";
 import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
-import { uploadToGCS } from "../config/gcs.js";
-import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 import storageService from "./storage/storageService.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
 
@@ -373,11 +371,6 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  // Lấy họ tên bệnh nhân để tạo tên thư mục
-  const { User } = await import("../models/user.model.js");
-  const user = await User.findById(userId).lean();
-  const patientName = user?.profile?.name || "Bệnh nhân";
-
   // 1. Lưu bản chính vào Local-First Hybrid Storage (Tự động tính SHA-256 & sync Drive ngầm)
   let savedStorage = null;
   let fileUrl = "";
@@ -393,19 +386,9 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
     });
     fileUrl = `/api/v1/storage/files/${savedStorage.fileId}`;
   } catch (storageErr) {
+    // Không còn đường dự phòng: trước đây đẩy BẢN RÕ lên thư mục Drive mang tên bệnh nhân, rồi GCS / thư mục /uploads.
     console.warn("⚠️ [Hybrid Storage] Lỗi lưu patient_upload:", storageErr.message);
-  }
-
-  // 2. Fallback legacy Google Drive / GCS nếu Local-First thất bại
-  if (!fileUrl) {
-    try {
-      const patientFolder = await getOrCreatePatientFolder(userId, patientName);
-      const driveResult = await uploadToDrive(fileBuffer, originalName, mimeType, patientFolder.id);
-      fileUrl = driveResult.downloadUrl;
-    } catch (driveErr) {
-      console.warn("⚠️ Google Drive upload failed, falling back to GCS:", driveErr.message);
-      fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
-    }
+    throw Object.assign(new Error("Không lưu được tài liệu vào kho lưu trữ. Vui lòng thử lại."), { status: 500 });
   }
 
   visit.documents.push({

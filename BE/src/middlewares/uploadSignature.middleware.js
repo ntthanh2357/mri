@@ -119,14 +119,17 @@ export const resolveClientImageUrl = (req, imageUrl) => {
   return internal[1];
 };
 
-// Tệp lưu trong kho: có link đã ký thì không cần token, không có thì đi qua đăng nhập như thường
-export const allowSignedStorageFile = (protect) => (req, res, next) => {
+// Tệp lưu trong kho hoặc preview tạm: có link đã ký thì không cần token, không có thì đi qua đăng nhập như thường
+export const allowSignedPath = (buildPath, protect) => (req, res, next) => {
   if (!req.query?.sig) return protect(req, res, next);
-  return checkSignature(`/api/v1/storage/files/${req.params.fileId}`, req, res, () => {
+  return checkSignature(buildPath(req), req, res, () => {
     req.signedFileAccess = true;
     next();
   });
 };
+
+export const allowSignedStorageFile = (protect) =>
+  allowSignedPath((req) => `/api/v1/storage/files/${req.params.fileId}`, protect);
 
 // Gắn tại mount "/uploads" nên req.path là phần sau /uploads
 export const requireSignedUpload = (req, res, next) => checkSignature(`/uploads${req.path}`, req, res, next);

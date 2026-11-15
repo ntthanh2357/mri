@@ -5,9 +5,12 @@ import {
   StyleSheet,
   useWindowDimensions,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Modal,
   Image,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { setAuthToken } from '../services/api.service';
 import Colors from '../constants/colors';
@@ -52,7 +55,41 @@ import {
   FileSearch,
   Shuffle,
   ClipboardCheck,
+  Monitor,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Edit3,
+  Save,
 } from 'lucide-react';
+
+const DEPARTMENT_LABELS = {
+  'KUTN-SURG': 'Phẫu thuật & Hồi tỉnh Mở Sọ (KUTN-SURG)',
+  'KUTN-ICU': 'Hồi sức Cấp cứu U Não (Neuro-ICU)',
+  'KUTN-CHEMO': 'Hóa trị & Xạ trị U Não (KUTN-CHEMO)',
+  'KUTN-PAL': 'Chăm sóc Giảm nhẹ & Phục hồi (KUTN-PAL)',
+  'KUTN-CLI': 'Phòng khám U Não & Tiếp đón (KUTN-CLI)',
+  KCDHA: 'Chẩn đoán Hình ảnh & Mini-PACS (KCDHA)',
+  KD: 'Khoa Dược & Pha chế Hóa chất (KD)',
+  KXN: 'Xét nghiệm & GPB Sinh học Phân tử (KXN)',
+  KUTN: 'Khoa Ung Thư Não (Trung tâm / Văn phòng Khoa)',
+  KNT: 'Khoa Ngoại Thần Kinh (KNT)',
+  ICU: 'Hồi Sức Cấp Cứu (ICU)',
+};
+
+const SPECIALTY_LABELS = {
+  neurosurgeon_radiologist: 'Khám Lâm Sàng & Đọc Phim CĐHA',
+  neurosurgeon: 'Phẫu thuật Thần kinh U Não',
+  neuro_oncologist: 'Ung thư Thần kinh Lâm sàng (Hóa xạ trị)',
+  neuroradiologist: 'Chẩn đoán Hình ảnh Thần kinh & MRI',
+  neuro_icu_nurse: 'Điều dưỡng Hồi sức Cấp cứu Neuro-ICU',
+  oncology_nurse: 'Điều dưỡng Hóa trị & Nội trú',
+  surgical_nurse: 'Điều dưỡng Hồi tỉnh Mở Sọ',
+  mri_technician: 'KTV Vận hành Máy MRI 3.0T Sọ Não',
+  radiation_technician: 'KTV Mô phỏng & Xạ trị Gia tốc',
+  general: 'Chuyên khoa chung',
+};
 
 // Màu khung theo role: bệnh nhân dùng màu logo 2026; nhân viên giữ teal cũ tới khi màn của họ được thiết kế lại.
 // Khung giao diện dùng chung 1 bộ màu thương hiệu cho mọi role (quyết định 2026-10-04 — bỏ teal của nhân viên).
@@ -75,6 +112,14 @@ const ResponsiveLayout = ({
   const [notifications, setNotifications] = React.useState([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [showNotifModal, setShowNotifModal] = React.useState(false);
+  const [showProfileModal, setShowProfileModal] = React.useState(false);
+  const [profileLoading, setProfileLoading] = React.useState(false);
+  const [isEditingProfile, setIsEditingProfile] = React.useState(false);
+  const [editName, setEditName] = React.useState('');
+  const [editPhone, setEditPhone] = React.useState('');
+  const [editAddress, setEditAddress] = React.useState('');
+  const [savingProfile, setSavingProfile] = React.useState(false);
+  const [profileFeedback, setProfileFeedback] = React.useState(null);
   const [showMobileMenu, setShowMobileMenu] = React.useState(false);
   const [activeEmergency, setActiveEmergency] = React.useState(null);
   const isPollingStoppedRef = React.useRef(false);
@@ -145,6 +190,71 @@ const ResponsiveLayout = ({
       fetchNotifications();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  /** Mở hộp thoại hồ sơ cá nhân và làm mới dữ liệu từ /auth/me */
+  const openProfileModal = async () => {
+    setShowMobileMenu(false);
+    setIsEditingProfile(false);
+    setProfileFeedback(null);
+    setShowProfileModal(true);
+    setProfileLoading(true);
+    try {
+      const { get } = require('../services/api.service');
+      const data = await get('/auth/me');
+      if (data?.user) {
+        setLocalUser(data.user);
+        try {
+          const { safeStorage } = require('../utils/safeStorage');
+          safeStorage.setItem('user', JSON.stringify(data.user));
+        } catch { /* bỏ qua lỗi storage */ }
+      }
+    } catch (err) {
+      console.error('Failed to refresh user profile:', err);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const startEditProfile = () => {
+    setProfileFeedback(null);
+    setEditName(localUser?.profile?.name || localUser?.profile?.fullName || '');
+    setEditPhone('');
+    setEditAddress(localUser?.profile?.address || '');
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      setProfileFeedback({ type: 'error', text: 'Vui lòng nhập họ và tên.' });
+      return;
+    }
+    setSavingProfile(true);
+    setProfileFeedback(null);
+    try {
+      const { put } = require('../services/api.service');
+      const res = await put('/auth/profile', {
+        name: editName.trim(),
+        phone: editPhone.trim() || undefined,
+        address: editAddress.trim() || undefined,
+      });
+      if (res && res.success) {
+        const updatedUser = { ...localUser, ...res.user };
+        setLocalUser(updatedUser);
+        try {
+          const { safeStorage } = require('../utils/safeStorage');
+          safeStorage.setItem('user', JSON.stringify(updatedUser));
+        } catch { /* bỏ qua lỗi storage */ }
+        setIsEditingProfile(false);
+        setProfileFeedback({ type: 'success', text: 'Đã cập nhật thông tin cá nhân.' });
+      } else {
+        setProfileFeedback({ type: 'error', text: res?.message || 'Cập nhật thất bại.' });
+      }
+    } catch (err) {
+      setProfileFeedback({ type: 'error', text: err.message || 'Không thể lưu thông tin cá nhân.' });
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -237,25 +347,23 @@ const ResponsiveLayout = ({
       case 'doctor':
       case 'department_head':
         return [
-          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
-          { label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
-          { label: 'Hàng chờ khám bệnh', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Hàng đợi chụp MRI', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
-          { label: 'Y lệnh miệng chờ xử lý', route: 'VerbalOrders', icon: ClipboardCheck },
-          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
-          { label: 'Bình duyệt phim lần 2', route: 'PeerReview', icon: FileSearch },
-          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
-          ...(role === 'department_head' ? [{ label: 'Báo cáo vận hành và lâm sàng', route: 'ClinicalReports', icon: Gauge }] : []),
-          { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
-          { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
-          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
-          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
-          { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
-          { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
-          { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
-          { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
-          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+          { section: 'Khám & Chẩn đoán', label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { section: 'Khám & Chẩn đoán', label: 'Hàng đợi khám & đọc MRI', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
+          { section: 'Khám & Chẩn đoán', label: 'Bình duyệt phim lần 2', route: 'PeerReview', icon: FileSearch },
+          { section: 'Khám & Chẩn đoán', label: 'Y lệnh miệng cấp cứu', route: 'VerbalOrders', icon: ClipboardCheck },
+          { section: 'Bệnh nhân & Hồ sơ', label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { section: 'Bệnh nhân & Hồ sơ', label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { section: 'Bệnh nhân & Hồ sơ', label: 'Quét mã QR bệnh án', route: 'ScanRecordQr', icon: ScanLine },
+          { section: 'Bệnh nhân & Hồ sơ', label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
+          { section: 'Bệnh nhân & Hồ sơ', label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
+          ...(role === 'department_head' ? [
+            { section: 'Quản lý khoa', label: 'Báo cáo vận hành & lâm sàng', route: 'ClinicalReports', icon: Gauge },
+            { section: 'Quản lý khoa', label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
+            { section: 'Quản lý khoa', label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
+          ] : []),
+          { section: 'Cá nhân & Ca trực', label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
+          { section: 'Cá nhân & Ca trực', label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
+          { section: 'Cá nhân & Ca trực', label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'radiologist':
         return [
@@ -285,10 +393,8 @@ const ResponsiveLayout = ({
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phòng chụp phim (MRI)', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
           { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Xem ảnh DICOM (PACS)', route: 'DicomViewer', icon: Monitor },
           { label: 'Phòng máy MRI', route: 'MriRooms', icon: Building2 },
-          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
-          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
-          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
@@ -410,6 +516,208 @@ const ResponsiveLayout = ({
     return activeRoute === item.route;
   };
 
+  /** Hộp thoại xem và chỉnh sửa nhanh hồ sơ cá nhân */
+  const renderProfileModal = () => {
+    if (!showProfileModal) return null;
+    const displayName = localUser?.profile?.name || localUser?.profile?.fullName || 'Người dùng';
+    const profileRows = [
+      localUser?.email ? { icon: Mail, label: 'Email đăng nhập', value: localUser.email } : null,
+      { icon: ShieldCheck, label: 'Vai trò', value: roleLabel },
+      !isPatient && localUser?.departmentId
+        ? {
+            icon: Building2,
+            label: 'Khoa / Đơn vị',
+            value: DEPARTMENT_LABELS[localUser.departmentId] || localUser.departmentId,
+          }
+        : null,
+      !isPatient && localUser?.profile?.specialty
+        ? {
+            icon: Stethoscope,
+            label: 'Chuyên môn',
+            value: SPECIALTY_LABELS[localUser.profile.specialty] || localUser.profile.specialty,
+          }
+        : null,
+      localUser?.profile?.medicalId
+        ? { icon: User, label: isPatient ? 'Mã bệnh nhân' : 'Mã nhân sự / Y tế', value: localUser.profile.medicalId }
+        : null,
+      {
+        icon: Phone,
+        label: 'Số điện thoại',
+        value: localUser?.profile?.phoneLast4
+          ? `•••• ${localUser.profile.phoneLast4}`
+          : localUser?.phone
+          ? 'Đã liên kết (bảo mật)'
+          : 'Chưa cập nhật',
+      },
+      {
+        icon: MapPin,
+        label: 'Địa chỉ',
+        value: localUser?.profile?.address || 'Chưa cập nhật',
+      },
+    ].filter(Boolean);
+
+    return (
+      <Modal
+        visible={showProfileModal}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <View style={[styles.modalOverlay, { zIndex: 99999 }]}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <View style={[styles.profileModalAvatar, { backgroundColor: theme.avatar }]}>
+                  <Text style={styles.profileModalAvatarText}>
+                    {localUser ? getInitials(displayName) : 'U'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.modalTitle} numberOfLines={2}>
+                    {displayName}
+                  </Text>
+                  <Text style={styles.modalSub}>{roleLabel}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowProfileModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Đóng hồ sơ"
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {profileFeedback && (
+              <View
+                style={[
+                  styles.profileFeedbackBox,
+                  profileFeedback.type === 'error' ? styles.profileFeedbackError : styles.profileFeedbackSuccess,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.profileFeedbackText,
+                    profileFeedback.type === 'error'
+                      ? styles.profileFeedbackTextError
+                      : styles.profileFeedbackTextSuccess,
+                  ]}
+                >
+                  {profileFeedback.text}
+                </Text>
+              </View>
+            )}
+
+            {profileLoading && !localUser ? (
+              <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={theme.accent} />
+                <Text style={[styles.modalSub, { marginTop: 8 }]}>Đang tải thông tin tài khoản…</Text>
+              </View>
+            ) : isEditingProfile ? (
+              <ScrollView style={{ maxHeight: 360, marginTop: 8 }}>
+                <View style={styles.profileField}>
+                  <Text style={styles.profileFieldLabel}>Họ và tên *</Text>
+                  <TextInput
+                    style={styles.profileInput}
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Nhập họ và tên"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={styles.profileField}>
+                  <Text style={styles.profileFieldLabel}>Số điện thoại mới (để trống nếu giữ nguyên)</Text>
+                  <TextInput
+                    style={styles.profileInput}
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    placeholder="Ví dụ: 0912345678"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.profileField}>
+                  <Text style={styles.profileFieldLabel}>Địa chỉ liên hệ</Text>
+                  <TextInput
+                    style={styles.profileInput}
+                    value={editAddress}
+                    onChangeText={setEditAddress}
+                    placeholder="Nhập địa chỉ"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </ScrollView>
+            ) : (
+              <ScrollView style={{ maxHeight: 360, marginTop: 8 }}>
+                <View style={styles.profileList}>
+                  {profileRows.map((row) => {
+                    const RowIcon = row.icon;
+                    return (
+                      <View key={row.label} style={styles.profileRow}>
+                        <View style={styles.profileRowIcon}>
+                          <RowIcon size={15} color={theme.accent} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.profileRowLabel}>{row.label}</Text>
+                          <Text style={styles.profileRowValue}>{row.value}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+
+            <View style={styles.profileActions}>
+              {isEditingProfile ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.profileBtnSecondary}
+                    onPress={() => {
+                      setIsEditingProfile(false);
+                      setProfileFeedback(null);
+                    }}
+                    disabled={savingProfile}
+                  >
+                    <Text style={styles.profileBtnSecondaryText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.profileBtnPrimary, { backgroundColor: theme.accent }]}
+                    onPress={handleSaveProfile}
+                    disabled={savingProfile}
+                  >
+                    <Save size={15} color="#FFFFFF" />
+                    <Text style={styles.profileBtnPrimaryText}>
+                      {savingProfile ? 'Đang lưu…' : 'Lưu thay đổi'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.profileBtnSecondary}
+                    onPress={() => setShowProfileModal(false)}
+                  >
+                    <Text style={styles.profileBtnSecondaryText}>Đóng</Text>
+                  </TouchableOpacity>
+                  {localUser && (
+                    <TouchableOpacity
+                      style={[styles.profileBtnPrimary, { backgroundColor: theme.accent }]}
+                      onPress={startEditProfile}
+                    >
+                      <Edit3 size={15} color="#FFFFFF" />
+                      <Text style={styles.profileBtnPrimaryText}>Chỉnh sửa</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   // MOBILE VIEW RENDERING
   if (!isDesktop) {
     return (
@@ -442,6 +750,13 @@ const ResponsiveLayout = ({
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={{ padding: 6 }}
+              onPress={openProfileModal}
+              accessibilityLabel="Xem hồ sơ cá nhân"
+            >
+              <User size={18} color="#94A3B8" />
+            </TouchableOpacity>
             <TouchableOpacity 
               style={{ padding: 6, position: 'relative' }} 
               onPress={() => setShowNotifModal(true)}
@@ -512,48 +827,71 @@ const ResponsiveLayout = ({
             }}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.darkRaised }}>
-                  <View>
+                  <TouchableOpacity
+                    onPress={openProfileModal}
+                    activeOpacity={0.75}
+                    accessibilityLabel="Xem hồ sơ cá nhân"
+                    style={{ flex: 1, paddingRight: 8 }}
+                  >
                     <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>NeuroScan AI</Text>
-                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }}>{localUser?.profile?.name || 'Người dùng'} · {roleLabel}</Text>
-                  </View>
+                    <Text style={{ color: theme.onDarkSub, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                      {localUser?.profile?.name || 'Người dùng'} · {roleLabel}
+                    </Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => setShowMobileMenu(false)} style={{ padding: 6 }}>
                     <X size={20} color="#94A3B8" />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                  {menuItems.map(item => {
+                  {menuItems.map((item, idx) => {
                     const isActive = isItemActive(item);
                     const IconComponent = item.icon;
+                    const showSection = Boolean(item.section) && item.section !== menuItems[idx - 1]?.section;
                     return (
-                      <TouchableOpacity
-                        key={`m_${item.route}_${item.label}`}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 8,
-                          marginBottom: 4,
-                          backgroundColor: isActive ? theme.onDarkActiveBg : 'transparent',
-                          borderLeftWidth: isActive ? 3 : 0,
-                          borderLeftColor: theme.onDarkAccent,
-                        }}
-                        onPress={() => {
-                          setShowMobileMenu(false);
-                          navigation.navigate(item.route, item.params);
-                        }}
-                      >
-                        <IconComponent size={18} color={isActive ? theme.onDarkAccent : '#94A3B8'} />
-                        <Text style={{
-                          color: isActive ? theme.onDarkAccent : '#E2E8F0',
-                          fontWeight: isActive ? 'bold' : '500',
-                          marginLeft: 12,
-                          fontSize: 14,
-                        }}>
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
+                      <React.Fragment key={`m_${item.route}_${item.label}`}>
+                        {showSection ? (
+                          <Text style={{
+                            color: '#94A3B8',
+                            fontSize: 10,
+                            fontWeight: '700',
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.7,
+                            marginTop: idx === 0 ? 4 : 12,
+                            marginBottom: 4,
+                            paddingHorizontal: 14,
+                          }}>
+                            {item.section}
+                          </Text>
+                        ) : null}
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            borderRadius: 8,
+                            marginBottom: 4,
+                            backgroundColor: isActive ? theme.onDarkActiveBg : 'transparent',
+                            borderLeftWidth: isActive ? 3 : 0,
+                            borderLeftColor: theme.onDarkAccent,
+                          }}
+                          onPress={() => {
+                            setShowMobileMenu(false);
+                            navigation.navigate(item.route, item.params);
+                          }}
+                        >
+                          <IconComponent size={18} color={isActive ? theme.onDarkAccent : '#94A3B8'} />
+                          <Text style={{
+                            color: isActive ? theme.onDarkAccent : '#E2E8F0',
+                            fontWeight: isActive ? 'bold' : '500',
+                            marginLeft: 12,
+                            fontSize: 14,
+                          }}>
+                            {item.label}
+                          </Text>
+                        </TouchableOpacity>
+                      </React.Fragment>
                     );
                   })}
                 </ScrollView>
@@ -642,6 +980,8 @@ const ResponsiveLayout = ({
             </View>
           </Modal>
         )}
+
+        {renderProfileModal()}
       </View>
     );
   }
@@ -664,23 +1004,43 @@ const ResponsiveLayout = ({
         </View>
 
         {/* User Card */}
-        <View style={styles.userCard}>
-          <View style={[styles.avatarCircle, { backgroundColor: theme.avatar }]}>
-            <Text style={styles.avatarText}>
-              {localUser ? getInitials(localUser.profile?.name) : 'U'}
-            </Text>
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {localUser?.profile?.name || 'Người dùng'}
-            </Text>
-            <Text style={styles.userRole}>
-              {roleLabel}
-            </Text>
-          </View>
+        <View style={[styles.userCard, { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }]}>
+          <Pressable
+            onPress={openProfileModal}
+            accessibilityRole="button"
+            accessibilityLabel="Xem hồ sơ cá nhân"
+            style={({ hovered }) => [
+              styles.userProfileTrigger,
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                borderRadius: 10,
+                padding: 4,
+                margin: -4,
+                backgroundColor: hovered ? '#F1F5F9' : 'transparent',
+              },
+            ]}
+          >
+            <View style={[styles.avatarCircle, { backgroundColor: theme.avatar, flexShrink: 0 }]}>
+              <Text style={styles.avatarText}>
+                {localUser ? getInitials(localUser.profile?.name) : 'U'}
+              </Text>
+            </View>
+            <View style={[styles.userInfo, { flex: 1, minWidth: 0, overflow: 'hidden', marginRight: 6 }]}>
+              <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+                {localUser?.profile?.name || 'Người dùng'}
+              </Text>
+              <Text style={styles.userRole} numberOfLines={1} ellipsizeMode="tail">
+                {roleLabel}
+              </Text>
+            </View>
+          </Pressable>
           {localUser && (
             <TouchableOpacity 
-              style={styles.bellBtn} 
+              style={[styles.bellBtn, { flexShrink: 0, marginLeft: 4 }]} 
               onPress={() => setShowNotifModal(true)}
               activeOpacity={0.7}
               accessibilityLabel="Thông báo"
@@ -697,25 +1057,41 @@ const ResponsiveLayout = ({
 
         {/* Nav Links */}
         <ScrollView style={styles.navLinks} contentContainerStyle={styles.navLinksContent}>
-          {menuItems.map((item) => {
+          {menuItems.map((item, idx) => {
             const isActive = isItemActive(item);
             const IconComponent = item.icon;
+            const showSection = Boolean(item.section) && item.section !== menuItems[idx - 1]?.section;
             return (
-              <PressableScale
-                key={`${item.route}_${item.label}`}
-                style={[styles.navItem, isActive && { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}
-                hoverStyle={!isActive && styles.navItemHover}
-                onPress={() => navigation.navigate(item.route, item.params)}
-                accessibilityRole="link"
-                accessibilityState={{ selected: isActive }}
-              >
-                <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
-                  <IconComponent size={17} color={isActive ? theme.accent : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
-                </View>
-                <Text style={[styles.navLabel, isActive && styles.navLabelActive, isActive && { color: theme.accent }]}>
-                  {item.label}
-                </Text>
-              </PressableScale>
+              <React.Fragment key={`${item.route}_${item.label}`}>
+                {showSection ? (
+                  <Text style={{
+                    color: '#94A3B8',
+                    fontSize: 10,
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.7,
+                    marginTop: idx === 0 ? 2 : 12,
+                    marginBottom: 4,
+                    paddingHorizontal: 10,
+                  }}>
+                    {item.section}
+                  </Text>
+                ) : null}
+                <PressableScale
+                  style={[styles.navItem, isActive && { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}
+                  hoverStyle={!isActive && styles.navItemHover}
+                  onPress={() => navigation.navigate(item.route, item.params)}
+                  accessibilityRole="link"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <View style={[styles.navIconContainer, isActive && styles.navIconContainerActive]}>
+                    <IconComponent size={17} color={isActive ? theme.accent : '#64748B'} strokeWidth={isActive ? 2.3 : 1.8} />
+                  </View>
+                  <Text style={[styles.navLabel, isActive && styles.navLabelActive, isActive && { color: theme.accent }]}>
+                    {item.label}
+                  </Text>
+                </PressableScale>
+              </React.Fragment>
             );
           })}
         </ScrollView>
@@ -848,6 +1224,8 @@ const ResponsiveLayout = ({
           </View>
         </Modal>
       )}
+
+      {renderProfileModal()}
     </View>
   );
 };
@@ -917,6 +1295,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  userProfileTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+  },
   avatarCircle: {
     width: 38,
     height: 38,
@@ -933,7 +1317,9 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
-    marginRight: 8,
+    minWidth: 0,
+    overflow: 'hidden',
+    marginRight: 6,
   },
   userName: {
     fontSize: 13,
@@ -1163,6 +1549,134 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#94A3B8',
     marginTop: 6,
+  },
+  profileModalAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileModalAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  profileFeedbackBox: {
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  profileFeedbackSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  profileFeedbackError: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  profileFeedbackText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  profileFeedbackTextSuccess: {
+    color: '#15803D',
+  },
+  profileFeedbackTextError: {
+    color: '#B91C1C',
+  },
+  profileList: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  profileRowIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  profileRowLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  profileRowValue: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  profileField: {
+    marginBottom: 12,
+  },
+  profileFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 5,
+  },
+  profileInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  profileActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  profileBtnSecondary: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  profileBtnSecondaryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  profileBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  profileBtnPrimaryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

@@ -21,7 +21,24 @@ const BLOCKED_EXTENSIONS = [
   ".html",
   ".htm",
   ".svg", // Prevents SVG with embedded JS (Stored XSS)
+  // Các định dạng trình duyệt cũng chạy script được (trước đây lọt qua danh sách chặn)
+  ".svgz", ".xhtml", ".xht", ".xml", ".xsl", ".shtml", ".mht", ".mhtml", ".htc", ".wasm", ".mjs",
 ];
+
+/**
+ * Header cho mọi tệp phục vụ từ /uploads: không cho chạy script/nhúng nội dung (kể cả khi lọt định dạng lạ),
+ * không đoán kiểu MIME. PDF giữ trình xem PDF của trình duyệt (sandbox chặn trình xem PDF).
+ */
+export const setUploadResponseHeaders = (res, filePath) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  const isPdf = path.extname(String(filePath || "")).toLowerCase() === ".pdf";
+  res.setHeader(
+    "Content-Security-Policy",
+    isPdf
+      ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'"
+      : "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"
+  );
+};
 
 const BLOCKED_DIRECTORIES = [
   "/backups",

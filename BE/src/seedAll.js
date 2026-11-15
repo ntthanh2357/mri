@@ -1504,7 +1504,7 @@ const seedComprehensiveDatabase = async () => {
       // ── STEP 17: CLINICAL VISITS (MULTIPLE STATES) ───────────────────────────
       console.log("\n🏥 Step 17: Seeding Clinical Visits (Waiting, In-Consult, Awaiting MRI)...");
 
-      // Sample template diagnostic report (text-only metadata, NO physical DICOM images)
+      // Sample diagnostic report for Visit 5 ("chờ bác sĩ đọc") with matching MRI slice
       const sampleImagingResult = await ImagingResult.create({
         hospitalId: hospital._id,
         medicalId: "BN001",
@@ -1523,7 +1523,8 @@ const seedComprehensiveDatabase = async () => {
         conclusion: "Hình ảnh điển hình của U màng não (Meningioma) thùy thái dương trái, chưa có dấu hiệu xâm lấn xương sọ.",
         radiologist: doc3.profile.name,
         reportDate: new Date(now.getTime() - 22 * 3600000),
-        images: [], // Kept empty per user requirement: user will upload MRI data
+        images: ["/uploads/tumor_01.png"],
+        representativeSliceUrl: "/uploads/tumor_01.png",
         imagingType: "MRI",
       });
 
@@ -1636,6 +1637,11 @@ const seedComprehensiveDatabase = async () => {
         },
       ]);
       console.log(`✅ Seeded ${visits.length} Clinical Visits with diverse lifecycle states.`);
+
+      await ImagingResult.updateOne(
+        { _id: sampleImagingResult._id },
+        { $set: { visitId: visits[4]._id } }
+      );
 
       // [FIX LINKAGE presc3] presc3 (kê ở Step 16) được tạo TRƯỚC visit ~9ms
       // (thứ tự code Step 16 → Step 17) khiến truy vấn linkage theo mốc thời

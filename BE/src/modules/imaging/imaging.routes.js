@@ -22,6 +22,18 @@ import {
 } from "./imaging.controller.js";
 import { protect, checkRole, denyPlatformAdmin } from "../../middlewares/auth.middleware.js";
 import { uploadImagingFile } from "../../middlewares/imagingUpload.middleware.js";
+import { allowSignedPath } from "../../middlewares/uploadSignature.middleware.js";
+import {
+  initTriage,
+  uploadTriageBatch,
+  uploadTriageZip,
+  runTriage,
+  previewTriageSlice,
+  finalizeTriage,
+  cancelTriage,
+  uploadTriageBatchMiddleware,
+  uploadTriageZipMiddleware,
+} from "./triage.controller.js";
 
 const router = Router();
 
@@ -45,6 +57,25 @@ router.get("/patient/:medicalId", protect, checkRole(IMAGING_STAFF_READ_ROLES), 
 
 // Upload imaging scan image or DICOM archive — chỉ KTV/bác sĩ của bệnh viện (P0-4)
 router.post("/upload", protect, checkRole(["technician", "doctor", "radiologist", "department_head"]), denyPlatformAdmin, uploadImagingFile, uploadImagingImage);
+
+// Sàng lọc hàng loạt thư mục / tệp ZIP MRI (KTV lọc ảnh rõ khối u trước khi đẩy ~10 lát cho bác sĩ)
+const TRIAGE_STAFF_ROLES = ["technician", "doctor", "radiologist", "department_head"];
+const allowSignedTriagePreview = allowSignedPath(
+  (req) => `/api/v1/imaging/triage/${req.params.sessionId}/preview/${req.params.sliceKey}`,
+  protect
+);
+const requireTriagePreviewStaff = (req, res, next) => {
+  if (req.signedFileAccess) return next();
+  return checkRole(TRIAGE_STAFF_ROLES)(req, res, () => denyPlatformAdmin(req, res, next));
+};
+
+router.post("/triage/init", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, initTriage);
+router.post("/triage/:sessionId/batch", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, uploadTriageBatchMiddleware, uploadTriageBatch);
+router.post("/triage/:sessionId/upload-zip", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, uploadTriageZipMiddleware, uploadTriageZip);
+router.post("/triage/:sessionId/run", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, runTriage);
+router.get("/triage/:sessionId/preview/:sliceKey", allowSignedTriagePreview, requireTriagePreviewStaff, previewTriageSlice);
+router.post("/triage/:sessionId/finalize", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, finalizeTriage);
+router.delete("/triage/:sessionId", protect, checkRole(TRIAGE_STAFF_ROLES), denyPlatformAdmin, cancelTriage);
 
 // Analyze imaging scan using AI (Requires login)
 router.post("/analyze-ai", protect, denyPlatformAdmin, analyzeImagingResultAI);

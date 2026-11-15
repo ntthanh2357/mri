@@ -331,7 +331,222 @@ except Exception as e:
 CATEGORIES = ['glioma', 'meningioma', 'notumor', 'pituitary']
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dcm", ".bmp"}
 
-def _run_mri_inference(file_path: str, processed_img: np.ndarray) -> dict:
+def _call_gemini_vlm_arbitration(
+    file_path: str,
+    cnn_class: str,
+    confidence: float,
+    uncertainty_score: float,
+    yolo_class: str,
+    yolo_box_details: Optional[dict],
+) -> tuple:
+    """Shared Tier-3 Location-Grounded Gemini VLM arbitration + Guard-1/Guard-2 safety checks."""
+    cnn_is_tumor = (cnn_class != 'notumor')
+    yolo_is_tumor = (yolo_class != 'notumor')
+
+    sys_prompt = """You are a senior neuroradiologist serving as a clinical diagnostic arbitrator for a multi-model AI consensus system.
+You will receive up to THREE images:
+  - Image 1 (Overview): Full brain MRI with a RED bounding box marking the suspected tumor ROI detected by YOLOv8.
+  - Image 2 (Adaptive Crop): A contextual crop of the ROI with adaptive margins.
+  - Image 3 (2× Zoom): The same ROI zoomed in 2× to reveal micro-textures, border sharpness, and signal gradients.
+
+  HOSPITAL DATASET CONTEXT: Real-world scans may have noise, varying contrast, slice-thickness artifacts, and subtle early-stage tumors.
+  Do NOT dismiss a region as normal based on low conspicuity alone.
+
+  CRITICAL CONSTRAINTS:
+  1. Analyze ONLY the tissue INSIDE the RED bounding box / cropped region. Do NOT base your verdict on tissue outside the ROI.
+  2. Be decisive. Calibrate confidence honestly: 0.85–0.99 for clear findings, <0.75 only for genuinely uninterpretable scans.
+  3. If both models agree a tumor is present (neither said 'notumor'), you MUST choose ('glioma'|'meningioma'|'pituitary'). 'notumor' is FORBIDDEN.
+  4. If ensemble detected a tumor but YOLO missed it, look carefully for subtle lesions before concluding 'notumor'.
+
+  ANATOMICAL CRITERIA:
+  - Glioma:     Intra-axial, irregular/infiltrative borders, vasogenic edema (T2/FLAIR hyperintensity).
+  - Meningioma: Extra-axial, well-defined, dural-tail, compresses rather than invades.
+  - Pituitary:  Midline sellar/suprasellar mass, optic chiasm compression, 'snowman sign'.
+  - No Tumor:   Symmetric brain, normal CSF spaces, no mass effect, centered midline.
+
+  OUTPUT — strict JSON only:
+  {
+    "reasoning": "Step-by-step clinical review of the ROI referencing specific anatomical features.",
+    "anatomical_location_assessment": "Describe where in the brain the ROI is and what structures are adjacent.",
+    "differential_diagnosis": "Alternative diagnosis considered and why it was ruled out.",
+    "contradictory_evidence": "At least 2 features in the ROI that ARGUE AGAINST your primary verdict (self-criticism).",
+    "confidence": 0.0-1.0 (float, your calibrated diagnostic certainty; typically 0.85-0.99 for clear cases, only below 0.75 if genuinely uninterpretable),
+    "verdict": "glioma" | "meningioma" | "pituitary" | "notumor"
+  }"""
+
+    yolo_info = f"Class: {yolo_class}"
+    if yolo_box_details:
+        yolo_info += (
+            f" (Confidence: {round(yolo_box_details['conf']*100, 2)}%), "
+            f"ROI Box: [x:{yolo_box_details['x']}, y:{yolo_box_details['y']}, "
+            f"w:{yolo_box_details['width']}, h:{yolo_box_details['height']}]"
+        )
+    else:
+        yolo_info += " (No bounding box — possible false negative)"
+
+    anatomical_hint = ""
+    if yolo_box_details:
+        img_cv_shape = cv2.imread(file_path)
+        if img_cv_shape is not None:
+            loc_desc, prior_hint = infer_anatomical_location(yolo_box_details, img_cv_shape.shape)
+            anatomical_hint = (
+                f"\n[ANATOMICAL PRIOR] The ROI centroid is in the {loc_desc}. "
+                f"Elevated prior probability for: {prior_hint}. "
+                f"Adjust differential accordingly, but do not override clear visual evidence."
+            )
+
+    rule_hints = []
+    if cnn_is_tumor and yolo_is_tumor:
+        rule_hints.append(
+            "⚠ CRITICAL: Both models detect a tumor. You MUST choose ('glioma'|'meningioma'|'pituitary'). "
+            "'notumor' is PROHIBITED."
+        )
+    elif cnn_is_tumor and not yolo_is_tumor:
+        if not yolo_box_details:
+            rule_hints.append(
+                "⚠ CRITICAL: The CNN ensemble (3 independent models) detected a tumor but YOLOv8 produced no bounding box. "
+                "There is NO bbox overlay — look carefully at midline structures, periventricular regions, and sellar area for subtle lesions. "
+                "Do NOT conclude 'notumor' simply because the lesion is small or low-contrast. "
+                "Returning 'notumor' is PROHIBITED — classify as ('glioma'|'meningioma'|'pituitary')."
+            )
+        else:
+            rule_hints.append(
+                "NOTE: CNN ensemble detected a tumor but YOLO missed it (high false-negative rate on small/low-contrast tumors). "
+                "Inspect carefully before concluding 'notumor'."
+            )
+    elif not cnn_is_tumor and yolo_is_tumor:
+        rule_hints.append(
+            "NOTE: YOLO detected a tumor mass but CNN voted 'notumor'. "
+            "Focus on the red-boxed region — localisation is key evidence."
+        )
+    rule_hint_str = "\n".join(rule_hints)
+
+    usr_prompt = f"""[CLINICAL DIAGNOSTIC ARBITRATION — Location-Grounded Analysis]
+
+MODEL VOTES:
+  • CNN Ensemble   → {cnn_class} (Confidence: {round(confidence*100, 2)}%, Uncertainty: {round(uncertainty_score, 4)})
+  • YOLOv8 Detector → {yolo_info}
+{anatomical_hint}
+
+VISUAL INPUTS:
+  • Image 1 — Full scan with RED bounding box on the suspected ROI.
+  • Image 2 — Adaptive-margin crop of the ROI.
+  • Image 3 — 2× zoomed ROI (micro-texture and border sharpness).
+
+⚠ FOCUS RULE: Restrict analysis EXCLUSIVELY to tissue INSIDE the RED bounding box / cropped region.
+
+{rule_hint_str}
+
+Produce your full chain-of-thought, then output a single valid JSON object."""
+
+    predicted_class = cnn_class
+    final_confidence = confidence
+    consensus_message = ""
+    try:
+        img_pil = Image.open(file_path).convert("RGB")
+        img_overview = img_pil.copy()
+        img_crop_pil = None
+        img_zoom_pil = None
+
+        if yolo_box_details:
+            draw = ImageDraw.Draw(img_overview)
+            bx = yolo_box_details['x']
+            by = yolo_box_details['y']
+            bw_box = yolo_box_details['width']
+            bh_box = yolo_box_details['height']
+            draw.rectangle([bx, by, bx + bw_box, by + bh_box], outline="red", width=4)
+
+            img_cv2 = cv2.imread(file_path)
+            if img_cv2 is not None:
+                x1, y1, x2, y2 = adaptive_roi_crop(yolo_box_details, img_cv2.shape)
+                img_crop_pil = img_pil.crop((x1, y1, x2, y2))
+                zoom_w = max(1, (x2 - x1) * 2)
+                zoom_h = max(1, (y2 - y1) * 2)
+                img_zoom_pil = img_crop_pil.resize((zoom_w, zoom_h), Image.Resampling.LANCZOS)
+
+        contents: list = [usr_prompt, img_overview]
+        if img_crop_pil:
+            contents.append(img_crop_pil)
+        if img_zoom_pil:
+            contents.append(img_zoom_pil)
+
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,  # type: ignore
+            config=types.GenerateContentConfig(
+                system_instruction=sys_prompt,
+                temperature=0.2,
+                response_mime_type="application/json"
+            )
+        )
+
+        raw_text = response.text.strip() if response.text else ""
+        try:
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:-3].strip()
+            elif raw_text.startswith("```"):
+                raw_text = raw_text[3:-3].strip()
+
+            gemini_json = json.loads(raw_text)
+            verdict = str(gemini_json.get("verdict", "")).lower().strip()
+            vlm_conf = float(gemini_json.get("confidence", 0))
+            reasoning = gemini_json.get("reasoning", "")
+            diff_dx = gemini_json.get("differential_diagnosis", "")
+            contra_ev = gemini_json.get("contradictory_evidence", "")
+
+            if verdict in CATEGORIES:
+                if vlm_conf >= 0.85:
+                    if verdict == 'notumor' and cnn_is_tumor and yolo_is_tumor:
+                        consensus_message = (
+                            "<strong style='color:#ffaa00'>Cảnh báo: Guard-1 Triggered</strong><br>"
+                            "<strong style='color:#fff'>Lý do:</strong> Cả Ensemble và YOLO đều ngđi u, VLM chẩn đoán nhầm thành 'notumor'.<br>"
+                            f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()}) để đảm bảo an toàn."
+                        )
+                    elif verdict == 'notumor' and cnn_is_tumor and not yolo_is_tumor and vlm_conf < 0.97:
+                        consensus_message = (
+                            f"<strong style='color:#ffaa00'>Cảnh báo: Guard-2 Triggered</strong><br>"
+                            f"<strong style='color:#fff'>Lý do:</strong> CNN phát hiện u nhưng VLM muốn 'notumor' với chỉ {vlm_conf*100:.0f}% (cần ≥ 97% để bác bỏ kết quả CNN).<br>"
+                            f"<strong style='color:#fff'>Hành động:</strong> Giữ kết quả Ensemble ({cnn_class.upper()}) tránh bỏ sót u."
+                        )
+                    else:
+                        predicted_class = verdict
+                        final_confidence = vlm_conf
+                        consensus_message = (
+                            f"<strong style='color:#fff'>Trọng tài VLM quyết định:</strong> {verdict.upper()}<br>"
+                            f"<strong style='color:#fff'>Độ tin cậy:</strong> {vlm_conf*100:.1f}%<br>"
+                            f"<strong style='color:#fff'>Lập luận:</strong> {reasoning}<br>"
+                            f"<strong style='color:#fff'>Chẩn đoán phân biệt:</strong> {diff_dx}<br>"
+                            f"<strong style='color:#aaa'>Bằng chứng phản bác:</strong> {contra_ev}"
+                        )
+                else:
+                    consensus_message = (
+                        f"<strong style='color:#ffaa00'>Cảnh báo: Ambiguous</strong><br>"
+                        f"<strong style='color:#fff'>Lý do:</strong> VLM confidence ({vlm_conf*100:.1f}%) < ngưỡng 85%.<br>"
+                        f"<strong style='color:#fff'>Lập luận VLM:</strong> {reasoning}<br>"
+                        f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()}) & hội chẩn thủ công."
+                    )
+            else:
+                consensus_message = (
+                    f"<strong style='color:#ff5555'>Cảnh báo: VLM verdict không hợp lệ</strong><br>"
+                    f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
+                )
+        except Exception as e:
+            print(f"[Consensus] Lỗi phân tích JSON Gemini: {e}. Raw: {raw_text}")
+            consensus_message = (
+                f"<strong style='color:#ff5555'>Cảnh báo: Lỗi xử lý kết quả phân xử</strong><br>"
+                f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
+            )
+    except Exception as e:
+        print(f"[Consensus] Lỗi gọi Gemini API: {e}")
+        consensus_message = (
+            f"<strong style='color:#ff5555'>Cảnh báo: Lỗi kết nối API</strong><br>"
+            f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
+        )
+
+    return predicted_class, final_confidence, consensus_message
+
+
+def _run_mri_inference(file_path: str, processed_img: np.ndarray, plane_hint_path: str = None) -> dict:
     if model is None or efficientnet_model is None or densenet_model is None:
         raise RuntimeError("Mô hình AI chưa sẵn sàng (Lỗi tải mô hình)")
 
@@ -443,8 +658,10 @@ def _run_mri_inference(file_path: str, processed_img: np.ndarray) -> dict:
             is_conflict = False  # CNN tự tin cao → tin CNN
 
     # ── Detect acquisition plane — Privacy guard for VLM arbitration ──
-    scan_plane = infer_plane_from_path(file_path)
-    print(f"[Plane Detect] Uploaded file plane='{scan_plane}'")
+    scan_plane = infer_plane_from_path(plane_hint_path) if plane_hint_path else "unknown"
+    if scan_plane == "unknown":
+        scan_plane = infer_plane_from_path(file_path)
+    print(f"[Plane Detect] Uploaded file plane='{scan_plane}' hint='{plane_hint_path or ''}'")
 
     predicted_class = cnn_class
     final_confidence = confidence
@@ -484,221 +701,14 @@ def _run_mri_inference(file_path: str, processed_img: np.ndarray) -> dict:
         # ────────────────────────────────────────────────────────────────
         else:
             print(f"[Consensus] XUNG ĐỘT: Ensemble={cnn_class} vs YOLO={yolo_class}. Đang gọi Gemini VLM...")
-
-            # ── System Prompt (Location-Grounded) ──
-            sys_prompt = """You are a senior neuroradiologist serving as a clinical diagnostic arbitrator for a multi-model AI consensus system.
-You will receive up to THREE images:
-  - Image 1 (Overview): Full brain MRI with a RED bounding box marking the suspected tumor ROI detected by YOLOv8.
-  - Image 2 (Adaptive Crop): A contextual crop of the ROI with adaptive margins.
-  - Image 3 (2× Zoom): The same ROI zoomed in 2× to reveal micro-textures, border sharpness, and signal gradients.
-
-  HOSPITAL DATASET CONTEXT: Real-world scans may have noise, varying contrast, slice-thickness artifacts, and subtle early-stage tumors.
-  Do NOT dismiss a region as normal based on low conspicuity alone.
-
-  CRITICAL CONSTRAINTS:
-  1. Analyze ONLY the tissue INSIDE the RED bounding box / cropped region. Do NOT base your verdict on tissue outside the ROI.
-  2. Be decisive. Calibrate confidence honestly: 0.85–0.99 for clear findings, <0.75 only for genuinely uninterpretable scans.
-  3. If both models agree a tumor is present (neither said 'notumor'), you MUST choose ('glioma'|'meningioma'|'pituitary'). 'notumor' is FORBIDDEN.
-  4. If ensemble detected a tumor but YOLO missed it, look carefully for subtle lesions before concluding 'notumor'.
-
-  ANATOMICAL CRITERIA:
-  - Glioma:     Intra-axial, irregular/infiltrative borders, vasogenic edema (T2/FLAIR hyperintensity).
-  - Meningioma: Extra-axial, well-defined, dural-tail, compresses rather than invades.
-  - Pituitary:  Midline sellar/suprasellar mass, optic chiasm compression, 'snowman sign'.
-  - No Tumor:   Symmetric brain, normal CSF spaces, no mass effect, centered midline.
-
-  OUTPUT — strict JSON only:
-  {
-    "reasoning": "Step-by-step clinical review of the ROI referencing specific anatomical features.",
-    "anatomical_location_assessment": "Describe where in the brain the ROI is and what structures are adjacent.",
-    "differential_diagnosis": "Alternative diagnosis considered and why it was ruled out.",
-    "contradictory_evidence": "At least 2 features in the ROI that ARGUE AGAINST your primary verdict (self-criticism).",
-    "confidence": 0.0-1.0 (float, your calibrated diagnostic certainty; typically 0.85-0.99 for clear cases, only below 0.75 if genuinely uninterpretable),
-    "verdict": "glioma" | "meningioma" | "pituitary" | "notumor"
-  }"""
-
-            # ── Thông tin YOLO ──
-            yolo_info = f"Class: {yolo_class}"
-            if yolo_box_details:
-                yolo_info += (f" (Confidence: {round(yolo_box_details['conf']*100, 2)}%), "
-                              f"ROI Box: [x:{yolo_box_details['x']}, y:{yolo_box_details['y']}, "
-                              f"w:{yolo_box_details['width']}, h:{yolo_box_details['height']}]")
-            else:
-                yolo_info += " (No bounding box — possible false negative)"
-
-            # ── Anatomical Prior ──
-            anatomical_hint = ""
-            if yolo_box_details:
-                img_cv_shape = cv2.imread(file_path)
-                if img_cv_shape is not None:
-                    loc_desc, prior_hint = infer_anatomical_location(yolo_box_details, img_cv_shape.shape)
-                    anatomical_hint = (
-                        f"\n[ANATOMICAL PRIOR] The ROI centroid is in the {loc_desc}. "
-                        f"Elevated prior probability for: {prior_hint}. "
-                        f"Adjust differential accordingly, but do not override clear visual evidence."
-                    )
-
-            # ── Ràng buộc lâm sàng ──
-            rule_hints = []
-            if cnn_is_tumor and yolo_is_tumor:
-                rule_hints.append(
-                    "⚠ CRITICAL: Both models detect a tumor. You MUST choose ('glioma'|'meningioma'|'pituitary'). "
-                    "'notumor' is PROHIBITED."
-                )
-            elif cnn_is_tumor and not yolo_is_tumor:
-                if not yolo_box_details:
-                    rule_hints.append(
-                        "⚠ CRITICAL: The CNN ensemble (3 independent models) detected a tumor but YOLOv8 produced no bounding box. "
-                        "There is NO bbox overlay — look carefully at midline structures, periventricular regions, and sellar area for subtle lesions. "
-                        "Do NOT conclude 'notumor' simply because the lesion is small or low-contrast. "
-                        "Returning 'notumor' is PROHIBITED — classify as ('glioma'|'meningioma'|'pituitary')."
-                    )
-                else:
-                    rule_hints.append(
-                        "NOTE: CNN ensemble detected a tumor but YOLO missed it (high false-negative rate on small/low-contrast tumors). "
-                        "Inspect carefully before concluding 'notumor'."
-                    )
-            elif not cnn_is_tumor and yolo_is_tumor:
-                rule_hints.append(
-                    "NOTE: YOLO detected a tumor mass but CNN voted 'notumor'. "
-                    "Focus on the red-boxed region — localisation is key evidence."
-                )
-            rule_hint_str = "\n".join(rule_hints)
-
-            usr_prompt = f"""[CLINICAL DIAGNOSTIC ARBITRATION — Location-Grounded Analysis]
-
-MODEL VOTES:
-  • CNN Ensemble   → {cnn_class} (Confidence: {round(confidence*100, 2)}%, Uncertainty: {round(uncertainty_score, 4)})
-  • YOLOv8 Detector → {yolo_info}
-{anatomical_hint}
-
-VISUAL INPUTS:
-  • Image 1 — Full scan with RED bounding box on the suspected ROI.
-  • Image 2 — Adaptive-margin crop of the ROI.
-  • Image 3 — 2× zoomed ROI (micro-texture and border sharpness).
-
-⚠ FOCUS RULE: Restrict analysis EXCLUSIVELY to tissue INSIDE the RED bounding box / cropped region.
-
-{rule_hint_str}
-
-Produce your full chain-of-thought, then output a single valid JSON object."""
-
-            try:
-                # ── Chuẩn bị ảnh 3 scale ──
-                img_pil = Image.open(file_path).convert("RGB")
-                img_overview = img_pil.copy()  # Image 1: tổng quan + bbox
-                img_crop_pil = None            # Image 2: adaptive crop
-                img_zoom_pil = None            # Image 3: 2x zoom
-
-                if yolo_box_details:
-                    draw = ImageDraw.Draw(img_overview)
-                    bx = yolo_box_details['x']
-                    by = yolo_box_details['y']
-                    bw_box = yolo_box_details['width']
-                    bh_box = yolo_box_details['height']
-                    draw.rectangle([bx, by, bx + bw_box, by + bh_box], outline="red", width=4)
-
-                    img_cv2 = cv2.imread(file_path)
-                    if img_cv2 is not None:
-                        x1, y1, x2, y2 = adaptive_roi_crop(yolo_box_details, img_cv2.shape)
-                        img_crop_pil = img_pil.crop((x1, y1, x2, y2))
-                        zoom_w = max(1, (x2 - x1) * 2)
-                        zoom_h = max(1, (y2 - y1) * 2)
-                        img_zoom_pil = img_crop_pil.resize((zoom_w, zoom_h), Image.Resampling.LANCZOS)
-
-                contents: list = [usr_prompt, img_overview]
-                if img_crop_pil:
-                    contents.append(img_crop_pil)
-                if img_zoom_pil:
-                    contents.append(img_zoom_pil)
-
-                response = gemini_client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=contents,  # type: ignore
-                    config=types.GenerateContentConfig(
-                        system_instruction=sys_prompt,
-                        temperature=0.2,
-                        response_mime_type="application/json"
-                    )
-                )
-
-                raw_text = response.text.strip() if response.text else ""
-                try:
-                    import json
-                    if raw_text.startswith("```json"):
-                        raw_text = raw_text[7:-3].strip()
-                    elif raw_text.startswith("```"):
-                        raw_text = raw_text[3:-3].strip()
-
-                    gemini_json = json.loads(raw_text)
-                    verdict   = str(gemini_json.get("verdict", "")).lower().strip()
-                    vlm_conf  = float(gemini_json.get("confidence", 0))
-                    reasoning = gemini_json.get("reasoning", "")
-                    diff_dx   = gemini_json.get("differential_diagnosis", "")
-                    contra_ev = gemini_json.get("contradictory_evidence", "")
-
-                    if verdict in CATEGORIES:
-                        if vlm_conf >= 0.85:
-                            # Guard-1: Cả hai cùng thấy u → không chấp nhận 'notumor' từ Gemini
-                            if verdict == 'notumor' and cnn_is_tumor and yolo_is_tumor:
-                                predicted_class   = cnn_class
-                                final_confidence  = confidence
-                                consensus_message = (
-                                    "<strong style='color:#ffaa00'>Cảnh báo: Guard-1 Triggered</strong><br>"
-                                    "<strong style='color:#fff'>Lý do:</strong> Cả Ensemble và YOLO đều ngđi u, VLM chẩn đoán nhầm thành 'notumor'.<br>"
-                                    f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()}) để đảm bảo an toàn."
-                                )
-                            # Guard-2: CNN thấy u nhưng YOLO miss → cần 97% mới được đổi sang notumor
-                            elif verdict == 'notumor' and cnn_is_tumor and not yolo_is_tumor and vlm_conf < 0.97:
-                                predicted_class   = cnn_class
-                                final_confidence  = confidence
-                                consensus_message = (
-                                    f"<strong style='color:#ffaa00'>Cảnh báo: Guard-2 Triggered</strong><br>"
-                                    f"<strong style='color:#fff'>Lý do:</strong> CNN phát hiện u nhưng VLM muốn 'notumor' với chỉ {vlm_conf*100:.0f}% (cần ≥ 97% để bác bỏ kết quả CNN).<br>"
-                                    f"<strong style='color:#fff'>Hành động:</strong> Giữ kết quả Ensemble ({cnn_class.upper()}) tránh bỏ sót u."
-                                )
-                            else:
-                                predicted_class   = verdict
-                                final_confidence  = vlm_conf
-                                consensus_message = (
-                                    f"<strong style='color:#fff'>Trọng tài VLM quyết định:</strong> {verdict.upper()}<br>"
-                                    f"<strong style='color:#fff'>Độ tin cậy:</strong> {vlm_conf*100:.1f}%<br>"
-                                    f"<strong style='color:#fff'>Lập luận:</strong> {reasoning}<br>"
-                                    f"<strong style='color:#fff'>Chẩn đoán phân biệt:</strong> {diff_dx}<br>"
-                                    f"<strong style='color:#aaa'>Bằng chứng phản bác:</strong> {contra_ev}"
-                                )
-                        else:
-                            predicted_class   = cnn_class
-                            final_confidence  = confidence
-                            consensus_message = (
-                                f"<strong style='color:#ffaa00'>Cảnh báo: Ambiguous</strong><br>"
-                                f"<strong style='color:#fff'>Lý do:</strong> VLM confidence ({vlm_conf*100:.1f}%) < ngưỡng 85%.<br>"
-                                f"<strong style='color:#fff'>Lập luận VLM:</strong> {reasoning}<br>"
-                                f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()}) & hội chẩn thủ công."
-                            )
-                    else:
-                        predicted_class   = cnn_class
-                        final_confidence  = confidence
-                        consensus_message = (
-                            f"<strong style='color:#ff5555'>Cảnh báo: VLM verdict không hợp lệ</strong><br>"
-                            f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
-                        )
-                except Exception as e:
-                    print(f"[Consensus] Lỗi phân tích JSON Gemini: {e}. Raw: {raw_text}")
-                    predicted_class   = cnn_class
-                    final_confidence  = confidence
-                    consensus_message = (
-                        f"<strong style='color:#ff5555'>Cảnh báo: Lỗi xử lý kết quả phân xử</strong><br>"
-                        f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
-                    )
-            except Exception as e:
-                print(f"[Consensus] Lỗi gọi Gemini API: {e}")
-                predicted_class   = cnn_class
-                final_confidence  = confidence
-                consensus_message = (
-                    f"<strong style='color:#ff5555'>Cảnh báo: Lỗi kết nối API</strong><br>"
-                    f"<strong style='color:#fff'>Hành động:</strong> Quây về Ensemble ({cnn_class.upper()})."
-                ) 
+            predicted_class, final_confidence, consensus_message = _call_gemini_vlm_arbitration(
+                file_path=file_path,
+                cnn_class=cnn_class,
+                confidence=confidence,
+                uncertainty_score=uncertainty_score,
+                yolo_class=yolo_class,
+                yolo_box_details=yolo_box_details,
+            )
 
     # 8. Xử lý khoanh vùng khối u (Sử dụng Grad-CAM kết hợp lọc ROI hoặc YOLO box)
     b64_string = ""
@@ -710,7 +720,8 @@ Produce your full chain-of-thought, then output a single valid JSON object."""
                 model, img_array, file_path, predicted_class, final_class_idx,
                 confidence=final_confidence * 100,
                 gemini_client=gemini_client,
-                gemini_model=GEMINI_MODEL
+                gemini_model=GEMINI_MODEL,
+                plane_hint_path=plane_hint_path,
             )
         else:
             img_cv = cv2.imread(file_path)
@@ -738,8 +749,195 @@ Produce your full chain-of-thought, then output a single valid JSON object."""
     return result
 
 
+from fastapi import Form as _TriageForm, HTTPException as _TriageHTTPException
+from starlette.concurrency import run_in_threadpool as _run_in_threadpool
+from typing import List as _TriageList, Optional as _TriageOptional
+import json as _triage_json
+import shutil as _triage_shutil
+import tempfile as _triage_tempfile
+from study_triage import (
+    extract_zip_safely as _extract_zip_safely,
+    sanitize_rel_path as _sanitize_triage_rel_path,
+    triage_study_slices as _triage_study_slices,
+)
+
+
+def _arbitrate_triage_slice_with_gemini(it: dict) -> dict:
+    """Adapter running bounded Tier-3 Gemini VLM arbitration on a study slice dict."""
+    box = it.get("boundingBox")
+    w_img = max(1, int(it.get("width") or 512))
+    h_img = max(1, int(it.get("height") or 512))
+    yolo_box_details = None
+    if isinstance(box, dict) and box.get("w") and box.get("h"):
+        yolo_box_details = {
+            "x": max(0, int(float(box["x"]) * w_img)),
+            "y": max(0, int(float(box["y"]) * h_img)),
+            "width": max(10, int(float(box["w"]) * w_img)),
+            "height": max(10, int(float(box["h"]) * h_img)),
+            "conf": float(it.get("yoloConf") or 0.0),
+        }
+
+    pred_cls, final_conf, msg = _call_gemini_vlm_arbitration(
+        file_path=it["absPath"],
+        cnn_class=str(it.get("cnnClass") or it.get("predictedClass") or "notumor"),
+        confidence=float(it.get("confidence") or 0.0) / 100.0,
+        uncertainty_score=float(it.get("uncertaintyScore") or 0.0),
+        yolo_class=str(it.get("yoloClass") or "notumor") if (it.get("yoloDetected") and float(it.get("yoloConf") or 0.0) >= 0.35) else "notumor",
+        yolo_box_details=yolo_box_details,
+    )
+    return {
+        "predictedClass": pred_cls,
+        "confidence": round(final_conf * 100.0, 2),
+        "consensusMessage": msg,
+    }
+
+
+@app.post("/triage-study")
+async def triage_study(
+    archive: _TriageOptional[UploadFile] = File(None),
+    files: _TriageOptional[_TriageList[UploadFile]] = File(None),
+    relative_paths: _TriageOptional[str] = _TriageForm(None),
+    protocol_code: _TriageOptional[str] = _TriageForm(None),
+    with_contrast: bool = _TriageForm(False),
+    top_k: int = _TriageForm(10),
+    candidate_limit: int = _TriageForm(120),
+    gemini_conflict_limit: int = _TriageForm(5),
+):
+    """
+    Phân tích AI chi tiết hàng loạt lát cắt MRI của một ca chụp (từ thư mục/ZIP):
+      - Loại bỏ Localizer / Screen Save / lát rìa tối.
+      - Chạy Ensemble 3 mô hình CNN (ResNet50V2 + EfficientNetB0 + DenseNet121) + BayTTA + YOLOv8 trên toàn bộ lát hợp lệ.
+      - Giới hạn gọi Gemini VLM tối đa `gemini_conflict_limit` lát xung đột (mặt phẳng axial) để tránh quá tải API.
+      - Thống kê loại khối u chiếm đa số trên toàn thư mục và đánh dấu preselected=True cho top_k lát tốt nhất.
+    """
+    if archive is None and not files:
+        raise _TriageHTTPException(
+            status_code=400,
+            detail="Vui lòng gửi archive (.zip) hoặc danh sách files ảnh cần sàng lọc.",
+        )
+
+    parsed_meta = []
+    if relative_paths:
+        try:
+            raw_meta = _triage_json.loads(relative_paths)
+            if isinstance(raw_meta, list):
+                parsed_meta = raw_meta
+        except Exception:
+            raise _TriageHTTPException(
+                status_code=400,
+                detail="relative_paths không đúng định dạng JSON.",
+            )
+
+    triage_tmp_dir = _triage_tempfile.mkdtemp(prefix="neuroscan_triage_")
+    try:
+        slice_entries = []
+
+        if archive is not None:
+            zip_ext = os.path.splitext(archive.filename or "study.zip")[1].lower()
+            if zip_ext != ".zip":
+                raise _TriageHTTPException(status_code=400, detail="Chỉ hỗ trợ tệp nén .zip để sàng lọc.")
+
+            zip_path = os.path.join(triage_tmp_dir, "study_upload.zip")
+            with open(zip_path, "wb") as zout:
+                while True:
+                    chunk = await archive.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    zout.write(chunk)
+
+            extract_root = os.path.join(triage_tmp_dir, "extracted")
+            extracted = _extract_zip_safely(zip_path, extract_root)
+
+            # Optional sliceKey lookup keyed by sanitized relativePath
+            key_by_rel = {}
+            for item in parsed_meta:
+                if isinstance(item, dict) and item.get("relativePath") and item.get("sliceKey"):
+                    key_by_rel[_sanitize_triage_rel_path(item["relativePath"])] = str(item["sliceKey"])
+
+            for idx, (abs_p, rel_p) in enumerate(extracted):
+                clean_rel = _sanitize_triage_rel_path(rel_p)
+                slice_entries.append({
+                    "absPath": abs_p,
+                    "relativePath": clean_rel,
+                    "sliceKey": key_by_rel.get(clean_rel, f"zip-{idx}"),
+                })
+
+        if files:
+            files_root = os.path.join(triage_tmp_dir, "batch_files")
+            os.makedirs(files_root, exist_ok=True)
+            for idx, uf in enumerate(files):
+                meta_item = parsed_meta[idx] if idx < len(parsed_meta) else None
+                if isinstance(meta_item, dict):
+                    raw_rel = meta_item.get("relativePath") or uf.filename or f"slice_{idx}.jpg"
+                    s_key = str(meta_item.get("sliceKey") or f"file-{idx}")
+                elif isinstance(meta_item, str):
+                    raw_rel = meta_item or uf.filename or f"slice_{idx}.jpg"
+                    s_key = f"file-{idx}"
+                else:
+                    raw_rel = uf.filename or f"slice_{idx}.jpg"
+                    s_key = f"file-{idx}"
+
+                clean_rel = _sanitize_triage_rel_path(raw_rel) or f"slice_{idx}.jpg"
+                out_abs = os.path.abspath(os.path.join(files_root, *clean_rel.split("/")))
+                files_root_abs = os.path.abspath(files_root)
+                if not (out_abs == files_root_abs or out_abs.startswith(files_root_abs + os.sep)):
+                    continue
+                os.makedirs(os.path.dirname(out_abs), exist_ok=True)
+                with open(out_abs, "wb") as fout:
+                    while True:
+                        chunk = await uf.read(512 * 1024)
+                        if not chunk:
+                            break
+                        fout.write(chunk)
+                slice_entries.append({
+                    "absPath": out_abs,
+                    "relativePath": clean_rel,
+                    "sliceKey": s_key,
+                })
+
+        if not slice_entries:
+            raise _TriageHTTPException(
+                status_code=400,
+                detail="Không tìm thấy lát cắt ảnh hợp lệ (.jpg, .png, .bmp, .webp) trong dữ liệu gửi lên.",
+            )
+
+        report = await _run_in_threadpool(
+            _triage_study_slices,
+            slice_entries,
+            resnet_model=model,
+            yolo_model=yolo_model,
+            categories=CATEGORIES,
+            preprocess_fn=medical_preprocessing_v2,
+            resnet_input_fn=res_prep,
+            efficientnet_model=efficientnet_model,
+            efficientnet_input_fn=eff_prep,
+            densenet_model=densenet_model,
+            densenet_input_fn=den_prep,
+            temp_scale_fn=apply_temperature_scaling,
+            gemini_arbitrate_fn=_arbitrate_triage_slice_with_gemini,
+            gemini_conflict_limit=gemini_conflict_limit,
+            protocol_code=protocol_code,
+            with_contrast=with_contrast,
+            top_k=top_k,
+            candidate_limit=candidate_limit,
+        )
+        return report
+    except _TriageHTTPException:
+        raise
+    except ValueError as ve:
+        raise _TriageHTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        print(f"[Triage Study Error] {exc}")
+        raise _TriageHTTPException(status_code=500, detail=f"Lỗi sàng lọc chuỗi ảnh: {exc}")
+    finally:
+        _triage_shutil.rmtree(triage_tmp_dir, ignore_errors=True)
+
+
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    series_hint: _TriageOptional[str] = _TriageForm(None),
+):
     if model is None or efficientnet_model is None or densenet_model is None:
         return {"error": "Hệ thống AI chưa sẵn sàng (Lỗi tải mô hình)"}
 
@@ -770,7 +968,7 @@ async def predict(file: UploadFile = File(...)):
             return {"error": "Không thể xử lý ảnh"}
 
         # 4. Thực thi suy luận đa mô hình Ensemble & YOLO & VLM
-        return _run_mri_inference(file_path, processed_img)
+        return _run_mri_inference(file_path, processed_img, plane_hint_path=series_hint)
     finally:
         # Luôn đảm bảo tệp ảnh tạm được xóa an toàn khỏi ổ đĩa
         if os.path.exists(file_path):

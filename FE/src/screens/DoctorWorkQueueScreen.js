@@ -15,6 +15,8 @@ import MriRescanModal from '../components/MriRescanModal';
 import MriCancelModal from '../components/MriCancelModal';
 import ContrastConsentReview from '../components/staff/ContrastConsentReview';
 import ReceptionQueueBoard from '../components/reception/ReceptionQueueBoard';
+import KtvStudyTriagePanel from '../components/ktv/KtvStudyTriagePanel';
+import FinalizedSliceGallery from '../components/ktv/FinalizedSliceGallery';
 import { consentStatus } from '../utils/signature';
 import { prefillFromScreening, screeningBadge } from '../utils/mriScreening';
 import ClinicalStatusBadge from '../components/ClinicalStatusBadge';
@@ -56,6 +58,7 @@ import {
   BellRing,
   Image as ImageIcon,
   MoreHorizontal,
+  Star,
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -67,6 +70,7 @@ const STATUS_CONFIG = {
   'đang chụp':      { color: '#E0F2FE', text: '#0284C7', label: 'Đang chụp' },
   'đã hủy':         { color: '#FEE2E2', text: '#DC2626', label: 'Đã hủy' },
   'chờ kết quả AI': { color: '#FEF9C3', text: '#CA8A04', label: 'Chờ AI' },
+  'lỗi AI':         { color: '#FEE2E2', text: '#B91C1C', label: 'Lỗi AI' },
   'chờ bác sĩ đọc': { color: Colors.brandGreenSoft, text: Colors.brandGreen, label: 'Chờ đọc phim' },
   'hoàn tất':       { color: '#F0FDF4', text: '#059669', label: 'Hoàn tất' },
   'đã đóng':        { color: '#F1F5F9', text: '#64748B', label: 'Đã đóng' },
@@ -94,6 +98,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [user, setUser] = useState(route?.params?.user || null);
   const [visits, setVisits] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [mriRooms, setMriRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'done'
   const { width: winWidth } = useWindowDimensions();
@@ -123,6 +128,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [uploadModal, setUploadModal] = useState(false);
   const [activeVisit, setActiveVisit] = useState(null);
   const [uploadedImages, setUploadedImages] = useState([]);
+  const [sliceSeriesMeta, setSliceSeriesMeta] = useState([]);
+  const [primarySliceIndex, setPrimarySliceIndex] = useState(0);
+  const [uploadAiPreview, setUploadAiPreview] = useState(null);
   const [dicomZipFile, setDicomZipFile] = useState(null); // { url, size, filename }
   const [techNotes, setTechNotes] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -168,13 +176,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [visitRes, staffRes] = await Promise.all([
+      const [visitRes, staffRes, roomRes] = await Promise.all([
         get('/api/v1/visits/my-queue'),
         get('/api/v1/visits/staff'),
+        get('/api/v1/mri-rooms').catch(() => null),
       ]);
       if (isMountedRef.current) {
         setVisits(visitRes.visits || []);
         setTechnicians(staffRes.technicians || []);
+        if (Array.isArray(roomRes?.data)) setMriRooms(roomRes.data);
       }
     } catch (e) {
       console.error('Lỗi nạp dữ liệu hàng đợi:', e);
@@ -425,6 +435,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         if (Platform.OS === 'web') alert(msg); else Alert.alert('Cần Bác sĩ duyệt', msg);
         setSafetyModal(false);
         fetchData();
+      } else if (res && res.success && res.roomBlocked) {
+        const msg = res.roomBlockMessage || res.message || 'Phòng máy MRI đang bảo trì hoặc ngừng hoạt động. Chưa thể đưa bệnh nhân vào buồng chụp.';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('Phòng máy chưa sẵn sàng', msg);
+        setSafetyModal(false);
+        fetchData();
       } else if (res && res.success) {
         if (Platform.OS === 'web') alert('Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
         else Alert.alert('An toàn đạt chuẩn', 'Đã hoàn tất bảng kiểm an toàn MRI. Đưa bệnh nhân vào buồng chụp.');
@@ -531,9 +546,27 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
   };
 
+  const handleAutoScheduleRoom = async (visit) => {
+    try {
+      const res = await post('/api/v1/mri-rooms/schedule/auto', { visitId: visit._id });
+      const roomName = res?.data?.room?.name || 'phòng MRI';
+      const msg = res?.message || `Đã xếp ca chụp vào ${roomName}.`;
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Đã xếp phòng MRI', msg);
+      fetchData();
+    } catch (e) {
+      const msg = e?.message || 'Chưa xếp được phòng chụp MRI.';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Không xếp được phòng', msg);
+    }
+  };
+
   const openUploadModal = (visit) => {
     setActiveVisit(visit);
     setUploadedImages([]);
+    setSliceSeriesMeta([]);
+    setPrimarySliceIndex(0);
+    setUploadAiPreview(null);
     setDicomZipFile(null);
     setTechNotes('');
     setUploadModal(true);
@@ -554,7 +587,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       reader.readAsDataURL(file);
     });
 
-  // Vùng 1: Tải lên 1 - 3 ảnh lát cắt tiêu biểu (Key Slices) qua multipart stream
+  // Vùng 1: Tải lên tối đa 15 lát cắt tiêu biểu (khuyến nghị ~10 lát rõ khối u) qua multipart stream
   const handlePickAndUpload = async () => {
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
@@ -564,8 +597,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       input.onchange = async (e) => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
-        if (uploadedImages.length + files.length > 3) {
-          alert('Tối đa 3 ảnh lát cắt tiêu biểu (Key Slices) mỗi ca chụp.');
+        if (uploadedImages.length + files.length > 15) {
+          alert('Tối đa 15 lát cắt tiêu biểu (khuyến nghị ~10 ảnh rõ khối u) mỗi ca chụp.');
           return;
         }
         setUploading(true);
@@ -591,8 +624,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       input.click();
     } else {
       // Mobile fallback
-      if (uploadedImages.length >= 3) {
-        Alert.alert('Giới hạn', 'Tối đa 3 ảnh lát cắt tiêu biểu mỗi ca chụp.');
+      if (uploadedImages.length >= 15) {
+        Alert.alert('Giới hạn', 'Tối đa 15 lát cắt tiêu biểu mỗi ca chụp.');
         return;
       }
 
@@ -613,7 +646,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
       setUploading(true);
       const results = [...uploadedImages];
-      for (const asset of result.assets.slice(0, 3 - uploadedImages.length)) {
+      for (const asset of result.assets.slice(0, Math.max(0, 15 - uploadedImages.length))) {
         try {
           const fileName = asset.fileName || `mri_${Date.now()}.jpg`;
           const fileType = asset.mimeType || (fileName.endsWith('.png') ? 'image/png' : 'image/jpeg');
@@ -676,9 +709,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   const handleRemoveImage = (idx) => {
     setUploadedImages(prev => prev.filter((_, i) => i !== idx));
+    setSliceSeriesMeta(prev => prev.filter((_, i) => i !== idx).map((m, newIdx) => ({ ...m, sliceIndex: newIdx })));
+    setPrimarySliceIndex(prev => (prev === idx ? 0 : prev > idx ? prev - 1 : prev));
   };
 
-  // Vùng 2: Tải lên trọn bộ file nén DICOM .zip / .rar (Mini-PACS archive, tối đa 200MB)
+  // Vùng 2: Tải lên trọn bộ file nén DICOM .zip / .rar (Mini-PACS archive, tối đa 600MB)
   const handlePickAndUploadDicomZip = async () => {
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
@@ -687,8 +722,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       input.onchange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 200 * 1024 * 1024) {
-          alert('Dung lượng tệp nén DICOM vượt quá giới hạn cho phép (tối đa 200MB).');
+        if (file.size > 600 * 1024 * 1024) {
+          alert('Dung lượng tệp nén DICOM vượt quá giới hạn cho phép (tối đa 600MB).');
           return;
         }
         setUploadingZip(true);
@@ -737,8 +772,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       await post('/api/v1/imaging-results', {
         visitId: activeVisit._id,
         patientId,
-        imageUrl: uploadedImages[0],
+        imageUrl: uploadedImages[primarySliceIndex] || uploadedImages[0],
         images: uploadedImages,
+        sliceSeriesMeta,
+        primarySliceIndex,
+        triageAiPreview: uploadAiPreview || null,
         dicomZipUrl: dicomZipFile?.url || null,
         dicomZipSize: dicomZipFile?.size || null,
         dicomZipFilename: dicomZipFile?.filename || null,
@@ -747,9 +785,11 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         requestAiAnalysis: activeVisit.mriOrder?.requestAiAnalysis || false,
       });
 
-      // Đồng bộ trạng thái lượt khám sang 'chờ kết quả AI' hoặc 'chờ bác sĩ đọc'
+      // Đồng bộ trạng thái lượt khám sang 'chờ kết quả AI' (nếu chưa có AI) hoặc 'chờ bác sĩ đọc'
       try {
-        const nextStatus = activeVisit.mriOrder?.requestAiAnalysis ? 'chờ kết quả AI' : 'chờ bác sĩ đọc';
+        const nextStatus = (activeVisit.mriOrder?.requestAiAnalysis && !uploadAiPreview)
+          ? 'chờ kết quả AI'
+          : 'chờ bác sĩ đọc';
         await put(`/api/v1/visits/${activeVisit._id}/status`, { status: nextStatus });
       } catch (statusErr) {
         console.warn('Lưu ý cập nhật status lượt khám:', statusErr?.message);
@@ -781,13 +821,21 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   };
 
 
+  const isDoctor = user?.role === 'doctor' || user?.role === 'department_head';
+  const isRadiologist = user?.role === 'radiologist';
+  const isTechnician = user?.role === 'technician';
+  const isNurse = user?.role === 'nurse';
+  const isReceptionist = user?.role === 'receptionist';
+  const isAdmin = ['admin', 'system_admin', 'hospital_admin'].includes(user?.role);
+  const effectiveMode = isTechnician ? 'mriQueue' : currentMode;
+
   const activeVisits = visits.filter(v => {
     if (['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status)) return false;
-    if (currentMode === 'all') {
-      return ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status);
+    if (effectiveMode === 'all') {
+      return ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status);
     }
-    if (currentMode === 'mriQueue') {
-      return ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status);
+    if (effectiveMode === 'mriQueue') {
+      return ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status);
     } else {
       return ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status);
     }
@@ -796,22 +844,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const doneVisits = visits.filter(v => {
     if (v.status === 'đã hủy') return true;
     if (!['hoàn tất', 'đã đóng'].includes(v.status)) return false;
-    if (currentMode === 'all') {
+    if (effectiveMode === 'all') {
       return true;
     }
-    if (currentMode === 'mriQueue') {
+    if (effectiveMode === 'mriQueue') {
       return !!v.mriOrder?.region;
     } else {
       return !v.mriOrder?.region;
     }
   });
-
-  const isDoctor = user?.role === 'doctor' || user?.role === 'department_head';
-  const isRadiologist = user?.role === 'radiologist';
-  const isTechnician = user?.role === 'technician';
-  const isNurse = user?.role === 'nurse';
-  const isReceptionist = user?.role === 'receptionist';
-  const isAdmin = ['admin', 'system_admin', 'hospital_admin'].includes(user?.role);
 
   const patientNameOf = (v) => v.patientId?.profile?.name || v.patientId?.profile?.fullName || v.patientId?.email || 'Bệnh nhân';
   const isEmergency = (v) => v.priority === 'khẩn cấp';
@@ -865,7 +906,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       visitId: v._id,
       resultId: ridStr,
       imagingResultId: ridStr,
-      activeRoute: `DoctorWorkQueue_${currentMode}`,
+      activeRoute: `DoctorWorkQueue_${effectiveMode}`,
       visitStatus: v.status,
     });
   };
@@ -912,7 +953,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     const canOrderMri = v.status === 'đang khám';
     const canStartMri = v.status === 'chờ chụp' || v.status === 'chờ chụp lại' || v.status === 'chờ chụp sau phẫu thuật';
     const canUploadMri = v.status === 'đang chụp';
-    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI' || Boolean(v.mriOrder?.imagingResultId);
+    const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI' || v.status === 'lỗi AI' || Boolean(v.mriOrder?.imagingResultId);
     const list = [];
     if ((isDoctor || isAdmin) && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh')) list.push({ key: 'start', variant: 'primary', icon: Stethoscope, label: 'Bắt đầu khám', onPress: () => startExam(v) });
     if ((isDoctor || isAdmin) && ['đang khám', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status)) list.push({ key: 'exam', variant: 'primary', icon: Pill, label: 'Khám & kê đơn', onPress: () => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id, defaultTab: 'prescription' }) });
@@ -923,9 +964,13 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     const awaitingConfirm = canStartMri && v.mriSafetyChecklist?.isScreened && !v.mriSafetyChecklist?.passed;
     if (awaitingConfirm && !v.mriSafetyChecklist?.hasPacemakerOrMetal && (isDoctor || isRadiologist)) list.push({ key: 'confirm', variant: 'primary', icon: ShieldCheck, label: 'Xác nhận an toàn MRI', onPress: () => openConfirmModal(v, 'review') });
     if (awaitingConfirm && v.mriSafetyChecklist?.hasPacemakerOrMetal && isRadiologist && v.patientMriScreening?.answers?.pacemaker !== 'yes') list.push({ key: 'confirm', variant: 'primary', icon: ShieldCheck, label: 'Xác nhận an toàn MRI', onPress: () => openConfirmModal(v, 'override') });
+    if (canStartMri && !v.mriSlot && (isTechnician || isDoctor || isRadiologist || isAdmin)) list.push({ key: 'scheduleRoom', variant: 'secondary', icon: Scan, label: 'Xếp phòng MRI', onPress: () => handleAutoScheduleRoom(v) });
     if (isTechnician && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
     if ((isTechnician || isAdmin) && canUploadMri) list.push({ key: 'upload', variant: 'primary', icon: Upload, label: 'Nộp ảnh phim', onPress: () => openUploadModal(v) });
-    if ((isDoctor || isRadiologist || isTechnician || isAdmin) && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
+    if ((isDoctor || isRadiologist || isTechnician || isAdmin) && hasReadResult) {
+      const readLabel = v.status === 'lỗi AI' ? 'Xem phim / Thử lại AI' : (v.status === 'chờ kết quả AI' ? 'Xem tiến độ AI' : isTechnician ? 'Xem ảnh chụp & AI' : 'Đọc kết quả phim');
+      list.push({ key: 'read', variant: 'primary', icon: Eye, label: readLabel, onPress: () => openReadResult(v) });
+    }
     if (isNurse && v.status === 'đang chờ') list.push({ key: 'vitals', variant: 'primary', icon: Activity, label: 'Nhập sinh hiệu', onPress: () => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } }) });
     if ((isTechnician || isAdmin) && (canStartMri || canUploadMri)) {
       list.push({ key: 'rescan', variant: 'secondary', icon: RotateCcw, label: 'Chụp lại', onPress: () => openRescanModal(v) });
@@ -1026,11 +1071,26 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={[styles.colInfo, styles.cellStack]}>
           {mri ? (
             <Text style={styles.cellText}>MRI {v.mriOrder.region}{v.mriOrder.requestAiAnalysis ? ' · có AI phân tích' : ''}</Text>
+          ) : isTechnician ? (
+            <Text style={styles.cellMuted}>Chưa có y lệnh chụp</Text>
           ) : v.vitals?.bloodPressure ? (
             <Text style={styles.cellNum}>HA {v.vitals.bloodPressure} · Mạch {v.vitals.pulse} · SpO₂ {v.vitals.spo2}%</Text>
           ) : (
             <Text style={styles.cellMuted}>Chưa đo sinh hiệu</Text>
           )}
+          {v.mriSlot?.roomId?.name ? (
+            <Text style={[styles.cellNote, v.mriSlot.roomId.status && v.mriSlot.roomId.status !== 'active' ? styles.cellNoteDanger : { color: '#0369A1' }]}>
+              {v.mriSlot.roomId.name}{v.mriSlot.roomId.status === 'maintenance' ? ' (Đang bảo trì)' : v.mriSlot.roomId.status === 'inactive' ? ' (Ngưng dùng)' : ''}
+            </Text>
+          ) : null}
+          {v.mriOrder?.imagingResultId?.aiReport?.class_name ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Brain size={12} color={v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#059669' : '#DC2626'} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#059669' : '#DC2626' }}>
+                AI: {v.mriOrder.imagingResultId.aiReport.class_name.toUpperCase()} ({v.mriOrder.imagingResultId.aiReport.confidence}%)
+              </Text>
+            </View>
+          ) : null}
           {v.status === 'chờ chụp lại' && v.mriRescanReason ? (
             <Text style={[styles.cellNote, styles.cellNoteWarn]}>Chụp lại: {v.mriRescanReason}</Text>
           ) : null}
@@ -1041,7 +1101,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         <View style={styles.colTime}>
           <Text style={styles.cellNum}>{fmtWhen(v.createdAt)}</Text>
           {activeTab === 'queue' ? <Text style={styles.cellSub}>{waitLabel(v.createdAt)}</Text> : null}
-          <Text style={styles.cellSub} numberOfLines={1}>Điều dưỡng: {v.nurseId?.profile?.name || v.nurseId?.email || 'Đã phân công'}</Text>
+          {!isTechnician && (
+            <Text style={styles.cellSub} numberOfLines={1}>Điều dưỡng: {v.nurseId?.profile?.name || v.nurseId?.email || 'Đã phân công'}</Text>
+          )}
         </View>
         {renderRowActions(v)}
       </View>
@@ -1139,7 +1201,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         )}
 
         {/* Vitals */}
-        {Boolean(v.vitals?.bloodPressure) && (
+        {!isTechnician && Boolean(v.vitals?.bloodPressure) && (
           <View style={styles.vitalsRow}>
             <Activity size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.vitalsLabel}>Sinh hiệu:</Text>
@@ -1151,23 +1213,34 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
         {/* MRI Order info */}
         {Boolean(v.mriOrder?.region) && (
-          <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+          <View style={[styles.mriInfo, { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }]}>
             <Scan size={13} color={Colors.brandGreen} strokeWidth={2.2} />
             <Text style={styles.mriInfoText}>
               Y lệnh MRI: <Text style={{ fontWeight: 'bold' }}>{v.mriOrder.region}</Text>
               {v.mriOrder.requestAiAnalysis ? ' · Yêu cầu AI phân tích' : ''}
+              {v.mriSlot?.roomId?.name ? ` · ${v.mriSlot.roomId.name}${v.mriSlot.roomId.status === 'maintenance' ? ' (Bảo trì)' : v.mriSlot.roomId.status === 'inactive' ? ' (Ngưng dùng)' : ''}` : ''}
             </Text>
           </View>
         )}
+        {v.mriOrder?.imagingResultId?.aiReport?.class_name ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#ECFDF5' : '#FEF2F2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#A7F3D0' : '#FECACA' }}>
+            <Brain size={14} color={v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#059669' : '#DC2626'} strokeWidth={2.4} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: v.mriOrder.imagingResultId.aiReport.class_name === 'notumor' ? '#065F46' : '#991B1B' }}>
+              Kết quả AI: {v.mriOrder.imagingResultId.aiReport.class_name.toUpperCase()} ({v.mriOrder.imagingResultId.aiReport.confidence}%)
+            </Text>
+          </View>
+        ) : null}
         {consentFlagOf(v) ? <View style={styles.cardFlags}><Flag {...consentFlagOf(v)} /></View> : null}
 
         {/* Nurse info */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-          <User size={13} color="#64748B" />
-          <Text style={styles.subInfo}>
-            Điều dưỡng: {v.nurseId?.profile?.name || v.nurseId?.email || 'Đã phân công'}
-          </Text>
-        </View>
+        {!isTechnician && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <User size={13} color="#64748B" />
+            <Text style={styles.subInfo}>
+              Điều dưỡng: {v.nurseId?.profile?.name || v.nurseId?.email || 'Đã phân công'}
+            </Text>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, marginBottom: 8 }}>
           <Clock size={12} color="#94A3B8" />
           <Text style={styles.subInfo}>
@@ -1188,7 +1261,17 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   const mriActiveCount = visits.filter(v => 
     !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
-    ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status)
+    ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status)
+  ).length;
+
+  const mriScanningCount = visits.filter(v =>
+    !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
+    ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp'].includes(v.status)
+  ).length;
+
+  const mriPostScanCount = visits.filter(v =>
+    !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
+    ['chờ kết quả AI', 'lỗi AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status)
   ).length;
 
   // Lễ tân & điều dưỡng: cùng một bảng gọi số ca khám (giao diện nhất quán giữa 2 vai trò)
@@ -1203,40 +1286,48 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const screenTitle = isNurse ? 'Hàng đợi đo sinh hiệu' : isTechnician ? 'Hàng đợi phòng chụp MRI 3.0T' : 'Hàng đợi khám & chẩn đoán';
 
   return (
-    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${currentMode}`}>
+    <ResponsiveLayout navigation={navigation} title={screenTitle} user={user} activeRoute={`DoctorWorkQueue_${effectiveMode}`}>
       <ScrollView>
         <PageContainer style={styles.page}>
           <View style={styles.bannerBlock}>
             <StaffBanner
-              image={isTechnician ? RECEPTION_IMAGES.mriFilms : currentMode === 'mriQueue' ? RECEPTION_IMAGES.mriFilms : RECEPTION_IMAGES.mriDiscuss}
+              image={isTechnician ? RECEPTION_IMAGES.mriFilms : effectiveMode === 'mriQueue' ? RECEPTION_IMAGES.mriFilms : RECEPTION_IMAGES.mriDiscuss}
               tone="indigo"
               eyebrow={isTechnician ? 'Phòng chụp MRI' : 'Hàng đợi bác sĩ'}
               title={screenTitle}
-              subtitle="Ca cấp cứu luôn nằm đầu danh sách. Bấm thao tác ở cuối mỗi dòng để khám, kê đơn hoặc đọc kết quả phim."
+              subtitle={isTechnician
+                ? 'Kiểm tra an toàn từ trường, vận hành chụp MRI, lọc lát cắt và tải phim lên hệ thống AI / Mini-PACS.'
+                : 'Ca cấp cứu luôn nằm đầu danh sách. Bấm thao tác ở cuối mỗi dòng để khám, kê đơn hoặc đọc kết quả phim.'}
               right={(
-                <BannerStats items={[
+                <BannerStats items={isTechnician ? [
+                  { icon: QStatWait, value: mriScanningCount, label: 'Chờ / Đang chụp' },
+                  { icon: QStatMri, value: mriPostScanCount, label: 'Đã chụp / AI' },
+                  { icon: QStatEmergency, value: emergencyCount, label: 'Ca cấp cứu' },
+                ] : [
                   { icon: QStatWait, value: examActiveCount, label: 'Khám lâm sàng' },
                   { icon: QStatMri, value: mriActiveCount, label: 'Chụp MRI' },
                   { icon: QStatEmergency, value: emergencyCount, label: 'Ca cấp cứu' },
                 ]} />
               )}
             >
-              <View style={styles.bannerBtns}>
+              <View style={[styles.bannerBtns, isTechnician && { marginBottom: 0 }]}>
                 <Pressable style={styles.bannerGhost} onPress={fetchData}>
                   <QBtnRefresh size={15} color="#FFFFFF" />
                   <Text style={styles.bannerGhostText}>Làm mới</Text>
                 </Pressable>
               </View>
             </StaffBanner>
-            <PillTabs
-              tabs={[
-                { key: 'all', label: 'Tất cả', icon: QStatAll, count: examActiveCount + mriActiveCount },
-                { key: 'examQueue', label: 'Khám lâm sàng', icon: QStatWait, count: examActiveCount },
-                { key: 'mriQueue', label: 'Chụp MRI', icon: QStatMri, count: mriActiveCount },
-              ]}
-              value={currentMode}
-              onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
-            />
+            {!isTechnician && (
+              <PillTabs
+                tabs={[
+                  { key: 'all', label: 'Tất cả', icon: QStatAll, count: examActiveCount + mriActiveCount },
+                  { key: 'examQueue', label: 'Khám lâm sàng', icon: QStatWait, count: examActiveCount },
+                  { key: 'mriQueue', label: 'Chụp MRI', icon: QStatMri, count: mriActiveCount },
+                ]}
+                value={currentMode}
+                onChange={(k) => { setMenuFor(null); setCurrentMode(k); }}
+              />
+            )}
           </View>
           <View style={styles.toolbar}>
             <View style={styles.seg}>
@@ -1259,6 +1350,20 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               <Flag tone="danger" icon={Flame} label={`${emergencyCount} ca cấp cứu`} />
             ) : null}
           </View>
+
+          {effectiveMode === 'mriQueue' && mriRooms.length > 0 && mriRooms.every((r) => r.status !== 'active') ? (
+            <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 240 }}>
+                <AlertTriangle size={18} color="#DC2626" />
+                <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '600', flex: 1 }}>
+                  Tất cả phòng máy MRI hiện đang Bảo trì hoặc Ngưng dùng. Hệ thống sẽ chặn đưa bệnh nhân vào buồng chụp cho tới khi có ít nhất 1 phòng hoạt động.
+                </Text>
+              </View>
+              <Pressable onPress={() => navigation.navigate('MriRooms')} style={{ backgroundColor: '#DC2626', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Mở Phòng máy MRI</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {loading ? (
             <View style={styles.empty}>
@@ -1283,7 +1388,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 <Text style={[styles.th, styles.colNo]}>STT</Text>
                 <Text style={[styles.th, styles.colPatient]}>Bệnh nhân</Text>
                 <Text style={[styles.th, styles.colStatus]}>Trạng thái</Text>
-                <Text style={[styles.th, styles.colInfo]}>{currentMode === 'mriQueue' ? 'Y lệnh chụp' : currentMode === 'all' ? 'Sinh hiệu / y lệnh chụp' : 'Sinh hiệu'}</Text>
+                <Text style={[styles.th, styles.colInfo]}>{effectiveMode === 'mriQueue' ? 'Y lệnh chụp' : effectiveMode === 'all' ? 'Sinh hiệu / y lệnh chụp' : 'Sinh hiệu'}</Text>
                 <Text style={[styles.th, styles.colTime]}>Tiếp nhận</Text>
                 <Text style={[styles.th, styles.colActions, styles.thRight]}>Thao tác</Text>
               </View>
@@ -1398,9 +1503,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
       {/* Upload Modal - Chuẩn hóa Mini-PACS & KTV 2 Vùng */}
       <Modal visible={uploadModal} transparent animationType="slide" onRequestClose={() => setUploadModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { padding: 0, overflow: 'hidden', maxWidth: 640, alignSelf: 'center', width: '100%' }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+        <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 16 }]}>
+          <View style={[styles.modalBox, { padding: 0, overflow: 'hidden', maxWidth: 1280, maxHeight: '95%', alignSelf: 'center', width: '96%', borderRadius: 20 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FAFAFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', flexShrink: 0 }}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <UploadCloud size={20} color={Colors.brandGreen} />
@@ -1415,7 +1520,27 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={{ padding: 20, maxHeight: 540 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20 }}>
+              {/* ── BỘ LỌC THƯ MỤC CA CHỤP MRI THÔNG MINH (~1,000 ẢNH -> ~10 LÁT RÕ NHẤT) ── */}
+              <KtvStudyTriagePanel
+                visit={activeVisit}
+                onComplete={({ images: pickedImages, sliceSeriesMeta: pickedMeta, primarySliceIndex: pIdx, triageSummary, triageAiPreview }) => {
+                  setUploadedImages(pickedImages || []);
+                  setSliceSeriesMeta(pickedMeta || []);
+                  setPrimarySliceIndex(Number.isInteger(pIdx) ? pIdx : 0);
+                  setUploadAiPreview(triageAiPreview || null);
+                    if (triageSummary && !techNotes.trim()) {
+                      const diag = triageAiPreview?.studyDiagnosisSummary;
+                      const domNote = diag?.totalAnalyzed
+                        ? ` Đa số toàn thư mục (${diag.totalAnalyzed} lát): ${diag.dominantCount}/${diag.totalAnalyzed} lát (${diag.dominantPctOfTotal}%) là ${String(diag.dominantClass || 'notumor').toUpperCase()}.`
+                        : '';
+                      setTechNotes(
+                        `Đã phân tích AI chi tiết từ ${triageSummary.totalUploadedRaw || 0} ảnh MRI (bỏ ${triageSummary.ignoredSequenceCount || 0} ảnh định vị/localizer), chọn ${pickedImages?.length || 0} lát cắt rõ khối u nhất.${domNote}`
+                      );
+                    }
+                }}
+              />
+
               {/* ── VÙNG 1: KEY SLICES (BẮT BUỘC) ────────────────────── */}
               <View style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -1424,36 +1549,38 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                   </Text>
                   <View style={{ backgroundColor: uploadedImages.length > 0 ? '#DCFCE7' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                     <Text style={{ fontSize: 11, fontWeight: 'bold', color: uploadedImages.length > 0 ? '#166534' : '#991B1B' }}>
-                      {uploadedImages.length}/3 ảnh
+                      {uploadedImages.length}/15 ảnh
                     </Text>
                   </View>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
-                  Chọn 1 – 3 lát cắt rõ tổn thương nhất (.jpg, .png) phục vụ AI phát hiện u tức thì và hiển thị nhanh trên Web EMR.
+                  Chọn 1 – 15 lát cắt rõ tổn thương nhất (.jpg, .png — khuyến nghị ~10 lát từ bộ lọc) phục vụ AI sàng lọc u tức thì và hiển thị nhanh trên Web EMR. Bấm ★ để đổi ảnh đại diện.
                 </Text>
 
-                {uploadedImages.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
-                    {uploadedImages.map((url, idx) => (
-                      <View key={idx} style={{ width: 90, height: 90, borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 1, borderColor: '#CBD5E1' }}>
-                        <Image source={{ uri: getImageUrl(url) }} style={{ width: '100%', height: '100%' }} />
-                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 2, alignItems: 'center' }}>
-                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600' }}>Slice #{idx + 1}</Text>
-                        </View>
-                        <TouchableOpacity
-                          style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(239,68,68,0.9)', borderRadius: 12, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' }}
-                          onPress={() => handleRemoveImage(idx)}
-                        >
-                          <X size={12} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                <FinalizedSliceGallery
+                  images={uploadedImages}
+                  sliceSeriesMeta={sliceSeriesMeta}
+                  primarySliceIndex={primarySliceIndex}
+                  aiResult={uploadAiPreview}
+                  onSelectPrimary={(idx) => setPrimarySliceIndex(idx)}
+                  onRemoveSlice={handleRemoveImage}
+                  onOpenDicomViewer={() => {
+                    setUploadModal(false);
+                    navigation.navigate('DicomViewer', {
+                      draftImages: uploadedImages,
+                      sliceSeriesMeta,
+                      aiReportData: uploadAiPreview,
+                      patientName: activeVisit?.patientId?.profile?.fullName || activeVisit?.patientId?.profile?.name || 'Bệnh nhân',
+                      medicalId: activeVisit?.patientId?.profile?.patientId || '',
+                      procedure: `MRI vùng ${activeVisit?.mriOrder?.region || 'Não bộ'}`,
+                      visitId: activeVisit?._id || null,
+                    });
+                  }}
+                />
 
-                {uploadedImages.length < 3 && (
+                {uploadedImages.length < 15 && (
                   <TouchableOpacity
-                    style={[styles.textArea, { alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderStyle: 'dashed', borderColor: '#7C3AED', borderWidth: 1.5, backgroundColor: '#FAF5FF' }]}
+                    style={[styles.textArea, { alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderStyle: 'dashed', borderColor: '#7C3AED', borderWidth: 1.5, backgroundColor: '#FAF5FF' }]}
                     onPress={handlePickAndUpload}
                     disabled={uploading}
                   >
@@ -1464,12 +1591,12 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                       </View>
                     ) : (
                       <View style={{ alignItems: 'center' }}>
-                        <ImageIcon size={26} color={Colors.brandGreen} />
-                        <Text style={{ color: Colors.brandGreen, fontWeight: 'bold', marginTop: 6, fontSize: 13 }}>
-                          + Chọn ảnh cắt lớp tiêu biểu (.jpg, .png)
+                        <ImageIcon size={22} color={Colors.brandGreen} />
+                        <Text style={{ color: Colors.brandGreen, fontWeight: 'bold', marginTop: 4, fontSize: 12.5 }}>
+                          + Chọn thêm lát cắt lẻ thủ công (.jpg, .png)
                         </Text>
                         <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>
-                          (Đã chọn {uploadedImages.length}/3 ảnh — Tối đa 3 ảnh)
+                          (Đã chọn {uploadedImages.length}/15 ảnh — Khuyến nghị ~10 lát rõ khối u nhất)
                         </Text>
                       </View>
                     )}
@@ -1484,7 +1611,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                     ② Trọn bộ thư mục DICOM gốc (Mini-PACS)
                   </Text>
                   <View style={{ backgroundColor: '#EDE9FE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>Tùy chọn • Tối đa 200MB</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#6D28D9' }}>Tùy chọn • Tối đa 600MB</Text>
                   </View>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
@@ -1531,7 +1658,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                           + Chọn file nén DICOM (.zip, .rar)
                         </Text>
                         <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>
-                          Hỗ trợ file nén series lên đến 200MB
+                          Hỗ trợ file nén series lên đến 600MB
                         </Text>
                       </View>
                     )}
@@ -1550,7 +1677,15 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
                 onChangeText={setTechNotes}
               />
             </ScrollView>
-            
+
+            {uploadedImages.length > 0 && (
+              <View style={{ backgroundColor: '#ECFDF5', borderTopWidth: 1, borderTopColor: '#A7F3D0', paddingHorizontal: 20, paddingVertical: 10 }}>
+                <Text style={{ color: '#065F46', fontSize: 12.5, fontWeight: '700' }}>
+                  ✓ Đã sẵn sàng {uploadedImages.length} lát cắt MRI{uploadAiPreview ? ' kèm phân tích AI 3 tầng' : ''}. Bấm "Nộp kết quả phim chụp" bên dưới để lưu và gửi cho bác sĩ xem ảnh.
+                </Text>
+              </View>
+            )}
+
             <View style={[styles.modalBtns, { padding: 20, marginTop: 0, borderTopWidth: 1, borderTopColor: '#E2E8F0', backgroundColor: '#FAFAFF' }]}>
               <TouchableOpacity style={styles.btnCancel} onPress={() => setUploadModal(false)}>
                 <Text style={styles.btnCancelText}>Hủy</Text>

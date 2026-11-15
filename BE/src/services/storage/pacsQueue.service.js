@@ -66,8 +66,9 @@ const executeSingleDriveSyncJob = async (job) => {
   if (!record) return;
   if (record.syncStatus === "SYNCED" && record.driveFileId) return;
 
-  // 1. Kiểm tra Cloud Deduplication theo SHA-256:
-  // Nếu đã có 1 tệp cùng SHA-256 được đồng bộ thành công lên Drive trước đó -> Kế thừa luôn!
+  // 1. Kiểm tra Cloud Deduplication theo SHA-256: đã có bản sao Drive dùng được → kế thừa, không tải lại.
+  // Bản chính đã mã hóa (localEncrypted): chỉ kế thừa bản Drive của bản ghi dùng CHUNG tệp vật lý (cùng bản mã, cùng IV/tag);
+  // kế thừa IV/tag của bản mã khác sẽ làm bản chính không giải mã được nữa.
   if (record.sha256) {
     const existingSynced = await StoredMedicalFile.findOne({
       _id: { $ne: record._id },
@@ -78,6 +79,7 @@ const executeSingleDriveSyncJob = async (job) => {
       driveFileId: { $ne: null },
       encryptionIv: { $ne: null },
       encryptionAuthTag: { $ne: null },
+      ...(record.localEncrypted ? { localPath: record.localPath, encryptionIv: record.encryptionIv } : { localEncrypted: { $ne: true } }),
     }).lean();
 
     if (existingSynced) {
@@ -85,9 +87,7 @@ const executeSingleDriveSyncJob = async (job) => {
         driveFileId: existingSynced.driveFileId,
         driveFolderId: existingSynced.driveFolderId,
         syncStatus: "SYNCED",
-        encryptionIv: existingSynced.encryptionIv,
-        encryptionAuthTag: existingSynced.encryptionAuthTag,
-        isEncrypted: true,
+        ...(record.localEncrypted ? {} : { encryptionIv: existingSynced.encryptionIv, encryptionAuthTag: existingSynced.encryptionAuthTag }),
         lastSyncAttemptAt: new Date(),
         syncError: null,
       });
@@ -105,8 +105,12 @@ const executeSingleDriveSyncJob = async (job) => {
     throw new Error(`Tệp cục bộ không còn tồn tại để đồng bộ lên Drive: ${record.localPath}`);
   }
 
-  const rawBuffer = await readLocalBuffer(localPath);
-  const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(rawBuffer);
+  const stored = await readLocalBuffer(localPath);
+  // Bản chính đã là bản mã: đẩy nguyên bản mã lên Drive (bản sao Drive = bản chính từng byte, cùng IV/tag).
+  // Dữ liệu cũ bản rõ: mã hóa riêng cho bản sao Drive như trước.
+  const { encryptedBuffer, ivHex, authTagHex } = record.localEncrypted
+    ? { encryptedBuffer: stored, ivHex: record.encryptionIv, authTagHex: record.encryptionAuthTag }
+    : encryptBuffer(stored);
   const driveFileName = `${fileName || record.fileName}.enc`;
 
   const uploadFn = customDriveUploaderForTest || uploadEncryptedFile;
@@ -123,7 +127,6 @@ const executeSingleDriveSyncJob = async (job) => {
     syncStatus: "SYNCED",
     encryptionIv: ivHex,
     encryptionAuthTag: authTagHex,
-    isEncrypted: true,
     lastSyncAttemptAt: new Date(),
     syncError: null,
   });

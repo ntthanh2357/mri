@@ -47,6 +47,7 @@ import DocumentFormScreen from '../screens/DocumentFormScreen';
 import ImagingHistoryScreen from '../screens/ImagingHistoryScreen';
 import ImagingResultScreen from '../screens/ImagingResultScreen';
 import CreateImagingResultScreen from '../screens/CreateImagingResultScreen';
+import DicomViewerScreen from '../screens/DicomViewerScreen';
 import DoctorPatientListScreen from '../screens/DoctorPatientListScreen';
 import NurseReceptionScreen from '../screens/NurseReceptionScreen';
 import NurseTriageScreen from '../screens/NurseTriageScreen';
@@ -106,6 +107,7 @@ export const staffLinkingConfig = {
       ImagingHistory: 'staff/imaging-history',
       ImagingResult: 'staff/imaging-result',
       CreateImagingResult: 'staff/create-imaging-result',
+      DicomViewer: 'staff/dicom-viewer',
       DoctorPatientList: 'staff/doctor-patient-list',
       NurseReception: 'staff/nurse-reception',
       NurseTriage: 'staff/nurse-triage',
@@ -235,6 +237,7 @@ const StaffPortalNavigator = () => {
         <Stack.Screen name="ImagingHistory" component={ImagingHistoryScreen} options={{ title: 'Lịch sử phim chụp', headerShown: false }} />
         <Stack.Screen name="ImagingResult" component={ImagingResultScreen} options={{ title: 'Chi tiết phim chụp', headerShown: false }} />
         <Stack.Screen name="CreateImagingResult" component={CreateImagingResultScreen} options={{ title: 'Nhập kết quả phim chụp', headerShown: false }} />
+        <Stack.Screen name="DicomViewer" component={DicomViewerScreen} options={{ title: 'Xem ảnh DICOM (PACS)', headerShown: false }} />
         <Stack.Screen name="DoctorPatientList" component={DoctorPatientListScreen} options={{ title: 'Danh sách bệnh nhân', headerShown: false }} />
         <Stack.Screen name="NurseReception" component={NurseReceptionScreen} options={{ title: 'Điều dưỡng & Tiếp đón', headerShown: false }} />
         <Stack.Screen name="NurseTriage" component={NurseTriageScreen} options={{ title: 'Tiếp nhận', headerShown: false }} />

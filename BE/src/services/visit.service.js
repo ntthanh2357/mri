@@ -11,6 +11,7 @@ import { contrastConsentPending, contrastRiskBlockMessage } from "./contrastCons
 import { evaluateVitalSigns } from "./vitalsSafety.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "./auditLog.service.js";
 import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
+import { getMriRoomBlockMessage } from "./mriRoomGuard.service.js";
 import StoredMedicalFile from "../models/storedMedicalFile.model.js";
 
 /**
@@ -752,10 +753,13 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   }
 
   // Nếu an toàn, tự động chuyển sang 'đang chụp' — trừ khi có tiêm cản quang mà bệnh nhân chưa ký phiếu (UC-PAT-06)
-  // hoặc trường hợp cần bác sĩ xác nhận (thai kỳ / suy thận + cản quang).
+  // hoặc trường hợp cần bác sĩ xác nhận (thai kỳ / suy thận + cản quang) hoặc phòng MRI đang bảo trì / ngừng hoạt động.
   const consentPending = await contrastConsentPending(visit);
   const contrastBlocked = consentPending ? null : await contrastRiskBlockMessage(visit);
-  if (isSafe && !requiresDoctorReview && !consentPending && !contrastBlocked && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
+  const roomBlockMessage = !isSafe || requiresDoctorReview || consentPending || contrastBlocked
+    ? null
+    : await getMriRoomBlockMessage(visit);
+  if (isSafe && !requiresDoctorReview && !consentPending && !contrastBlocked && !roomBlockMessage && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
     visit.status = 'đang chụp';
     if (visit.mriOrder) visit.mriOrder.mriStatus = 'scanning';
   } else if (visit.mriOrder && isSafe) {
@@ -800,6 +804,8 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     contrastBlocked: Boolean(contrastBlocked),
     reviewReasonRequired: requiresDoctorReview && isReviewer,
     requiresDoctorReview,
+    roomBlocked: Boolean(roomBlockMessage),
+    roomBlockMessage: roomBlockMessage || null,
     paymentPending: false,
     creatinineEgfr: egfrValue
   };

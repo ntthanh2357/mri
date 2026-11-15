@@ -96,6 +96,9 @@ const imagingResultSchema = new Schema(
       seriesInstanceUID: { type: String, default: "" },
       sopInstanceUIDs: { type: [String], default: [] },
       dicomFileUrls: { type: [String], default: [] },
+      sliceSeriesMeta: { type: [Schema.Types.Mixed], default: [] },
+      primarySliceIndex: { type: Number, default: 0 },
+      studyTriage: { type: Schema.Types.Mixed, default: null },
     },
     // Mini-PACS DICOM archive storage (.zip / .rar)
     dicomZipUrl: {
@@ -119,6 +122,9 @@ const imagingResultSchema = new Schema(
     // Module O / C — trường AI kết quả
     studyId: { type: Schema.Types.ObjectId, ref: 'DicomStudy', default: null }, // Liên kết DICOM Study
     aiReport: { type: Schema.Types.Mixed, default: null },              // C.4: full_report.json
+    // Trạng thái phân tích AI của hồ sơ: "" chưa yêu cầu · pending đang chờ · completed đã có kết quả · failed lỗi (aiError)
+    aiStatus: { type: String, enum: ["", "pending", "completed", "failed"], default: "" },
+    aiError: { type: String, default: "" },
     segmentationUrl: { type: String, default: null },                  // C.1: mask phân đoạn
     top5SlicesUrls: { type: [String], default: [] },                    // C.6: 5 slice nguy hiểm
     representativeSliceUrl: { type: String, default: null },            // C.7: 1 ảnh đại diện

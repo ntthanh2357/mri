@@ -119,6 +119,14 @@ export const imagingApi = {
   getAiReport: (jobId) => get(`/api/v1/ai-pipeline/jobs/${jobId}/report`),
   retryAiJob: (jobId) => post(`/api/v1/ai-pipeline/jobs/${jobId}/retry`),
 
+  // KTV Bulk Study Triage & Filtering (1,000+ ảnh MRI -> lọc lát rõ khối u -> chốt ~10 lát)
+  initTriage: (data) => post('/api/v1/imaging/triage/init', data),
+  uploadTriageBatch: (sessionId, formData) => postFormData(`/api/v1/imaging/triage/${sessionId}/batch`, formData),
+  uploadTriageZip: (sessionId, formData) => postFormData(`/api/v1/imaging/triage/${sessionId}/upload-zip`, formData),
+  runTriage: (sessionId, data = {}) => post(`/api/v1/imaging/triage/${sessionId}/run`, data),
+  finalizeTriage: (sessionId, data) => post(`/api/v1/imaging/triage/${sessionId}/finalize`, data),
+  cancelTriage: (sessionId) => del(`/api/v1/imaging/triage/${sessionId}`),
+
   // DICOM
   getStudiesByVisit: (visitId) => get(`/api/v1/dicom/studies/by-visit/${visitId}`),
   getStudyById: (id) => get(`/api/v1/dicom/studies/${id}`),

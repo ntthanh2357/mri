@@ -6,7 +6,8 @@ import { getJwtSecret } from "../config/jwt.config.js";
  * để người chưa đăng nhập không đẩy được hàng trăm MB vào bộ nhớ máy chủ. Quyền chi tiết vẫn do protect kiểm tra sau.
  */
 export const requireJwtBeforeLargeBody = (req, res, next) => {
-  if (req.method === "OPTIONS") return next();
+  // GET / HEAD / OPTIONS không có JSON body; route ảnh đã ký (?exp=&sig=) sẽ được allowSignedPath / protect xác thực phía dưới
+  if (req.method === "OPTIONS" || req.method === "GET" || req.method === "HEAD") return next();
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   try {

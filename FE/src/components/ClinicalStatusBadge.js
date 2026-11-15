@@ -66,6 +66,13 @@ const STATUS_MAP = {
     border: '#FEF08A',
     text: '#A16207',
   },
+  'lỗi AI': {
+    label: 'Lỗi phân tích AI',
+    icon: AlertTriangle,
+    bg: '#FEF2F2',
+    border: '#FECACA',
+    text: '#B91C1C',
+  },
   'chờ bác sĩ đọc': {
     label: 'Chờ bác sĩ đọc',
     icon: FileText,

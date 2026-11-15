@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 3000;
 
 import { securityHeaders } from "./middlewares/securityHeaders.middleware.js";
 import { sanitizeNoSql } from "./middlewares/noSqlSanitize.middleware.js";
-import { secureUploadsProtection } from "./middlewares/secureUploads.middleware.js";
+import { secureUploadsProtection, setUploadResponseHeaders } from "./middlewares/secureUploads.middleware.js";
 import { authRateLimiter, b2cRateLimiter } from "./middlewares/rateLimiter.middleware.js";
 import { requireSignedUpload, signUploadUrlsInResponse, stripUploadSignatures } from "./middlewares/uploadSignature.middleware.js";
 import { requireJwtBeforeLargeBody } from "./middlewares/largeBodyGuard.middleware.js";
@@ -89,7 +89,7 @@ app.use(signUploadUrlsInResponse);
 app.use(sanitizeServerErrors);
 
 // 5. Cổng bảo vệ thư mục /uploads: chặn tải trực tiếp file sao lưu (.json), mã lệnh và path traversal
-app.use("/uploads", requireSignedUpload, secureUploadsProtection, express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", requireSignedUpload, secureUploadsProtection, express.static(path.join(__dirname, "../uploads"), { setHeaders: setUploadResponseHeaders }));
 
 // 6. Rate Limiters chống Brute-Force & Credential Stuffing
 // Số proxy tin cậy phía trước app (production mặc định 1 = nginx). Sai số này thì req.ip sai,
