@@ -123,7 +123,7 @@ const NURSE_FAQS = [
       },
       {
         q: 'Lập phiếu chăm sóc (care sheet) như thế nào?',
-        a: 'Vào "Bệnh án & EMR" → chọn hồ sơ bệnh án → tab "Phiếu chăm sóc" → "+ Thêm phiếu". Điền cấp chăm sóc (1–3), mạch, huyết áp, nhiệt độ, nhịp thở, SpO2, tên điều dưỡng và diễn biến, rồi lưu phiếu.',
+        a: 'Vào "Bệnh án & EMR" → tab "Phiếu chăm sóc" → "+ Thêm phiếu" → chọn bệnh nhân nội trú/cấp cứu đang điều trị. Điền cấp chăm sóc (1–3), sinh hiệu, tên điều dưỡng và diễn biến, rồi lưu phiếu.',
       },
       {
         q: 'Điều dưỡng xem được những phần nào của bệnh án?',

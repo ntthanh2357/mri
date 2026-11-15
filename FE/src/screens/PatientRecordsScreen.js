@@ -28,6 +28,7 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import { PatientPage, PatientHero, SideCard, PATIENT_ILLUS, P } from '../components/patient/PatientUI';
 import FadeIn from '../components/FadeIn';
 import { usePatientRecords } from '../controllers/usePatientRecords';
+import { CareSheetItem } from '../components/patient/SharedRecordItems';
 import styles from './PatientRecordsScreen.styles';
 import Colors from '../constants/colors';
 
@@ -222,7 +223,7 @@ const PatientRecordsScreen = ({ navigation }) => {
   const [search, setSearch] = useState('');
   const [expandedVisit, setExpandedVisit] = useState(null);
 
-  const { visits, identity, loading, error, reload } = usePatientRecords();
+  const { visits, careSheets, identity, loading, error, reload } = usePatientRecords();
 
   const filtered = visits.filter(
     (v) =>
@@ -339,6 +340,27 @@ const PatientRecordsScreen = ({ navigation }) => {
                 </FadeIn>
               ))}
             </View>
+
+            <View style={recStyles.careSheetSection}>
+              <View>
+                <Text style={styles.sectionTitle}>Phiếu chăm sóc điều dưỡng</Text>
+                <Text style={styles.sectionSub}>Phiếu do bệnh viện ghi nhận trong thời gian điều trị</Text>
+              </View>
+              {careSheets.length ? careSheets.map((record) => (
+                <View key={record._id} style={recStyles.careRecordCard}>
+                  <Text style={recStyles.careRecordTitle}>
+                    {record.department || 'Bệnh án nội trú'}{record.diagnosis ? ` · ${record.diagnosis}` : ''}
+                  </Text>
+                  {record.careSheets.map((sheet, index) => (
+                    <CareSheetItem key={`${record._id}-${sheet._id || index}`} item={sheet} />
+                  ))}
+                </View>
+              )) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>Chưa có phiếu chăm sóc nào được bệnh viện cập nhật.</Text>
+                </View>
+              )}
+            </View>
           </View>
 
           <View style={[recStyles.sideCol, isWide && { flex: 1 }]}>
@@ -377,6 +399,9 @@ const recStyles = {
   columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
   mainCol: { gap: 16 },
   sideCol: { gap: 16 },
+  careSheetSection: { gap: 12 },
+  careRecordCard: { gap: 8, padding: 14, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border },
+  careRecordTitle: { fontSize: 14, fontWeight: '700', color: Colors.brandNavy },
   group: { gap: 8 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   groupIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },

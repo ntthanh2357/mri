@@ -34,6 +34,7 @@ router.put("/profile/identity/bhyt-review", ctrl.reviewDeclaredBhyt);
 
 // Visits
 router.get("/records", ctrl.listVisits);
+router.get("/care-sheets", ctrl.listCareSheets);
 router.post("/records", blockPatientWrite, ctrl.createVisit);
 router.get("/records/:visitId", ctrl.getVisit);
 router.put("/records/:visitId", blockPatientWrite, ctrl.updateVisit);

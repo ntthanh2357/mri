@@ -68,12 +68,56 @@ const Vital = ({ item: v }) => (
   </>
 );
 
+export const CareSheetItem = ({ item: c }) => (
+  <View style={styles.careSheet}>
+    <Text style={styles.careSheetTitle}>
+      Phiếu chăm sóc cấp {c.careLevel || 3}{c.createdAt ? ` · ${new Date(c.createdAt).toLocaleString('vi-VN')}` : ''}
+    </Text>
+    <Field label="Điều dưỡng" value={c.nurse} />
+    <Field label="Sinh hiệu" value={[
+      c.pulse ? `mạch ${c.pulse} lần/phút` : '',
+      c.bloodPressure ? `huyết áp ${c.bloodPressure} mmHg` : '',
+      c.temperature ? `nhiệt độ ${c.temperature} °C` : '',
+      c.respiratoryRate ? `nhịp thở ${c.respiratoryRate} lần/phút` : '',
+      c.spo2 ? `SpO₂ ${c.spo2}%` : '',
+    ].filter(Boolean).join(', ')} />
+    {c.glasgow ? <Field label="Tri giác Glasgow" value={`E${c.glasgow.eye} V${c.glasgow.verbal} M${c.glasgow.motor} · ${c.glasgow.totalScore}/15 (${c.glasgow.classification})`} /> : null}
+    {c.pupils ? <Field label="Đồng tử" value={[
+      c.pupils.leftSize ? `trái ${c.pupils.leftSize} mm, phản xạ ${c.pupils.leftLightReflex || '—'}` : '',
+      c.pupils.rightSize ? `phải ${c.pupils.rightSize} mm, phản xạ ${c.pupils.rightLightReflex || '—'}` : '',
+      c.pupils.shape,
+    ].filter(Boolean).join('; ')} /> : null}
+    {c.surgicalDrainage ? <Field label="Dẫn lưu" value={[
+      c.surgicalDrainage.site,
+      c.surgicalDrainage.volume ? `${c.surgicalDrainage.volume} ml` : '',
+      c.surgicalDrainage.color,
+      c.surgicalDrainage.condition,
+    ].filter(Boolean).join(', ')} /> : null}
+    {c.fluidInfusions?.map((f, i) => (
+      <Field key={i} label={`Dịch truyền ${i + 1}`} value={[
+        f.fluidName,
+        f.volume ? `${f.volume} ml` : '',
+        f.rate,
+        f.status,
+        f.startTime && f.endTime ? `${f.startTime}–${f.endTime}` : f.startTime || f.endTime,
+      ].filter(Boolean).join(', ')} />
+    ))}
+    <Field label="Diễn biến" value={c.progressNotes} />
+    <Field label="Hành động chăm sóc" value={c.careActions} />
+  </View>
+);
+
 const Inpatient = ({ item: r }) => (
   <>
     <Field label="Dị ứng (bệnh viện ghi trong bệnh án)" value={Array.isArray(r.allergies) ? r.allergies.filter(Boolean).join(', ') : ''} />
     <Field label="Hướng điều trị" value={r.treatmentPlan} />
     <Field label="Loại u" value={[r.tumorType, r.whoGrade ? `WHO độ ${r.whoGrade}` : null].filter(Boolean).join(', ')} />
-    {r.careSheets?.length ? <Text style={styles.note}>{r.careSheets.length} phiếu chăm sóc. Gần nhất: {r.careSheets[0].progressNotes}</Text> : null}
+    {r.careSheets?.length ? (
+      <View style={styles.careSheets}>
+        <Text style={styles.fieldLabel}>Phiếu chăm sóc ({r.careSheets.length})</Text>
+        {r.careSheets.map((c, i) => <CareSheetItem key={i} item={c} />)}
+      </View>
+    ) : null}
     {r.consultations?.map((c, i) => <Field key={i} label={`Hội chẩn ${fmtDate(c.meetingDate)}`} value={c.treatmentConclusion || c.diagnosis} />)}
   </>
 );
@@ -149,4 +193,7 @@ const styles = StyleSheet.create({
   docText: { fontSize: 15, lineHeight: 23, color: Colors.slateDark, marginTop: 4 },
   link: { fontSize: 14, fontWeight: '600', color: Colors.brandGreen, paddingVertical: 6 },
   note: { fontSize: 14, lineHeight: 20, color: Colors.slateMuted },
+  careSheets: { gap: 8, marginTop: 4 },
+  careSheet: { gap: 4, padding: 10, borderRadius: 8, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border },
+  careSheetTitle: { fontSize: 14, fontWeight: '700', color: Colors.brandGreen, marginBottom: 2 },
 });

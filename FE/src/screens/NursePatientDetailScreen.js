@@ -58,6 +58,9 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   );
   const patientName  = patient.patientName || patient?.profile?.name || "Bệnh nhân";
   const patientIdStr = (isRecordObj ? (patient.patientId || patient._id) : (patient.patientId || patient._id)) || "";
+  const patientAccountId = patient.userId || patient.user?._id || route?.params?.visit?.patientId?._id || (!isRecordObj ? patient._id : null);
+  const patientMedicalId = patient.profile?.medicalId || patient.medicalId
+    || patient.patientId?.profile?.medicalId || (isRecordObj ? patient.patientId : null);
   const gender       = patient.gender      || patient?.profile?.gender || "";
   const age          = patient.age         || "";
   const department   = patient.department  || "Khoa Ung Thư Não";
@@ -70,6 +73,10 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   // Active Visit ID state
   const [effectiveVisitId, setEffectiveVisitId] = useState(patient.visitId || null);
+  const [screeningPatientId, setScreeningPatientId] = useState(patientAccountId || null);
+  const [screeningVisit, setScreeningVisit] = useState(
+    route?.params?.visit || (patient.visitId ? { _id: patient.visitId, patientId: patient } : null)
+  );
   // Lượt khám đang thao tác: truyền từ màn trước, hoặc tự tìm trong hàng chờ khi mở từ nơi khác
   const activeVisitId = effectiveVisitId || patient.visitId || null;
 
@@ -190,21 +197,41 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     { age, gender }
   );
 
-  // Tự động tìm visitId nếu chưa được truyền từ route params
+  // Resolve the account and visit from the nurse queue; EMR records carry a medical ID, not a user ID.
   useEffect(() => {
-    if (patient.visitId) {
-      setEffectiveVisitId(patient.visitId);
-    } else if (patient._id) {
-      get('/api/v1/visits/my-queue')
-        .then(res => {
-          const v = (res.visits || []).find(it => 
-            (it.patientId?._id === patient._id || it.patientId === patient._id)
-          );
-          if (v?._id) setEffectiveVisitId(v._id);
-        })
-        .catch(e => console.log("Không tìm thấy queue visit:", e));
-    }
-  }, [patient._id, patient.visitId]);
+    let alive = true;
+    if (patient.visitId) setEffectiveVisitId(patient.visitId);
+    if (!patient.visitId && !patientAccountId && !patientMedicalId) return undefined;
+
+    get('/api/v1/visits/my-queue?today=true')
+      .then((res) => {
+        if (!alive) return;
+        const visits = res?.visits || [];
+        const visit = patient.visitId
+          ? visits.find((item) => String(item._id) === String(patient.visitId))
+          : visits.find((item) => {
+            const linkedPatient = item.patientId;
+            const linkedPatientId = linkedPatient && typeof linkedPatient === 'object'
+              ? linkedPatient._id
+              : linkedPatient;
+            const matchesAccount = patientAccountId && String(linkedPatientId) === String(patientAccountId);
+            const linkedMedicalId = linkedPatient?.profile?.medicalId || linkedPatient?.medicalId;
+            const matchesMedicalId = patientMedicalId && String(linkedMedicalId) === String(patientMedicalId);
+            return matchesAccount || matchesMedicalId;
+          });
+        if (!visit?._id) return;
+        setEffectiveVisitId((current) => current || visit._id);
+        setScreeningVisit(visit);
+        const linkedPatient = visit.patientId;
+        const linkedPatientId = linkedPatient && typeof linkedPatient === 'object'
+          ? linkedPatient._id
+          : null;
+        if (linkedPatientId) setScreeningPatientId(linkedPatientId);
+      })
+      .catch((e) => console.log("Không tìm thấy queue visit:", e));
+
+    return () => { alive = false; };
+  }, [patient._id, patient.visitId, patientAccountId, patientMedicalId]);
 
   // 1. Fetch logged in user to show nurse name on signatures
   useEffect(() => {
@@ -837,7 +864,13 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-          {/^[0-9a-fA-F]{24}$/.test(patient._id) && <PatientSafetyStrip patientId={patient._id} />}
+          {screeningPatientId && (
+            <PatientSafetyStrip
+              patientId={screeningPatientId}
+              visit={screeningVisit}
+              patientName={patientName}
+            />
+          )}
 
           {/* ───────────────────────────────────────────────────────────────────
               1. TAB INFO (Thông Tin Bệnh Nhân)

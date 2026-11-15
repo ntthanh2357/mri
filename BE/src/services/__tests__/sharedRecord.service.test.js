@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import { toSharedEmr, toSharedImaging, toSharedSafety, buildSharedRecord, buildShareCatalog, resolveShareItems, SHARE_SECTIONS } from '../sharedRecord.service.js';
+import { listCareSheets } from '../patientRecord.service.js';
 import { User } from '../../models/user.model.js';
 import { Prescription } from '../../models/prescription.model.js';
 import { PatientProfile } from '../../models/patientProfile.model.js';
 import { ScannedDocument } from '../../models/scannedDocument.model.js';
 import { ImagingResult } from '../../models/imagingResult.model.js';
 import { MedicalRecord } from '../../modules/emr/models/medicalRecord.model.js';
+import { CareSheet } from '../../modules/emr/models/careSheet.model.js';
 import { Visit } from '../../models/visit.model.js';
 
 describe('Bệnh án chia sẻ qua QR — chỉ gửi nhóm bệnh nhân đã chọn', () => {
@@ -73,10 +75,16 @@ describe('Bệnh án chia sẻ qua QR — lọc dữ liệu (UC-PAT-09)', () => 
     const shared = toSharedEmr({
       _id: 'r1', diagnosis: 'U màng não', treatmentPlan: 'Phẫu thuật', psychiatricNotes: 'x', hivStatusNotes: 'y', geneticNotes: 'z',
       digitalSignatureMetadata: { signedHash: 'abc' }, dicomIntegrityHash: 'h', legalHold: true,
-    }, { careSheets: [{ pulse: 80 }], consultations: [] });
+    }, { careSheets: [{
+      pulse: 80, spo2: 98, progressNotes: 'Ổn định', glasgow: { totalScore: 15 },
+      secretInternalField: 'không chia sẻ',
+    }], consultations: [] });
     const json = JSON.stringify(shared);
     expect(shared.diagnosis).toBe('U màng não');
     expect(shared.careSheets.length).toBe(1);
+    expect(shared.careSheets[0].spo2).toBe(98);
+    expect(shared.careSheets[0].progressNotes).toBe('Ổn định');
+    expect('secretInternalField' in shared.careSheets[0]).toBe(false);
     for (const k of ['psychiatricNotes', 'hivStatusNotes', 'geneticNotes', 'digitalSignatureMetadata', 'dicomIntegrityHash', 'legalHold']) {
       expect(json.includes(k)).toBe(false);
     }
@@ -97,6 +105,51 @@ describe('Bệnh án chia sẻ qua QR — lọc dữ liệu (UC-PAT-09)', () => 
     expect(s.emergencyContact.name).toBe('Lan');
     const json = JSON.stringify(s);
     expect(json.includes('citizen') || json.includes('bhyt') || json.includes('v1:')).toBe(false);
+  });
+});
+
+describe('Phiếu chăm sóc của bệnh nhân', () => {
+  const patientId = new mongoose.Types.ObjectId();
+  const hospitalId = new mongoose.Types.ObjectId();
+  const otherHospitalId = new mongoose.Types.ObjectId();
+  const medicalId = `CS-${patientId}`;
+  const ownRecordId = new mongoose.Types.ObjectId();
+  const otherRecordId = new mongoose.Types.ObjectId();
+  const ownSheetId = new mongoose.Types.ObjectId();
+  const otherSheetId = new mongoose.Types.ObjectId();
+
+  beforeAll(async () => {
+    const mongoUri = process.env.TEST_MONGO_URI || 'mongodb://127.0.0.1:27017/neuroscan_test_logic';
+    if (mongoose.connection.readyState === 0) await mongoose.connect(mongoUri);
+    await User.collection.insertOne({
+      _id: patientId,
+      role: 'patient',
+      email: `care-sheet-${patientId}@test.local`,
+      hospitalId,
+      profile: { medicalId },
+    });
+    await MedicalRecord.collection.insertMany([
+      { _id: ownRecordId, hospitalId, patientId: medicalId, patientName: 'BN Chăm sóc', admissionType: 'Nội trú', diagnosis: 'Theo dõi' },
+      { _id: otherRecordId, hospitalId: otherHospitalId, patientId: medicalId, patientName: 'BN khác viện', admissionType: 'Nội trú' },
+    ]);
+    await CareSheet.collection.insertMany([
+      { _id: ownSheetId, hospitalId, medicalRecordId: ownRecordId, pulse: 80, progressNotes: 'Phiếu của tôi' },
+      { _id: otherSheetId, hospitalId: otherHospitalId, medicalRecordId: otherRecordId, pulse: 90, progressNotes: 'Không được lộ' },
+    ]);
+  });
+
+  afterAll(async () => {
+    await User.collection.deleteOne({ _id: patientId });
+    await MedicalRecord.collection.deleteMany({ _id: { $in: [ownRecordId, otherRecordId] } });
+    await CareSheet.collection.deleteMany({ _id: { $in: [ownSheetId, otherSheetId] } });
+  });
+
+  it('chỉ trả phiếu của chính bệnh nhân trong đúng bệnh viện', async () => {
+    const records = await listCareSheets(patientId);
+    expect(records.length).toBe(1);
+    expect(String(records[0]._id)).toBe(String(ownRecordId));
+    expect(records[0].careSheets.length).toBe(1);
+    expect(records[0].careSheets[0].progressNotes).toBe('Phiếu của tôi');
   });
 });
 

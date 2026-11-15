@@ -262,6 +262,9 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (activeTab === 'records') {
       fetchRecords();
+    } else if (activeTab === 'care') {
+      fetchRecords();
+      if (selectedRecord) fetchRecordDetails(selectedRecord._id);
     } else if (selectedRecord) {
       fetchRecordDetails(selectedRecord._id);
     }
@@ -284,16 +287,27 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   // Create new care sheet
   const handleCreateCareSheet = async (formData) => {
-    if (!selectedRecord) {
-      Alert.alert('Lỗi', 'Vui lòng chọn một hồ sơ bệnh án trước!');
+    const record = records.find((item) => String(item._id) === String(formData.recordId));
+    if (!record) {
+      Alert.alert('Lỗi', 'Vui lòng chọn bệnh nhân nội trú/cấp cứu đang điều trị.');
       return;
     }
     try {
-      const data = await apiRequest(`/emr/records/${selectedRecord._id}/care-sheets`, {
+      const data = await apiRequest(`/emr/records/${record._id}/care-sheets`, {
         method: 'POST',
-        body: JSON.stringify(formData),
+        body: JSON.stringify(formData.careSheet),
       });
-      setCareSheets(prev => [data.data, ...prev]);
+      const previousSheets = String(selectedRecord?._id) === String(record._id) ? careSheets : [];
+      setSelectedRecord(record);
+      setCareSheets([data.data, ...previousSheets]);
+      if (!previousSheets.length) {
+        try {
+          const careData = await apiRequest(`/emr/records/${record._id}/care-sheets`);
+          setCareSheets(careData.data || [data.data]);
+        } catch (error) {
+          console.warn('Không thể tải lịch sử phiếu chăm sóc:', error.message);
+        }
+      }
       setIsModalVisible(false);
       Alert.alert('Thành công', 'Phiếu chăm sóc đã được tạo!');
     } catch (error) {
@@ -398,6 +412,11 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     { key: 'beds', label: 'Giường bệnh' },
     { key: 'transfers', label: 'Chuyển viện' },
   ].filter(Boolean);
+
+  const availableCareRecords = records.filter((record) =>
+    ['Nội trú', 'Cấp cứu'].includes(record.admissionType) &&
+    ['Đang điều trị', 'Cấp cứu'].includes(record.status)
+  );
 
   const tabMeta = EMR_TAB_META[activeTab] || EMR_TAB_META.records;
   const statRecords = records.length ? records : bannerRecords;
@@ -567,6 +586,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
           onCreateConsent={handleCreateConsent}
           onCreatePrescription={handleCreatePrescription}
           availableDrugs={availableDrugs}
+          careRecords={availableCareRecords}
+          selectedCareRecordId={selectedRecord?._id}
         />
 
         {/* Modal Lập phụ lục bệnh án theo TT 46/2018/TT-BYT */}
@@ -1520,7 +1541,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
     {!selectedRecord ? (
       <View style={styles.emptyState}>
         <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
+        <Text style={styles.emptyText}>Bấm "+ Thêm phiếu" để chọn bệnh nhân nội trú/cấp cứu đang điều trị.</Text>
       </View>
     ) : (
       <View style={styles.listContainer}>
@@ -2024,7 +2045,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
 };
 
 // Modal Component
-const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent }) => {
+const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent, careRecords, selectedCareRecordId }) => {
   return (
     <Modal
       animationType="fade"
@@ -2038,7 +2059,7 @@ const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet,
           style={styles.modalContainer}
         >
           {type === 'newRecord' && <NewRecordForm onClose={onClose} onSubmit={onCreateRecord} />}
-          {type === 'newCareSheet' && <NewCareSheetForm onClose={onClose} onSubmit={onCreateCareSheet} />}
+          {type === 'newCareSheet' && <NewCareSheetForm onClose={onClose} onSubmit={onCreateCareSheet} records={careRecords} initialRecordId={selectedCareRecordId} />}
           {type === 'newConsultation' && <NewConsultationForm onClose={onClose} onSubmit={onCreateConsultation} />}
           {type === 'newConsent' && <NewConsentForm onClose={onClose} onSubmit={onCreateConsent} />}
           {type === 'newPrescription' && <NewPrescriptionForm onClose={onClose} onSubmit={onCreatePrescription} availableDrugs={availableDrugs} />}
@@ -2188,7 +2209,8 @@ const SectionLabel = ({ icon: Icon, title, color = Colors.brandGreen }) => (
   </View>
 );
 
-const NewCareSheetForm = ({ onClose, onSubmit }) => {
+const NewCareSheetForm = ({ onClose, onSubmit, records = [], initialRecordId }) => {
+  const [recordId, setRecordId] = useState(initialRecordId || '');
   // ── Base vitals ──
   const [careLevel, setCareLevel] = useState('1');
   const [pulse, setPulse] = useState('');
@@ -2232,6 +2254,10 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
   const removeFluidRow = (idx) => setFluidInfusions(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = () => {
+    if (!records.some((record) => String(record._id) === String(recordId))) {
+      Alert.alert('Thông báo', 'Vui lòng chọn bệnh nhân nội trú/cấp cứu đang điều trị.');
+      return;
+    }
     if (!pulse || !bloodPressure || !temperature || !respiratoryRate || !spo2 || !progressNotes || !nurse) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh!');
       return;
@@ -2263,7 +2289,7 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
         ...f, volume: Number(f.volume)||0
       })),
     };
-    onSubmit(payload);
+    onSubmit({ recordId, careSheet: payload });
   };
 
   const handleOcrFill = () => {
@@ -2299,6 +2325,32 @@ const NewCareSheetForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+        <SectionLabel icon={User} title="Chọn bệnh nhân đang điều trị" color={Colors.brandGreen} />
+        {records.length ? records.map((record) => {
+          const isSelected = String(record._id) === String(recordId);
+          return (
+            <TouchableOpacity
+              key={record._id}
+              onPress={() => setRecordId(String(record._id))}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
+              style={{
+                padding: 12, marginBottom: 8, borderRadius: 10,
+                borderWidth: 1, borderColor: isSelected ? Colors.brandGreen : '#E2E8F0',
+                backgroundColor: isSelected ? Colors.brandGreenSoft : '#fff',
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.brandNavy }}>{record.patientName}</Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
+                {[record.patientId, record.admissionType, record.department, record.diagnosis].filter(Boolean).join(' • ')}
+              </Text>
+            </TouchableOpacity>
+          );
+        }) : (
+          <Text style={{ fontSize: 13, color: '#B91C1C', paddingVertical: 8 }}>
+            Không có bệnh nhân nội trú/cấp cứu đang điều trị để lập phiếu.
+          </Text>
+        )}
         <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
           <Zap size={14} color="#4ADE80" />
           <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động - Hậu phẫu U Não (Simulated OCR)</Text>

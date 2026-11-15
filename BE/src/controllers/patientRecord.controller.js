@@ -77,6 +77,18 @@ export const listVisits = async (req, res, next) => {
   }
 };
 
+export const listCareSheets = async (req, res, next) => {
+  try {
+    const targetId = await getTargetPatientId(req);
+    const careSheets = await service.listCareSheets(targetId);
+    res.set("Cache-Control", "no-store");
+    return successResponse(res, careSheets);
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
+};
+
 export const createVisit = async (req, res, next) => {
   try {
     const { facility, visitType } = req.body;

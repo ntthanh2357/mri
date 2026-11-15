@@ -160,7 +160,10 @@ const NurseTriageScreen = ({ navigation }) => {
     }
   };
 
-  const startVitals = (v) => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id, visitType: v.visitType } });
+  const startVitals = (v) => navigation.navigate('NursePatientDetail', {
+    patient: { ...v.patientId, visitId: v._id, visitType: v.visitType },
+    visit: v,
+  });
 
   const renderRow = (v, i) => {
     const st = callState(v);

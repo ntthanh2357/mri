@@ -40,7 +40,11 @@ const IMAGING_FIELDS = ["_id", "procedure", "imagingType", "technique", "diagnos
 /** Bệnh án nội trú: chỉ trường lâm sàng cần thiết, kèm phiếu chăm sóc và hội chẩn. */
 export const toSharedEmr = (record, { careSheets = [], consultations = [] } = {}) => ({
   ...pick(record, EMR_FIELDS),
-  careSheets: careSheets.map((c) => pick(c, ["careLevel", "pulse", "bloodPressure", "temperature", "respiratoryRate", "progressNotes", "careActions", "nurse", "createdAt"])),
+  careSheets: careSheets.map((c) => pick(c, [
+    "careLevel", "pulse", "bloodPressure", "temperature", "respiratoryRate", "spo2",
+    "glasgow", "pupils", "surgicalDrainage", "fluidInfusions",
+    "progressNotes", "careActions", "nurse", "createdAt",
+  ])),
   consultations: consultations.map((c) => pick(c, ["meetingDate", "consultationType", "clinicalSummary", "diagnosis", "treatmentConclusion", "participants"])),
 });
 

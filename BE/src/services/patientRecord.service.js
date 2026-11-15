@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 import { normalizeIdentityUpdate } from "./patientIdentity.service.js";
 import { Visit } from "../models/visit.model.js";
 import { PatientProfile } from "../models/patientProfile.model.js";
+import { User } from "../models/user.model.js";
+import { MedicalRecord } from "../modules/emr/models/medicalRecord.model.js";
+import { CareSheet } from "../modules/emr/models/careSheet.model.js";
 import { uploadToGCS } from "../config/gcs.js";
 import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 import storageService from "./storage/storageService.js";
@@ -83,6 +86,7 @@ export const listVisits = async (userId) => {
         facility: visit.facility || "Cơ sở y tế",
         visitType: visit.visitType || "ngoai_tru"
       };
+
     }
 
     // It's a system visit (created by receptionist/hospital)
@@ -311,6 +315,38 @@ export const listVisits = async (userId) => {
   }));
 
   return compiledVisits;
+};
+
+/** Phiếu chăm sóc của chính bệnh nhân (hoặc bệnh nhân đã được nhân viên xác thực tenancy). */
+export const listCareSheets = async (userId) => {
+  const user = await User.findById(userId).select("profile.medicalId hospitalId").lean();
+  if (!user) throw { status: 404, message: "Không tìm thấy bệnh nhân." };
+
+  const patientConditions = [{ patientId: String(userId) }, { userId }];
+  if (user.profile?.medicalId && user.hospitalId) {
+    patientConditions.push({ patientId: user.profile.medicalId, hospitalId: user.hospitalId });
+  }
+
+  // The medical ID is only safe to query after resolving it from this authenticated user
+  // and constraining it to that user's hospital.
+  const records = await MedicalRecord.find({ $or: patientConditions })
+    .select("admissionType department diagnosis createdAt")
+    .setOptions({ bypassTenancy: true })
+    .sort({ createdAt: -1 })
+    .lean();
+  if (!records.length) return [];
+
+  const fields = "medicalRecordId careLevel pulse bloodPressure temperature respiratoryRate spo2 glasgow pupils surgicalDrainage fluidInfusions progressNotes careActions nurse createdAt";
+  const sheets = await CareSheet.find({ medicalRecordId: { $in: records.map((record) => record._id) } })
+    .select(fields)
+    .setOptions({ bypassTenancy: true })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return records.map((record) => ({
+    ...record,
+    careSheets: sheets.filter((sheet) => String(sheet.medicalRecordId) === String(record._id)),
+  })).filter((record) => record.careSheets.length);
 };
 
 export const createVisit = async (userId, data) => {

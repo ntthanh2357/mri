@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../../constants/colors';
 import { usePatientSafety } from '../../controllers/usePatientSafety';
 import { usePatientPreScreening } from '../../controllers/usePatientPreScreening';
 import { ANSWER_LABEL, RISK_META, SCREEN_QUESTIONS } from '../../utils/preScreening';
+import PreScreeningModal from './PreScreeningModal';
 
 const RISK_TONE = {
   success: { bg: Colors.successBg, fg: Colors.successText, border: Colors.successBg },
@@ -14,8 +15,19 @@ const RISK_TONE = {
 const fmtDateTime = (d) => new Date(d).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 // UC-NUR-03: kết quả sàng lọc dị ứng & chống chỉ định do điều dưỡng ghi — bác sĩ đọc ngay trong bệnh án
-const PreScreeningStrip = ({ patientId }) => {
-  const { loading, latest, error } = usePatientPreScreening(patientId);
+const PreScreeningStrip = ({ patientId, visit, patientName }) => {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [modalVisible, setModalVisible] = useState(false);
+  const { loading, latest, error } = usePatientPreScreening(patientId, refreshKey);
+  const visitForModal = visit ? {
+    ...visit,
+    patientId: {
+      ...(visit.patientId && typeof visit.patientId === 'object' ? visit.patientId : {}),
+      _id: patientId,
+      profile: { ...(visit.patientId?.profile || {}), name: patientName },
+    },
+  } : null;
+
   if (loading) return null;
   if (error) {
     return (
@@ -29,7 +41,27 @@ const PreScreeningStrip = ({ patientId }) => {
     return (
       <View style={[styles.strip, styles.neutral]}>
         <Feather name="clipboard" size={16} color={Colors.slateMuted} />
-        <Text style={styles.mutedText}>Điều dưỡng chưa sàng lọc dị ứng & chống chỉ định cho bệnh nhân này.</Text>
+        <View style={styles.screeningContent}>
+          <Text style={styles.mutedText}>Điều dưỡng chưa sàng lọc dị ứng & chống chỉ định cho bệnh nhân này.</Text>
+          {visitForModal?._id ? (
+            <Pressable
+              onPress={() => setModalVisible(true)}
+              accessibilityRole="button"
+              style={styles.screeningButton}
+            >
+              <Feather name="shield" size={14} color="#FFFFFF" />
+              <Text style={styles.screeningButtonText}>Sàng lọc ngay</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.mutedText}>Cần mở bệnh nhân từ Hàng chờ / Lượt khám để lập phiếu sàng lọc.</Text>
+          )}
+        </View>
+        <PreScreeningModal
+          visible={modalVisible}
+          visit={visitForModal}
+          onClose={() => setModalVisible(false)}
+          onSaved={() => setRefreshKey((key) => key + 1)}
+        />
       </View>
     );
   }
@@ -58,7 +90,7 @@ const PreScreeningStrip = ({ patientId }) => {
 
 // Dải an toàn đầu trang chi tiết bệnh nhân: dị ứng thuốc (nổi bật khi có) + liên hệ khẩn cấp.
 // Phân biệt "chưa ghi nhận" với "không tải được" để bác sĩ không hiểu nhầm là bệnh nhân không dị ứng.
-const PatientSafetyStrip = ({ patientId }) => {
+const PatientSafetyStrip = ({ patientId, visit, patientName }) => {
   const { loading, data, error } = usePatientSafety(patientId);
   if (!patientId || loading) return null;
 
@@ -69,7 +101,7 @@ const PatientSafetyStrip = ({ patientId }) => {
           <Feather name="alert-circle" size={16} color={Colors.slateMuted} />
           <Text style={styles.mutedText}>Không tải được thông tin dị ứng thuốc. Hỏi lại bệnh nhân trước khi kê đơn.</Text>
         </View>
-        <PreScreeningStrip patientId={patientId} />
+        <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} />
       </View>
     );
   }
@@ -102,7 +134,7 @@ const PatientSafetyStrip = ({ patientId }) => {
           </Text>
         </View>
       ) : null}
-      <PreScreeningStrip patientId={patientId} />
+      <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} />
     </View>
   );
 };
@@ -111,6 +143,9 @@ const styles = StyleSheet.create({
   wrap: { gap: 8, marginBottom: 16 },
   strip: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  screeningContent: { flex: 1, gap: 8 },
+  screeningButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.brandGreen, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  screeningButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   meta: { fontSize: 12, opacity: 0.85 },
   lineText: { fontSize: 14, lineHeight: 20 },
   warn: { backgroundColor: Colors.warningBg, borderColor: Colors.warningBg },

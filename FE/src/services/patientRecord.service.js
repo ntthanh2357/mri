@@ -11,6 +11,7 @@ export const saveIdentity = (data) => post(`${BASE}/profile/identity`, data, 'PU
 
 export const fetchVisits = () => get(`${BASE}/records`);
 export const fetchVisit = (visitId) => get(`${BASE}/records/${visitId}`);
+export const fetchCareSheets = () => get(`${BASE}/care-sheets`);
 
 export const createVisit = (data) => post(`${BASE}/records`, data);
 export const updateVisit = (visitId, data) => post(`${BASE}/records/${visitId}`, data, 'PUT');
