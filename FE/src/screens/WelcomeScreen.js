@@ -611,7 +611,7 @@ const WelcomeScreen = ({ navigation }) => {
                   <Text style={styles.brandNameWhite}>
                     Neuro<Text style={styles.brandNameAccentOnDark}>Scan</Text> AI
                   </Text>
-                  <Text style={styles.brandSubWhite}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
+                  <Text style={styles.brandSubWhite}>HỖ TRỢ SÀNG LỌC U NÃO & EMR</Text>
                 </View>
               </Animated.View>
 

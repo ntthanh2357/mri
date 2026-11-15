@@ -8,7 +8,7 @@ const router = Router();
 router.post(
   "/",
   protect,
-  checkRole(["technician", "radiologist", "doctor", "department_head", "hospital_admin", "admin", "system_admin"]),
+  checkRole(["technician", "radiologist", "doctor", "department_head", "hospital_admin"]),
   createKtvImagingResult
 );
 

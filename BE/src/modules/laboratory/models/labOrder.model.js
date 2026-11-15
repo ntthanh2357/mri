@@ -2,6 +2,7 @@ import { Schema, model } from "mongoose";
 import { tenancyPlugin } from "../../../plugins/tenancy.plugin.js";
 
 const labOrderSchema = new Schema({
+  visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null, index: true },
   hospitalId: {
     type: Schema.Types.ObjectId,
     ref: "Hospital",
@@ -15,8 +16,8 @@ const labOrderSchema = new Schema({
   },
   patient_gender: { 
     type: String, 
-    enum: ["Nam", "Nữ"],
-    required: true
+    enum: ["Nam", "Nữ", null], // null = chưa có giới tính → không so khoảng tham chiếu theo giới
+    default: null
   },
   barcode: { 
     type: String, 
@@ -54,9 +55,14 @@ const labOrderSchema = new Schema({
   },
   verified_at: { type: Date, default: null },
   verified_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  // Người nhập kết quả lần gần nhất (null khi máy LIS gửi) — người này không được tự duyệt
+  resulted_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  resulted_source: { type: String, enum: ["", "lis_machine", "manual"], default: "" },
   // Cảnh báo giá trị nguy kịch (critical value) — phải báo ngay cho bác sĩ điều trị
   hasCriticalValue: { type: Boolean, default: false, index: true },
   criticalValues: [{ type: String }],
+  // Kết quả cũ bị thay khi máy gửi lại trước lúc bác sĩ duyệt (giữ dấu vết, gồm giá trị nguy kịch)
+  resultHistory: { type: [Schema.Types.Mixed], default: [] },
   criticalNotifiedAt: { type: Date, default: null },
   results: [{
     biomarker_code: { type: String, required: true },

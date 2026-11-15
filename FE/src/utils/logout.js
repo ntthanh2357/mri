@@ -17,6 +17,7 @@
  */
 import { Platform } from 'react-native';
 import Config from '../constants/config.js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, getRefreshToken } from '../api/client.js';
 
 /**
@@ -58,8 +59,19 @@ export const performLogout = () => {
     } catch (e) {
       console.warn('[logout] Lỗi xóa token local:', e?.message);
     }
+
+    // 3) Xóa thông tin người dùng và bản nháp bệnh án lưu trên máy (máy bệnh viện dùng chung nhiều người)
+    try {
+      await clearLocalClinicalData();
+    } catch (e) {
+      console.warn('[logout] Lỗi xóa dữ liệu nháp local:', e?.message);
+    }
   })();
   return lastLogoutPromise;
 };
+
+// Khóa và hàm xóa dữ liệu bệnh nhân trên máy: utils/localClinicalData.js (client.js cũng dùng khi đăng xuất cưỡng bức)
+export { LOCAL_CLINICAL_KEY_PREFIXES, LOCAL_CLINICAL_KEYS, isLocalClinicalKey, clearLocalClinicalData } from './localClinicalData';
+import { clearLocalClinicalData } from './localClinicalData';
 
 export default performLogout;

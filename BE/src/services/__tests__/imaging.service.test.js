@@ -23,7 +23,7 @@ describe('Unit Tests: Imaging Service (imaging.service.js)', () => {
     mockRadiologistUser = {
       id: new mongoose.Types.ObjectId().toString(),
       hospitalId: mockHospitalIdA.toString(),
-      role: 'doctor',
+      role: 'radiologist',
       profile: { fullName: 'BS. CĐHA Hoàng Minh Tuấn' }
     };
 

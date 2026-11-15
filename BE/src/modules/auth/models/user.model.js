@@ -39,6 +39,11 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isTestAccount: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     tokenVersion: {
       type: Number,
       default: 0,
@@ -66,19 +71,59 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
+    // HMAC của mã OTP (utils/accountOtp.util.js), không lưu mã gốc; ẩn khỏi mọi truy vấn mặc định
     otpCode: {
       type: String,
       default: null,
+      select: false,
     },
     otpExpires: {
       type: Date,
       default: null,
+    },
+    // Giới hạn dò mã cho otpCode (quên mật khẩu, kích hoạt, đăng nhập SĐT)
+    otpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    otpLastSentAt: {
+      type: Date,
+      default: null,
+    },
+    // Xác thực bước 2 (step-up) trước thao tác nhạy cảm: hiện dùng khi duyệt hoàn tiền
+    stepUpOtpHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    stepUpOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    stepUpOtpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    stepUpOtpLastSentAt: {
+      type: Date,
+      default: null,
+    },
+    stepUpVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    // Quyền ký báo cáo CĐHA cấp theo từng người (Trưởng khoa lâm sàng không tự động có phạm vi
+    // hành nghề hình ảnh - NĐ 96/2023 Điều 41). Hospital Admin cấp sau khi đã đối chiếu giấy phép.
+    canSignImaging: {
+      type: Boolean,
+      default: false,
     },
     // [2FA] Mã OTP xác thực 2 lớp khi đăng nhập (riêng biệt với otpCode dùng
     // cho kích hoạt tài khoản / quên mật khẩu để tránh xung đột luồng)
     otp2FACode: {
       type: String,
       default: null,
+      select: false,
     },
     otp2FAExpires: {
       type: Date,

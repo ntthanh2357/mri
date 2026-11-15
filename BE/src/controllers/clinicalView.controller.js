@@ -6,13 +6,16 @@ import { DicomSeries } from "../models/dicomSeries.model.js";
 import { Assignment } from "../models/assignment.model.js";
 import { User } from "../models/user.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
+import { evaluateImagingSignPermission, validateSignReason } from "../services/imagingSignPolicy.service.js";
+import { buildImagingSignatureMetadata } from "../utils/imagingSignature.util.js";
 
 // ─── G.1 — Trình xem DICOM — lấy danh sách series và signed URLs ─────────────
 // @route GET /api/v1/clinical-view/imaging/:imagingResultId/dicom-viewer
 // @access Private (Doctor, Technician, Admin)
 export const getDicomViewerData = async (req, res) => {
   try {
-    const allowedRoles = ["doctor", "radiologist", "department_head", "technician", "admin", "system_admin", "hospital_admin", "nurse"];
+    const allowedRoles = ["doctor", "radiologist", "department_head", "technician", "hospital_admin", "nurse"];
     if (!allowedRoles.includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem trình chiếu DICOM.", 403);
     }
@@ -21,7 +24,7 @@ export const getDicomViewerData = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem dữ liệu DICOM của cơ sở y tế khác.", 403);
     }
 
@@ -74,7 +77,7 @@ export const getDicomViewerData = async (req, res) => {
 // @access Private (Doctor)
 export const getAiOverlays = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới được xem overlay AI.", 403);
     }
 
@@ -82,7 +85,7 @@ export const getAiOverlays = async (req, res) => {
     const imaging = await ImagingResult.findById(imagingResultId).lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem overlay AI của cơ sở y tế khác.", 403);
     }
 
@@ -131,7 +134,7 @@ export const getAiOverlays = async (req, res) => {
 // @access Private (Doctor, Admin)
 export const getFullAiReport = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin", "technician"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem báo cáo AI chi tiết.", 403);
     }
 
@@ -141,7 +144,7 @@ export const getFullAiReport = async (req, res) => {
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem báo cáo AI của cơ sở y tế khác.", 403);
     }
 
@@ -209,7 +212,7 @@ export const getFullAiReport = async (req, res) => {
 // @access Private (Doctor)
 export const get3dModelUrl = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem mô hình 3D.", 403);
     }
 
@@ -219,7 +222,7 @@ export const get3dModelUrl = async (req, res) => {
       .lean();
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
-    if (req.user.role !== "admin" && imaging.hospitalId && req.user.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bạn không có quyền xem mô hình 3D của cơ sở y tế khác.", 403);
     }
 
@@ -242,10 +245,7 @@ export const get3dModelUrl = async (req, res) => {
 // @access Private (Radiologist / Department Head signs; Attending Doctor acknowledges)
 export const signImagingReport = async (req, res) => {
   try {
-    const SIGNING_ROLES = ["radiologist", "department_head"];
-    const ACK_ROLES = ["doctor"];
-
-    if (![...SIGNING_ROLES, ...ACK_ROLES].includes(req.user.role)) {
+    if (!["radiologist", "department_head", "doctor"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ Bác sĩ CĐHA hoặc Trưởng khoa mới có quyền ký số báo cáo.", 403);
     }
 
@@ -266,7 +266,7 @@ export const signImagingReport = async (req, res) => {
     if (!imaging) return errorResponse(res, "Không tìm thấy kết quả MRI.", 404);
 
     // Multi-tenant check: Bác sĩ không có quyền ký duyệt kết quả của bệnh viện khác
-    if (!["admin", "system_admin"].includes(req.user.role) && (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString()))) {
+    if (!req.user.hospitalId || (imaging.hospitalId && imaging.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return errorResponse(res, "Bác sĩ không có quyền ký duyệt kết quả hình ảnh của bệnh viện khác.", 403);
     }
 
@@ -279,53 +279,47 @@ export const signImagingReport = async (req, res) => {
       );
     }
 
-    // [Q-CLINICAL-01]: Nếu người gọi là Bác sĩ lâm sàng (doctor) -> Chuyển sang luồng Attending Acknowledge
-    if (ACK_ROLES.includes(req.user.role) && !SIGNING_ROLES.includes(req.user.role)) {
-      const ackName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ lâm sàng";
-      imaging.attendingAcknowledgment = {
-        acknowledgedBy: req.user.id,
-        acknowledgedByName: ackName,
-        acknowledgedAt: new Date(),
-        clinicalNote: String(doctorNote || effectiveConclusion || "").trim(),
-      };
-      await imaging.save();
-
-      try {
-        const { recordAuditLog, AUDIT_ACTIONS } = await import("../services/auditLog.service.js");
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.IMAGING_REPORT_ACKNOWLEDGED || "IMAGING_REPORT_ACKNOWLEDGED",
-          entity: "ImagingResult",
-          entityId: imaging._id,
-          performedBy: req.user.id,
-          hospitalId: req.user.hospitalId,
-          details: `Bác sĩ lâm sàng ${ackName} xác nhận đã đọc báo cáo CĐHA #${imaging._id}`,
-        });
-      } catch { /* optional */ }
-
-      return successResponse(res, {
-        imagingResultId: imaging._id,
-        isSigned: imaging.isSigned,
-        mode: "acknowledged",
-        attendingAcknowledgment: imaging.attendingAcknowledgment,
-      }, "Bác sĩ lâm sàng đã xác nhận đọc báo cáo CĐHA (Attending Acknowledge).");
+    // [Q-V4-01, Q-V4-11] Thẩm quyền ký xét ở máy chủ. Bác sĩ lâm sàng nhận 403 và dùng /acknowledge.
+    const permission = await evaluateImagingSignPermission({ user: req.user, imaging });
+    if (!permission.allowed) {
+      return res.status(403).json({ success: false, code: permission.code, message: permission.message });
     }
+    const reasonError = validateSignReason(permission, actingRadiologistReason);
+    if (reasonError) return errorResponse(res, reasonError, 400);
 
     if (!effectiveConclusion) {
       return errorResponse(res, "Vui lòng nhập kết luận cuối của bác sĩ CĐHA.", 400);
     }
 
-    // Cập nhật báo cáo bởi Radiologist hoặc Department Head
+    // Giành quyền ký atomic: 2 bác sĩ ký cùng lúc thì người sau nhận 409, không ghi đè kết luận của người trước
     const signerName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
-    imaging.conclusion = effectiveConclusion;
-    imaging.radiologist = signerName;
-    imaging.isSigned = true;
-    imaging.signedBy = req.user.id;
-    imaging.signedByDoctorId = req.user.id;
-    imaging.signedAt = new Date();
-    if (req.user.role === "department_head" && actingRadiologistReason) {
-      imaging.actingRadiologistReason = String(actingRadiologistReason).trim();
+    const signedAt = new Date();
+    const finalFindings = doctorNote ? (imaging.findings || "") + "\n\nGhi chú bác sĩ: " + doctorNote : imaging.findings;
+    const signedImaging = await ImagingResult.findOneAndUpdate(
+      { _id: imaging._id, isSigned: { $ne: true } },
+      {
+        $set: {
+          isSigned: true,
+          conclusion: effectiveConclusion,
+          radiologist: signerName,
+          signedBy: req.user.id,
+          signedByDoctorId: req.user.id,
+          signedAt,
+          signMode: permission.mode,
+          ...(permission.requiresReason ? { actingRadiologistReason: String(actingRadiologistReason).trim() } : {}),
+          ...(doctorNote ? { findings: finalFindings } : {}),
+          // Mã băm toàn vẹn giống PUT /imaging/:id (trước đây đường ký này không ghi signedHash)
+          digitalSignatureMetadata: buildImagingSignatureMetadata({
+            imagingId: imaging._id, medicalId: imaging.medicalId, patientName: imaging.patientName, findings: finalFindings,
+            conclusion: effectiveConclusion, signedAt, signerId: req.user.id, signerName,
+          }),
+        },
+      },
+      { new: true }
+    );
+    if (!signedImaging) {
+      return errorResponse(res, "Báo cáo CĐHA vừa được ký bởi người khác. Vui lòng tải lại và tạo Phụ lục nếu cần đính chính.", 409);
     }
-    if (doctorNote) imaging.findings = (imaging.findings || "") + "\n\nGhi chú bác sĩ: " + doctorNote;
 
     // G.5 — Active Learning: lưu feedback bác sĩ nếu có chỉnh sửa
     if (isAiCorrection && (correctedBoundingBox || correctedMask)) {
@@ -338,19 +332,20 @@ export const signImagingReport = async (req, res) => {
         originalAiReport: imaging.aiReport,
       };
       // Lưu vào aiReport.feedback array
-      if (!imaging.aiReport) imaging.aiReport = {};
-      if (!imaging.aiReport.feedbacks) imaging.aiReport.feedbacks = [];
-      imaging.aiReport.feedbacks.push(feedbackEntry);
-      imaging.markModified("aiReport");
+      if (!signedImaging.aiReport) signedImaging.aiReport = {};
+      if (!signedImaging.aiReport.feedbacks) signedImaging.aiReport.feedbacks = [];
+      signedImaging.aiReport.feedbacks.push(feedbackEntry);
+      signedImaging.markModified("aiReport");
+      await signedImaging.save();
     }
 
-    await imaging.save();
-
-    // Cập nhật Visit → hoàn tất
-    const visit = await Visit.findOne({ "mriOrder.imagingResultId": imagingResultId });
+    // Báo cáo đã ký thì ca chuyển sang chờ bác sĩ điều trị đọc, cùng logic với PUT /imaging/:id
+    const visit = await (signedImaging.visitId
+      ? Visit.findById(signedImaging.visitId)
+      : Visit.findOne({ hospitalId: signedImaging.hospitalId, "mriOrder.imagingResultId": imagingResultId }));
     if (visit) {
-      if (!["hoàn tất", "đã đóng"].includes(visit.status)) {
-        visit.status = "chờ kết luận";
+      if (["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ chụp lại", "lỗi AI", "chờ chụp sau phẫu thuật"].includes(visit.status)) {
+        visit.status = "chờ bác sĩ đọc";
       }
       await visit.save();
 
@@ -375,23 +370,25 @@ export const signImagingReport = async (req, res) => {
       }
     }
 
-    // Ghi AuditLog
-    try {
-      const { AuditLog } = await import("../models/auditLog.model.js");
-      await AuditLog.create({
-        action: "G5_DOCTOR_SIGN_REPORT",
-        performedBy: req.user.id,
-        targetId: imagingResultId,
-        targetModel: "ImagingResult",
-        note: `Bác sĩ ký duyệt báo cáo${isAiCorrection ? " (có hiệu chỉnh AI)" : ""}`,
-        hospitalId: req.user.hospitalId,
-      });
-    } catch { /* optional */ }
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.IMAGING_REPORT_SIGNED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: signedImaging.hospitalId || req.user.hospitalId,
+      targetModel: "ImagingResult",
+      targetId: String(signedImaging._id),
+      metadata: {
+        signMode: permission.mode,
+        actingRadiologistReason: permission.requiresReason ? String(actingRadiologistReason).trim() : undefined,
+        hasAiCorrection: Boolean(isAiCorrection),
+      },
+    });
 
     return successResponse(res, {
-      imagingResultId: imaging._id,
-      isSigned: imaging.isSigned,
-      signedAt: imaging.signedAt,
+      imagingResultId: signedImaging._id,
+      isSigned: signedImaging.isSigned,
+      signedAt: signedImaging.signedAt,
+      signMode: permission.mode,
       visitStatus: visit?.status || null,
     }, "Ký duyệt báo cáo thành công. Đã thông báo bệnh nhân.");
   } catch (err) {
@@ -404,7 +401,7 @@ export const signImagingReport = async (req, res) => {
 // @access Private (Doctor)
 export const getFollowUpComparison = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền xem dữ liệu so sánh.", 403);
     }
 
@@ -417,9 +414,9 @@ export const getFollowUpComparison = async (req, res) => {
     if (!medicalId) return errorResponse(res, "Bệnh nhân chưa có mã y tế.", 400);
 
     const followUpFilter = { medicalId };
-    if (!["admin", "system_admin"].includes(req.user.role) && req.user.hospitalId) {
-      followUpFilter.hospitalId = req.user.hospitalId;
-    }
+    // Chỉ xem phim của chính viện mình; tài khoản không gắn viện không xem được (fail-closed)
+    if (!req.user.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
+    followUpFilter.hospitalId = req.user.hospitalId;
     const results = await ImagingResult.find(followUpFilter)
       .sort({ orderDate: 1 })
       .select("orderDate procedure aiReport representativeSliceUrl isSigned signedAt")

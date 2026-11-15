@@ -18,6 +18,10 @@ const peerReviewSchema = new Schema(
     },
     // Lý do conflict (khi AI và bác sĩ không đồng ý)
     conflictReason: { type: String, default: "" },
+    // Bác sĩ đã ký báo cáo gốc, không được tự bình duyệt ca của mình
+    primaryDoctorId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    // Bác sĩ được phân công đọc độc lập
+    reviewerIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     // P.3 — Danh sách bác sĩ review
     readings: [
       {

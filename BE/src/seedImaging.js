@@ -1,13 +1,15 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { ImagingResult } from './models/imagingResult.model.js';
-import { connectDB } from './config/db.js';
+import { assertDemoSeedEnabled, connectLocalTestMongo } from './utils/seedGuard.util.js';
 
 dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
 
 const seedData = async () => {
   try {
-    await connectDB();
+    assertDemoSeedEnabled({ scriptName: 'seedImaging.js' });
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log('✅ DB connected for seeding');
 
     // Create mock imaging result

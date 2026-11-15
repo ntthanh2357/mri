@@ -6,6 +6,7 @@ import {
 import { FileText, Sparkles, LifeBuoy, ArrowRight } from 'lucide-react';
 import { LandingNav, HeroIntro, LandingBody, LANDING_IMAGES } from '../components/landing/LandingSections';
 import { Reveal, FloatingOrb } from '../components/ui/Motion';
+import { SUPPORT_HOTLINE, SUPPORT_HOURS_SHORT } from '../constants/supportContact';
 
 const isWeb = Platform.OS === 'web';
 
@@ -28,7 +29,7 @@ const LandingScreen = ({ navigation }) => {
   const quickActions = [
     { icon: FileText, title: 'Xem kết quả MRI', desc: 'Phim chụp và kết luận đã ký số', onPress: goLogin },
     { icon: Sparkles, title: 'Phân tích bằng AI', desc: 'Kết quả sàng lọc trong vài giây', onPress: goLogin },
-    { icon: LifeBuoy, title: 'Hỗ trợ 24/7', desc: 'Hotline 1800 1234', onPress: call },
+    { icon: LifeBuoy, title: 'Hỗ trợ kỹ thuật', desc: `Hotline ${SUPPORT_HOTLINE} (${SUPPORT_HOURS_SHORT})`, onPress: call },
   ];
 
   return (

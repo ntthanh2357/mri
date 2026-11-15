@@ -3,15 +3,17 @@ import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import { User } from "./models/user.model.js";
 import { Hospital } from "./models/hospital.model.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/neuro";
+const MONGO_URI = process.env.MONGO_URI;
+assertDemoSeedEnabled({ scriptName: "seedHospitals.js" });
 
 async function run() {
   try {
     console.log("Connecting to MongoDB for hospital seeding...");
-    await mongoose.connect(MONGO_URI);
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log("Connected successfully.");
 
     // 1. Clear existing hospitals
@@ -74,7 +76,9 @@ async function run() {
       }
     ];
 
-    await User.insertMany(hospitalAdmins);
+    await User.insertMany(
+      hospitalAdmins.map((user) => ({ ...user, isTestAccount: true })),
+    );
     console.log("Seeded Hospital Admins (hospital_admin role).");
 
     // 4. Update existing staff accounts to belong to BVBM (Hospital 1)
@@ -87,8 +91,9 @@ async function run() {
     console.log("✅ Hospital Seeding Complete!");
   } catch (error) {
     console.error("Seeding failed:", error);
+    process.exitCode = 1;
   } finally {
-    await mongoose.disconnect();
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   }
 }
 

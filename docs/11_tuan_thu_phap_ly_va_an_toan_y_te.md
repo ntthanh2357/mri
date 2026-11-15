@@ -1,5 +1,7 @@
 # ⚖️ CHƯƠNG 11: BÁO CÁO ĐÁNH GIÁ TUÂN THỦ PHÁP LÝ, AN TOÀN DỮ LIỆU Y TẾ & KHUNG TIÊU CHUẨN SaMD
-## HỆ THỐNG NEUROSCAN AI (LƯU TRỮ EMR, MINI-PACS & CHẨN ĐOÁN MRI U NÃO)
+
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+## HỆ THỐNG NEUROSCAN AI (LƯU TRỮ EMR, MINI-PACS & HỖ TRỢ SÀNG LỌC U NÃO TRÊN ẢNH MRI)
 ### CĂN CỨ VĂN BẢN PHÁP LUẬT VIỆT NAM HIỆN HÀNH (CẬP NHẬT ĐẾN THÁNG 09/2026)
 
 ---
@@ -104,14 +106,14 @@ Bảng dưới đây rà soát trực tiếp từng module mã nguồn của d�
 
 | Module Hệ Thống | Vị Trí File Mã Nguồn | Quy Định Pháp Lý Áp Dụng | Hiện Trạng Đã Triển Khai | Khoảng Cách / Thiếu Sót (GAP) | Đánh Giá Tuân Thủ |
 | :--- | :--- | :--- | :--- | :--- | :---: |
-| **Bảo Vệ Dữ Liệu & Phân Quyền** | [`tenancy.plugin.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/plugins/tenancy.plugin.js)<br>[`user.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/auth/models/user.model.js) | Luật 91/2025/QH15<br>NĐ 13/2023/NĐ-CP | Cô lập đa viện (Multi-tenant) triệt để bằng plugin; phân quyền RBAC 6 vai trò lâm sàng; chống Brute-force mật khẩu. | Chưa có module xin sự đồng ý xử lý dữ liệu cá nhân riêng biệt; chưa có cơ chế thu hồi sự đồng ý (Withdrawal of Consent). | 🟡 **Bán phần (60%)** |
+| **Bảo Vệ Dữ Liệu & Phân Quyền** | [`tenancy.plugin.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/plugins/tenancy.plugin.js)<br>[`user.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/auth/models/user.model.js) | Luật 91/2025/QH15<br>NĐ 13/2023/NĐ-CP | Cô lập đa viện (Multi-tenant) bằng plugin; phân quyền RBAC 6 vai trò lâm sàng; chống Brute-force mật khẩu. | Chưa có module xin sự đồng ý xử lý dữ liệu cá nhân riêng biệt; chưa có cơ chế thu hồi sự đồng ý (Withdrawal of Consent). | 🟡 **Bán phần (60%)** |
 | **Lưu Trữ Ảnh DICOM / Mini-PACS** | [`googleDrive.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/config/googleDrive.js)<br>[`imaging.controller.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/imaging/imaging.controller.js)<br>[`firebase.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/config/firebase.js) | Luật An ninh mạng 2018<br>NĐ 53/2022/NĐ-CP<br>Luật 91/2025/QH15 | Kiến trúc Hybrid: nén toàn bộ lát cắt thành 1 file `.zip` (PACS Archive) và upload 1–3 Key Slices xem ngay. | **RỦI RO CAO NHẤT:** Dữ liệu ảnh MRI, file nén DICOM và file JSON báo cáo được lưu trên Google Drive / Firebase (máy chủ nước ngoài), vi phạm quy định lưu trữ tại VN. | 🔴 **Nguy cơ cao (30%)** |
 | **Quản Lý Bệnh Án Điện Tử (EMR)** | [`medicalRecord.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/emr/models/medicalRecord.model.js)<br>[`patientRecord.service.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/services/patientRecord.service.js) | Thông tư 13/2025/TT-BYT<br>Luật Lưu trữ 2024<br>Luật KBCB 15/2023 | Thiết lập `retentionYears: 30`, `retentionCategory: "neuro_oncology_malignant"`, `legalHold`, lưu vết xóa mềm (Soft Delete). | Mã nguồn và tài liệu vẫn viện dẫn Thông tư 46/2018/TT-BYT (đã hết hiệu lực); chưa có kết nối VNeID mức 2 cho tài khoản người bệnh. | 🟡 **Bán phần (65%)** |
 | **Biểu Mẫu Lâm Sàng & Hồ Sơ Bệnh Án** | [`DocumentFormScreen.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DocumentFormScreen.js)<br>[`documentVault.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/models/documentVault.model.js) | Thông tư 32/2023/TT-BYT<br>(Phụ lục XXVIII) | Triển khai 12 biểu mẫu: Phiếu khám, Viện phí, Tóm tắt HSBA, Đơn thuốc, Giấy ra viện, Chuyển tuyến, Hóa sinh... | Các mẫu phiếu tự thiết kế theo luồng nội bộ; chưa khớp hoàn toàn cấu trúc dữ liệu 29 mẫu bệnh án chuẩn quốc gia của TT 32. | 🟡 **Bán phần (60%)** |
 | **Phân Hệ AI Engine (CDSS / YOLOv8)** | [`main.py`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/main.py)<br>[`train_yolo.py`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/train_yolo.py)<br>[`ImagingResultScreen.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/ImagingResultScreen.js) | Nghị định 98/2021/NĐ-CP<br>Nghị định 07/2023/NĐ-CP<br>Chuẩn SaMD (IMDRF) | Cơ chế Human-in-the-Loop bắt buộc: AI chỉ đóng vai trò gợi ý (CDSS); Bác sĩ CĐHA xác nhận/hiệu chỉnh; ghi nhận feedback log. | Phần mềm chưa đăng ký phân loại TTBYT Loại C/D; thiếu tuyên bố miễn trừ trách nhiệm pháp lý (Disclaimer RUO) trên giao diện. | 🟢 **Đạt (Mức đồ án / RUO)**<br>🔴 **Chưa cấp phép lâm sàng** |
 | **Nhật Ký Kiểm Toán (Audit Trail)** | [`auditLog.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/models/auditLog.model.js)<br>`audit_logs.db` (SQLite) | Luật ATTTM 86/2015<br>Thông tư 13/2025/TT-BYT | Chuỗi băm liên hoàn Cryptographic Tamper-Evidence (`previousHash`, `currentHash`, `payloadHash`); SQLite audit log cho AI inference. | Chưa có giao diện trích xuất Sổ theo dõi hoạt động xử lý dữ liệu (RoPA) theo mẫu của Cục A05; chưa tự động cảnh báo xâm phạm dữ liệu. | 🟢 **Đạt 85%** |
 | **Chữ Ký Số & Ký Duyệt Chuyên Môn** | [`imagingResult.model.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/imaging/models/imagingResult.model.js)<br>[`imaging.controller.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/imaging/imaging.controller.js#L943-L948) | Luật GDĐT 20/2023/QH15<br>NĐ 130/2018/NĐ-CP | Khóa quyền chỉnh sửa sau khi ký, đóng dấu điện tử trực quan trên Web: **✓ ĐÃ KÝ SỐ ĐIỆN TỬ** kèm tên Bác sĩ CĐHA và timestamp. | `ImagingResult` chỉ lưu cờ boolean `isSigned: true`, chưa lưu `digitalSignatureMetadata` (serial chứng thư số PKI, hash SHA256withRSA). | 🟡 **Bán phần (50%)** |
-| **Thanh Toán Viện Phí & Dữ Liệu BHYT** | [`invoice.controller.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/billing/invoice.controller.js)<br>[`payos.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/utils/payos.js) | Luật GDĐT 20/2023<br>Quy định NHNN | Tạo mã VietQR qua PayOS; Webhook kiểm tra chữ ký HMAC-SHA256 chống giả mạo; tách biệt hoàn toàn dữ liệu tài chính và y tế. | Không có thiếu sót lớn; đáp ứng tốt quy định trung gian thanh toán. | 🟢 **Đạt 95%** |
+| **Thanh Toán Viện Phí** | [`invoice.controller.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/modules/billing/invoice.controller.js)<br>[`payos.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/utils/payos.js) | Luật GDĐT 20/2023<br>Quy định NHNN | Tạo mã VietQR qua PayOS; Webhook kiểm tra chữ ký HMAC-SHA256 chống giả mạo; tách biệt hoàn toàn dữ liệu tài chính và y tế. | Không có thiếu sót lớn; đáp ứng tốt quy định trung gian thanh toán. | 🟢 **Đạt 95%** |
 
 ---
 
@@ -175,7 +177,7 @@ flowchart LR
 ```
 
 ### 4.3. Nguyên tắc Lâm sàng "Human-in-the-Loop" đã triển khai
-Hệ thống đã triển khai rất xuất sắc nguyên tắc phòng ngừa rủi ro sai sót của AI:
+Hệ thống đã triển khai nguyên tắc phòng ngừa rủi ro sai sót của AI:
 1. **AI không có quyền tự động kết luận:** Tuyến chạy ngầm AI chỉ trả kết quả vào trường `aiReport`. Ca chụp lập tức chuyển sang trạng thái `chờ bác sĩ đọc`.
 2. **Cơ chế xác nhận/hiệu chỉnh bắt buộc:** Giao diện [`ImagingResultScreen.js`](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/ImagingResultScreen.js) cung cấp 2 nút:
    * `"✅ AI đúng — Xác nhận"`: Bác sĩ đồng thuận với kết quả đề xuất.
@@ -365,7 +367,7 @@ digitalSignatureMetadata: {
   doctorFullName: { type: String, default: "" },
   doctorLicenseNumber: { type: String, default: "" }, // Số chứng chỉ hành nghề y tế
   certificateSerial: { type: String, default: "" }, // Serial chứng thư số hợp lệ
-  caProvider: { type: String, default: "VNPT-CA" }, // Viettel-CA, VNPT-CA, BKAV-CA...
+  caProvider: { type: String, default: "" }, // để trống khi chưa có chứng thư số thật (chưa tích hợp CA)
   signedHash: { type: String, default: "" }, // SHA-256 băm toàn bộ nội dung chẩn đoán
   timestampToken: { type: String, default: "" }, // Dấu thời gian xác thực từ TSA
   signedAt: { type: Date, default: null },
@@ -430,7 +432,7 @@ export default ClinicalDisclaimerBanner;
 
 ## 8. LỘ TRÌNH TRIỂN KHAI THEO THỨ TỰ ƯU TIÊN (PRIORITY ROADMAP)
 
-Để đảm bảo hệ thống vừa **bảo vệ thành công Đồ án Tốt nghiệp với điểm số xuất sắc**, vừa **sẵn sàng hồ sơ pháp lý cho việc triển khai bệnh viện thật**, nhóm thực hiện theo lộ trình 6 bước sau:
+Để chuẩn bị hồ sơ pháp lý trước khi có thể triển khai tại bệnh viện thật, nhóm đề xuất lộ trình 6 bước sau:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -465,15 +467,15 @@ Dưới đây là 7 câu hỏi phản biện chuyên sâu về mặt y tế, an 
 > **Chiến lược trả lời chuẩn mực:**  
 > *"Dạ kính thưa Thầy/Cô Hội đồng, nhóm nhận thức rất sâu sắc về quy định của Điều 26 Luật An ninh mạng 2018 và Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 (có hiệu lực 01/01/2026) về việc dữ liệu cá nhân và dữ liệu y tế của công dân Việt Nam bắt buộc phải được lưu trữ trên lãnh thổ Việt Nam.  
 > Trong phạm vi **nghiên cứu đồ án tốt nghiệp và môi trường thử nghiệm (Development/Staging)**, nhóm sử dụng Google Drive API và Firebase Storage làm giải pháp kỹ thuật mẫu để kiểm chứng tính khả thi của mô hình kiến trúc Hybrid Mini-PACS (phân tách Key Slices tải nhanh và file nén DICOM lưu trữ nền).  
-> Đối với **môi trường triển khai thực tế tại bệnh viện (Production)**, hệ thống đã được thiết kế sẵn module `StorageEngine` tương thích chuẩn S3 để chuyển đổi ngay lập tức sang hệ thống lưu trữ **MinIO On-Premises** đặt trong trung tâm dữ liệu nội bộ của bệnh viện hoặc các nhà cung cấp đám mây đạt chuẩn an toàn thông tin Cấp độ 3 tại Việt Nam (như Viettel IDC, VNPT Cloud, FPT Cloud), đảm bảo 100% dữ liệu không rời khỏi lãnh thổ Việt Nam và tuân thủ tuyệt đối pháp luật hiện hành."*
+> Đối với **môi trường triển khai thực tế tại bệnh viện (Production)**, hệ thống đã được thiết kế sẵn module `StorageEngine` tương thích chuẩn S3 để chuyển đổi ngay lập tức sang hệ thống lưu trữ **MinIO On-Premises** đặt trong trung tâm dữ liệu nội bộ của bệnh viện hoặc các nhà cung cấp đám mây đạt chuẩn an toàn thông tin Cấp độ 3 tại Việt Nam (như Viettel IDC, VNPT Cloud, FPT Cloud), đảm bảo 100% dữ liệu không rời khỏi lãnh thổ Việt Nam và tuân thủ pháp luật hiện hành."*
 
 ---
 
-### ❓ Câu 2: "Mô hình AI chẩn đoán u não (YOLOv8, CNN) nếu chẩn đoán sai dẫn đến mổ nhầm thì trách nhiệm pháp lý thuộc về ai? Nhóm phát triển phần mềm hay Bác sĩ?"
+### ❓ Câu 2: "Mô hình AI hỗ trợ sàng lọc u não (YOLOv8, CNN) nếu đưa ra kết quả sai dẫn đến mổ nhầm thì trách nhiệm pháp lý thuộc về ai? Nhóm phát triển phần mềm hay Bác sĩ?"
 > **Chiến lược trả lời chuẩn mực:**  
 > *"Dạ thưa Thầy/Cô, căn cứ theo **Luật Khám bệnh, chữa bệnh số 15/2023/QH15** và định hướng quản lý SaMD (Phần mềm như một Trang thiết bị y tế) của Bộ Y tế:  
 > 1. Về mặt pháp lý lâm sàng, **người chịu trách nhiệm pháp lý duy nhất đối với chẩn đoán và chỉ định điều trị là Bác sĩ chuyên khoa ký tên trên bệnh án**.  
-> 2. Về mặt thiết kế hệ thống, NeuroScan AI được định vị chính xác là **Hệ thống Hỗ trợ Ra Quyết định Lâm sàng (CDSS)**, hoạt động theo nguyên tắc **Human-in-the-Loop bắt buộc**. AI tuyệt đối không tự động đóng dấu kết luận. Kết quả của AI chỉ hiển thị cho bác sĩ tham khảo dưới dạng gợi ý (Heatmap và Bounding Box). Bác sĩ có toàn quyền bấm 'Xác nhận' hoặc 'Hiệu chỉnh/Bác bỏ' kết quả AI. Bệnh nhân hoàn toàn không thể xem kết quả khi bác sĩ chưa ký số.  
+> 2. Về mặt thiết kế hệ thống, NeuroScan AI được định vị chính xác là **Hệ thống Hỗ trợ Ra Quyết định Lâm sàng (CDSS)**, hoạt động theo nguyên tắc **Human-in-the-Loop bắt buộc**. AI không bao giờ tự động đóng dấu kết luận. Kết quả của AI chỉ hiển thị cho bác sĩ tham khảo dưới dạng gợi ý (Heatmap và Bounding Box). Bác sĩ có toàn quyền bấm 'Xác nhận' hoặc 'Hiệu chỉnh/Bác bỏ' kết quả AI. Bệnh nhân hoàn toàn không thể xem kết quả khi bác sĩ chưa ký số.  
 > 3. Hệ thống có cơ chế kiểm toán bất biến (Audit Trail) ghi nhận rõ: AI gợi ý gì, bác sĩ nào đọc, bác sĩ đã hiệu chỉnh những gì và thời điểm ký số, đảm bảo minh bạch hoàn toàn khi cần truy vết chuyên môn."*
 
 ---
@@ -501,7 +503,7 @@ Dưới đây là 7 câu hỏi phản biện chuyên sâu về mặt y tế, an 
 > **Chiến lược trả lời chuẩn mực:**  
 > *"Dạ thưa Thầy/Cô, con dấu hiển thị trên giao diện người dùng chỉ là lớp hiển thị trực quan (Visual Representation). Giá trị pháp lý thực sự nằm ở **chuỗi mã băm mật mã và siêu dữ liệu chứng thư số (Digital Signature Metadata)** được lưu trong CSDL:  
 > 1. Khi Bác sĩ CĐHA bấm ký, hệ thống tạo mã băm SHA-256 từ toàn bộ nội dung: Mã y tế + Tọa độ tổn thương + Kết luận chẩn đoán + ID bác sĩ + Timestamp.  
-> 2. Mã băm này được ký mã hóa bằng khóa riêng (Private Key) của chứng thư số PKI bác sĩ (thông qua USB Token hoặc Cloud HSM).  
+> 2. Mã băm được lưu cùng tài khoản bác sĩ đã đăng nhập và thời điểm ký (`signatureType = internal_hash`). Hệ thống **chưa** tích hợp chứng thư số của tổ chức chứng thực (CA), nên chưa ký mã băm bằng khóa riêng qua USB Token hay Cloud HSM và không ghi số chứng thư, nhà cung cấp CA. Ký bằng chứng thư số là hướng phát triển (Chương 10). Giá trị pháp lý của cách ký hiện tại: **[CẦN XÁC MINH PHÁP LÝ]**.  
 > 3. Nếu bất kỳ ai vào CSDL sửa đổi dù chỉ một dấu chấm trong phần kết luận chẩn đoán, hàm kiểm tra toàn vẹn sẽ lập tức phát hiện mã băm hiện tại không khớp với mã băm đã ký (Hash Mismatch) và tự động bật cờ cảnh báo `isTampered = true`, hủy bỏ hiệu lực con dấu điện tử ngay lập tức."*
 
 ---
@@ -517,7 +519,7 @@ Dưới đây là 7 câu hỏi phản biện chuyên sâu về mặt y tế, an 
 ### ❓ Câu 7: "Hệ thống có bảo vệ được dữ liệu bệnh nhân nếu một bệnh viện trong hệ thống bị tấn công mạng (Ransomware) không?"
 > **Chiến lược trả lời chuẩn mực:**  
 > *"Dạ thưa Thầy/Cô, hệ thống áp dụng chiến lược phòng thủ 3 lớp (Defense-in-Depth):  
-> 1. **Cô lập tuyệt đối giữa các bệnh viện (Tenant Isolation):** Nhờ Mongoose Tenancy Plugin, mỗi truy vấn dữ liệu đều bị neo cứng với `hospitalId`. Dù hacker chiếm được quyền của Bệnh viện A, họ tuyệt đối không thể đọc hoặc mã hóa dữ liệu của Bệnh viện B.  
+> 1. **Cô lập giữa các bệnh viện (Tenant Isolation):** Nhờ Mongoose Tenancy Plugin, mỗi truy vấn dữ liệu đều bị neo cứng với `hospitalId`. Dù hacker chiếm được quyền của Bệnh viện A, họ không thể đọc hoặc mã hóa dữ liệu của Bệnh viện B.  
 > 2. **Chuỗi băm chống chỉnh sửa (Tamper-Evident Hash Chain):** Toàn bộ nhật ký kiểm toán `AuditLog` hoạt động theo cơ chế chuỗi băm liên hoàn (tương tự Blockchain). Nếu mã độc sửa dữ liệu, hệ thống sẽ phát hiện vị trí gãy chuỗi ngay lập tức.  
 > 3. **Chính sách khôi phục sau thảm họa (Disaster Recovery):** Toàn bộ hồ sơ bệnh án được phân tách lưu trữ độc lập giữa cơ sở dữ liệu có cấu trúc (MongoDB) và kho dữ liệu nhị phân (PACS Archive), đồng thời có bản sao lưu bất biến (Immutable Backup) giúp khôi phục hệ thống trong vòng dưới 2 giờ sau sự cố."*
 

@@ -2,6 +2,7 @@ import { Schema, model } from "mongoose";
 import { tenancyPlugin } from "../../../plugins/tenancy.plugin.js";
 
 const prescriptionSchema = new Schema({
+  visitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null, index: true },
   hospitalId: {
     type: Schema.Types.ObjectId,
     ref: "Hospital",

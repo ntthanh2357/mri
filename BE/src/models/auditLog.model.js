@@ -47,6 +47,16 @@ const auditLogSchema = new Schema(
       sparse: true,
       index: true,
     },
+    // 2 = băm cả hospitalId, ipAddress, location và bản băm người thực hiện (cho phép ẩn danh mà không làm đứt chuỗi)
+    hashVersion: {
+      type: Number,
+    },
+    performerDigest: {
+      type: String,
+    },
+    redactedAt: {
+      type: Date,
+    },
     previousHash: {
       type: String,
       default: "0000000000000000000000000000000000000000000000000000000000000000",

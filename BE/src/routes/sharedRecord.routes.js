@@ -16,7 +16,7 @@ router.use(createRateLimiter({ windowMs: 60 * 1000, maxRequests: 30, keyGenerato
 
 router.post("/redeem", ctrl.redeem);
 // Nhân viên quét mã trong app (cổng nội bộ): phải đăng nhập, ghi lại tên người mở cho bệnh nhân xem
-router.post("/redeem-staff", protect, checkRole(["doctor", "nurse", "receptionist", "technician"]), ctrl.redeemAsStaff);
+router.post("/redeem-staff", protect, checkRole(["doctor", "department_head", "nurse", "receptionist", "technician"]), ctrl.redeemAsStaff);
 router.post("/view", ctrl.view);
 
 export default router;

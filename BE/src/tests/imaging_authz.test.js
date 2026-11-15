@@ -98,7 +98,7 @@ describe('Phân quyền báo cáo chẩn đoán hình ảnh (P0-2 / P0-3)', () =
     expect(stored.conclusion).toBe('Bình thường');
   });
 
-  it('bác sĩ ký báo cáo: tên lấy từ tài khoản, không nhận CA/chứng thư giả từ client', async () => {
+  it('bác sĩ CĐHA ký báo cáo: tên lấy từ tài khoản, không nhận CA/chứng thư giả từ client', async () => {
     const draft = await ImagingResult.create({
       hospitalId,
       medicalId: 'BN-DRAFT-01',
@@ -117,7 +117,7 @@ describe('Phân quyền báo cáo chẩn đoán hình ảnh (P0-2 / P0-3)', () =
     await updateImagingResult(
       {
         params: { id: draft._id.toString() },
-        user: doctor,
+        user: { ...doctor, role: 'radiologist' },
         body: {
           conclusion: 'U thần kinh đệm độ thấp, cần hội chẩn',
           radiologist: 'BS. Giả Mạo',

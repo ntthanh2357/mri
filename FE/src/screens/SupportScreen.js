@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import {
-  MessageCircle, PhoneCall, Mail, Search, ChevronDown, Send, RefreshCw, LifeBuoy, Clock3,
+  PhoneCall, Mail, Search, ChevronDown, Send, RefreshCw, LifeBuoy, Clock3,
   Bug, Brain, CreditCard, Lightbulb, Headphones, CheckCircle2, Inbox,
 } from 'lucide-react';
 import ResponsiveLayout from '../components/ResponsiveLayout';
@@ -22,6 +22,7 @@ import { get, post } from '../services/api.service';
 import { getFaqsForRole } from '../constants/supportFaqs';
 import { Reveal } from '../components/ui/Motion';
 import { ReceptionBanner, EmptyState } from '../components/reception/ReceptionUI';
+import { SUPPORT_HOTLINE, SUPPORT_HOTLINE_TEL, SUPPORT_HOURS, SUPPORT_HOURS_SHORT } from '../constants/supportContact';
 
 const SUPPORT_IMAGES = {
   hero: require('../../assets/reception/support_headset.jpg'),
@@ -44,8 +45,7 @@ const SupportScreen = ({ navigation }) => {
   const isWide = width > 1180;
 
   const contactOptions = [
-    { icon: MessageCircle, title: 'Chat trực tiếp', desc: 'Phản hồi trong 2 phút', action: 'Bắt đầu chat', color: '#0F9D6B', bg: '#E3F7EF', url: null },
-    { icon: PhoneCall, title: 'Hotline 24/7', desc: '0236 3650 676', action: 'Gọi ngay', color: '#1A5FD0', bg: '#E7F0FE', url: 'tel:02363650676' },
+    { icon: PhoneCall, title: 'Hotline', desc: `${SUPPORT_HOTLINE} · ${SUPPORT_HOURS}`, action: 'Gọi ngay', color: '#1A5FD0', bg: '#E7F0FE', url: SUPPORT_HOTLINE_TEL },
     { icon: Mail, title: 'Gửi email', desc: 'support@neuroscan.com', action: 'Soạn email', color: '#7C3AED', bg: '#F3EEFF', url: 'mailto:support@neuroscan.com?subject=Yêu cầu hỗ trợ kỹ thuật' },
   ];
 
@@ -155,12 +155,12 @@ const SupportScreen = ({ navigation }) => {
           tone="navy"
           eyebrow="Trung tâm hỗ trợ kỹ thuật"
           title="Chúng tôi luôn sẵn sàng hỗ trợ bạn"
-          subtitle="Đội kỹ thuật NeuroScan trực 24/7 — tra cứu câu hỏi thường gặp hoặc gửi yêu cầu, chúng tôi phản hồi trong vòng 2 giờ."
+          subtitle={`Đội kỹ thuật NeuroScan hỗ trợ ${SUPPORT_HOURS} — tra cứu câu hỏi thường gặp hoặc gửi yêu cầu, chúng tôi phản hồi trong vòng 2 giờ làm việc.`}
         >
             <View style={s.onDuty}>
               <View style={s.onDutyRow}>
-                <View style={s.liveDot} dataSet={{ anim: 'ping' }} />
-                <Text style={s.onDutyLabel}>Đội kỹ thuật đang trực</Text>
+                <View style={s.liveDot} />
+                <Text style={s.onDutyLabel}>Giờ hỗ trợ kỹ thuật</Text>
               </View>
               <View style={s.onDutyStats}>
                 <View>
@@ -169,7 +169,7 @@ const SupportScreen = ({ navigation }) => {
                 </View>
                 <View style={s.onDutyDivider} />
                 <View>
-                  <Text style={s.onDutyValue}>24/7</Text>
+                  <Text style={s.onDutyValue}>{SUPPORT_HOURS_SHORT}</Text>
                   <Text style={s.onDutySub}>Hotline 0236 3650 676</Text>
                 </View>
               </View>
@@ -181,7 +181,7 @@ const SupportScreen = ({ navigation }) => {
           {contactOptions.map((opt, i) => {
             const Icon = opt.icon;
             return (
-              <Reveal key={opt.title} delay={i * 100} style={{ width: isWide ? '32.4%' : '100%' }}>
+              <Reveal key={opt.title} delay={i * 100} style={{ width: isWide ? '49.2%' : '100%' }}>
                 <TouchableOpacity style={s.contactCard} onPress={() => handleContactAction(opt)} dataSet={{ hover: 'lift' }}>
                   <View style={[s.contactIcon, { backgroundColor: opt.bg }]}><Icon size={24} color={opt.color} /></View>
                   <View style={{ flex: 1 }}>
@@ -358,7 +358,7 @@ const SupportScreen = ({ navigation }) => {
             <Text style={s.teamText}>
               Phụ trách vận hành hệ thống bệnh án điện tử, Mini-PACS và AI Engine; hỗ trợ người dùng qua hotline, email và ticket.
             </Text>
-            {['Trực hotline 24/7, kể cả ngày lễ', 'Ưu tiên xử lý sự cố ảnh hưởng ca cấp cứu', 'Theo dõi tiến độ từng yêu cầu ngay trên trang này'].map((t) => (
+            {[`Hotline ${SUPPORT_HOURS}`, 'Ưu tiên xử lý sự cố ảnh hưởng ca cấp cứu', 'Theo dõi tiến độ từng yêu cầu ngay trên trang này'].map((t) => (
               <View key={t} style={s.teamPoint}>
                 <CheckCircle2 size={16} color="#6FDDB2" />
                 <Text style={s.teamPointText}>{t}</Text>

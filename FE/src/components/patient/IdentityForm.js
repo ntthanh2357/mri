@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { isFeatureEnabled } from '../../constants/featureScope';
 import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../../constants/colors';
@@ -128,6 +129,8 @@ const IdentityForm = ({ state, onSave, onRetry }) => {
         </Field>
       </View>
 
+      {/* BHYT ngoài phạm vi đồ án (constants/featureScope.js) */}
+      {isFeatureEnabled('bhyt') && (
       <View style={styles.card}>
         <View style={styles.cardHead}>
           <Text style={[styles.cardTitle, styles.grow]}>Thẻ bảo hiểm y tế</Text>
@@ -153,6 +156,7 @@ const IdentityForm = ({ state, onSave, onRetry }) => {
           </View>
         </View>
       </View>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Người liên hệ khẩn cấp</Text>

@@ -22,12 +22,12 @@ if %errorlevel% equ 0 (
 :: 2. Khoi dong AI Engine (Python FastAPI YOLOv8)
 echo.
 echo [2/3] Dang khoi dong AI Engine (Python FastAPI YOLOv8 - Port 8000)...
-start "NeuroScan - AI Engine (FastAPI YOLOv8)" cmd /k "cd /d "%ROOT_DIR%MRIteam_team5\MRIteam" && call .venv\Scripts\activate.bat && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+start "NeuroScan - AI Engine (FastAPI YOLOv8)" cmd /k "cd /d "%ROOT_DIR%MRIteam_team5\MRIteam" && set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& call .venv\Scripts\activate.bat && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 
 :: 3. Khoi dong Backend Node.js
 echo.
 echo [3/3] Dang khoi dong Core Backend (Node.js Express - Port 3000)...
-start "NeuroScan - Core Backend (Node.js)" cmd /k "cd /d "%ROOT_DIR%BE" && npm run dev"
+start "NeuroScan - Core Backend (Node.js)" cmd /k "cd /d "%ROOT_DIR%BE" && set ENABLE_DEBUG_OTP=true&& set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& npm run dev"
 
 :: 4. Khoi dong Frontend Expo Web
 echo.

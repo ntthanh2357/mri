@@ -10,10 +10,12 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 import { Drug } from './src/models/drug.model.js';
 import { User } from './src/models/user.model.js';
+import { assertDemoSeedEnabled, connectLocalTestMongo } from './src/utils/seedGuard.util.js';
 
 const seedDrugs = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    assertDemoSeedEnabled({ scriptName: 'seed_drugs.js' });
+    await connectLocalTestMongo(mongoose, process.env.MONGO_URI);
     console.log('Connected to MongoDB');
 
     // Find any hospital_admin to get a hospitalId
@@ -150,9 +152,9 @@ const seedDrugs = async () => {
 
   } catch (error) {
     console.error('Error seeding drugs:', error);
+    process.exitCode = 1;
   } finally {
-    mongoose.disconnect();
-    process.exit(0);
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   }
 };
 

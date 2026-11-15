@@ -14,10 +14,30 @@ import { FEATURES } from "../config/features.config.js";
 export const ROLE_WHITELIST_MAP = {
   // 1. Quản trị viên, Bác sĩ điều trị, Hội đồng u não (Tumor Board): Toàn quyền (null = full access)
   doctor: null,
+  department_head: null, // Trưởng khoa: bác sĩ phụ trách chuyên môn của khoa
   tumor_board_member: null,
   admin: null,
   system_admin: null,
   hospital_admin: null,
+
+  // 1b. Bác sĩ CĐHA: bối cảnh lâm sàng để đọc phim (chẩn đoán, phân loại u, dị ứng thuốc cản quang); không ghi chú tâm thần/HIV/gen
+  radiologist: new Set([
+    "_id", "patientId", "patientName", "gender", "age", "admissionType", "department", "wardId", "doctorInCharge",
+    "status", "signStatus", "diagnosis", "treatmentPlan", "allergies", "tumorType", "whoGrade", "molecularMarkers",
+    "createdAt", "updatedAt", "currentVersion"
+  ]),
+
+  // 1c. KTV xét nghiệm: hành chính + chẩn đoán để đối chiếu chỉ định xét nghiệm
+  lab_technician: new Set([
+    "_id", "patientId", "patientName", "gender", "age", "admissionType", "department", "doctorInCharge",
+    "status", "signStatus", "diagnosis", "createdAt", "updatedAt"
+  ]),
+
+  // 1d. Dược sĩ: hành chính + chẩn đoán, dị ứng, hướng điều trị để duyệt đơn an toàn
+  pharmacist: new Set([
+    "_id", "patientId", "patientName", "gender", "age", "admissionType", "department", "doctorInCharge",
+    "status", "signStatus", "diagnosis", "treatmentPlan", "allergies", "createdAt", "updatedAt"
+  ]),
 
   // 2. Điều dưỡng (Nurse): Hành chính, sinh hiệu, y lệnh chăm sóc, dị ứng; cấm dữ liệu phân tử & tư vấn di truyền
   nurse: new Set([
@@ -67,7 +87,7 @@ export const segregateMedicalRecord = (record, userRole = "doctor") => {
 
   // Nhóm Bác sĩ & Tumor Board: Toàn quyền truy cập lâm sàng
   const whitelist = ROLE_WHITELIST_MAP[userRole];
-  if (whitelist === null || (["admin", "system_admin", "doctor", "hospital_admin", "tumor_board_member"].includes(userRole))) {
+  if (whitelist === null || (["doctor", "department_head", "hospital_admin", "tumor_board_member"].includes(userRole))) {
     return raw;
   }
 

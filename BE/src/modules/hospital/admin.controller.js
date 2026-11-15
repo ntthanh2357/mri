@@ -1,4 +1,9 @@
 import { isValidObjectId } from "mongoose";
+import { isRoleInScope, OUT_OF_SCOPE_ROLE_MESSAGE } from "../../config/roleScope.js";
+import { aiFetch } from "../../utils/aiClient.util.js";
+import { passwordPolicyError } from "../../utils/passwordPolicy.util.js";
+import { escapeRegex } from "../../utils/escapeRegex.util.js";
+import { writeEncryptedBackup, readEncryptedBackup, readBackupEnvelope, BACKUP_FORMAT } from "../../utils/encryptedBackup.util.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -27,6 +32,7 @@ import {
 import { getDatasets, createDataset, updateDatasetPrice as updateDatasetPriceService } from "../../services/dataset.service.js";
 import { getAuditLogs, anonymizeAuditLogs } from "../../services/audit.service.js";
 import { sendHospitalCredentials } from "../../services/email.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 import { authCache } from "../../utils/authCache.util.js";
 // [FIX 0022] fan-out Notification cho announcement — trước đây thông báo chỉ nằm trong DB,
 // không người dùng nào nhận được.
@@ -121,7 +127,10 @@ export const fetchUsers = async (req, res) => {
 
 export const lockUser = async (req, res) => {
   try {
-    const { userId, isLocked } = req.body;
+    const { userId, isLocked } = req.body || {};
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: "Mã người dùng không hợp lệ." });
+    }
     const adminId = req.user.id;
     // [FIX 0022] truyền actorRole — service kiểm tra rank vai trò; thiếu param này
     // thì canModerateRole(undefined, ...) luôn false → mọi lock/unlock đều bị 403.
@@ -150,6 +159,9 @@ export const addDataset = async (req, res) => {
   try {
     const payload = req.body;
     const adminId = req.user.id;
+    if (!String(payload?.name || "").trim()) {
+      return res.status(400).json({ success: false, message: "Vui lòng nhập tên bộ dữ liệu." });
+    }
     const dataset = await createDataset(payload, adminId);
     res.status(201).json({ success: true, dataset });
   } catch (error) {
@@ -162,7 +174,7 @@ export const CLINICAL_AUDIT_CATEGORIES = {
   break_glass: ["BREAK_GLASS_EMERGENCY_ACCESSED"],
   soft_delete: ["SOFT_DELETE_VISIT"],
   emr_edit: ["UPDATE_EMR_RECORD", "ADDENDUM_CREATED", "SIGN_EMR_RECORD", "RECORD_LOCKED"],
-  refund: ["REFUND_REQUESTED", "REFUND_APPROVED"],
+  refund: ["REFUND_REQUESTED", "REFUND_APPROVED", "REFUND_COMPLETED", "REFUND_REJECTED", "LARGE_REFUND_REVIEWED"],
   assignment: ["ASSIGNMENT_OVERRIDDEN"],
   // Khoa Dược — Dual-Sign, phát thuốc, hậu kiểm 24h, kho & danh mục (UC-PHA)
   pharmacy: [
@@ -380,7 +392,7 @@ export const deleteUser = async (req, res) => {
     });
     authCache.invalidateUser(id);
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "soft-delete-user",
       entity: "User",
       entityId: id,
@@ -481,12 +493,17 @@ export const createUser = async (req, res) => {
     if (!email || !password || !name || !role) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
+    const pwError = passwordPolicyError(password);
+    if (pwError) return res.status(400).json({ success: false, message: pwError });
 
     // [P2-17] Bổ sung pharmacist — trước đây backoffice không tạo được dược sĩ.
     // system_admin không cho tạo từ màn hình bệnh viện (tránh tự nâng quyền nền tảng).
     const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
+    }
+    if (!isRoleInScope(role)) {
+      return res.status(400).json({ success: false, message: OUT_OF_SCOPE_ROLE_MESSAGE });
     }
 
     const userExists = await User.findOne({ email });
@@ -502,7 +519,7 @@ export const createUser = async (req, res) => {
       }
 
       const cleanName = hospitalName.trim();
-      let hospital = await Hospital.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, "i") } });
+      let hospital = await Hospital.findOne({ name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, "i") } }); // escape: tên viện là chuỗi, không phải biểu thức
       
       if (!hospital) {
         // Generate a simple unique code based on the initials
@@ -560,7 +577,7 @@ export const createUser = async (req, res) => {
     await newUser.save();
 
     // Create Audit Log
-    await AuditLog.create({
+    await recordAuditLog({
       action: "create-user",
       entity: "User",
       entityId: newUser._id,
@@ -607,7 +624,7 @@ export const fetchHospitals = async (req, res) => {
 export const getAiTrainingStats = async (req, res) => {
   try {
     const AI_SERVER = process.env.AI_SERVER_URL || "http://localhost:8000";
-    const response = await fetch(`${AI_SERVER}/training-stats`);
+    const response = await aiFetch(`${AI_SERVER}/training-stats`);
     if (!response.ok) {
       return res.status(200).json({
         success: true,
@@ -745,7 +762,7 @@ export const retrainAiModel = async (req, res) => {
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
-    const aiRes = await fetch(`${AI_SERVER}/retrain/start`, {
+    const aiRes = await aiFetch(`${AI_SERVER}/retrain/start`, {
       method: "POST",
       headers: getInternalAiHeaders({ "Content-Type": "application/json" })
     });
@@ -802,7 +819,7 @@ export const getAiRetrainStatus = async (req, res) => {
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
-    const aiRes = await fetch(`${AI_SERVER}/retrain/status`, { headers: getInternalAiHeaders() });
+    const aiRes = await aiFetch(`${AI_SERVER}/retrain/status`, { headers: getInternalAiHeaders() });
     if (!aiRes.ok) {
       return res.status(200).json({
         success: false,
@@ -856,7 +873,7 @@ export const deployAiRetrainedModel = async (req, res) => {
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
-    const aiRes = await fetch(`${AI_SERVER}/retrain/deploy`, {
+    const aiRes = await aiFetch(`${AI_SERVER}/retrain/deploy`, {
       method: "POST",
       headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(req.body || {}),
@@ -878,7 +895,7 @@ export const deployAiRetrainedModel = async (req, res) => {
       user: req.user,
     });
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "AI_MODEL_DEPLOYED",
       entity: "AIModel",
       entityId: data.active_model || "candidate_model",
@@ -906,7 +923,7 @@ export const rollbackAiRetrainedModel = async (req, res) => {
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
-    const aiRes = await fetch(`${AI_SERVER}/retrain/rollback`, {
+    const aiRes = await aiFetch(`${AI_SERVER}/retrain/rollback`, {
       method: "POST",
       headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(req.body || {}),
@@ -928,7 +945,7 @@ export const rollbackAiRetrainedModel = async (req, res) => {
       user: req.user,
     });
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "AI_MODEL_ROLLED_BACK",
       entity: "AIModel",
       entityId: data.active_model || "baseline_model",
@@ -1042,7 +1059,7 @@ export const saveChatbotConfig = async (req, res) => {
 
     const effectivePrompt = (typeof system_prompt === "string" && system_prompt.trim().length > 0)
       ? system_prompt
-      : (currentConfig.system_prompt || "Bạn là trợ lý chẩn đoán AI y tế chuyên nghiệp, hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
+      : (currentConfig.system_prompt || "Bạn là trợ lý AI y tế hỗ trợ sàng lọc (không đưa ra chẩn đoán), hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
 
     const updatedConfig = {
       ...currentConfig,
@@ -1235,13 +1252,111 @@ export const updateHospitalPricing = async (req, res) => {
   }
 };
 
+// Chính sách riêng của từng viện: ngưỡng nợ khi thanh toán một phần, ngoại lệ bác sĩ chỉ định ký CĐHA.
+export const getHospitalPolicies = async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.user.hospitalId).select("billingPolicy imagingPolicy").lean();
+    if (!hospital) return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện" });
+    const radiologistCount = await User.countDocuments({
+      hospitalId: req.user.hospitalId,
+      role: "radiologist",
+      isLocked: { $ne: true },
+      isDeleted: { $ne: true },
+    });
+    res.status(200).json({
+      success: true,
+      data: {
+        partialPaymentDebtThreshold: hospital.billingPolicy?.partialPaymentDebtThreshold ?? 0,
+        allowOrderingDoctorSign: hospital.imagingPolicy?.allowOrderingDoctorSign === true,
+        radiologistCount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+export const updateHospitalPolicies = async (req, res) => {
+  try {
+    const { partialPaymentDebtThreshold, allowOrderingDoctorSign } = req.body || {};
+    const hospital = await Hospital.findById(req.user.hospitalId);
+    if (!hospital) return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện" });
+
+    const before = {
+      partialPaymentDebtThreshold: hospital.billingPolicy?.partialPaymentDebtThreshold ?? 0,
+      allowOrderingDoctorSign: hospital.imagingPolicy?.allowOrderingDoctorSign === true,
+    };
+
+    if (partialPaymentDebtThreshold !== undefined) {
+      const threshold = Number(partialPaymentDebtThreshold);
+      if (!Number.isFinite(threshold) || threshold < 0) {
+        return res.status(400).json({ success: false, message: "Ngưỡng nợ phải là số tiền không âm." });
+      }
+      hospital.billingPolicy = { ...(hospital.billingPolicy?.toObject?.() || {}), partialPaymentDebtThreshold: threshold };
+    }
+    if (allowOrderingDoctorSign !== undefined) {
+      hospital.imagingPolicy = { ...(hospital.imagingPolicy?.toObject?.() || {}), allowOrderingDoctorSign: allowOrderingDoctorSign === true };
+    }
+    await hospital.save();
+
+    const after = {
+      partialPaymentDebtThreshold: hospital.billingPolicy?.partialPaymentDebtThreshold ?? 0,
+      allowOrderingDoctorSign: hospital.imagingPolicy?.allowOrderingDoctorSign === true,
+    };
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.HOSPITAL_POLICY_UPDATED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: hospital._id,
+      targetModel: "Hospital",
+      targetId: String(hospital._id),
+      metadata: { before, after },
+    });
+    res.status(200).json({ success: true, message: "Đã cập nhật chính sách bệnh viện.", data: after });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
+// Cấp hoặc thu hồi quyền ký CĐHA của Trưởng khoa, sau khi viện đã đối chiếu phạm vi hành nghề.
+export const updateStaffImagingSignPermission = async (req, res) => {
+  try {
+    const { canSignImaging, licenseNote } = req.body || {};
+    const note = String(licenseNote || "").trim();
+    if (typeof canSignImaging !== "boolean") {
+      return res.status(400).json({ success: false, message: "Thiếu giá trị canSignImaging." });
+    }
+    if (canSignImaging && note.length < 10) {
+      return res.status(400).json({ success: false, message: "Vui lòng ghi căn cứ cấp quyền (số giấy phép, phạm vi hành nghề), tối thiểu 10 ký tự." });
+    }
+    const staff = await User.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId, role: "department_head" });
+    if (!staff) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy Trưởng khoa thuộc bệnh viện của bạn." });
+    }
+    staff.canSignImaging = canSignImaging;
+    await staff.save();
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.STAFF_IMAGING_SIGN_PERMISSION_CHANGED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: req.user.hospitalId,
+      targetModel: "User",
+      targetId: String(staff._id),
+      metadata: { canSignImaging, licenseNote: note },
+    });
+    res.status(200).json({ success: true, message: canSignImaging ? "Đã cấp quyền ký CĐHA." : "Đã thu hồi quyền ký CĐHA.", data: { canSignImaging } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+  }
+};
+
 // ─── Hospital Onboarding ──────────────────────────────────────────────────────
 
 // Step 1: Admin cấp tài khoản tạm cho bệnh viện
 export const provisionHospital = async (req, res) => {
   try {
     const { hospitalName, itEmail } = req.body;
-    if (!hospitalName || !itEmail) {
+    if (typeof hospitalName !== "string" || !hospitalName.trim() || typeof itEmail !== "string" || !itEmail.trim()) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện và email IT." });
     }
 
@@ -1368,7 +1483,7 @@ export const activateHospital = async (req, res) => {
     hospital.status = "active";
     await hospital.save();
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "activate-hospital",
       entity: "Hospital",
       entityId: hospital._id,
@@ -1438,7 +1553,7 @@ export const toggleHospitalLock = async (req, res) => {
     await hospital.save();
 
     // Log action to AuditLog
-    await AuditLog.create({
+    await recordAuditLog({
       action: hospital.isActive ? "unlock-hospital" : "lock-hospital",
       entity: "Hospital",
       entityId: hospital._id,
@@ -1480,7 +1595,7 @@ export const deleteHospital = async (req, res) => {
     authCache.invalidateHospital(id);
 
     // Log action to AuditLog
-    await AuditLog.create({
+    await recordAuditLog({
       action: "delete-hospital",
       entity: "Hospital",
       entityId: id,
@@ -1693,11 +1808,16 @@ export const exportRevenueCSV = async (req, res) => {
       totalOther += other;
       totalRevenue += invoice.totalAmount;
 
+      // Ô bắt đầu bằng = + - @ bị Excel hiểu là công thức: thêm dấu nháy đơn trước, rồi bọc ngoặc kép
+      const csvText = (value) => {
+        const s = String(value ?? "");
+        return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
+      };
       const row = [
         invoice._id,
-        `"${patientName.replace(/"/g, '""')}"`,
-        patientEmail,
-        paymentMethod,
+        csvText(patientName),
+        csvText(patientEmail),
+        csvText(paymentMethod),
         paidDate,
         exam,
         mri,
@@ -1844,7 +1964,7 @@ export const updateHospitalSubscription = async (req, res) => {
     await hospital.save();
 
     // Log the action
-    await AuditLog.create({
+    await recordAuditLog({
       action: "update-subscription",
       entity: "Hospital",
       entityId: id,
@@ -2015,10 +2135,11 @@ export const backupHospitalData = async (req, res) => {
     
     const fileName = `backup_${hospital.code}_${Date.now()}.json`;
     const filePath = path.join(backupDir, fileName);
-    fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2), "utf8");
+    // Mã hóa AES-256-GCM: tệp tải về không đọc được nếu không có FILE_ENCRYPTION_KEY (trước đây JSON bản rõ)
+    writeEncryptedBackup(filePath, backupData, { hospitalId: String(hospital._id), hospitalCode: hospital.code, kind: "tenant" });
 
     // Log the backup
-    await AuditLog.create({
+    await recordAuditLog({
       action: "backup-tenant",
       entity: "Hospital",
       entityId: id,
@@ -2041,7 +2162,7 @@ export const backupHospitalData = async (req, res) => {
 export const downloadHospitalBackup = async (req, res) => {
   try {
     const { id, fileName } = req.params;
-    if (!isValidObjectId(id) || !fileName) {
+    if (!isValidObjectId(id) || !fileName || typeof fileName !== "string") {
       return res.status(400).json({ success: false, message: "ID bệnh viện hoặc tên file không hợp lệ." });
     }
 
@@ -2056,9 +2177,9 @@ export const downloadHospitalBackup = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy file sao lưu trên hệ thống." });
     }
 
-    const raw = fs.readFileSync(filePath, "utf8");
-    const backupData = JSON.parse(raw);
-    if (backupData.hospital?._id?.toString() !== id) {
+    const envelope = readBackupEnvelope(filePath);
+    const ownerId = envelope?.format === BACKUP_FORMAT ? envelope.meta?.hospitalId : envelope?.hospital?._id?.toString();
+    if (String(ownerId || "") !== id) {
       return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập tệp sao lưu của cơ sở khác." });
     }
 
@@ -2073,7 +2194,7 @@ export const restoreHospitalData = async (req, res) => {
     const { id } = req.params;
     const { fileName } = req.body;
 
-    if (!isValidObjectId(id) || !fileName) {
+    if (!isValidObjectId(id) || !fileName || typeof fileName !== "string") {
       return res.status(400).json({ success: false, message: "ID bệnh viện hoặc tên file không hợp lệ." });
     }
 
@@ -2097,8 +2218,7 @@ export const restoreHospitalData = async (req, res) => {
     // Đọc và parse file backup
     let backupData;
     try {
-      const raw = fs.readFileSync(filePath, "utf8");
-      backupData = JSON.parse(raw);
+      backupData = readEncryptedBackup(filePath).payload;
     } catch {
       return res.status(400).json({ success: false, message: "File sao lưu bị hỏng hoặc không đúng định dạng JSON." });
     }
@@ -2187,7 +2307,7 @@ export const restoreHospitalData = async (req, res) => {
     }
 
     // ── 4. AuditLog ───────────────────────────────────────────────────────────
-    await AuditLog.create({
+    await recordAuditLog({
       action: "restore-tenant",
       entity: "Hospital",
       entityId: id,
@@ -2302,7 +2422,7 @@ export const rollbackAiModel = async (req, res) => {
     let aiServerRollbackData = null;
     try {
       const AI_SERVER = getAiServerBase();
-      const aiRes = await fetch(`${AI_SERVER}/retrain/rollback`, {
+      const aiRes = await aiFetch(`${AI_SERVER}/retrain/rollback`, {
         method: "POST",
         headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ version: requestedVersion, target_model_path: requestedVersion }),
@@ -2335,7 +2455,7 @@ export const rollbackAiModel = async (req, res) => {
       user: req.user,
     });
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "rollback-ai-model",
       entity: "AIModel",
       entityId: requestedVersion,
@@ -2373,7 +2493,7 @@ export const createAnnouncement = async (req, res) => {
     await ann.save();
 
     // Log the announcement
-    await AuditLog.create({
+    await recordAuditLog({
       action: "create-announcement",
       entity: "Announcement",
       entityId: ann._id,
@@ -2516,7 +2636,7 @@ export const upgradeHospitalSubscription = async (req, res) => {
     const hospital = await Hospital.findByIdAndUpdate(hospitalId, updates, { new: true });
     if (!hospital) return res.status(404).json({ success: false, message: "Không tìm thấy bệnh viện." });
 
-    await AuditLog.create({
+    await recordAuditLog({
       action: "K6_UPDATE_SUBSCRIPTION",
       performedBy: req.user.id,
       targetId: hospitalId,
@@ -2543,7 +2663,7 @@ export const upgradeHospitalSubscription = async (req, res) => {
 export const checkAuditIntegrity = async (req, res) => {
   try {
     const { verifyAuditChainIntegrity } = await import("../../services/auditLog.service.js");
-    const result = await verifyAuditChainIntegrity(Number(req.query.limit) || 1000);
+    const result = await verifyAuditChainIntegrity(Number(req.query.limit) || null);
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

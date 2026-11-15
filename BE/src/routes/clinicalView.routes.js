@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import {
   getDicomViewerData,
   getAiOverlays,
@@ -25,7 +25,7 @@ router.get("/imaging/:imagingResultId/ai-report", protect, getFullAiReport);
 router.get("/imaging/:imagingResultId/3d-model", protect, get3dModelUrl);
 
 // G.5 — Ký duyệt + feedback AI (active learning)
-router.post("/imaging/:imagingResultId/sign", protect, signImagingReport);
+router.post("/imaging/:imagingResultId/sign", protect, checkRole(["radiologist", "department_head", "doctor"]), signImagingReport);
 
 // G.6 — So sánh follow-up nhiều lần chụp
 router.get("/patients/:patientId/followup-comparison", protect, getFollowUpComparison);

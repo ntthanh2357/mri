@@ -34,7 +34,13 @@ const notificationSchema = new Schema(
         "transfer_draft", "transfer_sent", "transfer_incoming", "transfer_accepted",
         "assignment_new", "assignment_override", "result_ready",
         "emergency_alert", "emergency_stand_down", "peer_review_assigned",
-        "appointment_reminder", "other",
+        "appointment_reminder", "task_new",
+        // QA-30: các loại đang được gọi nhưng thiếu trong enum (thông báo bị mất im lặng)
+        "critical_lab_value", "prescription_rejected", "deadline_warning", "mri_scheduled",
+        "slot_rescheduled", "emergency_slot_override", "dicom_uploaded",
+        // Phân tích AI thất bại: báo bác sĩ đọc phim trực tiếp / chạy lại AI (trước đây im lặng)
+        "ai_failed",
+        "other",
       ],
       default: "other",
     },

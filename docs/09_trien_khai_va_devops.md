@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 9: ĐÓNG GÓI, TRIỂN KHAI VÀ VẬN HÀNH HỆ THỐNG (DEVOPS & DEPLOYMENT)
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 9.1. KIẾN TRÚC TRIỂN KHAI ĐA DỊCH VỤ (DEPLOYMENT ARCHITECTURE)
@@ -44,7 +46,7 @@ Hệ thống **NeuroScan AI** được thiết kế để có thể triển khai
 Nhằm tối ưu hóa dung lượng hình ảnh Docker và triệt tiêu nguy cơ rò rỉ khóa bảo mật (Secrets Leakage), tất cả các thành phần đều được đóng gói bằng kỹ thuật **Multi-stage Build** kết hợp với danh sách đen `.dockerignore` nghiêm ngặt:
 
 ### 9.2.1. Thắt Chặt Bảo Mật `.dockerignore` (Khắc Phục Lỗ Hổng Rò Rỉ Private Key)
-Trong quá trình kiểm toán an ninh ([BUG-20260911-14](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/logic_bugs_postmortem.md)), nhóm phát hiện nguy cơ file Service Account của Google Cloud / Firebase bị đóng gói vào các tầng (layers) của Docker image. Hệ thống đã được tái cấu trúc bảo vệ tuyệt đối:
+Trong quá trình kiểm toán an ninh ([BUG-20260911-14](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/logic_bugs_postmortem.md)), nhóm phát hiện nguy cơ file Service Account của Google Cloud / Firebase bị đóng gói vào các tầng (layers) của Docker image. Hệ thống đã được tái cấu trúc để bảo vệ:
 - **Xóa bỏ toàn bộ ngoại lệ whitelist:** Nghiêm cấm sử dụng cú pháp whitelist `!credentials.json`.
 - **Danh sách đen chặn bắt buộc trong `.dockerignore`:**
   ```text

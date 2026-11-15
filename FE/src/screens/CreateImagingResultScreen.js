@@ -17,9 +17,12 @@ import { post, postFormData } from '../services/api.service';
 import ResponsiveLayout from '../components/ResponsiveLayout';
 import { StaffBanner, RECEPTION_IMAGES, BannerStats } from '../components/reception/ReceptionUI';
 import Config from '../constants/config';
+import KtvStudyTriagePanel from '../components/ktv/KtvStudyTriagePanel';
+import FinalizedSliceGallery from '../components/ktv/FinalizedSliceGallery';
+import { useCurrentRole } from '../controllers/useCurrentRole';
 import styles from './CreateImagingResultScreen.styles';
 import Colors from '../constants/colors';
-import { Zap, Brain, Edit3, CheckCircle2, RotateCw, X, Upload, UploadCloud, Image as ImgIcon, ScanLine as ScanIcon, ListChecks as ListIcon } from 'lucide-react';
+import { Zap, Brain, Edit3, CheckCircle2, RotateCw, X, Upload, UploadCloud, Image as ImgIcon, ScanLine as ScanIcon, ListChecks as ListIcon, Star, Monitor } from 'lucide-react';
 
 // Thẻ biểu mẫu có số mục — đặt ngoài component để ô nhập không bị mất con trỏ khi gõ
 const SectionCard = ({ no, title, hint, children }) => (
@@ -39,28 +42,33 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   const { patientInfo, visit } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const role = useCurrentRole();
+  const isTechnician = role === 'technician';
 
   const [loading, setLoading] = useState(false);
 
   // Pre-fill fields from visit if technician launched this screen from the queue
-  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '26025699';
+  const initialMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || '';
   const initialPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || '';
-  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || 'Nam';
-  const initialAddress = visit?.patientId?.profile?.address || '., Phường Hòa Xuân, Tp Đà Nẵng';
-  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ sọ não (0.2-1.5T) - (Chụp MRI không thuốc)';
+  const initialGender = visit?.patientId?.profile?.gender || patientInfo?.gender || ''; // chưa có thì để trống
+  const initialAddress = visit?.patientId?.profile?.address || patientInfo?.address || ''; // chưa có thì để trống
+  const initialProcedure = visit?.mriOrder?.region ? `Chụp cộng hưởng từ sọ não - Vùng ${visit.mriOrder.region}` : 'Chụp cộng hưởng từ (MRI) sọ não';
 
   const [medicalId, setMedicalId] = useState(initialMedicalId);
   const [patientName, setPatientName] = useState(initialPatientName);
-  const [birthYear, setBirthYear] = useState('1995');
+  const [birthYear, setBirthYear] = useState(String(visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || ''));
   const [gender, setGender] = useState(initialGender);
   const [address, setAddress] = useState(initialAddress);
   const [imagingType, setImagingType] = useState('MRI');
   const [procedure, setProcedure] = useState(initialProcedure);
-  const [technique, setTechnique] = useState('Chụp MRI sọ não lát cắt mỏng qua vùng hố sau và thùy thái dương, dựng hình 3D mạch máu não.');
+  const [technique, setTechnique] = useState(''); // KTV ghi kỹ thuật thực tế của ca chụp
   const [findings, setFindings] = useState('');
   const [conclusion, setConclusion] = useState('');
-  const [radiologist, setRadiologist] = useState('Bác sĩ Gia Huy');
+  const [radiologist, setRadiologist] = useState(''); // tên bác sĩ CĐHA thật, bắt buộc nhập
   const [images, setImages] = useState([]);
+  const [sliceSeriesMeta, setSliceSeriesMeta] = useState([]);
+  const [primarySliceIndex, setPrimarySliceIndex] = useState(0);
+  const [triageSummary, setTriageSummary] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
   const [aiResult, setAiResult] = useState(null);
@@ -110,8 +118,8 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
       const files = Array.from(e.target.files || []);
       if (files.length === 0) return;
 
-      if (images.length + files.length > 10) {
-        showAlert('Giới hạn', 'Bạn chỉ được chọn tối đa 10 hình ảnh.');
+      if (images.length + files.length > 15) {
+        showAlert('Giới hạn', 'Bạn chỉ được chọn tối đa 15 hình ảnh.');
         return;
       }
 
@@ -145,17 +153,18 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   };
 
   const handleRemoveImage = (indexToRemove) => {
-    setImages(images.filter((_, idx) => idx !== indexToRemove));
+    setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setSliceSeriesMeta((prev) => prev.filter((_, idx) => idx !== indexToRemove).map((m, newIdx) => ({ ...m, sliceIndex: newIdx })));
+    setPrimarySliceIndex((prev) => (prev === indexToRemove ? 0 : prev > indexToRemove ? prev - 1 : prev));
   };
 
-  // Simulated OCR & Fill function
+  // Điền thông tin hành chính có thật từ lượt khám/hồ sơ bệnh nhân. Không bịa mô tả, kết luận hay thông tin bệnh nhân.
   const handleOcrFill = () => {
-    // [BUG-KTV-07 FIX]: Ưu tiên bảo toàn thông tin bệnh nhân thực từ lượt khám, không ghi đè dữ liệu giả
-    const realMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || medicalId || 'BN-26025699';
-    const realPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || patientName || 'Bệnh nhân';
-    const realBirthYear = (visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || birthYear || '1995').toString();
-    const realGender = visit?.patientId?.profile?.gender || patientInfo?.gender || gender || 'Nam';
-    const realAddress = visit?.patientId?.profile?.address || patientInfo?.address || address || 'Đà Nẵng';
+    const realMedicalId = visit?.patientId?.profile?.medicalId || patientInfo?.id || medicalId || '';
+    const realPatientName = visit?.patientId?.profile?.name || visit?.patientId?.profile?.fullName || patientInfo?.name || patientName || '';
+    const realBirthYear = String(visit?.patientId?.profile?.birthYear || patientInfo?.birthYear || birthYear || '');
+    const realGender = visit?.patientId?.profile?.gender || patientInfo?.gender || gender || '';
+    const realAddress = visit?.patientId?.profile?.address || patientInfo?.address || address || '';
 
     setMedicalId(realMedicalId);
     setPatientName(realPatientName);
@@ -163,35 +172,36 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     setGender(realGender);
     setAddress(realAddress);
     setImagingType('MRI');
-    if (!procedure) setProcedure('Chụp cộng hưởng từ sọ não (MRI) có cản từ');
-    if (!technique) setTechnique('Chụp cộng hưởng từ sọ não đa xung, lát cắt mỏng qua các bể sọ và nhu mô não thất.');
-    setFindings(findings || 'Phát hiện khối u vùng thùy trán bên trái, kích thước tương đương 15x18mm. Khối u có ranh giới rõ ràng, bắt thuốc cản từ mạnh và đồng nhất sau tiêm, gây phù nề nhẹ xung quanh.');
-    setConclusion(conclusion || 'U màng não thùy trán trái (Meningioma) lành tính. Đề xuất hội chẩn chuyên khoa phẫu thuật thần kinh.');
-    if (!radiologist) setRadiologist('Bs. Chẩn Đoán Hình Ảnh');
-
-    // Clear validation errors when template fields are filled
-    setErrors(prev => ({
-      ...prev,
-      medicalId: null,
-      patientName: null,
-      procedure: null,
-      findings: null,
-      conclusion: null,
-      radiologist: null,
-    }));
-
-    showAlert('Điền mẫu OCR', 'Đã tự động trích xuất và điền nội dung mô tả hình ảnh & kết luận từ mẫu scan.');
+    setErrors(prev => ({ ...prev, medicalId: realMedicalId ? null : prev.medicalId, patientName: realPatientName ? null : prev.patientName }));
+    showAlert('Đã điền thông tin bệnh nhân', 'Đã điền thông tin hành chính từ lượt khám. Mô tả hình ảnh và kết luận do Bác sĩ CĐHA ghi.');
   };
 
   // ── Điều hướng sang màn hình AI chuyên biệt ──
   const handleAiAnalysis = () => {
     if (images.length === 0) {
-      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi thực hiện chẩn đoán AI.');
+      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất một hình ảnh MRI trước khi chạy phân tích AI hỗ trợ sàng lọc.');
       return;
     }
+    const safePrimary = Math.min(Math.max(0, primarySliceIndex), images.length - 1);
     navigation.navigate('AIAnalysis', {
       ...route.params,
-      imageUrl: images[0],
+      imageUrl: images[safePrimary] || images[0],
+      images,
+      sliceIndex: safePrimary,
+      aiReportData: aiResult || null,
+      visitId: visit?._id || null,
+    });
+  };
+
+  // ── Điều hướng sang trình xem DICOM (PACS / file .dcm cục bộ / từng lát đang chọn) ──
+  const handleOpenDicomViewer = () => {
+    navigation.navigate('DicomViewer', {
+      draftImages: images,
+      sliceSeriesMeta,
+      aiReportData: aiResult || null,
+      patientName: patientName || 'Ca chụp MRI',
+      medicalId: medicalId || '',
+      procedure: procedure || 'Chụp MRI Sọ não',
       visitId: visit?._id || null,
     });
   };
@@ -202,13 +212,20 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
     if (!medicalId || !medicalId.trim()) newErrors.medicalId = 'Mã y tế là trường bắt buộc.';
     if (!patientName || !patientName.trim()) newErrors.patientName = 'Họ tên bệnh nhân là trường bắt buộc.';
     if (!procedure || !procedure.trim()) newErrors.procedure = 'Chỉ định dịch vụ là trường bắt buộc.';
-    if (!findings || !findings.trim()) newErrors.findings = 'Mô tả hình ảnh y khoa là trường bắt buộc.';
-    if (!conclusion || !conclusion.trim()) newErrors.conclusion = 'Kết luận chẩn đoán là trường bắt buộc.';
-    if (!radiologist || !radiologist.trim()) newErrors.radiologist = 'Bác sĩ ký tên là trường bắt buộc.';
+    if (!isTechnician) {
+      if (!findings || !findings.trim()) newErrors.findings = 'Mô tả hình ảnh y khoa là trường bắt buộc.';
+      if (!conclusion || !conclusion.trim()) newErrors.conclusion = 'Kết luận chẩn đoán là trường bắt buộc.';
+      if (!radiologist || !radiologist.trim()) newErrors.radiologist = 'Bác sĩ ký tên là trường bắt buộc.';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       showAlert('Lỗi', 'Vui lòng điền đầy đủ các thông tin bắt buộc được đánh dấu đỏ.');
+      return;
+    }
+
+    if (isTechnician && images.length === 0) {
+      showAlert('Yêu cầu', 'Vui lòng tải lên ít nhất 1 ảnh phim chụp trước khi lưu.');
       return;
     }
 
@@ -227,19 +244,27 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
         gender,
         address,
         orderDate: new Date(),
-        orderingDoctor: visit?.doctorId?.profile?.name || 'Bác sĩ chỉ định',
-        orderingDepartment: imagingType === 'MRI' ? 'Khoa Khám Bệnh' : 'Khoa Cấp Cứu',
+        orderingDoctor: visit?.doctorId?.profile?.name || '',
+        orderingDepartment: '', // không suy khoa từ loại chụp
         medicalRecordNumber: generatedMrn,
-        diagnosis: visit?.reason || 'Theo dõi u não',
+        diagnosis: visit?.reason || '',
         procedure,
         technique,
-        findings,
-        conclusion,
-        radiologist,
+        findings: findings?.trim() || 'Đã tải ảnh phim chụp từ máy MRI. Đang chờ Bác sĩ CĐHA đọc phim.',
+        conclusion: conclusion?.trim() || 'Đang chờ Bác sĩ CĐHA kết luận.',
+        radiologist: radiologist?.trim() || 'Chờ Bác sĩ CĐHA ký duyệt',
         reportDate: new Date(),
         images,
         imagingType,
         visitId: visit?._id || null,
+        ...(aiResult ? { triageAiPreview: aiResult } : {}),
+        ...((sliceSeriesMeta.length > 0 || triageSummary) ? {
+          dicomMetadata: {
+            sliceSeriesMeta,
+            primarySliceIndex,
+            studyTriage: triageSummary || undefined,
+          },
+        } : {}),
       };
 
       const response = await post('/api/v1/imaging', payload);
@@ -273,7 +298,12 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
   };
 
   // Tiến độ điền biểu mẫu — hiện ở banner & danh sách kiểm tra trước khi lưu
-  const checks = [
+  const checks = isTechnician ? [
+    { key: 'medicalId', label: 'Mã y tế', ok: !!medicalId?.trim() },
+    { key: 'patientName', label: 'Họ tên bệnh nhân', ok: !!patientName?.trim() },
+    { key: 'procedure', label: 'Chỉ định dịch vụ', ok: !!procedure?.trim() },
+    { key: 'images', label: 'Ảnh phim chụp', ok: images.length > 0 },
+  ] : [
     { key: 'medicalId', label: 'Mã y tế', ok: !!medicalId?.trim() },
     { key: 'patientName', label: 'Họ tên bệnh nhân', ok: !!patientName?.trim() },
     { key: 'procedure', label: 'Chỉ định dịch vụ', ok: !!procedure?.trim() },
@@ -432,111 +462,93 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                 </View>
               </SectionCard>
 
-              <SectionCard no="III" title="Nội dung mô tả & kết luận" hint="Có thể điền tự động từ kết quả phân tích AI">
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Mô tả hình ảnh y khoa *</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea, { height: 120 }, errors.findings && styles.inputError]}
-                    multiline
-                    numberOfLines={6}
-                    placeholder="Nhập mô tả phim chụp chi tiết (ví dụ: phát hiện khối u thái dương kích thước 22x24mm...)"
-                    value={findings}
-                    onChangeText={(text) => {
-                      setFindings(text);
-                      if (errors.findings) setErrors(prev => ({ ...prev, findings: null }));
-                    }}
-                  />
-                  {errors.findings && <Text style={styles.errorText}>{errors.findings}</Text>}
-                </View>
+              {!isTechnician && (
+                <SectionCard no="III" title="Nội dung mô tả & kết luận" hint="Có thể điền tự động từ kết quả phân tích AI">
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Mô tả hình ảnh y khoa *</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea, { height: 120 }, errors.findings && styles.inputError]}
+                      multiline
+                      numberOfLines={6}
+                      placeholder="Nhập mô tả phim chụp chi tiết (ví dụ: phát hiện khối u thái dương kích thước 22x24mm...)"
+                      value={findings}
+                      onChangeText={(text) => {
+                        setFindings(text);
+                        if (errors.findings) setErrors(prev => ({ ...prev, findings: null }));
+                      }}
+                    />
+                    {errors.findings && <Text style={styles.errorText}>{errors.findings}</Text>}
+                  </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Kết luận chẩn đoán *</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea, { height: 80 }, errors.conclusion && styles.inputError]}
-                    multiline
-                    numberOfLines={4}
-                    placeholder="Nhập kết luận chính của Bác sĩ chuyên khoa..."
-                    value={conclusion}
-                    onChangeText={(text) => {
-                      setConclusion(text);
-                      if (errors.conclusion) setErrors(prev => ({ ...prev, conclusion: null }));
-                    }}
-                  />
-                  {errors.conclusion && <Text style={styles.errorText}>{errors.conclusion}</Text>}
-                </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Kết luận chẩn đoán *</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea, { height: 80 }, errors.conclusion && styles.inputError]}
+                      multiline
+                      numberOfLines={4}
+                      placeholder="Nhập kết luận chính của Bác sĩ chuyên khoa..."
+                      value={conclusion}
+                      onChangeText={(text) => {
+                        setConclusion(text);
+                        if (errors.conclusion) setErrors(prev => ({ ...prev, conclusion: null }));
+                      }}
+                    />
+                    {errors.conclusion && <Text style={styles.errorText}>{errors.conclusion}</Text>}
+                  </View>
 
-                <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-                  <Text style={styles.inputLabel}>Bác sĩ chuyên khoa ký tên *</Text>
-                  <TextInput
-                    style={[styles.input, errors.radiologist && styles.inputError]}
-                    placeholder="Nhập tên bác sĩ đọc phim"
-                    value={radiologist}
-                    onChangeText={(text) => {
-                      setRadiologist(text);
-                      if (errors.radiologist) setErrors(prev => ({ ...prev, radiologist: null }));
-                    }}
-                  />
-                  {errors.radiologist && <Text style={styles.errorText}>{errors.radiologist}</Text>}
-                </View>
-              </SectionCard>
+                  <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+                    <Text style={styles.inputLabel}>Bác sĩ chuyên khoa ký tên *</Text>
+                    <TextInput
+                      style={[styles.input, errors.radiologist && styles.inputError]}
+                      placeholder="Nhập tên bác sĩ đọc phim"
+                      value={radiologist}
+                      onChangeText={(text) => {
+                        setRadiologist(text);
+                        if (errors.radiologist) setErrors(prev => ({ ...prev, radiologist: null }));
+                      }}
+                    />
+                    {errors.radiologist && <Text style={styles.errorText}>{errors.radiologist}</Text>}
+                  </View>
+                </SectionCard>
+              )}
             </View>
 
-            {/* ── Cột phải: ảnh phim, công cụ, kiểm tra ── */}
+            {/* ── Cột phải: công cụ, AI, kiểm tra ── */}
             <View style={[L.sideCol, isWide && { flex: 1 }]}>
-              <SectionCard no="IV" title="Ảnh phim chụp" hint={`${images.length}/10 ảnh · PNG, JPG, DICOM, NIfTI, ZIP`}>
-                <TouchableOpacity style={[L.drop, uploading && { opacity: 0.6 }]} onPress={handlePickImages} disabled={uploading} dataSet={{ hover: 'tint' }}>
-                  {uploading ? (
-                    <ActivityIndicator size="large" color="#0369A1" />
-                  ) : (
-                    <>
-                      <View style={L.dropIcon}><Upload size={24} color="#0369A1" /></View>
-                      <Text style={L.dropTitle}>Bấm để tải ảnh phim lên</Text>
-                      <Text style={L.dropHint}>Chọn nhiều tệp cùng lúc, tối đa 10 ảnh</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                {images.length > 0 && (
-                  <View style={L.thumbGrid}>
-                    {images.map((img, idx) => {
-                      const fullUri = img.startsWith('http') ? img : `${Config.API_URL}${img}`;
-                      return (
-                        <View key={idx} style={L.thumb}>
-                          <Image source={{ uri: fullUri }} style={L.thumbImg} resizeMode="cover" />
-                          <TouchableOpacity style={styles.removeBadge} onPress={() => handleRemoveImage(idx)}>
-                            <X size={12} color="#B91C1C" />
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </SectionCard>
-
               <View style={L.toolCard}>
                 <Text style={L.toolTitle}>Công cụ hỗ trợ</Text>
                 <TouchableOpacity style={L.toolBtn} onPress={handleOcrFill} dataSet={{ hover: 'tint' }}>
                   <View style={[L.toolIcon, { backgroundColor: 'rgba(111,221,178,0.16)' }]}><Zap size={16} color="#6FDDB2" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={L.toolBtnTitle}>Điền thử bằng OCR</Text>
-                    <Text style={L.toolBtnHint}>Giả lập trích xuất từ phiếu scan</Text>
+                    <Text style={L.toolBtnTitle}>Điền thông tin bệnh nhân</Text>
+                    <Text style={L.toolBtnHint}>Lấy từ lượt khám, không điền kết luận</Text>
                   </View>
                 </TouchableOpacity>
                 <TouchableOpacity style={[L.toolBtn, images.length === 0 && { opacity: 0.5 }]} onPress={handleAiAnalysis} disabled={images.length === 0} dataSet={{ hover: 'tint' }}>
                   <View style={[L.toolIcon, { backgroundColor: 'rgba(165,180,252,0.18)' }]}><Brain size={16} color="#A5B4FC" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={L.toolBtnTitle}>{images.length === 0 ? 'Phân tích AI' : 'Mở phân tích AI'}</Text>
-                    <Text style={L.toolBtnHint}>{images.length === 0 ? 'Cần tải ít nhất 1 ảnh trước' : `Dùng ảnh đầu tiên trong ${images.length} ảnh`}</Text>
+                    <Text style={L.toolBtnTitle}>{images.length === 0 ? 'Phân tích AI' : 'Mở phân tích AI 3 tầng'}</Text>
+                    <Text style={L.toolBtnHint}>{images.length === 0 ? 'Cần tải ít nhất 1 ảnh trước' : `Dùng ảnh đại diện (#${Math.min(primarySliceIndex, images.length - 1) + 1}/${images.length} ảnh)`}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={L.toolBtn} onPress={handleOpenDicomViewer} dataSet={{ hover: 'tint' }}>
+                  <View style={[L.toolIcon, { backgroundColor: 'rgba(34,211,238,0.18)' }]}><Monitor size={16} color="#22D3EE" /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={L.toolBtnTitle}>Xem ảnh DICOM / từng lát (PACS)</Text>
+                    <Text style={L.toolBtnHint}>{images.length > 0 ? `Mở ${images.length} lát đang chọn hoặc tệp .dcm từ máy` : 'Mở thư mục .dcm cục bộ hoặc ca trên PACS'}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
-              {/* Kết quả AI trả về (sau khi bác sĩ xác nhận từ AIAnalysisScreen) */}
+              {/* Kết quả AI trả về (sau khi bác sĩ xác nhận từ AIAnalysisScreen hoặc sau khi AI 3 tầng/sàng lọc hoàn tất) */}
               {aiResult && (
                 <View style={[L.aiBox, { borderColor: aiResult.isWrong ? '#FCA5A5' : '#6EE7B7' }]}>
                   <View style={{ backgroundColor: aiResult.isWrong ? '#B91C1C' : Colors.brandGreen, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {aiResult.isWrong ? <Edit3 size={15} color="#fff" /> : <CheckCircle2 size={15} color="#fff" />}
                     <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-                      {aiResult.isWrong ? 'AI đã được điều chỉnh bởi bác sĩ' : 'Kết quả AI đã được bác sĩ xác nhận'}
+                      {aiResult.isWrong
+                        ? 'AI đã được điều chỉnh bởi bác sĩ'
+                        : (isTechnician ? 'Kết quả AI chi tiết toàn thư mục' : 'Kết quả AI đã được bác sĩ xác nhận')}
                     </Text>
                   </View>
                   <View style={{ backgroundColor: aiResult.isWrong ? '#FEF2F2' : '#ECFDF5', padding: 14 }}>
@@ -546,7 +558,24 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
                         <Text style={{ color: '#9CA3AF', fontSize: 12 }}> (AI gốc: {aiResult.originalClass?.toUpperCase()})</Text>
                       )}
                     </Text>
-                    <Text style={{ fontSize: 13, color: '#1E293B' }}>Độ tự tin AI: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text></Text>
+                    <Text style={{ fontSize: 13, color: '#1E293B', marginBottom: 4 }}>
+                      Độ tự tin AI: <Text style={{ fontWeight: 'bold' }}>{aiResult.confidence}%</Text>
+                    </Text>
+                    {aiResult.studyDiagnosisSummary?.totalAnalyzed > 0 && (
+                      <Text style={{ fontSize: 12, color: '#312E81', fontWeight: '700', marginBottom: 4 }}>
+                        Đa số toàn thư mục: {aiResult.studyDiagnosisSummary.dominantCount ?? 0}/
+                        {aiResult.studyDiagnosisSummary.totalAnalyzed} lát ({aiResult.studyDiagnosisSummary.dominantPctOfTotal ?? 0}%) là{' '}
+                        {String(aiResult.studyDiagnosisSummary.dominantClass || aiResult.class_name || 'notumor').toUpperCase()}
+                      </Text>
+                    )}
+                    {aiResult.totalSlices > 0 && (
+                      <Text style={{ fontSize: 12, color: '#475569' }}>
+                        Nghi khối u trên {aiResult.tumorSliceCount ?? 0}/{aiResult.totalSlices} lát PACS •{' '}
+                        {aiResult.deepAiCompleted
+                          ? 'Đã chạy đủ 3 tầng AI + Grad-CAM'
+                          : '3-CNN Ensemble + YOLOv8 + Gemini VLM giới hạn'}
+                      </Text>
+                    )}
                     {aiResult.isWrong && (
                       <View style={{ marginTop: 10, backgroundColor: '#FEE2E2', borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: '#B91C1C' }}>
                         <Text style={{ fontSize: 11, color: '#991B1B', lineHeight: 17 }}>{aiResult.warningNote}</Text>
@@ -582,6 +611,50 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
               </View>
             </View>
           </View>
+
+          {/* ── Khối ảnh phim & bộ lọc thư mục MRI toàn chiều ngang để dễ quan sát ── */}
+          <SectionCard no="IV" title="Ảnh phim chụp & Phân tích AI toàn thư mục MRI" hint={`${images.length}/15 ảnh · Phân tích AI chi tiết toàn thư mục (~60–300 ảnh), thống kê đa số & chọn ~10 lát rõ nhất · Bấm ★ đặt ảnh đại diện`}>
+            <KtvStudyTriagePanel
+              visit={visit}
+              onComplete={({ images: pickedImages, sliceSeriesMeta: pickedMeta, primarySliceIndex: pIdx, triageSummary: summary, triageAiPreview }) => {
+                setImages(pickedImages || []);
+                setSliceSeriesMeta(pickedMeta || []);
+                setPrimarySliceIndex(Number.isInteger(pIdx) ? pIdx : 0);
+                setTriageSummary(summary || null);
+                if (triageAiPreview) {
+                  setAiResult(triageAiPreview);
+                }
+                if (summary && !technique.trim()) {
+                  setTechnique(
+                    `Lọc thư mục MRI (${summary.totalUploadedRaw || 0} ảnh, bỏ ${summary.ignoredSequenceCount || 0} ảnh định vị/localizer), chọn ${pickedImages?.length || 0} lát rõ tổn thương nhất.`
+                  );
+                }
+              }}
+            />
+
+            {images.length < 15 && (
+              <TouchableOpacity style={[L.drop, uploading && { opacity: 0.6 }]} onPress={handlePickImages} disabled={uploading} dataSet={{ hover: 'tint' }}>
+                {uploading ? (
+                  <ActivityIndicator size="large" color="#0369A1" />
+                ) : (
+                  <>
+                    <View style={L.dropIcon}><Upload size={24} color="#0369A1" /></View>
+                    <Text style={L.dropTitle}>Hoặc bấm để thêm ảnh phim lẻ</Text>
+                    <Text style={L.dropHint}>Chọn nhiều tệp cùng lúc, tối đa 15 ảnh ({15 - images.length} chỗ trống)</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+            <FinalizedSliceGallery
+              images={images}
+              sliceSeriesMeta={sliceSeriesMeta}
+              primarySliceIndex={primarySliceIndex}
+              aiResult={aiResult}
+              onSelectPrimary={(idx) => setPrimarySliceIndex(idx)}
+              onRemoveSlice={handleRemoveImage}
+              onOpenDicomViewer={handleOpenDicomViewer}
+            />
+          </SectionCard>
         </ScrollView>
       </SafeAreaView>
     </ResponsiveLayout>
@@ -591,7 +664,7 @@ const CreateImagingResultScreen = ({ route, navigation }) => {
 const isWebL = Platform.OS === 'web';
 const shadowL = isWebL ? { boxShadow: '0 10px 30px -18px rgba(8,47,73,0.35)' } : { elevation: 2 };
 const L = StyleSheet.create({
-  page: { padding: 28, paddingBottom: 56, maxWidth: 1360, width: '100%', alignSelf: 'center', gap: 20 },
+  page: { padding: 28, paddingBottom: 56, maxWidth: 1440, width: '100%', alignSelf: 'center', gap: 20 },
   bannerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
   bannerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999 },
   bannerBtnText: { color: '#082F49', fontWeight: '800', fontSize: 13 },
@@ -614,8 +687,8 @@ const L = StyleSheet.create({
   dropIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   dropTitle: { fontSize: 14, fontWeight: '800', color: '#0369A1' },
   dropHint: { fontSize: 12, color: '#64748B' },
-  thumbGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
-  thumb: { width: 84, height: 84, borderRadius: 12, overflow: 'hidden', position: 'relative', borderWidth: 1, borderColor: '#E2E8F0' },
+  thumbGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14 },
+  thumb: { width: 120, height: 120, borderRadius: 12, overflow: 'hidden', position: 'relative', borderWidth: 1, borderColor: '#E2E8F0' },
   thumbImg: { width: '100%', height: '100%' },
 
   toolCard: { backgroundColor: '#082F49', borderRadius: 20, padding: 20, gap: 10, ...shadowL },

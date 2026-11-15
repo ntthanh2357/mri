@@ -1,3 +1,4 @@
+import "./assertLocalTestDb.js";
 /**
  * NeuroScan AI - Master Test Suite Runner
  * Executes both Clinical Workflow E2E / Service Unit Tests AND OWASP Security Audit Suite

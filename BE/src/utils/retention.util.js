@@ -1,6 +1,6 @@
 /**
  * NeuroScan AI - Retention Policy Engine
- * Căn cứ: Điều 15 Thông tư 46/2018/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15
+ * Căn cứ: TT 13/2025/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15
  * 
  * - Hồ sơ ngoại trú, nội trú: Lưu trữ tối thiểu 10 năm.
  * - Hồ sơ tai nạn lao động, bệnh nghề nghiệp: Lưu trữ tối thiểu 15 năm.
@@ -10,7 +10,7 @@
  */
 
 export const RETENTION_RULES = {
-  // Quy chuẩn bệnh án tổng quát (Thông tư 46/2018/TT-BYT)
+  // Quy chuẩn bệnh án tổng quát (Thông tư 13/2025/TT-BYT)
   ngoai_tru: { years: 10, label: "Bệnh án ngoại trú (10 năm)" },
   noi_tru: { years: 10, label: "Bệnh án nội trú (10 năm)" },
   tai_nan_lao_dong: { years: 15, label: "Tai nạn lao động / Bệnh nghề nghiệp (15 năm)" },
@@ -88,7 +88,7 @@ export const canDisposeRecord = (record) => {
   if (!record.retentionExpiresAt) {
     return {
       canDispose: false,
-      reason: "Hồ sơ chưa được ấn định ngày hết hạn lưu trữ theo Thông tư 46/2018/TT-BYT.",
+      reason: "Hồ sơ chưa được ấn định ngày hết hạn lưu trữ theo Thông tư 13/2025/TT-BYT.",
     };
   }
 

@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
+import { aiFetch } from "../../../utils/aiClient.util.js";
 import { User } from "../../../models/user.model.js";
 import { VitalSign } from "../../../models/vitalSign.model.js";
 import { LabOrder } from "../../../models/labOrder.model.js";
 import { Prescription } from "../../../models/prescription.model.js";
 import { Drug } from "../../../models/drug.model.js";
+import { escapeRegex } from "../../../utils/escapeRegex.util.js";
 import { ImagingResult } from "../../../models/imagingResult.model.js";
 
 // In-memory cache cho openFDA để tối ưu tốc độ và tránh rate limit
@@ -420,7 +422,7 @@ export async function consultAiPharmacist({ patientInfo, medications, diagnosis,
       tumor_ai_result: tumorAiResult || null
     };
 
-    const resp = await fetch(aiServerUrl, {
+    const resp = await aiFetch(aiServerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -641,7 +643,9 @@ export async function assessPrescriptionSafety({
   if (isDbConnected && medNames.length > 0) {
     try {
       dbDrugs = await Drug.find({ 
-        name: { $in: medNames.map(n => new RegExp(`^${n.trim()}$`, "i")) } 
+        // escape: tên thuốc như "Mannitol 20% (250ml)", "Amoxicillin + Clavulanat" có ký tự regex; trước đây không khớp
+        // (hoặc ném SyntaxError bị catch nuốt) nên bỏ sót thông tin thuốc trong danh mục viện khi kiểm tra an toàn kê đơn
+        name: { $in: medNames.map(n => new RegExp(`^${escapeRegex(String(n || "").trim())}$`, "i")) } 
       }).lean();
     } catch (e) {}
   }
@@ -1037,7 +1041,7 @@ export async function assessPrescriptionSafety({
             type: "TUMOR_PROTOCOL_MISMATCH",
             severity: "CRITICAL",
             drugName: hasChemo.name,
-            message: `[Cảnh báo Lệch Chỉ định Nghiêm trọng] Kết quả AI chẩn đoán hình ảnh kết luận KHÔNG PHÁT HIỆN KHỐI U NÃO (NOTUMOR) và không có tiền sử u não/hậu phẫu. Đơn thuốc đang kê hóa chất độc tế bào (${hasChemo.name}).`,
+            message: `[Cảnh báo Lệch Chỉ định Nghiêm trọng] Kết quả AI hỗ trợ sàng lọc trên ảnh KHÔNG PHÁT HIỆN KHỐI U NÃO (NOTUMOR) và không có tiền sử u não/hậu phẫu. Đơn thuốc đang kê hóa chất độc tế bào (${hasChemo.name}).`,
             recommendation: "Hội chẩn khẩn cấp trước khi cấp phát hóa chất cho người bệnh.",
             source: "Neuro-Oncology AI Protocol Guard"
           });
@@ -1095,7 +1099,7 @@ export async function assessPrescriptionSafety({
       patientId: patient?._id ? `ANON_${String(patient._id).slice(-6)}` : "ANON_PATIENT",
       name: "Bệnh nhân (Ẩn danh hóa)",
       age: patient?.profile?.dob ? (new Date().getFullYear() - new Date(patient.profile.dob).getFullYear()) : 45,
-      gender: patient?.profile?.gender || "Nam",
+      gender: patient?.profile?.gender || null, // chưa rõ thì để trống
       diagnosis: diagnosis || resolvedTumorAiResult?.predicted_class || "U não / Rối loạn thần kinh",
       allergies,
       bmi,

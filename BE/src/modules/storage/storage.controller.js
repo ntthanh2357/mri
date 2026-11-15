@@ -12,9 +12,66 @@ import {
   ensureDirectory,
 } from "../../services/storage/localAdapter.js";
 import { getPacsQueueStatus } from "../../services/storage/pacsQueue.service.js";
+import { checkPatientTenancy } from "../../utils/tenancy.util.js";
 
 // Lưu trữ phiên tải lên phân mảnh (Chunked Upload Sessions) trong bộ nhớ
 const chunkUploadSessions = new Map();
+
+// ── Giới hạn upload phân mảnh (PACS/DICOM) ─────────────────────────────────────────
+const CHUNK_MAX_TOTAL_BYTES = 600 * 1024 * 1024; // khớp giới hạn upload DICOM 600MB
+const CHUNK_MAX_PART_BYTES = 16 * 1024 * 1024;
+const CHUNK_MAX_PARTS = 1200;
+const CHUNK_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+const CHUNK_CATEGORIES = new Set(["pacs", "sequence_slice"]);
+const CHUNK_MIME_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",
+  "application/dicom", "application/octet-stream",
+  "application/zip", "application/x-zip-compressed", "application/gzip", "application/x-tar",
+  "application/x-7z-compressed", "application/vnd.rar", "application/x-rar-compressed",
+]);
+
+// Phiên bỏ dở quá hạn: xóa khỏi bộ nhớ và dọn mảnh tạm trên đĩa
+const purgeExpiredChunkSessions = () => {
+  const now = Date.now();
+  for (const [id, session] of chunkUploadSessions) {
+    if (now - session.createdAt > CHUNK_SESSION_TTL_MS) {
+      chunkUploadSessions.delete(id);
+      const dir = path.join(getLocalRoot(), "chunks_staging", String(id).replace(/[^a-zA-Z0-9_-]/g, ""));
+      fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+};
+setInterval(purgeExpiredChunkSessions, 30 * 60 * 1000).unref?.();
+
+// Chỉ người khởi tạo phiên mới gửi mảnh/hoàn tất được (không lộ phiên của người khác: trả như không tồn tại)
+const getOwnedSession = (uploadSessionId, user) => {
+  purgeExpiredChunkSessions();
+  const session = chunkUploadSessions.get(uploadSessionId);
+  if (!session || !user?.id || String(session.uploadedBy) !== String(user.id)) return null;
+  return session;
+};
+
+// ── Phản hồi tệp: chỉ hiển thị trực tiếp ảnh/PDF; loại khác buộc tải về. Chặn script trong tệp do người dùng tải lên. ──
+const INLINE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif", "image/tiff", "application/pdf"]);
+const DOWNLOAD_TYPES = new Set([
+  "application/dicom", "application/zip", "application/x-zip-compressed", "application/gzip", "application/x-tar",
+  "application/x-7z-compressed", "application/vnd.rar", "application/x-rar-compressed", "application/json",
+]);
+export const safeFileResponseHeaders = (mimeType, fileName) => {
+  const type = String(mimeType || "").toLowerCase().split(";")[0].trim();
+  const inline = INLINE_TYPES.has(type);
+  const contentType = inline || DOWNLOAD_TYPES.has(type) ? type : "application/octet-stream";
+  const headers = {
+    "Content-Type": contentType,
+    "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(fileName || "file")}"`,
+    "X-Content-Type-Options": "nosniff",
+  };
+  // PDF giữ trình xem PDF của trình duyệt (sandbox chặn trình xem PDF); mọi loại khác: không chạy script/không nhúng
+  headers["Content-Security-Policy"] = type === "application/pdf"
+    ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'"
+    : "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
+  return headers;
+};
 
 /**
  * Tra hospitalId của bệnh nhân / người tải tệp để áp quy tắc cùng bệnh viện (P1-8).
@@ -44,26 +101,31 @@ export const streamStoredFile = async (req, res) => {
     const { stream, file } = await storageService.get(fileId);
 
     // Kiểm tra quyền truy cập (chống IDOR giữa bệnh nhân và giữa các bệnh viện)
-    if (!(await ensureFileAccess(file, req.user))) {
+    if (!req.signedFileAccess && !(await ensureFileAccess(file, req.user))) {
       return res.status(403).json({
         success: false,
         message: "Bạn không có quyền truy cập tệp tin y tế này.",
       });
     }
 
-    // Thiết lập Header HTTP Stream
-    res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
+    // Thiết lập Header HTTP Stream (Content-Type theo danh sách cho phép, không tin mimeType client tự khai)
+    for (const [k, v] of Object.entries(safeFileResponseHeaders(file.mimeType, file.fileName))) res.setHeader(k, v);
     res.setHeader("Content-Length", file.sizeBytes);
-    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(file.fileName)}"`);
     res.setHeader("ETag", file.sha256);
     res.setHeader("Cache-Control", "private, max-age=86400"); // Cache 1 ngày trên browser bệnh nhân
 
+    // Lỗi khi đang gửi (vd. thẻ xác thực GCM không khớp = tệp bị sửa): cắt kết nối, không gửi phần còn lại
+    stream.on("error", (err) => {
+      console.error("Lỗi đọc/giải mã tệp khi stream:", err.message);
+      res.destroy(err);
+    });
     stream.pipe(res);
   } catch (error) {
-    console.error("Lỗi stream file:", error);
+    console.error("Lỗi stream file:", error.message);
     const status = error.status || 500;
     return res.status(status).json({
       success: false,
+      ...(error.code ? { code: error.code } : {}),
       message: error.message || "Không thể tải tệp tin.",
     });
   }
@@ -99,7 +161,10 @@ export const getStoredFileMetadata = async (req, res) => {
         mimeType: file.mimeType,
         sha256: file.sha256,
         syncStatus: file.syncStatus,
-        isEncrypted: file.isEncrypted,
+        // Báo đúng: bản chính trên máy chủ có mã hóa không (dữ liệu cũ từng ghi isEncrypted=true dù là bản rõ)
+        isEncrypted: file.localEncrypted === true,
+        localEncrypted: file.localEncrypted === true,
+        driveCopyEncrypted: Boolean(file.driveFileId && file.encryptionIv && file.encryptionAuthTag),
         createdAt: file.createdAt,
         streamUrl: `/api/v1/storage/files/${file.fileId}`,
       },
@@ -129,11 +194,28 @@ export const initChunkedUpload = async (req, res) => {
       expectedSha256 = null,
     } = req.body;
 
-    if (!fileName || !totalChunks || Number(totalChunks) <= 0) {
+    const parts = Number(totalChunks);
+    const declaredBytes = Number(totalSizeBytes) || 0;
+    if (!fileName || typeof fileName !== "string" || !Number.isInteger(parts) || parts <= 0) {
       return res.status(400).json({
         success: false,
         message: "Thiếu tên tệp (fileName) hoặc tổng số mảnh (totalChunks).",
       });
+    }
+    if (parts > CHUNK_MAX_PARTS || declaredBytes < 0 || declaredBytes > CHUNK_MAX_TOTAL_BYTES) {
+      return res.status(400).json({ success: false, message: "Tệp vượt quá giới hạn tải lên (tối đa 600MB)." });
+    }
+    // Kho PACS chỉ nhận ảnh/DICOM/tệp nén; loại do client tự khai được giới hạn (không lưu text/html để phát lại)
+    const safeMime = String(mimeType || "").toLowerCase().split(";")[0].trim();
+    if (!CHUNK_CATEGORIES.has(category) || !CHUNK_MIME_TYPES.has(safeMime)) {
+      return res.status(400).json({ success: false, message: "Loại tệp hoặc nhóm lưu trữ không được hỗ trợ cho tải lên phân mảnh." });
+    }
+    // Tệp gắn cho bệnh nhân nào thì bệnh nhân đó phải thuộc phạm vi truy cập của người tải lên
+    let resolvedPatientId = null;
+    if (patientId) {
+      const patient = await checkPatientTenancy(patientId, req.user);
+      if (!patient) return res.status(404).json({ success: false, message: "Không tìm thấy bệnh nhân hoặc không có quyền gắn tệp cho bệnh nhân này." });
+      resolvedPatientId = patient._id;
     }
 
     // Nếu client đã tính trước SHA-256, kiểm tra Instant Deduplication ngay lập tức
@@ -143,18 +225,17 @@ export const initChunkedUpload = async (req, res) => {
       const existing = await storageService.findExistingBySha256(String(expectedSha256).toLowerCase(), {
         hospitalId: req.user?.hospitalId || null,
         uploadedBy: req.user?.id || null,
-        strictTenantIsolation: true,
+        localEncryptedOnly: true,
       });
       if (existing) {
-        const saved = await storageService.putFromPath({
+        // Tạo bản ghi trỏ vào bản chính đã mã hóa sẵn có (không đọc lại/mã hóa lại tệp)
+        const saved = await storageService.createDedupReference(existing, {
           category,
           studyId,
           sequenceName,
           fileName,
-          sourceFilePath: existing.localPath,
-          moveFile: false,
-          mimeType,
-          patientId,
+          mimeType: safeMime,
+          patientId: resolvedPatientId,
           uploadedBy: req.user?.id || null,
           hospitalId: req.user?.hospitalId || null,
         });
@@ -173,20 +254,22 @@ export const initChunkedUpload = async (req, res) => {
       }
     }
 
+    purgeExpiredChunkSessions();
     const uploadSessionId = `chk_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
     chunkUploadSessions.set(uploadSessionId, {
       uploadSessionId,
       fileName,
-      totalChunks: Number(totalChunks),
-      totalSizeBytes: Number(totalSizeBytes) || 0,
-      mimeType,
+      totalChunks: parts,
+      totalSizeBytes: declaredBytes,
+      receivedBytes: 0,
+      mimeType: safeMime,
       category,
       studyId,
       sequenceName,
-      patientId,
+      patientId: resolvedPatientId,
       expectedSha256: expectedSha256 ? String(expectedSha256).toLowerCase() : null,
       uploadedBy: req.user?.id || null,
-      receivedChunks: new Set(),
+      receivedChunks: new Map(),
       createdAt: Date.now(),
     });
 
@@ -196,7 +279,7 @@ export const initChunkedUpload = async (req, res) => {
       message: "Khởi tạo phiên tải lên phân mảnh thành công.",
       data: {
         uploadSessionId,
-        totalChunks: Number(totalChunks),
+        totalChunks: parts,
         recommendedChunkSizeBytes: 5 * 1024 * 1024, // 5MB/chunk
       },
     });
@@ -213,7 +296,7 @@ export const initChunkedUpload = async (req, res) => {
 export const uploadChunkPart = async (req, res) => {
   try {
     const { uploadSessionId, chunkIndex, chunkBase64 } = req.body;
-    const session = chunkUploadSessions.get(uploadSessionId);
+    const session = getOwnedSession(uploadSessionId, req.user);
     if (!session) {
       return res.status(404).json({
         success: false,
@@ -222,7 +305,7 @@ export const uploadChunkPart = async (req, res) => {
     }
 
     const idx = Number(chunkIndex);
-    if (isNaN(idx) || idx < 0 || idx >= session.totalChunks) {
+    if (!Number.isInteger(idx) || idx < 0 || idx >= session.totalChunks) {
       return res.status(400).json({
         success: false,
         message: `Chỉ số mảnh (chunkIndex=${chunkIndex}) không hợp lệ (0 .. ${session.totalChunks - 1}).`,
@@ -244,9 +327,17 @@ export const uploadChunkPart = async (req, res) => {
         message: "Dữ liệu mảnh ghép (chunkBase64 hoặc file) bị trống.",
       });
     }
+    // Tổng dung lượng thật (gửi lại cùng một mảnh thì tính theo mảnh mới) không vượt giới hạn / dung lượng đã khai
+    const previous = session.receivedChunks.get(idx) || 0;
+    const nextTotal = session.receivedBytes - previous + chunkBuffer.length;
+    const limit = session.totalSizeBytes > 0 ? session.totalSizeBytes : CHUNK_MAX_TOTAL_BYTES;
+    if (chunkBuffer.length > CHUNK_MAX_PART_BYTES || nextTotal > limit) {
+      return res.status(413).json({ success: false, message: "Mảnh ghép vượt quá dung lượng cho phép của phiên tải lên." });
+    }
 
     const { sizeBytes } = await writeLocalChunk(uploadSessionId, idx, chunkBuffer);
-    session.receivedChunks.add(idx);
+    session.receivedChunks.set(idx, sizeBytes);
+    session.receivedBytes = nextTotal;
 
     return res.status(200).json({
       success: true,
@@ -272,7 +363,7 @@ export const uploadChunkPart = async (req, res) => {
 export const completeChunkedUpload = async (req, res) => {
   try {
     const { uploadSessionId, expectedSha256 } = req.body;
-    const session = chunkUploadSessions.get(uploadSessionId);
+    const session = getOwnedSession(uploadSessionId, req.user);
     if (!session) {
       return res.status(404).json({
         success: false,
@@ -286,12 +377,15 @@ export const completeChunkedUpload = async (req, res) => {
         message: `Chưa nhận đủ các mảnh ghép (${session.receivedChunks.size}/${session.totalChunks}).`,
       });
     }
+    if (session.totalSizeBytes > 0 && session.receivedBytes !== session.totalSizeBytes) {
+      return res.status(400).json({ success: false, message: "Tổng dung lượng các mảnh không khớp dung lượng tệp đã khai báo." });
+    }
 
     // 1. Ghép các mảnh vào tệp tạm bằng Stream (Zero-RAM-Spike)
     const tempRelativePath = path.posix.join("chunks_assembled", `${uploadSessionId}_${session.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`);
     const assembled = await assembleLocalChunks(uploadSessionId, session.totalChunks, tempRelativePath);
 
-    // 2. Lưu vào Hybrid PACS qua putFromPath (tự tính SHA-256 bằng Stream, chống trùng và đẩy vào DriveSyncQueue)
+    // 2. Lưu vào Hybrid PACS qua putFromPath (mã hóa bản chính, tính SHA-256 bằng Stream, chống trùng, đẩy vào DriveSyncQueue)
     const savedFile = await storageService.putFromPath({
       category: session.category || "pacs",
       studyId: session.studyId,
@@ -302,6 +396,7 @@ export const completeChunkedUpload = async (req, res) => {
       mimeType: session.mimeType,
       patientId: session.patientId,
       uploadedBy: session.uploadedBy || req.user?.id || null,
+      hospitalId: req.user?.hospitalId || null,
     });
 
     const targetSha = (expectedSha256 || session.expectedSha256 || "").toLowerCase().trim();

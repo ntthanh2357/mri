@@ -17,13 +17,13 @@ import {
   acknowledgeImagingReport,
   addClinicalAddendum,
 } from "../modules/imaging/imaging.controller.js";
-import { submitMriSafetyCheckService } from "../services/visit.service.js";
+import { submitMriSafetyCheckService, shouldEnforcePaymentGate } from "../services/visit.service.js";
 import { approveVisitDebt } from "../controllers/visit.controller.js";
 import {
   refundInvoice,
   requestInvoiceRefund,
   approveInvoiceRefund,
-  clearInvoiceAmlHold,
+  reviewLargeRefund,
 } from "../modules/billing/invoice.controller.js";
 import {
   createVerbalOrder,
@@ -99,6 +99,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
   let receptionistA;
   let receptionistB;
   let hospitalAdmin;
+  let hospitalAdmin2;
   let systemAdmin;
   let cleaner;
   let patientUser;
@@ -233,9 +234,24 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     receptionistA = makeActor("receptionist", "Thu ngân A — Nguyễn Thu Hà");
     receptionistB = makeActor("receptionist", "Thu ngân B (Ca trưởng) — Đặng Lan Anh");
     hospitalAdmin = makeActor("hospital_admin", "Giám đốc BV — TS.BS Hoàng Quốc Việt");
+    hospitalAdmin2 = makeActor("hospital_admin", "Phó Giám đốc BV — BS Lâm Thu Trang");
     systemAdmin = makeActor("system_admin", "System Admin", null);
     cleaner = makeActor("cleaner", "Nhân viên Vệ sinh");
     patientUser = makeActor("patient", "Bệnh nhân Nguyễn Văn B", null);
+
+    // Máy chủ đọc lại thẩm quyền từ DB (quyền ký CĐHA, step-up, điều dưỡng được gán)
+    await User.insertMany(
+      [radiologist, departmentHead, doctor, nurse, technician, receptionistA, receptionistB, hospitalAdmin, hospitalAdmin2].map((actor) => ({
+        _id: actor._id,
+        hospitalId: actor.hospitalId,
+        email: actor.email,
+        passwordHash: "hashed",
+        role: actor.role,
+        profile: actor.profile,
+        canSignImaging: actor.role === "department_head",
+        stepUpVerifiedAt: ["receptionist", "hospital_admin"].includes(actor.role) ? new Date() : null,
+      }))
+    );
 
     const ptEmg = await User.create({
       hospitalId: hospitalA,
@@ -318,8 +334,10 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     expect(reloaded.conclusion).toBe("Kết luận gốc đã khóa sổ");
   });
 
-  test("TC-03: [Q-CLINICAL-01] Bác sĩ lâm sàng (doctor) gọi API Acknowledge xác nhận đã đọc báo cáo CĐHA", async () => {
+  test("TC-03: [Q-CLINICAL-01] Bác sĩ lâm sàng (doctor) gọi API Acknowledge xác nhận đã đọc báo cáo CĐHA đã ký", async () => {
     const baseImaging = await createBaseImaging();
+    baseImaging.isSigned = true;
+    await baseImaging.save();
     const req = {
       params: { id: baseImaging._id.toString() },
       body: { clinicalNote: "Đã đối chiếu lâm sàng: Bệnh nhân có yếu nửa người trái tương ứng ổ tổn thương." },
@@ -332,7 +350,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     const reloaded = await ImagingResult.findById(baseImaging._id);
     expect(String(reloaded.attendingAcknowledgment.acknowledgedBy)).toBe(doctor.id);
     expect(reloaded.attendingAcknowledgment.clinicalNote).toContain("yếu nửa người trái");
-    expect(reloaded.isSigned).toBe(false);
+    expect(reloaded.isSigned).toBe(true);
   });
 
   test("TC-04: [Q-CLINICAL-01] Bác sĩ lâm sàng (doctor) thêm Phụ lục tương quan lâm sàng (clinical_correlation) mà không sửa kết luận gốc", async () => {
@@ -409,7 +427,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: {
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false,
           hasPacemakerOrMetal: false,
           enforcePaymentGate: false,
         },
@@ -426,7 +444,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -444,7 +462,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -462,7 +480,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(res.visit.status).toBe("đang chụp");
@@ -488,7 +506,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       visitId: visit._id,
       hospitalId: hospitalA,
       user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
     });
 
     expect(resCheck.visit.status).toBe("đang chụp");
@@ -512,32 +530,20 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: { hasPacemakerOrMetal: false },
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
       })
     ).rejects.toThrow("CHẶN CỔNG VIỆN PHÍ");
   });
 
-  test("TC-13: [Q-BILLING-01] Hóa đơn 'thanh toán một phần' có dư nợ còn lại 1.500.000 VNĐ (<= ngưỡng 2M VNĐ) -> Cho phép vào chụp", async () => {
-    const { visit } = await createVisitWithInvoice({
-      invoiceOverrides: {
-        status: "thanh toán một phần",
-        totalAmount: 4_500_000,
-        patientPayAmount: 4_500_000,
-        paidAmount: 3_000_000,
-      },
-    });
-
-    const res = await submitMriSafetyCheckService({
-      visitId: visit._id,
-      hospitalId: hospitalA,
-      user: technician,
-      checklistData: { hasPacemakerOrMetal: false },
-    });
-
-    expect(res.visit.status).toBe("đang chụp");
+  test("TC-13: [Q-V4-04] Ngưỡng nợ khi thanh toán một phần do từng viện cấu hình, mặc định phải trả đủ", async () => {
+    const partial = { status: "thanh toán một phần", totalAmount: 4_500_000, patientPayAmount: 4_500_000, paidAmount: 3_000_000 };
+    const outpatient = { priority: "trung bình", status: "chờ chụp", mriOrder: {} };
+    expect(shouldEnforcePaymentGate(outpatient, partial).enforce).toBe(true);
+    expect(shouldEnforcePaymentGate(outpatient, partial, { partialDebtThreshold: 2_000_000 }).enforce).toBe(false);
+    expect(shouldEnforcePaymentGate(outpatient, partial, { partialDebtThreshold: 1_000_000 }).enforce).toBe(true);
   });
 
-  test("TC-14: [Q-BILLING-01] Hóa đơn 'thanh toán một phần' còn nợ 8.000.000 VNĐ (> ngưỡng 2M VNĐ) -> Chặn 402", async () => {
+  test("TC-14: [Q-BILLING-01] Hóa đơn 'thanh toán một phần' còn nợ 8.000.000 VNĐ, viện chưa đặt ngưỡng -> Chặn 402", async () => {
     const { visit } = await createVisitWithInvoice({
       invoiceOverrides: {
         status: "thanh toán một phần",
@@ -552,7 +558,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
         visitId: visit._id,
         hospitalId: hospitalA,
         user: technician,
-        checklistData: { hasPacemakerOrMetal: false },
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false, hasPacemakerOrMetal: false },
       })
     ).rejects.toThrow("CHẶN CỔNG VIỆN PHÍ");
   });
@@ -657,7 +663,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     expect(updated.status).toBe("hoàn trả");
   });
 
-  test("TC-20: [Q-BILLING-02] Khoản 350M (>= 300M AML STR): Tự động bật amlReport.isFlagged = true, chặn hoàn tất cho tới khi giải tỏa AML (/aml-clearance)", async () => {
+  test("TC-20: [Q-V4-08] Khoản 350M: cần thêm một Ban Giám đốc khác kiểm tra trước khi duyệt, không lập báo cáo STR", async () => {
     const inv = await createPaidInvoice(350_000_000);
 
     const resReq = createMockRes();
@@ -666,7 +672,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       resReq
     );
     expect(resReq.statusCode).toBe(202);
-    expect(resReq.payload.amlFlagged).toBe(true);
+    expect(resReq.payload.largeRefundReviewRequired).toBe(true);
 
     const resBeforeClear = createMockRes();
     await approveInvoiceRefund(
@@ -674,11 +680,11 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
       resBeforeClear
     );
     expect(resBeforeClear.statusCode).toBe(403);
-    expect(resBeforeClear.payload.code).toBe("AML_HOLD_REQUIRED");
+    expect(resBeforeClear.payload.code).toBe("LARGE_REFUND_REVIEW_REQUIRED");
 
     const resClear = createMockRes();
-    await clearInvoiceAmlHold(
-      { params: { id: inv._id.toString() }, body: { strReportId: "STR-NHNN-2026-001" }, user: systemAdmin },
+    await reviewLargeRefund(
+      { params: { id: inv._id.toString() }, body: { note: "Đã đối chiếu chứng từ và lý do hoàn trả" }, user: hospitalAdmin2 },
       resClear
     );
     expect(resClear.statusCode).toBe(200);
@@ -691,7 +697,8 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     expect(resAfterClear.statusCode).toBe(200);
     const finalInv = await Invoice.findById(inv._id);
     expect(finalInv.status).toBe("hoàn trả");
-    expect(finalInv.amlReport.reportedToAuthority).toBe(true);
+    expect(String(finalInv.largeRefundReview.reviewedBy)).toBe(hospitalAdmin2.id);
+    expect(finalInv.amlReport.isFlagged).toBe(false);
   });
 
   // ── TC-21 -> TC-26: Q-EMG-01 & BUG-EMG-001 ──────────────────────────────────
@@ -719,8 +726,6 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
           orderText: "Tiêm tĩnh mạch chậm Fentanyl 0.05mg + Mannitol 20% 250ml truyền nhanh",
           isControlledSubstance: true,
           nurseReceivedId: nurse.id,
-          nurseReceivedName: nurse.profile.fullName,
-          requireReadBack: true,
         },
         user: doctor,
       },
@@ -746,7 +751,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     expect(res.statusCode).toBe(403);
   });
 
-  test("TC-24: [Q-EMG-01] Điều dưỡng (nurse) nhận lệnh gọi POST /verbal-order/:orderId/readback-confirm -> 200 OK, isReadBackConfirmed = true, status = 'pending_countersign'", async () => {
+  test("TC-24: [Q-EMG-01] Điều dưỡng (nurse) nhận lệnh gọi POST /verbal-order/:orderId/readback-confirm -> 200 OK, isReadBackConfirmed = true, status = 'readback_confirmed'", async () => {
     const res = createMockRes();
     await confirmVerbalOrderReadBack(
       {
@@ -759,7 +764,7 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
 
     expect(res.statusCode).toBe(200);
     expect(res.data.verbalOrder.isReadBackConfirmed).toBe(true);
-    expect(res.data.verbalOrder.status).toBe("pending_countersign");
+    expect(res.data.verbalOrder.status).toBe("readback_confirmed");
     expect(String(res.data.verbalOrder.readBackConfirmedBy)).toBe(nurse.id);
   });
 
@@ -776,15 +781,14 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     expect(res.statusCode).toBe(400);
   });
 
-  test("TC-26: [Q-EMG-01] Bác sĩ gọi /countersign kèm witnessUserId hợp lệ -> 200 OK, status = 'countersigned' & sinh chữ ký SHA-256", async () => {
+  test("TC-26: [Q-EMG-01] Bác sĩ gọi /countersign kèm witnessUserId hợp lệ -> 200 OK, status = 'fully_signed' & sinh chữ ký SHA-256", async () => {
     const res = createMockRes();
     await countersignVerbalOrder(
       {
         params: { orderId: createdOrderId },
         body: {
           witnessUserId: departmentHead.id,
-          witnessUserName: departmentHead.profile.fullName,
-          notes: "Đã ký số bổ sung y lệnh miệng thuốc hướng thần theo TT 20/2017/TT-BYT",
+          notes: "Đã ký số bổ sung y lệnh miệng thuốc hướng thần",
         },
         user: doctor,
       },
@@ -792,7 +796,8 @@ describe("MEGA AUDIT v3.0 — 28-TC Remediation & Architectural Verification Sui
     );
 
     expect(res.statusCode).toBe(200);
-    expect(res.data.verbalOrder.status).toBe("countersigned");
+    expect(res.data.verbalOrder.status).toBe("fully_signed");
+    expect(String(res.data.verbalOrder.countersignedBy)).toBe(doctor.id);
     expect(res.data.verbalOrder.signatureHash.length).toBe(64);
     expect(String(res.data.verbalOrder.witnessUserId)).toBe(departmentHead.id);
   });

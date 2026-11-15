@@ -1,4 +1,6 @@
-# NeuroScan AI v3.0 — Đặc tả Chức năng (Bản Review & Hoàn thiện)
+# NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử — Đặc tả Chức năng v3.2 (Bản Review & Hoàn thiện)
+
+> Tên chính thức của đề tài như trên; các mục "chẩn đoán" trong tài liệu này là của bác sĩ, AI chỉ hỗ trợ sàng lọc.
 
 **Phiên bản:** 3.2 (hoàn chỉnh) &nbsp;|&nbsp; **Ngày:** 07/08/2026 &nbsp;|&nbsp; **Dựa trên:** bản đặc tả v3.1 (70 chức năng, module A–T) + đối chiếu codebase thực tế
 
@@ -92,7 +94,7 @@ Tự động dời lịch bệnh nhân thường sang slot khác hoàn toàn im 
 |---|---|---|
 | **Frontend Mobile** | React Native (Expo) | **Dành riêng cho Bệnh nhân** (đặt lịch, xem kết quả, sổ sức khỏe, QR chia sẻ, FCM Push) |
 | **Frontend Web** | React.js | **Dành cho Nhân viên y tế** (Bác sĩ, KTV, Điều dưỡng, Lễ tân, Admin) |
-| **Backend** | Node.js + Express.js | REST API, WebSocket (Socket.IO cho Web) |��────────────────────────────┼───────────────────┐
+| **Backend** | Node.js + Express.js | REST API, WebSocket (Socket.IO cho Web) |��────────────────────────────┼───────────────────┐
 │                      BACKEND LAYER (Node.js/Express)             │
 │  ┌──────────▼──────────────────────────────▼──────────────────┐  │
 │  │               REST API (Express.js)                         │  │
@@ -653,7 +655,10 @@ Bệnh nhân đến → Lễ tân tạo Visit → Bác sĩ khám → Chỉ đị
 - Đang cho con bú
 - Tiền sử bệnh thận mạn, hen phế quản nặng
 
-Nếu có yếu tố nguy cơ, chặn tiến hành và cảnh báo bác sĩ chỉ định. Bác sĩ có thể override với xác nhận lý do.<br>
+Phân 3 mức nguy cơ:
+- **Cao (`high`):** có tiền sử dị ứng thuốc cản quang, hoặc eGFR < 30. Chặn tiến hành, cảnh báo bác sĩ chỉ định; bác sĩ có thể override với xác nhận lý do.
+- **Trung bình (`moderate`):** eGFR 30–59, mang thai, cho con bú, bệnh thận mạn, hen phế quản nặng. Cảnh báo, không chặn. Riêng thai kỳ và suy thận có cản quang vẫn cần bác sĩ xác nhận ở bảng kiểm an toàn MRI.
+- **Thấp (`low`):** không có yếu tố nào ở trên. Cho phép tiếp tục.<br>
 *Đầu ra:* Cho phép/chặn tiếp tục, cảnh báo bác sĩ, ghi log.
 
 **S.2 — Lưu phiếu đồng thuận điện tử**<br>

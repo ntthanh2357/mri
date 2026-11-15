@@ -26,6 +26,7 @@ const router = Router();
 // Secure all EMR routes
 router.use(protect);
 
+// Tài khoản nền tảng (admin, system_admin) không đọc/ghi dữ liệu lâm sàng và cam kết dữ liệu của bệnh viện (RELEASE_v3.4).
 const EMR_READ_ROLES = [
   "doctor",
   "radiologist",
@@ -35,46 +36,45 @@ const EMR_READ_ROLES = [
   "lab_technician",
   "pharmacist",
   "receptionist",
-  "admin",
-  "system_admin",
   "hospital_admin",
 ];
 
 router.route("/records")
   .get(checkRole(EMR_READ_ROLES), getRecords)
-  .post(checkRole(["doctor", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), createRecord);
+  .post(checkRole(["doctor", "department_head", "nurse", "receptionist", "hospital_admin"]), createRecord);
 
 router.route("/records/:id")
   .get(checkRole(EMR_READ_ROLES), getRecordById)
-  .put(checkRole(["doctor", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), updateRecord);
+  .put(checkRole(["doctor", "department_head", "nurse", "receptionist", "hospital_admin"]), updateRecord);
 
 router.route("/records/:id/care-sheets")
-  .get(checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), getCareSheets)
-  .post(checkRole(["doctor", "department_head", "nurse", "admin", "system_admin", "hospital_admin"]), createCareSheet);
+  .get(checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "hospital_admin"]), getCareSheets)
+  .post(checkRole(["doctor", "department_head", "nurse", "hospital_admin"]), createCareSheet);
 
 router.route("/records/:id/consultations")
-  .get(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), getConsultations)
-  .post(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), createConsultation);
+  .get(checkRole(["doctor", "radiologist", "department_head", "hospital_admin"]), getConsultations)
+  .post(checkRole(["doctor", "radiologist", "department_head", "hospital_admin"]), createConsultation);
 
-router.post("/consultations/:id/approve-tumor-board", checkRole(["department_head", "hospital_admin", "admin", "system_admin"]), approveTumorBoard);
+router.post("/consultations/:id/approve-tumor-board", checkRole(["department_head", "hospital_admin"]), approveTumorBoard);
 
 router.route("/records/:id/consents")
-  .get(checkRole(["doctor", "department_head", "patient", "admin", "system_admin", "hospital_admin"]), getConsents)
-  .post(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), createConsent);
+  .get(checkRole(["doctor", "department_head", "patient", "hospital_admin"]), getConsents)
+  .post(checkRole(["doctor", "department_head", "hospital_admin"]), createConsent);
 
 router.route("/consents/:consentId/sign")
-  .put(checkRole(["doctor", "department_head", "patient", "admin", "system_admin", "hospital_admin"]), signConsent);
+  .put(checkRole(["doctor", "department_head", "patient", "hospital_admin"]), signConsent);
 
 router.route("/records/:id/versions")
-  .get(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), getRecordVersions);
+  .get(checkRole(["doctor", "radiologist", "department_head", "hospital_admin"]), getRecordVersions);
 
 router.route("/records/:id/addendum")
-  .post(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), createRecordAddendum);
+  .post(checkRole(["doctor", "department_head", "hospital_admin"]), createRecordAddendum);
 
 router.route("/records/:id/sign")
-  .put(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), signMedicalRecord);
+  .put(checkRole(["doctor", "department_head", "hospital_admin"]), signMedicalRecord);
 
 // Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 & NĐ 13/2023: Thu thập và thu hồi sự đồng thuận
+// Cam kết chứa định danh người bệnh: chỉ bệnh nhân và nhân viên của bệnh viện (tài khoản nền tảng không tham gia)
 const PRIVACY_CONSENT_ROLES = [
   "patient",
   "doctor",
@@ -82,8 +82,6 @@ const PRIVACY_CONSENT_ROLES = [
   "department_head",
   "nurse",
   "receptionist",
-  "admin",
-  "system_admin",
   "hospital_admin",
 ];
 

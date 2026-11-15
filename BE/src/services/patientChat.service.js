@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { aiFetch } from "../utils/aiClient.util.js";
 import { ChatUsage, ChatConsent } from "../models/chatUsage.model.js";
 import { getJwtSecret } from "../config/jwt.config.js";
 import { aiBaseUrl } from "./documentOcr.service.js";
@@ -33,7 +34,7 @@ const aliasOf = (patientId) =>
 export const callAiChat = async (message, userAlias, { timeoutMs = 45000 } = {}) => {
   let res;
   try {
-    res = await fetch(`${aiBaseUrl()}/chat`, {
+    res = await aiFetch(`${aiBaseUrl()}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ doctor_id: userAlias, message }),

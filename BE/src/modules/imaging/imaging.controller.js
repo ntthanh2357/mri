@@ -1,21 +1,58 @@
 import { ImagingResult } from "./models/imagingResult.model.js";
+import { aiFetch, aiServiceUrl } from "../../utils/aiClient.util.js";
+import { getImageDimensions } from "../../utils/imageDimensions.util.js";
+import { toInternalFilePath } from "../../utils/internalFile.util.js";
+import { checkPatientTenancy } from "../../utils/tenancy.util.js";
+import {
+  AI_CLASS_NAMES,
+  normalizeBoundingBox,
+  buildAiReport,
+  aiSuggestionText,
+  applyAiResultToImaging,
+  markAiAnalysisFailed,
+} from "./aiResult.util.js";
+import {
+  applyDoctorSliceOverride,
+  applyMultiSliceAiResultToImaging,
+} from "./multiSliceAi.util.js";
+import { analyzeMultipleSlicesInternal } from "./multiSliceRunner.service.js";
+import { buildImagingSignatureMetadata } from "../../utils/imagingSignature.util.js";
 import { User } from "../auth/models/user.model.js";
 import { Visit } from "../../models/visit.model.js";
-import { Hospital } from "../../models/hospital.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { bucket } from "../../config/firebase.js";
-import { uploadMetadataBackup, uploadToDrive } from "../../config/googleDrive.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
+import { evaluateImagingSignPermission, validateSignReason } from "../../services/imagingSignPolicy.service.js";
 import storageService from "../../services/storage/storageService.js";
 import { enqueueAiTask } from "../../services/storage/pacsQueue.service.js";
 import { loadImageBuffer } from "../../utils/imageSource.util.js";
+import { resolveClientImageUrl } from "../../middlewares/uploadSignature.middleware.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Model CĐHA không có patientId nên bộ lọc tenancy của bệnh nhân không bao giờ khớp. Bệnh nhân đọc
+// theo medicalId và mọi nơi dùng tùy chọn này phải tự kiểm tra đúng phim của người đang đăng nhập.
+const PATIENT_IMAGING_QUERY = { bypassTenancy: true };
+
+const CLINICAL_CONTENT_FIELDS = [
+  "findings", "conclusion", "diagnosis", "technique", "structuredReport", "aiReport", "aiAgreement",
+  "criticalFinding", "addenda", "attendingAcknowledgment", "acknowledgmentHistory", "images", "top5SlicesUrls",
+];
+const hideClinicalContentFor = (user, data) => {
+  if (user?.role !== "receptionist" || !data) return data;
+  const strip = (doc) => {
+    const plain = typeof doc?.toObject === "function" ? doc.toObject() : { ...doc };
+    for (const field of CLINICAL_CONTENT_FIELDS) delete plain[field];
+    return plain;
+  };
+  return Array.isArray(data) ? data.map(strip) : strip(data);
+};
 
 // @desc    Get all imaging results for the logged in patient
 // @route   GET /api/v1/imaging/my-results
@@ -34,13 +71,20 @@ export const getPatientResults = async (req, res) => {
     }
 
     // 2. Query results matching medicalId
+    if (req.user.role === "patient") {
+      const ownResults = await ImagingResult.find({ medicalId, isSigned: true }, null, PATIENT_IMAGING_QUERY).sort({ reportDate: -1 });
+      return successResponse(res, ownResults, "Lấy danh sách kết quả chẩn đoán hình ảnh thành công.");
+    }
     const results = await ImagingResult.find(req.user.hospitalId && !["admin", "system_admin", "patient"].includes(req.user.role) ? { medicalId, hospitalId: req.user.hospitalId } : { medicalId }).sort({ reportDate: -1 });
     return successResponse(res, results, "Lấy danh sách kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy danh sách kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
+
+// Bác sĩ đọc kết quả để điều trị. Bác sĩ CĐHA là người ký nên không thuộc nhóm này.
+const CLINICAL_READER_ROLES = ["doctor", "department_head"];
 
 // @desc    Get detailed imaging result by ID
 // @route   GET /api/v1/imaging/:id
@@ -49,7 +93,7 @@ export const getResultById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await ImagingResult.findById(id);
+    const result = await ImagingResult.findById(id, null, req.user.role === "patient" ? PATIENT_IMAGING_QUERY : undefined);
     if (!result) {
       return errorResponse(res, "Không tìm thấy kết quả chẩn đoán hình ảnh.", 404);
     }
@@ -60,17 +104,93 @@ export const getResultById = async (req, res) => {
       if (!user || user.profile?.medicalId !== result.medicalId) {
         return errorResponse(res, "Bạn không có quyền xem kết quả chẩn đoán này.", 403);
       }
+      if (result.isSigned !== true) {
+        return errorResponse(res, "Kết quả này chưa được bác sĩ ký duyệt.", 403);
+      }
     } else if (req.user.role !== "admin") {
       if (req.user.hospitalId && result.hospitalId && req.user.hospitalId.toString() !== result.hospitalId.toString()) {
         return errorResponse(res, "Bạn không có quyền xem kết quả chẩn đoán của cơ sở y tế khác.", 403);
       }
     }
 
-    return successResponse(res, result, "Lấy chi tiết kết quả chẩn đoán hình ảnh thành công.");
+    return successResponse(res, hideClinicalContentFor(req.user, result), "Lấy chi tiết kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy chi tiết kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
+};
+
+const buildTriageAiReport = ({ triageAiPreview, metaSlices = [], imageList = [], primaryIdx = 0 }) => {
+  const rawPreviewSlices = Array.isArray(triageAiPreview?.sliceResults)
+    ? triageAiPreview.sliceResults
+    : metaSlices;
+  const hasSliceAi = rawPreviewSlices.some((s) => s && (s.class_name || s.predictedClass || s.yoloClass));
+  if (!hasSliceAi || imageList.length === 0) return null;
+
+  const normalizeSliceUrl = (url) => (url ? (toInternalFilePath(url) || url) : null);
+  const sliceResults = rawPreviewSlices.map((s, idx) => {
+    const cls = s.class_name || (s.yoloDetected && s.yoloClass && s.yoloClass !== "notumor" ? s.yoloClass : s.predictedClass) || "notumor";
+    const box = cls === "notumor" ? null : (s.bounding_box || s.boundingBox || null);
+    return {
+      sliceIndex: Number.isInteger(s.sliceIndex) ? s.sliceIndex : idx,
+      imageUrl: normalizeSliceUrl(s.imageUrl) || imageList[idx] || "",
+      seriesName: s.seriesName || "",
+      sequenceType: s.sequenceType || "OTHER",
+      plane: s.plane || "unknown",
+      sliceNumber: s.sliceNumber ?? null,
+      class_name: cls,
+      confidence: Number.isFinite(Number(s.confidence)) ? Number(s.confidence) : 0,
+      probabilities: s.probabilities || null,
+      bounding_box: box,
+      heatmapStreamUrl: normalizeSliceUrl(s.heatmapStreamUrl),
+      consensus_message: s.consensus_message || s.consensusMessage || null,
+      clinical_report: s.clinical_report || s.clinicalReport || null,
+      privacy_guard: s.privacy_guard || null,
+      clarityScore: s.clarityScore ?? null,
+      yoloDetected: Boolean(s.yoloDetected),
+      aiTier: s.aiTier || (s.heatmapStreamUrl || s.consensus_message ? "3-tier" : "triage"),
+    };
+  });
+
+  const tumorSlices = sliceResults.filter((s) => s.class_name && s.class_name !== "notumor");
+  const studyDiag = triageAiPreview?.studyDiagnosisSummary || null;
+  const folderDomCls =
+    studyDiag?.dominantClass && studyDiag.dominantClass !== "notumor" ? studyDiag.dominantClass : null;
+  const domMatches = folderDomCls ? tumorSlices.filter((s) => s.class_name === folderDomCls) : [];
+  const primaryS = sliceResults[primaryIdx] || tumorSlices[0] || sliceResults[0];
+  const bestTumor = (domMatches.length > 0 ? domMatches : tumorSlices).reduce(
+    (b, c) => (!b || (c.confidence || 0) > (b.confidence || 0) ? c : b),
+    null
+  );
+  const dom =
+    (primaryS && (!folderDomCls || primaryS.class_name === folderDomCls) && primaryS.class_name !== "notumor"
+      ? primaryS
+      : null) ||
+    bestTumor ||
+    primaryS;
+  const isDeepAi = Boolean(triageAiPreview?.deepAiCompleted || sliceResults.some((s) => s.aiTier === "3-tier"));
+
+  return {
+    fromTriage: !isDeepAi,
+    deepAiCompleted: isDeepAi,
+    class_name: folderDomCls || dom?.class_name || "notumor",
+    confidence: dom?.confidence ?? studyDiag?.dominantAvgConfidence ?? 0,
+    probabilities: dom?.probabilities || null,
+    bounding_box: dom?.bounding_box || null,
+    heatmapStreamUrl: dom?.heatmapStreamUrl || null,
+    consensus_message: dom?.consensus_message || null,
+    clinical_report: dom?.clinical_report || null,
+    tumorSliceCount: tumorSlices.length,
+    totalSlices: sliceResults.length,
+    studyDiagnosisSummary: studyDiag,
+    totalAnalyzedInFolder: studyDiag?.totalAnalyzed || triageAiPreview?.totalAnalyzedInFolder || null,
+    sliceResults,
+    model_info:
+      triageAiPreview?.model_info ||
+      (isDeepAi
+        ? "3-Tier Consensus AI (CNN Ensemble + YOLOv8 + Gemini VLM)"
+        : "Full Study AI (3-CNN Ensemble + BayTTA + YOLOv8 + Bounded Gemini VLM)"),
+  };
 };
 
 // @desc    Create a new imaging result
@@ -103,6 +223,7 @@ export const createImagingResult = async (req, res) => {
       dicomZipFilename,
       imagingType,
       visitId,
+      triageAiPreview,
     } = req.body;
 
     // 1. Check roles — kết quả CĐHA là tài liệu y khoa, bệnh nhân không bao giờ được tự tạo (P0-3).
@@ -112,7 +233,7 @@ export const createImagingResult = async (req, res) => {
     }
 
     // 2. Validate required fields
-    if (!medicalId || !patientName || !gender || !orderDate || !procedure || !findings || !conclusion || !radiologist || !reportDate || !imagingType) {
+    if (!medicalId || !patientName || !orderDate || !procedure || !findings || !conclusion || !radiologist || !reportDate || !imagingType) {
       return errorResponse(res, "Vui lòng nhập đầy đủ các trường bắt buộc.", 400);
     }
 
@@ -131,6 +252,18 @@ export const createImagingResult = async (req, res) => {
         }
       }
     }
+
+    const imageList = Array.isArray(images) ? images : [];
+    const metaSlices = Array.isArray(dicomMetadata?.sliceSeriesMeta) ? dicomMetadata.sliceSeriesMeta : [];
+    const primaryIdx = Number.isInteger(dicomMetadata?.primarySliceIndex)
+      ? Math.min(Math.max(0, dicomMetadata.primarySliceIndex), Math.max(0, imageList.length - 1))
+      : 0;
+    const builtTriageAiReport = buildTriageAiReport({
+      triageAiPreview,
+      metaSlices,
+      imageList,
+      primaryIdx,
+    });
 
     // 3. Create record
     const newResult = new ImagingResult({
@@ -152,12 +285,14 @@ export const createImagingResult = async (req, res) => {
       conclusion,
       radiologist,
       reportDate,
-      images: images || [],
+      images: imageList,
+      representativeSliceUrl: imageList[primaryIdx] || imageList[0] || null,
       dicomMetadata: dicomMetadata || {},
       dicomZipUrl: dicomZipUrl || null,
       dicomZipSize: dicomZipSize || null,
       dicomZipFilename: dicomZipFilename || null,
       imagingType,
+      ...(builtTriageAiReport ? { aiReport: builtTriageAiReport, aiStatus: "completed" } : {}),
     });
 
     await newResult.save();
@@ -175,7 +310,7 @@ export const createImagingResult = async (req, res) => {
     return successResponse(res, newResult, "Tạo kết quả chẩn đoán hình ảnh mới thành công.", 201);
   } catch (error) {
     console.error("Lỗi khi tạo kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tạo dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tạo dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -211,7 +346,7 @@ export const getResultsByPatientUserId = async (req, res) => {
     return successResponse(res, results, `Lấy danh sách phim chụp theo patientId thành công.`);
   } catch (error) {
     console.error("Lỗi khi lấy phim theo patientId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -228,195 +363,144 @@ export const getPatientResultsByMedicalId = async (req, res) => {
       return errorResponse(res, "Thiếu Mã y tế bệnh nhân.", 400);
     }
     const results = await ImagingResult.find(req.user.hospitalId && !["admin", "system_admin", "patient"].includes(req.user.role) ? { medicalId, hospitalId: req.user.hospitalId } : { medicalId }).sort({ reportDate: -1 });
-    return successResponse(res, results, `Lấy danh sách phim chụp của bệnh nhân mã ${medicalId} thành công.`);
+    return successResponse(res, hideClinicalContentFor(req.user, results), `Lấy danh sách phim chụp của bệnh nhân mã ${medicalId} thành công.`);
   } catch (error) {
     console.error("Lỗi khi lấy phim của bệnh nhân theo medicalId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
 // @desc    Upload imaging scan image or DICOM archive (Multipart stream or Base64)
 // @route   POST /api/v1/imaging/upload
 // @access  Private
-export const uploadImagingImage = async (req, res) => {
-  try {
-    let publicUrl = null;
-    let originalName = null;
-    let fileSize = 0;
-    let isArchive = false;
-    let ext = "";
-    let streamOrBuffer = null;
-    let mimeType = "";
+// Loại tệp theo đuôi đã được middleware tải lên kiểm tra (danh sách cho phép + magic bytes)
+const IMAGE_MIME_BY_EXT = {
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+  ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff",
+};
+const ARCHIVE_MIME_BY_EXT = {
+  ".zip": "application/zip", ".rar": "application/vnd.rar", ".7z": "application/x-7z-compressed",
+  ".tar": "application/x-tar", ".gz": "application/gzip",
+};
+// Tải ảnh dạng base64 (ứng dụng di động): chỉ ảnh, đuôi tệp lấy theo loại ảnh thật chứ không theo tên client gửi
+const BASE64_IMAGE_TYPES = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/bmp": ".bmp" };
+const MAX_BASE64_IMAGE_BYTES = 30 * 1024 * 1024;
 
-    // ── 1. Check if uploaded via Multer (multipart/form-data) ──────────
+export const uploadImagingImage = async (req, res) => {
+  // Tệp tạm multer (nằm trong /uploads, bản rõ) luôn bị xóa: thành công thì đã chuyển vào kho mã hóa, lỗi thì bỏ
+  let tempPath = req.file?.path || null;
+  try {
+    // Bệnh nhân gắn kèm tệp phải thuộc phạm vi truy cập của người tải lên
+    let patientId = null;
+    if (req.body?.patientId) {
+      const patient = await checkPatientTenancy(req.body.patientId, req.user);
+      if (!patient) return errorResponse(res, "Không tìm thấy bệnh nhân hoặc không có quyền gắn tệp cho bệnh nhân này.", 404);
+      patientId = patient._id;
+    }
+    const common = {
+      category: "pacs",
+      studyId: req.body?.studyId || req.body?.medicalId || null,
+      uploadedBy: req.user?.id,
+      hospitalId: req.user?.hospitalId || null,
+      patientId,
+    };
+
+    let saved;
+    let originalName;
+    let fileSize;
+    let isArchive = false;
+
     if (req.file) {
+      // ── 1. multipart/form-data (multer đã kiểm tra đuôi + magic bytes) ──
       originalName = req.file.originalname;
       fileSize = req.file.size;
-      ext = path.extname(originalName).toLowerCase();
-      isArchive = [".zip", ".rar", ".7z", ".tar", ".gz"].includes(ext);
-      publicUrl = `/uploads/${req.file.filename}`;
-      streamOrBuffer = fs.createReadStream(req.file.path);
-      mimeType = isArchive
-        ? (req.file.mimetype || "application/zip")
-        : (ext === ".png" ? "image/png" : "image/jpeg");
+      const ext = path.extname(originalName).toLowerCase();
+      isArchive = Boolean(ARCHIVE_MIME_BY_EXT[ext]);
+      const mimeType = ARCHIVE_MIME_BY_EXT[ext] || IMAGE_MIME_BY_EXT[ext] || "application/octet-stream";
+      saved = await storageService.putFromPath({ ...common, fileName: originalName, sourceFilePath: req.file.path, moveFile: true, mimeType });
+      tempPath = null;
     } else {
-      // ── 2. Fallback: Base64 JSON (req.body.fileData) ───────────────────
-      const { fileData, fileName, imagingType } = req.body;
-      if (!fileData) {
+      // ── 2. Base64 JSON (req.body.fileData) — chỉ ảnh ──
+      const { fileData, fileName } = req.body || {};
+      if (!fileData || typeof fileData !== "string") {
         return errorResponse(res, "Thiếu dữ liệu tệp tin. Vui lòng tải lên tệp tin hợp lệ.", 400);
       }
-
-      // Expect base64 format like "data:image/png;base64,iVBORw0KGgo..."
-      const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (!matches || matches.length !== 3) {
+      const matches = fileData.match(/^data:([A-Za-z0-9.+/-]+);base64,([\s\S]+)$/);
+      if (!matches) {
         return errorResponse(res, "Định dạng ảnh Base64 không hợp lệ.", 400);
       }
-
-      const imageBuffer = Buffer.from(matches[2], 'base64');
-      originalName = fileName || "scan.png";
+      const mimeType = matches[1].toLowerCase();
+      const ext = BASE64_IMAGE_TYPES[mimeType];
+      if (!ext) {
+        return errorResponse(res, "Chỉ nhận ảnh JPEG, PNG, WebP hoặc BMP khi tải lên dạng Base64.", 400);
+      }
+      const imageBuffer = Buffer.from(matches[2], "base64");
+      if (imageBuffer.length === 0) return errorResponse(res, "Dữ liệu ảnh trống.", 400);
+      if (imageBuffer.length > MAX_BASE64_IMAGE_BYTES) return errorResponse(res, "Ảnh vượt quá dung lượng cho phép (tối đa 30MB).", 413);
+      // Nội dung phải đúng là ảnh (đọc được kích thước từ header), không tin loại client khai
+      if (!getImageDimensions(imageBuffer)) {
+        return errorResponse(res, "Nội dung tệp không phải ảnh hợp lệ.", 400);
+      }
+      const stem = path.basename(String(fileName || "scan"), path.extname(String(fileName || ""))).replace(/[^a-zA-Z0-9._-]/g, "_") || "scan";
+      originalName = `${stem}${ext}`;
       fileSize = imageBuffer.length;
-      ext = fileName ? path.extname(fileName).toLowerCase() : ".png";
-      isArchive = [".zip", ".rar", ".7z", ".tar", ".gz"].includes(ext);
-      mimeType = isArchive ? "application/zip" : (ext === ".png" ? "image/png" : "image/jpeg");
-      streamOrBuffer = imageBuffer;
-
-      // Try uploading to Firebase Storage if configured
-      if (bucket && !isArchive) {
-        try {
-          const folder = (imagingType && imagingType.toUpperCase().includes('CT')) ? 'CT' : 'MRI';
-          const uniqueFileName = `${folder}/scans_${Date.now()}_${Math.floor(Math.random() * 10000)}${ext}`;
-          const file = bucket.file(uniqueFileName);
-          
-          await file.save(imageBuffer, {
-            metadata: {
-              contentType: `image/${ext.replace(".", "") || "png"}`
-            }
-          });
-          
-          await file.makePublic();
-          publicUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
-        } catch (fbError) {
-          console.warn("Tải lên Firebase Storage thất bại, chuyển sang lưu trữ cục bộ:", fbError);
-        }
-      }
-
-      if (!publicUrl) {
-        // Fallback to Local Storage
-        const uploadsDir = path.join(__dirname, "../../../uploads");
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
-        const newFileName = `uploaded_${Date.now()}_${Math.floor(Math.random() * 10000)}${ext}`;
-        const filePath = path.join(uploadsDir, newFileName);
-        fs.writeFileSync(filePath, imageBuffer);
-        publicUrl = `/uploads/${newFileName}`;
-      }
+      saved = await storageService.put({ ...common, fileName: originalName, buffer: imageBuffer, mimeType });
     }
 
-    // ── 3. Lưu trữ vào Hệ thống Hybrid PACS (Local-First + Encrypted Drive Mirror) ──
-    let savedStorageFile = null;
-    try {
-      if (req.file && req.file.path) {
-        savedStorageFile = await storageService.putFromPath({
-          category: "pacs",
-          studyId: req.body.studyId || req.body.medicalId || null,
-          fileName: originalName,
-          sourceFilePath: req.file.path,
-          moveFile: false,
-          mimeType,
-          uploadedBy: req.user?.id,
-          patientId: req.body.patientId || null,
-        });
-      }
-      const bufferToSave = req.file ? null : streamOrBuffer;
-      if (bufferToSave && Buffer.isBuffer(bufferToSave)) {
-        savedStorageFile = await storageService.put({
-          category: "pacs",
-          studyId: req.body.studyId || req.body.medicalId || null,
-          fileName: originalName,
-          buffer: bufferToSave,
-          mimeType,
-          uploadedBy: req.user?.id,
-          patientId: req.body.patientId || null,
-        });
-      }
-    } catch (storageErr) {
-      console.warn("⚠️ [Storage Service] Không thể lưu vào Hybrid PACS:", storageErr.message);
-    }
-
-    // ── 4. Backup scan image / DICOM archive to hospital's Google Drive (Legacy compatibility) ──
-    let driveViewLink = null;
-    try {
-      // Resolve hospitalId: from JWT, or from User DB (in case JWT is old)
-      let resolvedHospitalId = req.user?.hospitalId;
-      if (!resolvedHospitalId) {
-        const { User: UserModel } = await import("../../models/user.model.js");
-        const freshUser = await UserModel.findById(req.user?.id).select("hospitalId").lean();
-        resolvedHospitalId = freshUser?.hospitalId;
-        if (resolvedHospitalId) {
-          console.log(`[Drive] Resolved hospitalId from DB: ${resolvedHospitalId}`);
-        }
-      }
-
-      if (!resolvedHospitalId) {
-        console.warn(`⚠️ [Drive] Bỏ qua backup legacy: user ${req.user?.id} không có hospitalId.`);
-      } else {
-        const { Hospital } = await import("../../models/hospital.model.js");
-        const hospital = await Hospital.findById(resolvedHospitalId).lean();
-        const scansFolderId = hospital?.subFolders?.originalScansId;
-        if (scansFolderId && !savedStorageFile) {
-          const bgStream = (req.file && req.file.path) ? fs.createReadStream(req.file.path) : streamOrBuffer;
-          if (bgStream) {
-            uploadToDrive(bgStream, originalName, mimeType, scansFolderId)
-              .then((driveResult) => {
-                console.log(`✅ [Legacy Drive] Tệp ${originalName} đã sao lưu vào 01_Original_Scans`);
-              })
-              .catch(() => {});
-          }
-        }
-      }
-    } catch (driveErr) {
-      // Non-blocking
-    }
-
+    // Đường dẫn chuẩn là tệp trong kho (bản chính mã hóa). Không còn bản rõ trong /uploads hay link công khai Firebase.
+    const fileUrl = `/api/v1/storage/files/${saved.fileId}`;
     return successResponse(
       res,
       {
-        imageUrl: publicUrl,
-        fileUrl: publicUrl,
-        streamUrl: savedStorageFile ? `/api/v1/storage/files/${savedStorageFile.fileId}` : publicUrl,
-        fileId: savedStorageFile ? savedStorageFile.fileId : null,
-        sha256: savedStorageFile ? savedStorageFile.sha256 : null,
+        imageUrl: fileUrl,
+        fileUrl,
+        streamUrl: fileUrl,
+        fileId: saved.fileId,
+        sha256: saved.sha256,
         filename: originalName,
         size: fileSize,
         isArchive,
-        driveUrl: driveViewLink,
+        driveUrl: null,
       },
       isArchive ? "Tải tệp nén DICOM lên thành công." : "Tải ảnh cắt lớp lên thành công."
     );
   } catch (error) {
-    console.error("Lỗi khi tải ảnh/tệp lên:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi lưu tệp tin.", 500);
+    console.error("Lỗi khi tải ảnh/tệp lên:", error.message);
+    return errorResponse(res, "Có lỗi xảy ra khi lưu tệp tin.", inputErrorStatus(res, error));
+  } finally {
+    if (tempPath) fs.promises.unlink(tempPath).catch(() => {});
   }
 };
 
 // @desc    Helper to execute AI prediction on an image
-export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
+// Các trạng thái được chuyển sang "chờ bác sĩ đọc" theo ALLOWED_TRANSITIONS của lượt khám
+export const AI_DOCTOR_READ_FROM_STATUSES = ["chờ chụp sau phẫu thuật", "đang chụp", "chờ kết quả AI", "lỗi AI"];
+
+const moveVisitToDoctorRead = (visitId, hospitalId) =>
+  Visit.updateOne(
+    { _id: visitId, hospitalId, status: { $in: AI_DOCTOR_READ_FROM_STATUSES } },
+    { $set: { status: "chờ bác sĩ đọc" } }
+  );
+
+export const executeAiPredictionInternal = async (imageUrl, user, visitId, options = {}) => {
+  const { seriesName = null, skipVisitTransition = false } = options || {};
   // 1. Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
   const { buffer: fileBuffer, fileName, mimeType } = await loadImageBuffer(imageUrl);
+  // Kích thước thật của ảnh gửi đi: AI trả tọa độ khối u theo pixel của chính ảnh này
+  const dims = getImageDimensions(fileBuffer);
 
   // 2. Forward to Python FastAPI server using native fetch and FormData
   const formData = new FormData();
   const blob = new Blob([fileBuffer], { type: mimeType });
   formData.append("file", blob, fileName);
+  if (seriesName) {
+    formData.append("series_hint", String(seriesName));
+  }
 
-  const rawAiUrl = process.env.AI_SERVER_URL || "http://localhost:8000";
-  const aiPredictUrl = rawAiUrl.endsWith("/predict") ? rawAiUrl : `${rawAiUrl.replace(/\/+$/, '')}/predict`;
-
+  const aiPredictUrl = aiServiceUrl("/predict");
   console.log(`📡 Đang gửi ảnh tới AI server (${aiPredictUrl}) ...`);
 
-  const aiResponse = await fetch(aiPredictUrl, {
+  const aiResponse = await aiFetch(aiPredictUrl, {
     method: "POST",
     body: formData,
   });
@@ -428,83 +512,54 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
   }
 
   const aiData = await aiResponse.json();
+  if (!aiData || !AI_CLASS_NAMES.includes(aiData.class_name)) {
+    // AI service trả {"error": "..."} kèm HTTP 200 khi từ chối ảnh (sai định dạng, mô hình chưa sẵn sàng): nêu rõ lý do
+    const err = new Error(
+      aiData?.error
+        ? `Dịch vụ AI không phân tích được ảnh: ${String(aiData.error).slice(0, 200)}`
+        : "Dịch vụ AI trả kết quả không hợp lệ (thiếu nhóm phân loại)."
+    );
+    err.statusCode = 502;
+    throw err;
+  }
 
-  // ── Upload annotated heatmap image to Firebase (base64 → public URL) ──
-  if (aiData.annotated_image && aiData.annotated_image.startsWith('data:image')) {
-    try {
-      const base64Match = aiData.annotated_image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (base64Match && base64Match.length === 3) {
-        const imageBuffer = Buffer.from(base64Match[2], 'base64');
-        const heatmapFileName = `MRI/heatmap_${Date.now()}_${Math.floor(Math.random() * 10000)}.jpg`;
-
-        if (bucket) {
-          const file = bucket.file(heatmapFileName);
-          await file.save(imageBuffer, { metadata: { contentType: 'image/jpeg' } });
-          await file.makePublic();
-          aiData.annotated_image = `https://storage.googleapis.com/${bucket.name}/${heatmapFileName}`;
-          console.log(`✅ Heatmap uploaded to Firebase: ${aiData.annotated_image}`);
-        } else {
-          const uploadsDir = path.join(__dirname, '../../../uploads');
-          if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-          const localName = `heatmap_${Date.now()}.jpg`;
-          fs.writeFileSync(path.join(uploadsDir, localName), imageBuffer);
-          aiData.annotated_image = `/uploads/${localName}`;
-          console.log(`✅ Heatmap saved locally: ${aiData.annotated_image}`);
-        }
-
-        // [HYBRID STORAGE] Lưu ảnh AI Heatmap vào hệ thống Hybrid PACS Local-First
-        try {
-          const heatmapName = `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`;
-          const savedHeatmap = await storageService.put({
-            category: "pacs",
-            studyId: visitId || `ai_${Date.now()}`,
-            fileName: heatmapName,
-            buffer: imageBuffer,
-            mimeType: "image/jpeg",
-            uploadedBy: user?.id,
-          });
-          aiData.storageHeatmapFileId = savedHeatmap.fileId;
-          aiData.heatmapStreamUrl = `/api/v1/storage/files/${savedHeatmap.fileId}`;
-          console.log(`✅ [Hybrid PACS] AI Heatmap đã lưu an toàn: ${savedHeatmap.logicalPath}`);
-        } catch (storageErr) {
-          console.warn("⚠️ [Storage Service] Không thể lưu heatmap vào Hybrid PACS:", storageErr.message);
-        }
-
-        // [DRIVE] Lưu ảnh AI heatmap vào thư mục 02_AI_Predictions
-        try {
-          let resolvedHospId = user?.hospitalId;
-          if (!resolvedHospId && user?.id) {
-            const freshUser = await User.findById(user.id).select("hospitalId").lean();
-            resolvedHospId = freshUser?.hospitalId;
-          }
-
-          if (resolvedHospId) {
-            const hosp = await Hospital.findById(resolvedHospId).lean();
-            const aiPredFolderId = hosp?.subFolders?.aiPredictionsId;
-            if (aiPredFolderId && !aiData.storageHeatmapFileId) {
-              await uploadToDrive(
-                imageBuffer,
-                `ai_heatmap_${aiData.class_name || 'unknown'}_${Date.now()}.jpg`,
-                'image/jpeg',
-                aiPredFolderId
-              );
-              console.log(`✅ [Drive] Heatmap AI đã lưu vào 02_AI_Predictions (${hosp?.name})`);
-            }
-          }
-        } catch (driveErr) {
-          console.warn('⚠️ [Drive] Không thể lưu heatmap vào 02_AI_Predictions:', driveErr.message);
-        }
+  // ── Ảnh vùng nghi ngờ (heatmap) AI trả về dạng base64 → lưu vào kho (bản chính mã hóa), trả đường dẫn kho.
+  // Trước đây ghi bản rõ vào /uploads, đẩy bản rõ lên Drive, và có nhánh makePublic() trên Firebase.
+  if (typeof aiData.annotated_image === "string" && aiData.annotated_image.startsWith("data:image")) {
+    const base64Match = aiData.annotated_image.match(/^data:([A-Za-z0-9.+/-]+);base64,([\s\S]+)$/);
+    aiData.annotated_image = null;
+    if (base64Match) {
+      try {
+        const imageBuffer = Buffer.from(base64Match[2], "base64");
+        const savedHeatmap = await storageService.put({
+          category: "pacs",
+          studyId: visitId ? String(visitId) : `ai_${Date.now()}`,
+          fileName: `ai_heatmap_${aiData.class_name}.jpg`,
+          buffer: imageBuffer,
+          mimeType: "image/jpeg",
+          uploadedBy: user?.id,
+          hospitalId: user?.hospitalId || null,
+          // Bệnh nhân tự phân tích: ảnh kết quả thuộc về chính bệnh nhân đó
+          patientId: user?.role === "patient" ? user.id : null,
+        });
+        aiData.storageHeatmapFileId = savedHeatmap.fileId;
+        aiData.heatmapStreamUrl = `/api/v1/storage/files/${savedHeatmap.fileId}`;
+        aiData.annotated_image = aiData.heatmapStreamUrl;
+      } catch (storageErr) {
+        console.warn("⚠️ [Storage Service] Không thể lưu heatmap AI:", storageErr.message);
+        aiData.heatmapError = "Không lưu được ảnh vùng nghi ngờ của AI.";
       }
-    } catch (uploadErr) {
-      console.warn('⚠️ Không thể upload heatmap, giữ nguyên base64:', uploadErr.message);
     }
   }
 
+  // Khung khối u: tọa độ pixel AI trả về → tỉ lệ 0..1 theo kích thước ảnh. Không có tọa độ thì không có khung.
+  aiData.image_dimensions = dims;
+  aiData.bounding_box = aiData.class_name !== "notumor" ? normalizeBoundingBox(aiData.tumor_location, dims) : null;
+
   // Gọi thêm dịch vụ sinh báo cáo lâm sàng để mô tả chi tiết kích thước, vị trí và lý thuyết u
-  if (aiData.class_name && aiData.class_name !== 'notumor') {
+  if (aiData.class_name !== "notumor") {
     try {
-      const aiReportUrl = `${rawAiUrl.replace(/\/predict\/?$/, '').replace(/\/+$/, '')}/generate_clinical_report`;
-      const reportResponse = await fetch(aiReportUrl, {
+      const reportResponse = await aiFetch(aiServiceUrl("/generate_clinical_report"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -519,23 +574,22 @@ export const executeAiPredictionInternal = async (imageUrl, user, visitId) => {
       if (reportResponse.ok) {
         const reportData = await reportResponse.json();
         aiData.clinical_report = reportData.draft_report || "";
-        console.log("✅ Đã sinh báo cáo chi tiết vị trí/kích thước/lý thuyết thành công từ FastAPI.");
       }
     } catch (reportErr) {
       console.warn("⚠️ Lỗi sinh báo cáo chi tiết từ FastAPI:", reportErr.message);
     }
   }
 
-  if (visitId && user?.hospitalId) {
-    const visit = await Visit.findById(visitId);
-    if (visit && visit.hospitalId.toString() === user.hospitalId.toString()) {
-      visit.status = "chờ bác sĩ đọc";
-      await visit.save();
-    }
+  // Bệnh nhân tự phân tích chỉ để tham khảo, không làm thay đổi tiến trình lượt khám
+  if (!skipVisitTransition && visitId && user?.hospitalId && user.role !== "patient") {
+    await moveVisitToDoctorRead(visitId, user.hospitalId);
   }
 
   return aiData;
 };
+
+// Đường dẫn tệp nội bộ (bỏ origin, chữ ký, query) để so ảnh gửi phân tích với ảnh của hồ sơ
+const internalFilePath = (url) => toInternalFilePath(String(url || "").split("?")[0]) || String(url || "");
 
 // @desc    Analyze imaging scan using AI (FastAPI microservice proxy)
 // @route   POST /api/v1/imaging/analyze-ai
@@ -547,18 +601,95 @@ export const analyzeImagingResultAI = async (req, res) => {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
-    const { imageUrl, visitId } = req.body;
+    const { imageUrl, visitId, imagingResultId } = req.body;
     if (!imageUrl) {
       return errorResponse(res, "Thiếu đường dẫn hình ảnh cần phân tích.", 400);
     }
 
-    const aiData = await executeAiPredictionInternal(imageUrl, req.user, visitId);
+    if (visitId && !/^[a-f\d]{24}$/i.test(String(visitId))) {
+      return errorResponse(res, "Mã lượt khám không hợp lệ.", 400);
+    }
+    if (imagingResultId && !/^[a-f\d]{24}$/i.test(String(imagingResultId))) {
+      return errorResponse(res, "Mã hồ sơ CĐHA không hợp lệ.", 400);
+    }
+
+    const resolvedImageUrl = resolveClientImageUrl(req, imageUrl);
+
+    // Nhân viên phân tích ảnh của một hồ sơ CĐHA: máy chủ tự lưu kết quả AI vào hồ sơ (không nhận kết quả AI từ client).
+    // Hồ sơ phải cùng viện và ảnh phải thuộc hồ sơ đó. Bệnh nhân tự phân tích chỉ để tham khảo, không lưu.
+    let target = null;
+    if (imagingResultId && req.user.role !== "patient") {
+      target = await ImagingResult.findOne({ _id: imagingResultId, hospitalId: req.user.hospitalId }).select("images isSigned").lean();
+      if (!target) return errorResponse(res, "Không tìm thấy hồ sơ CĐHA.", 404);
+      const ownImages = new Set((target.images || []).map(internalFilePath));
+      if (!ownImages.has(internalFilePath(resolvedImageUrl))) {
+        return errorResponse(res, "Ảnh cần phân tích không thuộc hồ sơ CĐHA này.", 400);
+      }
+    }
+
+    const seriesHint = typeof req.body?.seriesName === "string" ? req.body.seriesName : null;
+    const aiData = await executeAiPredictionInternal(resolvedImageUrl, req.user, visitId, { seriesName: seriesHint });
+
+    if (target) {
+      if (target.isSigned) {
+        aiData.persisted = false;
+        aiData.persistNote = "Báo cáo đã ký: kết quả AI không được ghi vào hồ sơ.";
+      } else {
+        const singleReport = buildAiReport(aiData, { dims: aiData.image_dimensions, source: "manual", analyzedBy: req.user.id });
+        let reportToPersist = singleReport;
+        let repUrlToPersist = aiData.heatmapStreamUrl || null;
+
+        // Giữ nguyên danh sách sliceResults nếu hồ sơ đã phân tích nhiều lát cắt, chỉ cập nhật lát đang chạy lại.
+        const existingSlices = Array.isArray(target.aiReport?.sliceResults) ? target.aiReport.sliceResults : null;
+        if (existingSlices && existingSlices.length > 0) {
+          const targetPath = internalFilePath(resolvedImageUrl);
+          const clonedReport = JSON.parse(JSON.stringify(target.aiReport));
+          let matchIdx = clonedReport.sliceResults.findIndex((s) => internalFilePath(s?.imageUrl) === targetPath);
+          if (matchIdx < 0 && Number.isInteger(Number(req.body?.sliceIndex))) {
+            const reqIdx = Number(req.body.sliceIndex);
+            if (reqIdx >= 0 && reqIdx < clonedReport.sliceResults.length) matchIdx = reqIdx;
+          }
+          const updatedSlice = {
+            ...(matchIdx >= 0 ? clonedReport.sliceResults[matchIdx] : {}),
+            sliceIndex: matchIdx >= 0 ? (clonedReport.sliceResults[matchIdx]?.sliceIndex ?? matchIdx) : clonedReport.sliceResults.length,
+            imageUrl: targetPath,
+            class_name: singleReport.class_name,
+            confidence: singleReport.confidence,
+            probabilities: singleReport.probabilities || null,
+            tumor_location: singleReport.class_name === "notumor" ? null : (singleReport.tumor_location || null),
+            bounding_box: singleReport.class_name === "notumor" ? null : (singleReport.bounding_box || null),
+            heatmapStreamUrl: singleReport.heatmapStreamUrl || null,
+            clinical_report: singleReport.clinical_report || null,
+            consensus_message: singleReport.consensus_message || null,
+            privacy_guard: singleReport.privacy_guard || null,
+            error: null,
+          };
+          if (matchIdx >= 0) {
+            clonedReport.sliceResults[matchIdx] = updatedSlice;
+          } else {
+            clonedReport.sliceResults.push(updatedSlice);
+          }
+          reportToPersist = clonedReport;
+          repUrlToPersist = target.representativeSliceUrl || singleReport.heatmapStreamUrl || null;
+        }
+
+        const applied = await applyAiResultToImaging({
+          imagingResultId: target._id,
+          hospitalId: req.user.hospitalId,
+          aiReport: reportToPersist,
+          representativeSliceUrl: repUrlToPersist,
+        });
+        aiData.persisted = applied.applied;
+        if (!applied.applied) aiData.persistNote = "Báo cáo đã ký: kết quả AI không được ghi vào hồ sơ.";
+      }
+    }
     return successResponse(res, aiData, "Phân tích AI hoàn tất thành công.");
   } catch (error) {
+    if (error.statusCode) return errorResponse(res, error.message, error.statusCode);
     console.error("Lỗi khi phân tích AI:", error);
     return errorResponse(
       res,
-      `Không thể hoàn thành chẩn đoán AI: ${error.message}. Hãy đảm bảo dịch vụ AI FastAPI đã được khởi chạy trên cổng 8000.`,
+      `Không thể hoàn thành phân tích AI: ${error.message}. Hãy đảm bảo dịch vụ AI FastAPI đã được khởi chạy trên cổng 8000.`,
       500
     );
   }
@@ -573,105 +704,207 @@ export const feedbackImagingResultAI = async (req, res) => {
       return errorResponse(res, "Bạn không có quyền thực hiện hành động này.", 403);
     }
 
-    const { imageUrl, correct_class, x, y, w, h } = req.body;
+    const {
+      imageUrl,
+      correct_class,
+      x,
+      y,
+      w,
+      h,
+      normalizedBox = null,
+      imagingResultId = null,
+      sliceIndex = null,
+      note = "",
+      agreementStatus = "modified",
+    } = req.body;
     if (!imageUrl || !correct_class) {
       return errorResponse(res, "Thiếu thông tin hình ảnh hoặc kết quả chẩn đoán điều chỉnh.", 400);
+    }
+    if (!AI_CLASS_NAMES.includes(correct_class)) {
+      return errorResponse(res, `Nhóm phân loại không hợp lệ. Chỉ nhận: ${AI_CLASS_NAMES.join(", ")}.`, 400);
+    }
+
+    const hasResultId = Boolean(imagingResultId && /^[a-f\d]{24}$/i.test(String(imagingResultId)));
+    let targetRecord = null;
+    if (imagingResultId) {
+      if (!hasResultId) {
+        return errorResponse(res, "Mã hồ sơ CĐHA không hợp lệ.", 400);
+      }
+      targetRecord = await ImagingResult.findOne({
+        _id: imagingResultId,
+        hospitalId: req.user.hospitalId,
+      })
+        .select("isSigned aiReport aiAgreement images representativeSliceUrl")
+        .setOptions({ bypassTenancy: true })
+        .lean();
+
+      if (!targetRecord) {
+        return errorResponse(res, "Không tìm thấy hồ sơ CĐHA thuộc cơ sở hiện tại.", 404);
+      }
+      if (targetRecord.isSigned) {
+        return errorResponse(res, "Hồ sơ đã được ký số xác nhận, không thể chỉnh sửa kết quả AI.", 409);
+      }
     }
 
     // Nạp ảnh qua bộ lọc an toàn: chặn path traversal + SSRF (P0-5)
     let loaded;
     try {
-      loaded = await loadImageBuffer(imageUrl);
+      loaded = await loadImageBuffer(resolveClientImageUrl(req, imageUrl));
     } catch (loadErr) {
       return errorResponse(res, loadErr.message, loadErr.statusCode || 400);
     }
-    const { buffer: fileBuffer, fileName, mimeType } = loaded; const ext = path.extname(fileName || "").toLowerCase() || (mimeType === "image/png" ? ".png" : ".jpg");
+    const { buffer: fileBuffer, fileName, mimeType } = loaded;
+    const ext = path.extname(fileName || "").toLowerCase() || (mimeType === "image/png" ? ".png" : ".jpg");
+    const dims = getImageDimensions(fileBuffer);
+    const imgW = dims?.width > 0 ? dims.width : 512;
+    const imgH = dims?.height > 0 ? dims.height : 512;
+
+    let coords = [x, y, w, h].map((v) => (v === undefined || v === null || v === "" ? 0 : Number(v)));
+    if (!coords.every((v) => Number.isInteger(v) && v >= 0 && v <= 100000)) {
+      return errorResponse(res, "Tọa độ vùng khoanh không hợp lệ.", 400);
+    }
+
+    let normBox = null;
+    if (correct_class === "notumor") {
+      coords = [0, 0, 0, 0];
+      normBox = null;
+    } else if (normalizedBox && typeof normalizedBox === "object") {
+      const nb = {
+        x: Number(normalizedBox.x),
+        y: Number(normalizedBox.y),
+        w: Number(normalizedBox.width !== undefined ? normalizedBox.width : normalizedBox.w),
+        h: Number(normalizedBox.height !== undefined ? normalizedBox.height : normalizedBox.h),
+      };
+      if (
+        !Number.isFinite(nb.x) || !Number.isFinite(nb.y) || !Number.isFinite(nb.w) || !Number.isFinite(nb.h) ||
+        nb.x < 0 || nb.y < 0 || nb.w <= 0 || nb.h <= 0 || nb.x + nb.w > 1.02 || nb.y + nb.h > 1.02
+      ) {
+        return errorResponse(res, "Tọa độ chuẩn hóa vùng khối u không hợp lệ.", 400);
+      }
+      normBox = {
+        x: Number(Math.max(0, Math.min(1, nb.x)).toFixed(4)),
+        y: Number(Math.max(0, Math.min(1, nb.y)).toFixed(4)),
+        w: Number(Math.max(0.005, Math.min(1 - Math.max(0, nb.x), nb.w)).toFixed(4)),
+        h: Number(Math.max(0.005, Math.min(1 - Math.max(0, nb.y), nb.h)).toFixed(4)),
+      };
+      if (coords[2] === 0 || coords[3] === 0) {
+        coords = [
+          Math.round(normBox.x * imgW),
+          Math.round(normBox.y * imgH),
+          Math.max(1, Math.round(normBox.w * imgW)),
+          Math.max(1, Math.round(normBox.h * imgH)),
+        ];
+      }
+    } else if (coords[2] > 0 && coords[3] > 0) {
+      const nx = Math.max(0, Math.min(0.999, coords[0] / imgW));
+      const ny = Math.max(0, Math.min(0.999, coords[1] / imgH));
+      const nw = Math.max(0.005, Math.min(1 - nx, coords[2] / imgW));
+      const nh = Math.max(0.005, Math.min(1 - ny, coords[3] / imgH));
+      normBox = {
+        x: Number(nx.toFixed(4)),
+        y: Number(ny.toFixed(4)),
+        w: Number(nw.toFixed(4)),
+        h: Number(nh.toFixed(4)),
+      };
+    }
 
     const formData = new FormData();
     const blob = new Blob([fileBuffer], { type: mimeType });
     formData.append("file", blob, fileName);
     formData.append("correct_class", correct_class);
-    formData.append("x", String(x || 0));
-    formData.append("y", String(y || 0));
-    formData.append("w", String(w || 0));
-    formData.append("h", String(h || 0));
+    formData.append("x", String(coords[0]));
+    formData.append("y", String(coords[1]));
+    formData.append("w", String(coords[2]));
+    formData.append("h", String(coords[3]));
 
-    console.log(`📡 Đang gửi feedback tới AI server (http://localhost:8000/feedback) ...`);
-    const aiFeedbackUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/feedback") : "http://localhost:8000/feedback");
-    const internalKey = process.env.INTERNAL_AI_API_KEY || "";
-
-    const aiResponse = await fetch(aiFeedbackUrl, {
-      method: "POST",
-      headers: internalKey ? { "X-Internal-Api-Key": internalKey } : undefined,
-      body: formData,
-    });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("Lỗi gửi feedback tới AI Server:", errorText);
-      return errorResponse(
-        res,
-        `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
-        500
-      );
+    let aiData = {};
+    let aiFeedbackSynced = false;
+    try {
+      const aiResponse = await aiFetch(aiServiceUrl("/feedback"), { method: "POST", body: formData });
+      if (aiResponse.ok) {
+        aiData = await aiResponse.json();
+        aiFeedbackSynced = true;
+      } else {
+        const errorText = await aiResponse.text().catch(() => "");
+        console.warn("⚠️ Lỗi gửi feedback tới AI Server:", errorText);
+        if (!targetRecord) {
+          return errorResponse(
+            res,
+            `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
+            502
+          );
+        }
+      }
+    } catch (aiConnErr) {
+      console.warn("⚠️ Dịch vụ AI /feedback tạm thời không phản hồi:", aiConnErr.message);
+      if (!targetRecord) {
+        return errorResponse(res, `Không thể gửi phản hồi tới AI: ${aiConnErr.message}`, 502);
+      }
     }
 
-    const aiData = await aiResponse.json();
-
-    // [HYBRID STORAGE] Lưu ảnh hiệu chỉnh của bác sĩ vào Local-First Hybrid Storage
+    // Lưu ảnh hiệu chỉnh của bác sĩ vào kho (bản chính mã hóa, bản sao Drive mã hóa).
+    // Trước đây còn đẩy bản RÕ lên Drive (03_Doctor_Revisions) và tọa độ + email bác sĩ (05_Metadata_Backups).
     try {
-      const corrExt = ext || ".jpg";
-      const corrMime = corrExt === ".png" ? "image/png" : "image/jpeg";
+      const corrMime = ext === ".png" ? "image/png" : "image/jpeg";
       await storageService.put({
         category: "pacs",
         studyId: req.body.studyId || req.body.medicalId || `correction_${Date.now()}`,
-        fileName: `doctor_correction_${correct_class}_${Date.now()}${corrExt}`,
+        fileName: `doctor_correction_${correct_class}${ext}`,
         buffer: fileBuffer,
         mimeType: corrMime,
         uploadedBy: req.user?.id,
+        hospitalId: req.user?.hospitalId || null,
       });
-      console.log(`✅ [Hybrid PACS] Doctor correction saved locally for class: ${correct_class}`);
     } catch (storageErr) {
       console.warn("⚠️ [Storage Service] Không thể lưu doctor correction vào Hybrid PACS:", storageErr.message);
     }
 
-    // [DRIVE] Lưu ảnh hiệu chỉnh của bác sĩ vào thư mục 03_Doctor_Revisions
-    try {
-      if (req.user?.hospitalId) {
-        const { Hospital } = await import("../../models/hospital.model.js");
-        const hosp = await Hospital.findById(req.user.hospitalId).lean();
-        const docRevFolderId = hosp?.subFolders?.doctorRevisionsId;
-        if (docRevFolderId) {
-          const corrMime = ext === '.png' ? 'image/png' : 'image/jpeg';
-          await uploadToDrive(
-            fileBuffer,
-            `doctor_correction_${correct_class}_${Date.now()}${ext}`,
-            corrMime,
-            docRevFolderId
-          );
-          console.log(`✅ [Drive] Correction image saved to 03_Doctor_Revisions (class: ${correct_class})`);
-        }
-      }
-    } catch (driveErr) {
-      console.warn('⚠️ [Drive] Không thể lưu ảnh hiệu chỉnh vào 03_Doctor_Revisions:', driveErr.message);
-    }
-
-    // Sao lưu metadata tọa độ vẽ vào thư mục 05_Metadata_Backups
-    try {
-      const metadata = {
+    let persisted = false;
+    let overrideMeta = null;
+    if (targetRecord && req.user.hospitalId) {
+      const resolvedUrl = internalFilePath(imageUrl);
+      const { updatedReport, matchedSliceIndex, doctorOverride } = applyDoctorSliceOverride({
+        existingReport: targetRecord.aiReport,
+        sliceIndex,
+        imageUrl: resolvedUrl,
         correctClass: correct_class,
-        coordinates: { x, y, w, h },
-        originalImageUrl: imageUrl,
-        doctorEmail: req.user.email,
-        doctorId: req.user.id,
-        timestamp: new Date().toISOString()
+        correctedBox: normBox,
+        note,
+        userId: req.user.id,
+      });
+
+      const agreedStatus = agreementStatus === "rejected" ? "rejected" : "modified";
+      const agreementNote = String(note || "").trim() || `Hiệu chỉnh lát #${matchedSliceIndex + 1}: ${correct_class}`;
+      const nextAgreement = { status: agreedStatus, note: agreementNote };
+
+      const upd = await ImagingResult.updateOne(
+        { _id: imagingResultId, hospitalId: req.user.hospitalId, isSigned: { $ne: true } },
+        { $set: { aiReport: updatedReport, aiAgreement: nextAgreement } }
+      ).setOptions({ bypassTenancy: true });
+
+      persisted = upd.modifiedCount > 0 || upd.matchedCount > 0;
+      overrideMeta = {
+        sliceIndex: matchedSliceIndex,
+        doctorOverride,
+        updatedAiReport: updatedReport,
+        aiAgreement: nextAgreement,
       };
-      await uploadMetadataBackup(metadata, req.user.hospitalId, `feedback_coords_${correct_class}`);
-    } catch (backupError) {
-      console.warn("⚠️ Không thể sao lưu metadata vẽ lên 05_Metadata_Backups:", backupError.message);
     }
 
-    return successResponse(res, aiData, "Ghi nhận phản hồi và lưu ca bệnh thành công.");
+    return successResponse(
+      res,
+      {
+        ...aiData,
+        aiFeedbackSynced,
+        persisted,
+        ...(overrideMeta || {}),
+      },
+      persisted
+        ? (aiFeedbackSynced
+            ? "Đã lưu hiệu chỉnh của bác sĩ lên lát cắt và đồng bộ huấn luyện AI."
+            : "Đã lưu hiệu chỉnh của bác sĩ vào hồ sơ (AI active learning đang ngoại tuyến).")
+        : "Ghi nhận phản hồi AI thành công."
+    );
   } catch (error) {
     console.error("Lỗi khi gửi phản hồi AI:", error);
     return errorResponse(
@@ -695,23 +928,20 @@ export const approveImagingResultAI = async (req, res) => {
     if (!filename || !predicted_class) {
       return errorResponse(res, "Thiếu thông tin tên file hoặc kết quả phân loại AI.", 400);
     }
-
-    const AI_BASE = process.env.AI_SERVER_URL
-      ? process.env.AI_SERVER_URL.replace("/predict", "")
-      : "http://localhost:8000";
+    if (!AI_CLASS_NAMES.includes(predicted_class)) {
+      return errorResponse(res, `Nhóm phân loại không hợp lệ. Chỉ nhận: ${AI_CLASS_NAMES.join(", ")}.`, 400);
+    }
+    const conf = Number(confidence ?? 0);
+    if (!Number.isFinite(conf) || conf < 0 || conf > 100) {
+      return errorResponse(res, "Độ tin cậy không hợp lệ.", 400);
+    }
 
     const formData = new FormData();
-    formData.append("filename", filename);
+    formData.append("filename", path.basename(String(filename).split(/[?#]/)[0]));
     formData.append("predicted_class", predicted_class);
-    formData.append("confidence", String(confidence ?? 0));
+    formData.append("confidence", String(conf));
 
-    console.log(`✅ Gửi xác nhận đúng tới AI server (${AI_BASE}/approve) ...`);
-    const internalKey = process.env.INTERNAL_AI_API_KEY || "";
-    const aiResponse = await fetch(`${AI_BASE}/approve`, {
-      method: "POST",
-      headers: internalKey ? { "X-Internal-Api-Key": internalKey } : undefined,
-      body: formData,
-    });
+    const aiResponse = await aiFetch(aiServiceUrl("/approve"), { method: "POST", body: formData });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
@@ -719,7 +949,7 @@ export const approveImagingResultAI = async (req, res) => {
       return errorResponse(
         res,
         `AI Server trả về lỗi: ${aiResponse.status} - ${errorText || "Mất kết nối hoặc dịch vụ AI chưa chạy."}`,
-        500
+        502
       );
     }
 
@@ -741,15 +971,24 @@ export const approveImagingResultAI = async (req, res) => {
 export const explainImagingResultAI = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await ImagingResult.findById(id);
+    if (!/^[a-f\d]{24}$/i.test(String(id))) {
+      return errorResponse(res, "Không tìm thấy kết quả chẩn đoán.", 404);
+    }
+    const isPatient = req.user.role === "patient";
+    const result = await ImagingResult.findById(id, null, isPatient ? PATIENT_IMAGING_QUERY : undefined);
     if (!result) {
       return errorResponse(res, "Không tìm thấy kết quả chẩn đoán.", 404);
     }
 
-    if (req.user.role === "patient") {
+    if (isPatient) {
       const user = await User.findById(req.user.id);
-      if (!user || user.profile?.medicalId !== result.medicalId) {
+      if (!user || !result.medicalId || user.profile?.medicalId !== result.medicalId) {
         return errorResponse(res, "Bạn không có quyền truy cập hồ sơ này.", 403);
+      }
+      // Giống GET /imaging/:id: bệnh nhân chỉ xem (và xin giải thích) báo cáo bác sĩ ĐÃ KÝ.
+      // Trước đây bản nháp chưa ký (kể cả gợi ý AI chưa được bác sĩ xác nhận) bị gửi đi giải thích cho bệnh nhân.
+      if (result.isSigned !== true) {
+        return errorResponse(res, "Kết quả này chưa được bác sĩ ký duyệt.", 403);
       }
     } else {
       // Nhân viên y tế phải cùng bệnh viện
@@ -765,10 +1004,7 @@ export const explainImagingResultAI = async (req, res) => {
       Kết luận chẩn đoán (Conclusion): ${result.conclusion}
     `;
 
-    console.log(`📡 Đang gọi AI Server dịch báo cáo y khoa (http://localhost:8000/translate_for_patient) ...`);
-    const aiTranslateUrl = (process.env.AI_SERVER_URL ? process.env.AI_SERVER_URL.replace("/predict", "/translate_for_patient") : "http://localhost:8000/translate_for_patient");
-
-    const aiResponse = await fetch(aiTranslateUrl, {
+    const aiResponse = await aiFetch(aiServiceUrl("/translate_for_patient"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -781,14 +1017,17 @@ export const explainImagingResultAI = async (req, res) => {
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error("Lỗi từ AI Translate Server:", errorText);
-      return errorResponse(res, `Không thể dịch kết quả: AI Server phản hồi lỗi ${aiResponse.status}`, 500);
+      return errorResponse(res, `Không thể dịch kết quả: AI Server phản hồi lỗi ${aiResponse.status}`, 502);
     }
 
     const aiData = await aiResponse.json();
+    if (!aiData?.translated_report) {
+      return errorResponse(res, "Dịch vụ AI không trả về bản giải thích. Vui lòng thử lại sau.", 502);
+    }
     return successResponse(res, { explanation: aiData.translated_report }, "Giải thích kết quả AI thành công.");
   } catch (error) {
     console.error("Lỗi giải thích kết quả AI:", error);
-    return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, 500);
+    return errorResponse(res, `Không thể phân tích hồ sơ: ${error.message}`, inputErrorStatus(res, error));
   }
 };
 
@@ -808,7 +1047,7 @@ export const getAllImagingResults = async (req, res) => {
     return successResponse(res, results, "Lấy tất cả kết quả chẩn đoán hình ảnh thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy tất cả kết quả chẩn đoán hình ảnh:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu.", inputErrorStatus(res, error));
   }
 };
 
@@ -817,7 +1056,7 @@ export const getAllImagingResults = async (req, res) => {
 // @access  Private (Technician, Admin)
 export const createKtvImagingResult = async (req, res) => {
   try {
-    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin"].includes(req.user?.role)) {
       return res.status(403).json({ message: "Chỉ Kỹ thuật viên hoặc Bác sĩ mới được phép tạo kết quả chụp." });
     }
 
@@ -832,14 +1071,31 @@ export const createKtvImagingResult = async (req, res) => {
       dicomZipUrl,
       dicomZipSize,
       dicomZipFilename,
+      sliceSeriesMeta = [],
+      primarySliceIndex = null,
+      triageAiPreview = null,
     } = req.body;
 
     const imageList = Array.isArray(images) && images.length > 0
-      ? images
+      ? images.slice(0, 15)
       : (imageUrl ? [imageUrl] : []);
+
+    const normalizedSeriesMeta = Array.isArray(sliceSeriesMeta)
+      ? sliceSeriesMeta.map((item) => {
+          if (!item || typeof item !== "object") return item;
+          const cleanUrl = item.imageUrl ? (toInternalFilePath(item.imageUrl) || item.imageUrl) : item.imageUrl;
+          return { ...item, imageUrl: cleanUrl };
+        })
+      : [];
 
     if (!visitId || imageList.length === 0) {
       return res.status(400).json({ message: "Thiếu thông tin lượt khám hoặc đường dẫn hình ảnh." });
+    }
+    // Ảnh phim phải là tệp hệ thống đã tải lên (link đã ký do máy chủ cấp, middleware đã xác minh) — không nhận URL ngoài
+    const normalizedImages = imageList.map(toInternalFilePath);
+    const normalizedZipUrl = dicomZipUrl ? toInternalFilePath(dicomZipUrl) : null;
+    if (normalizedImages.some((u) => !u) || (dicomZipUrl && !normalizedZipUrl)) {
+      return res.status(400).json({ message: "Ảnh phim phải là tệp đã tải lên hệ thống." });
     }
 
     // Lấy thông tin lượt khám
@@ -849,15 +1105,18 @@ export const createKtvImagingResult = async (req, res) => {
     }
 
     // [SECURITY FIX BUG-IMG-001]: Kiểm tra cô lập bệnh viện (Tenancy check)
-    const isSysAdmin = ["admin", "system_admin"].includes(req.user.role);
-    if (!isSysAdmin && (!req.user.hospitalId || String(visit.hospitalId) !== String(req.user.hospitalId))) {
+    if (!req.user.hospitalId || String(visit.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Không có quyền tạo kết quả chụp cho ca khám của bệnh viện khác." });
     }
 
-    // Lấy thông tin bệnh nhân (hỗ trợ fallback từ visit.patientId)
-    const effectivePatientId = patientId || visit.patientId?._id || visit.patientId;
+    // Bệnh nhân luôn theo lượt khám. Trước đây nhận patientId tùy ý từ client: kết quả chụp của lượt khám này
+    // có thể mang tên/mã của một bệnh nhân khác (kể cả viện khác).
+    const effectivePatientId = visit.patientId?._id || visit.patientId;
     if (!effectivePatientId) {
       return res.status(400).json({ message: "Không tìm thấy thông tin bệnh nhân trong lượt khám." });
+    }
+    if (patientId && String(patientId) !== String(effectivePatientId)) {
+      return res.status(400).json({ message: "Bệnh nhân không khớp với lượt khám." });
     }
 
     const patient = await User.findById(effectivePatientId);
@@ -873,32 +1132,50 @@ export const createKtvImagingResult = async (req, res) => {
     const patientMedicalId = patient.profile?.medicalId
       || `BN${patient._id.toString().slice(-6).toUpperCase()}`;
 
+    const safePrimaryIdx = Number.isInteger(primarySliceIndex)
+      ? Math.min(Math.max(0, primarySliceIndex), Math.max(0, normalizedImages.length - 1))
+      : 0;
+    const builtTriageAiReport = buildTriageAiReport({
+      triageAiPreview,
+      metaSlices: normalizedSeriesMeta,
+      imageList: normalizedImages,
+      primaryIdx: safePrimaryIdx,
+    });
+    const shouldQueueBgAi = Boolean(requestAiAnalysis && normalizedImages.length > 0 && !builtTriageAiReport);
+
     // Tạo bản ghi ImagingResult mới với các trường bắt buộc
     const imagingResult = new ImagingResult({
       hospitalId: req.user.hospitalId || visit.hospitalId,
       visitId: visit._id,
       medicalId: patientMedicalId,
       patientName: patient.profile?.fullName || patient.profile?.name || patient.email,
-      birthYear: patient.profile?.birthYear || 1990,
-      gender: patient.profile?.gender === "Nữ" ? "Nữ" : patient.profile?.gender === "Khác" ? "Khác" : "Nam",
-      address: patient.profile?.address || "Đà Nẵng",
+      birthYear: patient.profile?.birthYear || undefined, // chưa có thì để trống
+      gender: ["Nam", "Nữ", "Khác"].includes(patient.profile?.gender) ? patient.profile.gender : "", // chưa rõ thì để trống
+      address: patient.profile?.address || "",
       orderDate: visit.mriOrder?.orderedAt || new Date(),
       orderingDoctor: doctorName,
-      orderingDepartment: "Chẩn đoán hình ảnh",
+      orderingDepartment: "", // khoa chỉ định do bác sĩ chỉ định ghi, không tự gán
       medicalRecordNumber: "BA" + visit._id.toString().substring(18),
-      diagnosis: visit.reason || "Theo dõi u não",
+      diagnosis: visit.reason || "",
       procedure: "Chụp MRI vùng " + (region || visit.mriOrder?.region || "Não bộ"),
-      technique: "Cộng hưởng từ (MRI) " + (region || visit.mriOrder?.region || "Não bộ") + " không thuốc cản quang.",
+      technique: "Cộng hưởng từ (MRI) " + (region || visit.mriOrder?.region || "Não bộ") + ".", // có/không cản quang do bác sĩ CĐHA ghi
       findings: techNotes ? `Kỹ thuật viên ghi chú: ${techNotes}` : "Chờ bác sĩ đọc mô tả hình ảnh.",
       conclusion: "Chờ kết quả chẩn đoán từ bác sĩ.",
       radiologist: "Chờ bác sĩ CĐHA đọc & ký duyệt",
       isSigned: false,
       reportDate: new Date(),
-      images: imageList,
-      dicomZipUrl: dicomZipUrl || null,
+      images: normalizedImages,
+      representativeSliceUrl: normalizedImages[safePrimaryIdx] || normalizedImages[0] || null,
+      dicomMetadata: {
+        sliceSeriesMeta: normalizedSeriesMeta,
+        primarySliceIndex: safePrimaryIdx,
+      },
+      dicomZipUrl: normalizedZipUrl,
       dicomZipSize: dicomZipSize || null,
       dicomZipFilename: dicomZipFilename || null,
-      imagingType: "MRI"
+      imagingType: "MRI",
+      aiStatus: builtTriageAiReport ? "completed" : (shouldQueueBgAi ? "pending" : ""),
+      ...(builtTriageAiReport ? { aiReport: builtTriageAiReport } : {}),
     });
 
     await imagingResult.save();
@@ -906,7 +1183,7 @@ export const createKtvImagingResult = async (req, res) => {
     // Liên kết với visit và cập nhật trạng thái an toàn
     if (!visit.mriOrder) visit.mriOrder = {};
     visit.mriOrder.imagingResultId = imagingResult._id;
-    visit.status = requestAiAnalysis ? "chờ kết quả AI" : "chờ bác sĩ đọc";
+    visit.status = shouldQueueBgAi ? "chờ kết quả AI" : "chờ bác sĩ đọc";
     await visit.save();
 
     // ── Gửi thông báo tới Bác sĩ chỉ định ─────────────────────────────────────
@@ -918,7 +1195,7 @@ export const createKtvImagingResult = async (req, res) => {
         senderId: req.user.id,
         type: "ai_ready",
         title: "📸 Phim chụp MRI sẵn sàng",
-        message: `Phim chụp MRI vùng ${region || "Não bộ"} của bệnh nhân ${patientName} đã được tải lên (${imageList.length} ảnh). ${requestAiAnalysis ? 'Đang chạy phân tích AI...' : 'Sẵn sàng để bác sĩ đọc kết quả.'}`,
+        message: `Phim chụp MRI vùng ${region || "Não bộ"} của bệnh nhân ${patientName} đã được tải lên (${normalizedImages.length} ảnh). ${shouldQueueBgAi ? 'Đang chạy phân tích AI...' : 'Sẵn sàng để bác sĩ đọc kết quả.'}`,
         relatedId: visit._id,
       });
     } catch (notifErr) {
@@ -926,37 +1203,64 @@ export const createKtvImagingResult = async (req, res) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Tự động chạy phân tích AI ngầm nếu KTV yêu cầu
-    if (requestAiAnalysis && imageList.length > 0) {
+    // Tự động chạy phân tích AI ngầm nếu KTV chưa chạy xong ở bước sàng lọc
+    if (shouldQueueBgAi) {
       enqueueAiTask({
         priority: visit.priority === "khẩn cấp" ? 1 : 5,
         visitId: visit._id,
         label: `Auto AI Scan (${visit._id})`,
         taskFn: async () => {
         try {
-          console.log(`🤖 [Auto AI] Kích hoạt phân tích AI ngầm cho kết quả ${imagingResult._id}...`);
-          const aiData = await executeAiPredictionInternal(imageList[0], req.user, visit._id);
-          if (aiData) {
-            const tumorLabel = aiData.class_name === "notumor"
-              ? "Không phát hiện khối u"
-              : `Nghi ngờ ${aiData.class_name.toUpperCase()}`;
-            const aiText = `[AI Tự Động Phân Tích]: ${tumorLabel} (Độ tin cậy: ${aiData.confidence}%).`;
-
-            await ImagingResult.findByIdAndUpdate(imagingResult._id, {
-              aiReport: aiData,
-              representativeSliceUrl: aiData.annotated_image || imageList[0],
-              findings: techNotes ? `KTV: ${techNotes}\n${aiText}\n${aiData.clinical_report || ''}`.trim() : `${aiText}\n${aiData.clinical_report || ''}`.trim(),
-              conclusion: `AI gợi ý: ${tumorLabel}. Chờ bác sĩ xác nhận.`,
-            });
-            await Visit.findByIdAndUpdate(visit._id, { status: "chờ bác sĩ đọc" });
-            console.log(`✅ [Auto AI] Phân tích hoàn tất cho ca ${visit._id}. Trạng thái đã chuyển 'chờ bác sĩ đọc'.`);
+          console.log(`🤖 [Auto AI] Kích hoạt phân tích AI đa lát cắt (${normalizedImages.length} ảnh) cho kết quả ${imagingResult._id}...`);
+          const multiReport = await analyzeMultipleSlicesInternal({
+            imageUrls: normalizedImages,
+            user: req.user,
+            visitId: visit._id,
+            sliceSeriesMeta: normalizedSeriesMeta,
+            primarySliceIndex,
+            source: "ktv_auto",
+            executeSingleFn: executeAiPredictionInternal,
+          });
+          if (!multiReport) {
+            throw new Error("Không phân tích được lát cắt MRI nào trong bộ ảnh đã chọn.");
+          }
+          const text = aiSuggestionText(multiReport);
+          const tumorCount = multiReport.summary?.tumorDetectedSlices ?? 0;
+          const totalAnalyzed = multiReport.summary?.analyzedSlices ?? normalizedImages.length;
+          const multiSummaryNote = totalAnalyzed > 1
+            ? `\n[Sàng lọc đa lát cắt] Đã phân tích ${totalAnalyzed}/${normalizedImages.length} lát cắt (${tumorCount} lát ghi nhận tín hiệu bất thường).`
+            : "";
+          const draftFindings = (
+            techNotes
+              ? `KTV: ${techNotes}\n${text.findingsLine}${multiSummaryNote}\n${multiReport.clinical_report || ""}`
+              : `${text.findingsLine}${multiSummaryNote}\n${multiReport.clinical_report || ""}`
+          ).trim();
+          // Chỉ ghi khi hồ sơ CHƯA KÝ; mô tả/kết luận chỉ điền khi bác sĩ chưa sửa (còn đúng chữ giữ chỗ lúc tạo).
+          const applied = await applyMultiSliceAiResultToImaging({
+            imagingResultId: imagingResult._id,
+            hospitalId: visit.hospitalId,
+            multiReport,
+            fillDraft: { findings: draftFindings, expectedFindings: imagingResult.findings, conclusion: text.conclusion },
+          });
+          if (visit.hospitalId && req.user?.role !== "patient") {
+            await moveVisitToDoctorRead(visit._id, visit.hospitalId);
+          }
+          if (applied.applied) {
+            console.log(`✅ [Auto AI] Phân tích hoàn tất cho ca ${visit._id}.`);
           } else {
-            console.warn(`⚠️ [Auto AI] AI không trả về dữ liệu hợp lệ cho ca ${visit._id}. Chuyển trạng thái để Bác sĩ đọc.`);
-            await Visit.findByIdAndUpdate(visit._id, { status: "chờ bác sĩ đọc" });
+            console.warn(`⚠️ [Auto AI] Kết quả AI về sau khi hồ sơ đã ký (${applied.reason}) — không ghi vào báo cáo.`);
           }
         } catch (autoAiErr) {
-          console.warn(`⚠️ [Auto AI] Phân tích ngầm không thành công (${autoAiErr.message}). Chuyển trạng thái để Bác sĩ đọc trực tiếp.`);
-          await Visit.findByIdAndUpdate(visit._id, { status: "chờ bác sĩ đọc" });
+          // AI lỗi: ghi nhận trung thực (hồ sơ aiStatus=failed, lượt khám "lỗi AI" vẫn hiện trong hàng đợi, báo bác sĩ)
+          console.warn(`⚠️ [Auto AI] Phân tích ngầm không thành công (${autoAiErr.message}).`);
+          await markAiAnalysisFailed({
+            imagingResultId: imagingResult._id,
+            hospitalId: visit.hospitalId,
+            visitId: visit._id,
+            doctorId: visit.doctorId,
+            senderId: req.user.id,
+            reason: autoAiErr.message,
+          });
         }
         },
       }).catch(() => {});
@@ -969,7 +1273,7 @@ export const createKtvImagingResult = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi KTV tạo kết quả chụp:", error);
-    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1047,7 +1351,8 @@ export const updateImagingResult = async (req, res) => {
       images,
       structuredReport,
       aiAgreement,
-      criticalFinding
+      criticalFinding,
+      actingRadiologistReason
     } = req.body;
 
     const result = await ImagingResult.findById(id);
@@ -1055,13 +1360,8 @@ export const updateImagingResult = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
 
-    // [P0-2 + Mini-PACS] Bác sĩ CĐHA (radiologist), bác sĩ (doctor), hoặc Trưởng khoa (department_head) của đúng bệnh viện được đọc/ký báo cáo
-    if (!["doctor", "radiologist", "department_head"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Chỉ bác sĩ chẩn đoán hình ảnh mới được ký báo cáo." });
-    }
-
     // Tenancy Check
-    if (result.hospitalId && req.user.hospitalId && result.hospitalId.toString() !== req.user.hospitalId.toString()) {
+    if (!req.user.hospitalId || (result.hospitalId && result.hospitalId.toString() !== req.user.hospitalId.toString())) {
       return res.status(403).json({ message: "Bạn không có quyền sửa đổi kết quả chụp này." });
     }
 
@@ -1073,6 +1373,53 @@ export const updateImagingResult = async (req, res) => {
       });
     }
 
+    // [Q-V4-01, Q-V4-11] Đường ký chính của FE: áp cùng thẩm quyền với /clinical-view/.../sign.
+    const permission = await evaluateImagingSignPermission({ user: req.user, imaging: result });
+    if (!permission.allowed) {
+      return res.status(403).json({ code: permission.code, message: permission.message });
+    }
+    const reasonError = validateSignReason(permission, actingRadiologistReason);
+    if (reasonError) return res.status(400).json({ message: reasonError });
+
+    // Bản nháp có sẵn chữ giữ chỗ ("Chờ bác sĩ đọc"), nên kết luận phải có trong chính lần ký này
+    if (!String(conclusion || "").trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập kết luận trước khi ký báo cáo." });
+    }
+
+    // Kiểm tra danh sách ảnh TRƯỚC khi giành quyền ký (lỗi sau bước giành quyền sẽ để lại báo cáo "đã ký" với nội dung cũ).
+    // Ảnh đã có trong hồ sơ giữ nguyên (kể cả dữ liệu cũ); ảnh MỚI phải là tệp hệ thống đã tải lên (không nhận URL ngoài).
+    let validatedImages = null;
+    if (images !== undefined) {
+      if (!Array.isArray(images)) {
+        return res.status(400).json({ message: "Danh sách ảnh phim không hợp lệ." });
+      }
+      const existingImages = new Set((result.images || []).map(String));
+      validatedImages = [];
+      for (const image of images) {
+        if (existingImages.has(String(image))) {
+          validatedImages.push(image);
+          continue;
+        }
+        const internal = toInternalFilePath(image);
+        if (!internal) {
+          return res.status(400).json({ message: "Ảnh phim phải là tệp đã tải lên hệ thống." });
+        }
+        validatedImages.push(internal);
+      }
+    }
+
+    // Giành quyền ký atomic: 2 bác sĩ ký cùng lúc thì người sau nhận 409, không ghi đè kết luận của người trước
+    const claimed = await ImagingResult.updateOne(
+      { _id: result._id, isSigned: { $ne: true } },
+      { $set: { isSigned: true, signedBy: req.user.id, signedByDoctorId: req.user.id } }
+    );
+    if (claimed.modifiedCount !== 1) {
+      return res.status(409).json({ message: "Báo cáo vừa được ký bởi người khác. Vui lòng tải lại và tạo bản bổ sung nếu cần đính chính." });
+    }
+    result.isSigned = true;
+    result.signMode = permission.mode;
+    if (permission.requiresReason) result.actingRadiologistReason = String(actingRadiologistReason).trim();
+
     // Tên bác sĩ trên báo cáo luôn lấy từ tài khoản đang đăng nhập, không lấy từ body (chống mạo danh).
     const signingDoctorName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ CĐHA";
     if (findings !== undefined) result.findings = findings;
@@ -1080,7 +1427,7 @@ export const updateImagingResult = async (req, res) => {
     // `radiologist` do client gửi lên bị bỏ qua có chủ đích (P0-2).
     result.radiologist = signingDoctorName;
     if (technique !== undefined) result.technique = technique;
-    if (images !== undefined) result.images = images;
+    if (validatedImages) result.images = validatedImages;
 
     // ── Lưu Báo cáo CĐHA u não có cấu trúc (Structured Brain Tumor Report) & tự động tính RANO ──
     if (structuredReport && typeof structuredReport === "object") {
@@ -1188,27 +1535,41 @@ export const updateImagingResult = async (req, res) => {
     result.signedAt = new Date();
 
     // [P0-2] Hệ thống hiện chỉ có hạch toàn vẹn nội bộ (SHA-256), KHÔNG phải chữ ký PKI/PAdES.
-    const signaturePayload = `${result._id}|${result.medicalId}|${result.patientName}|${result.findings}|${result.conclusion}|${result.signedAt.toISOString()}|${req.user.id}`;
-    const signedHash = crypto.createHash("sha256").update(signaturePayload).digest("hex");
+    result.digitalSignatureMetadata = buildImagingSignatureMetadata({
+      imagingId: result._id, medicalId: result.medicalId, patientName: result.patientName, findings: result.findings,
+      conclusion: result.conclusion, signedAt: result.signedAt, signerId: req.user.id, signerName: signingDoctorName,
+    });
+    const signedHash = result.digitalSignatureMetadata.signedHash;
 
-    result.digitalSignatureMetadata = {
-      signatureType: "internal_hash",
-      certificateSerial: null,
-      signingAlgorithm: "SHA-256",
-      timestampToken: null,
-      caProvider: "NONE",
-      signedHash,
-      signedBy: signingDoctorName,
-      signedAt: result.signedAt,
-      isTampered: false,
-    };
+    try {
+      await result.save();
+    } catch (saveErr) {
+      // Lưu nội dung thất bại thì trả lại quyền ký, tránh báo cáo bị khóa với nội dung chưa hoàn chỉnh
+      await ImagingResult.updateOne({ _id: result._id }, { $set: { isSigned: false, signedBy: null, signedByDoctorId: null } });
+      throw saveErr;
+    }
 
-    await result.save();
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.IMAGING_REPORT_SIGNED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: result.hospitalId || req.user.hospitalId,
+      targetModel: "ImagingResult",
+      targetId: String(result._id),
+      metadata: {
+        signMode: permission.mode,
+        actingRadiologistReason: permission.requiresReason ? result.actingRadiologistReason : undefined,
+        signedHash,
+      },
+    });
 
     // Đồng bộ trạng thái mriOrder.mriStatus và gửi Cảnh báo Đỏ CĐHA nếu có
-    if (result.visitId || isCriticalFlag) {
+    const linkedVisit = await (result.visitId
+      ? Visit.findById(result.visitId)
+      : Visit.findOne({ hospitalId: result.hospitalId, "mriOrder.imagingResultId": result._id })).catch(() => null);
+    if (linkedVisit || isCriticalFlag) {
       try {
-        const visit = result.visitId ? await Visit.findById(result.visitId) : null;
+        const visit = linkedVisit;
         if (visit) {
           if (visit.mriOrder) visit.mriOrder.mriStatus = "completed"; const isPdOrCritical = isCriticalFlag || result.structuredReport?.rano?.category === "PD"; if (isPdOrCritical && !["hoàn tất", "đã đóng", "đã hủy", "chờ nhập viện"].includes(visit.status)) { visit.status = "chờ hội chẩn"; } else if (["chờ chụp", "đang chụp", "chờ kết quả AI", "chờ chụp lại", "lỗi AI", "chờ chụp sau phẫu thuật"].includes(visit.status)) { visit.status = "chờ bác sĩ đọc"; }
           await visit.save();
@@ -1239,7 +1600,9 @@ export const updateImagingResult = async (req, res) => {
       }
     }
 
-    // [DRIVE] Lưu báo cáo chẩn đoán vào thư mục 04_Patient_Reports + 05_Metadata_Backups
+    // Sao lưu báo cáo chẩn đoán vào kho (bản chính mã hóa; bản sao Drive mã hóa qua hàng đợi đồng bộ).
+    // Trước đây còn đẩy JSON BẢN RÕ (tên bệnh nhân, mô tả, kết luận, email người sửa) lên Google Drive
+    // (04_Patient_Reports, 05_Metadata_Backups) mỗi lần lưu báo cáo.
     try {
       const reportBackup = {
         imagingResultId: result._id,
@@ -1253,50 +1616,21 @@ export const updateImagingResult = async (req, res) => {
         updatedBy: req.user.id,
         updatedByEmail: req.user.email
       };
-      const targetHospitalId = req.user.hospitalId || result.hospitalId;
-
-      // [HYBRID STORAGE] Lưu báo cáo chẩn đoán vào Local-First Hybrid Storage
-      try {
-        const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), "utf-8");
-        const savedReport = await storageService.put({
-          category: "report",
-          studyId: result.medicalId || result._id.toString(),
-          fileName: `report_${result.medicalId}_${Date.now()}.json`,
-          buffer: reportJson,
-          mimeType: "application/json",
-          patientId: result.patientId || null,
-          uploadedBy: req.user?.id,
-        });
-        result.storageReportFileId = savedReport.fileId;
-        await result.save();
-        console.log(`✅ [Hybrid PACS] Báo cáo chẩn đoán đã lưu local: ${savedReport.logicalPath}`);
-      } catch (storageErr) {
-        console.warn("⚠️ [Storage Service] Không thể lưu báo cáo vào Hybrid PACS:", storageErr.message);
-      }
-
-      // Lưu báo cáo đã hoàn chỉnh vào 04_Patient_Reports (Drive Legacy)
-      try {
-        const { Hospital } = await import("../../models/hospital.model.js");
-        const hosp = await Hospital.findById(targetHospitalId).lean();
-        const reportsFolderId = hosp?.subFolders?.patientReportsId;
-        if (reportsFolderId && !result.storageReportFileId) {
-          const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), 'utf-8');
-          await uploadToDrive(
-            reportJson,
-            `report_${result.medicalId}_${Date.now()}.json`,
-            'application/json',
-            reportsFolderId
-          );
-          console.log(`✅ [Drive] Report saved to 04_Patient_Reports (patient: ${result.medicalId})`);
-        }
-      } catch (rptErr) {
-        console.warn('⚠️ [Drive] Không thể lưu báo cáo vào 04_Patient_Reports:', rptErr.message);
-      }
-
-      // Cũng lưu bản sao vào 05_Metadata_Backups
-      await uploadMetadataBackup(reportBackup, targetHospitalId, `report_backup_${result.medicalId}`);
-    } catch (backupError) {
-      console.warn("⚠️ Không thể sao lưu bản ghi chẩn đoán lên Google Drive:", backupError.message);
+      const reportJson = Buffer.from(JSON.stringify(reportBackup, null, 2), "utf-8");
+      const savedReport = await storageService.put({
+        category: "report",
+        studyId: result.medicalId || result._id.toString(),
+        fileName: `report_${result.medicalId}.json`,
+        buffer: reportJson,
+        mimeType: "application/json",
+        patientId: result.patientId || null,
+        uploadedBy: req.user?.id,
+        hospitalId: result.hospitalId || req.user?.hospitalId || null,
+      });
+      result.storageReportFileId = savedReport.fileId;
+      await result.save();
+    } catch (storageErr) {
+      console.warn("⚠️ [Storage Service] Không thể lưu báo cáo vào kho:", storageErr.message);
     }
 
     res.status(200).json({
@@ -1306,7 +1640,7 @@ export const updateImagingResult = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật kết quả phim chụp:", error);
-    res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
@@ -1320,15 +1654,25 @@ export const getImagingResultByVisitId = async (req, res) => {
       return errorResponse(res, "Thiếu ID lượt khám.", 400);
     }
 
-    let result = await ImagingResult.findOne({ visitId }).sort({ createdAt: -1 });
+    const isPatient = req.user.role === "patient";
+    const imagingQuery = isPatient ? PATIENT_IMAGING_QUERY : undefined;
+    let result = await ImagingResult.findOne({ visitId }, null, imagingQuery).sort({ createdAt: -1 });
     const visit = await Visit.findById(visitId);
 
+    if (isPatient && String(visit?.patientId || "") !== String(req.user.id)) {
+      return errorResponse(res, "Bạn không có quyền xem kết quả chẩn đoán này.", 403);
+    }
+
     if (!result && visit?.mriOrder?.imagingResultId) {
-      result = await ImagingResult.findById(visit.mriOrder.imagingResultId);
+      result = await ImagingResult.findById(visit.mriOrder.imagingResultId, null, imagingQuery);
     }
 
     if (!result) {
       return errorResponse(res, "Không tìm thấy kết quả phim chụp cho lượt khám này.", 404);
+    }
+    if (isPatient) {
+      if (result.isSigned !== true) return errorResponse(res, "Kết quả này chưa được bác sĩ ký duyệt.", 403);
+      return successResponse(res, result, "Lấy thông tin phim chụp theo lượt khám thành công.");
     }
 
     // Auto-heal: Đồng bộ liên kết nếu visit.mriOrder.imagingResultId bị thiếu
@@ -1338,10 +1682,10 @@ export const getImagingResultByVisitId = async (req, res) => {
       await visit.save();
     }
 
-    return successResponse(res, result, "Lấy thông tin phim chụp theo lượt khám thành công.");
+    return successResponse(res, hideClinicalContentFor(req.user, result), "Lấy thông tin phim chụp theo lượt khám thành công.");
   } catch (error) {
     console.error("Lỗi khi lấy phim theo visitId:", error);
-    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", 500);
+    return errorResponse(res, "Có lỗi xảy ra khi tải dữ liệu phim chụp.", inputErrorStatus(res, error));
   }
 };
 
@@ -1355,7 +1699,8 @@ export const acknowledgeCriticalFinding = async (req, res) => {
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
-    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+    // Tài khoản không gắn viện không được xác nhận thay bác sĩ của viện (trước đây bỏ qua kiểm tra khi thiếu hospitalId)
+    if (!req.user.hospitalId || (result.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
     }
     if (!result.criticalFinding?.isCritical) {
@@ -1375,16 +1720,41 @@ export const acknowledgeCriticalFinding = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
-// @desc    Tạo bản đính chính / bổ sung báo cáo đã ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
+// @desc    Người đang đăng nhập có được ký báo cáo này không (FE dùng để hiện form ký và ô lý do)
+// @route   GET /api/v1/imaging/:id/sign-permission
+// @access  Private (Doctor, Radiologist, Department Head)
+export const getImagingSignPermission = async (req, res) => {
+  try {
+    const result = await ImagingResult.findById(req.params.id).select("hospitalId visitId isSigned").lean();
+    if (!result) return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
+    if (!req.user.hospitalId || (result.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId))) {
+      return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
+    }
+    const permission = await evaluateImagingSignPermission({ user: req.user, imaging: result });
+    return res.status(200).json({
+      success: true,
+      data: {
+        canSign: permission.allowed && result.isSigned !== true,
+        requiresReason: Boolean(permission.requiresReason),
+        mode: permission.mode || null,
+        message: permission.message || null,
+      },
+    });
+  } catch (error) {
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
+
+// @desc    Tạo bản đính chính / bổ sung báo cáo đã ký số (Addendum - bất biến bản gốc theo TT 13/2025/TT-BYT)
 // @route   POST /api/v1/imaging/:id/addendum
 // @access  Private (Radiologist, Doctor, Department Head)
 export const addImagingAddendum = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!["doctor", "radiologist", "department_head"].includes(req.user?.role)) {
       return res.status(403).json({ message: "Chỉ Bác sĩ mới có quyền tạo phụ lục (Addendum) báo cáo CĐHA." });
     }
     const { id } = req.params;
@@ -1398,7 +1768,7 @@ export const addImagingAddendum = async (req, res) => {
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
-    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+    if (!req.user.hospitalId || (result.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Không có quyền bổ sung báo cáo của bệnh viện khác." });
     }
     if (!result.isSigned) {
@@ -1410,10 +1780,17 @@ export const addImagingAddendum = async (req, res) => {
     const hashPayload = `${result._id}|${String(content).trim()}|${String(reason || "").trim()}|${addedAt.toISOString()}|${req.user.id}`;
     const signatureHash = crypto.createHash("sha256").update(hashPayload).digest("hex");
 
+    // Loại phụ lục suy từ vai trò: bác sĩ lâm sàng chỉ tạo được phụ lục lâm sàng, không đính chính được kết luận CĐHA.
+    const addendumType = req.user.role === "radiologist"
+      ? "radiology_amendment"
+      : req.user.role === "department_head" && req.body.addendumType !== "clinical_correlation"
+        ? "radiology_amendment"
+        : "clinical_correlation";
+
     const addendumItem = {
       content: String(content).trim(),
       reason: String(reason || "").trim(),
-      addendumType: req.body.addendumType === "clinical_correlation" ? "clinical_correlation" : "radiology_amendment",
+      addendumType,
       authorRole: req.user.role || "",
       addedBy: req.user.id,
       addedByName: authorName,
@@ -1425,6 +1802,16 @@ export const addImagingAddendum = async (req, res) => {
     result.addenda.push(addendumItem);
     await result.save();
 
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.CLINICAL_ADDENDUM_CREATED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: result.hospitalId || req.user.hospitalId,
+      targetModel: "ImagingResult",
+      targetId: String(result._id),
+      metadata: { addendumType, signatureHash },
+    });
+
     return res.status(201).json({
       success: true,
       message: "Đã phát hành bản bổ sung (Addendum) có chữ ký toàn vẹn, giữ nguyên bản gốc báo cáo.",
@@ -1433,30 +1820,37 @@ export const addImagingAddendum = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
 // @desc    [Q-CLINICAL-01] Bác sĩ lâm sàng xác nhận đã đọc báo cáo CĐHA (Attending Acknowledgment)
 // @route   POST /api/v1/imaging/:id/acknowledge
-// @access  Private (Doctor, Radiologist, Department Head)
+// @access  Private (Doctor, Department Head)
 export const acknowledgeImagingReport = async (req, res) => {
   try {
     const { id } = req.params;
     const { clinicalNote = "" } = req.body || {};
 
-    if (!["doctor", "radiologist", "department_head"].includes(req.user?.role)) {
-      return res.status(403).json({ message: "Chỉ bác sĩ mới được xác nhận đã đọc báo cáo CĐHA." });
+    if (!CLINICAL_READER_ROLES.includes(req.user?.role)) {
+      return res.status(403).json({ message: "Chỉ bác sĩ lâm sàng hoặc Trưởng khoa mới được xác nhận đã đọc báo cáo CĐHA." });
     }
 
     const result = await ImagingResult.findById(id);
     if (!result) {
       return res.status(404).json({ message: "Không tìm thấy kết quả phim chụp." });
     }
-    if (result.hospitalId && req.user.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId)) {
+    if (!req.user.hospitalId || (result.hospitalId && String(result.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Không có quyền thao tác kết quả chụp của bệnh viện khác." });
     }
+    if (result.isSigned !== true) {
+      return res.status(409).json({ message: "Báo cáo CĐHA chưa được ký nên chưa thể xác nhận đã đọc." });
+    }
 
+    // Người đọc sau không xóa vết của người đọc trước
+    if (result.attendingAcknowledgment?.acknowledgedBy) {
+      result.acknowledgmentHistory.push({ ...result.attendingAcknowledgment.toObject() });
+    }
     const ackName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Bác sĩ lâm sàng";
     result.attendingAcknowledgment = {
       acknowledgedBy: req.user.id,
@@ -1466,18 +1860,15 @@ export const acknowledgeImagingReport = async (req, res) => {
     };
     await result.save();
 
-    try {
-      const { recordAuditLog, AUDIT_ACTIONS } = await import("../../services/auditLog.service.js");
-      await recordAuditLog({
-        action: AUDIT_ACTIONS.IMAGING_REPORT_ACKNOWLEDGED || "IMAGING_REPORT_ACKNOWLEDGED",
-        entity: "ImagingResult",
-        entityId: result._id,
-        performedBy: req.user.id,
-        hospitalId: result.hospitalId || req.user.hospitalId,
-        details: `Bác sĩ ${ackName} (${req.user.role}) đã xác nhận đọc báo cáo CĐHA #${result._id}.`,
-        payload: { clinicalNote: result.attendingAcknowledgment.clinicalNote }
-      });
-    } catch { /* ignore audit error */ }
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.IMAGING_REPORT_ACKNOWLEDGED,
+      entity: "ImagingResult",
+      entityId: result._id,
+      performedBy: req.user.id,
+      hospitalId: result.hospitalId || req.user.hospitalId,
+      details: `Bác sĩ ${ackName} (${req.user.role}) đã xác nhận đọc báo cáo CĐHA #${result._id}.`,
+      payload: { clinicalNote: result.attendingAcknowledgment.clinicalNote }
+    });
 
     return res.status(200).json({
       success: true,
@@ -1486,14 +1877,17 @@ export const acknowledgeImagingReport = async (req, res) => {
       data: result
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ", error: error.message });
   }
 };
 
 // @desc    [Q-CLINICAL-01] Bác sĩ lâm sàng thêm nhận định / đối chiếu lâm sàng (Clinical Addendum)
 // @route   POST /api/v1/imaging/:id/clinical-addendum
-// @access  Private (Doctor, Radiologist, Department Head)
+// @access  Private (Doctor, Department Head)
 export const addClinicalAddendum = async (req, res) => {
+  if (!CLINICAL_READER_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ message: "Phụ lục lâm sàng do bác sĩ lâm sàng hoặc Trưởng khoa tạo. Bác sĩ CĐHA dùng bản đính chính (addendum)." });
+  }
   req.body = {
     ...req.body,
     addendumType: "clinical_correlation"
@@ -1569,7 +1963,7 @@ export const getPatientRanoTimeline = async (req, res) => {
       timeline
     });
   } catch (error) {
-    return res.status(500).json({ message: "Lỗi máy chủ khi tính chuỗi RANO", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Lỗi máy chủ khi tính chuỗi RANO", error: error.message });
   }
 };
 

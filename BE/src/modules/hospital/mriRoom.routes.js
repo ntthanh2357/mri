@@ -28,8 +28,8 @@ router.delete("/:id", checkRole(["admin", "system_admin", "hospital_admin"]), de
 
 router.post("/schedule/auto", checkRole(MRI_OPS_ROLES), autoScheduleSlot);
 router.get("/schedule/weekly", checkRole(MRI_VIEW_ROLES), getWeeklySchedule);
-router.post("/schedule/emergency-override", checkRole(MRI_STRICT_OPS_ROLES), handleEmergencyOverride);
-router.post("/schedule/confirm-reschedule", checkRole(MRI_OPS_ROLES), confirmReschedule);
+router.post("/schedule/emergency-override", checkRole([...MRI_STRICT_OPS_ROLES, "receptionist"]), handleEmergencyOverride);
+router.post("/schedule/confirm-reschedule", checkRole([...MRI_OPS_ROLES, "receptionist"]), confirmReschedule);
 router.put("/slots/:slotId/release", checkRole(MRI_STRICT_OPS_ROLES), releaseRoom);
 router.get("/visit/:visitId/slots", checkRole(MRI_VIEW_ROLES), getSlotsByVisit);
 

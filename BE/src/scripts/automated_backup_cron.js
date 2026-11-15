@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
+import { writeEncryptedBackup } from "../utils/encryptedBackup.util.js";
 import dotenv from "dotenv";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,7 +51,8 @@ export const runAutomatedDatabaseBackup = async () => {
     const fileName = `db_backup_${timestamp}.json`;
     const filePath = path.join(backupDir, fileName);
 
-    fs.writeFileSync(filePath, JSON.stringify(backupManifest, null, 2), "utf8");
+    // Mã hóa AES-256-GCM (FILE_ENCRYPTION_KEY) — trước đây ghi toàn bộ CSDL ra JSON bản rõ
+    writeEncryptedBackup(filePath, backupManifest, { kind: "database", database: backupManifest.database });
     const stat = fs.statSync(filePath);
     console.log(`[BACKUP] Sao lưu hoàn tất thành công!`);
     console.log(`  Tệp: ${filePath}`);

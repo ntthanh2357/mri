@@ -42,15 +42,17 @@ import { Notification } from "./models/notification.model.js";
 import { SupportTicket } from "./models/supportTicket.model.js";
 import { Dataset } from "./models/dataset.model.js";
 import { AuditLog } from "./models/auditLog.model.js";
+import { AuditChainAnchor } from "./models/auditChainAnchor.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
 import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
 import { AiJob } from "./models/aiJob.model.js";
 
-import { connectDB } from "./config/db.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 import { tenantStorage } from "./middlewares/tenant.middleware.js";
 
 dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
 
 const seedComprehensiveDatabase = async () => {
   return tenantStorage.run({ bypassTenancy: true, isSuperAdmin: true }, async () => {
@@ -60,7 +62,8 @@ const seedComprehensiveDatabase = async () => {
       console.log("================================================================================");
 
       console.log("🔌 Connecting to database...");
-      await connectDB();
+      assertDemoSeedEnabled({ scriptName: "seedAll.js" });
+      await connectLocalTestMongo(mongoose, MONGO_URI);
       console.log("✅ Successfully connected to database.");
 
       // ── STEP 1: CLEAN ALL COLLECTIONS TO ENSURE CONSISTENCY ──────────────────
@@ -102,6 +105,7 @@ const seedComprehensiveDatabase = async () => {
         SupportTicket.deleteMany({}),
         Dataset.deleteMany({}),
         AuditLog.deleteMany({}),
+        AuditChainAnchor.deleteMany({}),
         ImagingResult.deleteMany({}),
         // MRI Image & AI collections explicitly cleared and kept empty per user request
         DicomStudy.deleteMany({}),
@@ -423,7 +427,9 @@ const seedComprehensiveDatabase = async () => {
         },
       ];
 
-      const users = await User.insertMany(mockUsers);
+      const users = await User.insertMany(
+        mockUsers.map((user) => ({ ...user, isTestAccount: true })),
+      );
       console.log(`✅ Seeded ${users.length} Users successfully across all 7 roles.`);
 
       // Quick access helpers
@@ -1498,7 +1504,7 @@ const seedComprehensiveDatabase = async () => {
       // ── STEP 17: CLINICAL VISITS (MULTIPLE STATES) ───────────────────────────
       console.log("\n🏥 Step 17: Seeding Clinical Visits (Waiting, In-Consult, Awaiting MRI)...");
 
-      // Sample template diagnostic report (text-only metadata, NO physical DICOM images)
+      // Sample diagnostic report for Visit 5 ("chờ bác sĩ đọc") with matching MRI slice
       const sampleImagingResult = await ImagingResult.create({
         hospitalId: hospital._id,
         medicalId: "BN001",
@@ -1517,7 +1523,8 @@ const seedComprehensiveDatabase = async () => {
         conclusion: "Hình ảnh điển hình của U màng não (Meningioma) thùy thái dương trái, chưa có dấu hiệu xâm lấn xương sọ.",
         radiologist: doc3.profile.name,
         reportDate: new Date(now.getTime() - 22 * 3600000),
-        images: [], // Kept empty per user requirement: user will upload MRI data
+        images: ["/uploads/tumor_01.png"],
+        representativeSliceUrl: "/uploads/tumor_01.png",
         imagingType: "MRI",
       });
 
@@ -1630,6 +1637,11 @@ const seedComprehensiveDatabase = async () => {
         },
       ]);
       console.log(`✅ Seeded ${visits.length} Clinical Visits with diverse lifecycle states.`);
+
+      await ImagingResult.updateOne(
+        { _id: sampleImagingResult._id },
+        { $set: { visitId: visits[4]._id } }
+      );
 
       // [FIX LINKAGE presc3] presc3 (kê ở Step 16) được tạo TRƯỚC visit ~9ms
       // (thứ tự code Step 16 → Step 17) khiến truy vấn linkage theo mốc thời
@@ -1925,7 +1937,7 @@ const seedComprehensiveDatabase = async () => {
       console.log("\n📢 Step 22: Seeding Announcements, Notifications, Support, and Datasets...");
       await Announcement.insertMany([
         {
-          title: "Triển khai phần mềm chẩn đoán tổn thương u não NeuroScan AI thế hệ mới",
+          title: "Triển khai phần mềm hỗ trợ sàng lọc u não NeuroScan AI thế hệ mới",
           content: "Khoa Ung Thư Não và Khoa Chẩn đoán Hình ảnh chính thức vận hành hệ thống AI hỗ trợ phát hiện ranh giới khối u trên chuỗi xung MRI 3.0T.",
           type: "info",
           author: users[3]._id,

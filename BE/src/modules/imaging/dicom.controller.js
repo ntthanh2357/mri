@@ -1,3 +1,4 @@
+import { User } from "../../models/user.model.js";
 import { DicomStudy } from "./models/dicomStudy.model.js";
 import { DicomSeries } from "./models/dicomSeries.model.js";
 import { ImagingResult } from "./models/imagingResult.model.js";
@@ -5,6 +6,8 @@ import { Visit } from "../../models/visit.model.js";
 import { AiJob } from "./models/aiJob.model.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
+import { enqueueAiPipelineJob } from "./aiPipeline.controller.js";
+import { computeEffectiveSliceOverlay } from "./multiSliceAi.util.js";
 
 // ─── DICOM Series Type Classification (B.2) ───────────────────────────────────
 const SERIES_TYPE_MAP = {
@@ -14,6 +17,9 @@ const SERIES_TYPE_MAP = {
   't1 ce': 'T1C+',
   'contrast': 'T1C+',
   'gad': 'T1C+',
+  // Kiểm tra T1 FLAIR trước từ khóa 'flair' chung để không nhầm Sag_T1_FLAIR / AX_T1_FLAIR thành T2_FLAIR
+  't1_flair': 'T1_FLAIR',
+  't1 flair': 'T1_FLAIR',
   't2_flair': 'T2_FLAIR',
   't2 flair': 'T2_FLAIR',
   'flair': 'T2_FLAIR',
@@ -25,8 +31,6 @@ const SERIES_TYPE_MAP = {
   'tof': 'TOF_MRA',
   'mra': 'TOF_MRA',
   'time of flight': 'TOF_MRA',
-  't1_flair': 'T1_FLAIR',
-  't1 flair': 'T1_FLAIR',
   't2_cor': 'T2_CORONAL',
   't2 cor': 'T2_CORONAL',
   'coronal': 'T2_CORONAL',
@@ -183,31 +187,61 @@ export const createDicomStudy = async (req, res) => {
       }, `DICOM study đã lưu nhưng có lỗi validation: ${validation.errors.join('; ')}. AI sẽ không được kích hoạt.`, 201);
     }
 
-    // Cập nhật Visit status + liên kết study vào ImagingResult (nếu có)
-    visit.status = 'chờ kết quả AI';
-    await visit.save();
-
     // Tạo hoặc cập nhật ImagingResult với studyId
+    let imaging = null;
     if (visit.mriOrder?.imagingResultId) {
-      await ImagingResult.findByIdAndUpdate(visit.mriOrder.imagingResultId, {
-        studyId: study._id
-      });
-      study.imagingResultId = visit.mriOrder.imagingResultId;
-      await study.save();
+      imaging = await ImagingResult.findOne({ _id: visit.mriOrder.imagingResultId, hospitalId });
+      if (imaging) {
+        imaging.studyId = study._id;
+        if (!imaging.images?.length) {
+          const seriesUrls = savedSeries.flatMap(s => s.dicomFileUrls || []).filter(Boolean);
+          if (seriesUrls.length) {
+            imaging.images = seriesUrls;
+            imaging.representativeSliceUrl = seriesUrls[0];
+          }
+        }
+        await imaging.save();
+        study.imagingResultId = imaging._id;
+        await study.save();
+      }
     }
 
-    // Kích hoạt AI Job (C.8)
-    const aiJob = new AiJob({
-      hospitalId,
-      visitId: visit._id,
-      imagingResultId: visit.mriOrder?.imagingResultId || null,
-      studyId: study._id,
-      triggeredBy: req.user.id,
-      priority: visit.priority === 'khẩn cấp' ? 1 : 5,
-      status: 'queued',
-      currentStep: "Đang chờ trong hàng đợi AI",
-    });
-    await aiJob.save();
+    const hasImagesToAnalyze = Boolean(imaging?.images?.length);
+    const canRunAi = hasImagesToAnalyze && imaging?.isSigned !== true;
+
+    let aiJob = null;
+    if (canRunAi) {
+      // Kiểm tra đã có job đang chạy chưa
+      const existingJob = await AiJob.findOne({
+        visitId: visit._id,
+        status: { $in: ['queued', 'running'] }
+      });
+      if (existingJob) {
+        aiJob = existingJob;
+      } else {
+        aiJob = new AiJob({
+          hospitalId,
+          visitId: visit._id,
+          imagingResultId: imaging._id,
+          studyId: study._id,
+          triggeredBy: req.user.id,
+          priority: visit.priority === 'khẩn cấp' ? 1 : 5,
+          status: 'queued',
+          currentStep: "Đang chờ trong hàng đợi AI",
+        });
+        await aiJob.save();
+        await ImagingResult.updateOne(
+          { _id: imaging._id, hospitalId, isSigned: { $ne: true } },
+          { $set: { aiJobId: aiJob._id, aiStatus: "pending", aiError: "" } }
+        );
+        enqueueAiPipelineJob(aiJob);
+      }
+      visit.status = 'chờ kết quả AI';
+      await visit.save();
+    } else {
+      visit.status = 'chờ bác sĩ đọc';
+      await visit.save();
+    }
 
     // Gửi thông báo cho bác sĩ chỉ định
     try {
@@ -218,7 +252,9 @@ export const createDicomStudy = async (req, res) => {
           senderId: req.user.id,
           type: "dicom_uploaded",
           title: "🔬 DICOM đã upload xong",
-          message: `KTV đã upload ${savedSeries.length} chuỗi DICOM. AI đang xử lý...`,
+          message: canRunAi
+            ? `KTV đã upload ${savedSeries.length} chuỗi DICOM. AI đang xử lý...`
+            : `KTV đã upload ${savedSeries.length} chuỗi DICOM. Đang chờ bác sĩ đọc kết quả.`,
           relatedId: study._id,
         });
       }
@@ -231,7 +267,7 @@ export const createDicomStudy = async (req, res) => {
       series: savedSeries,
       aiJob,
       validation,
-    }, "Upload DICOM Study thành công. AI job đã được tạo.", 201);
+    }, canRunAi ? "Upload DICOM Study thành công. AI job đã được đưa vào hàng đợi." : "Upload DICOM Study thành công. Đang chờ bác sĩ đọc kết quả.", 201);
   } catch (err) {
     console.error("Lỗi createDicomStudy:", err);
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
@@ -342,23 +378,37 @@ export const getViewerManifest = async (req, res) => {
     const { id } = req.params;
     const hospitalId = req.user.hospitalId;
 
+    // Model CĐHA không có patientId nên bộ lọc tenancy của bệnh nhân không khớp; bên dưới kiểm tra đúng phim của họ
+    const imagingQuery = req.user.role === "patient" ? { bypassTenancy: true } : undefined;
+
     // Cho phép truyền studyId hoặc imagingResultId
-    let study = await DicomStudy.findById(id).lean();
+    let study = await DicomStudy.findById(id, null, imagingQuery).lean();
     let imagingResult = null;
 
     if (!study) {
-      imagingResult = await ImagingResult.findById(id).lean();
+      imagingResult = await ImagingResult.findById(id, null, imagingQuery).lean();
       if (imagingResult?.studyId) {
-        study = await DicomStudy.findById(imagingResult.studyId).lean();
+        study = await DicomStudy.findById(imagingResult.studyId, null, imagingQuery).lean();
       }
     } else {
       imagingResult = study.imagingResultId
-        ? await ImagingResult.findById(study.imagingResultId).lean()
-        : await ImagingResult.findOne({ studyId: study._id }).lean();
+        ? await ImagingResult.findById(study.imagingResultId, null, imagingQuery).lean()
+        : await ImagingResult.findOne({ studyId: study._id }, null, imagingQuery).lean();
     }
 
     if (!study && !imagingResult) {
       return errorResponse(res, "Không tìm thấy hồ sơ DICOM Study hoặc kết quả phim chụp.", 404);
+    }
+
+    // Bệnh nhân không gắn viện nên không qua được kiểm tra bên dưới: phải kiểm tra đúng phim của mình
+    if (req.user.role === "patient") {
+      const owner = await User.findById(req.user.id).select("profile.medicalId").lean();
+      const ownsStudy =
+        String(study?.patientId || "") === String(req.user.id) ||
+        (Boolean(imagingResult?.medicalId) && owner?.profile?.medicalId === imagingResult.medicalId);
+      if (!ownsStudy || imagingResult?.isSigned !== true) {
+        return errorResponse(res, "Bạn không có quyền xem phim chụp này.", 403);
+      }
     }
 
     const targetHospitalId = study?.hospitalId || imagingResult?.hospitalId;
@@ -379,40 +429,62 @@ export const getViewerManifest = async (req, res) => {
           sliceCount: s.sliceCount || (s.dicomFileUrls?.length || fallbackImages.length || 1),
           pixelSpacing: s.metadata?.pixelSpacing?.length === 2 ? s.metadata.pixelSpacing : [0.5, 0.5],
           sliceThickness: s.metadata?.sliceThickness || 3.0,
-          slices: (s.dicomFileUrls?.length ? s.dicomFileUrls : fallbackImages).map((url, sIdx) => ({
+          slices: (s.dicomFileUrls?.length
+            ? s.dicomFileUrls
+            : s.sliceFileIds?.length
+              ? s.sliceFileIds.map((fileId) => `/api/v1/storage/files/${fileId}`)
+              : fallbackImages).map((url, sIdx) => ({
             sliceIndex: sIdx + 1,
             imageUrl: url,
             isRepresentative: url === imagingResult?.representativeSliceUrl
           }))
         }))
-      : [
-          {
-            seriesId: "series-t2-flair",
-            seriesType: "T2_FLAIR",
-            seriesDescription: "Ax T2 FLAIR 3mm (Phù quanh u & Thâm nhiễm)",
-            sliceCount: Math.max(fallbackImages.length, top5Slices.length, 1),
-            pixelSpacing: [0.5, 0.5],
-            sliceThickness: 3.0,
-            slices: (fallbackImages.length ? fallbackImages : top5Slices).map((url, sIdx) => ({
-              sliceIndex: sIdx + 1,
-              imageUrl: url,
-              isRepresentative: sIdx === 0
-            }))
-          },
-          {
-            seriesId: "series-t1c-post",
-            seriesType: "T1C+",
-            seriesDescription: "Ax T1W +Contrast Gadolinium (Đo lõi u ngấm thuốc RANO)",
-            sliceCount: Math.max(fallbackImages.length, 1),
-            pixelSpacing: [0.5, 0.5],
-            sliceThickness: 1.5,
-            slices: fallbackImages.map((url, sIdx) => ({
-              sliceIndex: sIdx + 1,
-              imageUrl: url,
-              isRepresentative: sIdx === 0
-            }))
-          }
-        ];
+      : (fallbackImages.length > 0 || top5Slices.length > 0)
+        ? (/rano/i.test(imagingResult?.procedure || "")
+            ? [
+                {
+                  seriesId: "series-t2-flair",
+                  seriesType: "T2_FLAIR",
+                  seriesDescription: "Ax T2 FLAIR 3mm (Phù quanh u & Thâm nhiễm)",
+                  sliceCount: Math.max(fallbackImages.length, top5Slices.length, 1),
+                  pixelSpacing: [0.5, 0.5],
+                  sliceThickness: 3.0,
+                  slices: (fallbackImages.length ? fallbackImages : top5Slices).map((url, sIdx) => ({
+                    sliceIndex: sIdx + 1,
+                    imageUrl: url,
+                    isRepresentative: sIdx === 0
+                  }))
+                },
+                {
+                  seriesId: "series-t1c-post",
+                  seriesType: "T1C+",
+                  seriesDescription: "Ax T1W +Contrast Gadolinium (Đo lõi u ngấm thuốc RANO)",
+                  sliceCount: Math.max(fallbackImages.length, 1),
+                  pixelSpacing: [0.5, 0.5],
+                  sliceThickness: 1.5,
+                  slices: fallbackImages.map((url, sIdx) => ({
+                    sliceIndex: sIdx + 1,
+                    imageUrl: url,
+                    isRepresentative: sIdx === 0
+                  }))
+                }
+              ]
+            : [
+                {
+                  seriesId: "series-default",
+                  seriesType: imagingResult?.procedure?.includes("T1") ? "T1W" : "T2_FLAIR",
+                  seriesDescription: imagingResult?.procedure || "Ảnh chụp MRI",
+                  sliceCount: (fallbackImages.length ? fallbackImages : top5Slices).length,
+                  pixelSpacing: [0.5, 0.5],
+                  sliceThickness: 3.0,
+                  slices: (fallbackImages.length ? fallbackImages : top5Slices).map((url, sIdx) => ({
+                    sliceIndex: sIdx + 1,
+                    imageUrl: url,
+                    isRepresentative: sIdx === 0 || url === imagingResult?.representativeSliceUrl
+                  }))
+                }
+              ])
+        : [];
 
     // Tìm phim chụp kỳ trước (Prior Study) của cùng bệnh nhân để bật chế độ So sánh dọc thời gian (Dual Viewport)
     let priorResult = null;
@@ -428,6 +500,55 @@ export const getViewerManifest = async (req, res) => {
         .lean();
     }
 
+    // Xây dựng danh sách overlay từng lát cắt (ưu tiên doctorOverride nếu bác sĩ đã chỉnh sửa ROI/loại u)
+    const sliceOverlays = Array.isArray(imagingResult?.aiReport?.sliceResults)
+      ? imagingResult.aiReport.sliceResults.map(computeEffectiveSliceOverlay).filter(Boolean)
+      : [];
+
+    let finalViewerSeries = viewerSeries;
+    if (dbSeries.length === 0 && sliceOverlays.length > 1) {
+      const groupMap = new Map();
+      for (let i = 0; i < sliceOverlays.length; i += 1) {
+        const s = sliceOverlays[i];
+        if (!s.imageUrl) continue;
+        const key = s.seriesName && s.seriesName !== "Uploaded_Study" ? s.seriesName : "Chuỗi MRI";
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            seriesName: key,
+            seriesType: s.sequenceType && s.sequenceType !== "OTHER" ? s.sequenceType : classifySeriesType(key, key),
+            slices: [],
+          });
+        }
+        groupMap.get(key).slices.push({
+          sliceIndex: groupMap.get(key).slices.length + 1,
+          globalSliceIndex: Number.isInteger(s.sliceIndex) ? s.sliceIndex : i,
+          imageUrl: s.imageUrl,
+          isRepresentative: s.imageUrl === imagingResult?.representativeSliceUrl,
+        });
+      }
+      if (groupMap.size >= 2) {
+        let gIdx = 0;
+        finalViewerSeries = Array.from(groupMap.values()).map((grp) => ({
+          seriesId: `series-group-${gIdx++}`,
+          seriesType: grp.seriesType || "T2_FLAIR",
+          seriesDescription: grp.seriesName,
+          sliceCount: grp.slices.length,
+          pixelSpacing: [0.5, 0.5],
+          sliceThickness: 3.0,
+          slices: grp.slices,
+        }));
+      }
+    }
+
+    const repOverlay = sliceOverlays.find((s) => s.imageUrl === imagingResult?.representativeSliceUrl) || sliceOverlays[0] || null;
+    const doctorCorrection = imagingResult?.aiReport?.doctorCorrection || null;
+    const effectiveTopClass = repOverlay?.className || doctorCorrection?.correctClass || imagingResult?.aiReport?.class_name || null;
+    const effectiveTopBox = effectiveTopClass === "notumor"
+      ? null
+      : (repOverlay
+          ? repOverlay.boundingBox
+          : (doctorCorrection?.bounding_box ?? imagingResult?.aiReport?.bounding_box ?? null));
+
     const manifest = {
       studyId: study?._id || null,
       imagingResultId: imagingResult?._id || null,
@@ -442,15 +563,18 @@ export const getViewerManifest = async (req, res) => {
         { id: "t1_contrast", label: "T1C+ Ngấm thuốc (W:120 L:60)", ww: 120, wl: 60, brightness: 96, contrast: 140 },
         { id: "stroke_dwi", label: "DWI Khuếch tán (W:60 L:30)", ww: 60, wl: 30, brightness: 112, contrast: 150 }
       ],
-      series: viewerSeries,
+      series: finalViewerSeries,
       aiOverlay: {
         available: Boolean(imagingResult?.aiReport || imagingResult?.representativeSliceUrl || imagingResult?.segmentationUrl),
         representativeSliceUrl: imagingResult?.representativeSliceUrl || null,
         segmentationUrl: imagingResult?.segmentationUrl || null,
         top5SlicesUrls: top5Slices,
-        className: imagingResult?.aiReport?.class_name || null,
+        className: effectiveTopClass,
         confidence: imagingResult?.aiReport?.confidence || null,
-        boundingBox: imagingResult?.aiReport?.bounding_box || { x: 0.56, y: 0.38, width: 0.22, height: 0.24 }
+        boundingBox: effectiveTopBox,
+        doctorCorrection,
+        sliceOverlays,
+        summary: imagingResult?.aiReport?.summary || null,
       },
       structuredReport: imagingResult?.structuredReport || null,
       priorStudy: priorResult

@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createEmptyMedicalRecord, MEDICAL_RECORD_STORAGE_KEY } from '../models/medicalRecord.model';
 import { get, post, put } from '../services/api.service';
+import { buildMedicalRecordPayload } from '../utils/medicalRecordPayload.js';
 
 // [BUG-05 FIX] Hook nhận patientId để kích hoạt server sync
 // - Nếu có patientId: load từ server EMR, save lên server + AsyncStorage (offline cache)
@@ -91,21 +92,11 @@ export const useMedicalRecordForm = (patientId = null) => {
       const dataToSave = { ...formData, updatedAt: new Date().toISOString() };
 
       // [BUG-05 FIX] Lưu lên server nếu có patientId
+      let serverError = null;
       if (patientId) {
         try {
-          const payload = {
-            patientId,
-            patientName: formData.hanhChinh?.hoTen || '',
-            gender: formData.hanhChinh?.gioiTinh || '',
-            age: formData.hanhChinh?.tuoi || '',
-            admissionType: 'Tự đến',
-            department: 'Thần kinh',
-            paymentMethod: 'BHYT',
-            diagnosis: formData.chanDoan?.xacDinh || '',
-            treatmentPlan: formData.huongDieuTri?.chuyenKhoa || '',
-            doctorInCharge: formData.hanhChinh?.bacSi || '',
-            status: 'Đang điều trị',
-          };
+          // Chỉ gửi trường người dùng đã nhập (xem utils/medicalRecordPayload.js)
+          const payload = buildMedicalRecordPayload(formData, patientId);
 
           if (serverRecordId.current) {
             // Cập nhật bệnh án hiện có
@@ -117,10 +108,9 @@ export const useMedicalRecordForm = (patientId = null) => {
               serverRecordId.current = res.data._id;
             }
           }
-          console.log('[useMedicalRecordForm] [SUCCESS] Đã đồng bộ bệnh án lên server.');
         } catch (serverErr) {
-          console.warn('[useMedicalRecordForm] [WARNING] Không thể lưu lên server:', serverErr.message);
-          // Không throw — vẫn lưu local bên dưới
+          serverError = serverErr;
+          // Không throw — vẫn lưu local bên dưới, nhưng báo đúng là chưa lên hệ thống
         }
       }
 
@@ -130,6 +120,13 @@ export const useMedicalRecordForm = (patientId = null) => {
         : MEDICAL_RECORD_STORAGE_KEY;
       await AsyncStorage.setItem(storageKey, JSON.stringify(dataToSave));
       setFormData(dataToSave);
+      if (serverError) {
+        Alert.alert(
+          'Chưa lưu lên hệ thống',
+          `Bệnh án mới lưu trên thiết bị này, chưa lên hệ thống: ${serverError.message || 'lỗi không xác định'}. Vui lòng kiểm tra và lưu lại.`
+        );
+        return false;
+      }
       Alert.alert(
         'Đã lưu',
         patientId

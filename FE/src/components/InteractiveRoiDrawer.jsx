@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { Crop, RotateCcw, Crosshair, Check, Info } from 'lucide-react';
+import { Crop, RotateCcw, Crosshair, Check, Info, Trash2 } from 'lucide-react';
 
 /**
  * InteractiveRoiDrawer
@@ -24,6 +24,8 @@ import { Crop, RotateCcw, Crosshair, Check, Info } from 'lucide-react';
 export default function InteractiveRoiDrawer({
   imageUrl,
   initialBox = { x: 0, y: 0, w: 0, h: 0 },
+  normalizedInitialBox = null,
+  aiNormalizedBox = null,
   onBoxChange,
   disabled = false,
   containerHeight = 360,
@@ -96,16 +98,51 @@ export default function InteractiveRoiDrawer({
     return { renderW, renderH, offsetX, offsetY, scale };
   }, [layoutSize, naturalSize]);
 
-  // 3. Đồng bộ initialBox sang displayBox khi lần đầu tải xong metrics
+  const emitBoxChange = useCallback(
+    (realX, realY, realW, realH) => {
+      if (!onBoxChange) return;
+      const nw = naturalSize.width > 0 ? naturalSize.width : 512;
+      const nh = naturalSize.height > 0 ? naturalSize.height : 512;
+      const normalizedBox =
+        realW > 0 && realH > 0
+          ? {
+              x: Number(Math.max(0, Math.min(1, realX / nw)).toFixed(4)),
+              y: Number(Math.max(0, Math.min(1, realY / nh)).toFixed(4)),
+              w: Number(Math.max(0.005, Math.min(1, realW / nw)).toFixed(4)),
+              h: Number(Math.max(0.005, Math.min(1, realH / nh)).toFixed(4)),
+            }
+          : null;
+      onBoxChange({ x: realX, y: realY, w: realW, h: realH, normalizedBox, naturalWidth: nw, naturalHeight: nh });
+    },
+    [onBoxChange, naturalSize.width, naturalSize.height]
+  );
+
+  // 3. Đồng bộ initialBox / normalizedInitialBox sang displayBox mỗi khi đổi lát cắt hoặc box đầu vào
   useEffect(() => {
+    if (disabled) {
+      setDisplayBox(null);
+      return;
+    }
     if (!naturalSize.width || !layoutSize.width) return;
     const { renderW, renderH, offsetX, offsetY, scale } = getRenderMetrics();
 
+    let sourcePx = null;
     if (initialBox && initialBox.w > 0 && initialBox.h > 0) {
-      const dispX = offsetX + initialBox.x / scale;
-      const dispY = offsetY + initialBox.y / scale;
-      const dispW = initialBox.w / scale;
-      const dispH = initialBox.h / scale;
+      sourcePx = initialBox;
+    } else if (normalizedInitialBox && normalizedInitialBox.w > 0 && normalizedInitialBox.h > 0) {
+      sourcePx = {
+        x: Math.round(normalizedInitialBox.x * naturalSize.width),
+        y: Math.round(normalizedInitialBox.y * naturalSize.height),
+        w: Math.max(10, Math.round(normalizedInitialBox.w * naturalSize.width)),
+        h: Math.max(10, Math.round(normalizedInitialBox.h * naturalSize.height)),
+      };
+    }
+
+    if (sourcePx && sourcePx.w > 0 && sourcePx.h > 0) {
+      const dispX = offsetX + sourcePx.x / scale;
+      const dispY = offsetY + sourcePx.y / scale;
+      const dispW = sourcePx.w / scale;
+      const dispH = sourcePx.h / scale;
 
       setDisplayBox({
         x: Math.max(offsetX, Math.min(dispX, offsetX + renderW - 10)),
@@ -113,26 +150,26 @@ export default function InteractiveRoiDrawer({
         w: Math.min(dispW, renderW),
         h: Math.min(dispH, renderH),
       });
-    } else if (displayBox === null && !disabled) {
-      // Mặc định tạo 1 khung trung tâm nhỏ nếu chưa có
-      const defaultW = renderW * 0.35;
-      const defaultH = renderH * 0.35;
-      const dispX = offsetX + (renderW - defaultW) / 2;
-      const dispY = offsetY + (renderH - defaultH) / 2;
-
-      const newDispBox = { x: dispX, y: dispY, w: defaultW, h: defaultH };
-      setDisplayBox(newDispBox);
-
-      // Chuyển đổi sang tọa độ ảnh thật và thông báo
-      const realX = Math.round((dispX - offsetX) * scale);
-      const realY = Math.round((dispY - offsetY) * scale);
-      const realW = Math.round(defaultW * scale);
-      const realH = Math.round(defaultH * scale);
-      if (onBoxChange) {
-        onBoxChange({ x: realX, y: realY, w: realW, h: realH });
-      }
+    } else {
+      // Lát cắt mới chưa có khung khối u -> xóa khung cũ để tránh hiển thị nhầm từ lát trước
+      setDisplayBox(null);
     }
-  }, [naturalSize.width, layoutSize.width]);
+  }, [
+    disabled,
+    imageUrl,
+    naturalSize.width,
+    naturalSize.height,
+    layoutSize.width,
+    layoutSize.height,
+    initialBox?.x,
+    initialBox?.y,
+    initialBox?.w,
+    initialBox?.h,
+    normalizedInitialBox?.x,
+    normalizedInitialBox?.y,
+    normalizedInitialBox?.w,
+    normalizedInitialBox?.h,
+  ]);
 
   // 4. Xử lý thao tác vẽ chuột / cảm ứng
   const handlePointerDown = (e) => {
@@ -239,9 +276,7 @@ export default function InteractiveRoiDrawer({
     const realW = Math.max(1, Math.min(naturalSize.width - realX, Math.round(finalW * scale)));
     const realH = Math.max(1, Math.min(naturalSize.height - realY, Math.round(finalH * scale)));
 
-    if (onBoxChange) {
-      onBoxChange({ x: realX, y: realY, w: realW, h: realH });
-    }
+    emitBoxChange(realX, realY, realW, realH);
   };
 
   // Đặt lại vùng trung tâm
@@ -260,9 +295,31 @@ export default function InteractiveRoiDrawer({
     const realW = Math.round(defaultW * scale);
     const realH = Math.round(defaultH * scale);
 
-    if (onBoxChange) {
-      onBoxChange({ x: realX, y: realY, w: realW, h: realH });
-    }
+    emitBoxChange(realX, realY, realW, realH);
+  };
+
+  // Khôi phục khung AI gợi ý ban đầu của lát cắt (nếu có)
+  const handleResetToAi = () => {
+    if (!aiNormalizedBox || aiNormalizedBox.w <= 0 || aiNormalizedBox.h <= 0 || !naturalSize.width) return;
+    const realX = Math.round(aiNormalizedBox.x * naturalSize.width);
+    const realY = Math.round(aiNormalizedBox.y * naturalSize.height);
+    const realW = Math.max(10, Math.round(aiNormalizedBox.w * naturalSize.width));
+    const realH = Math.max(10, Math.round(aiNormalizedBox.h * naturalSize.height));
+
+    const { renderW, renderH, offsetX, offsetY, scale } = getRenderMetrics();
+    setDisplayBox({
+      x: Math.max(offsetX, Math.min(offsetX + realX / scale, offsetX + renderW - 10)),
+      y: Math.max(offsetY, Math.min(offsetY + realY / scale, offsetY + renderH - 10)),
+      w: Math.min(realW / scale, renderW),
+      h: Math.min(realH / scale, renderH),
+    });
+    emitBoxChange(realX, realY, realW, realH);
+  };
+
+  // Xóa vùng khoanh để vẽ lại hoặc để trống
+  const handleClearBox = () => {
+    setDisplayBox(null);
+    emitBoxChange(0, 0, 0, 0);
   };
 
   // Tính tọa độ ảnh thật hiện tại để hiển thị badge
@@ -287,6 +344,16 @@ export default function InteractiveRoiDrawer({
 
         {!disabled && (
           <View style={styles.toolbarActions}>
+            {aiNormalizedBox && aiNormalizedBox.w > 0 && aiNormalizedBox.h > 0 && (
+              <TouchableOpacity
+                style={[styles.toolBtn, { borderColor: '#93C5FD', backgroundColor: '#EFF6FF' }]}
+                onPress={handleResetToAi}
+                title="Khôi phục vùng khoanh gốc của AI"
+              >
+                <RotateCcw size={12} color="#2563EB" />
+                <Text style={[styles.toolBtnText, { color: '#1D4ED8' }]}>Về AI</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.toolBtn}
               onPress={handleResetCenter}
@@ -308,6 +375,17 @@ export default function InteractiveRoiDrawer({
                 {isDrawingModeActive ? 'Đang vẽ' : 'Bật vẽ'}
               </Text>
             </TouchableOpacity>
+
+            {displayBox && displayBox.w > 0 && (
+              <TouchableOpacity
+                style={[styles.toolBtn, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
+                onPress={handleClearBox}
+                title="Xóa khung đang vẽ"
+              >
+                <Trash2 size={12} color="#DC2626" />
+                <Text style={[styles.toolBtnText, { color: '#DC2626' }]}>Xóa</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -328,6 +406,7 @@ export default function InteractiveRoiDrawer({
         onMouseDown={Platform.OS === 'web' ? handlePointerDown : undefined}
         onMouseMove={Platform.OS === 'web' ? handlePointerMove : undefined}
         onMouseUp={Platform.OS === 'web' ? handlePointerUp : undefined}
+        onMouseLeave={Platform.OS === 'web' ? handlePointerUp : undefined}
         onTouchStart={handlePointerDown}
         onTouchMove={handlePointerMove}
         onTouchEnd={handlePointerUp}
@@ -347,6 +426,7 @@ export default function InteractiveRoiDrawer({
         {/* Khung Bounding Box hiển thị trực tiếp trên ảnh */}
         {!disabled && displayBox && displayBox.w > 0 && displayBox.h > 0 && (
           <View
+            pointerEvents="none"
             style={[
               styles.boundingBox,
               {
@@ -425,8 +505,10 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#1E293B',
@@ -555,13 +637,14 @@ const styles = StyleSheet.create({
   },
   metricsFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: '#1E293B',
     borderTopWidth: 1,
     borderTopColor: '#334155',
-    gap: 12,
+    gap: 10,
   },
   metricItem: {
     flexDirection: 'row',

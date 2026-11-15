@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect, checkRole } from "../../middlewares/auth.middleware.js";
+import { protect, checkRole, denyPlatformAdmin } from "../../middlewares/auth.middleware.js";
 import {
   getBeds,
   createBed,
@@ -14,6 +14,7 @@ import {
 
 const router = Router();
 router.use(protect);
+router.use(denyPlatformAdmin); // module lâm sàng: tài khoản nền tảng không truy cập
 
 // Role Guard chống rò rỉ thông tin bệnh nhân nội trú (HIPAA Minimum Necessary & Luật 15/2023 Điều 66)
 router.get("/", checkRole(["doctor", "department_head", "radiologist", "nurse", "admin", "system_admin", "hospital_admin", "receptionist", "technician"]), getBeds);

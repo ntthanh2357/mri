@@ -4,12 +4,13 @@ import { User } from "../models/user.model.js";
 import { ImagingResult } from "../models/imagingResult.model.js";
 import { LabOrder } from "../models/labOrder.model.js";
 
+import { inputErrorStatus } from "../utils/inputError.util.js";
 // ─── 1. Tạo ticket hỗ trợ ───────────────────────────────────────────────────
 export const createTicket = async (req, res) => {
   try {
     const { topic, message, priority } = req.body;
 
-    if (!topic || !message) {
+    if (!topic || !message || typeof topic !== "string" || typeof message !== "string") {
       return res.status(400).json({
         success: false,
         message: "Vui lòng cung cấp chủ đề và nội dung mô tả vấn đề.",
@@ -34,7 +35,7 @@ export const createTicket = async (req, res) => {
     });
   } catch (error) {
     console.error("createTicket error:", error);
-    return res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+    return res.status(inputErrorStatus(res, error)).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };
 
@@ -49,7 +50,7 @@ export const getMyTickets = async (req, res) => {
     return res.status(200).json({ success: true, tickets });
   } catch (error) {
     console.error("getMyTickets error:", error);
-    return res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+    return res.status(inputErrorStatus(res, error)).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };
 
@@ -71,7 +72,7 @@ export const getAllTickets = async (req, res) => {
     return res.status(200).json({ success: true, tickets });
   } catch (error) {
     console.error("getAllTickets error:", error);
-    return res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+    return res.status(inputErrorStatus(res, error)).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };
 
@@ -100,7 +101,7 @@ export const updateTicketStatus = async (req, res) => {
     return res.status(200).json({ success: true, ticket });
   } catch (error) {
     console.error("updateTicketStatus error:", error);
-    return res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+    return res.status(inputErrorStatus(res, error)).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };
 
@@ -110,7 +111,10 @@ export const getSystemMetrics = async (req, res) => {
   try {
     // [BUG-SA-06 FIX]: system_admin hoặc admin tổng không bị ép theo hospitalId null
     const isSystemAdmin = req.user.role === 'system_admin' || (req.user.role === 'admin' && !req.user.hospitalId);
-    const hospitalFilter = (!isSystemAdmin && req.user.hospitalId) ? { hospitalId: req.user.hospitalId } : {};
+    if (!isSystemAdmin && !req.user.hospitalId) {
+      return res.status(403).json({ success: false, message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
+    const hospitalFilter = isSystemAdmin ? {} : { hospitalId: req.user.hospitalId };
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -180,6 +184,6 @@ export const getSystemMetrics = async (req, res) => {
     });
   } catch (error) {
     console.error("getSystemMetrics error:", error);
-    return res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
+    return res.status(inputErrorStatus(res, error)).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
 };

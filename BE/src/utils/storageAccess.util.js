@@ -16,8 +16,9 @@ export const canAccessStoredFile = (file, user, ownerHospitalIds = []) => {
     return Boolean(file.patientId) && file.patientId.toString() === user.id.toString();
   }
 
-  // Quản trị viên nền tảng (SaaS) được giám sát toàn hệ thống
-  if (user.role === "admin") return true;
+  // Tài khoản nền tảng (admin, system_admin) không truy cập dữ liệu lâm sàng, kể cả tệp y tế (Q-V4-06, RELEASE v3.4).
+  // Trước đây admin đọc được mọi tệp của mọi viện.
+  if (user.role === "admin" || user.role === "system_admin") return false;
 
   if (!user.hospitalId) return false;
 

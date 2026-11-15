@@ -19,6 +19,7 @@ import { signInWithGoogleWeb } from '../firebase';
 import styles from './LoginScreen.styles';
 import { Eye, EyeOff, Check, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useDialogKeys } from '../utils/useDialogKeys';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 const LoginScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -467,6 +468,10 @@ const LoginScreen = ({ navigation }) => {
       showAlert('info', 'Thông báo', 'Vui lòng nhập mã OTP và mật khẩu mới.');
       return;
     }
+    if (passwordPolicyError(forgotNewPassword)) {
+      showAlert('info', 'Mật khẩu chưa đạt', passwordPolicyError(forgotNewPassword));
+      return;
+    }
     setForgotLoading(true);
     try {
       const data = await post('/auth/verify-otp', {
@@ -537,7 +542,7 @@ const LoginScreen = ({ navigation }) => {
                   <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
                 </Text>
                 <Text style={styles.leftPanelTextDesc}>
-                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng đưa ra quyết định chẩn đoán chính xác.
+                  Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử. Kết luận cuối cùng do bác sĩ đưa ra.
                 </Text>
               </View>
             </View>

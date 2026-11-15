@@ -8,6 +8,7 @@ import { get } from '../../services/api.service';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal, CountUp } from '../ui/Motion';
 import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, formatVnd, personName } from './ReceptionUI';
+import { isFeatureEnabled } from '../../constants/featureScope';
 
 const isWeb = Platform.OS === 'web';
 const SHIFT_LABELS = { 'sáng': 'Ca Sáng', 'chiều': 'Ca Chiều', 'tối': 'Ca Tối', 'cả ngày': 'Cả Ngày' };
@@ -101,7 +102,7 @@ const ReceptionistHome = ({ user, navigation }) => {
     { icon: Users, label: 'Lượt tiếp đón hôm nay', value: stats.visitsToday, color: '#067A5E', bg: '#E7F6F0' },
     { icon: ReceiptText, label: 'Hóa đơn chờ thu', value: stats.pendingCount, color: '#D97706', bg: '#FEF3C7', hint: formatVnd(stats.pendingTotal) },
     { icon: Wallet, label: 'Đã thu hôm nay', value: stats.collectedToday, money: true, color: '#0F9D6B', bg: '#E3F7EF' },
-    { icon: ShieldCheck, label: 'Hóa đơn có BHYT', value: stats.bhytCount, color: '#7C3AED', bg: '#F3EEFF' },
+    ...(isFeatureEnabled('bhyt') ? [{ icon: ShieldCheck, label: 'Hóa đơn có BHYT', value: stats.bhytCount, color: '#7C3AED', bg: '#F3EEFF' }] : []),
   ];
 
   const actions = [

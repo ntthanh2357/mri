@@ -1,5 +1,7 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
-# CHƯƠNG 6: HỆ THỐNG TRỌNG TÀI ĐỒNG THUẬN ĐA MÔ HÌNH (MAICS) VÀ THỊ GIÁC MÁY TÍNH TRONG CHẨN ĐOÁN U NÃO MRI
+# CHƯƠNG 6: HỆ THỐNG TRỌNG TÀI ĐỒNG THUẬN ĐA MÔ HÌNH (MAICS) VÀ THỊ GIÁC MÁY TÍNH TRONG HỖ TRỢ SÀNG LỌC U NÃO TRÊN ẢNH MRI
+
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
 
 ---
 
@@ -9,7 +11,7 @@ Chẩn đoán hình ảnh u não trên phim chụp cộng hưởng từ (Magneti
 
 ```
 +-----------------------------------------------------------------------------------+
-|               BA ĐIỂM NGHẼN CỐT LÕI CỦA AI CHẨN ĐOÁN U NÃO LÂM SÀNG               |
+|                BA ĐIỂM NGHẼN CỐT LÕI CỦA AI HỖ TRỢ SÀNG LỌC U NÃO                 |
 +-----------------------------------------------------------------------------------+
 | 1. Dịch chuyển miền dữ liệu (Severe Scanner Domain Shifts)                        |
 |    - Sự khác biệt về từ trường máy chụp (1.5 Tesla vs 3.0 Tesla của Siemens, GE). |
@@ -25,13 +27,13 @@ Chẩn đoán hình ảnh u não trên phim chụp cộng hưởng từ (Magneti
 +-----------------------------------------------------------------------------------+
 ```
 
-Để khắc phục triệt để các hạn chế trên, đề tài không sử dụng một mô hình đơn lẻ mà nghiên cứu, phát triển và tích hợp hệ thống **MAICS (Multimodal AI Consensus System with Risk-Calibrated Decision Support and Spatial Localization)** — một kiến trúc trọng tài đồng thuận đa tầng kết hợp giữa học sâu phân loại, thị giác định vị không gian và mô hình ngôn ngữ - thị giác lớn (Vision-Language Model).
+Để khắc phục các hạn chế trên, đề tài không sử dụng một mô hình đơn lẻ mà nghiên cứu, phát triển và tích hợp hệ thống **MAICS (Multimodal AI Consensus System with Risk-Calibrated Decision Support and Spatial Localization)** — một kiến trúc trọng tài đồng thuận đa tầng kết hợp giữa học sâu phân loại, thị giác định vị không gian và mô hình ngôn ngữ - thị giác lớn (Vision-Language Model).
 
 ---
 
 ## 6.2. KIẾN TRÚC TRỌNG TÀI ĐỒNG THUẬN ĐA TẦNG (THREE-TIER ARBITRATION ARCHITECTURE)
 
-Hệ thống **MAICS** trong [MRIteam_team5/MRIteam/main.py](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/main.py) được xây dựng theo kiến trúc trọng tài 3 tầng phân cấp (Three-Tier Pipeline), dung hòa tối ưu giữa độ chính xác chẩn đoán, độ an toàn lâm sàng, chi phí tính toán và bảo vệ quyền riêng tư người bệnh:
+Hệ thống **MAICS** trong [MRIteam_team5/MRIteam/main.py](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/main.py) được xây dựng theo kiến trúc trọng tài 3 tầng phân cấp (Three-Tier Pipeline), dung hòa giữa độ chính xác phân loại, độ an toàn lâm sàng, chi phí tính toán và bảo vệ quyền riêng tư người bệnh:
 
 ```mermaid
 graph TD
@@ -57,7 +59,7 @@ graph TD
         ROI["Trích xuất Bounding Box<br/>+ Adaptive Margin ROI Crop"]:::tier2
     end
 
-    CHECK{"🔍 Có Xung Đột Chẩn Đoán?<br/>(c_BayTTA ≠ c_YOLO HOẶC Conf < 0.80 HOẶC Var > 0.15)"}
+    CHECK{"🔍 Các Mô Hình Cho Kết Quả Khác Nhau?<br/>(c_BayTTA ≠ c_YOLO HOẶC Conf < 0.80 HOẶC Var > 0.15)"}
 
     subgraph GUARD_LAYER ["Lớp Bảo Vệ Quyền Riêng Tư & An Toàn Lâm Sàng"]
         PG["🛡️ Anatomical Privacy Guard<br/>(Nhận diện mặt cắt giải phẫu Axial)"]:::guard
@@ -146,15 +148,15 @@ Một phát hiện quan trọng trong nghiên cứu thực nghiệm lâm sàng l
 Phân hệ **Anatomical Privacy Guard** ([localization.py](file:///c:/Users/Administrator/OneDrive/Desktop/team5/MRIteam_team5/MRIteam/localization.py#L35)) thực hiện kiểm duyệt tự động:
 1. **Nhận diện mặt phẳng chụp:** Tự động phân loại lát cắt thuộc hướng Axial (mặt cắt ngang qua đỉnh đầu) hay mặt phẳng ngoại trục (Coronal/Sagittal).
 2. **Cơ chế đóng cổng truyền tải đám mây (Cloud Transmission Blocking):**
-   - Nếu phát hiện lát cắt là **Coronal** hoặc **Sagittal**: Hệ thống lập tức phong tỏa lệnh gửi ảnh ra Internet, giữ nguyên kết quả chẩn đoán nội bộ của Tầng 1 (CNN Ensemble).
+   - Nếu phát hiện lát cắt là **Coronal** hoặc **Sagittal**: Hệ thống lập tức phong tỏa lệnh gửi ảnh ra Internet, giữ nguyên kết quả phân loại nội bộ của Tầng 1 (CNN Ensemble).
    - Cơ chế này giúp tuân thủ nghiêm ngặt **Luật Khám bệnh, chữa bệnh 2023** và **Nghị định 13/2023/NĐ-CP** về bảo vệ dữ liệu sinh trắc học cá nhân.
-3. **Hiệu quả thực nghiệm:** Anatomical Privacy Guard giúp **giảm 79.5% số lượng cuộc gọi API đám mây** (từ $12.14\%$ tổng số ca chụp xuống chỉ còn $2.48\%$), vừa tiết kiệm chi phí vận hành cho bệnh viện, vừa loại bỏ hoàn toàn các ca phân xử sai do ảo giác khuôn mặt.
+3. **Hiệu quả thực nghiệm:** Anatomical Privacy Guard giúp **giảm 79.5% số lượng cuộc gọi API đám mây** (từ $12.14\%$ tổng số ca chụp xuống chỉ còn $2.48\%$), vừa tiết kiệm chi phí vận hành cho bệnh viện, vừa giảm các ca phân xử sai do ảo giác khuôn mặt.
 
 ---
 
 ## 6.4. KHỬ ĐỊNH DANH ẢNH Y TẾ THEO TIÊU CHUẨN HIPAA SAFE HARBOR
 
-Nhằm đảm bảo an toàn tuyệt đối trước khi bất kỳ dữ liệu hình ảnh nào được xử lý hoặc lưu trữ:
+Nhằm đảm bảo an toàn trước khi bất kỳ dữ liệu hình ảnh nào được xử lý hoặc lưu trữ:
 1. **Làm Sạch 18 Nhóm Định Danh Cá Nhân (HIPAA §164.514(b)(2)):**
    - Tự động bóc tách toàn bộ thẻ DICOM Header nhạy cảm: Tên bệnh nhân (0010,0010), Ngày sinh (0010,0030), Mã số bệnh án (0010,0020), Tên cơ sở y tế (0008,0080), Tên bác sĩ chụp (0008,1050), Số serial máy chụp (0018,1000).
 2. **Gom Nhóm Tuổi Cao (Age Bucketing 90+):**
@@ -198,6 +200,8 @@ Quy trình tiền xử lý được hiện thực hóa trong [preprocess.py](fil
 
 Hệ thống được đánh giá trên tập kiểm thử độc lập theo bệnh nhân (**Patient-Level Split Benchmark**) gồm **3.461 ảnh lát cắt MRI sọ não** (trong đó có **1.861 ảnh lâm sàng thực tế thu thập từ Bệnh viện Đa khoa Tâm Trí Đà Nẵng** và 1.600 ảnh từ bộ dữ liệu chuẩn quốc tế).
 
+> **[CẦN NHÓM BỔ SUNG]** Văn bản hợp tác hoặc cho phép sử dụng dữ liệu đã khử định danh của Bệnh viện Đa khoa Tâm Trí Đà Nẵng cho 1.861 ảnh nêu trên (đính kèm phụ lục), và thời điểm thực hiện phép đo (trước hay trong kỳ đồ án). Nếu chưa có văn bản, cần chỉ báo cáo kết quả trên bộ dữ liệu công khai (mục 1.4.4).
+
 ### 6.6.1. Bảng So Sánh Hiệu Năng Các Cấu Hình Hệ Thống
 
 | Cấu hình Hệ thống / Mô hình | Độ chính xác (Accuracy) | Macro F1-Score | Độ nhạy U ác tính (Glioma Recall) | Tỷ lệ bỏ sót u chết người (Fatal FNR) | Tỷ lệ gọi API VLM Cloud | Trạng thái Bộ lọc An toàn |
@@ -209,7 +213,7 @@ Hệ thống được đánh giá trên tập kiểm thử độc lập theo b�
 | **Custom CNN (Huấn luyện từ đầu)**| 25.25% | 21.05% | 12.50% | 8.40% | 0.00% | Kém hội tụ |
 
 > **Ý nghĩa chỉ số Fatal FNR (Fatal False Negative Rate):**
-> Trong chẩn đoán u não, sai lầm nghiêm trọng nhất là phân loại một khối u thần kinh đệm ác tính (Glioma) thành người bình thường (No-Tumor). Sai lầm này tước đoạt cơ hội điều trị trong giai đoạn vàng của bệnh nhân. Kiến trúc MAICS với cơ chế trọng tài đa tầng đã kéo giảm tỷ lệ nguy hiểm chết người này từ **0.85% (ở Tầng 1)** xuống chỉ còn **0.43%** — tương đương mức **giảm thiểu rủi ro lâm sàng tương đối lên tới 49.4%**.
+> Khi sàng lọc u não, sai lầm nghiêm trọng nhất là phân loại một khối u thần kinh đệm ác tính (Glioma) thành người bình thường (No-Tumor). Sai lầm này tước đoạt cơ hội điều trị trong giai đoạn vàng của bệnh nhân. Kiến trúc MAICS với cơ chế trọng tài đa tầng đã kéo giảm tỷ lệ nguy hiểm chết người này từ **0.85% (ở Tầng 1)** xuống chỉ còn **0.43%** — tương đương mức **giảm thiểu rủi ro lâm sàng tương đối lên tới 49.4%**.
 
 ### 6.6.2. Kiểm Định Ý Nghĩa Thống Kê (McNemar's Test)
 Kiểm định phi tham số McNemar đối chứng trực tiếp giữa MAICS và mô hình Ensemble CNN cơ sở:

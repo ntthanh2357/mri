@@ -1,94 +1,109 @@
 import "dotenv/config";
+import fs from "fs/promises";
 import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import mongoose from "mongoose";
-import { connectDB } from "../src/config/db.js";
-import { encryptBuffer } from "../src/utils/cryptoStorage.util.js";
+import { createDatabaseBackupArtifacts, sha256, verifyDatabaseBackup } from "../src/utils/databaseBackup.util.js";
+import { connectLocalTestMongo } from "../src/utils/seedGuard.util.js";
 import { uploadEncryptedFile } from "../src/services/storage/driveMirrorAdapter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function backupDatabase() {
-  console.log("===============================================================================");
-  console.log("📦 BẮT ĐẦU TIẾN TRÌNH SAO LƯU VÀ MÃ HÓA CƠ SỞ DỮ LIỆU BỆNH VIỆN               ");
-  console.log("===============================================================================\n");
+export const backupDatabase = async () => {
+  const mongoUri = process.env.MONGO_URI;
+  const encryptionKey = process.env.FILE_ENCRYPTION_KEY;
+  if (!mongoUri) throw new Error("MONGO_URI is required; backup will not fall back to another database.");
+  if (!encryptionKey) throw new Error("FILE_ENCRYPTION_KEY is required; refusing to create a backup with a default key.");
 
-  await connectDB();
-
-  const backupDir = process.env.STORAGE_BACKUP_DIR
-    ? path.resolve(process.env.STORAGE_BACKUP_DIR)
-    : path.resolve(__dirname, "../../../../neuroscan_backup");
-
-  if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
-  }
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const now = new Date();
-  const yyyy = now.getFullYear().toString();
-  const mm = (now.getMonth() + 1).toString().padStart(2, "0");
-
-  console.log(`1. Đang trích xuất dữ liệu các bảng từ MongoDB Atlas...`);
-  const collections = await mongoose.connection.db.listCollections().toArray();
-  const dumpData = {};
-
-  for (const col of collections) {
-    const colName = col.name;
-    const docs = await mongoose.connection.db.collection(colName).find({}).toArray();
-    dumpData[colName] = docs;
-    console.log(`   - Bảng [${colName}]: ${docs.length} bản ghi`);
-  }
-
-  const jsonString = JSON.stringify(dumpData, null, 2);
-  const rawBuffer = Buffer.from(jsonString, "utf-8");
-  console.log(`\n2. Kích thước dữ liệu trích xuất: ${(rawBuffer.length / 1024).toFixed(2)} KB`);
-
-  console.log(`3. Đang mã hóa dữ liệu bằng chuẩn quân sự AES-256-GCM...`);
-  const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(rawBuffer);
-
-  // Đóng gói metadata giải mã kèm theo file sao lưu
-  const backupPayload = {
-    version: "1.0",
-    createdAt: new Date().toISOString(),
-    ivHex,
-    authTagHex,
-    sizeOriginal: rawBuffer.length,
-    sizeEncrypted: encryptedBuffer.length,
-    data: encryptedBuffer.toString("base64"),
-  };
-
-  const backupFileName = `db_backup_${timestamp}.enc.json`;
-  const localBackupPath = path.join(backupDir, backupFileName);
-  await fs.promises.writeFile(localBackupPath, JSON.stringify(backupPayload, null, 2));
-
-  console.log(`✅ Đã lưu bản sao lưu mã hóa cục bộ tại: ${localBackupPath}`);
-
-  // 4. Đẩy 1 bản sao ngoại tuyến lên Google Drive
-  console.log(`\n4. Đang đẩy bản sao lưu mã hóa lên Google Drive thư mục backups/${yyyy}/${mm}...`);
   try {
-    const driveRelativeDir = `backups/${yyyy}/${mm}`;
-    const driveResult = await uploadEncryptedFile(
-      Buffer.from(JSON.stringify(backupPayload)),
-      driveRelativeDir,
-      backupFileName,
-      "application/json"
+    await connectLocalTestMongo(mongoose, mongoUri);
+    const db = mongoose.connection.db;
+    const artifacts = await createDatabaseBackupArtifacts(db, encryptionKey);
+    const backupRoot = process.env.STORAGE_BACKUP_DIR
+      ? path.resolve(process.env.STORAGE_BACKUP_DIR)
+      : path.resolve(__dirname, "../secure_backups");
+    await fs.mkdir(backupRoot, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const runDir = await fs.mkdtemp(path.join(backupRoot, `db_backup_${timestamp}-`));
+    const writeVerifiedBackup = async (filePath, backup) => {
+      const contents = Buffer.from(JSON.stringify(backup), "utf8");
+      const handle = await fs.open(filePath, "wx");
+      try {
+        await handle.writeFile(contents);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+
+      const writtenContents = await fs.readFile(filePath);
+      if (!writtenContents.equals(contents)) {
+        throw new Error(`Backup file verification failed after writing "${filePath}".`);
+      }
+      const fileSha256 = sha256(writtenContents);
+      const verification = await verifyDatabaseBackup({
+        filePath,
+        expectedDatabase: db.databaseName,
+        expectedSha256: fileSha256,
+        encryptionKey,
+      });
+      return { contents: writtenContents, fileSha256, verification };
+    };
+
+    console.log(`Backup run directory: ${runDir}`);
+    console.log("Writing and verifying a separate encrypted file for each collection...");
+    for (const collectionBackup of artifacts.collectionBackups) {
+      const collectionPath = path.join(runDir, collectionBackup.fileName);
+      let verification;
+      try {
+        ({ verification } = await writeVerifiedBackup(collectionPath, collectionBackup.backup));
+      } catch (cause) {
+        throw new Error(
+          `Backup failed for collection "${collectionBackup.name}" at "${collectionPath}": ${cause.message}`,
+          { cause },
+        );
+      }
+      console.log(
+        `  ${collectionBackup.name}: ${verification.collectionCounts[collectionBackup.name]} documents -> ${collectionPath}`,
+      );
+    }
+
+    const fileName = "database-full.enc.json";
+    const backupPath = path.join(runDir, fileName);
+    const { contents, fileSha256, verification } = await writeVerifiedBackup(
+      backupPath,
+      artifacts.backup,
     );
-    console.log(`✅ Đã sao lưu ngoại tuyến thành công lên Google Drive (ID: ${driveResult.driveFileId})`);
-  } catch (driveErr) {
-    console.warn(`⚠️ Đẩy bản sao lưu lên Drive thất bại (Bản local vẫn an toàn 100%):`, driveErr.message);
+    console.log(`Verified encrypted backup for database "${verification.database}".`);
+    console.log(`File: ${backupPath}`);
+    console.log(`SHA-256: ${verification.fileSha256}`);
+    console.log("Collections and document counts:");
+    for (const [name, count] of Object.entries(verification.collectionCounts)) {
+      console.log(`  ${name}: ${count}`);
+    }
+
+    try {
+      const now = new Date();
+      await uploadEncryptedFile(
+        contents,
+        `backups/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`,
+        fileName,
+        "application/json"
+      );
+      console.log("Encrypted backup mirror upload completed.");
+    } catch (error) {
+      console.warn(`Encrypted backup is verified locally; cloud mirror upload failed: ${error.message}`);
+    }
+    return verification;
+  } finally {
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   }
+};
 
-  console.log("\n===============================================================================");
-  console.log("🎉 TIẾN TRÌNH SAO LƯU CƠ SỞ DỮ LIỆU ĐÃ HOÀN TẤT THÀNH CÔNG!                     ");
-  console.log("===============================================================================");
-
-  await mongoose.disconnect();
-  process.exit(0);
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  backupDatabase().catch((error) => {
+    console.error(`Database backup failed: ${error.message}`);
+    process.exitCode = 1;
+  });
 }
-
-backupDatabase().catch((err) => {
-  console.error("Lỗi khi sao lưu CSDL:", err);
-  process.exit(1);
-});

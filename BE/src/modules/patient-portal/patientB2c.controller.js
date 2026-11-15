@@ -1,3 +1,4 @@
+import { recordAuditLog } from "../../services/auditLog.service.js";
 import { ImagingResult } from "../imaging/models/imagingResult.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { User } from "../auth/models/user.model.js";
@@ -181,8 +182,7 @@ export const generateShareQr = async (req, res) => {
 
     // Ghi AuditLog (chỉ log nếu có model AuditLog)
     try {
-      const { AuditLog } = await import("../models/auditLog.model.js");
-      await AuditLog.create({
+      await recordAuditLog({
         action: "H3_SHARE_QR_GENERATED",
         performedBy: req.user.id,
         targetId: imagingResultId,
@@ -249,6 +249,21 @@ export const bookFollowUp = async (req, res) => {
     const targetHospitalId = req.user.hospitalId || hospitalId;
     if (!targetHospitalId) {
       return errorResponse(res, "Vui lòng chọn cơ sở y tế muốn đăng ký tái khám.", 400);
+    }
+    const { default: mongoose } = await import("mongoose");
+    if (!mongoose.Types.ObjectId.isValid(String(targetHospitalId))) {
+      return errorResponse(res, "Cơ sở y tế không hợp lệ.", 400);
+    }
+    const { Hospital } = await import("../../models/hospital.model.js");
+    const hospitalExists = await Hospital.exists({ _id: targetHospitalId });
+    if (!hospitalExists) return errorResponse(res, "Không tìm thấy cơ sở y tế đã chọn.", 400);
+    // Bác sĩ chọn phải là bác sĩ của đúng cơ sở đó (trước đây nhận mọi doctorId client gửi)
+    if (doctorId) {
+      const { User } = await import("../../models/user.model.js");
+      const doctor = mongoose.Types.ObjectId.isValid(String(doctorId))
+        ? await User.findOne({ _id: doctorId, hospitalId: targetHospitalId, role: { $in: ["doctor", "department_head", "radiologist"] }, isDeleted: { $ne: true } }).select("_id").setOptions({ bypassTenancy: true }).lean()
+        : null;
+      if (!doctor) return errorResponse(res, "Bác sĩ đã chọn không thuộc cơ sở y tế này.", 400);
     }
 
     // Tạo Visit mới với trạng thái đặt lịch

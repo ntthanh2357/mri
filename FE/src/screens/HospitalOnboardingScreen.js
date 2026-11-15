@@ -374,7 +374,7 @@ export default function HospitalOnboardingScreen({ navigation }) {
               <View style={styles.uploadedFileRow}>
                 <FileText size={18} color={Colors.brandGreen} style={{ marginRight: 6 }} />
                 <Text style={styles.uploadedFileName} numberOfLines={1}>
-                  {licenseFile.split('/').pop() || 'Giấy phép hoạt động'}
+                  {licenseFile.split('?')[0].split('/').pop() || 'Giấy phép hoạt động'}
                 </Text>
                 <TouchableOpacity onPress={() => setLicenseFile(null)} style={styles.removeFileBtn}>
                   <Text style={styles.removeFileText}>Xóa</Text>

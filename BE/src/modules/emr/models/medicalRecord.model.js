@@ -27,12 +27,15 @@ const medicalRecordSchema = new Schema(
     },
     gender: {
       type: String,
-      enum: ["Nam", "Nữ", "Khác"],
-      default: "Nam",
+      enum: ["Nam", "Nữ", "Khác", ""], // để trống khi chưa có giới tính (không tự gán "Nam")
+      default: "",
     },
+    // Để trống (null) khi chưa có tuổi — không tự điền giá trị giả.
     age: {
       type: Number,
-      required: true,
+      default: null,
+      min: 0,
+      max: 150,
     },
 
     admissionType: {
@@ -50,9 +53,9 @@ const medicalRecordSchema = new Schema(
       enum: ["BHYT", "Viện phí", "Dịch vụ"],
       default: "Viện phí",
     },
+    // Để trống khi bác sĩ chưa ghi chẩn đoán; ký số bệnh án yêu cầu có chẩn đoán (emr.controller).
     diagnosis: {
       type: String,
-      required: true,
       default: "",
     },
     treatmentPlan: {
@@ -70,7 +73,7 @@ const medicalRecordSchema = new Schema(
     },
     doctorInCharge: {
       type: String,
-      required: true,
+      default: "",
     },
     signStatus: {
       type: String,
@@ -92,7 +95,7 @@ const medicalRecordSchema = new Schema(
       default: 1,
     },
 
-    // [TT 13/2025/TT-BYT (thay TT46/2018) & LUẬT LƯU TRỮ 2024 & NEURO-ONCOLOGY]: Động cơ thời hạn lưu trữ hồ sơ bệnh án
+    // [TT 13/2025/TT-BYT (thay TT 13/2025) & LUẬT LƯU TRỮ 2024 & NEURO-ONCOLOGY]: Động cơ thời hạn lưu trữ hồ sơ bệnh án
     retentionCategory: {
       type: String,
       enum: [
@@ -181,15 +184,16 @@ const medicalRecordSchema = new Schema(
       default: "", // Tư vấn di truyền / NGS ghi chú bảo mật
     },
 
-    // [LUẬT GDĐT 20/2023/QH15 & TT 13/2025/TT-BYT (thay TT46/2018)]: Chữ ký số y tế pháp lý
+    // [LUẬT GDĐT 20/2023/QH15 & TT 13/2025/TT-BYT (thay TT 13/2025)]: Chữ ký số y tế pháp lý
     digitalSignatureMetadata: {
       signatureType: {
         type: String,
-        enum: ["pki_token", "cloud_hsm", "smartcard", "electronic"],
+        // 'internal_hash': mã băm toàn vẹn nội bộ, KHÔNG phải chữ ký số có chứng thư CA
+        enum: ["pki_token", "cloud_hsm", "smartcard", "electronic", "internal_hash"],
         default: "electronic",
       },
       certificateSerial: { type: String, default: "" },
-      signingAlgorithm: { type: String, default: "SHA256withRSA" },
+      signingAlgorithm: { type: String, default: "" },
       timestampToken: { type: String, default: "" },
       caProvider: { type: String, default: "" },
       signedHash: { type: String, default: "" },
@@ -215,22 +219,24 @@ const medicalRecordSchema = new Schema(
       {
         emergencyEventId: { type: Schema.Types.ObjectId, ref: "EmergencyAlert" },
         orderText: { type: String, required: true },
-        isControlledSubstance: { type: Boolean, default: false }, // Thuốc hướng thần / gây nghiện (TT 20/2017)
+        isControlledSubstance: { type: Boolean, default: false }, // Thuốc gây nghiện, hướng thần
         prescribedAt: { type: Date, default: Date.now },
         prescribedByDoctorId: { type: Schema.Types.ObjectId, ref: "User" },
         prescribedByDoctorName: { type: String, default: "" },
         nurseReceivedId: { type: Schema.Types.ObjectId, ref: "User" },
         nurseReceivedName: { type: String, default: "" },
-        isReadBackConfirmed: { type: Boolean, default: true },
+        isReadBackConfirmed: { type: Boolean, default: false },
         readBackConfirmedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
         readBackConfirmedAt: { type: Date, default: null },
         readBackMethod: {
           type: String,
-          enum: ["app_confirm", "otp", "witness", "bedside_immediate"],
-          default: "bedside_immediate",
+          // "witness", "bedside_immediate" chỉ còn ở dữ liệu cũ
+          enum: ["app_confirm", "otp", "witness", "bedside_immediate", null],
+          default: null,
         },
-        readBackOtpCode: { type: String, default: null },
+        readBackOtpHash: { type: String, default: null, select: false },
         readBackOtpExpires: { type: Date, default: null },
+        readBackOtpAttempts: { type: Number, default: 0 },
         witnessUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
         witnessUserName: { type: String, default: "" },
         countersignDeadline: { type: Date }, // Mặc định 24h từ lúc ra lệnh
@@ -239,19 +245,24 @@ const medicalRecordSchema = new Schema(
         countersignedAt: { type: Date, default: null },
         signatureHash: { type: String, default: "" },
         escalatedReadBackAt: { type: Date, default: null },
+        overdueAt: { type: Date, default: null },
         status: {
           type: String,
           enum: [
             "pending_readback",
             "readback_confirmed",
+            "fully_signed",
+            "rejected",
+            // Y lệnh trước v3.4 chưa xác minh được đọc lại (xem scripts/migrateVerbalOrdersV34.js)
+            "legacy_unverified",
+            // Tên cũ, chỉ để bản ghi chưa migrate vẫn lưu được; code không ghi mới
             "pending_countersign",
             "countersigned",
-            "fully_signed",
             "overdue_warning",
-            "rejected",
           ],
-          default: "pending_countersign",
+          default: "pending_readback",
         },
+        legacyStatus: { type: String, default: null },
         rejectionReason: { type: String, default: "" },
       },
     ],
@@ -260,6 +271,11 @@ const medicalRecordSchema = new Schema(
     timestamps: true,
   }
 );
+
+medicalRecordSchema.index({ "verbalOrders._id": 1 });
+medicalRecordSchema.index({ "verbalOrders.status": 1, "verbalOrders.countersignDeadline": 1 });
+medicalRecordSchema.index({ hospitalId: 1, "verbalOrders.nurseReceivedId": 1, "verbalOrders.status": 1 });
+medicalRecordSchema.index({ hospitalId: 1, "verbalOrders.prescribedByDoctorId": 1, "verbalOrders.status": 1 });
 
 medicalRecordSchema.plugin(tenancyPlugin);
 

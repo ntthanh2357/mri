@@ -7,6 +7,7 @@ import {
 import { get } from '../../services/api.service';
 import { Reveal, CountUp } from '../ui/Motion';
 import { StaffBanner, RECEPTION_IMAGES, LiveClock, Avatar, EmptyState, personName } from '../reception/ReceptionUI';
+import { isFeatureEnabled } from '../../constants/featureScope';
 
 const isWeb = Platform.OS === 'web';
 
@@ -37,7 +38,7 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
       const [qRes, emrRes, bedRes, schRes] = await Promise.all([
         get('/api/v1/visits/my-queue').catch(() => null),
         get('/emr/records').catch(() => null),
-        get('/api/v1/hospital-beds/map-summary').catch(() => null),
+        isFeatureEnabled('beds') ? get('/api/v1/hospital-beds/map-summary').catch(() => null) : null,
         get('/api/v1/schedules/my-schedule').catch(() => null),
       ]);
       setVisits(qRes?.visits || []);
@@ -71,14 +72,14 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
     { icon: BadgeCheck, label: 'Đã đo sinh hiệu', value: stats.measuredToday.length, color: '#0F9D6B', bg: '#E3F7EF' },
     { icon: NotebookPen, label: 'Nội trú cần theo dõi', value: stats.inpatients.length, color: '#7C3AED', bg: '#F3EEFF' },
     { icon: BedDouble, label: 'Giường trống', value: beds?.availableCount ?? 0, color: '#067A5E', bg: '#E7F6F0', hint: beds ? `trên tổng ${beds.totalBeds} giường` : null },
-  ];
+  ].filter((k) => isFeatureEnabled('beds') || k.icon !== BedDouble); // quản lý giường ngoài phạm vi đồ án
 
   const actions = [
     { icon: Megaphone, title: 'Gọi đo sinh hiệu', desc: stats.waiting.length ? `${stats.waiting.length} người đang chờ gọi` : 'Chưa có bệnh nhân chờ', bg: '#067A5E', shade: '#05634D', go: () => navigation.navigate('NurseTriage') },
     { icon: ClipboardList, title: 'Nhập sinh hiệu', desc: 'Phiếu khám, chỉ định & lập phiếu thu', bg: '#0F9D6B', shade: '#0B7A53', go: () => navigation.navigate('NurseReception', { tab: 'myQueue' }) },
     { icon: NotebookPen, title: 'Phiếu chăm sóc', desc: 'Theo dõi người bệnh nội trú trong ca', bg: '#7C3AED', shade: '#6D28D9', go: () => navigation.navigate('EMRDashboard', { tab: 'care' }) },
     { icon: BedDouble, title: 'Sơ đồ giường bệnh', desc: beds ? `${beds.availableCount}/${beds.totalBeds} giường đang trống` : 'Phân bổ buồng giường nội trú', bg: '#4F46E5', shade: '#3730A3', go: () => navigation.navigate('EMRDashboard', { tab: 'beds' }) },
-  ];
+  ].filter((a) => isFeatureEnabled('beds') || a.icon !== BedDouble);
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.pageContent}>

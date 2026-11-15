@@ -181,13 +181,13 @@ describe('Unit & Security Tests: Tenancy BOLA/IDOR & ACID Transaction Audit', ()
     expect(result).toBeNull();
   });
 
-  test('6. Quản trị viên cấp cao (Admin) được phép xem hồ sơ giám sát hệ thống', async () => {
-    const result = await checkPatientTenancy(patientA._id, {
-      role: 'admin',
-      id: adminUser._id
-    });
-    expect(result).toBeDefined();
-    expect(result._id.toString()).toBe(patientA._id.toString());
+  // Đổi theo quyết định RELEASE_v3.4: tài khoản quản trị nền tảng không truy cập hồ sơ bệnh nhân
+  // (trước đây test này khẳng định admin xem được mọi bệnh nhân — chính là lỗ rò audit FE 10/11/2026 phát hiện)
+  test('6. Quản trị viên nền tảng (admin, system_admin) KHÔNG xem được hồ sơ bệnh nhân', async () => {
+    for (const role of ['admin', 'system_admin']) {
+      const result = await checkPatientTenancy(patientA._id, { role, id: adminUser._id });
+      expect(result).toBeNull();
+    }
   });
 
   test('7. Trừ kho nguyên tử với $inc và $gte: Thành công khi tồn kho đủ', async () => {

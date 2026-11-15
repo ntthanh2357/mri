@@ -1,6 +1,7 @@
 import { Hospital } from "./models/hospital.model.js";
 import { User } from "../auth/models/user.model.js";
 import { AuditLog } from "../../models/auditLog.model.js";
+import { recordAuditLog } from "../../services/auditLog.service.js";
 import { uploadToGCS } from "../../config/gcs.js";
 import { authCache } from "../../utils/authCache.util.js";
 import path from "path";
@@ -189,7 +190,7 @@ export const submitOnboardingInfo = async (req, res) => {
     ).lean();
 
     // Log the change
-    await AuditLog.create({
+    await recordAuditLog({
       action: "update-hospital-info",
       entity: "Hospital",
       entityId: hospitalId,
@@ -255,7 +256,7 @@ export const getHospitalStaff = async (req, res) => {
     }
 
     const staff = await User.find({ hospitalId, role: { $ne: "patient" } })
-      .select("email role departmentId profile.name profile.specialty isActive isLocked isVerified createdAt phone")
+      .select("email role departmentId profile.name profile.specialty isActive isLocked isVerified canSignImaging createdAt phone")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -289,7 +290,7 @@ export const toggleStaffLock = async (req, res) => {
     authCache.invalidateUser(staffMember._id);
 
     // Log the change
-    await AuditLog.create({
+    await recordAuditLog({
       action: "toggle-staff-lock",
       entity: "User",
       entityId: staffMember._id,

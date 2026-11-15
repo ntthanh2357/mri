@@ -2,6 +2,9 @@ import { Schema, model } from "mongoose";
 import { tenancyPlugin } from "../plugins/tenancy.plugin.js";
 
 const transferFormSchema = new Schema({
+  acceptedByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  acceptedAt: { type: Date, default: null },
+  rejectionReason: { type: String, default: "" },
   hospitalId: {
     type: Schema.Types.ObjectId,
     ref: "Hospital",

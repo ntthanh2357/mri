@@ -1,3 +1,4 @@
+import { PAPER_BLANK, SHORT_BLANK } from '../utils/paperFields';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -24,7 +25,7 @@ import {
 // Banner đầu trang Bệnh án điện tử: ảnh, tông màu & mô tả đổi theo tab (cùng phong cách các trang lễ tân / điều dưỡng)
 const EMR_TAB_META = {
   nurseQueue: { icon: TabVitals, image: 'tabletScan', tone: 'teal', title: 'Đo sinh hiệu', subtitle: 'Bệnh nhân chờ đo sinh hiệu ban đầu trong ngày.' },
-  records: { icon: TabRecords, image: 'doctorDesk', tone: 'navy', title: 'Hồ sơ bệnh án', subtitle: 'Tra cứu, ký số và lập phụ lục hồ sơ bệnh án điện tử theo TT 46/2018.' },
+  records: { icon: TabRecords, image: 'doctorDesk', tone: 'navy', title: 'Hồ sơ bệnh án', subtitle: 'Tra cứu, ký số và lập phụ lục hồ sơ bệnh án điện tử theo TT 13/2025.' },
   care: { icon: TabCare, image: 'tabletScan', tone: 'plum', title: 'Phiếu chăm sóc điều dưỡng', subtitle: 'Theo dõi người bệnh nội trú: sinh hiệu, tri giác Glasgow và diễn biến trong ca.' },
   consult: { icon: TabConsult, image: 'mriDiscuss', tone: 'indigo', title: 'Hội chẩn', subtitle: 'Biên bản hội chẩn đa chuyên khoa cho ca bệnh khó.' },
   consent: { icon: TabConsent, image: 'doctorDesk', tone: 'ocean', title: 'Giấy cam đoan', subtitle: 'Cam đoan phẫu thuật, thủ thuật và tiêm thuốc cản quang.' },
@@ -71,18 +72,26 @@ import { get, put, post } from '../services/api.service';
 import safeStorage from '../utils/safeStorage.js';
 import HospitalBedManagementView from '../components/HospitalBedManagementView.jsx';
 import InterHospitalTransferView from '../components/InterHospitalTransferView.jsx';
+import { isFeatureEnabled } from '../constants/featureScope';
+import { buildCareAssessment } from '../utils/careSheetPayload';
+import { can, isPlatformAdminRole, PLATFORM_ADMIN_NOTICE } from '../constants/clinicalPermissions';
 
 const EMRDashboardScreen = ({ navigation, route }) => {
-  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'records');
+  // Quản lý giường ngoài phạm vi đồ án (constants/featureScope.js): tab 'beds' quy về hồ sơ bệnh án
+  const scopedTab = (tab) => (tab === 'beds' && !isFeatureEnabled('beds') ? 'records' : tab);
+  // Tài khoản nền tảng (admin, system_admin) không xem dữ liệu lâm sàng, kể cả hồ sơ chuyển viện
+  const isPlatformAdmin = (u) => isPlatformAdminRole(u?.role);
+  const [activeTab, setActiveTab] = useState(scopedTab(route?.params?.tab || 'records'));
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [detailRecord, setDetailRecord] = useState(null);
   const [localUser, setLocalUser] = useState(null);
   // Nurse workflow: selected patient for detail panel
   const [nurseSelectedPatient, setNurseSelectedPatient] = useState(null);
 
-  // EMR Signing & Addendum states (Thông tư 46/2018/TT-BYT)
+  // EMR Signing & Addendum states (Thông tư 13/2025/TT-BYT)
   const [addendumModal, setAddendumModal] = useState(false);
   const [addendumRecord, setAddendumRecord] = useState(null);
   const [addendumTitle, setAddendumTitle] = useState('');
@@ -92,21 +101,22 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (route?.params?.tab) {
-      setActiveTab(route.params.tab);
+      setActiveTab(scopedTab(route.params.tab));
     }
   }, [route?.params?.tab]);
 
   const handleSignRecord = async (record) => {
-    if (!confirm(`Xác nhận ký số điện tử cho hồ sơ bệnh án của bệnh nhân ${record.patientName}? Hồ sơ sau khi ký sẽ được xác thực toàn vẹn chống sửa đổi theo quy định Bộ Y Tế.`)) return;
+    if (!confirm(`Xác nhận ký hồ sơ bệnh án của bệnh nhân ${record.patientName}? Sau khi ký, hồ sơ bị khóa, chỉ bổ sung bằng phụ lục. Hệ thống ghi mã băm toàn vẹn SHA-256, chưa dùng chứng thư số của tổ chức chứng thực (CA).`)) return;
     try {
       const res = await apiRequest(`/emr/records/${record._id}/sign`, {
         method: 'PUT',
       });
-      if (res && res.success) {
-        Alert.alert('Thành công', 'Đã ký số hồ sơ bệnh án điện tử thành công!');
+      // BE trả { status: "success" } — trước đây kiểm tra res.success nên ký xong vẫn báo lỗi
+      if (res && (res.success || res.status === 'success')) {
+        Alert.alert('Thành công', 'Đã ký hồ sơ bệnh án (mã băm toàn vẹn nội bộ).');
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể ký số bệnh án.');
+        Alert.alert('Lỗi', res?.message || 'Không thể ký bệnh án.');
       }
     } catch (err) {
       Alert.alert('Lỗi', err.message || 'Ký số thất bại.');
@@ -122,8 +132,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   };
 
   const handleCreateAddendum = async () => {
-    if (!addendumTitle.trim() || !addendumContent.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề và nội dung phụ lục.');
+    if (!addendumTitle.trim() || !addendumReason.trim() || !addendumContent.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập tiêu đề, lý do bổ sung và nội dung phụ lục.');
       return;
     }
     setSubmittingAddendum(true);
@@ -132,16 +142,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
         method: 'POST',
         body: JSON.stringify({
           title: addendumTitle.trim(),
-          reason: addendumReason.trim() || 'Bổ sung thông tin lâm sàng theo Thông tư 46/2018/TT-BYT',
+          reason: addendumReason.trim(),
           content: addendumContent.trim(),
         }),
       });
-      if (res && res.success) {
+      if (res && (res.success || res.status === 'success')) {
         Alert.alert('Thành công', 'Đã tạo phụ lục bệnh án thành công!');
         setAddendumModal(false);
         fetchRecords();
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể tạo phụ lục.');
+        Alert.alert('Lỗi', res?.message || 'Không thể tạo phụ lục.');
       }
     } catch (err) {
       Alert.alert('Lỗi', err.message || 'Tạo phụ lục thất bại.');
@@ -193,21 +203,22 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
   // Fetch drugs for autocomplete
   useEffect(() => {
+    if (!can(localUser?.role, 'prescriptionCreate')) return; // chỉ form kê đơn dùng danh mục thuốc
     get('/api/drugs').then(res => {
       if(res && res.success) setAvailableDrugs(res.data?.drugs || []);
     }).catch(err => console.log('Error fetching drugs:', err));
-  }, []);
+  }, [localUser?.role]);
   
   // Fetch imaging
   useEffect(() => {
-    if (selectedRecord && selectedRecord.patientId) {
+    if (selectedRecord && selectedRecord.patientId && can(localUser?.role, 'imagingStaffRead')) {
       get(`/api/v1/imaging/patient/${selectedRecord.patientId}`)
         .then(res => {
           if (res && res.success) setImagingResults(res.data || []);
         })
         .catch(err => console.log('Error fetching imaging:', err));
     }
-  }, [selectedRecord]);
+  }, [selectedRecord, localUser?.role]);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -225,16 +236,27 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     }
   };
 
+  const handleSignConsent = async (consent) => {
+    try {
+      await apiRequest(`/emr/consents/${consent._id || consent.id}/sign`, { method: 'PUT', body: JSON.stringify({}) });
+      await fetchRecordDetails(selectedRecord._id);
+    } catch (err) {
+      Alert.alert('Chưa ký được', err.message || 'Vui lòng thử lại.');
+    }
+  };
+
   // Fetch care sheets, consultations, consents for a specific record
-  const fetchRecordDetails = async (recordId) => {
+  const fetchRecordDetails = async (recordId, patientId = selectedRecord?.patientId) => {
     setLoading(true);
     try {
+      const role = localUser?.role;
+      const ifAllowed = (perm, url) => (can(role, perm) ? apiRequest(url).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }));
       const [careData, consultData, consentData, versionData, rxData] = await Promise.all([
-        apiRequest(`/emr/records/${recordId}/care-sheets`),
-        apiRequest(`/emr/records/${recordId}/consultations`),
-        apiRequest(`/emr/records/${recordId}/consents`),
-        apiRequest(`/emr/records/${recordId}/versions`),
-        get(`/api/patients/${selectedRecord.patientId}/prescriptions`).catch(() => null),
+        ifAllowed('careRead', `/emr/records/${recordId}/care-sheets`),
+        ifAllowed('consultRead', `/emr/records/${recordId}/consultations`),
+        ifAllowed('consentRead', `/emr/records/${recordId}/consents`),
+        ifAllowed('versionsRead', `/emr/records/${recordId}/versions`),
+        patientId && can(role, 'prescriptionCreate') ? get(`/api/patients/${patientId}/prescriptions`).catch(() => null) : null,
       ]);
       setCareSheets(careData.data || []);
       setConsultations(consultData.data || []);
@@ -255,11 +277,14 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   // Số liệu banner (hồ sơ / nội trú / chưa ký) — tải nhẹ 1 lần, không ảnh hưởng nội dung tab đang mở
   const [bannerRecords, setBannerRecords] = useState([]);
   useEffect(() => {
+    if (!localUser || isPlatformAdmin(localUser)) return;
     get('/emr/records').then((res) => { if (Array.isArray(res?.data)) setBannerRecords(res.data); }).catch(() => {});
-  }, []);
+  }, [localUser?.role]);
 
   // Load records when tab changes
   useEffect(() => {
+    // Chờ biết vai trò (đọc từ bộ nhớ đệm ngay khi mở màn) để tài khoản nền tảng không gọi API bệnh án
+    if (!localUser || isPlatformAdmin(localUser)) return;
     if (activeTab === 'records') {
       fetchRecords();
     } else if (activeTab === 'care') {
@@ -268,7 +293,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     } else if (selectedRecord) {
       fetchRecordDetails(selectedRecord._id);
     }
-  }, [activeTab]);
+  }, [activeTab, localUser?.role]);
 
   // Create new record
   const handleCreateRecord = async (formData) => {
@@ -399,19 +424,26 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     serverMatchIds.includes(r.patientId)
   );
 
-  const isDoctorLike = localUser?.role === 'doctor' || localUser?.role === 'admin';
-  const emrTabs = [
-    localUser?.role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
-    { key: 'records', label: 'Hồ sơ bệnh án' },
-    { key: 'care', label: 'Phiếu chăm sóc' },
+  const isDoctorLike = ['doctor', 'department_head'].includes(localUser?.role);
+  const role = localUser?.role;
+  // Tab chỉ hiện khi vai trò được BE cho phép (constants/clinicalPermissions.js); tài khoản nền tảng không có tab nào
+  const emrTabs = isPlatformAdmin(localUser) ? [] : [
+    role === 'nurse' && { key: 'nurseQueue', label: 'Đo sinh hiệu' },
+    can(role, 'emrRead') && { key: 'records', label: 'Hồ sơ bệnh án' },
+    can(role, 'careRead') && { key: 'care', label: 'Phiếu chăm sóc' },
     isDoctorLike && { key: 'consult', label: 'Hội chẩn' },
     isDoctorLike && { key: 'consent', label: 'Giấy cam đoan' },
     isDoctorLike && { key: 'prescriptions', label: 'Kê đơn thuốc' },
-    { key: 'versions', label: 'Lịch sử sửa đổi' },
-    isDoctorLike && { key: 'imaging', label: 'Phim MRI & CT' },
-    { key: 'beds', label: 'Giường bệnh' },
-    { key: 'transfers', label: 'Chuyển viện' },
+    can(role, 'versionsRead') && { key: 'versions', label: 'Lịch sử sửa đổi' },
+    (isDoctorLike || role === 'radiologist') && { key: 'imaging', label: 'Phim MRI & CT' },
+    isFeatureEnabled('beds') && { key: 'beds', label: 'Giường bệnh' },
+    can(role, 'transfersRead') && { key: 'transfers', label: 'Chuyển viện' },
   ].filter(Boolean);
+  const allowedTabKeys = emrTabs.map((t) => t.key).join(',');
+  useEffect(() => {
+    // mở bằng đường dẫn tới tab vai trò không được dùng → chuyển về tab đầu tiên được phép
+    if (localUser && allowedTabKeys && !allowedTabKeys.split(',').includes(activeTab)) setActiveTab(allowedTabKeys.split(',')[0]);
+  }, [localUser, allowedTabKeys, activeTab]);
 
   const availableCareRecords = records.filter((record) =>
     ['Nội trú', 'Cấp cứu'].includes(record.admissionType) &&
@@ -422,6 +454,16 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   const statRecords = records.length ? records : bannerRecords;
   const inpatientCount = statRecords.filter((r) => r.admissionType === 'Nội trú').length;
   const unsignedCount = statRecords.filter((r) => r.signStatus === 'Chưa duyệt').length;
+
+  if (isPlatformAdmin(localUser)) {
+    return (
+      <ResponsiveLayout navigation={navigation} activeRoute="EMRDashboard">
+        <View style={{ padding: 24 }}>
+          <Text style={{ fontSize: 15, color: '#334155' }}>{PLATFORM_ADMIN_NOTICE}</Text>
+        </View>
+      </ResponsiveLayout>
+    );
+  }
 
   return (
     <ResponsiveLayout navigation={navigation} activeRoute={activeTab ? `EMRDashboard_${activeTab}` : 'EMRDashboard'}>
@@ -488,19 +530,22 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                     }}
                     onViewRecord={(record) => {
                       setSelectedRecord(record);
-                      fetchRecordDetails(record._id);
+                      fetchRecordDetails(record._id, record.patientId);
                       if (localUser?.role === 'nurse') {
                         navigation.navigate('NursePatientDetail', {
                           patient: record,
                           recordId: record._id,
                         });
                       } else {
-                        Alert.alert('Thông báo', `Đã chọn hồ sơ của ${record.patientName}`);
+                        setDetailRecord(record);
                       }
                     }}
                     onRefresh={fetchRecords}
                     onSign={handleSignRecord}
                     onAddendum={handleOpenAddendum}
+                    canCreate={can(localUser?.role, 'emrCreate')}
+                    canSign={can(localUser?.role, 'emrSign')}
+                    canAddendum={can(localUser?.role, 'emrAddendum')}
                   />
                 )}
 
@@ -508,6 +553,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   <CareTab
                     careSheets={careSheets}
                     selectedRecord={selectedRecord}
+                    canCreate={can(localUser?.role, 'careCreate')}
                     onNewCare={() => {
                       setModalType('newCareSheet');
                       setIsModalVisible(true);
@@ -517,6 +563,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
 
                 {activeTab === 'consult' && (
                   <ConsultationTab
+                    canApproveTumorBoard={['department_head', 'hospital_admin'].includes(localUser?.role)}
                     consultations={consultations}
                     selectedRecord={selectedRecord}
                     onNewConsult={() => {
@@ -530,6 +577,8 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   <ConsentTab
                     consents={consents}
                     selectedRecord={selectedRecord}
+                    canSignAsDoctor={['doctor', 'department_head', 'hospital_admin'].includes(localUser?.role)}
+                    onSignConsent={handleSignConsent}
                     onNewConsent={() => {
                       setModalType('newConsent');
                       setIsModalVisible(true);
@@ -550,6 +599,10 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                     availableDrugs={availableDrugs}
                     selectedRecord={selectedRecord}
                     onNewPrescription={() => {
+                      if (!selectedRecord) {
+                        Alert.alert('Chưa chọn bệnh án', 'Chọn một hồ sơ ở tab "Hồ sơ bệnh án" trước khi kê đơn.');
+                        return;
+                      }
                       setModalType('newPrescription');
                       setIsModalVisible(true);
                     }}
@@ -564,7 +617,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   />
                 )}
 
-                {activeTab === 'beds' && (
+                {activeTab === 'beds' && isFeatureEnabled('beds') && (
                   <HospitalBedManagementView currentUser={localUser} />
                 )}
 
@@ -590,12 +643,12 @@ const EMRDashboardScreen = ({ navigation, route }) => {
           selectedCareRecordId={selectedRecord?._id}
         />
 
-        {/* Modal Lập phụ lục bệnh án theo TT 46/2018/TT-BYT */}
+        {/* Modal Lập phụ lục bệnh án theo TT 13/2025/TT-BYT */}
         <Modal visible={addendumModal} transparent animationType="slide" onRequestClose={() => setAddendumModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalBox, { maxWidth: 500, backgroundColor: '#fff', borderRadius: 16, padding: 20 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 46/2018)</Text>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.brandNavy }}>Lập phụ lục bệnh án (TT 13/2025)</Text>
                 <TouchableOpacity onPress={() => setAddendumModal(false)}>
                   <Text style={{ fontSize: 18, color: '#64748B', fontWeight: 'bold' }}>Đóng</Text>
                 </TouchableOpacity>
@@ -604,7 +657,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                 Bệnh nhân: <Text style={{ fontWeight: 'bold', color: Colors.brandNavy }}>{addendumRecord?.patientName}</Text> • Mã BA: {addendumRecord?.patientId}
               </Text>
               <Text style={{ fontSize: 12, color: Colors.brandGreen, backgroundColor: Colors.brandGreenSoft, padding: 8, borderRadius: 8, marginBottom: 12 }}>
-                Theo quy định Thông tư 46/2018/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
+                Theo quy định Thông tư 13/2025/TT-BYT, hồ sơ bệnh án đã khóa không được sửa đổi trực tiếp mà phải ghi nhận bổ sung qua phụ lục (Addendum) có chữ ký bác sĩ.
               </Text>
 
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>Tiêu đề phụ lục *</Text>
@@ -650,6 +703,219 @@ const EMRDashboardScreen = ({ navigation, route }) => {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal Chi tiết Hồ sơ bệnh án */}
+        <Modal
+          visible={Boolean(detailRecord)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDetailRecord(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { maxWidth: 680, width: '95%', maxHeight: '88%', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', padding: 0 }]}>
+              {detailRecord && (() => {
+                const markers = detailRecord.molecularMarkers || {};
+                const markerList = [
+                  markers.idhStatus && `IDH: ${markers.idhStatus}`,
+                  markers.mgmtMethylation && `MGMT: ${markers.mgmtMethylation}`,
+                  markers.codeletion1p19q && `1p/19q: ${markers.codeletion1p19q}`,
+                  markers.tertPromoter && `TERT: ${markers.tertPromoter}`,
+                  markers.atrxStatus && `ATRX: ${markers.atrxStatus}`,
+                  markers.egfrAmplification && `EGFR: ${markers.egfrAmplification}`,
+                  markers.h3k27mStatus && `H3K27M: ${markers.h3k27mStatus}`,
+                  markers.brafMutation && `BRAF: ${markers.brafMutation}`,
+                ].filter(Boolean);
+                const sig = detailRecord.digitalSignatureMetadata || {};
+                const addendums = Array.isArray(detailRecord.addendums) ? detailRecord.addendums : [];
+                const goToTab = (tabKey) => {
+                  setDetailRecord(null);
+                  setActiveTab(tabKey);
+                };
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '800', color: Colors.brandNavy }}>
+                          {detailRecord.patientName}
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+                          Mã BN: {detailRecord.patientId || '—'} • {detailRecord.gender || 'Chưa rõ giới tính'} • {detailRecord.age != null ? `${detailRecord.age} tuổi` : 'Chưa rõ tuổi'} • Phiên bản v{detailRecord.currentVersion || 1}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setDetailRecord(null)} style={{ padding: 6 }}>
+                        <X size={20} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <StatusBadge status={detailRecord.status} />
+                        <SignBadge signStatus={detailRecord.signStatus} />
+                        <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
+                            {detailRecord.admissionType || 'Ngoại trú'} • {detailRecord.department || 'Khoa Ung Thư Não'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, gap: 6 }}>
+                        <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Bác sĩ phụ trách: </Text>
+                          {detailRecord.doctorInCharge || 'Chưa phân công'}
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Dị ứng: </Text>
+                          {Array.isArray(detailRecord.allergies) && detailRecord.allergies.length > 0 ? detailRecord.allergies.join(', ') : 'Chưa ghi nhận'}
+                        </Text>
+                        {(detailRecord.tumorType || detailRecord.whoGrade) ? (
+                          <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                            <Text style={{ fontWeight: '700', color: '#0F172A' }}>Phân loại u / WHO CNS5: </Text>
+                            {[detailRecord.tumorType, detailRecord.whoGrade].filter(Boolean).join(' • ')}
+                          </Text>
+                        ) : null}
+                        {markerList.length > 0 ? (
+                          <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                            <Text style={{ fontWeight: '700', color: '#0F172A' }}>Dấu ấn phân tử: </Text>
+                            {markerList.join(' | ')}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 14, gap: 10 }}>
+                        <View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 4 }}>Chẩn đoán lâm sàng</Text>
+                          <Text style={{ fontSize: 14, color: '#0F172A', lineHeight: 20 }}>
+                            {detailRecord.diagnosis || 'Chưa ghi nhận chẩn đoán.'}
+                          </Text>
+                        </View>
+                        <View style={{ height: 1, backgroundColor: '#F1F5F9' }} />
+                        <View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 4 }}>Kế hoạch điều trị</Text>
+                          <Text style={{ fontSize: 14, color: '#0F172A', lineHeight: 20 }}>
+                            {detailRecord.treatmentPlan || 'Chưa có kế hoạch điều trị.'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {addendums.length > 0 && (
+                        <View style={{ borderWidth: 1, borderColor: '#FDE68A', backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, gap: 8 }}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E' }}>
+                            Phụ lục bệnh án đã bổ sung ({addendums.length})
+                          </Text>
+                          {addendums.map((ad, idx) => (
+                            <View key={ad._id || idx} style={{ borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#FDE68A', paddingTop: idx > 0 ? 8 : 0 }}>
+                              <Text style={{ fontSize: 13, color: '#1E293B', fontWeight: '600' }}>{ad.content}</Text>
+                              <Text style={{ fontSize: 11.5, color: '#78350F', marginTop: 2 }}>
+                                Lý do: {ad.reason || '—'} • BS: {ad.author || '—'}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {detailRecord.signStatus === 'Đã ký số' && sig.signedBy ? (
+                        <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 10, padding: 10 }}>
+                          <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700' }}>
+                            ✓ Đã ký khóa bởi {sig.signedBy}
+                            {sig.signedAt ? ` (${new Date(sig.signedAt).toLocaleString('vi-VN')})` : ''}
+                          </Text>
+                          {sig.signedHash ? (
+                            <Text style={{ fontSize: 11, color: '#15803D', marginTop: 2 }} numberOfLines={1}>
+                              SHA-256: {sig.signedHash}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      <View>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>
+                          Chuyển nhanh dữ liệu liên quan của hồ sơ này:
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('imaging')}
+                          >
+                            <Text style={{ color: '#3730A3', fontSize: 12.5, fontWeight: '700' }}>Phim MRI & CT</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('care')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Phiếu chăm sóc ({careSheets.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('consult')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Hội chẩn ({consultations.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('prescriptions')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Đơn thuốc ({prescriptions.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                            onPress={() => goToTab('versions')}
+                          >
+                            <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Lịch sử ({versions.length})</Text>
+                          </TouchableOpacity>
+                          {detailRecord.userId && (
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                              onPress={() => {
+                                const targetUid = typeof detailRecord.userId === 'object' ? detailRecord.userId._id : detailRecord.userId;
+                                setDetailRecord(null);
+                                navigation.navigate('PatientDetail', { patientId: targetUid });
+                              }}
+                            >
+                              <Text style={{ color: '#065F46', fontSize: 12.5, fontWeight: '700' }}>Mở trang Bệnh nhân</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    </ScrollView>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                      {detailRecord.signStatus !== 'Đã ký số' && can(localUser?.role, 'emrSign') && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: Colors.brandGreen, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8 }}
+                          onPress={() => {
+                            const r = detailRecord;
+                            setDetailRecord(null);
+                            handleSignRecord(r);
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Ký số bệnh án</Text>
+                        </TouchableOpacity>
+                      )}
+                      {can(localUser?.role, 'emrAddendum') && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8 }}
+                          onPress={() => {
+                            const r = detailRecord;
+                            setDetailRecord(null);
+                            handleOpenAddendum(r);
+                          }}
+                        >
+                          <Text style={{ color: '#1D4ED8', fontSize: 13, fontWeight: '700' }}>Lập phụ lục</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8 }}
+                        onPress={() => setDetailRecord(null)}
+                      >
+                        <Text style={{ color: '#334155', fontSize: 13, fontWeight: '700' }}>Đóng</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                );
+              })()}
             </View>
           </View>
         </Modal>
@@ -1194,7 +1460,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
                 <Text style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>Đối tượng</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Thu phí / BHYT..."
+                  placeholder={isFeatureEnabled('bhyt') ? 'Thu phí / BHYT...' : 'Viện phí / Dịch vụ...'}
                   placeholderTextColor={Colors.secondary}
                   value={examDiagnosis}
                   onChangeText={setExamDiagnosis}
@@ -1211,7 +1477,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.brandNavy, marginBottom: 4 }}>
                 PHIẾU CHỈ ĐỊNH DỊCH VỤ
               </Text>
-              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 16 }}>SỞ Y TẾ ĐÀ NẴNG • BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 16 }}>SỞ Y TẾ: {SHORT_BLANK} • CƠ SỞ KCB: {PAPER_BLANK}</Text>
 
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                 {['Thường', 'Cấp Cứu'].map(p => (
@@ -1298,7 +1564,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
               <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.brandNavy, marginBottom: 4 }}>
                 PHIẾU THU VIỆN PHÍ
               </Text>
-              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 12 }}>BỆNH VIỆN CHUYÊN KHOA UNG THƯ NÃO NEUROSCAN</Text>
+              <Text style={{ fontSize: 12, color: Colors.secondary, marginBottom: 12 }}>CƠ SỞ KCB: {PAPER_BLANK}</Text>
 
               {/* Patient info summary */}
               <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -1420,7 +1686,7 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 };
 
 // Tab Components
-const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum }) => {
+const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord, onRefresh, onSign, onAddendum, canCreate, canSign, canAddendum }) => {
 
   return (
     <View style={styles.tabContainer}>
@@ -1433,9 +1699,11 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
           <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
             <RefreshCw size={14} color="#64748B" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={onNewRecord}>
-            <Text style={styles.actionButtonText}>+ Thêm mới</Text>
-          </TouchableOpacity>
+          {canCreate && (
+            <TouchableOpacity style={styles.actionButton} onPress={onNewRecord}>
+              <Text style={styles.actionButtonText}>+ Thêm mới</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1464,6 +1732,8 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
               onPress={() => onViewRecord(record)}
               onSign={onSign}
               onAddendum={onAddendum}
+              canSign={canSign}
+              canAddendum={canAddendum}
             />
           ))
         )}
@@ -1472,7 +1742,7 @@ const RecordsTab = ({ records, searchQuery, onSearch, onNewRecord, onViewRecord,
   );
 };
 
-const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
+const RecordCard = ({ record, onPress, onSign, onAddendum, canSign, canAddendum }) => (
   <View style={styles.card}>
     <TouchableOpacity onPress={onPress}>
       <View style={styles.cardHeader}>
@@ -1497,11 +1767,25 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
           <Text style={styles.footerText}>{record.department}, {record.admissionType}</Text>
         </View>
       </View>
+      {record.diagnosis ? (
+        <Text style={{ fontSize: 13, color: '#334155', marginTop: 6 }} numberOfLines={2}>
+          <Text style={{ fontWeight: '700', color: '#0F172A' }}>Chẩn đoán: </Text>
+          {record.diagnosis}
+        </Text>
+      ) : null}
     </TouchableOpacity>
 
-    {/* Nút Ký Số EMR & Lập Phụ Lục theo TT 46/2018 */}
+    {/* Nút Xem chi tiết, Ký Số EMR & Lập Phụ Lục theo TT 13/2025 */}
     <View style={styles.cardActions}>
-      {record.signStatus !== 'Đã ký số' ? (
+      <TouchableOpacity
+        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+        onPress={onPress}
+        accessibilityRole="button"
+      >
+        <Eye size={13} color="#334155" />
+        <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>Xem chi tiết</Text>
+      </TouchableOpacity>
+      {record.signStatus !== 'Đã ký số' ? (canSign &&
         <TouchableOpacity
           style={styles.signBtn}
           onPress={() => onSign && onSign(record)}
@@ -1515,27 +1799,29 @@ const RecordCard = ({ record, onPress, onSign, onAddendum }) => (
           <Text style={{ color: '#166534', fontSize: 12, fontWeight: 'bold' }}>Đã ký số</Text>
         </View>
       )}
-      <TouchableOpacity
+      {canAddendum && (<TouchableOpacity
         style={styles.addendumBtn}
         onPress={() => onAddendum && onAddendum(record)}
         accessibilityRole="button"
       >
-        <Text style={styles.addendumBtnText}>Lập phụ lục (TT 46)</Text>
-      </TouchableOpacity>
+        <Text style={styles.addendumBtnText}>Lập phụ lục</Text>
+      </TouchableOpacity>)}
     </View>
   </View>
 );
 
-const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
+const CareTab = ({ careSheets, selectedRecord, onNewCare, canCreate }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <FileText size={18} color={Colors.brandGreen} />
         <Text style={styles.tabTitle}>Phiếu chăm sóc Điều dưỡng</Text>
       </View>
-      <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
-        <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
-      </TouchableOpacity>
+      {canCreate && (
+        <TouchableOpacity style={styles.actionButton} onPress={onNewCare}>
+          <Text style={styles.actionButtonText}>+ Thêm phiếu</Text>
+        </TouchableOpacity>
+      )}
     </View>
 
     {!selectedRecord ? (
@@ -1552,7 +1838,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
           </View>
         ) : (
           careSheets.map(cs => {
-            const gcs = cs.glasgow;
+            const gcs = cs.glasgow?.totalScore ? cs.glasgow : null; // phiếu không đánh giá GCS → không hiển thị
             const gcsCritical = gcs && gcs.totalScore <= 8;
             const gcsMedium = gcs && gcs.totalScore > 8 && gcs.totalScore <= 12;
             return (
@@ -1663,7 +1949,7 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   </View>
 );
 
-const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
+const ConsultationTab = ({ canApproveTumorBoard, consultations, selectedRecord, onNewConsult }) => {
   const [approvingId, setApprovingId] = useState(null);
   const [approvedMap, setApprovedMap] = useState({});
 
@@ -1672,7 +1958,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
     if (!cId) return;
     setApprovingId(cId);
     try {
-      const res = await post(`/api/v1/emr/consultations/${cId}/approve-tumor-board`, {
+      const res = await post(`/emr/consultations/${cId}/approve-tumor-board`, {
         consensusDecision: consult.treatmentConclusion || 'Phác đồ đồng thuận Hội đồng U não (MTB)',
         scheduledSurgeryDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
       });
@@ -1746,7 +2032,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
                       </Text>
                     </View>
                   )}
-                  {!isApproved && (
+                  {!isApproved && canApproveTumorBoard && (
                     <TouchableOpacity
                       style={{ backgroundColor: '#0F766E', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, marginTop: 10, alignSelf: 'flex-start' }}
                       onPress={() => handleApproveTumorBoard(c)}
@@ -1767,7 +2053,7 @@ const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
   );
 };
 
-const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
+const ConsentTab = ({ consents, selectedRecord, onNewConsent, canSignAsDoctor, onSignConsent }) => (
   <View style={styles.tabContainer}>
     <View style={styles.tabHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1805,6 +2091,11 @@ const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
                 <StatusBadge status={c.doctorSigned ? 'Đã ký' : 'Chưa ký'} color="blue" />
                 <StatusBadge status={c.patientSigned ? 'Đã ký' : 'Chưa ký'} color="green" />
               </View>
+              {canSignAsDoctor && !c.doctorSigned ? (
+                <TouchableOpacity style={[styles.actionButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => onSignConsent(c)}>
+                  <Text style={styles.actionButtonText}>Bác sĩ ký giấy cam đoan</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ))
         )}
@@ -2045,7 +2336,7 @@ const ImagingTab = ({ imagingResults, selectedRecord, navigation }) => {
 };
 
 // Modal Component
-const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent, careRecords, selectedCareRecordId }) => {
+const EMRModal = ({ isVisible, type, onClose, onCreateRecord, onCreateCareSheet, onCreateConsultation, onCreateConsent, onCreatePrescription, availableDrugs, careRecords, selectedCareRecordId }) => {
   return (
     <Modal
       animationType="fade"
@@ -2074,12 +2365,12 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     patientId: '',
     patientName: '',
-    gender: 'Nam',
+    gender: '',
     age: '',
     bhytNumber: '',
     admissionType: 'Ngoại trú',
     department: 'Khoa Ung Thư Não',
-    paymentMethod: 'BHYT',
+    paymentMethod: '',
     doctorInCharge: '',
     diagnosis: '',
     treatmentPlan: '',
@@ -2090,27 +2381,13 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc!');
       return;
     }
-    onSubmit({
-      ...formData,
-      age: Number(formData.age),
-    });
+    // Ô giới tính / thanh toán để trống thì không gửi (BE để trống giới tính, thanh toán theo mặc định của viện)
+    const { bhytNumber, ...payload } = formData;
+    if (!String(payload.gender || '').trim()) delete payload.gender;
+    if (!String(payload.paymentMethod || '').trim()) delete payload.paymentMethod;
+    onSubmit({ ...payload, age: Number(formData.age) });
   };
 
-  const handleOcrFill = () => {
-    setFormData({
-      patientId: 'PT-' + Math.floor(1000 + Math.random() * 9000),
-      patientName: 'Lê Trần Gia Huy',
-      gender: 'Nam',
-      age: '48',
-      admissionType: 'Nội trú',
-      department: 'Khoa Ung Thư Não',
-      paymentMethod: 'BHYT',
-      doctorInCharge: 'BS. CKII Nguyễn Thế Thành',
-      diagnosis: 'U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải',
-      treatmentPlan: 'Chỉ định phẫu thuật mở sọ cắt u vi phẫu dưới định vị Neuronavigation, sau mổ chuyển Neuro-ICU theo dõi ICP và lập phác đồ Stupp (Hóa xạ trị kết hợp Temozolomide).',
-    });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền thông tin bệnh án mẫu Khoa Ung Thư Não!');
-  };
 
   return (
     <View style={styles.formContainer}>
@@ -2121,10 +2398,6 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
-        </TouchableOpacity>
         <FormField
           label="Mã bệnh nhân"
           placeholder="VD: PT-1234"
@@ -2165,7 +2438,7 @@ const NewRecordForm = ({ onClose, onSubmit }) => {
         />
         <FormField
           label="Phương thức thanh toán"
-          placeholder="BHYT/Viện phí/Dịch vụ"
+          placeholder={isFeatureEnabled('bhyt') ? 'BHYT/Viện phí/Dịch vụ' : 'Viện phí/Dịch vụ (để trống nếu chưa rõ)'}
           value={formData.paymentMethod}
           onChangeText={(text) => setFormData({ ...formData, paymentMethod: text })}
         />
@@ -2262,8 +2535,17 @@ const NewCareSheetForm = ({ onClose, onSubmit, records = [], initialRecordId }) 
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh!');
       return;
     }
+    const assessment = buildCareAssessment({
+      careLevel, gcsEye, gcsVerbal, gcsMotor,
+      pupilLeftSize, pupilRightSize, pupilLeftReflex, pupilRightReflex, pupilShape,
+      drainageSite, drainageVolume, drainageColor, drainageCondition, fluidInfusions,
+    });
+    if (assessment.error) {
+      Alert.alert('Lỗi', assessment.error);
+      return;
+    }
     const payload = {
-      careLevel: Number(careLevel) || 1,
+      ...assessment.value,
       pulse: Number(pulse),
       bloodPressure,
       temperature: Number(temperature),
@@ -2272,46 +2554,10 @@ const NewCareSheetForm = ({ onClose, onSubmit, records = [], initialRecordId }) 
       nurse,
       progressNotes,
       careActions,
-      // UC-NUR-04 fields
-      glasgow: { eye: parseInt(gcsEye)||4, verbal: parseInt(gcsVerbal)||5, motor: parseInt(gcsMotor)||6 },
-      pupils: {
-        leftSize: parseFloat(pupilLeftSize)||2.5, rightSize: parseFloat(pupilRightSize)||2.5,
-        leftLightReflex: pupilLeftReflex, rightLightReflex: pupilRightReflex,
-        shape: pupilShape
-      },
-      surgicalDrainage: drainageSite ? {
-        site: drainageSite,
-        volume: Number(drainageVolume)||0,
-        color: drainageColor,
-        condition: drainageCondition
-      } : undefined,
-      fluidInfusions: fluidInfusions.filter(f => f.fluidName).map(f => ({
-        ...f, volume: Number(f.volume)||0
-      })),
     };
     onSubmit({ recordId, careSheet: payload });
   };
 
-  const handleOcrFill = () => {
-    // Simulate realistic post-op cranial surgery care sheet
-    setCareLevel('1'); setPulse('78'); setBloodPressure('125/80'); setTemperature('36.8');
-    setRespiratoryRate('18'); setSpo2('98'); setNurse('Đd. Lê Thị Hoa');
-    setProgressNotes('Bệnh nhân tỉnh táo (GCS 14đ E4V4M6), hậu phẫu mở sọ cắt u não ngày thứ 2, đồng tử 2 bên đều 2mm phản xạ ánh sáng tốt (+), vết mổ khô, dẫn lưu EVD ra 40ml dịch não tủy hồng nhạt/8h.');
-    setCareActions('Đầu cao 30° giảm phù não, thay băng vô trùng vết mổ, sát trùng chân dẫn lưu EVD, tiêm Dexamethasone 4mg TM theo y lệnh, truyền Mannitol 20% 250ml/30 phút, theo dõi tri giác và áp lực nội sọ mỗi 2h.');
-    // GCS 14 = E4V4M6
-    setGcsEye('4'); setGcsVerbal('4'); setGcsMotor('6');
-    // Pupils
-    setPupilLeftSize('2'); setPupilRightSize('2'); setPupilLeftReflex('+'); setPupilRightReflex('+'); setPupilShape('Tròn đều 2 bên');
-    // Drainage
-    setDrainageSite('EVD - Dẫn lưu não thất ngoài'); setDrainageVolume('40'); setDrainageColor('Hồng nhạt'); setDrainageCondition('Chân ống khô ráo, băng dính cố định tốt, không rỉ dịch');
-    // Fluid Infusions
-    setFluidInfusions([
-      { fluidName: 'Mannitol 20%', volume: '250', rate: '40 giọt/phút', status: 'đã hoàn thành' },
-      { fluidName: 'NaCl 0.9%', volume: '500', rate: '20 giọt/phút', status: 'đang truyền' },
-      { fluidName: 'Dexamethasone 4mg + NaCl', volume: '100', rate: 'Tiêm chậm TM', status: 'đã hoàn thành' },
-    ]);
-    Alert.alert('Giả lập OCR', '✅ Đã tự động điền đầy đủ phiếu chăm sóc hậu phẫu u não (GCS, đồng tử, EVD, truyền dịch)!');
-  };
 
   const REFLEX_OPTIONS = ['+', 'chậm', '-'];
   const FLUID_STATUSES = ['đang truyền', 'đã hoàn thành', 'tạm dừng'];
@@ -2351,10 +2597,6 @@ const NewCareSheetForm = ({ onClose, onSubmit, records = [], initialRecordId }) 
             Không có bệnh nhân nội trú/cấp cứu đang điều trị để lập phiếu.
           </Text>
         )}
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động - Hậu phẫu U Não (Simulated OCR)</Text>
-        </TouchableOpacity>
 
         {/* ── SECTION 1: Sinh hiệu ── */}
         <SectionLabel icon={HeartPulse} title="1. Sinh hiệu lâm sàng (Vital Signs)" color="#DC2626" />
@@ -2495,7 +2737,7 @@ const NewCareSheetForm = ({ onClose, onSubmit, records = [], initialRecordId }) 
           {fluidInfusions.length === 0 ? (
             <View style={{ paddingVertical: 12, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', textAlign: 'center' }}>
-                Chưa có chai truyền dịch nào. Bấm nút "+ Thêm dịch truyền" bên dưới để nhập hoặc bấm "Giả lập Quét tự động".
+                Chưa có chai truyền dịch nào. Bấm nút "+ Thêm dịch truyền" bên dưới để nhập.
               </Text>
             </View>
           ) : (
@@ -2584,16 +2826,6 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
     });
   };
 
-  const handleOcrFill = () => {
-    setFormData({
-      meetingDate: new Date().toISOString().split('T')[0],
-      participants: 'BS. CKII Nguyễn Thế Thành (Chủ trì KUTN), BS. Lê Văn Minh (CĐHA), ThS. BS. Phan Hoàng Đức (Phẫu thuật Thần kinh U Não)',
-      clinicalSummary: 'Bệnh nhân nam 48 tuổi, hội chứng tăng áp lực nội sọ (đau đầu dữ dội, nôn vọt, phù gai thị) kèm liệt nửa người trái tiến triển 3 tuần. MRI phát hiện khối u vùng trán - đỉnh phải kích thước 4.2 x 3.8 cm, phù não quanh u diện rộng, đè đẩy đường giữa 8mm.',
-      diagnosis: 'Hội chẩn u não đa mô thức: U nguyên bào thần kinh đệm (Glioblastoma WHO Grade 4) vùng trán - đỉnh phải / Phù não nặng có nguy cơ thoát vị não.',
-      treatmentConclusion: '1. Điều trị cấp cứu: Truyền Mannitol 20% + Dexamethasone 8mg tiêm tĩnh mạch giảm phù não. 2. Phẫu thuật: Mổ mở sọ vi phẫu cắt u tối đa có hỗ trợ kính vi phẫu và Neuronavigation. 3. Hậu phẫu chuyển Neuro-ICU theo dõi ICP. 4. Chuyển Khoa Hóa Xạ Trị U Não thực hiện Phác đồ Stupp (Temozolomide).',
-    });
-    Alert.alert('Giả lập OCR', '[Giả lập] Đã tự động điền nội dung từ Biên bản hội chẩn U Não đa mô thức!');
-  };
 
   return (
     <View style={styles.formContainer}>
@@ -2604,10 +2836,6 @@ const NewConsultationForm = ({ onClose, onSubmit }) => {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.ocrFillBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handleOcrFill}>
-          <Zap size={14} color="#4ADE80" />
-          <Text style={styles.ocrFillBtnText}>Giả lập Quét tự động (Simulated OCR)</Text>
-        </TouchableOpacity>
         <FormField
           label="Ngày hội chẩn"
           placeholder="YYYY-MM-DD"

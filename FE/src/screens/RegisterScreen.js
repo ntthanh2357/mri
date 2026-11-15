@@ -18,6 +18,7 @@ import { post } from '../services/api.service';
 import styles from './RegisterScreen.styles';
 import { Building2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useDialogKeys } from '../utils/useDialogKeys';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 
 const RegisterScreen = ({ navigation }) => {
@@ -104,8 +105,8 @@ const RegisterScreen = ({ navigation }) => {
     if (!password) {
       setPasswordError('Vui lòng nhập Mật khẩu.');
       hasError = true;
-    } else if (password.length < 6) {
-      setPasswordError('Mật khẩu phải chứa ít nhất 6 ký tự.');
+    } else if (passwordPolicyError(password)) {
+      setPasswordError(passwordPolicyError(password));
       hasError = true;
     }
 
@@ -156,7 +157,7 @@ const RegisterScreen = ({ navigation }) => {
                   <Text style={styles.leftPanelTextHighlight}>NeuroScan AI</Text>
                 </Text>
                 <Text style={styles.leftPanelTextDesc}>
-                  Giải pháp AI hàng đầu cho phân tích hình ảnh hệ thần kinh và hỗ trợ bác sĩ lâm sàng đưa ra quyết định chẩn đoán chính xác.
+                  Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử. Kết luận cuối cùng do bác sĩ đưa ra.
                 </Text>
               </View>
             </View>
@@ -177,7 +178,7 @@ const RegisterScreen = ({ navigation }) => {
                 {/* Title */}
                 <View style={styles.desktopTitleContainer}>
                   <Text style={styles.desktopTitle}>Đăng ký tài khoản</Text>
-                  <Text style={styles.desktopSubtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+                  <Text style={styles.desktopSubtitle}>Tạo tài khoản mới để dùng AI hỗ trợ sàng lọc u não</Text>
                 </View>
 
                 {/* Form */}
@@ -316,7 +317,7 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* Title */}
           <Text style={styles.title}>Đăng ký tài khoản</Text>
-          <Text style={styles.subtitle}>Tạo tài khoản mới để trải nghiệm chẩn đoán AI</Text>
+          <Text style={styles.subtitle}>Tạo tài khoản mới để dùng AI hỗ trợ sàng lọc u não</Text>
 
           {/* Form */}
           <View style={styles.form}>

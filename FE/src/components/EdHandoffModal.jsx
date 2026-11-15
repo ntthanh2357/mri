@@ -27,7 +27,7 @@ export default function EdHandoffModal({
   const [isUnidentifiedPatient, setIsUnidentifiedPatient] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [age, setAge] = useState('');
-  const [gender, setGender] = useState('Nam');
+  const [gender, setGender] = useState(''); // chưa rõ thì để trống
   const [edDoctorName, setEdDoctorName] = useState('');
 
   // S - Situation
@@ -207,6 +207,7 @@ export default function EdHandoffModal({
                           onChange={(e) => setGender(e.target.value)}
                           className="w-full text-xs px-2 py-2 border border-slate-200 rounded-xl font-medium"
                         >
+                          <option value="">Chưa rõ</option>
                           <option value="Nam">Nam</option>
                           <option value="Nữ">Nữ</option>
                         </select>

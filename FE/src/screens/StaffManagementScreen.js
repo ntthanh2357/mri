@@ -111,6 +111,20 @@ export default function StaffManagementScreen({ navigation }) {
   };
 
 
+  const [grantTarget, setGrantTarget] = useState(null);
+  const [licenseNote, setLicenseNote] = useState('');
+  const updateImagingSignPermission = async (staffId, canSignImaging, note) => {
+    try {
+      const res = await put(`/admin/staff/${staffId}/imaging-sign-permission`, { canSignImaging, licenseNote: note });
+      Alert.alert('Thành công', res?.message || 'Đã cập nhật quyền ký CĐHA.');
+      setGrantTarget(null);
+      setLicenseNote('');
+      fetchHospitalStaff();
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Không cập nhật được quyền ký CĐHA.');
+    }
+  };
+
   const handleToggleLock = async (staffId, email, isLocked) => {
     const actionText = isLocked ? 'MỞ KHÓA' : 'KHÓA';
     Alert.alert(
@@ -350,6 +364,40 @@ export default function StaffManagementScreen({ navigation }) {
                               </View>
                             </TouchableOpacity>
                           </View>
+
+                          {item.role === 'department_head' && (
+                            <View style={{ width: '100%', marginTop: 8, gap: 6 }}>
+                              <Text style={{ fontSize: 12, color: '#475569' }}>
+                                {item.canSignImaging ? 'Được ký báo cáo CĐHA khi ký thay Bác sĩ CĐHA.' : 'Chưa được cấp quyền ký báo cáo CĐHA.'}
+                              </Text>
+                              {grantTarget === item._id ? (
+                                <View style={{ gap: 6 }}>
+                                  <TextInput
+                                    style={styles.input}
+                                    placeholder="Số chứng chỉ, phạm vi hành nghề đã đối chiếu"
+                                    placeholderTextColor={Colors.secondary}
+                                    value={licenseNote}
+                                    onChangeText={setLicenseNote}
+                                  />
+                                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity style={styles.lockButton} onPress={() => updateImagingSignPermission(item._id, true, licenseNote)}>
+                                      <Text style={styles.lockButtonText}>Xác nhận cấp quyền</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.lockButton} onPress={() => { setGrantTarget(null); setLicenseNote(''); }}>
+                                      <Text style={styles.lockButtonText}>Hủy</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={[styles.lockButton, { alignSelf: 'flex-start' }]}
+                                  onPress={() => (item.canSignImaging ? updateImagingSignPermission(item._id, false, '') : setGrantTarget(item._id))}
+                                >
+                                  <Text style={styles.lockButtonText}>{item.canSignImaging ? 'Thu hồi quyền ký CĐHA' : 'Cấp quyền ký CĐHA'}</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          )}
                         </View>
                       );
                     })}

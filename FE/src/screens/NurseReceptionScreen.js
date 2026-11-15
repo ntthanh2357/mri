@@ -27,6 +27,8 @@ import { useQueueDesk } from '../controllers/useQueueDesk';
 import QRCodeLib from 'qrcode';
 import { Reveal } from '../components/ui/Motion';
 import { useAppDialog } from '../components/ui/AppDialog';
+import { isFeatureEnabled } from '../constants/featureScope';
+import { can } from '../constants/clinicalPermissions';
 import { ReceptionBanner, RECEPTION_IMAGES, Avatar, EmptyState, formatVnd, personName } from '../components/reception/ReceptionUI';
 
 // UC-REC-03 — Phòng khám chuyên khoa Thần kinh để phân luồng
@@ -160,6 +162,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [activeCards, setActiveCards] = useState({});
 
   const fetchActiveCards = async () => {
+    if (!isFeatureEnabled('bhyt')) return; // BHYT ngoài phạm vi đồ án (constants/featureScope.js)
     try {
       const res = await get('/api/v1/bhyt/active-cards');
       const map = {};
@@ -597,7 +600,13 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   };
 
+  const payingRef = React.useRef(null);
+  const [payingInvoiceId, setPayingInvoiceId] = useState(null);
   const handlePayInvoice = async (invoiceId, confirmNoTransfer = false) => {
+    // chống bấm đúp: đang thu hóa đơn này thì bỏ qua lần bấm sau (lần gọi lại sau xác nhận vẫn đi qua)
+    if (payingRef.current === invoiceId && !confirmNoTransfer) return;
+    payingRef.current = invoiceId;
+    setPayingInvoiceId(invoiceId);
     try {
       await put(`/api/v1/invoices/${invoiceId}/pay`, { paymentMethod: 'cash', confirmNoTransfer: confirmNoTransfer === true });
       const res = await get('/api/v1/invoices');
@@ -646,6 +655,9 @@ const NurseReceptionScreen = ({ route, navigation }) => {
       } else {
         notify('Lỗi', msg || 'Xác nhận thanh toán thất bại');
       }
+    } finally {
+      payingRef.current = null;
+      setPayingInvoiceId(null);
     }
   };
 
@@ -788,17 +800,20 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     if (!refundTarget) return;
     setRefunding(true);
     try {
-      const res = await put(`/api/v1/invoices/${refundTarget._id}/refund`, {
+      const res = await post(`/api/v1/invoices/${refundTarget._id}/refund/request`, {
         refundReason: [refundReason, refundNote.trim()].filter(Boolean).join(' — '),
       });
       setRefundTarget(null);
       setRefundNote('');
       await fetchInvoices();
-      notify('Thành công', res?.message || 'Đã hoàn trả viện phí và chuyển hóa đơn sang "Hoàn trả".');
+      if (res?.approvalStatus === 'pending_second_approval') {
+        notify('Đã gửi yêu cầu', 'Khoản từ 10 triệu đồng cần người thứ hai duyệt tại mục "Duyệt hoàn tiền".', 'info');
+      } else {
+        notify('Thành công', res?.message || 'Đã hoàn trả viện phí và chuyển hóa đơn sang "Hoàn trả".');
+      }
     } catch (err) {
-      // Hóa đơn ≥ 10 triệu cần phê duyệt cấp 2 → backend trả 403 kèm hướng dẫn
       setRefundTarget(null);
-      notify('Cần phê duyệt thêm', err.message || 'Không thể hoàn trả viện phí.', 'info');
+      notify('Chưa hoàn được tiền', err.message || 'Không thể hoàn trả viện phí.', 'error');
     } finally {
       setRefunding(false);
     }
@@ -833,7 +848,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   );
 
   // Chưa tải xong thông tin người dùng thì vẫn hiện nút (backend luôn kiểm tra quyền lại)
-  const canApplyBhyt = !user?.role || ['receptionist', 'admin', 'hospital_admin'].includes(user.role);
+  const canApplyBhyt = isFeatureEnabled('bhyt') && (!user?.role || ['receptionist', 'admin', 'hospital_admin'].includes(user.role));
   const canDeclareBhyt = canApplyBhyt; // UC-REC-02: khai báo / xác minh thẻ cũng chỉ lễ tân
   const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' :
                       user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
@@ -917,8 +932,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     { key: 'createVisit', label: 'Tiếp nhận', icon: UserPlus },
     { key: 'callQueue', label: 'Gọi số', icon: Ticket, count: queueWaiting, warn: true },
     { key: 'myQueue', label: 'Lượt khám hôm nay', icon: ClipboardList, count: visits.length },
-    { key: 'billing', label: 'Thu ngân & BHYT', icon: Wallet, count: pendingInvoicesCount, warn: true },
-  ];
+    { key: 'billing', label: isFeatureEnabled('bhyt') ? 'Thu ngân & BHYT' : 'Thu ngân', icon: Wallet, count: pendingInvoicesCount, warn: true },
+  ].filter((t) => t.key !== 'billing' || !user?.role || can(user.role, 'invoicePay')); // BE chỉ cho lễ tân, BGĐ thu tiền
 
   const banner = activeTab === 'createVisit' ? (
     <ReceptionBanner
@@ -972,8 +987,8 @@ const NurseReceptionScreen = ({ route, navigation }) => {
       image={RECEPTION_IMAGES.payment}
       tone="amber"
       eyebrow="Quầy thu ngân"
-      title="Thu ngân & BHYT"
-      subtitle="Áp dụng BHYT, thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn."
+      title={isFeatureEnabled('bhyt') ? 'Thu ngân & BHYT' : 'Thu ngân'}
+      subtitle={isFeatureEnabled('bhyt') ? 'Áp dụng BHYT, thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn.' : 'Thu tiền mặt hoặc tạo mã VietQR PayOS cho từng hóa đơn.'}
       right={(
         <View style={st.bannerStat}>
           <Text style={st.bannerStatLabel}>Tổng cần thu</Text>
@@ -1494,7 +1509,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 <Text style={[st.lineAmount, { color: '#0B7A53' }]}>-{formatVnd(inv.bhytInfo.bhytAmount)}</Text>
                               </View>
                             ) : (
-                              <Text style={st.receiptNote}>Chưa khấu trừ BHYT cho hóa đơn này.</Text>
+                              isFeatureEnabled('bhyt') ? <Text style={st.receiptNote}>Chưa khấu trừ BHYT cho hóa đơn này.</Text> : null
                             )}
                           </View>
 
@@ -1559,7 +1574,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 </TouchableOpacity>
                               ) : (
                               <View style={st.payRow}>
-                                <TouchableOpacity style={[st.payBtn, { backgroundColor: '#0F9D6B' }]} onPress={() => handlePayInvoice(inv._id)} dataSet={{ hover: 'glow' }}>
+                                <TouchableOpacity style={[st.payBtn, { backgroundColor: '#0F9D6B' }, payingInvoiceId === inv._id && { opacity: 0.6 }]} disabled={payingInvoiceId === inv._id} onPress={() => handlePayInvoice(inv._id)} dataSet={{ hover: 'glow' }}>
                                   <Banknote size={18} color="#FFFFFF" />
                                   <Text style={st.payBtnText}>Thu tiền mặt</Text>
                                 </TouchableOpacity>
@@ -1575,7 +1590,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                                 </TouchableOpacity>
                               )}
                               {/* Khấu trừ BHYT là nghiệp vụ của tiếp đón/viện phí (backend chỉ cho lễ tân & quản trị) */}
-                              {!bhytCovered && !canApplyBhyt && (
+                              {isFeatureEnabled('bhyt') && !bhytCovered && !canApplyBhyt && (
                                 <View style={[st.bhytApply, { opacity: 0.6 }]}>
                                   <Lock size={15} color="#64748B" />
                                   <Text style={[st.bhytApplyText, { color: '#64748B' }]}>Chỉ lễ tân / thu ngân được áp dụng BHYT</Text>
@@ -1954,7 +1969,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                 </View>
               )}
               <Text style={st.qrAmount}>{formatVnd(qrPayment.amount)}</Text>
-              <Text style={st.hintText}>Phần bệnh nhân đồng chi trả (đã trừ BHYT)</Text>
+              <Text style={st.hintText}>{isFeatureEnabled('bhyt') ? 'Phần bệnh nhân đồng chi trả (đã trừ BHYT)' : 'Số tiền bệnh nhân cần thanh toán'}</Text>
               <View style={st.qrWaiting}>
                 <ActivityIndicator size="small" color="#1A5FD0" />
                 <Text style={{ color: '#1A5FD0', fontWeight: '700', fontSize: 13 }}>Đang chờ thanh toán — tự cập nhật khi tiền về</Text>

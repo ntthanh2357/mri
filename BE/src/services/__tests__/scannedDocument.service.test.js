@@ -380,7 +380,8 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
   });
 
   it(`hạn mức ${MAX_SCANS_PER_DAY} lần quét mỗi ngày: hết lượt báo 429, xoá giấy tờ không được hoàn lượt (chặn vòng lặp quét-xoá tốn AI)`, async () => {
-    const day = new Date('2026-10-13T03:00:00Z');
+    // Dùng ngày hiện tại: ngày cố định trong quá khứ làm expireAt đã hết hạn, TTL của MongoDB có thể xoá bộ đếm giữa test
+    const day = new Date();
     for (let i = 0; i < MAX_SCANS_PER_DAY; i += 1) {
       const { doc } = await scanDocument({ patientId: heavy, hospitalId, buffer: JPEG }, { ocr: okOcr, storage, now: day });
       await deleteDocument(heavy, doc._id, { storage });
@@ -389,7 +390,7 @@ describe('Giấy tờ bệnh nhân tự quét (UC-PAT-09 mở rộng)', () => {
     expect(await statusOf(() => scanDocument({ patientId: heavy, hospitalId, buffer: JPEG }, { ocr: async () => { aiCalls += 1; return okOcr(); }, storage, now: day }))).toBe(429);
     expect(aiCalls).toBe(0);
     // sang ngày khác thì quét lại được
-    const next = await scanDocument({ patientId: heavy, hospitalId, buffer: JPEG }, { ocr: okOcr, storage, now: new Date('2026-10-14T03:00:00Z') });
+    const next = await scanDocument({ patientId: heavy, hospitalId, buffer: JPEG }, { ocr: okOcr, storage, now: new Date(day.getTime() + 24 * 3600 * 1000) });
     expect(next.ocrFailed).toBe(false);
   });
 

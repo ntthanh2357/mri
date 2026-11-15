@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { MedicalRecord } from "./models/medicalRecord.model.js";
+import { Visit } from "../../models/visit.model.js";
 import { CareSheet } from "./models/careSheet.model.js";
 import { Consultation } from "./models/consultation.model.js";
 import { ConsentForm } from "./models/consentForm.model.js";
@@ -14,6 +15,8 @@ import { segregateMedicalRecord } from "../../utils/dataSegregation.util.js";
 import { encryptField } from "../../services/fieldCrypto.service.js";
 import { evaluateVitalSigns } from "../../services/vitalsSafety.service.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
+import { normalizeCareAssessment } from "../../utils/careSheetAssessment.util.js";
 // --- Medical Record (HSBA) Controllers ---
 
 export const getRecords = async (req, res) => {
@@ -75,7 +78,7 @@ export const getRecords = async (req, res) => {
     res.status(200).json({ status: "success", data: safeRecords });
   } catch (error) {
     console.error("Lỗi lấy danh sách bệnh án:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách bệnh án." });
   }
 };
 
@@ -102,12 +105,21 @@ export const createRecord = async (req, res) => {
       hivStatusNotes,
     } = req.body;
 
-    if (!patientId || !patientName || !age || !diagnosis || !doctorInCharge) {
-      return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin bắt buộc." });
+    // Chỉ bắt buộc định danh bệnh nhân. Tuổi, chẩn đoán, bác sĩ phụ trách để trống khi chưa có
+    // (điều dưỡng mở hồ sơ lúc đo sinh hiệu) — không điền giá trị giả. Ký số bắt buộc có chẩn đoán.
+    if (!patientId || !String(patientName || "").trim()) {
+      return res.status(400).json({ message: "Vui lòng điền mã và họ tên bệnh nhân." });
+    }
+    const hasAge = age !== undefined && age !== null && String(age).trim() !== "";
+    const ageValue = hasAge ? Number(age) : null;
+    if (hasAge && !(Number.isFinite(ageValue) && ageValue >= 0 && ageValue <= 150)) {
+      return res.status(400).json({ message: "Tuổi không hợp lệ." });
     }
 
-    // [TT46/2018/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
-    const categoryToUse = userRetentionCat || (admissionType === "Ngoại trú" ? "ngoai_tru" : "noi_tru");
+    // [TT 13/2025/TT-BYT]: Động cơ tự động xác lập thời hạn lưu trữ bệnh án (10/15/20 năm)
+    // Không gửi loại nhập viện → model lưu "Ngoại trú" (mặc định), thời hạn lưu trữ phải tính theo đúng giá trị đó
+    const effectiveAdmission = admissionType || "Ngoại trú";
+    const categoryToUse = userRetentionCat || (effectiveAdmission === "Ngoại trú" ? "ngoai_tru" : "noi_tru");
     const { retentionCategory, retentionYears, retentionExpiresAt } = calculateRetentionExpiry(categoryToUse, new Date());
 
     const newRecord = new MedicalRecord({
@@ -115,13 +127,13 @@ export const createRecord = async (req, res) => {
       patientId,
       patientName,
       gender,
-      age,
+      age: ageValue,
       admissionType,
       department,
       paymentMethod,
-      diagnosis,
+      diagnosis: diagnosis || "",
       treatmentPlan,
-      doctorInCharge,
+      doctorInCharge: doctorInCharge || "",
       status: "Đang điều trị",
       signStatus: "Chưa duyệt",
       retentionCategory,
@@ -151,7 +163,7 @@ export const createRecord = async (req, res) => {
     res.status(201).json({ status: "success", data: newRecord });
   } catch (error) {
     console.error("Lỗi tạo bệnh án:", error);
-    res.status(500).json({ message: "Không thể tạo bệnh án mới." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo bệnh án mới." });
   }
 };
 
@@ -172,7 +184,7 @@ export const checkBreakGlassRateLimit = (userId) => {
 // Helper thẩm định quyền truy cập hồ sơ bệnh án EMR/EHR đa cơ sở (Kèm cơ chế Break-Glass Cấp cứu)
 const canAccessMedicalRecord = async (record, user, breakGlassReason = "") => {
   if (!record || !user) return false;
-  if (user.role === "admin" || user.role === "system_admin") return true;
+  // Tài khoản nền tảng (admin, system_admin) không có quyền mặc định với bệnh án (RELEASE_v3.4).
 
   // Nếu là bệnh nhân: Bắt buộc phải là chính bệnh nhân của hồ sơ đó
   if (user.role === "patient") {
@@ -264,7 +276,7 @@ export const getRecordById = async (req, res) => {
     res.status(200).json({ status: "success", data: segregatedData });
   } catch (error) {
     console.error("Lỗi chi tiết bệnh án:", error);
-    res.status(500).json({ message: "Lỗi hệ thống khi lấy chi tiết bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Lỗi hệ thống khi lấy chi tiết bệnh án." });
   }
 };
 
@@ -281,16 +293,22 @@ export const updateRecord = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền cập nhật hồ sơ bệnh án này." });
     }
 
-    // [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: KHÓA BẤT BIẾN HỒ SƠ BỆNH ÁN ĐÃ KÝ SỐ HOẶC ĐÃ XUẤT VIỆN
+    // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: KHÓA BẤT BIẾN HỒ SƠ BỆNH ÁN ĐÃ KÝ SỐ HOẶC ĐÃ XUẤT VIỆN
     if (FEATURES.ENABLE_EMR_IMMUTABLE_LOCK && (record.signStatus === "Đã ký số" || record.status === "Xuất viện")) {
       return res.status(400).json({
         status: "fail",
         code: "EMR_IMMUTABLE_RECORD_LOCKED",
-        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 46/2018/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
+        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 13/2025/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
       });
     }
 
-    const updates = req.body;
+    // Chỉ nhận trường nội dung lâm sàng. Trường do hệ thống quản lý (viện, bệnh nhân, trạng thái ký, chữ ký,
+    // phiên bản, hạn lưu trữ, phong tỏa pháp lý, phụ lục, y lệnh miệng, ngày ra viện) không nhận từ client.
+    const EDITABLE_FIELDS = ["patientName", "gender", "age", "admissionType", "department", "paymentMethod", "diagnosis",
+      "treatmentPlan", "status", "doctorInCharge", "allergies", "wardId", "whoGrade", "tumorType", "molecularMarkers",
+      "isClinicalTrial", "clinicalTrialProtocolId", "psychiatricNotes", "hivStatusNotes", "geneticNotes"];
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const updates = Object.fromEntries(EDITABLE_FIELDS.filter((k) => body[k] !== undefined).map((k) => [k, body[k]]));
     
     // So sánh sự khác biệt để ghi nhận phiên bản EMR
     const changes = {};
@@ -316,7 +334,7 @@ export const updateRecord = async (req, res) => {
       emrVersion = new EMRVersion({
         medicalRecordId: record._id,
         version: record.currentVersion || 1, // Lưu trạng thái hiện tại trước khi lên ver mới
-        modifiedBy: req.user?.profile?.name || "Bác sĩ điều trị",
+        modifiedBy: req.user?.profile?.name || req.user?.profile?.fullName || req.user?.email || "",
         changes,
       });
       updates.currentVersion = nextVersion;
@@ -329,7 +347,7 @@ export const updateRecord = async (req, res) => {
       updates.retentionExpiresAt = retentionExpiresAt;
     }
 
-    // [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: CẬP NHẬT NGUYÊN TỬ (ATOMIC CONDITIONAL UPDATE) CHỐNG RACE CONDITION
+    // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: CẬP NHẬT NGUYÊN TỬ (ATOMIC CONDITIONAL UPDATE) CHỐNG RACE CONDITION
     const lockFilter = {
       _id: req.params.id,
       ...(FEATURES.ENABLE_EMR_IMMUTABLE_LOCK
@@ -350,7 +368,7 @@ export const updateRecord = async (req, res) => {
       return res.status(400).json({
         status: "fail",
         code: "EMR_IMMUTABLE_RECORD_LOCKED",
-        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 46/2018/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
+        message: "Hồ sơ bệnh án đã được ký số hoặc bệnh nhân đã xuất viện. Theo quy định Thông tư 13/2025/TT-BYT và Luật Khám bệnh, chữa bệnh số 15/2023/QH15, không được phép chỉnh sửa trực tiếp nội dung bệnh án. Vui lòng sử dụng tính năng 'Tạo phụ lục bổ sung' (Addendum).",
       });
     }
 
@@ -379,7 +397,7 @@ export const updateRecord = async (req, res) => {
       return res.status(400).json({ message: `Thiếu hoặc sai thông tin bắt buộc của bệnh án: ${fields.join(", ")}.` });
     }
     console.error("Lỗi cập nhật bệnh án:", error);
-    res.status(500).json({ message: "Không thể cập nhật bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể cập nhật bệnh án." });
   }
 };
 
@@ -401,7 +419,7 @@ export const getRecordVersions = async (req, res) => {
     res.status(200).json({ status: "success", data: versions });
   } catch (error) {
     console.error("Lỗi lấy danh sách lịch sử sửa đổi bệnh án:", error);
-    res.status(500).json({ message: "Không thể lấy lịch sử sửa đổi bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy lịch sử sửa đổi bệnh án." });
   }
 };
 
@@ -426,7 +444,7 @@ export const getCareSheets = async (req, res) => {
     res.status(200).json({ status: "success", data: careSheets });
   } catch (error) {
     console.error("Lỗi lấy danh sách phiếu chăm sóc:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách phiếu chăm sóc." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách phiếu chăm sóc." });
   }
 };
 
@@ -461,26 +479,11 @@ export const createCareSheet = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ các chỉ số sinh hiệu và diễn biến bệnh." });
     }
 
-    // Tính điểm và phân loại thang điểm hôn mê Glasgow (UC-NUR-04)
-    let calculatedGlasgow = undefined;
-    if (glasgow) {
-      const eye = Math.max(1, Math.min(4, Number(glasgow.eye) || 4));
-      const verbal = Math.max(1, Math.min(5, Number(glasgow.verbal) || 5));
-      const motor = Math.max(1, Math.min(6, Number(glasgow.motor) || 6));
-      const totalScore = eye + verbal + motor;
-      let classification = "Tỉnh táo / Tri giác tốt";
-      if (totalScore <= 8) classification = "Hôn mê sâu / Nguy kịch (Cảnh báo)";
-      else if (totalScore <= 12) classification = "Hôn mê vừa";
-      else if (totalScore <= 14) classification = "Hôn mê nhẹ / Lú lẫn";
-
-      calculatedGlasgow = {
-        eye,
-        verbal,
-        motor,
-        totalScore,
-        classification
-      };
-    }
+    // Glasgow, đồng tử, dẫn lưu, truyền dịch (UC-NUR-04): chỉ lưu phần điều dưỡng thật sự đánh giá,
+    // không tự điền mức "bình thường" cho thành phần còn thiếu.
+    const assessment = normalizeCareAssessment({ careLevel, glasgow, pupils, surgicalDrainage, fluidInfusions });
+    if (assessment.error) return res.status(400).json({ message: assessment.error });
+    const care = assessment.value;
 
     // Đánh giá ngưỡng an toàn sinh hiệu theo phân tầng tuổi & giới tính của hồ sơ bệnh án
     const vitalsEvaluation = evaluateVitalSigns(
@@ -500,16 +503,16 @@ export const createCareSheet = async (req, res) => {
     const newCareSheet = new CareSheet({
       hospitalId: record.hospitalId || req.user?.hospitalId,
       medicalRecordId: req.params.id,
-      careLevel: careLevel || 3,
+      careLevel: care.careLevel,
       pulse: Number(pulse),
       bloodPressure: String(bloodPressure).trim(),
       temperature: Number(temperature),
       respiratoryRate: Number(respiratoryRate),
       spo2: Number(spo2),
-      glasgow: calculatedGlasgow,
-      pupils: pupils || undefined,
-      surgicalDrainage: surgicalDrainage || undefined,
-      fluidInfusions: Array.isArray(fluidInfusions) ? fluidInfusions : undefined,
+      ...(care.glasgow ? { glasgow: care.glasgow } : {}),
+      ...(care.pupils ? { pupils: care.pupils } : {}),
+      ...(care.surgicalDrainage ? { surgicalDrainage: care.surgicalDrainage } : {}),
+      ...(care.fluidInfusions ? { fluidInfusions: care.fluidInfusions } : {}),
       vitalsEvaluation,
       progressNotes,
       careActions,
@@ -528,8 +531,8 @@ export const createCareSheet = async (req, res) => {
           query = { "profile.medicalId": record.patientId };
         }
 
-        const { User } = await import("../models/user.model.js");
-        const { VitalSign } = await import("../models/vitalSign.model.js");
+        const { User } = await import("../../models/user.model.js");
+        const { VitalSign } = await import("./models/vitalSign.model.js");
 
         const patientUser = await User.findOne(query);
         if (patientUser) {
@@ -548,6 +551,7 @@ export const createCareSheet = async (req, res) => {
             }
 
             const newVital = new VitalSign({
+              hospitalId: record.hospitalId || req.user?.hospitalId,
               patient_id: patientUser._id,
               pulse: Number(pulse),
               blood_pressure: { systolic, diastolic },
@@ -570,7 +574,7 @@ export const createCareSheet = async (req, res) => {
     res.status(201).json({ status: "success", data: newCareSheet });
   } catch (error) {
     console.error("Lỗi tạo phiếu chăm sóc:", error);
-    res.status(500).json({ message: "Không thể lưu phiếu chăm sóc." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lưu phiếu chăm sóc." });
   }
 };
 
@@ -595,7 +599,7 @@ export const getConsultations = async (req, res) => {
     res.status(200).json({ status: "success", data: consultations });
   } catch (error) {
     console.error("Lỗi lấy danh sách hội chẩn:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách biên bản hội chẩn." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách biên bản hội chẩn." });
   }
 };
 
@@ -640,7 +644,7 @@ export const createConsultation = async (req, res) => {
     res.status(201).json({ status: "success", data: newConsultation });
   } catch (error) {
     console.error("Lỗi tạo biên bản hội chẩn:", error);
-    res.status(500).json({ message: "Không thể lưu biên bản hội chẩn." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lưu biên bản hội chẩn." });
   }
 };
 
@@ -665,7 +669,7 @@ export const getConsents = async (req, res) => {
     res.status(200).json({ status: "success", data: consents });
   } catch (error) {
     console.error("Lỗi lấy giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách giấy cam đoan." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách giấy cam đoan." });
   }
 };
 
@@ -700,7 +704,7 @@ export const createConsent = async (req, res) => {
     res.status(201).json({ status: "success", data: newConsent });
   } catch (error) {
     console.error("Lỗi tạo giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể tạo giấy cam đoan." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo giấy cam đoan." });
   }
 };
 
@@ -726,23 +730,11 @@ export const signConsent = async (req, res) => {
     const signerName = req.user?.profile?.name || req.user?.name;
 
     // [SECURITY FIX]: Xác thực vai trò ký từ req.user.role đã được định danh, ngăn chặn mạo danh
-    if (["doctor", "admin", "hospital_admin"].includes(userRole)) {
+    if (["doctor", "department_head", "hospital_admin"].includes(userRole)) {
       consent.doctorSigned = true;
-      consent.doctorSignature = signature || signerName || "Bs. Phụ trách";
+      consent.doctorSignature = signature || signerName || "";
       consent.signedAt = new Date();
-
-      // Lưu trữ thông số Chữ ký số y tế (PKI / SmartCard / Cloud HSM)
-      if (digitalSignature && typeof digitalSignature === "object") {
-        consent.digitalSignatureMetadata = {
-          signatureType: digitalSignature.signatureType || "pki_token",
-          certificateSerial: digitalSignature.certificateSerial || "",
-          signingAlgorithm: digitalSignature.signingAlgorithm || "SHA256withRSA",
-          timestampToken: digitalSignature.timestampToken || "",
-          caProvider: digitalSignature.caProvider || "VNPT-CA / Viettel-CA",
-          signedHash: digitalSignature.signedHash || "",
-          signedAt: new Date(),
-        };
-      }
+      // Chưa tích hợp CA: không ghi thông tin chứng thư số (client tự khai không kiểm chứng được).
     } else if (userRole === "patient") {
       // Bệnh nhân chỉ được ký cam đoan cho chính mình
       const isOwnConsent = (record.patientId && record.patientId.toString() === req.user.id.toString()) ||
@@ -761,11 +753,11 @@ export const signConsent = async (req, res) => {
     res.status(200).json({ status: "success", data: consent });
   } catch (error) {
     console.error("Lỗi ký giấy cam đoan:", error);
-    res.status(500).json({ message: "Không thể thực hiện ký duyệt." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thực hiện ký duyệt." });
   }
 };
 
-// --- [TT46/2018/TT-BYT & LUẬT 15/2023/QH15]: BỔ SUNG PHỤ LỤC BỆNH ÁN (EMR ADDENDUM) ---
+// --- [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: BỔ SUNG PHỤ LỤC BỆNH ÁN (EMR ADDENDUM) ---
 export const createRecordAddendum = async (req, res) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
@@ -810,7 +802,7 @@ export const createRecordAddendum = async (req, res) => {
         entityId: record._id.toString(),
         performedBy: (req.user?.id || req.user?._id || "system").toString(),
         hospitalId: record.hospitalId || req.user?.hospitalId,
-        details: `Thêm phụ lục bệnh án (lý do: ${reason}) theo Điều 12 TT46/2018/TT-BYT.`,
+        details: `Thêm phụ lục bệnh án (lý do: ${reason}) theo TT 13/2025/TT-BYT.`,
         payload: { addendumHash: signedHash, reason },
       });
     } catch (auditErr) {
@@ -820,11 +812,11 @@ export const createRecordAddendum = async (req, res) => {
     res.status(201).json({ status: "success", data: record });
   } catch (error) {
     console.error("Lỗi tạo phụ lục bệnh án:", error);
-    res.status(500).json({ message: "Không thể tạo phụ lục bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo phụ lục bệnh án." });
   }
 };
 
-// --- [LUẬT GDĐT 20/2023 & TT46/2018]: KÝ SỐ BỆNH ÁN ĐIỆN TỬ VÀ KÍCH HOẠT KHÓA BẤT BIẾN ---
+// --- [LUẬT GDĐT 20/2023 & TT 13/2025]: KÝ SỐ BỆNH ÁN ĐIỆN TỬ VÀ KÍCH HOẠT KHÓA BẤT BIẾN ---
 export const signMedicalRecord = async (req, res) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
@@ -838,25 +830,29 @@ export const signMedicalRecord = async (req, res) => {
     }
 
     const userRole = req.user?.role;
-    if (!["doctor", "admin", "hospital_admin"].includes(userRole)) {
-      return res.status(403).json({ message: "Chỉ bác sĩ điều trị hoặc quản trị viên mới có thẩm quyền ký số bệnh án." });
+    if (!["doctor", "department_head", "hospital_admin"].includes(userRole)) {
+      return res.status(403).json({ message: "Chỉ bác sĩ điều trị, trưởng khoa hoặc quản lý bệnh viện mới có thẩm quyền ký bệnh án." });
     }
-
-    const { certificateSerial, caProvider, signatureType, signingAlgorithm, timestampToken } = req.body || {};
+    if (!String(record.diagnosis || "").trim()) {
+      return res.status(400).json({ message: "Bệnh án chưa có chẩn đoán. Bác sĩ cần ghi chẩn đoán trước khi ký số." });
+    }
 
     // Tính toán mã băm toàn vẹn nội dung bệnh án lâm sàng
     const clinicalDigest = `${record._id}|${record.patientId}|${record.diagnosis}|${record.treatmentPlan}|${record.department}|${record.hospitalId}`;
     const signedHash = crypto.createHash("sha256").update(clinicalDigest).digest("hex");
 
+    // Hệ thống chưa tích hợp tổ chức chứng thực (CA): chỉ ghi mã băm toàn vẹn SHA-256 và tài khoản đã đăng nhập,
+    // không ghi số chứng thư, nhà cung cấp CA hay dấu thời gian (giống ký báo cáo CĐHA, P0-2).
+    // Thông tin chứng thư do client tự gửi không kiểm chứng được nên bị bỏ qua.
     record.signStatus = "Đã ký số";
     record.digitalSignatureMetadata = {
-      signatureType: signatureType || "cloud_hsm",
-      certificateSerial: certificateSerial || "VNPT_SMARTCA_2026_DEFAULT",
-      signingAlgorithm: signingAlgorithm || "SHA256withRSA",
-      timestampToken: timestampToken || "RFC3161_TSA_VERIFIED",
-      caProvider: caProvider || "VNPT-CA / Viettel-CA",
+      signatureType: "internal_hash",
+      certificateSerial: "",
+      signingAlgorithm: "SHA-256",
+      timestampToken: "",
+      caProvider: "",
       signedHash,
-      signedBy: req.user?.profile?.name || req.user?.name || "Bác sĩ điều trị",
+      signedBy: req.user?.profile?.name || req.user?.profile?.fullName || req.user?.name || req.user?.email || String(req.user?.id || ""),
       signedAt: new Date(),
     };
 
@@ -880,7 +876,7 @@ export const signMedicalRecord = async (req, res) => {
     res.status(200).json({ status: "success", data: record });
   } catch (error) {
     console.error("Lỗi ký số bệnh án:", error);
-    res.status(500).json({ message: "Không thể thực hiện ký số bệnh án." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thực hiện ký số bệnh án." });
   }
 };
 
@@ -896,6 +892,10 @@ export const getPrivacyConsents = async (req, res) => {
     } else if (req.query.patientId) {
       filter.patientId = req.query.patientId;
     }
+    if (req.user.role !== 'patient' && !req.user.hospitalId) {
+      // Không trả cam kết của mọi viện cho tài khoản chưa gán viện
+      return res.status(403).json({ message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
     if (req.user.hospitalId) {
       filter.hospitalId = req.user.hospitalId;
     }
@@ -910,7 +910,7 @@ export const getPrivacyConsents = async (req, res) => {
     res.status(200).json({ status: "success", data: safeConsents });
   } catch (error) {
     console.error("Lỗi lấy danh sách cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
   }
 };
 
@@ -920,7 +920,19 @@ export const createPrivacyConsent = async (req, res) => {
   try {
     const { purposes, signerName, signerNationalId, signerRelationship, medicalId } = req.body;
     const patientId = req.user.role === 'patient' ? (req.user.id || req.user._id) : req.body.patientId;
-    const hospitalId = req.user.hospitalId || req.body.hospitalId;
+    if (req.user.role !== "patient" && !req.user.hospitalId) {
+      return res.status(403).json({ message: "Tài khoản chưa được gán vào bệnh viện nào." });
+    }
+    // Nhân viên chỉ lập cam kết trong viện của mình (không nhận hospitalId từ body)
+    let hospitalId = req.user.role === "patient" ? (req.user.hospitalId || req.body.hospitalId) : req.user.hospitalId;
+    // Tài khoản bệnh nhân không gắn viện: lấy viện từ lượt khám gần nhất của chính họ
+    if (!hospitalId && req.user.role === "patient") {
+      const latestVisit = await Visit.findOne({ patientId }).sort({ createdAt: -1 }).select("hospitalId").lean();
+      hospitalId = latestVisit?.hospitalId;
+    }
+    if (!hospitalId) {
+      return res.status(400).json({ message: "Bạn chưa có lượt khám tại bệnh viện nào nên chưa thể lập cam kết." });
+    }
 
     if (!patientId || !signerName) {
       return res.status(400).json({ message: "Thiếu thông tin người bệnh hoặc người ký cam kết." });
@@ -971,7 +983,7 @@ export const createPrivacyConsent = async (req, res) => {
     res.status(201).json({ status: "success", data: consent });
   } catch (error) {
     console.error("Lỗi tạo cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể tạo bản cam kết bảo vệ dữ liệu cá nhân." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể tạo bản cam kết bảo vệ dữ liệu cá nhân." });
   }
 };
 
@@ -993,8 +1005,8 @@ export const revokePrivacyConsent = async (req, res) => {
     if (req.user.role === 'patient' && consent.patientId.toString() !== (req.user.id || req.user._id).toString()) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết này." });
     }
-    if (!["admin", "system_admin"].includes(req.user.role)
-      && String(consent.hospitalId) !== String(req.user.hospitalId)) {
+    if (req.user.role !== "patient"
+      && (!req.user.hospitalId || String(consent.hospitalId) !== String(req.user.hospitalId))) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết của bệnh viện khác." });
     }
 
@@ -1027,7 +1039,7 @@ export const revokePrivacyConsent = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi thu hồi cam kết bảo vệ dữ liệu:", error);
-    res.status(500).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
+    res.status(inputErrorStatus(res, error)).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
   }
 };
 
@@ -1053,7 +1065,7 @@ export const approveTumorBoard = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy biên bản hội chẩn." });
     }
 
-    if (!["admin", "system_admin"].includes(req.user.role) && String(consultation.hospitalId) !== String(req.user.hospitalId)) {
+    if (!req.user.hospitalId || String(consultation.hospitalId) !== String(req.user.hospitalId)) {
       return res.status(403).json({ message: "Không có quyền phê duyệt hội chẩn của bệnh viện khác." });
     }
 
@@ -1073,7 +1085,7 @@ export const approveTumorBoard = async (req, res) => {
     let linkedVisitId = visitId || tb.postOpMriVisitId || null;
     if (effectiveSurgeryDate) {
       try {
-        const { Visit } = await import("../../models/visit.model.js");
+        
         let targetVisit = linkedVisitId ? await Visit.findById(linkedVisitId) : null;
         if (!targetVisit) {
           const record = await MedicalRecord.findById(consultation.medicalRecordId).lean();
@@ -1132,6 +1144,6 @@ export const approveTumorBoard = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi phê duyệt Tumor Board:", error);
-    return res.status(500).json({ message: "Không thể phê duyệt biên bản Tumor Board.", error: error.message });
+    return res.status(inputErrorStatus(res, error)).json({ message: "Không thể phê duyệt biên bản Tumor Board.", error: error.message });
   }
 };

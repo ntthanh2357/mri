@@ -1,12 +1,13 @@
-# 🧠 NeuroScan AI — Hệ Thống Quản Lý Bệnh Án Điện Tử (EMR), Mini-PACS & AI Chẩn Đoán U Não
+# 🧠 NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
 ## TÀI LIỆU HỢP NHẤT TOÀN DIỆN & BÁO CÁO CHUYÊN SÂU ĐỒ ÁN TỐT NGHIỆP
-### KIẾN TRÚC HỆ THỐNG · HYBRID MINI-PACS · LUỒNG LÂM SÀNG B2B/B2C · CHUẨN HÓA LOGIC Y TẾ · TOÀN BỘ API V3.2 · ĐỐI CHIẾU BỘ Y TẾ & CHIẾN LƯỢC BẢO VỆ HỘI ĐỒNG
+### KIẾN TRÚC HỆ THỐNG · HYBRID MINI-PACS · LUỒNG LÂM SÀNG B2B/B2C · CHUẨN HÓA LOGIC Y TẾ · TOÀN BỘ API · ĐỐI CHIẾU BỘ Y TẾ & CHIẾN LƯỢC BẢO VỆ HỘI ĐỒNG
 
 ---
 
-> **Đề tài:** Hệ Thống Quản Lý Bệnh Án Điện Tử (EMR), Điều Phối Quy Trình Bệnh Viện & Phân Hệ Mini-PACS Hỗ Trợ Chẩn Đoán U Não Bằng Trí Tuệ Nhân Tạo (NeuroScan AI)  
+> **Tên đề tài (VN):** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử  
+> **Tên đề tài (EN):** NeuroScan AI – A Brain MRI Tumor Screening Support and Electronic Medical Record Platform  
 > **Chuyên ngành:** Kỹ thuật Phần mềm / Hệ thống Thông tin Y tế (Healthcare Information Systems)  
-> **Phiên bản:** NeuroScan AI v3.2 Core Foundation (Bản hợp nhất hoàn chỉnh)  
+> **Tên hệ thống:** NeuroScan AI (mã nguồn phiên bản v3.4)  
 > **Thời điểm cập nhật:** Tháng 09/2026  
 > **Tình trạng:** Đã nghiệm thu 100% các bài kiểm thử cú pháp, bảo mật đa viện, luồng AI tự động và các chuẩn hóa nghiệp vụ lâm sàng thực tế.
 
@@ -19,7 +20,7 @@
 3. [HƯỚNG DẪN CÀI ĐẶT, KHỞI CHẠY & TÀI KHOẢN TRẢI NGHIỆM](#3-hướng-dẫn-cài-đặt-khởi-chạy--tài-khoản-trải-nghiệm)
 4. [GIẢI PHÁP ĐỘT PHÁ HYBRID MINI-PACS & LƯU TRỮ WEB EMR](#4-giải-pháp-đột-phá-hybrid-mini-pacs--lưu-trữ-web-emr)
 5. [SƠ ĐỒ & QUY TRÌNH VẬN HÀNH LÂM SÀNG TOÀN TRÌNH (B2B & B2C)](#5-sơ-đồ--quy-trình-vận-hành-lâm-sàng-toàn-trình-b2b--b2c)
-6. [CÁC CHUẨN HÓA NGHIỆP VỤ Y TẾ & BẢO MẬT ĐÃ NGHIỆM THU 100%](#6-các-chuẩn-hóa-nghiệp-vụ-y-tế--bảo-mật-đã-nghiệm-thu-100)
+6. [CÁC CHUẨN HÓA NGHIỆP VỤ Y TẾ & BẢO MẬT ĐÃ TRIỂN KHAI](#6-các-chuẩn-hóa-nghiệp-vụ-y-tế--bảo-mật-đã-triển-khai)
 7. [BẢNG ĐẶC TẢ TOÀN BỘ API V3.2 (FULL API SPECIFICATION)](#7-bảng-đặc-tả-toàn-bộ-api-v32-full-api-specification)
 8. [ĐỐI CHIẾU THỰC TIỄN BỆNH VIỆN & TIÊU CHUẨN BỘ Y TẾ VIỆT NAM](#8-đối-chiếu-thực-tiễn-bệnh-viện--tiêu-chuẩn-bộ-y-tế-việt-nam)
 9. [BỘ CÂU HỎI PHẢN BIỆN HỘI ĐỒNG TỐT NGHIỆP & CHIẾN LƯỢC BẢO VỆ](#9-bộ-câu-hỏi-phản-biện-hội-đồng-tốt-nghiệp--chiến-lược-bảo-vệ)
@@ -34,7 +35,7 @@ Dự án cung cấp trọn bộ tài liệu học thuật chuyên sâu 10 chươ
 | Thứ tự | Tên Chương / Phụ Lục | Nội dung chính & Liên kết tài liệu |
 | :---: | :--- | :--- |
 | **Chương 1** | Tổng quan đề tài & Mục tiêu | [docs/01_de_tai_va_muc_tieu.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/01_de_tai_va_muc_tieu.md) · Tính cấp thiết, mục tiêu, phạm vi u não. |
-| **Chương 2** | Nghiệp vụ & Quy trình Bệnh viện | [docs/02_nghiep_vu_va_quy_trinh_benh_vien.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/02_nghiep_vu_va_quy_trinh_benh_vien.md) · Luồng 8 bước lâm sàng, BHYT, an toàn MRI. |
+| **Chương 2** | Nghiệp vụ & Quy trình Bệnh viện | [docs/02_nghiep_vu_va_quy_trinh_benh_vien.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/02_nghiep_vu_va_quy_trinh_benh_vien.md) · Luồng 8 bước lâm sàng, viện phí, an toàn MRI. |
 | **Chương 3** | Thiết kế Kiến trúc Hệ thống | [docs/03_kien_truc_he_thong.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/03_kien_truc_he_thong.md) · Microservices, Nginx Gateway, Hybrid Mini-PACS. |
 | **Chương 4** | Thiết kế Cơ sở Dữ liệu | [docs/04_thiet_ke_csdl.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/04_thiet_ke_csdl.md) · Mô hình thực thể ERD, Multi-tenancy, Mongoose Schema. |
 | **Chương 5** | Đặc tả Kỹ thuật API RESTful | [docs/05_thiet_ke_api.md](file:///c:/Users/Administrator/OneDrive/Desktop/team5/docs/05_thiet_ke_api.md) · Swagger/OpenAPI, mã phản hồi HTTP, JWT RBAC. |
@@ -75,7 +76,7 @@ $$\text{HIS (Tiếp đón, Viện phí)} \longrightarrow \text{RIS (Hàng đợi
 │     HỆ LƯU TRỮ CLOUD      │ │   AI DIAGNOSTIC ENGINE│ │     DATABASE CỤC BỘ / CLOUD   │
 │ Google Drive / Firebase   │ │  FastAPI  ·  Cổng 8000│ │  MongoDB Atlas (Multi-Tenant)     │
 │ 01_Original_Scans (.zip)  │ │  Ensemble DeepLearning│ │  Visit, Patient, ImagingResult,   │
-│ 04_Patient_Reports (JSON) │ │  YOLOv8 + Grad-CAM    │ │  HospitalBed, Invoice, Task       │
+│ 04_Patient_Reports (JSON) │ │  YOLOv8 + Grad-CAM    │ │  Visit, Invoice, Task             │
 └───────────────────────────┘ └───────────────────────┘ └───────────────────────────┘
 ```
 
@@ -83,12 +84,12 @@ $$\text{HIS (Tiếp đón, Viện phí)} \longrightarrow \text{RIS (Hàng đợi
 
 | Vai trò | Mã Role | Màn hình tương tác chính | Trách nhiệm chuyên môn lâm sàng |
 | :--- | :---: | :--- | :--- |
-| **Tiếp tân / Thu ngân** | `receptionist` | [NurseReceptionScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/NurseReceptionScreen.js) | Đăng ký lượt khám, khai báo thẻ BHYT, phân phòng khám theo bác sĩ, tạo hóa đơn thu viện phí. |
-| **Điều dưỡng viên (Nurse)** | `nurse` | [NurseReceptionScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/NurseReceptionScreen.js) | Tiếp nhận tại buồng khám, đo 5 chỉ số sinh hiệu (Mạch, HA, Nhiệt độ, SpO₂, Nhịp thở), gán giường nội trú. |
+| **Tiếp tân / Thu ngân** | `receptionist` | [NurseReceptionScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/NurseReceptionScreen.js) | Đăng ký lượt khám, phân phòng khám theo bác sĩ, tạo hóa đơn thu viện phí. |
+| **Điều dưỡng viên (Nurse)** | `nurse` | [NurseReceptionScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/NurseReceptionScreen.js) | Tiếp nhận tại buồng khám, đo 5 chỉ số sinh hiệu (Mạch, HA, Nhiệt độ, SpO₂, Nhịp thở), lập phiếu chăm sóc. |
 | **Bác sĩ Khám Lâm Sàng** | `doctor` | [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | Khám ngoại trú, ra y lệnh chụp MRI (`mriOrder`), chỉ định đơn thuốc, hội chẩn chuyên khoa. |
 | **Kỹ thuật viên CĐHA** | `technician` | [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | Bảng kiểm an toàn MRI, vận hành phòng chụp, nộp lát cắt tiêu biểu & file nén DICOM gốc. |
 | **Bác sĩ Đọc Phim (Radiologist)** | `doctor` | [ImagingResultScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/ImagingResultScreen.js) | Thẩm định hình ảnh y khoa, đối chiếu gợi ý AI, kết luận chẩn đoán và đóng dấu ký số điện tử. |
-| **Quản trị viên Bệnh viện** | `hospital_admin` / `admin` | [AdminDashboardScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/AdminDashboardScreen.js) | Quản lý giá khám, chỉ tiêu tiếp nhận/ngày, quản trị phòng máy MRI, giường bệnh và phân quyền nhân sự. |
+| **Quản trị viên Bệnh viện** | `hospital_admin` / `admin` | [AdminDashboardScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/AdminDashboardScreen.js) | Quản lý giá khám, chỉ tiêu tiếp nhận/ngày, quản trị phòng máy MRI và phân quyền nhân sự. |
 | **Bệnh nhân / Thân nhân** | `patient` | [PatientPortalScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/PatientPortalScreen.js) | Sổ sức khỏe đám mây cá nhân, xem kết quả MRI, quét mã VietQR PayOS, tra cứu diễn giải AI. |
 
 ---
@@ -184,9 +185,9 @@ Hệ thống được khởi tạo sẵn các tài khoản demo chuẩn y khoa (
 
 | Vai trò | Email đăng nhập | Tên hiển thị chuyên môn | Trách nhiệm kiểm thử chính |
 | :--- | :--- | :--- | :--- |
-| **Admin BV** | `admin@hospital.vn` | Quản trị viên Bệnh viện | Quản trị bảng giá, phòng chụp MRI, danh mục giường bệnh. |
-| **Tiếp tân** | `receptionist@hospital.vn` | Nhân viên Tiếp đón & Thu ngân | Đăng ký bệnh nhân, khai báo BHYT, mở lượt khám, thu tiền. |
-| **Điều dưỡng** | `nurse@hospital.vn` | ĐD. Nguyễn Thị Mai | Đo sinh hiệu 5 chỉ số, gán giường nội trú, lập phiếu chăm sóc. |
+| **Admin BV** | `admin@hospital.vn` | Quản trị viên Bệnh viện | Quản trị bảng giá, phòng chụp MRI, nhân sự. |
+| **Tiếp tân** | `receptionist@hospital.vn` | Nhân viên Tiếp đón & Thu ngân | Đăng ký bệnh nhân, mở lượt khám, thu tiền. |
+| **Điều dưỡng** | `nurse@hospital.vn` | ĐD. Nguyễn Thị Mai | Đo sinh hiệu 5 chỉ số, lập phiếu chăm sóc. |
 | **Bác sĩ Khám** | `doctor@hospital.vn` | BS. CKII Lê Mạnh Minh | Khám lâm sàng, ra y lệnh chụp MRI, kê đơn thuốc, hội chẩn. |
 | **Kỹ thuật viên**| `tech@hospital.vn` | KTV. Trần Văn Hùng | Bảng kiểm an toàn MRI, nộp ảnh Key Slices & file nén DICOM. |
 | **Bác sĩ CĐHA** | `radiologist@hospital.vn` | TS. BS Hoàng Đức Nam | Thẩm định hình ảnh học, đối soát AI, đóng dấu ký số điện tử. |
@@ -215,11 +216,11 @@ Mỗi ca chụp MRI sọ não gồm 400 đến hơn 1.500 file DICOM (`.dcm`), d
                     │                                │
                     ▼                                ▼
        Phục vụ: Hiển thị nhanh trên Web     Phục vụ: Lưu trữ lâu dài (PACS Archive)
-       EMR (1 giây), AI chẩn đoán ngay      Bác sĩ tải về mở bằng RadiAnt / Horos
+       EMR (1 giây), AI hỗ trợ sàng lọc    Bác sĩ tải về mở bằng RadiAnt / Horos
        (2 giây), Heatmap Grad-CAM           để đo đạc đa bình diện và lập lịch mổ.
 ```
 
-1. **Vùng 1 (Bắt buộc — Dành cho Web EMR & AI chẩn đoán tức thì):**
+1. **Vùng 1 (Bắt buộc — Dành cho Web EMR & AI hỗ trợ sàng lọc tức thì):**
    - KTV chọn 1 đến 3 ảnh cắt lớp đại diện rõ u nhất (`.jpg`, `.png`).
    - Gửi luồng nhị phân trực tiếp qua Multer `diskStorage` ([imagingUpload.middleware.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/middlewares/imagingUpload.middleware.js)), tiết kiệm 40% băng thông so với Base64.
    - AI Server xử lý và trả kết quả Heatmap Grad-CAM + Bounding Box trong vòng 2 giây.
@@ -236,7 +237,7 @@ Mỗi ca chụp MRI sọ não gồm 400 đến hơn 1.500 file DICOM (`.dcm`), d
 
 ```mermaid
 stateDiagram-v2
-    [*] --> đang_chờ: [B1] Tiếp đón & Khai báo BHYT
+    [*] --> đang_chờ: [B1] Tiếp đón & Đăng ký lượt khám
     
     đang_chờ --> đang_khám: [B2] Đo sinh hiệu & Khám lâm sàng
     
@@ -257,18 +258,18 @@ stateDiagram-v2
     
     chờ_bác_sĩ_đọc --> hoàn_tất: [B6] Bác sĩ CĐHA thẩm định, kết luận & Ký số điện tử
     
-    hoàn_tất --> đã_đóng: [B7] Nhập viện nội trú (Gán giường) hoặc Quyết toán VietQR xuất viện
+    hoàn_tất --> đã_đóng: [B7] Quyết toán viện phí VietQR và đóng hồ sơ
 ```
 
 ### 5.2. Tóm tắt 8 Bước Vận Hành Lâm Sàng B2B
-1. **Tiếp đón & Phân buồng khám:** Tiếp tân tìm kiếm bệnh nhân theo mã y tế `medicalId`, khai báo mức hưởng BHYT (80%–100%), gợi ý bác sĩ có hàng chờ ngắn nhất và tạo lượt khám `đang chờ`.
+1. **Tiếp đón & Phân buồng khám:** Tiếp tân tìm kiếm bệnh nhân theo mã y tế `medicalId`, gợi ý bác sĩ có hàng chờ ngắn nhất và tạo lượt khám `đang chờ`.
 2. **Đo sinh hiệu ban đầu:** Điều dưỡng ghi nhận 5 chỉ số sinh tồn (Mạch, Huyết áp, Nhiệt độ, SpO₂, Nhịp thở); Bác sĩ bấm bắt đầu khám, chuyển trạng thái sang `đang khám`.
 3. **Ra y lệnh chụp MRI:** Bác sĩ chọn vùng chụp (Sọ não, Cột sống), ghi chú chỉ định tiêm thuốc đối quang từ, tích chọn AI phân tích. Hệ thống tự động sinh hóa đơn tạm ứng viện phí và chuyển trạng thái sang `chờ chụp`.
-4. **Bảng kiểm an toàn MRI & Chụp phim:** Hàng chờ KTV hiển thị huy hiệu viện phí (`CẤP CỨU`, `BHYT`, `Đã đóng phí`, `Chưa đóng phí`). KTV thực hiện Bảng kiểm 4 câu hỏi an toàn. **Chặn tuyệt đối (HTTP 400)** nếu bệnh nhân mang máy tạo nhịp tim/kim loại từ tính. Xử lý ngoại lệ với nút `Chụp lại (Rescan)` và `Hủy ca (Cancel)`.
+4. **Bảng kiểm an toàn MRI & Chụp phim:** Hàng chờ KTV hiển thị huy hiệu viện phí (`CẤP CỨU`, `Đã đóng phí`, `Chưa đóng phí`). KTV thực hiện Bảng kiểm 4 câu hỏi an toàn. **Chặn (HTTP 400)** nếu bệnh nhân mang máy tạo nhịp tim/kim loại từ tính. Xử lý ngoại lệ với nút `Chụp lại (Rescan)` và `Hủy ca (Cancel)`.
 5. **Phân tích AI tự động:** Backend tự động gọi ngầm AI server, tiền xử lý và phân loại 4 nhóm u, vẽ bản đồ nhiệt Grad-CAM và Bounding box YOLOv8, cập nhật `ImagingResult.aiReport` và chuyển sang `chờ bác sĩ đọc`.
 6. **Thẩm định, Đọc phim & Ký số điện tử:** Bác sĩ CĐHA xem ảnh gốc đối chiếu Heatmap, bấm xác nhận hoặc hiệu chỉnh kết quả AI (lưu nhật ký `feedback_log.csv` để tái huấn luyện), ghi mô tả tổn thương, chẩn đoán xác định và đóng con dấu **✓ ĐÃ KÝ SỐ ĐIỆN TỬ**.
-7. **Phân giường nội trú:** Chuyển bệnh nhân u não vào điều trị nội trú, gán giường bệnh bằng lệnh nguyên tử chống trùng lặp, lập phiếu chăm sóc điều dưỡng theo dõi tri giác Glasgow.
-8. **Quyết toán viện phí & Xuất viện:** Hệ thống tính tổng tiền, tự động khấu trừ phần BHYT chi trả, tạo mã thanh toán động **VietQR PayOS** để bệnh nhân quét chuyển khoản tức thì, xuất tóm tắt bệnh án PDF có mã QR tra cứu 30 ngày và chuyển trạng thái sang `đã đóng`.
+7. **Điều trị nội trú & chăm sóc:** Bác sĩ ra phác đồ điều trị, điều dưỡng lập phiếu chăm sóc theo dõi tri giác Glasgow. Xếp giường nội trú do bệnh viện thực hiện ngoài hệ thống (ngoài phạm vi đồ án).
+8. **Quyết toán viện phí & Xuất viện:** Hệ thống tính tổng tiền, tạo mã thanh toán động **VietQR PayOS** để bệnh nhân quét chuyển khoản tức thì, xuất tóm tắt bệnh án PDF có mã QR tra cứu 30 ngày và chuyển trạng thái sang `đã đóng`.
 
 ### 5.3. Luồng Sổ Sức Khỏe Bệnh Nhân B2C & Danh Mục 14 Loại Hồ Sơ EMR
 - **Bảo vệ danh tính cá nhân:** Tuyệt đối không lưu số CCCD/CMND trên hệ thống, quản lý hồ sơ an toàn qua mã y tế `medicalId`, họ tên và số điện thoại.
@@ -276,13 +277,13 @@ stateDiagram-v2
 - **Chia sẻ QR liên viện:** Bệnh nhân tạo mã QR động để bác sĩ tại bệnh viện mới quét truy cập nhanh 12 loại tài liệu y khoa cá nhân trong vòng 30 ngày.
 - **Danh mục 14 loại tài liệu EMR chuẩn y khoa:**
   * *Nhóm Hành chính & Tài chính:* Phiếu tiếp nhận khám bệnh, Phiếu thu viện phí, Tóm tắt hồ sơ bệnh án.
-  * *Nhóm Lâm sàng:* Phiếu chỉ định cận lâm sàng, Toa thuốc điều trị, Giấy ra viện, Phiếu chuyển tuyến khám chữa bệnh BHYT.
+  * *Nhóm Lâm sàng:* Phiếu chỉ định cận lâm sàng, Toa thuốc điều trị, Giấy ra viện, Phiếu chuyển tuyến khám chữa bệnh.
   * *Nhóm Cận lâm sàng:* Phiếu xét nghiệm huyết học, Phiếu hóa sinh máu, Kết quả CT-Scan sọ não, Kết quả MRI não bộ.
   * *Nhóm Điều dưỡng & Pháp lý:* Phiếu chăm sóc điều dưỡng theo dõi sinh hiệu, Giấy cam đoan chấp thuận phẫu thuật/thủ thuật, Biên bản hội chẩn chuyên khoa.
 
 ---
 
-## 6. CÁC CHUẨN HÓA NGHIỆP VỤ Y TẾ & BẢO MẬT ĐÃ NGHIỆM THU 100%
+## 6. CÁC CHUẨN HÓA NGHIỆP VỤ Y TẾ & BẢO MẬT ĐÃ TRIỂN KHAI
 
 Toàn bộ các điểm đứt gãy và nguy cơ logic y tế trước đây đã được chuẩn hóa và kiểm thử xác minh tự động đạt kết quả 100%:
 
@@ -290,25 +291,23 @@ Toàn bộ các điểm đứt gãy và nguy cơ logic y tế trước đây đ�
 
 | STT | Vị trí Mã Nguồn | Hạng Mục Nghiệp Vụ Chuẩn Hóa | Hiện Trạng Thực Tế Sau Khi Hoàn Thiện |
 | :---: | :--- | :--- | :--- |
-| **1** | [patient.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/patient.controller.js#L78-L101) | **Cô lập Dữ liệu Đa Viện (Cross-Tenant Isolation) & Chống ReDoS** | Áp dụng mệnh đề `$and` kết hợp bộ lọc `{ hospitalId }` cùng danh sách trường search. Thoát ký tự đặc biệt Regex chống tấn công ReDoS. Dữ liệu giữa các bệnh viện được cô lập tuyệt đối. |
-| **2** | [invoice.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/invoice.controller.js#L34-L37) & [visit.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/visit.controller.js#L273-L275) | **Bảo vệ Phòng Ngừa Null Pointer cho Giá Viện Phí** | Sử dụng triệt để Optional Chaining & Nullish Coalescing: `hospital?.pricing?.examFee ?? 50000`, `mriFee ?? 1500000`, `aiFee ?? 200000`. Hệ thống hoạt động an toàn ngay cả khi BV chưa cấu hình bảng giá. |
-| **3** | [imaging.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/imaging.controller.js#L864-L895) | **Luồng AI Chẩn Đoán Ngầm Không Bị Nghẽn Trạng Thái** | KTV nộp ảnh có cờ `requestAiAnalysis`, backend tự động gọi tác vụ ngầm `executeAiPredictionInternal`. Tích hợp khối `catch` và nhánh fallback `else` tự động đưa ca bệnh về `chờ bác sĩ đọc` nếu AI server gặp sự cố. |
+| **1** | [patient.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/patient.controller.js#L78-L101) | **Cô lập Dữ liệu Đa Viện (Cross-Tenant Isolation) & Chống ReDoS** | Áp dụng mệnh đề `$and` kết hợp bộ lọc `{ hospitalId }` cùng danh sách trường search. Thoát ký tự đặc biệt Regex chống tấn công ReDoS. Dữ liệu giữa các bệnh viện được cô lập theo từng bệnh viện. |
+| **2** | [invoice.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/invoice.controller.js#L34-L37) & [visit.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/visit.controller.js#L273-L275) | **Bảo vệ Phòng Ngừa Null Pointer cho Giá Viện Phí** | Sử dụng Optional Chaining & Nullish Coalescing: `hospital?.pricing?.examFee ?? 50000`, `mriFee ?? 1500000`, `aiFee ?? 200000`. Hệ thống hoạt động an toàn ngay cả khi BV chưa cấu hình bảng giá. |
+| **3** | [imaging.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/imaging.controller.js#L864-L895) | **Luồng AI Hỗ Trợ Sàng Lọc Chạy Ngầm Không Bị Nghẽn Trạng Thái** | KTV nộp ảnh có cờ `requestAiAnalysis`, backend tự động gọi tác vụ ngầm `executeAiPredictionInternal`. Tích hợp khối `catch` và nhánh fallback `else` tự động đưa ca bệnh về `chờ bác sĩ đọc` nếu AI server gặp sự cố. |
 | **4** | [HomeScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/HomeScreen.js#L271-L280) | **Định Danh Đúng Vai Trò Kỹ Thuật Viên CĐHA** | Khai báo biến `isTechnician = user.role === 'technician'`. Hiển thị chuẩn xác nhãn `'Kỹ thuật viên Chẩn đoán Hình ảnh'` và mở khóa widget điều phối phòng chụp MRI trên trang chủ. |
 | **5** | [dicom.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/dicom.controller.js#L287-L294) & [mriRoom.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/mriRoom.controller.js#L213-L218) | **Chuẩn Hóa Cú Pháp Truy Vấn Mongoose `.lean()`** | Đã dời `.lean()` xuống cuối chuỗi truy vấn sau khi `.populate()` hoàn tất. Kiểm tra cú pháp tĩnh `node --check` đạt 100%. |
-| **6** | [hospitalBed.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/hospitalBed.controller.js#L83-L107) | **Chống Tranh Chấp Gán Giường Bệnh (Race Condition)** | Chuyển toàn bộ thao tác gán giường sang câu lệnh nguyên tử `HospitalBed.findOneAndUpdate({ _id, hospitalId, status: 'available' })`. Trả về mã phản hồi `409 Conflict` nếu có xung đột đồng thời. |
-| **7** | [visit.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/visit.controller.js#L174-L181) | **Bảo Mật Hàng Đợi Điều Dưỡng (getMyQueue Isolation)** | Nhúng trực tiếp `{ hospitalId: req.user.hospitalId }` vào cả hai nhánh điều kiện của `$or`. Ngăn chặn hoàn toàn việc quét nhầm dữ liệu bệnh nhân của bệnh viện khác. |
-| **8** | [visit.model.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/models/visit.model.js) & [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | **Bảng Kiểm An Toàn Chụp MRI (Safety Checklist)** | Sub-schema `mriSafetyChecklist` 4 tiêu chí bắt buộc. **Chặn tuyệt đối (HTTP 400)** nếu bệnh nhân có cấy máy tạo nhịp tim/kim loại từ tính trước khi vào buồng chụp. |
-| **9** | [visit.routes.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/routes/visit.routes.js) & [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | **Quy Trình Xử Lý Ngoại Lệ: Hủy Ca / Chụp Lại (Rescan)** | Bổ sung 2 trạng thái `chờ chụp lại` và `đã hủy`. Endpoint `mri-rescan` và `mri-cancel` ghi nhận lý do kỹ thuật (nhiễu ảnh chuyển động, chứng sợ buồng kín), người thực hiện và mốc thời gian. |
-| **10** | [imaging.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/imaging.controller.js) & [ImagingResultScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/ImagingResultScreen.js) | **Phân Định Bác Sĩ Lâm Sàng vs Bác Sĩ CĐHA & Ký Số** | Tách biệt `orderingDoctor` (BS Lâm sàng) và `radiologist` (BS CĐHA). Tự động gắn con dấu điện tử **✓ ĐÃ KÝ SỐ ĐIỆN TỬ** kèm timestamp và tên bác sĩ CĐHA khi thẩm định. |
+| **6** | [visit.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/visit.controller.js#L174-L181) | **Bảo Mật Hàng Đợi Điều Dưỡng (getMyQueue Isolation)** | Nhúng trực tiếp `{ hospitalId: req.user.hospitalId }` vào cả hai nhánh điều kiện của `$or`. Ngăn chặn hoàn toàn việc quét nhầm dữ liệu bệnh nhân của bệnh viện khác. |
+| **7** | [visit.model.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/models/visit.model.js) & [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | **Bảng Kiểm An Toàn Chụp MRI (Safety Checklist)** | Sub-schema `mriSafetyChecklist` 4 tiêu chí bắt buộc. **Chặn (HTTP 400)** nếu bệnh nhân có cấy máy tạo nhịp tim/kim loại từ tính trước khi vào buồng chụp. |
+| **8** | [visit.routes.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/routes/visit.routes.js) & [DoctorWorkQueueScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/DoctorWorkQueueScreen.js) | **Quy Trình Xử Lý Ngoại Lệ: Hủy Ca / Chụp Lại (Rescan)** | Bổ sung 2 trạng thái `chờ chụp lại` và `đã hủy`. Endpoint `mri-rescan` và `mri-cancel` ghi nhận lý do kỹ thuật (nhiễu ảnh chuyển động, chứng sợ buồng kín), người thực hiện và mốc thời gian. |
+| **9** | [imaging.controller.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/src/controllers/imaging.controller.js) & [ImagingResultScreen.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/FE/src/screens/ImagingResultScreen.js) | **Phân Định Bác Sĩ Lâm Sàng vs Bác Sĩ CĐHA & Ký Số** | Tách biệt `orderingDoctor` (BS Lâm sàng) và `radiologist` (BS CĐHA). Tự động gắn con dấu điện tử **✓ ĐÃ KÝ SỐ ĐIỆN TỬ** kèm timestamp và tên bác sĩ CĐHA khi thẩm định. |
 
 ### 6.2. Kết quả kiểm thử tự động độc lập (Test Suite Verification)
 
-Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/scratch/test_business_logic_fixes.js) kết nối trực tiếp CSDL kiểm tra toàn diện 5 bài test nghiệp vụ với tỷ lệ thành công tuyệt đối:
+Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/Administrator/OneDrive/Desktop/team5/BE/scratch/test_business_logic_fixes.js) kết nối trực tiếp CSDL kiểm tra toàn diện 4 bài test nghiệp vụ và đều đạt:
 - **Test 1 (Bảng kiểm an toàn MRI):** Chặn thành công bệnh nhân có máy tạo nhịp tim với HTTP 400; duyệt ca an toàn chuyển sang `đang chụp`.
 - **Test 2 (Yêu cầu chụp lại):** Ghi nhận lý do nhiễu ảnh và chuyển ca về `chờ chụp lại`.
 - **Test 3 (Hủy ca chụp MRI):** Ghi nhận lý do sợ buồng kín và chuyển ca về `đã hủy`.
-- **Test 4 (Chống race condition phân giường):** Điều dưỡng 1 giữ giường thành công (200 OK), Điều dưỡng 2 bị chặn với `409 Conflict`.
-- **Test 5 (Phân định Bác sĩ & Ký số):** Tách bạch Bác sĩ lâm sàng, sau khi Bác sĩ CĐHA ký duyệt có đầy đủ con dấu `isSigned: true`, `signedAt` và định danh chuẩn xác.
+- **Test 4 (Phân định Bác sĩ & Ký số):** Tách bạch Bác sĩ lâm sàng, sau khi Bác sĩ CĐHA ký duyệt có đầy đủ con dấu `isSigned: true`, `signedAt` và định danh chuẩn xác.
 
 ---
 
@@ -359,19 +358,12 @@ Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/
 | `POST` | `/mri-rooms/schedule/emergency-override` | Dời lịch nhường phòng cho ca cấp cứu khẩn cấp | Doctor, Admin |
 | `PUT` | `/mri-rooms/slots/:slotId/release` | KTV giải phóng phòng máy sau khi chụp | Technician |
 
-### 7.5. Phân hệ Quản Lý Giường Bệnh Nội Trú (`/api/v1/hospital-beds`)
-| Method | Endpoint | Mô tả chức năng | Quyền truy cập (RBAC) |
-|---|---|---|---|
-| `GET` | `/hospital-beds` | Lấy danh sách giường bệnh theo khoa/trạng thái | Doctor, Nurse, Admin |
-| `POST` | `/hospital-beds/:id/reserve` | Giữ chỗ giường bệnh tạm thời 4 giờ (Atomic 409) | Doctor, Nurse, Admin |
-| `PUT` | `/hospital-beds/:id/occupy` | Nhập bệnh nhân vào giường điều trị (Atomic 409) | Doctor, Nurse, Admin |
-| `PUT` | `/hospital-beds/:id/release` | Giải phóng giường bệnh khi xuất viện | Doctor, Nurse, Admin |
+### 7.5. Phân hệ Quản Lý Giường Bệnh Nội Trú — ngoài phạm vi đồ án
+Nhóm API `/api/v1/hospital-beds` còn trong mã nguồn nhưng không thuộc phạm vi đồ án (xem `docs/01_de_tai_va_muc_tieu.md`, mục 1.4.3); giao diện đã ẩn chức năng này.
 
-### 7.6. Phân hệ BHYT & Viện Phí VietQR (`/api/v1/bhyt` & `/api/v1/invoices`)
+### 7.6. Phân hệ Viện Phí VietQR (`/api/v1/invoices`)
 | Method | Endpoint | Mô tả chức năng | Quyền truy cập (RBAC) |
 |---|---|---|---|
-| `POST` | `/bhyt/:patientId` | Lưu và xác thực thông tin thẻ BHYT | Receptionist, Staff |
-| `POST` | `/bhyt/calculate-copay` | Tính toán tỷ lệ đồng chi trả BHYT (80% - 100%) | Staff |
 | `POST` | `/invoices/create-and-pay/:visitId` | Lập hóa đơn viện phí và thanh toán | Receptionist, Admin |
 | `POST` | `/invoices/payos-qr/:invoiceId` | Tạo mã VietQR Napas 247 động qua PayOS | Receptionist, Patient |
 | `POST` | `/invoices/payos-webhook` | Webhook tự động cập nhật hóa đơn đã thanh toán | Hệ thống PayOS |
@@ -394,8 +386,8 @@ Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/
 - **Lưu trữ và bảo mật (Điều 11):** Cơ chế lưu trữ dự phòng thảm họa kép: CSDL MongoDB Atlas + Sao lưu tự động báo cáo và file nén DICOM lên Google Drive bệnh viện.
 
 ### 8.2. Đối chiếu Thông tư 54/2017/TT-BYT (Bộ Tiêu Chí Ứng Dụng CNTT Bệnh Viện)
-- **Nhóm HIS:** Đạt **Mức 3/7** (Quản lý tiếp đón, phân buồng khám, quản lý bệnh nhân theo mã y tế duy nhất, quản lý viện phí và BHYT).
-- **Nhóm RIS / PACS:** Đạt **Mức 4/7** (Điều phối phòng chụp MRI, số hóa hình ảnh y tế, AI hỗ trợ chẩn đoán, lưu trữ file nén DICOM gốc phục vụ trích xuất).
+- **Nhóm HIS:** Đạt **Mức 3/7** (Quản lý tiếp đón, phân buồng khám, quản lý bệnh nhân theo mã y tế duy nhất, quản lý viện phí).
+- **Nhóm RIS / PACS:** Đạt **Mức 4/7** (Điều phối phòng chụp MRI, số hóa hình ảnh y tế, AI hỗ trợ sàng lọc, lưu trữ file nén DICOM gốc phục vụ trích xuất).
 - **Nhóm EMR:** Đạt **Mức 4/7** (Đầy đủ hồ sơ bệnh án ngoại trú, phiếu chăm sóc điều dưỡng nội trú, giấy chuyển tuyến, cam kết phẫu thuật, ký số bệnh án).
 
 ---
@@ -407,9 +399,9 @@ Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/
 > *"Dạ kính thưa Hội đồng, đây là quyết định thiết kế kiến trúc có chủ đích (Architectural Trade-off):  
 > 1. Về mặt lâm sàng, 90% lát cắt MRI sọ não là mô não bình thường, các mô hình CNN 2D nếu xử lý toàn bộ sẽ mất 3–5 phút suy luận vô ích và dễ sinh dương tính giả.  
 > 2. Về mặt công nghệ Web, nạp 1.000 file qua trình duyệt sẽ làm tê liệt RAM client và nghẽn băng thông.  
-> Vì vậy nhóm áp dụng Kiến trúc Lai (Hybrid PACS): KTV lọc 1–3 ảnh cắt lớp rõ tổn thương nhất để Web hiển thị ngay trong 1 giây và AI chẩn đoán tức thì (2 giây); đồng thời toàn bộ 1.000 file DICOM gốc được đóng gói thành file `.zip` tải luồng nền lên Google Drive và hệ thống cung cấp nút 'Tải trọn bộ phim DICOM' để bác sĩ ngoại khoa tải về mở bằng phần mềm chuyên dụng như RadiAnt khi lập kế hoạch mổ."*
+> Vì vậy nhóm áp dụng Kiến trúc Lai (Hybrid PACS): KTV lọc 1–3 ảnh cắt lớp rõ tổn thương nhất để Web hiển thị ngay trong 1 giây và AI hỗ trợ sàng lọc tức thì (2 giây); đồng thời toàn bộ 1.000 file DICOM gốc được đóng gói thành file `.zip` tải luồng nền lên Google Drive và hệ thống cung cấp nút 'Tải trọn bộ phim DICOM' để bác sĩ ngoại khoa tải về mở bằng phần mềm chuyên dụng như RadiAnt khi lập kế hoạch mổ."*
 
-### ❓ Câu 2: "AI đóng vai trò gì? Nếu AI chẩn đoán sai thì trách nhiệm thuộc về ai?"
+### ❓ Câu 2: "AI đóng vai trò gì? Nếu AI đưa ra kết quả sàng lọc sai thì trách nhiệm thuộc về ai?"
 > **Trả lời chiến lược:**  
 > *"Dạ thưa Thầy/Cô, AI trong hệ thống được định vị chính xác là Hệ thống hỗ trợ quyết định lâm sàng (CDSS - Clinical Decision Support System), đóng vai trò như một người trợ lý đưa ra ý kiến tham khảo độc lập (Second Opinion), hoàn toàn KHÔNG THAY THẾ BÁC SĨ.  
 > Về mặt pháp lý y tế (Theo Luật Khám bệnh, chữa bệnh 2023 và Thông tư 46/2018/TT-BYT), người chịu trách nhiệm pháp lý duy nhất là Bác sĩ chuyên khoa CĐHA ký tên trên bản ghi. Hệ thống thiết kế tính năng 'Hiệu chỉnh kết quả AI' cho phép bác sĩ bác bỏ dự đoán của AI, sửa đổi kết luận và dữ liệu hiệu chỉnh này được lưu lại để tái huấn luyện mô hình."*
@@ -417,22 +409,22 @@ Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/
 ### ❓ Câu 3: "Hệ thống làm thế nào để đảm bảo dữ liệu của Bệnh viện A không bị rò rỉ sang Bệnh viện B?"
 > **Trả lời chiến lược:**  
 > *"Dạ thưa Thầy/Cô, nhóm áp dụng kiến trúc Multi-Tenancy cấp độ ứng dụng thông qua Mongoose Plugin `tenancy.plugin.js`. Mọi Document trong cơ sở dữ liệu đều bắt buộc chứa trường `hospitalId`.  
-> Khi bất kỳ truy vấn nào được thực thi, Middleware xác thực JWT sẽ trích xuất `req.user.hospitalId` và plugin tự động chèn điều kiện lọc `{ hospitalId }` vào mọi câu lệnh Query ở tầng Database. Nhờ đó, người dùng ở viện này tuyệt đối không thể đọc hoặc sửa dữ liệu của viện khác, tuân thủ nghiêm ngặt Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân."*
+> Khi bất kỳ truy vấn nào được thực thi, Middleware xác thực JWT sẽ trích xuất `req.user.hospitalId` và plugin tự động chèn điều kiện lọc `{ hospitalId }` vào mọi câu lệnh Query ở tầng Database. Nhờ đó, người dùng ở viện này không thể đọc hoặc sửa dữ liệu của viện khác, tuân thủ nghiêm ngặt Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân."*
 
 ### ❓ Câu 4: "Bảng kiểm An toàn MRI giải quyết rủi ro gì trong thực tế bệnh viện?"
 > **Trả lời chiến lược:**  
 > *"Dạ thưa Thầy/Cô, từ trường máy MRI (1.5 Tesla hoặc 3.0 Tesla) cực kỳ mạnh. Nếu đưa bệnh nhân có máy tạo nhịp tim hoặc clip phình mạch não kim loại vào phòng chụp, từ trường sẽ hút và làm hỏng thiết bị, đe dọa tính mạng bệnh nhân tức thì.  
 > Hệ thống tích hợp Bảng kiểm An toàn MRI 4 câu hỏi bắt buộc trước khi KTV bấm chụp. Nếu phát hiện chống chỉ định tuyệt đối (kim loại/máy tạo nhịp tim), hệ thống lập tức khóa cứng nút tiếp nhận và trả về lỗi HTTP 400, ngăn chặn hoàn toàn rủi ro tai biến y khoa."*
 
-### ❓ Câu 5: "Làm sao hệ thống xử lý được tình trạng 2 điều dưỡng cùng gán 1 giường trống cùng thời điểm?"
+### ❓ Câu 5: "Làm sao hệ thống xử lý được tình trạng 2 bác sĩ CĐHA cùng bấm ký một báo cáo cùng thời điểm?"
 > **Trả lời chiến lược:**  
-> *"Dạ thưa Thầy/Cô, nhóm đã loại bỏ phương thức `findById` rồi mới `save` truyền thống, thay vào đó áp dụng thao tác nguyên tử `HospitalBed.findOneAndUpdate({ _id, hospitalId, status: 'available' })` trực tiếp trong một lệnh duy nhất ở tầng cơ sở dữ liệu MongoDB. Nhờ đó, thao tác đầu tiên sẽ khóa và gán giường thành công, thao tác thứ hai nhận phản hồi `409 Conflict` thân thiện, ngăn chặn 100% tình trạng ghi đè bệnh nhân."*
+> *"Dạ thưa Thầy/Cô, nhóm không dùng cách đọc `isSigned` rồi mới `save`, vì giữa hai bước đó người thứ hai vẫn ghi đè được kết luận. Thay vào đó, hệ thống dùng một lệnh cập nhật có điều kiện `ImagingResult.findOneAndUpdate({ _id, isSigned: { $ne: true } }, { $set: { isSigned: true, ... } })`: chỉ người đến trước được ghi, người đến sau nhận `409` và phải tạo phụ lục đính chính. Cách này cũng dùng cho duyệt hoàn tiền và duyệt kết quả xét nghiệm."*
 
 ---
 
 ## 10. HẠN CHẾ CÔNG NGHỆ & LỘ TRÌNH PHÁT TRIỂN TƯƠNG LAI
 
-Để phát triển NeuroScan AI từ phiên bản đồ án tốt nghiệp xuất sắc lên một sản phẩm phần mềm y tế thương mại (Production-Ready Software), nhóm định hướng 4 mục tiêu tiếp theo:
+Để phát triển NeuroScan AI từ phiên bản đồ án tốt nghiệp lên một sản phẩm phần mềm y tế thương mại (Production-Ready Software), nhóm định hướng 4 mục tiêu tiếp theo:
 
 1. **Tích hợp Web DICOM Viewer Chuyên Dụng (CornerstoneJS / OHIF Viewer):**
    - Hỗ trợ công cụ điều chỉnh độ rộng/mức độ cửa sổ (Window Width / Window Level - WW/WL) phân biệt mô mềm não và xương sọ.
@@ -442,7 +434,7 @@ Kịch bản kiểm thử tại [test_business_logic_fixes.js](file:///c:/Users/
    - Triển khai chuẩn **HL7 FHIR** để liên thông kết quả với các hệ thống HIS tuyến trên.
    - Dịch vụ **DICOM DIMSE (C-STORE SCP)** lắng nghe trên cổng TCP 104 để nhận phim trực tiếp từ máy chụp MRI của Siemens/GE Healthcare mà không cần KTV xuất file thủ công.
 3. **Nâng Cấp Chữ Ký Số Pháp Lý PKI:**
-   - Tích hợp Chữ ký số USB Token (Viettel-CA, VNPT-CA) hoặc Ký số từ xa (Remote Signing) đáp ứng 100% quy chuẩn Chữ ký số Quốc gia theo Luật Giao dịch Điện tử.
+   - Tích hợp Chữ ký số USB Token (Viettel-CA, VNPT-CA) hoặc Ký số từ xa (Remote Signing) theo quy định về chữ ký số của Luật Giao dịch điện tử (hiện hệ thống mới ghi mã băm toàn vẹn SHA-256, chưa tích hợp CA).
 4. **Chuyển Đổi Giao Tiếp Thời Gian Thực Toàn Diện:**
    - Triển khai **WebSocket / Server-Sent Events (SSE)** thay thế hoàn toàn cơ chế Polling, đảm bảo các cảnh báo cấp cứu Code Red và cập nhật hàng đợi đạt độ trễ thời gian thực tức thì (< 100ms).
 

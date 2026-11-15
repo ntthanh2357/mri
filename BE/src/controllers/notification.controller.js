@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import { Notification } from "../models/notification.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
+import { inputErrorStatus } from "../utils/inputError.util.js";
 // Helper function to create notification internally from other controllers
 export const createNotificationInternal = async ({
   hospitalId,
@@ -16,6 +17,13 @@ export const createNotificationInternal = async ({
     if (!hospitalId || !recipientId || !title || !message) {
       console.warn("createNotificationInternal: Thiếu thông tin bắt buộc.");
       return null;
+    }
+
+    // Loại chưa khai báo trong enum: vẫn giao thông báo (loại "other") thay vì mất im lặng.
+    const knownTypes = Notification.schema.path("type").enumValues;
+    if (!knownTypes.includes(type)) {
+      console.warn(`createNotificationInternal: loại "${type}" chưa có trong enum, lưu thành "other".`);
+      type = "other";
     }
 
     const notification = new Notification({
@@ -61,7 +69,7 @@ export const getNotifications = async (req, res) => {
     return successResponse(res, { notifications, unreadCount }, "Lấy danh sách thông báo thành công.");
   } catch (error) {
     console.error("Lỗi getNotifications:", error);
-    return errorResponse(res, "Lỗi máy chủ.", 500);
+    return errorResponse(res, "Lỗi máy chủ.", inputErrorStatus(res, error));
   }
 };
 
@@ -93,7 +101,7 @@ export const markAsRead = async (req, res) => {
     return successResponse(res, { notification }, "Đã đánh dấu thông báo là đã đọc.");
   } catch (error) {
     console.error("Lỗi markAsRead:", error);
-    return errorResponse(res, "Lỗi máy chủ.", 500);
+    return errorResponse(res, "Lỗi máy chủ.", inputErrorStatus(res, error));
   }
 };
 
@@ -111,7 +119,7 @@ export const markAllAsRead = async (req, res) => {
     return successResponse(res, null, "Đã đánh dấu toàn bộ thông báo là đã đọc.");
   } catch (error) {
     console.error("Lỗi markAllAsRead:", error);
-    return errorResponse(res, "Lỗi máy chủ.", 500);
+    return errorResponse(res, "Lỗi máy chủ.", inputErrorStatus(res, error));
   }
 };
 
@@ -135,7 +143,7 @@ export const updateFcmToken = async (req, res) => {
     return successResponse(res, null, "Cập nhật FCM token thành công.");
   } catch (error) {
     console.error("Lỗi updateFcmToken:", error);
-    return errorResponse(res, "Lỗi máy chủ.", 500);
+    return errorResponse(res, "Lỗi máy chủ.", inputErrorStatus(res, error));
   }
 };
 

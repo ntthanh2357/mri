@@ -23,6 +23,8 @@ gcs-service-account.json
 
 # Uploads & local databases
 uploads/
+secure_backups/
+neuroscan_backup/
 *.db
 *.sqlite
 *.sqlite3

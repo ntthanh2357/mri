@@ -6,7 +6,7 @@ import {
   updateTicketStatus,
   getSystemMetrics,
 } from "../controllers/support.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import { requireSystemAdmin, requireHospitalAdmin } from "../middlewares/role.middleware.js";
 
 const router = Router();
@@ -25,6 +25,6 @@ router.put("/tickets/:id/status", requireSystemAdmin, updateTicketStatus);
 
 // ─── System Metrics ───────────────────────────────────────────────────────────
 // Metrics hệ thống cho màn hình SystemAdmin (staff hoặc admin)
-router.get("/system-metrics", getSystemMetrics);
+router.get("/system-metrics", checkRole(["admin", "system_admin", "hospital_admin"]), getSystemMetrics);
 
 export default router;

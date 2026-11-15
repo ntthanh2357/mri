@@ -29,7 +29,7 @@ const SystemAdminScreen = ({ navigation }) => {
   const [transTemp, setTransTemp] = useState(0.7);
   const [transToken, setTransToken] = useState(2); // in k (2k)
   const [ragDepth, setRagDepth] = useState(5);
-  const [systemPrompt, setSystemPrompt] = useState("Bạn là trợ lý chẩn đoán AI y tế chuyên nghiệp, hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
+  const [systemPrompt, setSystemPrompt] = useState("Bạn là trợ lý AI y tế hỗ trợ sàng lọc (không đưa ra chẩn đoán), hỗ trợ bác sĩ phân tích hình ảnh thần kinh và trích xuất dữ liệu bệnh án lâm sàng.");
 
   // Metrics state từ API thực
   const [metrics, setMetrics] = useState(null);

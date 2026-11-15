@@ -25,7 +25,7 @@ const run = async () => {
   }
   console.log(`=> Đã hoàn tất sửa ${fixedVisits} lượt khám.`);
 
-  console.log(">> 2. Chạy migrateLegacyEMR để bổ sung thời hạn lưu trữ bắt buộc (TT 46/2018/TT-BYT)...");
+  console.log(">> 2. Chạy migrateLegacyEMR để bổ sung thời hạn lưu trữ bắt buộc (TT 13/2025/TT-BYT)...");
   const emrResult = await migrateLegacyEMR();
   console.log("=> Kết quả di chuyển EMR:", emrResult);
 

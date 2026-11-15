@@ -6,6 +6,7 @@ import { createNotificationInternal } from "../../controllers/notification.contr
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { getDayRangeVN } from "../../utils/date.util.js";
 import { sendMriRescheduleEmail } from "../../services/email.service.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 const fmtVN = (d) => new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -14,8 +15,10 @@ const fmtVN = (d) => new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Ch
  * Duyệt từng ngày (tối đa maxDays) và từng phòng MRI đang hoạt động theo giờ mở cửa,
  * bỏ qua giờ đã qua và các khung trùng với slot đã đặt / đang chụp.
  */
-const findFreeWindow = async (hospitalId, fromDate, maxDays = 1, { dayStartMin = 0, dayEndMin = 1440 } = {}) => {
-  const rooms = await MriRoom.find({ hospitalId, status: 'active' }).lean();
+const findFreeWindow = async (hospitalId, fromDate, maxDays = 1, { dayStartMin = 0, dayEndMin = 1440, excludeRoomId = null, extraTakenByRoom = null } = {}) => {
+  const roomQuery = { hospitalId, status: 'active' };
+  if (excludeRoomId) roomQuery._id = { $ne: excludeRoomId };
+  const rooms = await MriRoom.find(roomQuery).lean();
   if (!rooms.length) return null;
   const earliest = Math.max(Date.now(), new Date(fromDate).getTime());
   for (let d = 0; d < maxDays; d++) {
@@ -23,11 +26,17 @@ const findFreeWindow = async (hospitalId, fromDate, maxDays = 1, { dayStartMin =
     let best = null;
     for (const room of rooms) {
       const dayEnd = startOfDay.getTime() + 86400000;
-      const taken = await MriSlot.find({
+      const takenDb = await MriSlot.find({
+        hospitalId,
         roomId: room._id,
         startTime: { $gte: startOfDay, $lt: new Date(dayEnd) },
         status: { $in: ['booked', 'in_progress'] },
       }).select('startTime endTime').lean();
+      const extraTaken = (extraTakenByRoom?.[String(room._id)] || []).filter((t) => {
+        const ts = new Date(t.startTime).getTime();
+        return ts >= startOfDay.getTime() && ts < dayEnd;
+      });
+      const taken = [...takenDb, ...extraTaken];
       // Phòng đã đủ số ca tối đa trong ngày thì bỏ qua
       if (taken.length >= (room.maxSlotsPerDay || 16)) continue;
       const toMin = (hhmm, fallback) => {
@@ -67,10 +76,14 @@ export const getRooms = async (req, res) => {
   }
 };
 
+const ADMIN_ROOM_ROLES = ["admin", "system_admin", "hospital_admin"];
+const UPDATE_ROOM_ROLES = [...ADMIN_ROOM_ROLES, "technician"];
+const ROOM_STATUSES = ["active", "maintenance", "inactive"];
+
 // ─── A.1 — Tạo phòng MRI mới ─────────────────────────────────────────────────
 export const createRoom = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!ADMIN_ROOM_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin mới có thể thêm phòng MRI.", 403);
     }
     const hospitalId = req.user.hospitalId;
@@ -99,17 +112,119 @@ export const createRoom = async (req, res) => {
 // ─── A.1 — Cập nhật phòng MRI ────────────────────────────────────────────────
 export const updateRoom = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
-      return errorResponse(res, "Chỉ admin mới có thể cập nhật phòng MRI.", 403);
+    if (!UPDATE_ROOM_ROLES.includes(req.user.role)) {
+      return errorResponse(res, "Bạn không có quyền cập nhật phòng MRI.", 403);
     }
     const room = await MriRoom.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
     if (!room) return errorResponse(res, "Không tìm thấy phòng MRI.", 404);
 
-    const allowedFields = ["name", "modelMachine", "location", "status", "maxSlotsPerDay", "slotDurationMinutes", "operatingHours", "notes"];
-    allowedFields.forEach(f => { if (req.body[f] !== undefined) room[f] = req.body[f]; });
+    if (req.body.status !== undefined && !ROOM_STATUSES.includes(req.body.status)) {
+      return errorResponse(res, "Trạng thái phòng MRI không hợp lệ.", 400);
+    }
+    for (const numField of ["maxSlotsPerDay", "slotDurationMinutes"]) {
+      if (req.body[numField] !== undefined && !(Number(req.body[numField]) > 0)) {
+        return errorResponse(res, "Số ca mỗi ngày và thời lượng mỗi ca phải lớn hơn 0.", 400);
+      }
+    }
+
+    const allowedFields = req.user.role === "technician"
+      ? ["modelMachine", "location", "status", "maxSlotsPerDay", "slotDurationMinutes", "operatingHours", "notes"]
+      : ["name", "modelMachine", "location", "status", "maxSlotsPerDay", "slotDurationMinutes", "operatingHours", "notes"];
+    if (allowedFields.includes("name") && req.body.name !== undefined && !String(req.body.name).trim()) {
+      return errorResponse(res, "Tên phòng MRI không được để trống.", 400);
+    }
+    if (req.body.operatingHours !== undefined) {
+      const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+      const s = req.body.operatingHours?.start;
+      const e = req.body.operatingHours?.end;
+      if (!hhmm.test(String(s || "")) || !hhmm.test(String(e || "")) || s >= e) {
+        return errorResponse(res, "Giờ hoạt động không hợp lệ (định dạng HH:mm và giờ mở < giờ đóng).", 400);
+      }
+    }
+
+    const nextStatus = req.body.status;
+    let plannedMoves = [];
+    if (nextStatus && nextStatus !== room.status && ["maintenance", "inactive"].includes(nextStatus)) {
+      const inProgressCount = await MriSlot.countDocuments({ hospitalId: room.hospitalId, roomId: room._id, status: "in_progress" });
+      if (inProgressCount > 0) {
+        return errorResponse(res, "Phòng đang có ca chụp diễn ra. Vui lòng hoàn tất hoặc giải phóng ca đang chụp trước khi chuyển trạng thái.", 400);
+      }
+
+      const upcomingBooked = await MriSlot.find({
+        hospitalId: room.hospitalId,
+        roomId: room._id,
+        status: "booked",
+        endTime: { $gte: new Date() },
+      }).sort({ startTime: 1 });
+
+      if (upcomingBooked.length > 0) {
+        const extraTakenByRoom = {};
+        for (const slot of upcomingBooked) {
+          const fromMs = Math.max(Date.now(), new Date(slot.startTime).getTime());
+          const win = await findFreeWindow(room.hospitalId, fromMs, 7, {
+            excludeRoomId: room._id,
+            extraTakenByRoom,
+          });
+          if (!win) {
+            return errorResponse(
+              res,
+              `Phòng còn ${upcomingBooked.length} lịch hẹn sắp tới nhưng các phòng MRI khác không đủ chỗ trống để tự động dời. Vui lòng hủy hoặc dời lịch trước.`,
+              409
+            );
+          }
+          const rKey = String(win.room._id);
+          extraTakenByRoom[rKey] = [...(extraTakenByRoom[rKey] || []), { startTime: win.start, endTime: win.end }];
+          plannedMoves.push({ slot, win });
+        }
+      }
+    }
+
+    allowedFields.forEach(f => {
+      if (req.body[f] !== undefined) {
+        room[f] = f === "name" ? String(req.body[f]).trim() : req.body[f];
+      }
+    });
 
     await room.save();
-    return successResponse(res, room, "Cập nhật phòng MRI thành công.");
+
+    if (plannedMoves.length > 0) {
+      const statusLabel = nextStatus === "maintenance" ? "Bảo trì" : "Ngừng hoạt động";
+      for (const { slot, win } of plannedMoves) {
+        const prevStart = slot.startTime;
+        slot.roomId = win.room._id;
+        slot.startTime = win.start;
+        slot.endTime = win.end;
+        slot.rescheduledFrom = prevStart;
+        slot.rescheduledReason = `${room.name} chuyển sang ${statusLabel}`;
+        await slot.save();
+
+        if (slot.patientId) {
+          try {
+            await createNotificationInternal({
+              hospitalId: room.hospitalId,
+              recipientId: slot.patientId,
+              senderId: req.user.id,
+              type: "slot_rescheduled",
+              title: "📅 Lịch chụp MRI đã được chuyển phòng",
+              message: `Do ${room.name} chuyển sang ${statusLabel}, lịch chụp MRI của bạn được chuyển sang ${win.room.name} lúc ${fmtVN(win.start)}.`,
+              relatedId: slot.visitId || slot._id,
+            });
+          } catch (notifErr) {
+            console.warn("⚠️ Không thể gửi thông báo chuyển phòng MRI:", notifErr.message);
+          }
+        }
+      }
+    }
+
+    const roomPayload = room.toObject ? room.toObject() : room;
+    roomPayload.rescheduledCount = plannedMoves.length;
+    return successResponse(
+      res,
+      roomPayload,
+      plannedMoves.length > 0
+        ? `Cập nhật phòng MRI thành công và đã tự động dời ${plannedMoves.length} lịch hẹn sang phòng đang hoạt động.`
+        : "Cập nhật phòng MRI thành công."
+    );
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
@@ -118,7 +233,7 @@ export const updateRoom = async (req, res) => {
 // ─── A.1 — Xóa (deactivate) phòng MRI ───────────────────────────────────────
 export const deleteRoom = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!ADMIN_ROOM_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin mới có thể xóa phòng MRI.", 403);
     }
     const room = await MriRoom.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
@@ -126,6 +241,7 @@ export const deleteRoom = async (req, res) => {
 
     // Kiểm tra có slot sắp tới không
     const upcomingSlots = await MriSlot.countDocuments({
+      hospitalId: room.hospitalId,
       roomId: room._id,
       startTime: { $gte: new Date() },
       status: { $in: ['booked', 'in_progress'] }
@@ -153,6 +269,21 @@ export const autoScheduleSlot = async (req, res) => {
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
 
+    const existingBooking = await MriSlot.findOne({
+      hospitalId,
+      visitId: visit._id,
+      status: { $in: ['booked', 'in_progress'] },
+    }).populate('roomId', 'name status').lean();
+    if (existingBooking?.roomId?.status === 'active') {
+      return successResponse(res, {
+        slot: existingBooking,
+        room: { id: existingBooking.roomId._id, name: existingBooking.roomId.name },
+        startTime: existingBooking.startTime,
+        endTime: existingBooking.endTime,
+        action: 'already_booked',
+      }, `Ca này đã được xếp vào ${existingBooking.roomId.name}.`);
+    }
+
     // Tìm tất cả phòng active
     const rooms = await MriRoom.find({ hospitalId, status: 'active' }).lean();
     if (!rooms.length) return errorResponse(res, "Bệnh viện chưa có phòng MRI nào đang hoạt động.", 400);
@@ -165,6 +296,7 @@ export const autoScheduleSlot = async (req, res) => {
 
     for (const room of rooms) {
       const count = await MriSlot.countDocuments({
+        hospitalId,
         roomId: room._id,
         startTime: { $gte: searchDate, $lte: endOfDay },
         status: { $in: ['booked', 'in_progress'] }
@@ -181,6 +313,7 @@ export const autoScheduleSlot = async (req, res) => {
 
     // Lấy danh sách các slot đã đặt trong ngày của phòng được chọn để tránh trùng lịch (overlap)
     const existingSlots = await MriSlot.find({
+      hospitalId,
       roomId: bestRoom._id,
       startTime: { $gte: searchDate, $lte: endOfDay },
       status: { $in: ['booked', 'in_progress'] }
@@ -266,6 +399,11 @@ export const getWeeklySchedule = async (req, res) => {
     const hospitalId = req.user.hospitalId;
     if (!hospitalId) return errorResponse(res, "Bạn chưa được gán vào bệnh viện nào.", 403);
 
+    const { weekStart, roomId } = req.query;
+    if (weekStart && Number.isNaN(new Date(weekStart).getTime())) {
+      return errorResponse(res, "Ngày bắt đầu tuần không hợp lệ.", 400);
+    }
+
     const startDate = weekStart ? new Date(weekStart) : (() => {
       const now = new Date();
       const day = now.getDay();
@@ -306,6 +444,20 @@ export const getWeeklySchedule = async (req, res) => {
 };
 
 // ─── A.4 — Xử lý cấp cứu (Emergency Override) ────────────────────────────────
+// Xếp lịch khẩn nâng ca lên "khẩn cấp", và mức này được miễn cổng viện phí. Vì vậy chỉ bác sĩ mới được
+// nâng ưu tiên; vai trò còn lại chỉ xếp lịch cho ca đã là cấp cứu và đã có chỉ định của bác sĩ.
+const PRIORITY_ESCALATION_ROLES = ["doctor", "department_head", "radiologist"];
+const checkEmergencySchedulingAllowed = (visit, user) => {
+  if (PRIORITY_ESCALATION_ROLES.includes(user.role)) return null;
+  if (visit.priority !== "khẩn cấp") {
+    return "Ca này chưa được xác định là cấp cứu. Chỉ bác sĩ mới được nâng mức ưu tiên.";
+  }
+  if (!visit.mriOrder?.orderedAt) {
+    return "Ca cấp cứu này chưa có chỉ định chụp MRI của bác sĩ.";
+  }
+  return null;
+};
+
 export const handleEmergencyOverride = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
@@ -315,6 +467,9 @@ export const handleEmergencyOverride = async (req, res) => {
 
     const visit = await Visit.findOne({ _id: visitId, hospitalId });
     if (!visit) return errorResponse(res, "Không tìm thấy lượt khám.", 404);
+
+    const guardError = checkEmergencySchedulingAllowed(visit, req.user);
+    if (guardError) return errorResponse(res, guardError, 403);
 
     const now = new Date();
 
@@ -341,6 +496,15 @@ export const handleEmergencyOverride = async (req, res) => {
       visit.status = 'chờ chụp';
       visit.priority = 'khẩn cấp';
       await visit.save();
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.MRI_EMERGENCY_SCHEDULED,
+        actorId: req.user.id,
+        actorRole: req.user.role,
+        hospitalId,
+        targetModel: "Visit",
+        targetId: String(visit._id),
+        metadata: { action: "booked_empty_slot", slotId: String(slot._id) },
+      });
       return successResponse(res, {
         slot: { ...slot.toObject(), roomId: { _id: window.room._id, name: window.room.name } },
         action: 'booked_empty_slot',
@@ -348,9 +512,14 @@ export const handleEmergencyOverride = async (req, res) => {
       }, "Xử lý cấp cứu thành công.");
     }
 
-    // 3. Hết chỗ trong ngày — chọn slot bệnh nhân thường gần nhất để nhường cho cấp cứu
+    // 3. Hết chỗ trong ngày — chọn slot bệnh nhân thường gần nhất thuộc phòng đang hoạt động để nhường cho cấp cứu
+    const activeRoomIds = await MriRoom.find({ hospitalId, status: 'active' }).distinct('_id');
+    if (!activeRoomIds.length) {
+      return errorResponse(res, "Bệnh viện hiện không có phòng MRI nào đang hoạt động để xếp lịch cấp cứu.", 400);
+    }
     const normalSlot = await MriSlot.findOne({
       hospitalId,
+      roomId: { $in: activeRoomIds },
       startTime: { $gte: now },
       status: 'booked',
       priority: { $gt: 1 } // Không phải cấp cứu
@@ -398,13 +567,29 @@ export const confirmReschedule = async (req, res) => {
 
     const slot = await MriSlot.findOne({ _id: slotId, hospitalId: req.user.hospitalId });
     if (!slot) return errorResponse(res, "Không tìm thấy slot.", 404);
+    const targetRoom = await MriRoom.findOne({ _id: slot.roomId, hospitalId: req.user.hospitalId }).select("name status").lean();
+    if (!targetRoom || targetRoom.status !== "active") {
+      return errorResponse(res, "Phòng máy của khung giờ này đang bảo trì hoặc ngừng hoạt động. Vui lòng bấm xếp lịch lại.", 409);
+    }
 
     // Lưu lại thông tin slot cũ
     const originalVisitId = slot.visitId;
     const originalStartTime = slot.startTime;
 
     // Đặt slot cho ca cấp cứu
-    const emergencyVisit = await Visit.findById(emergencyVisitId);
+    const emergencyVisit = await Visit.findOne({ _id: emergencyVisitId, hospitalId: req.user.hospitalId });
+    if (!emergencyVisit) return errorResponse(res, "Không tìm thấy lượt khám cấp cứu.", 404);
+    const guardError = checkEmergencySchedulingAllowed(emergencyVisit, req.user);
+    if (guardError) return errorResponse(res, guardError, 403);
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.MRI_EMERGENCY_SCHEDULED,
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      hospitalId: req.user.hospitalId,
+      targetModel: "Visit",
+      targetId: String(emergencyVisit._id),
+      metadata: { action: "rescheduled_slot", slotId: String(slot._id), displacedVisitId: originalVisitId ? String(originalVisitId) : null },
+    });
     slot.visitId = emergencyVisitId;
     slot.patientId = emergencyVisit?.patientId;
     slot.priority = 1;

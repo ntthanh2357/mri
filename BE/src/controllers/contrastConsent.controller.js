@@ -2,6 +2,17 @@ import { ConsentForm } from "../models/consentForm.model.js";
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
+import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
+import { createNotificationInternal } from "./notification.controller.js";
+
+const CONTRAST_OVERRIDE_ROLES = ["doctor", "radiologist", "department_head"];
+const logContrast = async (action, req, entityId, details, payload) => {
+  try {
+    await recordAuditLog({ action, entity: "ConsentForm", entityId: String(entityId), performedBy: String(req.user.id || req.user._id), hospitalId: req.user.hospitalId, details, payload });
+  } catch (err) {
+    console.warn("Không ghi được nhật ký cản quang:", err.message);
+  }
+};
 
 // ─── S.1 — Sàng lọc nguy cơ dị ứng trước khi tiêm thuốc cản quang Gadolinium ─
 // @route POST /api/v1/contrast-consents/screening
@@ -11,7 +22,6 @@ export const submitScreeningChecklist = async (req, res) => {
     const hospitalId = req.user.hospitalId;
     const {
       visitId,
-      patientId,
       contrastAllergy = 'no',    // yes/no/unknown
       gfrLevel,                 // eGFR (mL/min/1.73m²)
       isPregnant = false,
@@ -56,19 +66,21 @@ export const submitScreeningChecklist = async (req, res) => {
     const isBlocked = riskLevel === 'high';
 
     // Tạo hoặc cập nhật ConsentForm
-    let consentForm = await ConsentForm.findOne({ visitId, procedureName: "Tiêm thuốc cản quang Gadolinium" });
+    let consentForm = await ConsentForm.findOne({ visitId, hospitalId, procedureName: "Tiêm thuốc cản quang Gadolinium" });
     if (!consentForm) {
       consentForm = new ConsentForm({
         hospitalId,
         visitId,
         medicalRecordId: visit._id, // Tạm gắn với visitId
-        patientId: patientId || visit.patientId,
+        patientId: visit.patientId, // phiếu luôn thuộc bệnh nhân của lượt khám, không lấy từ client
         procedureName: "Tiêm thuốc cản quang Gadolinium",
         risks: "Phản ứng dị ứng, mẩn ngứa, buồn nôn, nguy cơ xơ hóa hệ thống do thận (NSF) nếu suy thận nặng.",
         doctorExplanation: "Thuốc cản quang Gadolinium giúp làm rõ hình ảnh u và mạch máu não.",
       });
     }
 
+    // Chụp giá trị cũ: đối tượng lồng của Mongoose sẽ đọc ra giá trị mới sau khi gán lại
+    const prev = consentForm.toObject().allergyChecklist || {};
     consentForm.allergyChecklist = {
       contrastAllergy,
       gfrLevel: gfrLevel !== undefined ? Number(gfrLevel) : null,
@@ -78,15 +90,37 @@ export const submitScreeningChecklist = async (req, res) => {
       severeAsthma: Boolean(severeAsthma),
     };
     consentForm.riskLevel = riskLevel;
-    consentForm.isBlockedByChecklist = isBlocked;
+    // Như luồng bệnh nhân tự khai: câu trả lời đổi mà vẫn nguy cơ cao thì bác sĩ phải xác nhận lại
+    const changed = ["contrastAllergy", "gfrLevel", "isPregnant", "isBreastfeeding", "kidneyDisease", "severeAsthma"]
+      .some((k) => String(prev[k] ?? "") !== String(consentForm.allergyChecklist[k] ?? ""));
+    if (changed && isBlocked) consentForm.isDoctorOverridden = false;
+    consentForm.isBlockedByChecklist = isBlocked && !consentForm.isDoctorOverridden;
     await consentForm.save();
+
+    await logContrast(AUDIT_ACTIONS.CONTRAST_SCREENING_SUBMITTED, req, consentForm._id,
+      `Sàng lọc cản quang cho lượt khám ${visit._id}: nguy cơ ${riskLevel}${riskFactors.length ? ` (${riskFactors.join(", ")})` : ""}.`,
+      { visitId: String(visit._id), riskLevel, isBlocked: consentForm.isBlockedByChecklist, allergyChecklist: consentForm.allergyChecklist });
+    // Spec S.1: có yếu tố nguy cơ thì cảnh báo bác sĩ chỉ định
+    if (consentForm.isBlockedByChecklist && visit.doctorId) {
+      await createNotificationInternal({
+        hospitalId: visit.hospitalId,
+        recipientId: visit.doctorId,
+        senderId: req.user.id,
+        type: "other",
+        title: "Sàng lọc cản quang có nguy cơ cao",
+        message: `Sàng lọc trước tiêm Gadolinium phát hiện: ${riskFactors.join(", ")}. Bác sĩ cần xem xét và xác nhận lý do trước khi tiếp tục.`,
+        relatedId: visit._id,
+      });
+    }
 
     return successResponse(res, {
       consentForm,
       riskLevel,
-      isBlocked,
+      isBlocked: consentForm.isBlockedByChecklist,
       riskFactors,
-      message: isBlocked
+      message: isBlocked && !consentForm.isBlockedByChecklist
+        ? `⚠️ NGUY CƠ CAO: ${riskFactors.join(', ')}. Bác sĩ đã xác nhận cho tiêm với đúng các câu trả lời này.`
+        : isBlocked
         ? `⚠️ NGUY CƠ CAO: Phát hiện ${riskFactors.join(', ')}. Đã CHẶN tiến trình. Bác sĩ cần xác nhận override lý do mới được phép chụp.`
         : riskLevel === 'moderate'
         ? `⚡ NGUY CƠ TRUNG BÌNH: Có yếu tố nghi vấn (${riskFactors.join(', ')}). Khuyến cáo theo dõi sát.`
@@ -102,7 +136,7 @@ export const submitScreeningChecklist = async (req, res) => {
 // @access Private (Doctor)
 export const overrideChecklistRisk = async (req, res) => {
   try {
-    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!CONTRAST_OVERRIDE_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới có quyền override cảnh báo nguy cơ cản quang.", 403);
     }
 
@@ -112,7 +146,7 @@ export const overrideChecklistRisk = async (req, res) => {
     });
     if (!consentForm) return errorResponse(res, "Không tìm thấy phiếu đồng thuận.", 404);
 
-    const { overrideReason } = req.body;
+    const overrideReason = typeof req.body?.overrideReason === "string" ? req.body.overrideReason.trim() : "";
     if (!overrideReason) return errorResponse(res, "Bắt buộc nhập lý do xác nhận override.", 400);
 
     consentForm.isDoctorOverridden = true;
@@ -122,6 +156,9 @@ export const overrideChecklistRisk = async (req, res) => {
     consentForm.doctorSignature = req.user.name || "Bác sĩ chỉ định";
     consentForm.isBlockedByChecklist = false; // Mở chặn
     await consentForm.save();
+    await logContrast(AUDIT_ACTIONS.CONTRAST_RISK_OVERRIDDEN, req, consentForm._id,
+      `Bác sĩ xác nhận tiêm cản quang dù có nguy cơ, lý do: ${overrideReason}`,
+      { visitId: String(consentForm.visitId), riskLevel: consentForm.riskLevel });
 
     return successResponse(res, { consentForm }, "Bác sĩ đã xác nhận override. Đã mở chặn tiến trình chụp.");
   } catch (err) {
@@ -139,6 +176,14 @@ export const signPatientConsent = async (req, res) => {
       hospitalId: req.user.hospitalId
     });
     if (!consentForm) return errorResponse(res, "Không tìm thấy phiếu đồng thuận.", 404);
+    // Tài khoản bệnh nhân chỉ ký phiếu của chính mình (cùng viện không có nghĩa là cùng người)
+    if (req.user.role === "patient" && String(consentForm.patientId || "") !== String(req.user.id)) {
+      return errorResponse(res, "Không tìm thấy phiếu đồng thuận.", 404);
+    }
+    // Đã ký thì không ghi đè chữ ký cũ (kể cả chữ ký tay bệnh nhân tự ký trên app)
+    if (consentForm.patientSigned) {
+      return errorResponse(res, "Phiếu đồng thuận này đã được ký.", 409);
+    }
 
     if (consentForm.isBlockedByChecklist && !consentForm.isDoctorOverridden) {
       return errorResponse(res, "Phiếu này đang bị CHẶN do nguy cơ dị ứng chưa được bác sĩ duyệt override.", 400);
@@ -147,12 +192,15 @@ export const signPatientConsent = async (req, res) => {
     const { patientName } = req.body;
     if (!patientName) return errorResponse(res, "Thiếu họ tên người ký xác nhận.", 400);
 
-    consentForm.patientSigned = true;
-    consentForm.patientSignature = patientName;
-    consentForm.signedAt = new Date();
-    await consentForm.save();
+    // Ghi nguyên tử: hai lần ký đồng thời thì chỉ một lần được ghi
+    const signed = await ConsentForm.findOneAndUpdate(
+      { _id: consentForm._id, hospitalId: consentForm.hospitalId, patientSigned: { $ne: true } },
+      { $set: { patientSigned: true, patientSignature: patientName, signedAt: new Date() } },
+      { new: true }
+    );
+    if (!signed) return errorResponse(res, "Phiếu đồng thuận này đã được ký.", 409);
 
-    return successResponse(res, { consentForm }, "Bệnh nhân đã ký đồng thuận điện tử thành công.");
+    return successResponse(res, { consentForm: signed }, "Bệnh nhân đã ký đồng thuận điện tử thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
   }
@@ -168,6 +216,11 @@ export const getConsentByVisit = async (req, res) => {
       hospitalId: req.user.hospitalId,
       procedureName: "Tiêm thuốc cản quang Gadolinium"
     }).populate("doctorOverrideByUserId", "profile.name profile.fullName");
+
+    // Bệnh nhân chỉ xem được phiếu của chính mình
+    if (req.user.role === "patient" && consent && String(consent.patientId) !== String(req.user.id)) {
+      return errorResponse(res, "Bạn không có quyền xem phiếu đồng thuận này.", 403);
+    }
 
     return successResponse(res, consent, "Lấy thông tin phiếu đồng thuận thành công.");
   } catch (err) {

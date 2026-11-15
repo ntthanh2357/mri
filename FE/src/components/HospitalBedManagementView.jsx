@@ -754,7 +754,7 @@ export default function HospitalBedManagementView({ currentUser }) {
             {activeModal === 'reserve' && (
               <div className="space-y-3">
                 <p className="text-xs text-slate-500">
-                  Cơ chế khóa giữ chỗ ngăn ngừa 2 bác sĩ cùng chỉ định 1 giường tại cùng thời điểm (Chống Race Condition - TT 46/2018).
+                  Cơ chế khóa giữ chỗ ngăn ngừa 2 bác sĩ cùng chỉ định 1 giường tại cùng thời điểm (Chống Race Condition - TT 13/2025).
                 </p>
                 <div>
                   <label className="text-xs font-bold text-slate-700 mb-1 block">Chọn bệnh nhân giữ chỗ:</label>

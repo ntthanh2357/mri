@@ -8,6 +8,7 @@ import PageHeader, { HeaderAction } from '../layout/PageHeader';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import useStaffHome from '../../controllers/useStaffHome';
 import { SHIFT_LABELS } from '../../utils/staffTasks';
+import { isFeatureEnabled, OUT_OF_SCOPE_NOTICE } from '../../constants/featureScope';
 
 const ROLE_LABEL = {
   doctor: 'Bác sĩ',
@@ -15,6 +16,7 @@ const ROLE_LABEL = {
   nurse: 'Điều dưỡng',
   receptionist: 'Tiếp đón & thu ngân',
   pharmacist: 'Dược sĩ Bệnh viện',
+  cleaner: 'Nhân viên vệ sinh',
 };
 // 1 hành động chính mỗi role — phần còn lại đã có ở menu bên trái
 const PRIMARY_ACTION = {
@@ -22,7 +24,10 @@ const PRIMARY_ACTION = {
   technician: { label: 'Nhập kết quả chụp', icon: 'upload-cloud', route: 'CreateImagingResult' },
   nurse: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
   receptionist: { label: 'Tạo lượt khám', icon: 'user-plus', route: 'NurseReception', params: { tab: 'createVisit' } },
-  pharmacist: { label: 'Mở hàng đợi Khoa Dược', icon: 'package', route: 'PharmacyQueue' },
+  // Phân hệ Dược ngoài phạm vi đồ án → dược sĩ chỉ còn lịch làm việc (constants/featureScope.js)
+  pharmacist: isFeatureEnabled('pharmacy')
+    ? { label: 'Mở hàng đợi Khoa Dược', icon: 'package', route: 'PharmacyQueue' }
+    : { label: 'Lịch làm việc', icon: 'calendar', route: 'StaffScheduling' },
 };
 const NEXT_TITLE = {
   doctor: 'Bệnh nhân tiếp theo',
@@ -67,7 +72,7 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
   const openVisit = (v) => {
     if (role === 'receptionist') return navigation.navigate('NurseReception', { tab: 'myQueue' });
     if (role === 'nurse') return navigation.navigate('NurseTriage');
-    if (role === 'pharmacist') return navigation.navigate('PharmacyQueue');
+    if (role === 'pharmacist') return isFeatureEnabled('pharmacy') ? navigation.navigate('PharmacyQueue') : null;
     return navigation.navigate('DoctorWorkQueue', { tab: MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
   };
 
@@ -87,21 +92,31 @@ const StaffHome = ({ user, navigation, onEditProfile }) => {
           }
         />
 
-        <View style={styles.shift}>
-          <Feather name="clock" size={16} color={Colors.brandGreen} />
-          <Text style={styles.shiftText}>
-            {schedule ? (
-              <>
-                Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
-                {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
-                {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
-              </>
-            ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
-          </Text>
-          <Pressable onPress={() => navigation.navigate('StaffScheduling')} accessibilityRole="link" hitSlop={8}>
-            {({ hovered }) => <Text style={[styles.link, hovered && styles.linkHover]}>Xem lịch trực</Text>}
-          </Pressable>
-        </View>
+        {/* Vai trò vệ sinh chỉ phục vụ bước hoàn tất dọn giường; quản lý giường ngoài phạm vi thì nói rõ thay vì để trang trống */}
+        {role === 'cleaner' && !isFeatureEnabled('beds') ? (
+          <View style={[styles.panel, { padding: 14, marginBottom: 16 }]}>
+            <Text style={styles.sub}>{OUT_OF_SCOPE_NOTICE} Tài khoản Nhân viên vệ sinh chỉ dùng cho bước hoàn tất dọn giường thuộc phân hệ quản lý giường bệnh.</Text>
+          </View>
+        ) : null}
+
+        {/* Nhân viên vệ sinh không có lịch trực trong module lịch (BE từ chối) — không hiện ca trực / liên kết bị 403 */}
+        {role !== 'cleaner' ? (
+          <View style={styles.shift}>
+            <Feather name="clock" size={16} color={Colors.brandGreen} />
+            <Text style={styles.shiftText}>
+              {schedule ? (
+                <>
+                  Ca trực hôm nay: <Text style={styles.shiftStrong}>{SHIFT_LABELS[schedule.shift] || schedule.shift}</Text>
+                  {schedule.startTime ? ` · ${schedule.startTime}–${schedule.endTime}` : ''}
+                  {schedule.status === 'pending' ? ' · chờ Trưởng khoa duyệt' : ''}
+                </>
+              ) : loading ? 'Đang tải ca trực…' : 'Hôm nay bạn không có ca trực.'}
+            </Text>
+            <Pressable onPress={() => navigation.navigate('StaffScheduling')} accessibilityRole="link" hitSlop={8}>
+              {({ hovered }) => <Text style={[styles.link, hovered && styles.linkHover]}>Xem lịch trực</Text>}
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={[styles.columns, wide && styles.columnsWide]}>
           <View style={wide ? styles.colMain : null}>

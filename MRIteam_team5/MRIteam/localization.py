@@ -488,21 +488,24 @@ def generate_gradcam_localization(model, img_array, file_path,
                                    predicted_class, class_idx,
                                    confidence: float = 0.0,
                                    gemini_client=None,
-                                   gemini_model: str = "gemini-2.5-flash"):
+                                   gemini_model: str = "gemini-2.5-flash",
+                                   plane_hint_path: str = None):
     """
     Pipeline 3 tầng:
       Tầng 1: Grad-CAM  → heatmap màu JET (XAI display)
       Tầng 2: OpenCV    → phát hiện blob sáng trong não (box sơ bộ)
       Tầng 3: Gemini Vision → căn chỉnh box cuối cùng dựa trên ảnh MRI gốc
-                              [PRIVACY GUARD: skipped for sagittal/coronal]
+                              [PRIVACY GUARD: skipped for sagittal/coronal/unknown]
     """
     img_cv = cv2.imread(file_path)
     if img_cv is None or predicted_class == "notumor":
         return None, img_cv
 
     # ── Detect acquisition plane — used by privacy guard ──
-    scan_plane = infer_plane_from_path(file_path)
-    print(f"[Plane Detect] file='{os.path.basename(file_path)}' → plane='{scan_plane}'")
+    scan_plane = infer_plane_from_path(plane_hint_path) if plane_hint_path else PLANE_UNKNOWN
+    if scan_plane == PLANE_UNKNOWN:
+        scan_plane = infer_plane_from_path(file_path)
+    print(f"[Plane Detect] file='{os.path.basename(file_path)}' hint='{plane_hint_path or ''}' → plane='{scan_plane}'")
 
     gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
 

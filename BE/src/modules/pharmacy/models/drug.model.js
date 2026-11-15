@@ -86,7 +86,7 @@ const drugSchema = new Schema(
       },
     ],
 
-    // ── Lịch sử biến động kho (Stock Movement Audit Trail - TT46/2018) ─────
+    // ── Lịch sử biến động kho (Stock Movement Audit Trail - TT 13/2025) ─────
     stockMovements: [
       {
         type: {

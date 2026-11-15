@@ -6,6 +6,11 @@ import { authCache } from "../utils/authCache.util.js";
 import { getJwtSecret } from "../config/jwt.config.js";
 import { FEATURES } from "../config/features.config.js";
 
+// protect và optionalProtect dùng CHUNG cache người dùng (authCache) → phải đọc cùng một bộ trường.
+// Trước đây optionalProtect lưu bản rút gọn (không isDeleted/profile/emergencyDuty), protect đọc lại trong 60s:
+// tài khoản đã xóa vẫn qua được kiểm tra, mất trạng thái trực cấp cứu và hồ sơ.
+const AUTH_USER_FIELDS = "tokenVersion isLocked isDeleted hospitalId role departmentId profile emergencyDuty email";
+
 export const protect = async (req, res, next) => {
   let token;
 
@@ -31,7 +36,7 @@ export const protect = async (req, res, next) => {
       // Tầng đệm Auth Cache (In-Memory Fast Path): Tránh gọi DB lặp lại trên mọi request
       let user = authCache.getUserAuth(decoded.id);
       if (!user) {
-        user = await User.findById(decoded.id).select("tokenVersion isLocked isDeleted hospitalId role departmentId profile emergencyDuty").lean();
+        user = await User.findById(decoded.id).select(AUTH_USER_FIELDS).lean();
         if (user) {
           authCache.setUserAuth(decoded.id, user, 60000); // Cache 60s
         }
@@ -89,6 +94,8 @@ export const protect = async (req, res, next) => {
       req.user = {
         ...decoded,
         role: user.role || decoded.role,
+        // JWT không chứa email; nhật ký kiểm toán dùng req.user.email (trước đây luôn "undefined")
+        email: user.email || null,
         hospitalId: user.hospitalId ? user.hospitalId.toString() : null,
         departmentId: user.departmentId || null,
         department: user.departmentId || null,
@@ -132,18 +139,19 @@ export const optionalProtect = async (req, res, next) => {
 
       let user = authCache.getUserAuth(decoded.id);
       if (!user) {
-        user = await User.findById(decoded.id).select("tokenVersion isLocked hospitalId role").lean();
+        user = await User.findById(decoded.id).select(AUTH_USER_FIELDS).lean();
         if (user) {
           authCache.setUserAuth(decoded.id, user, 60000);
         }
       }
 
-      if (user && !user.isLocked) {
+      if (user && !user.isLocked && !user.isDeleted) {
         const tokenVersionInJwt = decoded.tokenVersion !== undefined ? decoded.tokenVersion : 0;
         if (user.tokenVersion === tokenVersionInJwt) {
           req.user = decoded;
           req.user.role = user.role || decoded.role;
           req.user.hospitalId = user.hospitalId ? user.hospitalId.toString() : null;
+          req.user.email = user.email || null;
         }
       }
     } catch (error) {
@@ -164,6 +172,16 @@ export const optionalProtect = async (req, res, next) => {
   } else {
     next();
   }
+};
+
+// Tài khoản quản trị nền tảng (admin, system_admin) không gắn bệnh viện và không truy cập dữ liệu lâm sàng
+// của bệnh nhân (RELEASE_v3.4). Đặt sau protect ở các router lâm sàng.
+export const PLATFORM_ADMIN_ROLES = ["admin", "system_admin"];
+export const denyPlatformAdmin = (req, res, next) => {
+  if (PLATFORM_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: "Tài khoản quản trị nền tảng không truy cập dữ liệu lâm sàng của bệnh nhân." });
+  }
+  return next();
 };
 
 export const checkRole = (...roles) => {

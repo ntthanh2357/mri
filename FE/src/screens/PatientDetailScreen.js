@@ -41,6 +41,13 @@ import VitalsTab from '../components/patientDetail/VitalsTab';
 import LabOrdersTab from '../components/patientDetail/LabOrdersTab';
 import PrescriptionTab from '../components/patientDetail/PrescriptionTab';
 import DischargeTransferTab from '../components/patientDetail/DischargeTransferTab';
+import { isFeatureEnabled } from '../constants/featureScope';
+import { can } from '../constants/clinicalPermissions';
+
+// Tab / dữ liệu chỉ tải khi vai trò được BE cho đọc (KTV xét nghiệm mở hồ sơ trước đây nhận 403 ở phim, giấy ra viện, chuyển tuyến).
+// Bệnh nhân xem hồ sơ của chính mình: giấy ra viện, chuyển tuyến theo quyền tự xem.
+const TAB_PERM = { discharge: 'dischargeRead', transfer: 'transferFormRead', imaging: 'imagingStaffRead' };
+const canTab = (role, key) => !TAB_PERM[key] || can(role, TAB_PERM[key]) || (role === 'patient' && key !== 'imaging');
 
 const calculateAge = (dob, birthYear) => {
   if (dob) {
@@ -68,6 +75,8 @@ const PatientDetailScreen = ({ route, navigation }) => {
   const [imagingResults, setImagingResults] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeTab, setActiveTab] = useState(VALID_TABS.includes(route.params?.defaultTab) ? route.params.defaultTab : 'lab'); // 'vitals', 'lab', 'imaging', 'prescription', 'discharge', 'transfer'
+  // Tab mặc định (?defaultTab=) bị ẩn với vai trò này → về tab Xét nghiệm
+  useEffect(() => { if (currentUser?.role && !canTab(currentUser.role, activeTab)) setActiveTab('lab'); }, [currentUser?.role, activeTab]);
 
   // State cho form ghi nhận sinh hiệu mới
   const [pulseInput, setPulseInput] = useState('');
@@ -186,8 +195,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
       const ordersData = await get(`/api/patients/${targetPatientId}/lab-orders`);
       setLabOrders(ordersData.data || []);
       
+      const myRole = meData.user.role;
       // 5. Lấy danh sách phim MRI/CT — thử cả 2 cách: theo medicalId và theo patientId
-      try {
+      if (canTab(myRole, 'imaging')) try {
         const medId = foundPatient?.profile?.medicalId;
         let allImaging = [];
 
@@ -224,7 +234,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       }
 
       // 7. Lấy danh sách giấy ra viện
-      try {
+      if (canTab(myRole, 'discharge')) try {
         const discRes = await get(`/api/patients/${targetPatientId}/discharge-papers`);
         setDischargePapers(discRes.data || []);
       } catch (err) {
@@ -232,7 +242,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
       }
 
       // 8. Lấy danh sách phiếu chuyển tuyến
-      try {
+      if (canTab(myRole, 'transfer')) try {
         const transRes = await get(`/api/patients/${targetPatientId}/transfer-forms`);
         setTransferForms(transRes.data || []);
       } catch (err) {
@@ -452,7 +462,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
     try {
       const targetPatientId = patient?._id;
       const body = {
-        doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
+        doctor_name: currentUser?.profile?.name || "", // BE ghi tên theo tài khoản đăng nhập
         diagnosis: prescriptionDiagnosis,
         visitId: visitId || undefined,
         drugs: prescriptionDrugs,
@@ -504,9 +514,10 @@ const PatientDetailScreen = ({ route, navigation }) => {
     try {
       const targetPatientId = patient?._id;
       const body = {
-        doctor_name: currentUser?.profile?.name || "Bác sĩ điều trị",
-        dischargeNo: dischargeNo || `GV-${Math.floor(1000 + Math.random() * 9000)}`,
-        hospitalNo: hospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
+        doctor_name: currentUser?.profile?.name || "", // BE ghi tên theo tài khoản đăng nhập
+        // số giấy/số bệnh án do phòng KHTH cấp: chưa có thì để trống (giấy in dòng chấm điền tay), không sinh số ngẫu nhiên
+        dischargeNo: dischargeNo || '',
+        hospitalNo: hospitalNo || '',
         dateIn: dateIn,
         dateOut: dateOut,
         diagnosis: dischargeDiagnosis,
@@ -548,9 +559,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
       const body = {
         patient_id: targetPatientId,
-        doctor_name: currentUser?.profile?.name || currentUser?.name || "Bác sĩ điều trị",
-        transferNo: transferNo || `CV-${Math.floor(100000 + Math.random() * 900000)}`,
-        hospitalNo: transferHospitalNo || `BA-${Math.floor(10000 + Math.random() * 90000)}`,
+        doctor_name: currentUser?.profile?.name || currentUser?.name || "", // BE ghi tên theo tài khoản đăng nhập
+        transferNo: transferNo || '',
+        hospitalNo: transferHospitalNo || '',
         transferTo,
         dateIn,
         dateOut,
@@ -652,28 +663,6 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // Tự động điền các trị số bình thường theo giới tính
-  const handleAutoFillNormalLab = () => {
-    if (!selectedOrder || biomarkerList.length === 0) return;
-    const filled = { ...labInputValues };
-    biomarkerList.forEach(b => {
-      const ref = selectedOrder.patient_gender === 'Nam' ? b.reference_range?.male : b.reference_range?.female;
-      if (ref) {
-        let normalVal = 0;
-        const hasMin = ref.min !== null && ref.min !== undefined;
-        const hasMax = ref.max !== null && ref.max !== undefined;
-        if (hasMin && hasMax) {
-          normalVal = (ref.min + ref.max) / 2;
-        } else if (hasMax) {
-          normalVal = ref.max;
-        } else if (hasMin) {
-          normalVal = ref.min;
-        }
-        filled[b.code] = String(Number(normalVal.toFixed(2)));
-      }
-    });
-    setLabInputValues(filled);
-  };
 
   // Lưu kết quả xét nghiệm điền tay của bác sĩ
   const handleSaveManualLab = async () => {
@@ -722,19 +711,40 @@ const PatientDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // Giả lập gửi dữ liệu từ máy LIS
+  // Vòng đời mẫu xét nghiệm: lấy mẫu, rồi duyệt kết quả sau khi có kết quả
+  const advanceLabOrder = async (order, step, successMessage) => {
+    try {
+      await post(`/api/lis/orders/${order._id}/${step}`, {});
+      Alert.alert('Thành công', successMessage);
+      const ordersData = await get(`/api/patients/${patient?._id}/lab-orders`);
+      setLabOrders(ordersData.data || []);
+      setSelectedOrder((ordersData.data || []).find((o) => o._id === order._id) || null);
+    } catch (error) {
+      Alert.alert('Chưa thực hiện được', error.message || 'Vui lòng thử lại.');
+    }
+  };
+
   // Tạo chỉ định xét nghiệm mới từ UI
   const handleCreateLabOrder = async (category) => {
     const targetPatientId = patient?._id;
     if (!targetPatientId) return;
 
+    // Giới tính quyết định khoảng tham chiếu của kết quả nên phải lấy từ hồ sơ, không được đoán
+    const rawGender = String(patient.profile?.gender || '').trim().toLowerCase();
+    const patientGender = ['nam', 'male'].includes(rawGender) ? 'Nam' : ['nữ', 'nu', 'female'].includes(rawGender) ? 'Nữ' : null;
+    if (!patientGender) {
+      Alert.alert('Thiếu giới tính', 'Vui lòng cập nhật giới tính của bệnh nhân trước khi tạo phiếu xét nghiệm.');
+      return;
+    }
+
     try {
-      const barcode = `LIS-${category === 'HOA_SINH' ? 'HS' : 'HH'}-${Math.floor(1000 + Math.random() * 9000)}`;
+      // mã vạch phải duy nhất (máy LIS ghép kết quả theo mã vạch): thời điểm + chuỗi ngẫu nhiên, không chỉ 4 chữ số
+      const barcode = `LIS-${category === 'HOA_SINH' ? 'HS' : 'HH'}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       
       await post(`/api/patients/${targetPatientId}/lab-orders`, {
         category,
         barcode,
-        patient_gender: patient.profile?.gender || (Math.random() > 0.5 ? 'Nữ' : 'Nam')
+        patient_gender: patientGender
       });
 
       Alert.alert('Thành công', `Đã tạo phiếu xét nghiệm mới (${category}) với mã Barcode: ${barcode}`);
@@ -793,23 +803,16 @@ const PatientDetailScreen = ({ route, navigation }) => {
     };
 
     // Chuỗi điểm cho polyline
-    const systolicPoints = vitals.map((v, i) => {
-      const val = v.blood_pressure?.systolic || 120;
-      const { x, y } = getCoords(val, i);
-      return `${x},${y}`;
-    }).join(' ');
-
-    const diastolicPoints = vitals.map((v, i) => {
-      const val = v.blood_pressure?.diastolic || 80;
-      const { x, y } = getCoords(val, i);
-      return `${x},${y}`;
-    }).join(' ');
-
-    const pulsePoints = vitals.map((v, i) => {
-      const val = v.pulse || 70;
-      const { x, y } = getCoords(val, i);
-      return `${x},${y}`;
-    }).join(' ');
+    // Chỉ vẽ số đo có thật: lần đo thiếu huyết áp/mạch không được vẽ thành 120/80/70 (giá trị bình thường giả)
+    const measured = (val) => Number.isFinite(Number(val)) && Number(val) > 0;
+    const seriesPoints = (pick) => vitals
+      .map((v, i) => (measured(pick(v)) ? getCoords(Number(pick(v)), i) : null))
+      .filter(Boolean)
+      .map(({ x, y }) => `${x},${y}`)
+      .join(' ');
+    const systolicPoints = seriesPoints((v) => v.blood_pressure?.systolic);
+    const diastolicPoints = seriesPoints((v) => v.blood_pressure?.diastolic);
+    const pulsePoints = seriesPoints((v) => v.pulse);
 
     // Vẽ Grid Lines ngang (40, 80, 120, 160, 200)
     const gridValues = [40, 80, 120, 160, 200];
@@ -887,18 +890,15 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
           {/* Dots */}
           {vitals.map((v, i) => {
-            const sys = v.blood_pressure?.systolic || 120;
-            const dia = v.blood_pressure?.diastolic || 80;
-            const pul = v.pulse || 70;
-            const sysC = getCoords(sys, i);
-            const diaC = getCoords(dia, i);
-            const pulC = getCoords(pul, i);
+            const sysC = measured(v.blood_pressure?.systolic) ? getCoords(Number(v.blood_pressure.systolic), i) : null;
+            const diaC = measured(v.blood_pressure?.diastolic) ? getCoords(Number(v.blood_pressure.diastolic), i) : null;
+            const pulC = measured(v.pulse) ? getCoords(Number(v.pulse), i) : null;
 
             return (
               <g key={i}>
-                <circle cx={sysC.x} cy={sysC.y} r="5" fill="#EF4444" stroke="#FFFFFF" strokeWidth="1.5" />
-                <circle cx={diaC.x} cy={diaC.y} r="5" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1.5" />
-                <circle cx={pulC.x} cy={pulC.y} r="5" fill="#10B981" stroke="#FFFFFF" strokeWidth="1.5" />
+                {sysC ? <circle cx={sysC.x} cy={sysC.y} r="5" fill="#EF4444" stroke="#FFFFFF" strokeWidth="1.5" /> : null}
+                {diaC ? <circle cx={diaC.x} cy={diaC.y} r="5" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1.5" /> : null}
+                {pulC ? <circle cx={pulC.x} cy={pulC.y} r="5" fill="#10B981" stroke="#FFFFFF" strokeWidth="1.5" /> : null}
               </g>
             );
           })}
@@ -934,18 +934,9 @@ const PatientDetailScreen = ({ route, navigation }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Edit2 size={15} color={Colors.brandGreen} />
             <Text style={styles.manualFormTitle}>
-              {selectedOrder.status === 'COMPLETED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
+              {selectedOrder.status === 'RESULTED' ? 'Chỉnh sửa kết quả xét nghiệm' : 'Nhập kết quả xét nghiệm'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.autofillBtn}
-            onPress={handleAutoFillNormalLab}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={13} color={Colors.brandGreen} />
-              <Text style={styles.autofillBtnText}>Tự động điền giá trị chuẩn</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.manualLabGrid}>
@@ -987,7 +978,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.manualFormFooter}>
-          {selectedOrder.status === 'COMPLETED' && (
+          {selectedOrder.status === 'RESULTED' && (
             <TouchableOpacity
               style={styles.cancelManualBtn}
               onPress={() => setIsEditingLab(false)}
@@ -1031,6 +1022,15 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
   const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
 
+  // Quay lại màn trước; mở thẳng bằng đường dẫn (không có lịch sử) thì về danh sách bệnh nhân
+  const handleBackNavigation = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(currentUser?.role === 'patient' ? 'PatientRecords' : 'DoctorPatientList');
+    }
+  };
+
   return (
     <ResponsiveLayout
       navigation={navigation}
@@ -1057,7 +1057,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
                 { key: 'discharge', label: 'Giấy ra viện' },
                 { key: 'transfer', label: 'Chuyển tuyến' },
                 { key: 'imaging', label: 'Phim MRI/CT' },
-              ]}
+              ].filter((t) => !currentUser?.role || canTab(currentUser.role, t.key))}
               value={activeTab}
               onChange={setActiveTab}
             />
@@ -1066,7 +1066,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <PageContainer>
-          <PatientSafetyStrip patientId={patientId} />
+          <PatientSafetyStrip patientId={patientId} role={currentUser?.role} />
           {/* 3. Nội dung TAB 1: SINH HIỆU */}
           {activeTab === 'vitals' && (
             <VitalsTab
@@ -1101,6 +1101,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               setSelectedOrder={setSelectedOrder}
               currentUser={currentUser}
               handleCreateLabOrder={handleCreateLabOrder}
+              advanceLabOrder={advanceLabOrder}
               patient={patient}
               isEditingLab={isEditingLab}
               setIsEditingLab={setIsEditingLab}
@@ -1143,7 +1144,7 @@ const PatientDetailScreen = ({ route, navigation }) => {
               clinicalSources={clinicalSources}
               aiConsultationData={aiConsultationData}
               isConsultingAi={isConsultingAi}
-              onConsultAi={handleConsultAi}
+              onConsultAi={isFeatureEnabled('pharmacy') ? handleConsultAi : undefined}
               overrideReason={overrideReason}
               setOverrideReason={setOverrideReason}
               overrideCategory={overrideCategory}

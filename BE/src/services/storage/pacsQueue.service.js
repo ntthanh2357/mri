@@ -1,5 +1,7 @@
+import { AsyncResource } from "async_hooks";
 import StoredMedicalFile from "../../models/storedMedicalFile.model.js";
-import { readLocalBuffer, existsOnLocal } from "./localAdapter.js";
+import { readLocalBuffer, existsOnLocal, getLocalRoot } from "./localAdapter.js";
+import path from "path";
 import { uploadEncryptedFile, getDriveFolderLockStats } from "./driveMirrorAdapter.js";
 import { encryptBuffer } from "../../utils/cryptoStorage.util.js";
 
@@ -64,16 +66,20 @@ const executeSingleDriveSyncJob = async (job) => {
   if (!record) return;
   if (record.syncStatus === "SYNCED" && record.driveFileId) return;
 
-  // 1. Kiểm tra Cloud Deduplication theo SHA-256:
-  // Nếu đã có 1 tệp cùng SHA-256 được đồng bộ thành công lên Drive trước đó -> Kế thừa luôn!
+  // 1. Kiểm tra Cloud Deduplication theo SHA-256: đã có bản sao Drive dùng được → kế thừa, không tải lại.
+  // Bản chính đã mã hóa (localEncrypted): chỉ kế thừa bản Drive của bản ghi dùng CHUNG tệp vật lý (cùng bản mã, cùng IV/tag);
+  // kế thừa IV/tag của bản mã khác sẽ làm bản chính không giải mã được nữa.
   if (record.sha256) {
     const existingSynced = await StoredMedicalFile.findOne({
       _id: { $ne: record._id },
       sha256: record.sha256,
+      // Bản sao trên Drive cũng không được dùng chung giữa các viện
+      hospitalId: record.hospitalId || null,
       syncStatus: "SYNCED",
       driveFileId: { $ne: null },
       encryptionIv: { $ne: null },
       encryptionAuthTag: { $ne: null },
+      ...(record.localEncrypted ? { localPath: record.localPath, encryptionIv: record.encryptionIv } : { localEncrypted: { $ne: true } }),
     }).lean();
 
     if (existingSynced) {
@@ -81,9 +87,7 @@ const executeSingleDriveSyncJob = async (job) => {
         driveFileId: existingSynced.driveFileId,
         driveFolderId: existingSynced.driveFolderId,
         syncStatus: "SYNCED",
-        encryptionIv: existingSynced.encryptionIv,
-        encryptionAuthTag: existingSynced.encryptionAuthTag,
-        isEncrypted: true,
+        ...(record.localEncrypted ? {} : { encryptionIv: existingSynced.encryptionIv, encryptionAuthTag: existingSynced.encryptionAuthTag }),
         lastSyncAttemptAt: new Date(),
         syncError: null,
       });
@@ -94,12 +98,19 @@ const executeSingleDriveSyncJob = async (job) => {
   }
 
   // 2. Chỉ đọc tệp từ ổ cứng cục bộ KHI ĐẾN LƯỢT UPLOAD (Zero-RAM-Hold trong lúc chờ Queue)
-  if (!existsOnLocal(record.localPath)) {
+  // Đường dẫn tuyệt đối ghi từ máy khác: tìm lại theo logicalPath dưới thư mục kho
+  const byLogical = record.logicalPath ? path.join(getLocalRoot(), record.logicalPath) : null;
+  const localPath = existsOnLocal(record.localPath) ? record.localPath : byLogical && existsOnLocal(byLogical) ? byLogical : null;
+  if (!localPath) {
     throw new Error(`Tệp cục bộ không còn tồn tại để đồng bộ lên Drive: ${record.localPath}`);
   }
 
-  const rawBuffer = await readLocalBuffer(record.localPath);
-  const { encryptedBuffer, ivHex, authTagHex } = encryptBuffer(rawBuffer);
+  const stored = await readLocalBuffer(localPath);
+  // Bản chính đã là bản mã: đẩy nguyên bản mã lên Drive (bản sao Drive = bản chính từng byte, cùng IV/tag).
+  // Dữ liệu cũ bản rõ: mã hóa riêng cho bản sao Drive như trước.
+  const { encryptedBuffer, ivHex, authTagHex } = record.localEncrypted
+    ? { encryptedBuffer: stored, ivHex: record.encryptionIv, authTagHex: record.encryptionAuthTag }
+    : encryptBuffer(stored);
   const driveFileName = `${fileName || record.fileName}.enc`;
 
   const uploadFn = customDriveUploaderForTest || uploadEncryptedFile;
@@ -116,7 +127,6 @@ const executeSingleDriveSyncJob = async (job) => {
     syncStatus: "SYNCED",
     encryptionIv: ivHex,
     encryptionAuthTag: authTagHex,
-    isEncrypted: true,
     lastSyncAttemptAt: new Date(),
     syncError: null,
   });
@@ -260,7 +270,8 @@ const drainAiQueue = async () => {
 export const enqueueAiTask = ({ taskFn, priority = 5, visitId = null, label = "AI Analysis" }) => {
   return new Promise((resolve, reject) => {
     aiPendingQueue.push({
-      taskFn,
+      // Worker rảnh chạy tiếp trong ngữ cảnh của tác vụ trước. Không gắn lại thì bộ lọc tenancy sẽ dùng nhầm viện.
+      taskFn: AsyncResource.bind(taskFn),
       priority: Number(priority) || 5,
       visitId,
       label,

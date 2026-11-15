@@ -6,6 +6,7 @@ import {
   ShieldAlert, PackageCheck, Pill, Package, CalendarX,
 } from 'lucide-react';
 import useStaffHome from '../../controllers/useStaffHome';
+import { isFeatureEnabled, OUT_OF_SCOPE_NOTICE } from '../../constants/featureScope';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal, CountUp } from '../ui/Motion';
 import { StaffBanner, RECEPTION_IMAGES, LiveClock, Avatar, EmptyState, personName } from '../reception/ReceptionUI';
@@ -42,9 +43,13 @@ const VARIANTS = {
     image: 'mriDiscuss', tone: 'indigo', label: 'Bác sĩ', kpis: ['exam', 'examining', 'read', 'sign'],
     primary: { icon: Stethoscope, label: 'Mở hàng đợi khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' } },
   },
-  pharmacist: {
+  // Phân hệ Dược ngoài phạm vi đồ án (constants/featureScope.js): dược sĩ chỉ còn lịch làm việc
+  pharmacist: isFeatureEnabled('pharmacy') ? {
     image: 'tabletScan', tone: 'teal', label: 'Dược sĩ', kpis: ['verify', 'ready', 'dispense'],
     primary: { icon: Package, label: 'Mở hàng đợi Khoa Dược', route: 'PharmacyQueue' },
+  } : {
+    image: 'tabletScan', tone: 'teal', label: 'Dược sĩ', kpis: [],
+    primary: { icon: CalendarDays, label: 'Lịch làm việc', route: 'StaffScheduling' },
   },
   lab_technician: { image: 'tabletScan', tone: 'ocean', label: 'KTV Xét nghiệm (LIS)', kpis: ['scan', 'upload'], primary: { icon: Activity, label: 'Danh sách Bệnh nhân (LIS)', route: 'DoctorPatientList' } },
   technician: {
@@ -70,7 +75,9 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
 
   const kpis = cfg.kpis.map((k) => ({ key: k, ...TASK_TONE[k], label: byKey[k]?.label || '', value: byKey[k]?.count || 0, task: byKey[k] }));
 
-  const actions = isPharm ? [
+  const actions = isPharm && !isFeatureEnabled('pharmacy') ? [
+    { icon: CalendarDays, title: 'Lịch làm việc', desc: OUT_OF_SCOPE_NOTICE, bg: '#4F46E5', shade: '#3730A3', go: () => navigation.navigate('StaffScheduling') },
+  ] : isPharm ? [
     { icon: Package, title: 'Hàng đợi Khoa Dược', desc: `${(byKey.verify?.count || 0) + (byKey.ready?.count || 0) + (byKey.dispense?.count || 0)} đơn cần xử lý`, bg: '#0F766E', shade: '#115E59', go: () => navigation.navigate('PharmacyQueue') },
     { icon: Pill, title: 'Danh mục thuốc', desc: 'Tồn kho theo lô (FEFO)', bg: '#0369A1', shade: '#075985', go: () => navigation.navigate('DrugManagement', { tab: 'list' }) },
     { icon: CalendarX, title: 'Thuốc hết hạn', desc: 'Lô sắp & đã hết hạn', bg: '#B45309', shade: '#92400E', go: () => navigation.navigate('DrugManagement', { tab: 'expiry' }) },
@@ -89,7 +96,7 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
     { icon: ClipboardCheck, title: 'Phân công của tôi', desc: byKey.assign?.count ? `${byKey.assign.count} ca chờ xác nhận` : 'Không có ca chờ xác nhận', bg: '#0B2A5B', shade: '#071E3D', go: () => navigation.navigate('MyAssignments') },
   ];
 
-  const openVisit = (v) => isPharm ? navigation.navigate('PharmacyQueue') : navigation.navigate('DoctorWorkQueue', { tab: isTech || MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
+  const openVisit = (v) => isPharm ? (isFeatureEnabled('pharmacy') ? navigation.navigate('PharmacyQueue') : null) : navigation.navigate('DoctorWorkQueue', { tab: isTech || MRI_STATUSES.includes(v.status) ? 'mriQueue' : 'examQueue' });
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.pageContent}>

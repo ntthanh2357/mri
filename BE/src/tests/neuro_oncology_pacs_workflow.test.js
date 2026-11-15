@@ -212,7 +212,7 @@ describe('Quy trình Khép kín Khoa Ung thư Não & Mini-PACS Web DICOM AI (Neu
         visitId: visit._id,
         hospitalId: hospital._id,
         user: { id: technician._id, role: 'technician', profile: { name: 'KTV MRI' } },
-        checklistData: {
+        checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false,
           hasPacemakerOrMetal: false,
           enforcePaymentGate: true,
         },
@@ -235,7 +235,7 @@ describe('Quy trình Khép kín Khoa Ung thư Não & Mini-PACS Web DICOM AI (Neu
       visitId: visit._id,
       hospitalId: hospital._id,
       user: { id: technician._id, role: 'technician', profile: { name: 'KTV MRI' } },
-      checklistData: {
+      checklistData: { hasClaustrophobia: false, hasKidneyDisease: false, isPregnant: false,
         hasPacemakerOrMetal: false,
         enforcePaymentGate: true,
       },

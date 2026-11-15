@@ -20,6 +20,8 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { apiRequest } from '../utils/apiClient';
+import { localAvatarUri } from '../utils/localAvatar';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 // "KS. Huy Hoàng (Quản trị Hệ thống)" → { name: "KS. Huy Hoàng", title: "Quản trị Hệ thống" }
 const splitTitle = (full = '') => {
@@ -39,7 +41,7 @@ function mapApiUser(u) {
     specialty: u.profile?.specialty || '',
     avatarUrl:
       u.profile?.photoUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(u.profile?.name || u.email)}&background=e2e8f0&color=475569&bold=true`,
+      localAvatarUri(u.profile?.name || u.email),
     status: u.isLocked ? 'Locked' : 'Active',
     lastActive: u.createdAt,
   };
@@ -154,6 +156,10 @@ function getSpecialtyLabel(spec) {
   }
 }
 
+// BE (services/user.service.js canModerateRole) chỉ cho khóa/mở khóa tài khoản hạng THẤP hơn:
+// màn này chỉ admin/system_admin dùng, nên không hiện nút khóa với tài khoản quản trị nền tảng (trước đây bấm vào bị 403)
+const canModerate = (targetRole) => !['admin', 'system_admin'].includes(targetRole);
+
 export default function AdminUsersView() {
   // ─── State ────────────────────────────────────────────────────────────────
   const [usersList, setUsersList] = useState([]);
@@ -224,6 +230,10 @@ export default function AdminUsersView() {
     setCreateSuccess(null);
     if (!newEmail || !newPassword || !newName || !newRole) {
       setCreateError('Vui lòng nhập đầy đủ các trường bắt buộc.');
+      return;
+    }
+    if (passwordPolicyError(newPassword)) {
+      setCreateError(passwordPolicyError(newPassword));
       return;
     }
     
@@ -546,7 +556,7 @@ export default function AdminUsersView() {
                       {/* Interactive Buttons (ADM-04, ADM-05) */}
                       <td className="py-3.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex gap-1.5">
-                          {user.status === 'Active' ? (
+                          {!canModerate(user.role) ? null : user.status === 'Active' ? (
                             <button
                               onClick={() => handleLockUser(user.id)}
                               title="Khóa tài khoản này"
@@ -628,9 +638,7 @@ export default function AdminUsersView() {
                 <img
                   src={
                     selectedUserDetail.profile?.photoUrl ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      selectedUserDetail.profile?.name || selectedUserDetail.email
-                    )}&background=e2e8f0&color=475569&bold=true`
+                    localAvatarUri(selectedUserDetail.profile?.name || selectedUserDetail.email)
                   }
                   alt={selectedUserDetail.profile?.name || selectedUserDetail.email}
                   className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
@@ -715,7 +723,7 @@ export default function AdminUsersView() {
               {/* Bottom Actions inside detailed card */}
               <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
                 <div className="flex gap-2">
-                  {selectedUserDetail.isLocked ? (
+                  {!canModerate(selectedUserDetail.role) ? null : selectedUserDetail.isLocked ? (
                     <button
                       onClick={() => handleUnlockUser(selectedUserDetail._id)}
                       className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/10"

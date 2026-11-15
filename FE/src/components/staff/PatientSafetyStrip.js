@@ -6,6 +6,7 @@ import { usePatientSafety } from '../../controllers/usePatientSafety';
 import { usePatientPreScreening } from '../../controllers/usePatientPreScreening';
 import { ANSWER_LABEL, RISK_META, SCREEN_QUESTIONS } from '../../utils/preScreening';
 import PreScreeningModal from './PreScreeningModal';
+import { can } from '../../constants/clinicalPermissions';
 
 const RISK_TONE = {
   success: { bg: Colors.successBg, fg: Colors.successText, border: Colors.successBg },
@@ -90,8 +91,10 @@ const PreScreeningStrip = ({ patientId, visit, patientName }) => {
 
 // Dải an toàn đầu trang chi tiết bệnh nhân: dị ứng thuốc (nổi bật khi có) + liên hệ khẩn cấp.
 // Phân biệt "chưa ghi nhận" với "không tải được" để bác sĩ không hiểu nhầm là bệnh nhân không dị ứng.
-const PatientSafetyStrip = ({ patientId, visit, patientName }) => {
+// role: vai trò người xem — chỉ gọi kết quả sàng lọc khi vai trò được BE cho đọc (lễ tân không có quyền → trước đây 403)
+const PatientSafetyStrip = ({ patientId, visit, patientName, role }) => {
   const { loading, data, error } = usePatientSafety(patientId);
+  const showPreScreening = Boolean(role && can(role, 'preScreeningRead'));
   if (!patientId || loading) return null;
 
   if (error) {
@@ -101,7 +104,7 @@ const PatientSafetyStrip = ({ patientId, visit, patientName }) => {
           <Feather name="alert-circle" size={16} color={Colors.slateMuted} />
           <Text style={styles.mutedText}>Không tải được thông tin dị ứng thuốc. Hỏi lại bệnh nhân trước khi kê đơn.</Text>
         </View>
-        <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} />
+        {showPreScreening ? <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} /> : null}
       </View>
     );
   }
@@ -134,7 +137,7 @@ const PatientSafetyStrip = ({ patientId, visit, patientName }) => {
           </Text>
         </View>
       ) : null}
-      <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} />
+      {showPreScreening ? <PreScreeningStrip patientId={patientId} visit={visit} patientName={patientName} /> : null}
     </View>
   );
 };

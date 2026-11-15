@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Task } from "../models/task.model.js";
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
@@ -5,6 +6,7 @@ import { Hospital } from "../models/hospital.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { getDayRangeVN } from "../utils/date.util.js";
+import { canUpdateTask, taskUpdateDenial, taskDenialMessage } from "../utils/taskPermission.util.js";
 
 // ─── Định nghĩa 8 bước quy trình chuẩn theo spec I.2 ────────────────────────
 const WORKFLOW_STEPS = [
@@ -74,8 +76,10 @@ export const getKanbanBoard = async (req, res) => {
     const filter = { hospitalId };
 
     // Bác sĩ/KTV/Lễ tân chỉ xem task thuộc vai trò mình (hoặc gán trực tiếp)
-    const userRole = role || req.user.role;
-    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(userRole)) {
+    // ?role= chỉ là bộ lọc cho nhóm quản lý; người khác không được tự nâng phạm vi xem bằng tham số này.
+    const LEAD_ROLES = ["admin", "system_admin", "hospital_admin", "department_head"];
+    const userRole = LEAD_ROLES.includes(req.user.role) && typeof role === "string" && role ? role : req.user.role;
+    if (!LEAD_ROLES.includes(userRole)) {
       filter.$or = [
         { roleRequired: userRole },
         { assignedToUserId: req.user.id }
@@ -85,6 +89,9 @@ export const getKanbanBoard = async (req, res) => {
     }
 
     if (date) {
+      if (typeof date !== "string" || Number.isNaN(new Date(date).getTime())) {
+        return errorResponse(res, "Ngày không hợp lệ.", 400);
+      }
       const { startOfDay: searchDate, endOfDay } = getDayRangeVN(date);
       filter.createdAt = { $gte: searchDate, $lte: endOfDay };
     }
@@ -112,23 +119,9 @@ export const getKanbanBoard = async (req, res) => {
 // @route PUT /api/v1/tasks/:id/status
 // @access Private
 
-const TASK_ADMIN_ROLES = ["admin", "system_admin", "hospital_admin", "department_head"];
-
-/**
- * [P2-6] Chỉ người đúng vai trò của bước, hoặc người được giao trực tiếp, mới được
- * đổi trạng thái task. Trước đây mọi nhân viên cùng viện đều tick hoàn tất được
- * bước của người khác (lễ tân "ký duyệt báo cáo" thay bác sĩ).
- */
-export const canUpdateTask = (task, user) => {
-  if (!task || !user) return false;
-  if (TASK_ADMIN_ROLES.includes(user.role)) return true;
-  if (task.assignedToUserId && task.assignedToUserId.toString() !== String(user.id)) return false;
-  // Bước "auto" là của hệ thống/AI, không cho nhân viên tự tick
-  if (task.roleRequired === "auto") return false;
-  if (task.roleRequired === "doctor" && ["doctor", "radiologist", "department_head"].includes(user.role)) return true;
-  if (task.roleRequired === "technician" && ["technician", "lab_technician"].includes(user.role)) return true;
-  return task.roleRequired === user.role;
-};
+// [P2-6] Quy tắc quyền nằm ở utils/taskPermission.util.js (FE dùng bản sao để chỉ hiện nút cho người được phép).
+// Trước đây mọi nhân viên cùng viện đều tick hoàn tất được bước của người khác (lễ tân "ký duyệt báo cáo" thay bác sĩ).
+export { canUpdateTask };
 
 export const updateTaskStatus = async (req, res) => {
   try {
@@ -144,13 +137,8 @@ export const updateTaskStatus = async (req, res) => {
     }
     const oldStatus = task.status;
 
-    if (!canUpdateTask(task, req.user)) {
-      return errorResponse(
-        res,
-        `Bạn không có quyền cập nhật bước "${task.title}" (yêu cầu vai trò ${task.roleRequired}).`,
-        403
-      );
-    }
+    const denial = taskUpdateDenial(task, req.user);
+    if (denial) return errorResponse(res, taskDenialMessage(task, denial), 403);
 
     task.status = status;
     if (notes) task.notes = notes;

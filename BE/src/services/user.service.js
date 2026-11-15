@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
+import { recordAuditLog } from "./auditLog.service.js";
 import { Dataset } from "../models/dataset.model.js";
 import { Visit } from "../models/visit.model.js";
 import { Invoice } from "../models/invoice.model.js";
 import { authCache } from "../utils/authCache.util.js";
+import { isRoleInScope } from "../config/roleScope.js";
 
 export const getAllUsers = async () => {
   // [P2-4] Tài khoản đã xóa mềm không còn xuất hiện trong danh sách quản trị
@@ -58,7 +60,7 @@ export const toggleUserLock = async (userId, isLocked, adminId, actorRole) => {
 
   if (user) {
     authCache.invalidateUser(userId);
-    await AuditLog.create({
+    await recordAuditLog({
       action: isLocked ? "lock-user" : "unlock-user",
       entity: "User",
       entityId: userId,
@@ -98,7 +100,7 @@ export const lockUserById = async (id, adminId, actorRole) => {
 
   authCache.invalidateUser(id);
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: "lock-user",
     entity: "User",
     entityId: id,
@@ -125,7 +127,7 @@ export const verifyAdminById = async (id, verified, adminId) => {
     .select("-passwordHash -otpCode -otpExpires -tokenVersion")
     .lean();
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: verified ? "verify-admin" : "unverify-admin",
     entity: "User",
     entityId: id,
@@ -167,7 +169,7 @@ export const unlockUserById = async (id, adminId, actorRole) => {
 
   authCache.invalidateUser(id);
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: "unlock-user",
     entity: "User",
     entityId: id,
@@ -239,7 +241,9 @@ export const getSystemStats = async () => {
 
   // User role distribution counts
   const patientsCount = await User.countDocuments({ role: "patient", isDeleted: { $ne: true } });
-  const staffCount = await User.countDocuments({ role: { $in: ["admin", "system_admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist", "cleaner"] }, isDeleted: { $ne: true } });
+  // Vai trò ngoài phạm vi (vệ sinh, dược sĩ) không tính vào số nhân sự khi phạm vi đồ án đang thu hẹp
+  const staffRoles = ["admin", "system_admin", "hospital_admin", "technician", "nurse", "receptionist", "pharmacist", "cleaner"].filter(isRoleInScope);
+  const staffCount = await User.countDocuments({ role: { $in: staffRoles }, isDeleted: { $ne: true } });
 
   const userDistribution = {
     patient: patientsCount,

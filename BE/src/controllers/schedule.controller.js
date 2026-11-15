@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 import { sendSwapRequestResultEmail } from "../services/email.service.js";
 import { getDayRangeVN, getWeekRangeVN } from "../utils/date.util.js";
 
+import { inputErrorStatus } from "../utils/inputError.util.js";
 // Giờ trực chuẩn mặc định theo từng loại ca lâm sàng tại bệnh viện
 const DEFAULT_SHIFT_TIMES = {
   "sáng": { startTime: "07:00", endTime: "15:00" },
@@ -35,6 +36,9 @@ export const createSchedule = async (req, res) => {
 
     if (!isValidObjectId(staffId)) {
       return errorResponse(res, "ID nhân sự không hợp lệ.", 400);
+    }
+    if (Number.isNaN(new Date(date).getTime())) {
+      return errorResponse(res, "Ngày không hợp lệ.", 400);
     }
 
     // Verify staff exists and belongs to the same hospital
@@ -75,7 +79,7 @@ export const createSchedule = async (req, res) => {
     return successResponse(res, { schedule: populated }, "Xếp lịch ca làm việc thành công!", 201);
   } catch (error) {
     console.error("Lỗi createSchedule:", error);
-    return errorResponse(res, "Lỗi hệ thống khi tạo lịch làm.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi tạo lịch làm.", inputErrorStatus(res, error));
   }
 };
 
@@ -97,6 +101,9 @@ export const registerSchedule = async (req, res) => {
 
     if (!date || !shift) {
       return errorResponse(res, "Vui lòng chọn ngày và ca muốn đăng ký.", 400);
+    }
+    if (Number.isNaN(new Date(date).getTime())) {
+      return errorResponse(res, "Ngày không hợp lệ.", 400);
     }
 
     const { startOfDay: parsedDate } = getDayRangeVN(date);
@@ -150,7 +157,7 @@ export const registerSchedule = async (req, res) => {
     return successResponse(res, { schedule: populated }, "Đăng ký ca trực thành công! Vui lòng chờ phê duyệt.", 201);
   } catch (error) {
     console.error("Lỗi registerSchedule:", error);
-    return errorResponse(res, "Lỗi hệ thống khi đăng ký lịch làm.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi đăng ký lịch làm.", inputErrorStatus(res, error));
   }
 };
 
@@ -195,7 +202,7 @@ export const getWeeklySchedules = async (req, res) => {
     return successResponse(res, { schedules, range: { start, end } }, "Lấy lịch làm việc tuần thành công.");
   } catch (error) {
     console.error("Lỗi getWeeklySchedules:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -228,7 +235,7 @@ export const getMySchedules = async (req, res) => {
     return successResponse(res, { schedules, range: { start, end } }, "Lấy lịch làm cá nhân thành công.");
   } catch (error) {
     console.error("Lỗi getMySchedules:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -266,7 +273,7 @@ export const updateSchedule = async (req, res) => {
     return successResponse(res, { schedule }, "Cập nhật ca làm việc thành công!");
   } catch (error) {
     console.error("Lỗi updateSchedule:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -320,7 +327,7 @@ export const deleteSchedule = async (req, res) => {
     return successResponse(res, { deletedId: id }, "Xóa ca làm việc thành công!");
   } catch (error) {
     console.error("Lỗi deleteSchedule:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -364,7 +371,7 @@ export const getShiftRegistrations = async (req, res) => {
     return successResponse(res, { registrations }, "Lấy danh sách đăng ký ca làm thành công.");
   } catch (error) {
     console.error("Lỗi getShiftRegistrations:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -415,7 +422,7 @@ export const reviewShiftRegistration = async (req, res) => {
     );
   } catch (error) {
     console.error("Lỗi reviewShiftRegistration:", error);
-    return errorResponse(res, "Lỗi hệ thống khi duyệt ca trực.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi duyệt ca trực.", inputErrorStatus(res, error));
   }
 };
 
@@ -451,7 +458,7 @@ export const cancelMyRegistration = async (req, res) => {
     return successResponse(res, { deletedId: id }, "Hủy đăng ký ca trực thành công!");
   } catch (error) {
     console.error("Lỗi cancelMyRegistration:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -509,7 +516,7 @@ export const createSwapRequest = async (req, res) => {
     return successResponse(res, { swapRequest }, "Gửi yêu cầu đổi ca làm thành công! Chờ Admin phê duyệt.", 201);
   } catch (error) {
     console.error("Lỗi createSwapRequest:", error);
-    return errorResponse(res, "Lỗi hệ thống khi gửi yêu cầu đổi ca.", 500);
+    return errorResponse(res, "Lỗi hệ thống khi gửi yêu cầu đổi ca.", inputErrorStatus(res, error));
   }
 };
 
@@ -553,7 +560,7 @@ export const getSwapRequests = async (req, res) => {
     return successResponse(res, { requests }, "Lấy danh sách yêu cầu đổi ca thành công.");
   } catch (error) {
     console.error("Lỗi getSwapRequests:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };
 
@@ -648,6 +655,6 @@ export const reviewSwapRequest = async (req, res) => {
     return successResponse(res, { swapRequest }, `Đã ${status === "approved" ? "phê duyệt" : "từ chối"} yêu cầu đổi ca trực thành công!`);
   } catch (error) {
     console.error("Lỗi reviewSwapRequest:", error);
-    return errorResponse(res, "Lỗi hệ thống.", 500);
+    return errorResponse(res, "Lỗi hệ thống.", inputErrorStatus(res, error));
   }
 };

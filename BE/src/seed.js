@@ -5,16 +5,18 @@ import { User } from "./models/user.model.js";
 import { VitalSign } from "./models/vitalSign.model.js";
 import { LabOrder } from "./models/labOrder.model.js";
 import { Biomarker } from "./models/biomarker.model.js";
+import { assertDemoSeedEnabled, connectLocalTestMongo } from "./utils/seedGuard.util.js";
 
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/neuro";
+const MONGO_URI = process.env.MONGO_URI;
+assertDemoSeedEnabled({ scriptName: "seed.js" });
 // mongodb+srv://admin:[EMAIL_ADDRESS]/neuro
 const seedDatabase = async () => {
   try {
     console.log("Connecting to MongoDB for seeding...");
-    await mongoose.connect(MONGO_URI);
+    await connectLocalTestMongo(mongoose, MONGO_URI);
     console.log("Connected successfully.");
 
     // 1. Clear existing users (Optional - keep it safe or only clear test users)
@@ -87,7 +89,9 @@ const seedDatabase = async () => {
     ];
 
     console.log("Inserting users...");
-    const createdUsers = await User.insertMany(mockUsers);
+    const createdUsers = await User.insertMany(
+      mockUsers.map((user) => ({ ...user, isTestAccount: true })),
+    );
     console.log("Created users:", createdUsers.map(u => `${u.email} (${u.role})`));
 
     const patientUser = createdUsers.find(u => u.role === "patient");

@@ -238,6 +238,10 @@ export const calculateCopay = async (req, res) => {
     if (!patientId || totalAmount === undefined || totalAmount === null) {
       return errorResponse(res, "Thiếu patientId hoặc tổng tiền hóa đơn.", 400);
     }
+    const amountNum = typeof totalAmount === "number" ? totalAmount : typeof totalAmount === "string" && totalAmount.trim() !== "" ? Number(totalAmount) : NaN;
+    if (!Number.isFinite(amountNum) || amountNum < 0 || amountNum > Number.MAX_SAFE_INTEGER) {
+      return errorResponse(res, "Tổng tiền phải là số không âm.", 400);
+    }
 
     // Tìm thẻ BHYT hợp lệ gần nhất
     const bhyt = await BhytInfo.findOne({
@@ -333,29 +337,7 @@ export const calculateCopay = async (req, res) => {
 
     const patientAmount = totalAmount - bhytAmount;
 
-    // Ghi nhận Audit Log (TT46/2018/TT-BYT)
-    try {
-      if (bhytAmount > 0) {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.BHYT_CLAIM_SUBMITTED,
-          entity: "Invoice",
-          performedBy: req.user?.id || "system",
-          hospitalId: req.user?.hospitalId || bhyt.hospitalId,
-          details: `Tính toán đồng chi trả BHYT: Tổng ${totalAmount.toLocaleString("vi-VN")}đ, BHYT trả ${bhytAmount.toLocaleString("vi-VN")}đ, BN trả ${patientAmount.toLocaleString("vi-VN")}đ.`
-        });
-      }
-      if (rejectedItems.length > 0 || effectiveRate === 0) {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.BHYT_CLAIM_REJECTED,
-          entity: "Invoice",
-          performedBy: req.user?.id || "system",
-          hospitalId: req.user?.hospitalId || bhyt.hospitalId,
-          details: `Từ chối thanh toán một phần hoặc toàn bộ BHYT: ${outOfNetworkWarning || priorAuthWarning || "Lý do thẩm định"}`
-        });
-      }
-    } catch (auditErr) {
-      console.warn("[BHYT AuditLog Warn]", auditErr.message);
-    }
+    // Tính thử không phải gửi yêu cầu thanh toán: không ghi nhật ký BHYT_CLAIM_*; nhật ký ghi khi áp BHYT vào hóa đơn
 
     return successResponse(res, {
       hasBhyt: true,
@@ -406,7 +388,7 @@ export const applyBhytToInvoice = async (req, res) => {
 
     const result = await applyBhytCore(invoice, { bhyt, treatmentType, isOutOfNetwork, hasTransferForm });
     if (!result.ok) {
-      const status = { NO_CARD: 404, PAID_BEFORE_BHYT: 409, PAYOS_IN_FLIGHT: 409 }[result.code] || 400;
+      const status = { NO_CARD: 404, PAID_BEFORE_BHYT: 409, PAYOS_IN_FLIGHT: 409, CAP_CHANGED: 409, APPLY_IN_PROGRESS: 409 }[result.code] || 400;
       return res.status(status).json({ success: false, code: result.code, message: result.message });
     }
 

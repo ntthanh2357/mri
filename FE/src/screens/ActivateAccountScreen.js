@@ -16,6 +16,7 @@ import Colors from '../constants/colors';
 import PressableScale from '../components/PressableScale';
 import { put, setAuthToken, get } from '../services/api.service';
 import { Lock, Shield, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { passwordPolicyError } from '../utils/passwordPolicy';
 
 const ROLE_LABELS = {
   department_head: 'Trưởng khoa Ung thư Não',
@@ -74,8 +75,8 @@ const ActivateAccountScreen = ({ route, navigation }) => {
       showAlert('error', 'Thiếu thông tin', 'Vui lòng nhập mật khẩu tạm thời đã được cấp.');
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      showAlert('error', 'Mật khẩu không hợp lệ', 'Mật khẩu mới phải chứa ít nhất 6 ký tự.');
+    if (passwordPolicyError(newPassword)) {
+      showAlert('error', 'Mật khẩu không hợp lệ', passwordPolicyError(newPassword));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -96,7 +97,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
       });
 
       if (res.accessToken) {
-        await setAuthToken(res.accessToken);
+        await setAuthToken(res.accessToken, res.refreshToken);
       }
 
       let destination = 'Home';
@@ -150,7 +151,7 @@ const ActivateAccountScreen = ({ route, navigation }) => {
             <Text style={styles.brandName}>
               Neuro<Text style={styles.brandNameAccent}>Scan</Text> AI
             </Text>
-            <Text style={styles.brandSub}>HỆ THỐNG CHẨN ĐOÁN HÌNH ẢNH THẦN KINH</Text>
+            <Text style={styles.brandSub}>HỖ TRỢ SÀNG LỌC U NÃO & EMR</Text>
           </View>
         </View>
 
@@ -283,9 +284,9 @@ const ActivateAccountScreen = ({ route, navigation }) => {
           {/* Strength indicator */}
           {newPassword.length > 0 && (
             <View style={styles.strengthRow}>
-              <View style={[styles.strengthBar, { backgroundColor: newPassword.length >= 8 ? '#047857' : newPassword.length >= 6 ? '#B45309' : '#B91C1C' }]} />
-              <Text style={[styles.strengthText, { color: newPassword.length >= 8 ? '#047857' : newPassword.length >= 6 ? '#B45309' : '#B91C1C' }]}>
-                {newPassword.length >= 8 ? 'Độ bảo mật: Mạnh' : newPassword.length >= 6 ? 'Độ bảo mật: Trung bình' : 'Độ bảo mật: Yếu'}
+              <View style={[styles.strengthBar, { backgroundColor: !passwordPolicyError(newPassword) ? '#047857' : '#B91C1C' }]} />
+              <Text style={[styles.strengthText, { color: !passwordPolicyError(newPassword) ? '#047857' : '#B91C1C' }]}>
+                {!passwordPolicyError(newPassword) ? 'Đạt yêu cầu (đủ 8 ký tự, có chữ và số)' : 'Chưa đạt: cần 8 ký tự, có cả chữ và số'}
               </Text>
             </View>
           )}

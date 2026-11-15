@@ -1,6 +1,7 @@
 import { isValidObjectId } from "mongoose";
 import { Dataset } from "../models/dataset.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
+import { recordAuditLog } from "./auditLog.service.js";
 
 export const getDatasets = async () => {
   return Dataset.find().lean();
@@ -17,7 +18,7 @@ export const createDataset = async (
     status: payload.status || "pending",
   });
 
-  await AuditLog.create({
+  await recordAuditLog({
     action: "create-dataset",
     entity: "Dataset",
     entityId: dataset._id.toString(),
@@ -62,7 +63,7 @@ export const updateDatasetPrice = async (
   }
 
   // Create audit log after successful write (Requirement 9.6)
-  await AuditLog.create({
+  await recordAuditLog({
     action: "update-dataset-price",
     entity: "Dataset",
     entityId: id,

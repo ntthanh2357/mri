@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { EmergencyAlert, EmergencyEvent } from "../models/emergencyAlert.model.js";
 import { Visit } from "../models/visit.model.js";
 import { User } from "../models/user.model.js";
@@ -7,7 +8,9 @@ import { AiJob } from "../models/aiJob.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
+import { sendOtpEmail } from "../services/email.service.js";
 
+// Kíp lâm sàng cấp cứu của bệnh viện; tài khoản nền tảng (admin, system_admin) không xem/thao tác sự kiện cấp cứu.
 const CLINICAL_EMERGENCY_ROLES = [
   "doctor",
   "department_head",
@@ -15,17 +18,11 @@ const CLINICAL_EMERGENCY_ROLES = [
   "technician",
   "radiologist",
   "hospital_admin",
-  "admin",
-  "system_admin",
 ];
 
-const DOCTOR_LEAD_ROLES = [
-  "doctor",
-  "department_head",
-  "hospital_admin",
-  "admin",
-  "system_admin",
-];
+// Giải trừ báo động, đề xuất chèn lịch MRI/giữ giường, đóng sự kiện, đóng cảnh báo là quyết định chuyên môn:
+// chỉ Bác sĩ hoặc Trưởng khoa (khớp thông báo lỗi). Tài khoản quản trị không tham gia.
+const DOCTOR_LEAD_ROLES = ["doctor", "department_head"];
 
 /**
  * Tra cứu kíp trực Roster hiện tại theo WorkSchedule & isOnCall
@@ -352,6 +349,7 @@ export const edHandoff = async (req, res) => {
       return errorResponse(res, "Chỉ nhân sự lâm sàng mới có quyền tạo bàn giao ca cấp cứu ISBAR.", 403);
     }
     const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const {
       hisPatientCode,
       isUnidentifiedPatient = false,
@@ -393,9 +391,9 @@ export const edHandoff = async (req, res) => {
         profile: {
           patientId: generatedCode,
           name: patientName || (isUnidentifiedPatient ? `Bệnh nhân Vô Danh (${generatedCode})` : "Bệnh nhân cấp cứu ED"),
-          age: age || 40,
-          gender: gender || "Nam",
-          phone: "0000000000"
+          age: Number(age) > 0 ? Number(age) : null, // chưa rõ thì để trống
+          gender: ["Nam", "Nữ", "Khác"].includes(gender) ? gender : "", // chưa rõ thì để trống
+          phone: ""
         }
       });
       await patient.save();
@@ -405,11 +403,11 @@ export const edHandoff = async (req, res) => {
     const visit = new Visit({
       hospitalId,
       patientId: patient._id,
-      type: 'cấp cứu',
+      visitType: 'Cấp cứu',
       priority: 'khẩn cấp',
       status: 'đang khám',
       reason: situation || "Tiếp nhận cấp cứu chuyển từ Khoa Cấp Cứu",
-      diagnosis: assessment || "Nghi ngờ tổn thương u não nguy kịch"
+      diagnosis: assessment || ""
     });
     await visit.save();
 
@@ -477,7 +475,7 @@ export const edHandoff = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 export const edAccept = async (req, res) => {
   try {
-    if (!["doctor", "department_head", "admin", "hospital_admin"].includes(req.user.role)) {
+    if (!DOCTOR_LEAD_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ Bác sĩ Ngoại Thần Kinh mới có thẩm quyền chấp thuận nhận bệnh.", 403);
     }
 
@@ -606,7 +604,7 @@ export const cancelStandDown = async (req, res) => {
     const { id } = req.params;
     const { cancelReason } = req.body;
 
-    if (!cancelReason || cancelReason.trim() === '') {
+    if (typeof cancelReason !== "string" || cancelReason.trim() === '') {
       return errorResponse(res, "Bắt buộc phải nhập lý do hủy báo động nhầm để lưu vết kiểm toán.", 400);
     }
 
@@ -644,34 +642,74 @@ export const cancelStandDown = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7. Y LỆNH MIỆNG CẤP CỨU & KÝ BỔ SUNG (VERBAL ORDER - Q-EMG-01 / BUG-EMG-001)
+// 7. Y LỆNH MIỆNG CẤP CỨU: tạo → điều dưỡng đọc lại → bác sĩ ký bổ sung
+//
+// Trạng thái: pending_readback → readback_confirmed → fully_signed; pending_readback → rejected.
+// Quá hạn là mốc thời gian riêng (escalatedReadBackAt, overdueAt) vì y lệnh có thể quá hạn ở nhiều bước.
+// Thời hạn 15 phút và 24 giờ là quy định nội bộ: văn bản đã rà soát của Bộ Y tế không đặt các mốc này.
+// Điều dưỡng được thực hiện thuốc ngay trong cấp cứu rồi xác nhận sau; trước khi xác nhận,
+// hệ thống không ghi là đã đọc lại (không có cờ nào từ client bỏ qua được bước này).
 // POST /api/v1/emergency/verbal-order
 // ══════════════════════════════════════════════════════════════════════════════
+const VERBAL_ORDER_PRESCRIBER_ROLES = ["doctor", "department_head"];
+const ALERT_BANNER_MAX_AGE_HOURS = 24;
+const VERBAL_ORDER_COUNTERSIGN_HOURS = 24;
+const READBACK_OTP_TTL_MS = 15 * 60 * 1000;
+const READBACK_OTP_MAX_ATTEMPTS = 5;
+const OPEN_EVENT_STATUSES = ["active", "triggered", "acknowledged", "in_progress", "escalated"];
+const WITNESS_ROLES = ["doctor", "department_head", "nurse", "radiologist", "pharmacist"];
+
+const hashReadBackOtp = (orderId, code) =>
+  crypto.createHash("sha256").update(`${orderId}|${code}`).digest("hex");
+
+// Không bao giờ trả mã OTP (kể cả bản băm) về cho client
+const serializeVerbalOrder = (order) => {
+  const plain = typeof order?.toObject === "function" ? order.toObject() : { ...order };
+  delete plain.readBackOtpHash;
+  delete plain.readBackOtpAttempts;
+  return plain;
+};
+
+const findActiveStaff = (userId, hospitalId, roles) =>
+  mongoose.isValidObjectId(userId)
+    ? User.findOne({
+        _id: userId,
+        hospitalId,
+        role: { $in: roles },
+        isLocked: { $ne: true },
+        isDeleted: { $ne: true },
+      }).select("email role profile").lean()
+    : null;
+
+const staffDisplayName = (user, fallback) =>
+  user?.profile?.fullName || user?.profile?.name || user?.username || user?.email || fallback;
+
 export const createVerbalOrder = async (req, res) => {
   try {
-    if (!DOCTOR_LEAD_ROLES.includes(req.user?.role)) {
+    if (!VERBAL_ORDER_PRESCRIBER_ROLES.includes(req.user?.role)) {
       return errorResponse(res, "Chỉ Bác sĩ hoặc Trưởng khoa mới có thẩm quyền ra y lệnh miệng cấp cứu.", 403);
     }
     const hospitalId = req.user.hospitalId;
-    const {
-      emergencyEventId,
-      medicalRecordId,
-      orderText,
-      isControlledSubstance = false,
-      nurseReceivedId,
-      nurseReceivedName,
-      countersignHours = 24,
-      requireReadBack,
-      bedsideImmediate,
-      readBackMethod
-    } = req.body;
+    const { emergencyEventId, medicalRecordId, isControlledSubstance = false, nurseReceivedId } = req.body || {};
+    const orderText = String(req.body?.orderText || "").trim();
 
     if (!emergencyEventId || !orderText) {
       return errorResponse(res, "Thiếu ID sự kiện cấp cứu hoặc nội dung y lệnh.", 400);
     }
+    if (!nurseReceivedId) {
+      return errorResponse(res, "Vui lòng chọn điều dưỡng nhận y lệnh để đọc lại.", 400);
+    }
 
     const event = await EmergencyAlert.findOne({ _id: emergencyEventId, hospitalId });
     if (!event) return errorResponse(res, "Không tìm thấy sự kiện cấp cứu liên kết.", 404);
+    if (!OPEN_EVENT_STATUSES.includes(event.status)) {
+      return errorResponse(res, "Sự kiện cấp cứu đã đóng. Y lệnh miệng chỉ được ra trong sự kiện cấp cứu đang mở.", 409);
+    }
+
+    const nurse = await findActiveStaff(nurseReceivedId, hospitalId, ["nurse"]);
+    if (!nurse) {
+      return errorResponse(res, "Người nhận y lệnh phải là điều dưỡng đang hoạt động của bệnh viện.", 400);
+    }
 
     // Tìm MedicalRecord tương ứng (Fix BUG-EMR-001: khớp cả patientId string và userId ObjectId)
     let record = null;
@@ -690,42 +728,38 @@ export const createVerbalOrder = async (req, res) => {
       return errorResponse(res, "Không tìm thấy hồ sơ bệnh án để ghi nhận y lệnh miệng.", 404);
     }
 
-    const deadline = new Date(Date.now() + countersignHours * 3600 * 1000);
-    const requiresTwoStepReadBack =
-      requireReadBack === true ||
-      (Boolean(nurseReceivedId) && bedsideImmediate !== true);
+    const now = new Date();
+    const orderId = new mongoose.Types.ObjectId();
+    const otpCode = String(crypto.randomInt(100000, 1000000));
+    const prescriberName = staffDisplayName(req.user, "Bác sĩ");
 
-    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
-    const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
-
-    const newVerbalOrder = {
+    record.verbalOrders.push({
+      _id: orderId,
       emergencyEventId: event._id,
       orderText,
       isControlledSubstance: Boolean(isControlledSubstance),
-      prescribedAt: new Date(),
+      prescribedAt: now,
       prescribedByDoctorId: req.user.id,
-      prescribedByDoctorName: req.user.profile?.name || req.user.username,
-      nurseReceivedId: nurseReceivedId || req.user.id,
-      nurseReceivedName: nurseReceivedName || req.user.profile?.name || "Điều dưỡng trực tiếp nhận",
-      isReadBackConfirmed: !requiresTwoStepReadBack,
-      readBackMethod: requiresTwoStepReadBack ? (readBackMethod || "app_confirm") : "bedside_immediate",
-      readBackOtpCode: requiresTwoStepReadBack ? otpCode : null,
-      readBackOtpExpires: requiresTwoStepReadBack ? otpExpires : null,
-      countersignDeadline: deadline,
-      status: requiresTwoStepReadBack ? "pending_readback" : "pending_countersign"
-    };
-
-    record.verbalOrders.push(newVerbalOrder);
+      prescribedByDoctorName: prescriberName,
+      nurseReceivedId: nurse._id,
+      nurseReceivedName: staffDisplayName(nurse, "Điều dưỡng"),
+      isReadBackConfirmed: false,
+      readBackOtpHash: hashReadBackOtp(orderId, otpCode),
+      readBackOtpExpires: new Date(now.getTime() + READBACK_OTP_TTL_MS),
+      readBackOtpAttempts: 0,
+      countersignDeadline: new Date(now.getTime() + VERBAL_ORDER_COUNTERSIGN_HOURS * 3600 * 1000),
+      status: "pending_readback",
+    });
     await record.save();
-    const savedVerbalOrder = record.verbalOrders[record.verbalOrders.length - 1];
+    const savedVerbalOrder = record.verbalOrders.id(orderId);
 
     // Ghi nhận mốc thời gian vào EmergencyEvent
     event.timelineMilestones.push({
       action: `Ra y lệnh miệng: ${orderText}`,
       performedBy: req.user.id,
-      performedByName: req.user.profile?.name || req.user.username,
-      timestamp: new Date(),
-      notes: `${requiresTwoStepReadBack ? "Chờ điều dưỡng xác nhận Read-Back trên App/OTP." : "Đọc lại (Read-Back) xác nhận tại giường."} ${isControlledSubstance ? '[THUỐC HƯỚNG THẦN/GÂY NGHIỆN: TT 20/2017]' : ''}. Hạn ký bổ sung EMR: ${countersignHours} giờ.`
+      performedByName: prescriberName,
+      timestamp: now,
+      notes: `Chờ điều dưỡng ${savedVerbalOrder.nurseReceivedName} xác nhận đọc lại. ${isControlledSubstance ? "[THUỐC GÂY NGHIỆN/HƯỚNG THẦN] " : ""}Hạn ký bổ sung: ${VERBAL_ORDER_COUNTERSIGN_HOURS} giờ.`
     });
 
     if (event.status === 'acknowledged' || event.status === 'triggered') {
@@ -741,225 +775,368 @@ export const createVerbalOrder = async (req, res) => {
       targetModel: "MedicalRecord",
       targetId: String(record._id),
       metadata: {
-        verbalOrderId: String(savedVerbalOrder._id),
+        verbalOrderId: String(orderId),
         status: savedVerbalOrder.status,
         isControlledSubstance: Boolean(isControlledSubstance),
+        nurseReceivedId: String(nurse._id),
       },
       req,
     });
 
+    await createNotificationInternal({
+      hospitalId,
+      recipientId: nurse._id,
+      senderId: req.user.id,
+      type: "emergency_alert",
+      title: "Y lệnh miệng cần đọc lại",
+      message: `BS ${prescriberName}: ${orderText}. Vui lòng xác nhận đã đọc lại trên ứng dụng.`,
+      relatedId: record._id,
+    });
+    // Mã OTP chỉ gửi tới điều dưỡng, không bao giờ trả về cho bác sĩ ra lệnh
+    sendOtpEmail(nurse.email, otpCode, {
+      subject: "[NeuroScan AI] Mã xác nhận đọc lại y lệnh miệng",
+      purpose: `Bác sĩ ${prescriberName} vừa ra y lệnh miệng cho bạn. Dùng mã dưới đây để xác nhận đã đọc lại nếu chưa thao tác được trực tiếp trên ứng dụng.`,
+      validity: "15 phút",
+    }).catch((mailErr) => {
+      console.warn("Không gửi được mã đọc lại y lệnh miệng:", mailErr.message);
+    });
+
     return successResponse(res, {
-      verbalOrder: savedVerbalOrder,
+      verbalOrder: serializeVerbalOrder(savedVerbalOrder),
       recordId: record._id,
       event
-    }, "Ghi nhận y lệnh miệng thành công. Chờ ký số bổ sung trong 24 giờ.", 201);
+    }, "Đã ghi nhận y lệnh miệng. Chờ điều dưỡng xác nhận đọc lại, sau đó bác sĩ ký bổ sung trong 24 giờ.", 201);
   } catch (err) {
     return errorResponse(res, "Lỗi tạo y lệnh miệng: " + err.message, 500);
   }
 };
 
+// Chỉ đúng điều dưỡng được gán mới xác nhận được, từ đúng trạng thái chờ đọc lại.
+const loadOrderForReadBack = async (req, orderId, { withOtp = false } = {}) => {
+  const hospitalId = req.user?.hospitalId;
+  if (!hospitalId || !mongoose.isValidObjectId(orderId)) {
+    return { error: { message: "Không tìm thấy y lệnh miệng.", status: 404 } };
+  }
+  const query = MedicalRecord.findOne({ "verbalOrders._id": orderId, hospitalId });
+  if (withOtp) query.select("+verbalOrders.readBackOtpHash");
+  const record = await query;
+  const order = record?.verbalOrders.id(orderId);
+  if (!order) return { error: { message: "Không tìm thấy y lệnh miệng.", status: 404 } };
+
+  const currentUserId = String(req.user.id || req.user._id);
+  if (String(order.prescribedByDoctorId) === currentUserId) {
+    return { error: { message: "Bác sĩ ra y lệnh miệng không được tự xác nhận đọc lại thay cho điều dưỡng nhận lệnh.", status: 403 } };
+  }
+  if (req.user.role !== "nurse" || String(order.nurseReceivedId) !== currentUserId) {
+    return { error: { message: "Chỉ điều dưỡng được gán nhận y lệnh mới có quyền xác nhận đọc lại.", status: 403 } };
+  }
+  if (order.status !== "pending_readback") {
+    return { error: { message: `Y lệnh không ở trạng thái chờ đọc lại (hiện tại: ${order.status}).`, status: 409 } };
+  }
+  return { record, order, currentUserId };
+};
+
+const markReadBackConfirmed = async (req, res, { record, orderId, currentUserId, method }) => {
+  const confirmedAt = new Date();
+  const updated = await MedicalRecord.findOneAndUpdate(
+    {
+      _id: record._id,
+      hospitalId: record.hospitalId,
+      verbalOrders: { $elemMatch: { _id: orderId, status: "pending_readback" } },
+    },
+    {
+      $set: {
+        "verbalOrders.$.status": "readback_confirmed",
+        "verbalOrders.$.isReadBackConfirmed": true,
+        "verbalOrders.$.readBackConfirmedBy": currentUserId,
+        "verbalOrders.$.readBackConfirmedAt": confirmedAt,
+        "verbalOrders.$.readBackMethod": method,
+        "verbalOrders.$.readBackOtpHash": null,
+        "verbalOrders.$.readBackOtpExpires": null,
+      },
+    },
+    { new: true }
+  );
+  if (!updated) {
+    return errorResponse(res, "Y lệnh này vừa được xử lý, vui lòng tải lại.", 409);
+  }
+
+  await recordAuditLog({
+    action: AUDIT_ACTIONS.VERBAL_ORDER_READBACK_CONFIRMED,
+    actorId: currentUserId,
+    actorRole: req.user.role,
+    hospitalId: updated.hospitalId,
+    targetModel: "MedicalRecord",
+    targetId: String(updated._id),
+    metadata: { verbalOrderId: String(orderId), readBackMethod: method },
+    req,
+  });
+
+  return successResponse(
+    res,
+    { verbalOrder: serializeVerbalOrder(updated.verbalOrders.id(orderId)), recordId: updated._id },
+    "Điều dưỡng đã xác nhận đọc lại y lệnh miệng thành công."
+  );
+};
+
 // ══════════════════════════════════════════════════════════════════════════════
-// 7B. ĐIỀU DƯỠNG XÁC NHẬN ĐỌC LẠI Y LỆNH MIỆNG TRÊN APP (READ-BACK CONFIRM)
+// 7B. ĐIỀU DƯỠNG XÁC NHẬN ĐỌC LẠI Y LỆNH MIỆNG TRÊN APP
 // POST /api/v1/emergency/verbal-order/:orderId/readback-confirm
 // ══════════════════════════════════════════════════════════════════════════════
 export const confirmVerbalOrderReadBack = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const hospitalId = req.user?.hospitalId;
-
-    const record = await MedicalRecord.findOne({
-      "verbalOrders._id": orderId,
-      ...(hospitalId && !["admin", "system_admin"].includes(req.user.role) ? { hospitalId } : {}),
+    const loaded = await loadOrderForReadBack(req, orderId);
+    if (loaded.error) return errorResponse(res, loaded.error.message, loaded.error.status);
+    return await markReadBackConfirmed(req, res, {
+      record: loaded.record,
+      orderId,
+      currentUserId: loaded.currentUserId,
+      method: "app_confirm",
     });
-    if (!record) {
-      return errorResponse(res, "Không tìm thấy y lệnh miệng cần xác nhận Read-Back.", 404);
-    }
-
-    const order = record.verbalOrders.id(orderId);
-    if (!order) {
-      return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
-    }
-
-    const currentUserId = String(req.user.id || req.user._id);
-    // Bác sĩ ra y lệnh tuyệt đối KHÔNG được tự xác nhận Read-Back cho chính y lệnh của mình (TC-23)
-    if (String(order.prescribedByDoctorId) === currentUserId) {
-      return errorResponse(
-        res,
-        "Bác sĩ ra y lệnh miệng không được tự xác nhận Read-Back thay cho điều dưỡng nhận lệnh.",
-        403
-      );
-    }
-
-    if (!["nurse", "hospital_admin", "admin", "system_admin"].includes(req.user.role)) {
-      return errorResponse(res, "Chỉ Điều dưỡng nhận lệnh mới có quyền xác nhận Read-Back y lệnh miệng.", 403);
-    }
-
-    order.isReadBackConfirmed = true;
-    order.readBackConfirmedBy = req.user.id || req.user._id;
-    order.readBackConfirmedAt = new Date();
-    order.readBackMethod = "app_confirm";
-    order.nurseReceivedId = req.user.id || req.user._id;
-    order.nurseReceivedName = req.user.profile?.name || req.user.profile?.fullName || req.user.username || "Điều dưỡng xác nhận";
-    order.status = "pending_countersign";
-
-    await record.save();
-
-    await recordAuditLog({
-      action: AUDIT_ACTIONS.VERBAL_ORDER_READBACK_CONFIRMED,
-      actorId: req.user.id || req.user._id,
-      actorRole: req.user.role,
-      hospitalId: record.hospitalId,
-      targetModel: "MedicalRecord",
-      targetId: String(record._id),
-      metadata: {
-        verbalOrderId: String(order._id),
-        readBackMethod: "app_confirm",
-      },
-      req,
-    });
-
-    return successResponse(
-      res,
-      { verbalOrder: order, recordId: record._id },
-      "Điều dưỡng đã xác nhận Đọc lại (Read-Back) y lệnh miệng thành công."
-    );
   } catch (err) {
-    return errorResponse(res, "Lỗi xác nhận Read-Back: " + err.message, 500);
+    return errorResponse(res, "Lỗi xác nhận đọc lại: " + err.message, 500);
   }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7C. XÁC NHẬN READ-BACK BẰNG MÃ OTP 6 SỐ TẠI GIƯỜNG (BEDSIDE OTP FALLBACK)
+// 7C. XÁC NHẬN ĐỌC LẠI BẰNG MÃ OTP GỬI TỚI ĐIỀU DƯỠNG
 // POST /api/v1/emergency/verbal-order/:orderId/readback-otp
 // ══════════════════════════════════════════════════════════════════════════════
 export const confirmVerbalOrderOtp = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { otpCode, nurseId, nurseName } = req.body || {};
-    const hospitalId = req.user?.hospitalId;
+    const loaded = await loadOrderForReadBack(req, orderId, { withOtp: true });
+    if (loaded.error) return errorResponse(res, loaded.error.message, loaded.error.status);
+    const { record, order, currentUserId } = loaded;
 
-    const record = await MedicalRecord.findOne({
-      "verbalOrders._id": orderId,
-      ...(hospitalId && !["admin", "system_admin"].includes(req.user.role) ? { hospitalId } : {}),
-    });
-    if (!record) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
+    const otpCode = String(req.body?.otpCode || "").trim();
+    if (!otpCode) return errorResponse(res, "Vui lòng nhập mã OTP đọc lại.", 400);
 
-    const order = record.verbalOrders.id(orderId);
-    if (!order) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
-
-    const confirmingNurseId = nurseId || req.user.id || req.user._id;
-    if (String(confirmingNurseId) === String(order.prescribedByDoctorId)) {
-      return errorResponse(res, "Người xác nhận Read-Back OTP phải là điều dưỡng độc lập với bác sĩ ra lệnh.", 403);
-    }
-
-    if (!otpCode || String(order.readBackOtpCode) !== String(otpCode)) {
-      return errorResponse(res, "Mã OTP xác nhận Read-Back không chính xác.", 400);
-    }
-    if (order.readBackOtpExpires && new Date(order.readBackOtpExpires) < new Date()) {
-      return errorResponse(res, "Mã OTP xác nhận Read-Back đã hết hạn (quá 15 phút).", 400);
-    }
-
-    order.isReadBackConfirmed = true;
-    order.readBackConfirmedBy = confirmingNurseId;
-    order.readBackConfirmedAt = new Date();
-    order.readBackMethod = "otp";
-    if (nurseName) order.nurseReceivedName = nurseName;
-    order.status = "pending_countersign";
-
-    await record.save();
-
-    await recordAuditLog({
-      action: AUDIT_ACTIONS.VERBAL_ORDER_READBACK_CONFIRMED,
-      actorId: confirmingNurseId,
-      actorRole: req.user.role,
-      hospitalId: record.hospitalId,
-      targetModel: "MedicalRecord",
-      targetId: String(record._id),
-      metadata: {
-        verbalOrderId: String(order._id),
-        readBackMethod: "otp",
+    // Đếm atomic trước khi so khớp để request song song không lách được giới hạn
+    const counted = await MedicalRecord.findOneAndUpdate(
+      {
+        _id: record._id,
+        hospitalId: record.hospitalId,
+        verbalOrders: {
+          $elemMatch: {
+            _id: orderId,
+            status: "pending_readback",
+            readBackOtpAttempts: { $not: { $gte: READBACK_OTP_MAX_ATTEMPTS } },
+          },
+        },
       },
-      req,
-    });
+      { $inc: { "verbalOrders.$.readBackOtpAttempts": 1 } }
+    ).select("_id");
+    if (!counted) {
+      return errorResponse(res, "Đã nhập sai mã OTP quá số lần cho phép. Vui lòng xác nhận đọc lại trực tiếp trên ứng dụng.", 429);
+    }
 
-    return successResponse(
-      res,
-      { verbalOrder: order, recordId: record._id },
-      "Xác nhận Read-Back bằng OTP tại giường thành công."
-    );
+    if (!order.readBackOtpHash || hashReadBackOtp(orderId, otpCode) !== order.readBackOtpHash) {
+      return errorResponse(res, "Mã OTP đọc lại không chính xác.", 400);
+    }
+    if (!order.readBackOtpExpires || new Date(order.readBackOtpExpires) < new Date()) {
+      return errorResponse(res, "Mã OTP đọc lại đã hết hạn (quá 15 phút). Vui lòng xác nhận trực tiếp trên ứng dụng.", 400);
+    }
+
+    return await markReadBackConfirmed(req, res, { record, orderId, currentUserId, method: "otp" });
   } catch (err) {
-    return errorResponse(res, "Lỗi xác nhận OTP Read-Back: " + err.message, 500);
+    return errorResponse(res, "Lỗi xác nhận OTP đọc lại: " + err.message, 500);
   }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7D. BÁC SĨ KÝ SỐ BỔ SUNG Y LỆNH MIỆNG TRONG 24H (COUNTERSIGN VERBAL ORDER)
+// 7E. TỪ CHỐI Y LỆNH KHI ĐỌC LẠI KHÔNG KHỚP (hoặc bác sĩ tự thu hồi trước khi xác nhận)
+// POST /api/v1/emergency/verbal-order/:orderId/reject
+// ══════════════════════════════════════════════════════════════════════════════
+export const rejectVerbalOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const hospitalId = req.user?.hospitalId;
+    const reason = String(req.body?.reason || "").trim();
+    if (reason.length < 5) return errorResponse(res, "Vui lòng ghi lý do từ chối y lệnh, tối thiểu 5 ký tự.", 400);
+    if (!hospitalId || !mongoose.isValidObjectId(orderId)) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
+
+    const record = await MedicalRecord.findOne({ "verbalOrders._id": orderId, hospitalId });
+    const order = record?.verbalOrders.id(orderId);
+    if (!order) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
+
+    const currentUserId = String(req.user.id || req.user._id);
+    const isAssignedNurse = req.user.role === "nurse" && String(order.nurseReceivedId) === currentUserId;
+    const isPrescriber = String(order.prescribedByDoctorId) === currentUserId;
+    if (!isAssignedNurse && !isPrescriber) {
+      return errorResponse(res, "Chỉ điều dưỡng được gán hoặc bác sĩ ra lệnh mới được từ chối y lệnh này.", 403);
+    }
+
+    const updated = await MedicalRecord.findOneAndUpdate(
+      {
+        _id: record._id,
+        hospitalId,
+        verbalOrders: { $elemMatch: { _id: orderId, status: "pending_readback" } },
+      },
+      {
+        $set: {
+          "verbalOrders.$.status": "rejected",
+          "verbalOrders.$.rejectionReason": reason,
+          "verbalOrders.$.readBackOtpHash": null,
+          "verbalOrders.$.readBackOtpExpires": null,
+        },
+      },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Chỉ từ chối được y lệnh đang chờ đọc lại.", 409);
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.VERBAL_ORDER_REJECTED,
+      actorId: currentUserId,
+      actorRole: req.user.role,
+      hospitalId,
+      targetModel: "MedicalRecord",
+      targetId: String(updated._id),
+      metadata: { verbalOrderId: String(orderId), reason },
+      req,
+    });
+
+    if (isAssignedNurse) {
+      await createNotificationInternal({
+        hospitalId,
+        recipientId: order.prescribedByDoctorId,
+        senderId: currentUserId,
+        type: "emergency_alert",
+        title: "Y lệnh miệng bị từ chối khi đọc lại",
+        message: `${order.orderText}. Lý do: ${reason}`,
+        relatedId: updated._id,
+      });
+    }
+
+    return successResponse(res, { verbalOrder: serializeVerbalOrder(updated.verbalOrders.id(orderId)) }, "Đã từ chối y lệnh miệng.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi từ chối y lệnh miệng: " + err.message, 500);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7F. Y LỆNH MIỆNG ĐANG CHỜ TÔI XỬ LÝ
+// GET /api/v1/emergency/verbal-orders/my-pending
+// ══════════════════════════════════════════════════════════════════════════════
+export const getMyPendingVerbalOrders = async (req, res) => {
+  try {
+    const hospitalId = req.user?.hospitalId;
+    const me = String(req.user.id || req.user._id);
+    const isNurse = req.user.role === "nurse";
+    const matcher = isNurse
+      ? { nurseReceivedId: me, status: "pending_readback" }
+      : { prescribedByDoctorId: me, status: { $in: ["pending_readback", "readback_confirmed"] } };
+
+    const records = await MedicalRecord.find({ hospitalId, verbalOrders: { $elemMatch: matcher } })
+      .select("patientName patientId verbalOrders")
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .lean();
+
+    const statuses = isNurse ? ["pending_readback"] : ["pending_readback", "readback_confirmed"];
+    const ownerField = isNurse ? "nurseReceivedId" : "prescribedByDoctorId";
+    const orders = records.flatMap((record) =>
+      record.verbalOrders
+        .filter((order) => statuses.includes(order.status) && String(order[ownerField]) === me)
+        .map((order) => ({
+          ...serializeVerbalOrder(order),
+          recordId: record._id,
+          patientName: record.patientName,
+        }))
+    ).sort((a, b) => new Date(a.prescribedAt) - new Date(b.prescribedAt));
+
+    return successResponse(res, orders, "Lấy danh sách y lệnh miệng chờ xử lý thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi lấy danh sách y lệnh miệng: " + err.message, 500);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7D. BÁC SĨ RA LỆNH KÝ BỔ SUNG TRONG 24H
 // POST /api/v1/emergency/verbal-order/:orderId/countersign
 // ══════════════════════════════════════════════════════════════════════════════
 export const countersignVerbalOrder = async (req, res) => {
   try {
-    if (!["doctor", "department_head"].includes(req.user?.role)) {
-      return errorResponse(res, "Chỉ Bác sĩ hoặc Trưởng khoa mới có thẩm quyền ký số bổ sung (Countersign) y lệnh miệng.", 403);
+    if (!VERBAL_ORDER_PRESCRIBER_ROLES.includes(req.user?.role)) {
+      return errorResponse(res, "Chỉ Bác sĩ hoặc Trưởng khoa mới có thẩm quyền ký bổ sung y lệnh miệng.", 403);
     }
 
     const { orderId } = req.params;
-    const { witnessUserId, witnessUserName, notes } = req.body || {};
+    const { witnessUserId, notes } = req.body || {};
     const hospitalId = req.user?.hospitalId;
-
-    const record = await MedicalRecord.findOne({
-      "verbalOrders._id": orderId,
-      ...(hospitalId ? { hospitalId } : {}),
-    });
-    if (!record) return errorResponse(res, "Không tìm thấy hồ sơ bệnh án chứa y lệnh miệng.", 404);
-
-    const order = record.verbalOrders.id(orderId);
-    if (!order) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
-
-    if (!order.isReadBackConfirmed) {
-      return errorResponse(
-        res,
-        "Y lệnh miệng chưa được Điều dưỡng xác nhận Đọc lại (Read-Back). Vui lòng hoàn tất Read-Back trước khi ký số bổ sung.",
-        400
-      );
+    if (!hospitalId || !mongoose.isValidObjectId(orderId)) {
+      return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
     }
 
-    // [TC-25]: Thuốc gây nghiện / hướng thần (Thông tư 20/2017/TT-BYT) bắt buộc có witnessUserId độc lập
+    const record = await MedicalRecord.findOne({ "verbalOrders._id": orderId, hospitalId });
+    const order = record?.verbalOrders.id(orderId);
+    if (!order) return errorResponse(res, "Không tìm thấy y lệnh miệng.", 404);
+
+    const currentUserId = String(req.user.id || req.user._id);
+    if (String(order.prescribedByDoctorId) !== currentUserId) {
+      return errorResponse(res, "Chỉ bác sĩ đã ra y lệnh miệng mới được ký bổ sung.", 403);
+    }
+    if (order.status === "pending_readback" || order.isReadBackConfirmed !== true) {
+      return errorResponse(res, "Y lệnh miệng chưa được điều dưỡng xác nhận đọc lại. Vui lòng hoàn tất đọc lại trước khi ký bổ sung.", 400);
+    }
+    if (order.status !== "readback_confirmed") {
+      return errorResponse(res, `Y lệnh không ở trạng thái chờ ký bổ sung (hiện tại: ${order.status}).`, 409);
+    }
+
+    // Quy định nội bộ: thuốc gây nghiện, hướng thần cần nhân viên y tế chứng kiến độc lập với người ra lệnh
+    let witness = null;
     if (order.isControlledSubstance === true) {
-      if (!witnessUserId || String(witnessUserId) === String(req.user.id || req.user._id)) {
-        return errorResponse(
-          res,
-          "Y lệnh miệng thuốc gây nghiện/hướng thần (Thông tư 20/2017/TT-BYT) bắt buộc phải có nhân viên y tế chứng kiến độc lập (witnessUserId).",
-          400
-        );
+      witness = witnessUserId && String(witnessUserId) !== currentUserId
+        ? await findActiveStaff(witnessUserId, hospitalId, WITNESS_ROLES)
+        : null;
+      if (!witness) {
+        return errorResponse(res, "Y lệnh thuốc gây nghiện/hướng thần cần chọn nhân viên y tế chứng kiến độc lập với bác sĩ ra lệnh.", 400);
       }
-      order.witnessUserId = witnessUserId;
-      order.witnessUserName = witnessUserName || "Nhân viên y tế chứng kiến";
     }
 
     const signedAt = new Date();
     const signatureHash = crypto
       .createHash("sha256")
-      .update(`${order._id}|${req.user.id || req.user._id}|${order.orderText}|${signedAt.toISOString()}`)
+      .update(`${order._id}|${currentUserId}|${order.orderText}|${signedAt.toISOString()}`)
       .digest("hex");
 
-    order.countersignedByDoctorId = req.user.id || req.user._id;
-    order.countersignedAt = signedAt;
-    order.signatureHash = signatureHash;
-    order.status = "countersigned";
-
-    await record.save();
+    const updated = await MedicalRecord.findOneAndUpdate(
+      {
+        _id: record._id,
+        hospitalId,
+        verbalOrders: { $elemMatch: { _id: orderId, status: "readback_confirmed" } },
+      },
+      {
+        $set: {
+          "verbalOrders.$.status": "fully_signed",
+          "verbalOrders.$.countersignedBy": currentUserId,
+          "verbalOrders.$.countersignedByName": staffDisplayName(req.user, "Bác sĩ"),
+          "verbalOrders.$.countersignedAt": signedAt,
+          "verbalOrders.$.signatureHash": signatureHash,
+          ...(witness
+            ? {
+                "verbalOrders.$.witnessUserId": witness._id,
+                "verbalOrders.$.witnessUserName": staffDisplayName(witness, "Nhân viên y tế chứng kiến"),
+              }
+            : {}),
+        },
+      },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Y lệnh này vừa được ký, vui lòng tải lại.", 409);
 
     await recordAuditLog({
       action: AUDIT_ACTIONS.VERBAL_ORDER_COUNTERSIGNED,
-      actorId: req.user.id || req.user._id,
+      actorId: currentUserId,
       actorRole: req.user.role,
-      hospitalId: record.hospitalId,
+      hospitalId: updated.hospitalId,
       targetModel: "MedicalRecord",
-      targetId: String(record._id),
+      targetId: String(updated._id),
       metadata: {
-        verbalOrderId: String(order._id),
+        verbalOrderId: String(orderId),
         isControlledSubstance: Boolean(order.isControlledSubstance),
-        witnessUserId: order.witnessUserId ? String(order.witnessUserId) : null,
+        witnessUserId: witness ? String(witness._id) : null,
         signatureHash,
         notes: notes || "",
       },
@@ -968,11 +1145,11 @@ export const countersignVerbalOrder = async (req, res) => {
 
     return successResponse(
       res,
-      { verbalOrder: order, recordId: record._id, signatureHash },
-      "Bác sĩ đã ký số bổ sung (Countersign) y lệnh miệng thành công."
+      { verbalOrder: serializeVerbalOrder(updated.verbalOrders.id(orderId)), recordId: updated._id, signatureHash },
+      "Bác sĩ đã ký bổ sung y lệnh miệng thành công."
     );
   } catch (err) {
-    return errorResponse(res, "Lỗi ký số bổ sung y lệnh miệng: " + err.message, 500);
+    return errorResponse(res, "Lỗi ký bổ sung y lệnh miệng: " + err.message, 500);
   }
 };
 
@@ -1153,12 +1330,28 @@ export const closeEmergencyEvent = async (req, res) => {
 export const getActiveAlerts = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const { status } = req.query;
 
     const query = {
       hospitalId,
       status: status || { $in: ['active', 'triggered', 'acknowledged', 'in_progress', 'escalated'] }
     };
+
+    // Banner chỉ báo cấp cứu còn mới. Sự kiện cũ chưa đóng vẫn xem được ở danh sách của kíp lâm sàng.
+    const isClinical = CLINICAL_EMERGENCY_ROLES.includes(req.user.role);
+    const recentHours = isClinical ? Number(req.query.recentHours) : ALERT_BANNER_MAX_AGE_HOURS;
+    if (recentHours > 0) query.triggeredAt = { $gte: new Date(Date.now() - recentHours * 3600 * 1000) };
+
+    // Nhân viên ngoài kíp lâm sàng chỉ cần biết có cấp cứu ở đâu: không trả dữ liệu người bệnh.
+    if (!isClinical) {
+      const minimal = await EmergencyAlert.find(query)
+        .select("level status location triggeredAt")
+        .sort({ triggeredAt: -1 })
+        .limit(50)
+        .lean();
+      return successResponse(res, minimal, "Lấy cảnh báo cấp cứu thành công.");
+    }
 
     const alerts = await EmergencyAlert.find(query)
       .populate("patientId", "profile")
@@ -1200,12 +1393,13 @@ export const getActiveEvents = getActiveAlerts;
 // ══════════════════════════════════════════════════════════════════════════════
 export const triggerEmergency = async (req, res) => {
   try {
-    if (!["doctor", "department_head", "radiologist", "technician", "admin", "hospital_admin", "nurse"].includes(req.user.role)) {
+    if (!CLINICAL_EMERGENCY_ROLES.includes(req.user.role)) {
       return errorResponse(res, "Chỉ nhân viên y tế mới có thể kích hoạt cấp cứu.", 403);
     }
 
     const hospitalId = req.user.hospitalId;
-    const { visitId, patientId, imagingResultId, level = 'RED', reason } = req.body;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
+    const { visitId, patientId, imagingResultId, level = 'RED', reason } = req.body || {};
 
     let targetPatientId = patientId;
     let visit = null;
@@ -1303,6 +1497,7 @@ export const resolveAlert = async (req, res) => {
 export const getAlertHistory = async (req, res) => {
   try {
     const hospitalId = req.user.hospitalId;
+    if (!hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const { page = 1, limit = 20, status } = req.query;
 
     const filter = { hospitalId };

@@ -49,7 +49,7 @@ describe('E2E Clinical Workflow Test: Quy Trình Bệnh Viện Toàn Diện 10 B
     radiologistDoctor = {
       id: new mongoose.Types.ObjectId().toString(),
       hospitalId: hospitalId.toString(),
-      role: 'doctor',
+      role: 'radiologist',
       profile: { fullName: 'BS. CĐHA Đỗ Thúy Hằng', department: 'Khoa Chẩn Đoán Hình Ảnh' }
     };
 

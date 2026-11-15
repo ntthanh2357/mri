@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 8: KIỂM THỬ CHẤT LƯỢNG PHẦN MỀM VÀ THẨM ĐỊNH LÂM SÀNG
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 8.1. CHIẾN LƯỢC KIỂM THỬ TOÀN DIỆN (COMPREHENSIVE TESTING STRATEGY)
@@ -24,39 +26,50 @@ Hệ thống y tế **NeuroScan AI** xử lý các dữ liệu sinh mạng của
 
 ### Các Tiêu Chí Đánh Giá Bắt Buộc:
 1. **Kiểm định Nghiệp Vụ Toàn Trình (Clinical E2E Tests):** Đạt 100% tỷ lệ vượt qua trên toàn bộ các tầng nghiệp vụ cốt lõi (`BE/src/services/`) và quy trình 10 bước lâm sàng.
-2. **Kiểm thử Biên & An Toàn Lâm Sàng (Clinical Safety Edge Cases):** 100% các tình huống chống chỉ định buồng chụp (máy tạo nhịp tim), nhiễu ảnh di chuyển, tranh chấp buồng giường và lạm dụng cấp cứu đều phải được xử lý an toàn (Fail-Safe).
+2. **Kiểm thử Biên & An Toàn Lâm Sàng (Clinical Safety Edge Cases):** 100% các tình huống chống chỉ định buồng chụp (máy tạo nhịp tim), nhiễu ảnh di chuyển, ký trùng báo cáo CĐHA và lạm dụng cấp cứu đều phải được xử lý an toàn (Fail-Safe).
 3. **An Toàn Bảo Mật & Pháp Lý (OWASP & Regulatory Compliance):** Vượt qua 100% các bài kiểm tra về khóa EMR bất biến, chuỗi băm mật mã học SHA-256, khử định danh HIPAA Safe Harbor, phòng chống tấn công ReDoS và NoSQL Injection.
 
 ---
 
 ## 8.2. TỔNG HỢP KẾT QUẢ KIỂM THỬ TỰ ĐỘNG THỰC TẾ
 
-Toàn bộ hệ thống sở hữu **166 ca kiểm thử tự động (152 ca Backend + 14 ca Frontend)** với **tỷ lệ vượt qua đạt 100% (166/166 PASS)**:
+Số liệu dưới đây được đo ngày **09/11/2026** trên mã nguồn nhánh `fix/v3.4-p0-remediation`, chạy đúng các bước CI (`.github/workflows/ci.yml`) trên MongoDB tạm, không dùng dữ liệu thật. Có thể chạy lại bằng các lệnh ghi ở từng mục.
 
-### 8.2.1. Phân Hệ Backend (152 Ca Kiểm Thử Tự Động Qua 4 Suite Chuyên Sâu)
-Thực thi bằng câu lệnh: `npm run test:all` tại thư mục `BE/`:
+### 8.2.1. Phân Hệ Backend
+Thực thi tại thư mục `BE/`: `node src/tests/test_runner.js`, `node src/tests/run_all_tests.js`, `npm run test:seed-safety`.
 
-| Tên Bộ Kiểm Thử (Test Suite) | Số Lượng Bài Test | Trọng Tâm Khảo Sát Nghiệp Vụ & An Ninh | Tỷ Lệ Đạt | Thời Gian Thực Thi |
-| :--- | :---: | :--- | :---: | :---: |
-| **Suite 1: Clinical Workflow & Unit Tests** | **30 tests** | Khám bệnh, Bảng kiểm an toàn MRI, Rescan, Hủy ca, Khóa nguyên tử giường bệnh, Phân định 2 bác sĩ, Luồng 10 bước E2E. | **100% (30/30)** | $778.3\text{ ms}$ |
-| **Suite 2: OWASP Top 10 Security Audit** | **35 tests** | 5 HTTP Security Headers, 7 bài Khử độc NoSQL Injection ($ne, $where), 8 bài Rate Limiting, 4 bài Secure Uploads, 4 bài Masking PII, 3 bài Cô lập Multi-Tenant & B2C. | **100% (35/35)** | $3.8\text{ ms}$ |
-| **Suite 3: Audit Remediation Verification** | **53 tests** | Khắc phục 17 lỗi kiểm toán: Xóa bỏ Payment Bypass trên route GET, PayOS HMAC Webhook, Hoàn kho thuốc tự động, Chống cướp giường 4h, Chống ReDoS, FSM ALLOWED_TRANSITIONS, Múi giờ Việt Nam +07:00, Ký cam đoan phẫu thuật theo req.user.role, BHYT trần 40 tháng lương cơ sở, AML STR báo cáo NHNN trong 48h. | **100% (53/53)** | $24.2\text{ ms}$ |
-| **Suite 4: Comprehensive Compliance & Neuro-Oncology** | **34 tests** | Khóa bất biến EMR (TT46), Chuỗi băm mật mã Tamper-Evident Hash Chain, Chịu tải đồng thời Tumor Board, HIPAA Minimum Necessary, Mã hóa AES-256-GCM, Thời hạn lưu trữ EMR 10-30 năm, Khử định danh ảnh DICOM HIPAA Safe Harbor, Break-Glass cấp cứu giới hạn 3 lần/ngày, Phát cảnh báo SIEM, Phác đồ u thần kinh đệm Stupp + Bevacizumab. | **100% (34/34)** | $178.7\text{ ms}$ |
-| **TỔNG CỘNG TOÀN BỘ BACKEND** | **152 tests** | **Hệ thống HIS/RIS/EMR/Mini-PACS hoàn chỉnh, bảo mật y tế tuyệt đối** | **100% (152/152)** | **0.98 giây** |
-
-### 8.2.2. Phân Hệ Frontend (14 Ca Kiểm Thử Mô Hình & Tiện Ích Lâm Sàng)
-Thực thi bằng câu lệnh: `npm test` tại thư mục `FE/`:
-
-| Tên Bộ Kiểm Thử Frontend | Số Lượng Bài Test | Trọng Tâm Khảo Sát | Tỷ Lệ Đạt |
+| Bộ kiểm thử | Số ca | Nội dung chính | Kết quả |
 | :--- | :---: | :--- | :---: |
-| **Suite 1: Formatting Utilities (`format.js`)** | **3 tests** | Định dạng ngày tháng địa phương chuẩn Việt Nam (`vi-VN`), định dạng tiền tệ viện phí (`VND`) và xử lý chính xác giá trị 0 VNĐ. | **100% (3/3)** |
-| **Suite 2: Medical Record EMR Data Model** | **4 tests** | Cấu trúc dữ liệu bệnh án EMR, trường hành chính, cờ chẩn đoán phân biệt thần kinh và phác đồ đa mô thức (phẫu thuật, xạ trị, hóa chất). | **100% (4/4)** |
-| **Suite 3: Document Vault & Ministry of Health Forms** | **7 tests** | Xác thực 12 biểu mẫu bệnh viện chuẩn, 4 nhóm hồ sơ Bộ Y Tế (Hành chính, Lâm sàng, Cận lâm sàng, Pháp lý), kiểm tra tính toàn vẹn của Phiếu khám, Phiếu viện phí, Cam kết phẫu thuật và Giấy chuyển tuyến TT01. | **100% (7/7)** |
-| **TỔNG CỘNG TOÀN BỘ FRONTEND** | **14 tests** | **Chuẩn hóa giao ước dữ liệu và mô hình hồ sơ bệnh án trên Client** | **100% (14/14)** |
+| `test_runner.js` (73 nhóm) | 510 | Quy trình lâm sàng, an toàn buồng chụp MRI, phân quyền và cô lập dữ liệu giữa các bệnh viện, hoàn tiền, y lệnh miệng, cảnh báo nguy kịch, bảo vệ phiên đăng nhập; gồm 6 ca E2E chạy trên server thật cho 5 luồng trọng yếu | 510/510 |
+| OWASP Top 10 Security Audit | 35 | Header bảo mật HTTP, chống NoSQL Injection, giới hạn tần suất, tải tệp an toàn, che dữ liệu cá nhân | 35/35 |
+| Audit Remediation | 51 | Kiểm chứng các lỗi đã khắc phục sau các đợt kiểm toán | 51/51 |
+| Compliance Audit | 34 | Khóa bất biến bệnh án, chuỗi băm chống sửa đổi, nguyên tắc tối thiểu cần thiết (HIPAA Minimum Necessary) | 34/34 |
+| Seed safety (`node --test`) | 28 | Chặn chạy dữ liệu mẫu trên cơ sở dữ liệu thật | 28/28 |
+
+Ngoài các bộ kiểm thử trên, hệ thống được kiểm bằng harness tự động: gọi 400 endpoint với 13 vai trò và người chưa đăng nhập (0 phản hồi HTTP 500), và gửi 18.024 request dữ liệu sai kiểu (0 phản hồi lộ chi tiết nội bộ; 8 route trả 5xx do môi trường kiểm thử không có máy chủ AI và cổng PayOS).
+
+> **Ghi chú phạm vi:** Một số ca thuộc các chức năng đã đưa ra ngoài phạm vi đồ án (quản lý giường bệnh, BHYT, phân hệ Dược — mục 1.4.3) vẫn được chạy trong bộ hồi quy vì mã nguồn còn tồn tại, nhưng **không được tính vào phần đánh giá đồ án**.
+
+### 8.2.2. Phân Hệ Frontend
+Thực thi tại thư mục `FE/`: `npm test`; kiểm tra bản build web: `npx expo export --platform web`.
+
+| Bộ kiểm thử | Số ca | Nội dung chính | Kết quả |
+| :--- | :---: | :--- | :---: |
+| `fe_models_utils` | 76 | Định dạng dữ liệu lâm sàng, mô hình bệnh án, biểu mẫu và tiện ích | 76/76 |
+| `fe_navigation_linking` | 73 | Điều hướng và liên kết sâu (deep link) theo vai trò | 73/73 |
+| `fe_transfer_package` | 3 | Gói hồ sơ chuyển viện | 3/3 |
+| `fe_auth_cookie` | 9 | Refresh token qua cookie HttpOnly trên web, luồng cũ trên mobile | 9/9 |
+| `fe_feature_scope` | 8 | Ẩn/bật các phần ngoài phạm vi đồ án | 8/8 |
+| `fe_paper_fields` | 3 | Giấy tờ y tế không điền dữ liệu giả | 3/3 |
+| **Tổng Frontend** | **172** | | **172/172** |
+
+Bản build web (`expo export`) biên dịch thành công. **Hạn chế:** chưa có kiểm thử giao diện tự động trên trình duyệt; kiểm thử E2E hiện ở mức API.
 
 ---
 
 ## 8.3. BÁO CÁO ĐỘ BAO PHỦ MÃ NGUỒN THỰC TẾ (CODE COVERAGE REPORT)
+
+> **Lưu ý:** Số liệu độ bao phủ trong mục này được đo ở phiên bản v3.2 và **chưa được đo lại** sau các đợt sửa lỗi v3.4.
 
 Nhóm tuân thủ nguyên tắc minh bạch học thuật, đo lường trực tiếp độ phủ mã nguồn bằng công cụ **`c8` (V8 Native Coverage Engine)** tích hợp trong Node.js (`npm run test:coverage`):
 
@@ -78,6 +91,8 @@ Nhóm tuân thủ nguyên tắc minh bạch học thuật, đo lường trực t
 ---
 
 ## 8.4. TRÍCH XUẤT NHẬT KÝ THỰC THI KIỂM THỬ THỰC TẾ (TELEMETRY LOGS)
+
+> **Lưu ý:** Nhật ký dưới đây là của lần chạy ở phiên bản v3.2 (152 ca Backend). Số liệu hiện tại xem mục 8.2.
 
 Dưới đây là trích xuất trực tiếp kết quả chạy thực nghiệm từ terminal máy chủ đồ án:
 
@@ -146,5 +161,7 @@ Dưới đây là trích xuất trực tiếp kết quả chạy thực nghiệm
 >> STATUS: ✅ 100% PASSED (152/152 TESTS)
 ```
 
+> **Ghi chú phạm vi:** Nhật ký trên được giữ nguyên như khi thực thi. Các dòng `Hospital Bed …`, `Pharmacy Integrity …`, `BHYT Edge Case …` thuộc chức năng ngoài phạm vi đồ án (mục 1.4.3), chỉ đóng vai trò kiểm thử hồi quy.
+
 > **Kết luận chương:**
-> Hệ thống **NeuroScan AI** sở hữu bộ kiểm thử tự động đạt tiêu chuẩn công nghiệp với **166 ca kiểm thử toàn diện**, tỷ lệ vượt qua tuyệt đối $100\%$, thời gian thực thi siêu tốc dưới 1 giây và độ bao phủ mã nguồn thực tế đo bằng `c8` đạt $77.77\%$. Mọi kịch bản lâm sàng, an ninh mạng và pháp lý y tế đều được kiểm chứng độc lập, minh chứng cho độ tin cậy và sự sẵn sàng triển khai thực tiễn của sản phẩm đồ án.
+> Tại thời điểm đo (09/11/2026), bộ kiểm thử tự động gồm 510 ca (`test_runner`) và 148 ca bổ sung ở Backend, 172 ca ở Frontend, tất cả đều đạt; trong đó có 6 ca E2E cho 5 luồng trọng yếu. Hạn chế còn lại: chưa có kiểm thử giao diện tự động trên trình duyệt, độ bao phủ mã nguồn chưa đo lại cho v3.4, và chưa thử nghiệm với dữ liệu, người dùng thật tại bệnh viện. Vì vậy hệ thống hiện phù hợp ở mức **thử nghiệm**, chưa sẵn sàng vận hành thực tế.

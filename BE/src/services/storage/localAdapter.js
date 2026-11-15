@@ -40,6 +40,9 @@ export const cleanPatientSlug = (name) => {
     .replace(/^_|_$/g, "");
 };
 
+// Mã ca chụp có thể đến từ client: chỉ giữ ký tự an toàn, không để ".." thoát khỏi thư mục ca bệnh
+const safePathSegment = (value) => String(value).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, "_");
+
 /**
  * Xây dựng đường dẫn logic chuẩn hóa (De-identified & Traceable Logical Path)
  * Ví dụ:
@@ -49,16 +52,19 @@ export const cleanPatientSlug = (name) => {
  * - patient-uploads/quarantine/up_123.pdf
  * - ai-temp/job_abc123/slice.png
  */
-export const buildLogicalPath = ({ category, studyId = null, sequenceName = null, fileName, patientName = null }) => {
+export const buildLogicalPath = ({ category, studyId = null, sequenceName = null, fileName, patientName = null, uniqueId = null }) => {
   const now = new Date();
   const yyyy = now.getFullYear().toString();
   const mm = (now.getMonth() + 1).toString().padStart(2, "0");
-  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  // uniqueId (mã tệp) làm tiền tố tên tệp: hai tệp trùng tên (vd. "scan.jpg", "giay_chuyen_vien.pdf") của hai ca/bệnh nhân
+  // khác nhau không còn chung một đường dẫn vật lý. Trước đây tệp sau ghi đè tệp trước, bản ghi cũ trả nội dung của người khác.
+  const baseFileName = String(fileName || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeFileName = uniqueId ? `${safePathSegment(uniqueId)}_${baseFileName}` : baseFileName;
 
   // Xây dựng tên thư mục ca bệnh: study_{studyId}_{PatientName}
   let studyFolderName = "study_general";
   if (studyId) {
-    const baseStudy = studyId.replace(/^study_/, "");
+    const baseStudy = safePathSegment(studyId).replace(/^study_/, "");
     const patSlug = patientName ? cleanPatientSlug(patientName) : "";
     if (patSlug && !baseStudy.toLowerCase().includes(patSlug.toLowerCase())) {
       studyFolderName = `study_${baseStudy}_${patSlug}`;
@@ -70,12 +76,12 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
   switch (category) {
     case "pacs": {
       if (sequenceName) {
-        return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", sequenceName, safeFileName);
+        return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", safePathSegment(sequenceName), safeFileName);
       }
       return path.posix.join("pacs", yyyy, mm, studyFolderName, safeFileName);
     }
     case "sequence_slice": {
-      const seq = sequenceName || "general_sequence";
+      const seq = safePathSegment(sequenceName || "general_sequence");
       return path.posix.join("pacs", yyyy, mm, studyFolderName, "sequences", seq, safeFileName);
     }
     case "report": {
@@ -85,7 +91,7 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
       return path.posix.join("patient-uploads", "quarantine", safeFileName);
     }
     case "ai_temp": {
-      const token = studyId || `job_${Date.now()}`;
+      const token = safePathSegment(studyId || `job_${Date.now()}`);
       return path.posix.join("ai-temp", token, safeFileName);
     }
     case "backup": {
@@ -102,18 +108,39 @@ export const buildLogicalPath = ({ category, studyId = null, sequenceName = null
  * @param {Buffer} buffer - Dữ liệu nhị phân
  * @returns {Promise<{ localPath: string, sizeBytes: number }>}
  */
-export const writeLocalFile = async (logicalSubPath, buffer) => {
+export const writeLocalFile = async (logicalSubPath, buffer, { exclusive = false } = {}) => {
   const root = getLocalRoot();
   const fullPath = path.join(root, logicalSubPath);
   const dirName = path.dirname(fullPath);
 
   ensureDirectory(dirName);
-  await fs.promises.writeFile(fullPath, buffer);
+  // exclusive: không bao giờ ghi đè tệp đã có (kho lưu trữ y tế luôn dùng chế độ này)
+  await fs.promises.writeFile(fullPath, buffer, exclusive ? { flag: "wx" } : undefined);
 
   return {
     localPath: fullPath,
     sizeBytes: buffer.length,
   };
+};
+
+/**
+ * Ghi tệp từ một stream qua bộ biến đổi (vd. mã hóa AES-GCM) — không nạp cả tệp vào RAM, không ghi đè tệp đã có.
+ * @returns {Promise<{ localPath: string }>}
+ */
+export const writeLocalStreamExclusive = async (logicalSubPath, readable, transform = null) => {
+  const { pipeline } = await import("stream/promises");
+  const fullPath = path.join(getLocalRoot(), logicalSubPath);
+  ensureDirectory(path.dirname(fullPath));
+  const out = fs.createWriteStream(fullPath, { flags: "wx" });
+  try {
+    if (transform) await pipeline(readable, transform, out);
+    else await pipeline(readable, out);
+  } catch (err) {
+    // Ghi dở dang (lỗi đọc/mã hóa) thì xóa tệp nửa vời, trừ khi lỗi là do tệp đã tồn tại (không phải của mình)
+    if (err?.code !== "EEXIST") await fs.promises.unlink(fullPath).catch(() => {});
+    throw err;
+  }
+  return { localPath: fullPath };
 };
 
 /**

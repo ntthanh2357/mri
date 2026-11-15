@@ -5,8 +5,6 @@ import { PatientProfile } from "../models/patientProfile.model.js";
 import { User } from "../models/user.model.js";
 import { MedicalRecord } from "../modules/emr/models/medicalRecord.model.js";
 import { CareSheet } from "../modules/emr/models/careSheet.model.js";
-import { uploadToGCS } from "../config/gcs.js";
-import { getOrCreatePatientFolder, uploadToDrive } from "../config/googleDrive.js";
 import storageService from "./storage/storageService.js";
 // ── Patient Identity ──────────────────────────────────────────────────────────
 
@@ -22,13 +20,21 @@ export const reviewDeclaredBhyt = async (userId, action, staffId) => {
   return profile;
 };
 
+// Hồ sơ định danh theo đúng userId đã được controller kiểm tra quyền. Không qua bộ lọc tenancy vì
+// bệnh nhân đăng ký cá nhân có hồ sơ không gắn viện, nhân viên sẽ không thấy rồi tạo trùng.
 export const getOrCreateProfile = async (userId) => {
-  let profile = await PatientProfile.findOne({ userId });
+  let profile = await PatientProfile.findOne({ userId }).setOptions({ bypassTenancy: true });
   if (!profile) {
     // Lấy hospitalId từ User để điền vào trường required của PatientProfile
     const { User } = await import("../models/user.model.js");
     const user = await User.findById(userId).select("hospitalId").lean();
-    profile = await PatientProfile.create({ userId, hospitalId: user?.hospitalId });
+    try {
+      profile = await PatientProfile.create({ userId, hospitalId: user?.hospitalId || null });
+    } catch (err) {
+      // Hai request đầu tiên cùng tạo hồ sơ thì một bên trùng khóa userId: đọc lại bản vừa được tạo
+      if (err.code !== 11000) throw err;
+      profile = await PatientProfile.findOne({ userId }).setOptions({ bypassTenancy: true });
+    }
   }
   return profile;
 };
@@ -36,15 +42,17 @@ export const getOrCreateProfile = async (userId) => {
 export const updateProfile = async (userId, data) => {
   // UC-PAT-02: chuẩn hoá + kiểm tra định dạng, mã hoá CCCD/thẻ BHYT trước khi lưu
   const { update, errors } = normalizeIdentityUpdate(data);
-  const firstError = Object.values(errors)[0];
+  const firstError = Object.values(errors || {})[0];
   if (firstError) throw { status: 400, message: firstError, errors };
 
-  const profile = await PatientProfile.findOneAndUpdate(
-    { userId },
-    { $set: update },
-    { new: true, upsert: true }
-  );
-  return profile;
+  const upsert = () => PatientProfile.findOneAndUpdate({ userId }, { $set: update }, { new: true, upsert: true }).setOptions({ bypassTenancy: true });
+  try {
+    return await upsert();
+  } catch (err) {
+    // Hai request đầu tiên cùng tạo hồ sơ thì một bên trùng khóa userId: lần thử lại sẽ cập nhật bản đã có
+    if (err.code === 11000) return upsert();
+    throw err;
+  }
 };
 
 // ── Visits ────────────────────────────────────────────────────────────────────
@@ -125,7 +133,7 @@ export const listVisits = async (userId) => {
             manualData: {
               soPhieu: invoice.invoiceNumber || `HD-${invoice._id.toString().substring(18)}`,
               tongChiPhi: String(invoice.totalAmount || invoice.amount || 0),
-              danhSachDichVu: invoice.status === "paid" ? "Đã thanh toán qua " + (invoice.paymentMethod || "Tiền mặt") : "Chưa thanh toán"
+              danhSachDichVu: invoice.status === "đã thanh toán" ? "Đã thanh toán qua " + (invoice.paymentMethod || "Tiền mặt") : "Chưa thanh toán"
             },
             uploadedAt: invoice.paidAt || invoice.createdAt
           });
@@ -305,11 +313,11 @@ export const listVisits = async (userId) => {
     return {
       ...visit,
       date: visit.createdAt,
-      facility: visit.hospitalId?.name || "Bệnh viện đa khoa NeuroScan",
+      facility: visit.hospitalId?.name || "",
       visitType: "ngoai_tru",
-      diagnosis: visit.reason || "Khám thần kinh",
+      diagnosis: visit.reason || "",
       medicalId: medicalId || "Chưa có",
-      doctor: visit.doctorId?.profile?.name || "Bác sĩ phụ trách",
+      doctor: visit.doctorId?.profile?.name || "",
       documents: docList
     };
   }));
@@ -374,7 +382,7 @@ export const updateVisit = async (userId, visitId, data) => {
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  // [TT 46/2018/TT-BYT & LUẬT 15/2023/QH15]: BẢO VỆ TÍNH BẤT BIẾN CA KHÁM ĐÃ HOÀN TẤT
+  // [TT 13/2025/TT-BYT & LUẬT 15/2023/QH15]: BẢO VỆ TÍNH BẤT BIẾN CA KHÁM ĐÃ HOÀN TẤT
   if (["hoàn tất", "đã đóng"].includes(visit.status)) {
     throw Object.assign(
       new Error("Không thể cập nhật lượt khám đã hoàn tất hoặc đã đóng viện phí theo quy chuẩn hồ sơ bệnh án."),
@@ -399,11 +407,6 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  // Lấy họ tên bệnh nhân để tạo tên thư mục
-  const { User } = await import("../models/user.model.js");
-  const user = await User.findById(userId).lean();
-  const patientName = user?.profile?.name || "Bệnh nhân";
-
   // 1. Lưu bản chính vào Local-First Hybrid Storage (Tự động tính SHA-256 & sync Drive ngầm)
   let savedStorage = null;
   let fileUrl = "";
@@ -419,19 +422,9 @@ export const addDocumentUpload = async (userId, visitId, { docKey, groupKey, lab
     });
     fileUrl = `/api/v1/storage/files/${savedStorage.fileId}`;
   } catch (storageErr) {
+    // Không còn đường dự phòng: trước đây đẩy BẢN RÕ lên thư mục Drive mang tên bệnh nhân, rồi GCS / thư mục /uploads.
     console.warn("⚠️ [Hybrid Storage] Lỗi lưu patient_upload:", storageErr.message);
-  }
-
-  // 2. Fallback legacy Google Drive / GCS nếu Local-First thất bại
-  if (!fileUrl) {
-    try {
-      const patientFolder = await getOrCreatePatientFolder(userId, patientName);
-      const driveResult = await uploadToDrive(fileBuffer, originalName, mimeType, patientFolder.id);
-      fileUrl = driveResult.downloadUrl;
-    } catch (driveErr) {
-      console.warn("⚠️ Google Drive upload failed, falling back to GCS:", driveErr.message);
-      fileUrl = await uploadToGCS(fileBuffer, originalName, mimeType, `patient-records/${userId}`);
-    }
+    throw Object.assign(new Error("Không lưu được tài liệu vào kho lưu trữ. Vui lòng thử lại."), { status: 500 });
   }
 
   visit.documents.push({
@@ -528,7 +521,7 @@ export const deleteVisit = async (userId, visitId, currentUser) => {
   visit.status = "đã hủy";
   await visit.save();
 
-  // Ghi vết kiểm toán (Audit Trail) tuân thủ Thông tư 46/2018/TT-BYT & HIPAA
+  // Ghi vết kiểm toán (Audit Trail) tuân thủ Thông tư 13/2025/TT-BYT & HIPAA
   try {
     const { recordAuditLog } = await import("./auditLog.service.js");
     await recordAuditLog({
@@ -537,7 +530,7 @@ export const deleteVisit = async (userId, visitId, currentUser) => {
       entityId: visitId.toString(),
       performedBy: (currentUser?.id || currentUser?._id || userId || "system").toString(),
       hospitalId: visit.hospitalId || currentUser?.hospitalId || null,
-      details: `Hủy lượt khám (Soft Delete) tuân thủ TT 46/2018/TT-BYT. Trạng thái ca khám cũ: ${oldStatus}`,
+      details: `Hủy lượt khám (Soft Delete) tuân thủ TT 13/2025/TT-BYT. Trạng thái ca khám cũ: ${oldStatus}`,
     });
   } catch (auditErr) {
     console.warn("Lỗi ghi audit log khi hủy lượt khám:", auditErr.message);
@@ -550,7 +543,7 @@ export const deleteDocument = async (userId, visitId, docId, currentUser) => {
   const visit = await Visit.findOne({ _id: visitId, $or: [{ userId }, { patientId: userId }] });
   if (!visit) throw Object.assign(new Error("Không tìm thấy lượt khám."), { status: 404 });
 
-  // Theo Thông tư 46/2018/TT-BYT: Không được xóa tài liệu y tế thuộc ca khám đã hoàn tất hoặc đã đóng viện phí
+  // Theo Thông tư 13/2025/TT-BYT: Không được xóa tài liệu y tế thuộc ca khám đã hoàn tất hoặc đã đóng viện phí
   if (['hoàn tất', 'đã đóng'].includes(visit.status)) {
     throw Object.assign(new Error("Không thể xóa tài liệu thuộc lượt khám đã hoàn tất hoặc đã đóng viện phí theo quy chế hồ sơ bệnh án."), { status: 400 });
   }
@@ -574,7 +567,7 @@ export const deleteDocument = async (userId, visitId, docId, currentUser) => {
       entityId: docId.toString(),
       performedBy: (currentUser?.id || currentUser?._id || userId || "system").toString(),
       hospitalId: visit.hospitalId || currentUser?.hospitalId || null,
-      details: `Xóa mềm tài liệu y khoa '${doc.label || doc.docKey}' thuộc ca khám ${visitId} theo TT 46/2018/TT-BYT.`,
+      details: `Xóa mềm tài liệu y khoa '${doc.label || doc.docKey}' thuộc ca khám ${visitId} theo TT 13/2025/TT-BYT.`,
     });
   } catch (auditErr) {
     console.warn("Lỗi ghi audit log khi xóa tài liệu:", auditErr.message);

@@ -1,6 +1,6 @@
 /**
  * NeuroScan AI - Legacy EMR Compliance Migration Script
- * Căn cứ: Thông tư 46/2018/TT-BYT & HIPAA §164.312
+ * Căn cứ: Thông tư 13/2025/TT-BYT & HIPAA §164.312
  * 
  * Mục tiêu:
  * 1. Bổ sung trường retentionCategory, retentionYears, retentionExpiresAt cho các hồ sơ bệnh án cũ.

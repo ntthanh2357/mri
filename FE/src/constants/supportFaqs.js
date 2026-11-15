@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from './featureScope.js';
 /**
  * Câu hỏi thường gặp (FAQ) theo từng vai trò cho màn hình Hỗ trợ kỹ thuật.
  * Mỗi role gồm các nhóm chủ đề { category, items: [{ q, a }] }.
@@ -17,7 +18,7 @@ const COMMON_FAQS = {
     },
     {
       q: 'Thời gian phản hồi của ticket hỗ trợ là bao lâu? Theo dõi trạng thái ticket ở đâu?',
-      a: 'Đội kỹ thuật phản hồi trong vòng 2 giờ (trường hợp khẩn cấp gọi Hotline 1800 1234, hoạt động 24/7). Trạng thái ticket hiển thị ở mục "Yêu cầu hỗ trợ của tôi (Ticket)" ngay trên trang này: Đang mở → Đang xử lý → Đã giải quyết / Đã đóng. Bấm "Làm mới" để cập nhật trạng thái mới nhất.',
+      a: 'Đội kỹ thuật phản hồi trong vòng 2 giờ (trường hợp khẩn cấp gọi Hotline 0236 3650 676, 8:00–17:00 các ngày làm việc). Trạng thái ticket hiển thị ở mục "Yêu cầu hỗ trợ của tôi (Ticket)" ngay trên trang này: Đang mở → Đang xử lý → Đã giải quyết / Đã đóng. Bấm "Làm mới" để cập nhật trạng thái mới nhất.',
     },
   ],
 };
@@ -191,7 +192,7 @@ const DOCTOR_FAQS = [
     items: [
       {
         q: 'Vì sao bệnh án đã ký thì không sửa được? Nếu cần bổ sung thì làm thế nào?',
-        a: 'Theo Thông tư 46/2018/TT-BYT, hồ sơ đã "Ký Số EMR" hoặc bệnh nhân đã xuất viện sẽ bị khóa để chống chỉnh sửa. Muốn bổ sung, bấm "+ Lập Phụ Lục (TT 46)" trên hồ sơ, nhập tiêu đề, lý do và nội dung bổ sung. Trước khi ký, mỗi lần cập nhật hồ sơ đều được lưu thành một phiên bản mới để truy vết.',
+        a: 'Theo Thông tư 13/2025/TT-BYT, hồ sơ đã "Ký Số EMR" hoặc bệnh nhân đã xuất viện sẽ bị khóa để chống chỉnh sửa. Muốn bổ sung, bấm "+ Lập Phụ Lục (TT 46)" trên hồ sơ, nhập tiêu đề, lý do và nội dung bổ sung. Trước khi ký, mỗi lần cập nhật hồ sơ đều được lưu thành một phiên bản mới để truy vết.',
       },
       {
         q: 'Khi kê đơn, hệ thống cảnh báo tương tác thuốc hoặc chống chỉ định. Xử lý thế nào?',
@@ -332,4 +333,18 @@ const FAQS_BY_ROLE = {
   system_admin: SYSTEM_ADMIN_FAQS,
 };
 
-export const getFaqsForRole = (role) => [...(FAQS_BY_ROLE[role] || []), COMMON_FAQS];
+// Phạm vi đồ án (constants/featureScope.js): bỏ câu hỏi về BHYT, giường bệnh, phân hệ Dược khi các phần này đang tắt.
+const OUT_OF_SCOPE_FAQ = [
+  ['bhyt', /BHYT|bảo hiểm y tế/i],
+  ['beds', /giường/i],
+  ['pharmacy', /kho thuốc|dược sĩ|khoa dược|phát thuốc|hạn dùng|hết hạn/i],
+];
+const SCOPED_CATEGORY_NAMES = { 'BHYT & thu ngân': ['bhyt', 'Thu ngân'], 'Cơ sở vật chất & kho thuốc': ['pharmacy', 'Cơ sở vật chất'] };
+const inScope = (item) => !OUT_OF_SCOPE_FAQ.some(([key, re]) => !isFeatureEnabled(key) && re.test(item.q));
+const scopeGroup = (group) => {
+  const rename = SCOPED_CATEGORY_NAMES[group.category];
+  const category = rename && !isFeatureEnabled(rename[0]) ? rename[1] : group.category;
+  return { ...group, category, items: group.items.filter(inScope) };
+};
+
+export const getFaqsForRole = (role) => [...(FAQS_BY_ROLE[role] || []), COMMON_FAQS].map(scopeGroup).filter((g) => g.items.length > 0);

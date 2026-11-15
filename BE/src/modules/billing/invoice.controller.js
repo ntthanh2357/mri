@@ -1,4 +1,5 @@
 import { Invoice } from "./models/invoice.model.js";
+import { acquireDistributedLock, releaseDistributedLock } from "../../models/systemLock.model.js";
 import { Visit } from "../../models/visit.model.js";
 import { Hospital } from "../hospital/models/hospital.model.js";
 import { MedicalRecord } from "../emr/models/medicalRecord.model.js";
@@ -10,6 +11,7 @@ import { Prescription } from "../pharmacy/models/prescription.model.js";
 import { deductDrugStockFEFO, restockDrugBatch } from "../pharmacy/services/batchStock.service.js";
 import { executeWithTransaction } from "../../utils/transaction.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
+import { hasFreshStepUp } from "../../services/stepUp.service.js";
 import { buildServiceItems, hasVitals } from "./servicePricing.util.js";
 import { sendRefundEmail } from "../../services/email.service.js";
 import { autoApplyBhytIfEligible, reconcileBhytAfterTotalChange } from "./bhytApply.service.js";
@@ -114,7 +116,24 @@ export const deductStockForInvoice = async ({ invoice, session = null, performed
 // @desc    Lễ tân tạo hóa đơn và thanh toán
 // @route   POST /api/v1/invoices/visit/:visitId
 // @access  Private (Receptionist, Admin)
+const PAYMENT_METHOD_INPUTS = ["tiền mặt", "cash", "chuyển khoản", "transfer"];
+
+// Bấm 2 lần "tạo và thu tiền": khóa theo lượt khám để chỉ tạo một hóa đơn và trừ kho một lần
 export const createAndPayInvoice = async (req, res) => {
+  if (!PAYMENT_METHOD_INPUTS.includes(req.body?.paymentMethod)) {
+    return res.status(400).json({ success: false, message: "Vui lòng chọn phương thức thanh toán: tiền mặt hoặc chuyển khoản." });
+  }
+  const lockKey = `create_pay_${String(req.params.visitId)}`;
+  const lock = await acquireDistributedLock(lockKey, { ttlSeconds: 60 });
+  if (!lock.acquired) return res.status(409).json({ success: false, message: "Lượt khám đang được thu tiền ở phiên khác. Vui lòng tải lại." });
+  try {
+    return await createAndPayInvoiceLocked(req, res);
+  } finally {
+    await releaseDistributedLock(lockKey, lock.holder);
+  }
+};
+
+const createAndPayInvoiceLocked = async (req, res) => {
   try {
     const { visitId } = req.params;
     const { paymentMethod } = req.body;
@@ -143,7 +162,7 @@ export const createAndPayInvoice = async (req, res) => {
     if (visit.mriOrder && visit.mriOrder.orderedAt) {
       items.push({ description: "Chụp MRI", amount: mriFee, type: "mri" });
       if (visit.mriOrder.requestAiAnalysis) {
-        items.push({ description: "Phân tích AI chẩn đoán", amount: aiFee, type: "ai" });
+        items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
       }
     }
 
@@ -316,12 +335,18 @@ export const getInvoices = async (req, res) => {
       filter.status = status;
     }
 
-    const invoices = await Invoice.find(filter)
+    // Phân trang tùy chọn (?limit, ?page, tối đa 500/trang); không truyền thì giữ nguyên hành vi cũ cho FE hiện tại
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 0, 0), 500);
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    let query = Invoice.find(filter)
       .populate("patientId", "email profile")
       .populate("visitId", "reason status")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+    if (limit) query = query.skip((page - 1) * limit).limit(limit);
+    const invoices = await query;
 
-    res.status(200).json({ invoices });
+    res.status(200).json(limit ? { invoices, page, limit, total: await Invoice.countDocuments(filter) } : { invoices });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
   }
@@ -364,7 +389,8 @@ export const payInvoice = async (req, res) => {
     // Bệnh nhân có thẻ BHYT hợp lệ mà hóa đơn chưa áp (hoặc áp trên tổng cũ) → tự áp trước khi thu
     if (invoice.status === "chờ thanh toán" && (["admin", "system_admin"].includes(req.user.role) || String(invoice.hospitalId) === String(req.user.hospitalId))) {
       const auto = await autoApplyBhytIfEligible(invoice);
-      if (auto.code === "PAID_BEFORE_BHYT" || auto.code === "PAYOS_IN_FLIGHT") {
+      // APPLY_IN_PROGRESS: BHYT đang được áp ở thao tác khác → chưa thu, tránh thu đủ tiền khi phần BHYT sắp trừ
+      if (auto.code === "PAID_BEFORE_BHYT" || auto.code === "PAYOS_IN_FLIGHT" || auto.code === "APPLY_IN_PROGRESS") {
         return res.status(409).json({ code: auto.code, message: auto.reason });
       }
       if (auto.applied && paymentMethod !== "bhyt") {
@@ -862,6 +888,10 @@ export const resolveProcessingInvoice = async (req, res) => {
       return res.status(400).json({ message: `Hóa đơn không ở trạng thái 'đang xử lý' (Hiện tại: ${invoice.status}).` });
     }
 
+    if (invoice.refundApproval?.approvalStatus === "pending_second_approval") {
+      return res.status(409).json({ message: "Hóa đơn đang có yêu cầu hoàn tiền chờ duyệt. Chờ người duyệt xử lý (duyệt hoặc từ chối) trước." });
+    }
+
     if (action === "retry_deduct") {
       // Dược sĩ đã nhập thêm thuốc vào kho, thử trừ kho lại
       await executeWithTransaction(async (session) => {
@@ -895,27 +925,22 @@ export const resolveProcessingInvoice = async (req, res) => {
 
       return res.status(200).json({ success: true, message: "Đã trừ kho bù thành công và chuyển hóa đơn sang 'đã thanh toán'.", invoice });
     } else if (action === "cancel_refund") {
-      // Không thể cấp thuốc -> hoàn tiền cho người bệnh
-      invoice.status = "hoàn trả";
-      invoice.refundReason = note || "Kho không thể cung ứng thuốc sau thanh toán VietQR.";
-      invoice.refundedAt = new Date();
-      invoice.refundedBy = req.user.id;
-      await invoice.save();
-
-      try {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.REFUND_APPROVED,
-          entity: "Invoice",
-          entityId: invoice._id,
-          performedBy: req.user.id,
-          hospitalId: req.user.hospitalId || invoice.hospitalId,
-          details: `Xử lý gỡ kẹt hóa đơn PayOS: Hủy đơn và phê duyệt hoàn trả viện phí do kho thiếu thuốc không thể cấp phát. Ghi chú: ${note || 'N/A'}`
-        });
-      } catch (auditErr) {
-        console.warn("[AuditLog Warn]", auditErr.message);
+      // Không thể cấp thuốc -> hoàn tiền cho người bệnh. Hoàn tiền là quyết định tài chính: KHÔNG cho một người
+      // tự hủy và hoàn (trước đây dược sĩ một mình hoàn được hóa đơn bất kỳ, không ghi số tiền). Mở yêu cầu theo
+      // quy trình Maker-Checker chung: người khác duyệt (từ 50 triệu BGĐ duyệt, từ 300 triệu thêm người kiểm tra),
+      // hoàn tiền ghi đúng số đã thu. Bị từ chối thì hóa đơn vẫn "đang xử lý" để trừ kho lại.
+      if (!isSameHospital(invoice, req.user)) {
+        return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
       }
-
-      return res.status(200).json({ success: true, message: "Đã hủy hóa đơn và chuyển sang trạng thái hoàn trả cho người bệnh.", invoice });
+      const opened = await openRefundRequest(invoice, req.user, { refundReason: note || "Kho không thể cung ứng thuốc sau thanh toán VietQR." }, ["đang xử lý"]);
+      if (!opened) return res.status(409).json(REFUND_ALREADY_PENDING);
+      return res.status(202).json({
+        success: true,
+        message: "Đã lập yêu cầu hoàn tiền do kho không cấp được thuốc. Chờ người thứ hai phê duyệt độc lập.",
+        approvalStatus: "pending_second_approval",
+        requiredRole: opened.refundApproval.requiredRole,
+        invoice: opened,
+      });
     } else {
       return res.status(400).json({ message: "action phải là 'retry_deduct' hoặc 'cancel_refund'." });
     }
@@ -1167,135 +1192,150 @@ export const paymentCancel = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M.5 — Hoàn tiền hóa đơn (Full & Partial Refund, Drug FK Restock, Dual Approval, AML)
+// M.5 — Hoàn tiền hóa đơn (Full & Partial Refund, Drug FK Restock, Dual Approval)
 // PUT /api/v1/invoices/:id/refund
-// @access Private (Receptionist, Admin)
+// @access Private (Receptionist, Hospital Admin)
 // ─────────────────────────────────────────────────────────────────────────────
+// Ngưỡng duyệt hoàn tiền là quy chế kiểm soát nội bộ, không phải báo cáo theo Luật Phòng, chống rửa tiền:
+// bệnh viện không thuộc đối tượng báo cáo tại Điều 4 của Luật (rà soát 11/2026).
+const REFUND_DUAL_APPROVAL_THRESHOLD = 10_000_000;
+const REFUND_ADMIN_APPROVAL_THRESHOLD = 50_000_000;
+const LARGE_REFUND_REVIEW_THRESHOLD = 300_000_000;
+const REFUND_ROLES = ["receptionist", "hospital_admin"];
+
+// Ngưỡng luôn tính từ hóa đơn ở máy chủ, không bao giờ lấy từ số tiền client gửi lên.
+const refundThresholdAmount = (invoice) =>
+  Math.max(Number(invoice.totalAmount || 0), Number(invoice.patientPayAmount || 0));
+
+const isSameHospital = (invoice, user) => String(invoice.hospitalId) === String(user.hospitalId);
+
+// Mở yêu cầu hoàn tiền chờ người thứ hai. Trả null nếu đã có yêu cầu đang chờ: yêu cầu mới
+// không được ghi đè, nếu không maker gốc có thể tự duyệt sau khi người khác lập lại yêu cầu.
+// fromStatuses: hóa đơn "đang xử lý" (đã thu tiền, kẹt trừ kho) chỉ vào đây qua resolveProcessingInvoice → cancel_refund.
+const openRefundRequest = async (invoice, user, { refundReason, itemsToRefund }, fromStatuses = ["đã thanh toán"]) => {
+  const amount = refundThresholdAmount(invoice);
+  const requiredRole = amount >= REFUND_ADMIN_APPROVAL_THRESHOLD ? "hospital_admin" : "receptionist";
+  const requestedReason = String(refundReason || "Theo yêu cầu khách hàng").trim();
+  const opened = await Invoice.findOneAndUpdate(
+    {
+      _id: invoice._id,
+      status: { $in: fromStatuses },
+      "refundApproval.approvalStatus": { $nin: ["pending_second_approval", "approved"] },
+    },
+    {
+      $set: {
+        refundApproval: {
+          requiresDualApproval: true,
+          requiredRole,
+          firstApproverId: user.id || user._id,
+          secondApproverId: null,
+          requestedAmount: amount,
+          requestedReason,
+          requestedItems: Array.isArray(itemsToRefund) && itemsToRefund.length > 0 ? itemsToRefund : null,
+          requestedAt: new Date(),
+          approvalStatus: "pending_second_approval",
+        },
+        largeRefundReview: {
+          required: amount >= LARGE_REFUND_REVIEW_THRESHOLD,
+          reviewedBy: null,
+          reviewedByName: "",
+          reviewedAt: null,
+          note: "",
+        },
+      },
+    },
+    { new: true }
+  );
+  if (!opened) return null;
+
+  await recordAuditLog({
+    action: AUDIT_ACTIONS.REFUND_REQUESTED,
+    actorId: user.id || user._id,
+    actorRole: user.role,
+    hospitalId: opened.hospitalId,
+    targetModel: "Invoice",
+    targetId: String(opened._id),
+    metadata: { amount, requiredRole, requestedReason },
+  });
+  return opened;
+};
+
+const REFUND_ALREADY_PENDING = {
+  success: false,
+  code: "REFUND_ALREADY_PENDING",
+  message: "Hóa đơn này đã có yêu cầu hoàn tiền đang chờ duyệt. Vui lòng duyệt hoặc từ chối yêu cầu đó trước.",
+};
+
 export const refundInvoice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { refundReason, itemsToRefund, secondApproverId } = req.body;
+    const { refundReason, itemsToRefund } = req.body || {};
 
-    if (!["admin", "system_admin", "hospital_admin", "receptionist"].includes(req.user.role)) {
+    if (!REFUND_ROLES.includes(req.user?.role)) {
       return res.status(403).json({ message: "Không có quyền thực hiện hoàn tiền hóa đơn." });
     }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
 
-    if (!["admin", "system_admin"].includes(req.user.role) && invoice.hospitalId.toString() !== req.user.hospitalId) {
+    if (!isSameHospital(invoice, req.user)) {
       return res.status(403).json({ message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 
     if (invoice.status === "hoàn trả" || invoice.status === "hủy") {
       return res.status(400).json({ message: `Hóa đơn này đã ở trạng thái '${invoice.status}'.` });
     }
-    // Chỉ hoàn tiền hóa đơn bệnh nhân đã thực sự thanh toán
-    if (invoice.status !== "đã thanh toán") {
-      return res.status(400).json({ message: "Hóa đơn chưa được thanh toán nên không có tiền để hoàn trả." });
-    }
-
-    // [FIX BUG REFUND-01] Chỉ được hoàn tiền hóa đơn ĐÃ THU TIỀN:
-    // - Hoàn cho hóa đơn "chờ thanh toán" sẽ ghi hoàn tiền cho tiền CHƯA TỪNG THU
-    //   (refundAmount + notes "[HOÀN TIỀN TOÀN BỘ]..." + audit REFUND_APPROVED đều sai)
-    //   và đánh isRefunded toàn bộ item, trong khi kho thì không bị ảnh hưởng —
-    //   tạo sổ kế toán lệch chuẩn giữa tiền và kho.
-    // - Hóa đơn "đang xử lý" (kẹt trừ kho VietQR/PayOS) phải đi luồng
-    //   resolveProcessingInvoice (nhập kho bù hoặc hoàn tiền), không dùng refund.
-    // Hóa đơn chưa thu tiền muốn bỏ → để nguyên / hủy, không hoàn tiền.
+    // Chỉ hóa đơn ĐÃ thu tiền mới có tiền để hoàn:
+    // - Hóa đơn "chờ thanh toán": hoàn sẽ ghi sổ cho tiền chưa từng thu.
+    // - Hóa đơn "đang xử lý" (kẹt trừ kho VietQR/PayOS) đi luồng resolveProcessingInvoice.
     if (invoice.status !== "đã thanh toán") {
       return res.status(400).json({
         message: `Không thể hoàn tiền: hóa đơn đang ở trạng thái '${invoice.status}'. Chỉ hóa đơn ĐÃ thanh toán mới được hoàn tiền; hóa đơn chưa thu tiền vui lòng bỏ qua hoặc xử lý theo luồng hủy.`,
       });
     }
 
-    // 1. Phê duyệt 2 cấp Phân tầng (Maker-Checker Dual Approval Workflow >= 10.000.000 VNĐ - Q-BILLING-02 / BUG-BILLING-001)
-    // BẤT BIẾN: Không bao giờ cho phép lễ tân (receptionist) tự truyền `secondApproverId` trong cùng 1 request để vượt chốt 2 bước!
-    const requiredSecondRole = invoice.totalAmount >= 50000000 ? "hospital_admin" : "receptionist";
-    if (invoice.totalAmount >= 10000000 && req.user.role === "receptionist") {
-      if (
-        secondApproverId &&
-        (String(secondApproverId) === String(req.user.id) ||
-          (invoice.refundApproval?.firstApproverId && String(secondApproverId) === String(invoice.refundApproval.firstApproverId)))
-      ) {
-        return res.status(400).json({
-          message: "Người phê duyệt cấp 2 (Kế toán trưởng / Ban Giám Đốc) phải khác người lập/yêu cầu cấp 1.",
-        });
-      }
-      if (invoice.refundApproval?.approvalStatus !== "approved") {
-        invoice.refundApproval = {
-          requiresDualApproval: true,
-          requiredRole: requiredSecondRole,
-          firstApproverId: req.user.id,
-          secondApproverId: null,
-          requestedAmount: invoice.totalAmount,
-          requestedReason: refundReason || "Theo yêu cầu khách hàng",
-          requestedAt: new Date(),
-          approvalStatus: "pending_second_approval",
-        };
-        if (invoice.totalAmount >= 300000000) {
-          const now = new Date();
-          const strDeadline = new Date(now.getTime() + 48 * 3600 * 1000);
-          const retentionUntil = new Date(now);
-          retentionUntil.setFullYear(retentionUntil.getFullYear() + 5);
-          invoice.amlReport = {
-            isFlagged: true,
-            flaggedAt: now,
-            reportedToAuthority: false,
-            strReportId: `STR-${invoice.hospitalId ? invoice.hospitalId.toString().slice(-4) : "HOSP"}-${Date.now()}`,
-            strDeadline,
-            retentionUntil,
-            reason: "Giao dịch y tế hoàn tiền quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN.",
-            kycVerified: true,
-          };
-        }
-        await invoice.save();
-        return res.status(403).json({
-          message: "Hóa đơn giá trị cao (≥ 10.000.000 VNĐ) yêu cầu phê duyệt 2 cấp (Maker-Checker). Đã chuyển sang trạng thái chờ người thứ 2 phê duyệt độc lập.",
-          approvalStatus: "pending_second_approval",
-          requiredRole: requiredSecondRole,
-          invoice,
-        });
-      }
+    // Từ 10 triệu đồng: mọi vai trò đều phải qua người thứ hai, kể cả Ban Giám đốc.
+    if (refundThresholdAmount(invoice) >= REFUND_DUAL_APPROVAL_THRESHOLD) {
+      const opened = await openRefundRequest(invoice, req.user, { refundReason, itemsToRefund });
+      if (!opened) return res.status(409).json(REFUND_ALREADY_PENDING);
+      return res.status(403).json({
+        message: "Hóa đơn giá trị cao (≥ 10.000.000 VNĐ) yêu cầu phê duyệt 2 cấp (Maker-Checker). Đã chuyển sang trạng thái chờ người thứ 2 phê duyệt độc lập.",
+        approvalStatus: "pending_second_approval",
+        requiredRole: opened.refundApproval.requiredRole,
+        invoice: opened,
+      });
     }
 
-    // 2. Cảnh báo AML & Báo cáo Giao dịch đáng ngờ STR (Thông tư 35/2013/TT-NHNN >= 300.000.000 VNĐ)
-    if (invoice.totalAmount >= 300000000) {
-      const now = new Date();
-      const strDeadline = new Date(now.getTime() + 48 * 3600 * 1000); // Báo cáo trong 48h
-      const retentionUntil = new Date(now);
-      retentionUntil.setFullYear(retentionUntil.getFullYear() + 5); // Lưu trữ tối thiểu 5 năm
-      const strReportId = `STR-${invoice.hospitalId ? invoice.hospitalId.toString().slice(-4) : "HOSP"}-${Date.now()}`;
+    // Dưới ngưỡng: giành quyền xử lý atomic để 2 request song song không hoàn 2 lần.
+    const previousApprovalStatus = invoice.refundApproval?.approvalStatus || "none";
+    const claimed = await Invoice.findOneAndUpdate(
+      {
+        _id: invoice._id,
+        status: "đã thanh toán",
+        "refundApproval.approvalStatus": { $nin: ["pending_second_approval", "approved"] },
+      },
+      { $set: { "refundApproval.approvalStatus": "approved" } },
+      { new: true }
+    );
+    if (!claimed) return res.status(409).json(REFUND_ALREADY_PENDING);
 
-      invoice.amlReport = {
-        isFlagged: true,
-        flaggedAt: invoice.amlReport?.flaggedAt || now,
-        reportedToAuthority: Boolean(invoice.amlReport?.reportedToAuthority),
-        strReportId: invoice.amlReport?.strReportId || strReportId,
-        strDeadline: invoice.amlReport?.strDeadline || strDeadline,
-        retentionUntil: invoice.amlReport?.retentionUntil || retentionUntil,
-        reason: "Giao dịch y tế hoàn tiền quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN.",
-        kycVerified: true,
-        kycDetails: {
-          fullName: req.body.patientFullName || "Chủ thể giao dịch",
-          idCardNumber: req.body.patientIdCard || "N/A",
-          nationality: "Việt Nam"
-        }
-      };
-      try {
-        await recordAuditLog({
-          action: AUDIT_ACTIONS.AML_STR_REPORTED,
-          entity: "Invoice",
-          entityId: invoice._id,
-          performedBy: req.user.id,
-          hospitalId: req.user.hospitalId,
-          details: `Lập hồ sơ STR phòng chống rửa tiền: ${strReportId}. Hạn chót báo cáo NHNN trong 48h (${strDeadline.toISOString()}). Thời hạn lưu trữ tối thiểu 5 năm theo TT35/2013/TT-NHNN.`
-        });
-      } catch (amlErr) {
-        console.warn("[AML AuditLog Warn]", amlErr.message);
-      }
+    try {
+      return await performRefund(req, res, claimed, { refundReason, itemsToRefund });
+    } catch (refundErr) {
+      await Invoice.updateOne(
+        { _id: invoice._id, "refundApproval.approvalStatus": "approved" },
+        { $set: { "refundApproval.approvalStatus": previousApprovalStatus } }
+      );
+      throw refundErr;
     }
+  } catch (error) {
+    console.error("Lỗi refundInvoice:", error);
+    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
+  }
+};
 
+// Thực thi hoàn tiền trên hóa đơn đã giành quyền xử lý. Lỗi được ném lên để nơi gọi trả lại quyền.
+const performRefund = async (req, res, invoice, { refundReason, itemsToRefund }) => {
     // 3. Phân biệt Hoàn tiền từng phần (Partial Refund) vs Toàn bộ (Full Refund)
     const isPartial = Array.isArray(itemsToRefund) && itemsToRefund.length > 0;
     let targetDrugItems = [];
@@ -1329,18 +1369,23 @@ export const refundInvoice = async (req, res) => {
       const allItemsRefunded = invoice.items.every(i => i.isRefunded);
       invoice.status = allItemsRefunded ? "hoàn trả" : "đã thanh toán";
     } else {
-      // Hoàn toàn bộ: trả lại đúng số bệnh nhân đã thanh toán (không gồm phần BHYT)
-      refundedAmount = Math.round(patientPaid);
-      invoice.items.forEach(item => {
+      // Hoàn toàn bộ PHẦN CÒN LẠI: trả lại số bệnh nhân đã thanh toán (không gồm phần BHYT) trừ phần đã hoàn trước đó.
+      // Trước đây hoàn một phần rồi hoàn toàn bộ thì trả lại cả hóa đơn lần nữa (hoàn 800.000đ trên hóa đơn 500.000đ),
+      // ghi đè refundAmount và nhập kho lại cả dòng thuốc đã hoàn.
+      const alreadyRefunded = Math.max(0, Number(invoice.refundAmount || 0));
+      refundedAmount = Math.max(0, Math.round(patientPaid) - alreadyRefunded);
+      const remainingItems = (invoice.items || []).filter((item) => !item.isRefunded);
+      remainingItems.forEach(item => {
         item.isRefunded = true;
         item.refundedQuantity = item.quantity;
       });
-      targetDrugItems = (invoice.items || []).filter(item => item.type === "drug");
+      targetDrugItems = remainingItems.filter(item => item.type === "drug");
       invoice.isPartialRefund = false;
-      invoice.refundAmount = refundedAmount;
+      invoice.refundAmount = alreadyRefunded + refundedAmount;
       invoice.status = "hoàn trả";
     }
 
+    let bhytCardRelease = null;
     // 3b. Phần BHYT của dịch vụ bị hoàn sẽ không được BHXH thanh toán → trả lại lũy kế cho thẻ & giảm phần BHYT trên hóa đơn
     const bhytOnInvoice = invoice.bhytInfo?.bhytAmount || 0;
     if (bhytOnInvoice > 0) {
@@ -1348,16 +1393,30 @@ export const refundInvoice = async (req, res) => {
         ? Math.min(bhytOnInvoice, Math.round(grossRefundedNow * (1 - patientShare)))
         : bhytOnInvoice;
       if (bhytReleased > 0 && invoice.bhytInfo?.bhytId) {
-        try {
-          const card = await BhytInfo.findById(invoice.bhytInfo.bhytId);
-          if (card) {
-            card.usedThisYear = Math.max(0, (card.usedThisYear || 0) - bhytReleased);
-            await card.save();
-          }
-        } catch (bhytErr) {
-          console.warn("⚠️ Không cập nhật được lũy kế BHYT khi hoàn tiền:", bhytErr.message);
-        }
+        bhytCardRelease = { bhytId: invoice.bhytInfo.bhytId, amount: bhytReleased };
         invoice.bhytInfo.bhytAmount = bhytOnInvoice - bhytReleased;
+      }
+    }
+
+    invoice.refundReason = refundReason || 'Theo yêu cầu khách hàng';
+    invoice.refundedAt = new Date();
+    invoice.refundedBy = req.user.id;
+    invoice.notes = `[HOÀN TIỀN ${isPartial ? 'MỘT PHẦN' : 'TOÀN BỘ'}] Số tiền: ${refundedAmount.toLocaleString('vi-VN')} VNĐ. Lý do: ${refundReason || 'N/A'}. Thực hiện bởi: ${req.user.id} vào ${new Date().toLocaleString('vi-VN')}`;
+    // Mỗi lần phê duyệt chỉ dùng cho đúng một lần hoàn: lần hoàn một phần sau phải xin duyệt mới.
+    invoice.refundApproval.approvalStatus = "completed";
+    await invoice.save();
+
+    // Hóa đơn đã ghi xong mới động tới thẻ BHYT và kho: nếu bước lưu trên lỗi thì chưa có tác dụng phụ nào,
+    // và yêu cầu quay về trạng thái chờ duyệt mà không làm hoàn kho hai lần khi duyệt lại.
+    if (bhytCardRelease) {
+      try {
+        const card = await BhytInfo.findById(bhytCardRelease.bhytId);
+        if (card) {
+          card.usedThisYear = Math.max(0, (card.usedThisYear || 0) - bhytCardRelease.amount);
+          await card.save();
+        }
+      } catch (bhytErr) {
+        console.warn("⚠️ Không cập nhật được lũy kế BHYT khi hoàn tiền:", bhytErr.message);
       }
     }
 
@@ -1464,20 +1523,14 @@ export const refundInvoice = async (req, res) => {
       }
     }
 
-    invoice.refundReason = refundReason || 'Theo yêu cầu khách hàng';
-    invoice.refundedAt = new Date();
-    invoice.refundedBy = req.user.id;
-    invoice.notes = `[HOÀN TIỀN ${isPartial ? 'MỘT PHẦN' : 'TOÀN BỘ'}] Số tiền: ${refundedAmount.toLocaleString('vi-VN')} VNĐ. Lý do: ${refundReason || 'N/A'}. Thực hiện bởi: ${req.user.id} vào ${new Date().toLocaleString('vi-VN')}`;
-    await invoice.save();
-
-    // 5. Ghi nhận chuỗi băm Audit Trail (TT46/2018/TT-BYT)
+    // 5. Ghi nhận chuỗi băm Audit Trail
     try {
       await recordAuditLog({
-        action: AUDIT_ACTIONS.REFUND_APPROVED,
+        action: AUDIT_ACTIONS.REFUND_COMPLETED,
         entity: "Invoice",
         entityId: invoice._id,
         performedBy: req.user.id,
-        hospitalId: req.user.hospitalId,
+        hospitalId: invoice.hospitalId,
         details: `Hoàn tiền hóa đơn viện phí (${invoice.isPartialRefund ? 'Một phần' : 'Toàn bộ'}). Số tiền hoàn: ${refundedAmount} VNĐ. Lý do: ${refundReason || 'N/A'}`
       });
     } catch (auditErr) {
@@ -1509,10 +1562,6 @@ export const refundInvoice = async (req, res) => {
       message: isPartial ? "Hoàn tiền một phần thành công." : "Hoàn tiền toàn bộ hóa đơn thành công.",
       data: { invoice, refundedAmount, isPartial, emailSent }
     });
-  } catch (error) {
-    console.error("Lỗi refundInvoice:", error);
-    return res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
-  }
 };
 
 
@@ -1687,26 +1736,44 @@ export const recordBankTransfer = async (req, res) => {
 // [Q-BILLING-02 / BUG-BILLING-001] LUỒNG HOÀN TIỀN 2 BƯỚC PHÂN TẦNG (MAKER-CHECKER)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// @desc    Bước 1 (Maker): Tạo yêu cầu hoàn tiền (hoặc tự động hoàn nếu < 10.000.000 VNĐ)
+// @desc    Danh sách yêu cầu hoàn tiền đang chờ duyệt của viện
+// @route   GET /api/v1/invoices/refund-requests/pending
+// @access  Private (Receptionist, Hospital Admin)
+export const getPendingRefundRequests = async (req, res) => {
+  try {
+    const requests = await Invoice.find({
+      hospitalId: req.user.hospitalId,
+      // gồm cả hóa đơn kẹt trừ kho có yêu cầu hoàn do dược sĩ/BGĐ lập (cancel_refund)
+      status: { $in: ["đã thanh toán", "đang xử lý"] },
+      "refundApproval.approvalStatus": "pending_second_approval",
+    })
+      .select("patientId totalAmount patientPayAmount refundApproval largeRefundReview createdAt")
+      .populate("patientId", "profile.name profile.fullName")
+      .populate("refundApproval.firstApproverId", "profile.name profile.fullName email")
+      .sort({ "refundApproval.requestedAt": 1 })
+      .lean();
+    return res.status(200).json({ success: true, requests });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
+  }
+};
+
+// @desc    Bước 1 (Maker): Tạo yêu cầu hoàn tiền (hoặc hoàn ngay nếu dưới 10.000.000 VNĐ)
 // @route   POST /api/v1/invoices/:id/refund/request
-// @access  Private (Receptionist, Hospital Admin, Admin, System Admin)
+// @access  Private (Receptionist, Hospital Admin)
 export const requestInvoiceRefund = async (req, res) => {
   try {
     const { id } = req.params;
-    const { refundReason, requestedAmount } = req.body || {};
+    const { refundReason, requestedAmount, itemsToRefund } = req.body || {};
 
-    if (!["receptionist", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!REFUND_ROLES.includes(req.user?.role)) {
       return res.status(403).json({ success: false, message: "Không có quyền lập yêu cầu hoàn tiền." });
     }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ success: false, message: "Không tìm thấy hóa đơn." });
 
-    if (
-      !["admin", "system_admin"].includes(req.user.role) &&
-      invoice.hospitalId &&
-      String(invoice.hospitalId) !== String(req.user.hospitalId)
-    ) {
+    if (!isSameHospital(invoice, req.user)) {
       return res.status(403).json({ success: false, message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 
@@ -1717,144 +1784,174 @@ export const requestInvoiceRefund = async (req, res) => {
       });
     }
 
-    const amount = Number(requestedAmount || invoice.patientPayAmount || invoice.totalAmount || 0);
-    if (amount < 10_000_000) {
+    const amount = refundThresholdAmount(invoice);
+    if (requestedAmount !== undefined && requestedAmount !== null) {
+      const requested = Number(requestedAmount);
+      if (!Number.isFinite(requested) || requested <= 0 || requested > amount) {
+        return res.status(400).json({
+          success: false,
+          message: "Số tiền yêu cầu hoàn không hợp lệ: phải lớn hơn 0 và không vượt quá giá trị hóa đơn.",
+        });
+      }
+    }
+
+    // QA-14: hoàn theo số tiền chỉ hỗ trợ hoàn toàn bộ; hoàn một phần phải chọn dòng (itemsToRefund)
+    const hasItems = Array.isArray(itemsToRefund) && itemsToRefund.length > 0;
+    if (requestedAmount !== undefined && requestedAmount !== null && !hasItems && Number(requestedAmount) !== amount) {
+      return res.status(400).json({
+        success: false,
+        message: `Hoàn một phần cần chọn dòng dịch vụ cần hoàn. Không chọn dòng thì số tiền hoàn phải bằng ${amount.toLocaleString("vi-VN")}đ.`,
+      });
+    }
+
+    if (amount < REFUND_DUAL_APPROVAL_THRESHOLD) {
       return refundInvoice(req, res);
     }
 
-    const requiredRole = amount >= 50_000_000 ? "hospital_admin" : "receptionist";
-    invoice.refundApproval = {
-      requiresDualApproval: true,
-      requiredRole,
-      firstApproverId: req.user.id || req.user._id,
-      secondApproverId: null,
-      requestedAmount: amount,
-      requestedReason: refundReason || "Theo yêu cầu khách hàng",
-      requestedAt: new Date(),
-      approvalStatus: "pending_second_approval",
-    };
+    const opened = await openRefundRequest(invoice, req.user, { refundReason, itemsToRefund });
+    if (!opened) return res.status(409).json(REFUND_ALREADY_PENDING);
 
-    if (amount >= 300_000_000 || (invoice.totalAmount || 0) >= 300_000_000) {
-      const now = new Date();
-      const strDeadline = new Date(now.getTime() + 48 * 3600 * 1000);
-      const retentionUntil = new Date(now);
-      retentionUntil.setFullYear(retentionUntil.getFullYear() + 5);
-      invoice.amlReport = {
-        isFlagged: true,
-        flaggedAt: now,
-        reportedToAuthority: false,
-        strReportId: `STR-${invoice.hospitalId ? String(invoice.hospitalId).slice(-4) : "HOSP"}-${Date.now()}`,
-        strDeadline,
-        retentionUntil,
-        reason: "Giao dịch y tế hoàn tiền quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN.",
-        kycVerified: true,
-      };
-    }
-
-    await invoice.save();
     return res.status(202).json({
       success: true,
       message: "Đã khởi tạo yêu cầu hoàn tiền (Maker). Chờ người có thẩm quyền cấp 2 (Checker) phê duyệt độc lập.",
       approvalStatus: "pending_second_approval",
-      requiredRole,
-      amlFlagged: Boolean(invoice.amlReport?.isFlagged),
-      invoice,
+      requiredRole: opened.refundApproval.requiredRole,
+      largeRefundReviewRequired: opened.largeRefundReview.required,
+      invoice: opened,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
   }
 };
 
+// Người duyệt, người từ chối phải đúng thẩm quyền theo giá trị hóa đơn và khác người lập.
+const checkRefundDecisionAuthority = (invoice, user) => {
+  if (invoice.refundApproval?.approvalStatus !== "pending_second_approval") {
+    return { status: 409, message: "Hóa đơn không có yêu cầu hoàn tiền đang chờ duyệt." };
+  }
+  const makerId = String(invoice.refundApproval.firstApproverId || "");
+  if (!makerId || String(user.id || user._id) === makerId) {
+    return {
+      status: 403,
+      message: "Vi phạm nguyên tắc Maker-Checker: Người phê duyệt bước 2 bắt buộc phải khác người tạo yêu cầu bước 1.",
+    };
+  }
+  const needsAdmin =
+    refundThresholdAmount(invoice) >= REFUND_ADMIN_APPROVAL_THRESHOLD ||
+    invoice.refundApproval.requiredRole === "hospital_admin";
+  if (needsAdmin && user.role !== "hospital_admin") {
+    return { status: 403, message: "Khoản hoàn tiền từ 50.000.000 VNĐ trở lên bắt buộc phải do Ban Giám đốc (hospital_admin) quyết định." };
+  }
+  return null;
+};
+
 // @desc    Bước 2 (Checker): Phê duyệt độc lập yêu cầu hoàn tiền & thực thi hoàn tiền
 // @route   POST /api/v1/invoices/:id/refund/approve
-// @access  Private (Receptionist [10M-<50M], Hospital Admin / Admin / System Admin [>=50M])
+// @access  Private (Receptionist [10M-<50M], Hospital Admin [mọi mức])
 export const approveInvoiceRefund = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!["receptionist", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!REFUND_ROLES.includes(req.user?.role)) {
       return res.status(403).json({ success: false, message: "Không có quyền phê duyệt hoàn tiền." });
     }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ success: false, message: "Không tìm thấy hóa đơn." });
 
-    if (
-      !["admin", "system_admin"].includes(req.user.role) &&
-      invoice.hospitalId &&
-      String(invoice.hospitalId) !== String(req.user.hospitalId)
-    ) {
+    if (!isSameHospital(invoice, req.user)) {
       return res.status(403).json({ success: false, message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 
-    if (invoice.refundApproval?.approvalStatus !== "pending_second_approval") {
-      return res.status(400).json({
-        success: false,
-        message: "Hóa đơn không ở trạng thái chờ phê duyệt hoàn tiền bước 2 (pending_second_approval).",
-      });
+    const authorityError = checkRefundDecisionAuthority(invoice, req.user);
+    if (authorityError) {
+      return res.status(authorityError.status).json({ success: false, message: authorityError.message });
     }
 
     const currentUserId = String(req.user.id || req.user._id);
-    const makerId = String(invoice.refundApproval.firstApproverId || "");
-    if (!makerId || currentUserId === makerId) {
-      return res.status(403).json({
-        success: false,
-        message: "Vi phạm nguyên tắc Maker-Checker: Người phê duyệt bước 2 bắt buộc phải khác người tạo yêu cầu bước 1.",
-      });
-    }
 
-    const amount = Math.max(
-      Number(invoice.totalAmount || 0),
-      Number(invoice.refundApproval.requestedAmount || 0)
-    );
-
-    // Kiểm tra phân tầng thẩm quyền: >= 50M bắt buộc phải là hospital_admin / admin / system_admin
-    if (
-      (amount >= 50_000_000 || invoice.refundApproval.requiredRole === "hospital_admin") &&
-      !["hospital_admin", "admin", "system_admin"].includes(req.user.role)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Khoản hoàn tiền từ 50.000.000 VNĐ trở lên bắt buộc phải do Ban Giám đốc (hospital_admin) hoặc Quản trị viên phê duyệt.",
-      });
-    }
-
-    // Kiểm tra chốt chặn AML STR cho khoản >= 300M VNĐ
-    if (amount >= 300_000_000 || invoice.amlReport?.isFlagged === true) {
-      if (!invoice.amlReport?.isFlagged) {
-        const now = new Date();
-        invoice.amlReport = {
-          isFlagged: true,
-          flaggedAt: now,
-          reportedToAuthority: false,
-          strReportId: `STR-${invoice.hospitalId ? String(invoice.hospitalId).slice(-4) : "HOSP"}-${Date.now()}`,
-          strDeadline: new Date(now.getTime() + 48 * 3600 * 1000),
-          retentionUntil: new Date(now.getFullYear() + 5, now.getMonth(), now.getDate()),
-          reason: "Giao dịch y tế hoàn tiền quy mô lớn vượt ngưỡng 300 triệu VNĐ theo Thông tư 35/2013/TT-NHNN.",
-          kycVerified: true,
-        };
-      }
-      if (invoice.amlReport.reportedToAuthority !== true) {
-        await invoice.save();
+    // Khoản từ 300 triệu đồng cần thêm một Ban Giám đốc khác kiểm tra trước khi duyệt
+    if (refundThresholdAmount(invoice) >= LARGE_REFUND_REVIEW_THRESHOLD) {
+      const reviewerId = invoice.largeRefundReview?.reviewedBy ? String(invoice.largeRefundReview.reviewedBy) : null;
+      if (!reviewerId) {
         return res.status(403).json({
           success: false,
-          code: "AML_HOLD_REQUIRED",
-          message: "Giao dịch hoàn tiền >= 300.000.000 VNĐ đang bị tạm giữ để rà soát phòng chống rửa tiền (AML STR). Cần Quản trị viên xác nhận giải tỏa AML (/aml-clearance) trước khi hoàn tất.",
-          amlReport: invoice.amlReport,
-          invoice,
+          code: "LARGE_REFUND_REVIEW_REQUIRED",
+          message: "Khoản hoàn từ 300.000.000 VNĐ cần một Ban Giám đốc khác kiểm tra (large-review) trước khi phê duyệt.",
+        });
+      }
+      if (reviewerId === currentUserId) {
+        return res.status(403).json({
+          success: false,
+          code: "LARGE_REFUND_REVIEW_REQUIRED",
+          message: "Người kiểm tra và người phê duyệt khoản hoàn lớn phải là hai người khác nhau.",
         });
       }
     }
 
-    invoice.refundApproval.secondApproverId = req.user.id || req.user._id;
-    invoice.refundApproval.approvedAt = new Date();
-    invoice.refundApproval.approvalStatus = "approved";
-    await invoice.save();
+    // Xác thực bước 2: lộ phiên đăng nhập của người duyệt thôi thì không đủ để duyệt tiền
+    if (!(await hasFreshStepUp(currentUserId))) {
+      return res.status(403).json({
+        success: false,
+        code: "STEP_UP_REQUIRED",
+        message: "Vui lòng xác thực bước 2 bằng mã OTP email trước khi phê duyệt hoàn tiền (hiệu lực 5 phút).",
+      });
+    }
 
-    req.body = {
-      ...(req.body || {}),
-      refundReason: req.body?.refundReason || invoice.refundApproval.requestedReason || "Phê duyệt hoàn tiền cấp 2",
-    };
-    return refundInvoice(req, res);
+    // Giành quyền duyệt atomic: 2 người bấm cùng lúc thì chỉ một người được thực thi hoàn tiền
+    const claimed = await Invoice.findOneAndUpdate(
+      {
+        _id: invoice._id,
+        status: { $in: ["đã thanh toán", "đang xử lý"] },
+        "refundApproval.approvalStatus": "pending_second_approval",
+        "refundApproval.firstApproverId": { $ne: currentUserId },
+      },
+      {
+        $set: {
+          "refundApproval.approvalStatus": "approved",
+          "refundApproval.secondApproverId": currentUserId,
+          "refundApproval.approvedAt": new Date(),
+        },
+      },
+      { new: true }
+    );
+    if (!claimed) {
+      return res.status(409).json({ success: false, message: "Yêu cầu hoàn tiền này vừa được người khác xử lý." });
+    }
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.REFUND_APPROVED,
+      actorId: currentUserId,
+      actorRole: req.user.role,
+      hospitalId: claimed.hospitalId,
+      targetModel: "Invoice",
+      targetId: String(claimed._id),
+      metadata: {
+        makerId: String(claimed.refundApproval.firstApproverId),
+        amount: claimed.refundApproval.requestedAmount,
+        reviewedBy: claimed.largeRefundReview?.reviewedBy ? String(claimed.largeRefundReview.reviewedBy) : null,
+      },
+    });
+
+    try {
+      // Phạm vi và lý do hoàn lấy từ yêu cầu đã lập, không lấy từ request của người duyệt
+      return await performRefund(req, res, claimed, {
+        refundReason: claimed.refundApproval.requestedReason || "Phê duyệt hoàn tiền cấp 2",
+        itemsToRefund: claimed.refundApproval.requestedItems || undefined,
+      });
+    } catch (refundErr) {
+      console.error("Lỗi thực thi hoàn tiền sau phê duyệt:", refundErr);
+      await Invoice.updateOne(
+        { _id: claimed._id, "refundApproval.approvalStatus": "approved" },
+        {
+          $set: {
+            "refundApproval.approvalStatus": "pending_second_approval",
+            "refundApproval.secondApproverId": null,
+            "refundApproval.approvedAt": null,
+          },
+        }
+      );
+      return res.status(500).json({ success: false, message: "Không thực thi được hoàn tiền. Yêu cầu đã quay về trạng thái chờ duyệt." });
+    }
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
   }
@@ -1862,98 +1959,125 @@ export const approveInvoiceRefund = async (req, res) => {
 
 // @desc    Từ chối yêu cầu hoàn tiền bước 2
 // @route   POST /api/v1/invoices/:id/refund/reject
-// @access  Private (Receptionist, Hospital Admin, Admin, System Admin)
+// @access  Private (cùng thẩm quyền với người duyệt)
 export const rejectInvoiceRefund = async (req, res) => {
   try {
     const { id } = req.params;
     const { rejectReason } = req.body || {};
 
-    if (!["receptionist", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+    if (!REFUND_ROLES.includes(req.user?.role)) {
       return res.status(403).json({ success: false, message: "Không có quyền từ chối yêu cầu hoàn tiền." });
     }
 
     const invoice = await Invoice.findById(id);
     if (!invoice) return res.status(404).json({ success: false, message: "Không tìm thấy hóa đơn." });
 
-    if (invoice.refundApproval?.approvalStatus !== "pending_second_approval") {
-      return res.status(400).json({ success: false, message: "Hóa đơn không có yêu cầu hoàn tiền đang chờ duyệt." });
+    if (!isSameHospital(invoice, req.user)) {
+      return res.status(403).json({ success: false, message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
 
-    invoice.refundApproval.approvalStatus = "rejected";
-    invoice.refundApproval.rejectedBy = req.user.id || req.user._id;
-    invoice.refundApproval.rejectedAt = new Date();
-    invoice.refundApproval.rejectReason = String(rejectReason || "Không đủ điều kiện hoàn tiền").trim();
-    await invoice.save();
+    const authorityError = checkRefundDecisionAuthority(invoice, req.user);
+    if (authorityError) {
+      return res.status(authorityError.status).json({ success: false, message: authorityError.message });
+    }
+
+    const reason = String(rejectReason || "Không đủ điều kiện hoàn tiền").trim();
+    const rejected = await Invoice.findOneAndUpdate(
+      { _id: invoice._id, "refundApproval.approvalStatus": "pending_second_approval" },
+      {
+        $set: {
+          "refundApproval.approvalStatus": "rejected",
+          "refundApproval.rejectedBy": req.user.id || req.user._id,
+          "refundApproval.rejectedAt": new Date(),
+          "refundApproval.rejectReason": reason,
+        },
+      },
+      { new: true }
+    );
+    if (!rejected) {
+      return res.status(409).json({ success: false, message: "Yêu cầu hoàn tiền này vừa được người khác xử lý." });
+    }
 
     await recordAuditLog({
       action: AUDIT_ACTIONS.REFUND_REJECTED,
       actorId: req.user.id || req.user._id,
       actorRole: req.user.role,
-      hospitalId: invoice.hospitalId,
+      hospitalId: rejected.hospitalId,
       targetModel: "Invoice",
-      targetId: String(invoice._id),
-      metadata: {
-        rejectReason: invoice.refundApproval.rejectReason,
-      },
-      req,
+      targetId: String(rejected._id),
+      metadata: { rejectReason: reason },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Đã từ chối yêu cầu hoàn tiền.",
-      invoice,
-    });
+    return res.status(200).json({ success: true, message: "Đã từ chối yêu cầu hoàn tiền.", invoice: rejected });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
   }
 };
 
-// @desc    Giải tỏa tạm giữ AML STR cho giao dịch hoàn tiền >= 300.000.000 VNĐ
-// @route   PUT /api/v1/invoices/:id/aml-clearance
-// @access  Private (Admin, System Admin, Hospital Admin)
-export const clearInvoiceAmlHold = async (req, res) => {
+// @desc    Ban Giám đốc thứ hai kiểm tra khoản hoàn từ 300.000.000 VNĐ (kiểm soát nội bộ)
+// @route   PUT /api/v1/invoices/:id/refund/large-review
+// @access  Private (Hospital Admin, khác người lập yêu cầu)
+export const reviewLargeRefund = async (req, res) => {
   try {
-    if (!["admin", "system_admin", "hospital_admin"].includes(req.user?.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "Chỉ Quản trị viên hệ thống hoặc Ban Giám đốc mới có quyền giải tỏa chốt chặn AML STR.",
-      });
+    if (req.user?.role !== "hospital_admin") {
+      return res.status(403).json({ success: false, message: "Chỉ Ban Giám đốc bệnh viện mới được kiểm tra khoản hoàn lớn." });
+    }
+
+    const note = String(req.body?.note || "").trim();
+    if (note.length < 10) {
+      return res.status(400).json({ success: false, message: "Vui lòng ghi nội dung kiểm tra, tối thiểu 10 ký tự." });
     }
 
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ success: false, message: "Không tìm thấy hóa đơn." });
 
-    if (!invoice.amlReport) {
-      invoice.amlReport = {};
+    if (!isSameHospital(invoice, req.user)) {
+      return res.status(403).json({ success: false, message: "Không có quyền xử lý hóa đơn của bệnh viện khác." });
     }
-    invoice.amlReport.isFlagged = true;
-    invoice.amlReport.reportedToAuthority = true;
-    invoice.amlReport.kycVerified = true;
-    if (req.body?.strReportId) {
-      invoice.amlReport.strReportId = String(req.body.strReportId);
+    if (invoice.refundApproval?.approvalStatus !== "pending_second_approval") {
+      return res.status(409).json({ success: false, message: "Hóa đơn không có yêu cầu hoàn tiền đang chờ duyệt." });
     }
-    await invoice.save();
+    if (refundThresholdAmount(invoice) < LARGE_REFUND_REVIEW_THRESHOLD) {
+      return res.status(400).json({ success: false, message: "Khoản hoàn này chưa tới ngưỡng cần kiểm tra bổ sung." });
+    }
+
+    const currentUserId = String(req.user.id || req.user._id);
+    if (String(invoice.refundApproval.firstApproverId) === currentUserId) {
+      return res.status(403).json({ success: false, message: "Người lập yêu cầu không được tự kiểm tra khoản hoàn của mình." });
+    }
+
+    const reviewerName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Ban Giám đốc";
+    const reviewed = await Invoice.findOneAndUpdate(
+      {
+        _id: invoice._id,
+        "refundApproval.approvalStatus": "pending_second_approval",
+        "largeRefundReview.reviewedBy": null,
+      },
+      {
+        $set: {
+          "largeRefundReview.reviewedBy": currentUserId,
+          "largeRefundReview.reviewedByName": reviewerName,
+          "largeRefundReview.reviewedAt": new Date(),
+          "largeRefundReview.note": note,
+        },
+      },
+      { new: true }
+    );
+    if (!reviewed) {
+      return res.status(409).json({ success: false, message: "Khoản hoàn này đã được kiểm tra hoặc vừa được xử lý." });
+    }
 
     await recordAuditLog({
-      action: AUDIT_ACTIONS.AML_STR_REPORTED,
-      actorId: req.user.id || req.user._id,
+      action: AUDIT_ACTIONS.LARGE_REFUND_REVIEWED,
+      actorId: currentUserId,
       actorRole: req.user.role,
-      hospitalId: invoice.hospitalId,
+      hospitalId: reviewed.hospitalId,
       targetModel: "Invoice",
-      targetId: String(invoice._id),
-      metadata: {
-        strReportId: invoice.amlReport.strReportId,
-        reportedToAuthority: true,
-      },
-      req,
+      targetId: String(reviewed._id),
+      metadata: { note },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Đã xác nhận báo cáo STR và giải tỏa tạm giữ AML cho hóa đơn.",
-      amlReport: invoice.amlReport,
-      invoice,
-    });
+    return res.status(200).json({ success: true, message: "Đã ghi nhận kết quả kiểm tra khoản hoàn lớn.", invoice: reviewed });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || "Lỗi máy chủ" });
   }

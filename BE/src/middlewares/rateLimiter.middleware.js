@@ -66,11 +66,13 @@ export const createRateLimiter = ({
       return next();
     }
 
-    const rawIp = req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || req.ip || "unknown-ip";
-    const ip = typeof rawIp === "string" ? rawIp.split(",")[0].trim() : "unknown-ip";
+    // Chỉ dùng req.ip: Express giải X-Forwarded-For theo cấu hình "trust proxy" (src/index.js).
+    // Không đọc thẳng header vì phần tử đầu do client tự đặt, đổi giá trị là thoát giới hạn.
+    const ip = req.ip || req.socket?.remoteAddress || "unknown-ip";
     const routeKey = req.baseUrl || req.path || "";
-    // Chống tấn công dò mật khẩu phân tán: kết hợp IP + Email (nếu có)
-    const accountIdentifier = req.body?.email ? `:${req.body.email.toLowerCase().trim()}` : "";
+    // Chống dò phân tán: kết hợp IP + tài khoản (email hoặc số điện thoại trong body)
+    const account = req.body?.email || req.body?.phone;
+    const accountIdentifier = account ? `:${String(account).toLowerCase().trim()}` : "";
     const key = keyGenerator ? String(keyGenerator(req, ip)) : `${ip}:${routeKey}${accountIdentifier}`;
     const now = Date.now();
 

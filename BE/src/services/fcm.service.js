@@ -1,4 +1,5 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin";
+import { getMessaging } from "firebase-admin/messaging";
 
 let isFirebaseInitialized = false;
 
@@ -6,9 +7,9 @@ let isFirebaseInitialized = false;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+    if (!getApps().length) {
+      initializeApp({
+        credential: cert(serviceAccount)
       });
     }
     isFirebaseInitialized = true;
@@ -49,14 +50,15 @@ export const sendFcmNotification = async (targetTokens, { title, body, data = {}
       }, {}),
     };
 
+    const messaging = getMessaging();
     if (tokens.length === 1) {
-      const response = await admin.messaging().send({
+      const response = await messaging.send({
         token: tokens[0],
         ...message
       });
       return { successCount: 1, failureCount: 0, responseId: response };
     } else {
-      const response = await admin.messaging().sendEachForMulticast({
+      const response = await messaging.sendEachForMulticast({
         tokens,
         ...message
       });

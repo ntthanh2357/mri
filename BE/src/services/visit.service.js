@@ -7,22 +7,33 @@ import { LabOrder } from "../modules/laboratory/models/labOrder.model.js";
 import { ImagingResult } from "../modules/imaging/models/imagingResult.model.js";
 import { createNotificationInternal } from "../controllers/notification.controller.js";
 import { getDayRangeVN } from "../utils/date.util.js";
-import { contrastConsentPending } from "./contrastConsent.service.js";
+import { contrastConsentPending, contrastRiskBlockMessage } from "./contrastConsent.service.js";
 import { evaluateVitalSigns } from "./vitalsSafety.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "./auditLog.service.js";
+import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
+import { getMriRoomBlockMessage } from "./mriRoomGuard.service.js";
+import StoredMedicalFile from "../models/storedMedicalFile.model.js";
 
 /**
  * Helper: Đánh giá Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01)
  */
-export const shouldEnforcePaymentGate = (visit, inv) => {
+const INPATIENT_VISIT_TYPES = new Set(["inpatient", "nội trú", "noi_tru", "noi tru"]);
+export const isInpatientVisitType = (visitType) =>
+  INPATIENT_VISIT_TYPES.has(String(visitType || "").trim().toLowerCase());
+
+export const shouldEnforcePaymentGate = (visit, inv, { partialDebtThreshold = 0 } = {}) => {
+  if (!visit) {
+    const err = new Error("Không tìm thấy lượt khám.");
+    err.statusCode = 404;
+    throw err;
+  }
   // 1. Cấp cứu — KHÔNG BAO GIỜ chặn
-  if (visit.priority === "khẩn cấp" || visit.isEmergency === true) {
+  if (visit.priority === "khẩn cấp") {
     return { enforce: false, reason: "EMERGENCY_BYPASS" };
   }
-  // 2. Nội trú / Hậu phẫu —記 sổ nội trú, thanh toán khi ra viện
+  // 2. Nội trú / Hậu phẫu — ghi sổ nội trú, thanh toán khi ra viện
   if (
-    visit.visitType === "inpatient" ||
-    visit.visitType === "nội trú" ||
+    isInpatientVisitType(visit.visitType) ||
     visit.status === "chờ nhập viện" ||
     visit.status === "chờ chụp sau phẫu thuật" ||
     visit.mriOrder?.clinicalScenario === "post_op_72h"
@@ -40,27 +51,91 @@ export const shouldEnforcePaymentGate = (visit, inv) => {
   ) {
     return { enforce: false, reason: "FULL_COVERAGE_OR_SPONSORED" };
   }
-  // 4. Có Bảo lãnh nợ (Debt Approval) hợp lệ từ Ban Giám đốc / Hospital Admin
+  const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
+  const paidAmount = inv.status === "thanh toán một phần" ? Number(inv.paidAmount || 0) : 0;
+  const remainingOwed = Math.max(0, owed - paidAmount);
+  // 4. Bảo lãnh nợ từ Ban Giám đốc: còn hạn và đủ hạn mức cho số tiền còn nợ
   if (
     visit.debtApproval?.isApproved === true &&
-    (!visit.debtApproval.expiresAt || new Date(visit.debtApproval.expiresAt) > new Date())
+    visit.debtApproval.expiresAt &&
+    new Date(visit.debtApproval.expiresAt) > new Date() &&
+    remainingOwed <= Number(visit.debtApproval.maxAmount || 0)
   ) {
     return { enforce: false, reason: "DEBT_APPROVED_BY_ADMIN" };
   }
-  // 5. Đã thanh toán hoặc Đặt cọc / Thanh toán một phần (dư nợ còn lại <= 2.000.000 VNĐ)
-  const owed = inv.patientPayAmount ?? (inv.totalAmount - (inv.bhytInfo?.bhytAmount || 0));
-  if (inv.status === "đã thanh toán" || inv.status === "PAID" || owed <= 0) {
+  // 5. Hóa đơn đã hoàn trả hoặc đã hủy: không còn khoản thu nào cho ca này, cần lập hóa đơn mới
+  if (inv.status === "hoàn trả" || inv.status === "hủy") {
+    return { enforce: true, reason: "INVOICE_VOIDED", owed };
+  }
+  // 6. Đã thu tiền. "đang xử lý" = tiền đã về, chỉ còn kẹt bước trừ kho (xem invoice.controller)
+  if (inv.status === "đã thanh toán" || inv.status === "đang xử lý" || inv.status === "PAID" || owed <= 0) {
     return { enforce: false, reason: "ALREADY_PAID" };
   }
-  if (inv.status === "thanh toán một phần") {
-    const paidAmount = Number(inv.paidAmount || 0);
-    const remainingOwed = Math.max(0, owed - paidAmount);
-    if (remainingOwed <= 2_000_000) {
-      return { enforce: false, reason: "PARTIAL_PAYMENT_WITHIN_THRESHOLD" };
-    }
+  // 7. Thanh toán một phần: mức nợ cho phép do từng viện cấu hình, mặc định phải trả đủ
+  if (inv.status === "thanh toán một phần" && partialDebtThreshold > 0 && remainingOwed <= partialDebtThreshold) {
+    return { enforce: false, reason: "PARTIAL_PAYMENT_WITHIN_THRESHOLD" };
   }
   // Mặc định: Ngoại trú thường chưa đóng tiền -> BẮT BUỘC CHẶN (bất kể client gửi enforcePaymentGate gì)
   return { enforce: true, reason: "OUTPATIENT_UNPAID", owed };
+};
+
+const GATE_MESSAGES = {
+  INVOICE_VOIDED: "CHẶN CỔNG VIỆN PHÍ: Hóa đơn của ca chụp đã hoàn trả hoặc đã hủy. Vui lòng lập hóa đơn mới trước khi vào buồng chụp, hoặc xin bảo lãnh viện phí của Ban Giám đốc.",
+  OUTPATIENT_UNPAID: "CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu, Nội trú/Hậu phẫu, BHYT 100%, hoặc có Bảo lãnh viện phí của Ban Giám đốc).",
+};
+
+/**
+ * Đánh giá cổng viện phí của một lượt khám (đọc hóa đơn và chính sách viện) rồi ghi audit nếu được miễn.
+ * Dùng chung cho mọi đường đưa bệnh nhân vào buồng chụp. Ném lỗi 402 khi bị chặn.
+ */
+export const assertPaymentGateOpen = async (visit, user, req = null) => {
+  const GATE_FIELDS = "status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo";
+  // Hóa đơn chứa phí MRI của lượt khám (có thể là hóa đơn MRI riêng khi hóa đơn khám đã thu trước)
+  const mriInvoice = visit._id
+    ? await Invoice.findOne({ visitId: visit._id, hospitalId: visit.hospitalId, "items.type": "mri" }).sort({ createdAt: -1 }).select(GATE_FIELDS).lean()
+    : null;
+  const inv = mriInvoice || (visit.invoiceId ? await Invoice.findById(visit.invoiceId).select(GATE_FIELDS).lean() : null);
+  const hospital = await Hospital.findById(visit.hospitalId).select("billingPolicy").lean();
+  const decision = shouldEnforcePaymentGate(visit, inv, {
+    partialDebtThreshold: Number(hospital?.billingPolicy?.partialPaymentDebtThreshold || 0),
+  });
+
+  if (decision.enforce) {
+    const err = new Error(GATE_MESSAGES[decision.reason] || GATE_MESSAGES.OUTPATIENT_UNPAID);
+    err.statusCode = 402;
+    err.code = "ERR_INVOICE_NOT_PAID";
+    throw err;
+  }
+
+  if (decision.reason !== "ALREADY_PAID") {
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.PAYMENT_GATE_BYPASSED,
+      actorId: user.id || user._id || null,
+      actorRole: user.role,
+      hospitalId: visit.hospitalId,
+      targetModel: "Visit",
+      targetId: String(visit._id),
+      metadata: { bypassReason: decision.reason, invoiceId: visit.invoiceId ? String(visit.invoiceId) : null },
+      req,
+    });
+  }
+  return decision;
+};
+
+// Lịch phòng phản ánh đúng ca đang chụp: nếu không, phòng cứ hiện "đã đặt" dù ca đã xong.
+export const syncMriSlotWithVisit = async (visit, previousStatus) => {
+  try {
+    if (visit.status === "đang chụp") {
+      await MriSlot.updateMany({ hospitalId: visit.hospitalId, visitId: visit._id, status: "booked" }, { $set: { status: "in_progress" } });
+    } else if (previousStatus === "đang chụp") {
+      await MriSlot.updateMany(
+        { hospitalId: visit.hospitalId, visitId: visit._id, status: "in_progress" },
+        { $set: { status: visit.status === "đã hủy" ? "cancelled" : "completed" } }
+      );
+    }
+  } catch (err) {
+    console.warn("Không đồng bộ được lịch phòng MRI:", err.message);
+  }
 };
 
 /**
@@ -286,7 +361,7 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals, keepWai
     throw err;
   }
   
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác");
     err.statusCode = 403;
     throw err;
@@ -338,6 +413,82 @@ export const updateVitalsService = async ({ visitId, hospitalId, vitals, keepWai
 /**
  * Service: Ra y lệnh chụp MRI và tạo hóa đơn tạm tính
  */
+/**
+ * Hóa đơn tạm tính khi ra y lệnh MRI. Chưa có hóa đơn → lập hóa đơn khám + MRI; hóa đơn còn chờ thanh toán → thêm dòng MRI;
+ * hóa đơn khám đã thu/đã đóng → lập hóa đơn MRI riêng. Lỗi thì ném ra (không nuốt), vì y lệnh không có hóa đơn
+ * sẽ bị cổng viện phí coi là "không cần hóa đơn". Cập nhật visit.invoiceId khi lập hóa đơn đầu tiên (chưa lưu visit).
+ */
+export const ensureMriInvoice = async (visit, { region, requestAiAnalysis } = {}) => {
+  try {
+    if (!visit.invoiceId) {
+      const hospital = await Hospital.findById(visit.hospitalId);
+      const examFee = hospital?.pricing?.examFee ?? 50000;
+      const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+      const aiFee = hospital?.pricing?.aiFee ?? 200000;
+
+      const items = [
+        { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
+        { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
+      ];
+      if (requestAiAnalysis) {
+        items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+      }
+      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+      const draftInvoice = new Invoice({
+        hospitalId: visit.hospitalId,
+        patientId: visit.patientId,
+        visitId: visit._id,
+        items,
+        totalAmount,
+        status: "chờ thanh toán"
+      });
+      await draftInvoice.save();
+      visit.invoiceId = draftInvoice._id;
+    } else {
+      const existingInvoice = await Invoice.findById(visit.invoiceId);
+      if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
+        const hospital = await Hospital.findById(visit.hospitalId);
+        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+        const aiFee = hospital?.pricing?.aiFee ?? 200000;
+        if (!existingInvoice.items.some((i) => i.type === "mri")) {
+          existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
+        }
+        if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
+          existingInvoice.items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+        }
+        existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        await existingInvoice.save();
+      } else if (!existingInvoice?.items?.some((i) => i.type === "mri")) {
+        // Hóa đơn khám đã thu (hoặc đã đóng): lập hóa đơn MRI riêng chờ thanh toán. Trước đây không lập gì,
+        // cổng viện phí xét hóa đơn khám đã trả nên bệnh nhân vào chụp khi chưa đóng phí MRI.
+        const hasMriInvoice = await Invoice.exists({ visitId: visit._id, hospitalId: visit.hospitalId, "items.type": "mri", status: { $ne: "hủy" } });
+        if (!hasMriInvoice) {
+          const hospital = await Hospital.findById(visit.hospitalId);
+          const mriFee = hospital?.pricing?.mriFee ?? 1500000;
+          const aiFee = hospital?.pricing?.aiFee ?? 200000;
+          const items = [{ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" }];
+          if (requestAiAnalysis) items.push({ description: "Phân tích AI hỗ trợ sàng lọc", amount: aiFee, type: "ai" });
+          await new Invoice({
+            hospitalId: visit.hospitalId,
+            patientId: visit.patientId,
+            visitId: visit._id,
+            items,
+            totalAmount: items.reduce((sum, item) => sum + item.amount, 0),
+            status: "chờ thanh toán",
+          }).save();
+        }
+      }
+    }
+  } catch (invErr) {
+    // Không nuốt lỗi: y lệnh MRI không có hóa đơn thì cổng viện phí sẽ coi là "không cần hóa đơn" và cho vào chụp
+    console.error("Không thể lập hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
+    const err = new Error("Chưa lập được hóa đơn tạm tính chụp MRI. Vui lòng thử lại.");
+    err.statusCode = 500;
+    throw err;
+  }
+};
+
 export const createMriOrderService = async ({
   visitId,
   hospitalId,
@@ -360,7 +511,7 @@ export const createMriOrderService = async ({
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -417,61 +568,55 @@ export const createMriOrderService = async ({
   };
   visit.status = clinicalScenario === "post_op_72h" ? "chờ chụp sau phẫu thuật" : "chờ chụp";
 
-  // Lập hóa đơn tạm tính
-  try {
-    if (!visit.invoiceId) {
-      const hospital = await Hospital.findById(visit.hospitalId);
-      const examFee = hospital?.pricing?.examFee ?? 50000;
-      const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-      const aiFee = hospital?.pricing?.aiFee ?? 200000;
-
-      const items = [
-        { description: "Khám bệnh lâm sàng", amount: examFee, type: "exam" },
-        { description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" },
-      ];
-      if (requestAiAnalysis) {
-        items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-      }
-      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-
-      const draftInvoice = new Invoice({
-        hospitalId: visit.hospitalId,
-        patientId: visit.patientId,
-        visitId: visit._id,
-        items,
-        totalAmount,
-        status: "chờ thanh toán"
-      });
-      await draftInvoice.save();
-      visit.invoiceId = draftInvoice._id;
-    } else {
-      const existingInvoice = await Invoice.findById(visit.invoiceId);
-      if (existingInvoice && existingInvoice.status === "chờ thanh toán") {
-        const hospital = await Hospital.findById(visit.hospitalId);
-        const mriFee = hospital?.pricing?.mriFee ?? 1500000;
-        const aiFee = hospital?.pricing?.aiFee ?? 200000;
-        if (!existingInvoice.items.some((i) => i.type === "mri")) {
-          existingInvoice.items.push({ description: `Chụp MRI vùng ${region || "Não bộ"}`, amount: mriFee, type: "mri" });
-        }
-        if (requestAiAnalysis && !existingInvoice.items.some((i) => i.type === "ai")) {
-          existingInvoice.items.push({ description: "Phân tích AI hỗ trợ chẩn đoán", amount: aiFee, type: "ai" });
-        }
-        existingInvoice.totalAmount = existingInvoice.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-        await existingInvoice.save();
-      }
-    }
-  } catch (invErr) {
-    console.warn("⚠️ Không thể tạo hóa đơn tạm tính khi ra y lệnh MRI:", invErr.message);
-  }
+  // Lập hóa đơn tạm tính (dùng chung với controller createMriOrder)
+  await ensureMriInvoice(visit, { region, requestAiAnalysis });
 
   await visit.save();
   return visit;
+};
+
+const SAFETY_ANSWER_FIELDS = ["hasPacemakerOrMetal", "hasClaustrophobia", "hasKidneyDisease", "isPregnant"];
+const MRI_REVIEW_ROLES = ["doctor", "department_head", "radiologist"];
+const badRequest = (message) => Object.assign(new Error(message), { statusCode: 400 });
+
+/** eGFR gửi lên phải là số hữu hạn. Chuỗi rỗng, chữ hay object bị từ chối thay vì thành NaN hoặc 0. */
+export const parseEgfrInput = (value) => {
+  if (value === undefined || value === null) return null;
+  const num = typeof value === "number" ? value : (typeof value === "string" && value.trim() !== "" ? Number(value) : NaN);
+  if (!Number.isFinite(num)) throw badRequest("Chỉ số eGFR không hợp lệ: phải là số (mL/phút/1.73m²).");
+  return num;
+};
+
+const logMriSafetyCheck = async (visit, user, result) => {
+  const c = visit.mriSafetyChecklist || {};
+  try {
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.MRI_SAFETY_CHECKLIST_SUBMITTED,
+      entity: "Visit",
+      entityId: String(visit._id),
+      performedBy: String(user.id || user._id || "system"),
+      hospitalId: visit.hospitalId,
+      details: `Bảng kiểm an toàn MRI (${user.role}): ${result}. Kim loại=${c.hasPacemakerOrMetal}, sợ buồng kín=${c.hasClaustrophobia}, thận=${c.hasKidneyDisease}, thai=${c.isPregnant}${c.overrideReason ? `, lý do xác nhận: ${c.overrideReason}` : ""}${c.mrConditionalDocFileId ? `, giấy MR-conditional: ${c.mrConditionalDocFileId}` : ""}.`,
+      payload: { result, status: visit.status, hasPacemakerOrMetal: c.hasPacemakerOrMetal, hasClaustrophobia: c.hasClaustrophobia, hasKidneyDisease: c.hasKidneyDisease, isPregnant: c.isPregnant, passed: c.passed, overrideReason: c.overrideReason || "", mrConditionalDocFileId: c.mrConditionalDocFileId || "" },
+    });
+  } catch (err) {
+    console.warn("Không ghi được nhật ký bảng kiểm an toàn MRI:", err.message);
+  }
 };
 
 /**
  * Service: Thẩm định Bảng kiểm An toàn MRI (MRI Safety Screening)
  */
 export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, checklistData }) => {
+  // Spec: KTV phải trả lời đủ 4 câu. Thiếu câu hoặc sai kiểu không được hiểu là "không có".
+  if (SAFETY_ANSWER_FIELDS.some((k) => typeof checklistData?.[k] !== "boolean")) {
+    throw badRequest("Bảng kiểm an toàn MRI chưa trả lời đủ 4 câu (Có/Không). Vui lòng hỏi lại bệnh nhân từng câu.");
+  }
+  if (checklistData.overrideReason !== undefined && checklistData.overrideReason !== null && typeof checklistData.overrideReason !== "string") {
+    throw badRequest("Lý do xác nhận phải là văn bản.");
+  }
+  const submittedEgfr = parseEgfrInput(checklistData.creatinineEgfr);
+
   const {
     hasPacemakerOrMetal,
     hasClaustrophobia,
@@ -490,7 +635,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -505,6 +650,30 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     throw err;
   }
 
+  // Chống chỉ định đã ghi nhận thì không xóa được bằng cách gửi lại "không": hủy ca, hoặc bác sĩ xác nhận ghi đè
+  const prior = visit.mriSafetyChecklist;
+  if (prior?.isScreened && prior.hasPacemakerOrMetal && !prior.passed && hasPacemakerOrMetal !== true) {
+    const err = new Error("Ca này đã được ghi nhận chống chỉ định kim loại hoặc máy tạo nhịp. Hãy hủy ca chụp, hoặc bác sĩ xác nhận lại trong bảng kiểm.");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Hai người gửi bảng kiểm cùng lúc: chỉ lưu khi trạng thái và bảng kiểm chưa đổi kể từ lúc đọc (lệnh ghi có điều kiện)
+  const readGuard = { status: visit.status, "mriSafetyChecklist.screenedAt": prior?.screenedAt ?? null };
+  const guardedSave = async () => {
+    visit.$where = readGuard;
+    try {
+      await visit.save();
+    } catch (err) {
+      if (err?.name === "DocumentNotFoundError") {
+        const conflict = new Error("Bảng kiểm an toàn MRI vừa được người khác cập nhật. Hãy tải lại và kiểm tra lại.");
+        conflict.statusCode = 409;
+        throw conflict;
+      }
+      throw err;
+    }
+  };
+
   // ── AN TOÀN NGƯỜI BỆNH (P0-1): máy chủ TỰ quyết định, KHÔNG tin `passed` do client gửi lên ──
   // Trước đây `{ hasPacemakerOrMetal: true, passed: true }` bypass được chống chỉ định tuyệt đối.
   const screening = visit.patientMriScreening?.answers || {};
@@ -514,9 +683,7 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   const withContrast = Boolean(visit.mriOrder?.withContrast);
 
   // Kiểm tra tự động chỉ số eGFR từ LIS nếu ca chụp có tiêm thuốc đối quang từ Gadolinium
-  let egfrValue = checklistData.creatinineEgfr !== undefined && checklistData.creatinineEgfr !== null
-    ? Number(checklistData.creatinineEgfr)
-    : (visit.mriOrder?.creatinineEgfr ?? null);
+  let egfrValue = submittedEgfr ?? (visit.mriOrder?.creatinineEgfr ?? null);
   if (withContrast && egfrValue === null) {
     egfrValue = await findLatestPatientEgfr(hospitalId, visit.patientId);
     if (egfrValue !== null && visit.mriOrder) {
@@ -528,49 +695,31 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
 
   // Kiểm tra Cổng Viện phí (Payment Gate) bắt buộc phía Server (Q-BILLING-01 / BUG-VISIT-001)
   // Lưu ý: Không bao giờ tin cờ `checklistData.enforcePaymentGate = false` từ client!
-  let paymentPending = false;
-  let inv = null;
-  if (visit.invoiceId) {
-    inv = await Invoice.findById(visit.invoiceId)
-      .select("status totalAmount patientPayAmount paidAmount paymentMethod billingType bhytInfo")
-      .lean();
-  }
-  const gateDecision = shouldEnforcePaymentGate(visit, inv);
-  paymentPending = gateDecision.enforce;
+  await assertPaymentGateOpen(visit, user);
 
-  if (!gateDecision.enforce && inv && !["ALREADY_PAID", "NO_INVOICE_REQUIRED"].includes(gateDecision.reason)) {
-    await recordAuditLog({
-      action: AUDIT_ACTIONS.PAYMENT_GATE_BYPASSED,
-      actorId: user.id || user._id || null,
-      actorRole: user.role,
-      hospitalId: visit.hospitalId,
-      targetModel: "Visit",
-      targetId: String(visit._id),
-      metadata: {
-        bypassReason: gateDecision.reason,
-        invoiceId: String(visit.invoiceId),
-      },
-    });
-  }
-
-  if (gateDecision.enforce) {
-    const err = new Error("CHẶN CỔNG VIỆN PHÍ: Hóa đơn tạm tính chụp MRI chưa được thanh toán. Vui lòng hướng dẫn bệnh nhân hoàn tất thu ngân trước khi vào buồng chụp (trừ ca Cấp cứu, Nội trú/Hậu phẫu, BHYT 100%, hoặc có Bảo lãnh viện phí của Ban Giám đốc).");
-    err.statusCode = 402;
-    err.code = "ERR_INVOICE_NOT_PAID";
-    throw err;
-  }
-
-  // Kim loại/thiết bị cấy ghép: chỉ bác sĩ được ghi đè, phải nêu lý do chuyên môn (lưu vết).
-  // Máy tạo nhịp tim (bệnh nhân tự khai) là chống chỉ định tuyệt đối — KHÔNG có ngoại lệ.
+  // Kim loại/thiết bị cấy ghép: chỉ Bác sĩ CĐHA được ghi đè, phải có lý do chuyên môn và giấy xác nhận MR-conditional
+  // đã tải lên cho đúng ca này (lưu vết). Máy tạo nhịp tim (bệnh nhân tự khai) là chống chỉ định tuyệt đối — KHÔNG có ngoại lệ.
   const overrideReasonText = String(overrideReason || "").trim();
-  const allowedToOverride = ['doctor', 'department_head', 'radiologist'].includes(user.role) && !patientDeclaredPacemaker;
-  const hasOverride = metalFlagged && Boolean(allowedToOverride && overrideReasonText.length >= 10);
+  const allowedToOverride = user.role === 'radiologist' && !patientDeclaredPacemaker;
+  const hasOverride = metalFlagged && allowedToOverride && overrideReasonText.length >= 10;
+  let mrConditionalDocFileId = "";
+  if (hasOverride) {
+    const docId = typeof checklistData.mrConditionalDocFileId === "string" ? checklistData.mrConditionalDocFileId.trim() : "";
+    const doc = docId
+      ? await StoredMedicalFile.findOne({ fileId: docId, hospitalId: visit.hospitalId, studyId: String(visit._id) }).select("fileId").lean()
+      : null;
+    if (!doc) throw badRequest("Cần tải lên giấy xác nhận thiết bị MR-conditional của ca này trước khi ghi đè chống chỉ định.");
+    mrConditionalDocFileId = doc.fileId;
+  }
   const isSafe = !metalFlagged || hasOverride;
 
   // Suy thận + có cản quang, hoặc đang mang thai: cần bác sĩ xác nhận trước khi vào buồng.
-  // Bác sĩ tự thực hiện bảng kiểm thì coi như đã xác nhận (không lặp vô hạn).
-  const requiresDoctorReview = isSafe && !hasOverride && !['doctor', 'department_head', 'radiologist'].includes(user.role)
-    && (pregnant || (kidneyDisease && withContrast));
+  // Bác sĩ tự làm bảng kiểm vẫn phải ghi lý do xác nhận (spec S.1: override với xác nhận lý do).
+  const needsReview = pregnant || (kidneyDisease && withContrast);
+  const isReviewer = MRI_REVIEW_ROLES.includes(user.role);
+  const doctorConfirmed = isSafe && !hasOverride && needsReview && isReviewer && overrideReasonText.length >= 10;
+  const requiresDoctorReview = isSafe && !hasOverride && needsReview && !doctorConfirmed;
+  const recordedReason = hasOverride || doctorConfirmed;
 
   const screenerName = user.profile?.fullName || user.profile?.name || user.email || "Kỹ thuật viên";
 
@@ -585,16 +734,18 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
     screenedAt: new Date(),
     passed: isSafe && !requiresDoctorReview,
     notes: notes || (egfrLowRisk ? `Cảnh báo LIS tự động: eGFR = ${egfrValue} mL/phút/1.73m² (< 30) — Nguy cơ xơ hóa hệ thống do thận (NSF) khi tiêm Gadolinium.` : ""),
-    overrideReason: hasOverride ? overrideReasonText : "",
-    overriddenBy: hasOverride ? (user.id || user._id || null) : null,
-    overriddenByName: hasOverride ? screenerName : "",
-    overriddenAt: hasOverride ? new Date() : null
+    overrideReason: recordedReason ? overrideReasonText : "",
+    overriddenBy: recordedReason ? (user.id || user._id || null) : null,
+    overriddenByName: recordedReason ? screenerName : "",
+    overriddenAt: recordedReason ? new Date() : null,
+    mrConditionalDocFileId: hasOverride ? mrConditionalDocFileId : ""
   };
 
   // Phát hiện chống chỉ định tuyệt đối chưa được bác sĩ chấp thuận -> chặn ngay
   if (!isSafe) {
-    await visit.save();
-    const err = new Error("CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI: Bệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính! Không được phép đưa vào buồng chụp từ trường 1.5T/3T. Nếu có chỉ định đặc biệt, bác sĩ phải ghi rõ lý do chuyên môn để chấp thuận.");
+    await guardedSave();
+    await logMriSafetyCheck(visit, user, "chống chỉ định");
+    const err = new Error("CHỐNG CHỈ ĐỊNH TUYỆT ĐỐI: Bệnh nhân mang máy tạo nhịp tim hoặc mảnh kim loại từ tính! Không được phép đưa vào buồng chụp từ trường 1.5T/3T. Nếu thiết bị là MR-conditional, Bác sĩ CĐHA xác nhận kèm lý do và giấy xác nhận.");
     err.statusCode = 400;
     err.checklist = visit.mriSafetyChecklist;
     err.visit = visit;
@@ -602,22 +753,60 @@ export const submitMriSafetyCheckService = async ({ visitId, hospitalId, user, c
   }
 
   // Nếu an toàn, tự động chuyển sang 'đang chụp' — trừ khi có tiêm cản quang mà bệnh nhân chưa ký phiếu (UC-PAT-06)
-  // hoặc trường hợp cần bác sĩ xác nhận (thai kỳ / suy thận + cản quang).
+  // hoặc trường hợp cần bác sĩ xác nhận (thai kỳ / suy thận + cản quang) hoặc phòng MRI đang bảo trì / ngừng hoạt động.
   const consentPending = await contrastConsentPending(visit);
-  if (isSafe && !requiresDoctorReview && !consentPending && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
+  const contrastBlocked = consentPending ? null : await contrastRiskBlockMessage(visit);
+  const roomBlockMessage = !isSafe || requiresDoctorReview || consentPending || contrastBlocked
+    ? null
+    : await getMriRoomBlockMessage(visit);
+  if (isSafe && !requiresDoctorReview && !consentPending && !contrastBlocked && !roomBlockMessage && ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật'].includes(visit.status)) {
     visit.status = 'đang chụp';
     if (visit.mriOrder) visit.mriOrder.mriStatus = 'scanning';
   } else if (visit.mriOrder && isSafe) {
     visit.mriOrder.mriStatus = 'safety_checked';
   }
 
-  await visit.save();
+  await guardedSave();
+  // Đồng bộ lịch phòng sau khi lưu thành công, để lần lưu bị từ chối không làm lệch lịch
+  if (visit.status === 'đang chụp') await syncMriSlotWithVisit(visit, null);
+  await logMriSafetyCheck(visit, user, requiresDoctorReview ? "cần bác sĩ xác nhận" : visit.status === "đang chụp" ? "đạt, vào buồng chụp" : "đạt, chờ điều kiện khác");
+  // Bác sĩ CĐHA ghi đè chống chỉ định kim loại: báo mọi Trưởng khoa của viện
+  if (hasOverride) {
+    const heads = await User.find({ hospitalId: visit.hospitalId, role: "department_head", isLocked: { $ne: true } }).select("_id").lean();
+    for (const head of heads) {
+      await createNotificationInternal({
+        hospitalId: visit.hospitalId,
+        recipientId: head._id,
+        senderId: user.id || user._id || null,
+        type: "other",
+        title: "Bác sĩ CĐHA ghi đè chống chỉ định MRI",
+        message: `${screenerName} cho phép chụp MRI dù có thiết bị kim loại (MR-conditional). Lý do: ${overrideReasonText}`,
+        relatedId: visit._id,
+      });
+    }
+  }
+  // Spec S.1: có yếu tố nguy cơ thì cảnh báo bác sĩ chỉ định
+  if (requiresDoctorReview && visit.doctorId && String(visit.doctorId) !== String(user.id || user._id)) {
+    await createNotificationInternal({
+      hospitalId: visit.hospitalId,
+      recipientId: visit.doctorId,
+      senderId: user.id || user._id || null,
+      type: "other",
+      title: "Ca chụp MRI cần bác sĩ xác nhận",
+      message: "Bảng kiểm an toàn MRI có yếu tố nguy cơ (thai kỳ hoặc suy thận khi có cản quang). Bác sĩ cần xác nhận kèm lý do trước khi đưa bệnh nhân vào buồng chụp.",
+      relatedId: visit._id,
+    });
+  }
   return {
     checklist: visit.mriSafetyChecklist,
     visit,
     contrastConsentPending: consentPending,
+    contrastBlocked: Boolean(contrastBlocked),
+    reviewReasonRequired: requiresDoctorReview && isReviewer,
     requiresDoctorReview,
-    paymentPending,
+    roomBlocked: Boolean(roomBlockMessage),
+    roomBlockMessage: roomBlockMessage || null,
+    paymentPending: false,
     creatinineEgfr: egfrValue
   };
 };
@@ -639,7 +828,7 @@ export const requestMriRescanService = async ({ visitId, hospitalId, user, reaso
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;
@@ -700,7 +889,7 @@ export const cancelMriOrderService = async ({ visitId, hospitalId, user, reason,
     throw err;
   }
 
-  if (visit.hospitalId.toString() !== hospitalId.toString()) {
+  if (String(visit.hospitalId) !== String(hospitalId)) {
     const err = new Error("Không có quyền thao tác lượt khám này.");
     err.statusCode = 403;
     throw err;

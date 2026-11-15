@@ -26,8 +26,8 @@ const imagingResultSchema = new Schema(
     },
     gender: {
       type: String,
-      enum: ["Nam", "Nữ", "Khác"],
-      required: true,
+      enum: ["Nam", "Nữ", "Khác", ""], // để trống khi hồ sơ chưa có giới tính (không tự gán)
+      default: "",
     },
     address: {
       type: String,
@@ -96,6 +96,9 @@ const imagingResultSchema = new Schema(
       seriesInstanceUID: { type: String, default: "" },
       sopInstanceUIDs: { type: [String], default: [] },
       dicomFileUrls: { type: [String], default: [] },
+      sliceSeriesMeta: { type: [Schema.Types.Mixed], default: [] },
+      primarySliceIndex: { type: Number, default: 0 },
+      studyTriage: { type: Schema.Types.Mixed, default: null },
     },
     // Mini-PACS DICOM archive storage (.zip / .rar)
     dicomZipUrl: {
@@ -119,6 +122,9 @@ const imagingResultSchema = new Schema(
     // Module O / C — trường AI kết quả
     studyId: { type: Schema.Types.ObjectId, ref: 'DicomStudy', default: null }, // Liên kết DICOM Study
     aiReport: { type: Schema.Types.Mixed, default: null },              // C.4: full_report.json
+    // Trạng thái phân tích AI của hồ sơ: "" chưa yêu cầu · pending đang chờ · completed đã có kết quả · failed lỗi (aiError)
+    aiStatus: { type: String, enum: ["", "pending", "completed", "failed"], default: "" },
+    aiError: { type: String, default: "" },
     segmentationUrl: { type: String, default: null },                  // C.1: mask phân đoạn
     top5SlicesUrls: { type: [String], default: [] },                    // C.6: 5 slice nguy hiểm
     representativeSliceUrl: { type: String, default: null },            // C.7: 1 ảnh đại diện
@@ -139,9 +145,9 @@ const imagingResultSchema = new Schema(
         default: 'electronic',
       },
       certificateSerial: { type: String, default: "" },
-      signingAlgorithm: { type: String, default: "SHA256withRSA" },
+      signingAlgorithm: { type: String, default: "" },
       timestampToken: { type: String, default: "" },
-      caProvider: { type: String, default: "VNPT-CA" },
+      caProvider: { type: String, default: "" }, // không mặc định nhà cung cấp CA khi chưa có chứng thư thật
       signedHash: { type: String, default: "" },
       signedBy: { type: String, default: "" },
       signedAt: { type: Date, default: null },
@@ -205,9 +211,24 @@ const imagingResultSchema = new Schema(
       acknowledgedAt: { type: Date, default: null },
       clinicalNote: { type: String, default: '' }
     },
+    // Các lần xác nhận trước đó, không ghi đè để giữ vết ai đã đọc báo cáo
+    acknowledgmentHistory: [
+      {
+        acknowledgedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        acknowledgedByName: { type: String, default: '' },
+        acknowledgedAt: { type: Date },
+        clinicalNote: { type: String, default: '' },
+      },
+    ],
     // Lý do khi Trưởng khoa (department_head) ký thay Bác sĩ CĐHA (radiologist)
     actingRadiologistReason: { type: String, default: '' },
-    // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT46/2018/TT-BYT)
+    // Căn cứ thẩm quyền của người ký (xem services/imagingSignPolicy.service.js)
+    signMode: {
+      type: String,
+      enum: ['radiologist', 'acting_department_head', 'ordering_doctor_exception', null],
+      default: null,
+    },
+    // Bản đính chính / bổ sung sau ký số (Addendum - bất biến bản gốc theo TT 13/2025/TT-BYT)
     addenda: [
       {
         content: { type: String, required: true },

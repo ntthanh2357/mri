@@ -6,6 +6,7 @@ import { recordAuditLog } from "../../services/auditLog.service.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { evaluateLabValue } from "./labResult.util.js";
 
+import { inputErrorStatus } from "../../utils/inputError.util.js";
 /** [P2-7] Báo ngay cho bác sĩ + quản lý bệnh viện khi có giá trị nguy kịch. */
 const notifyCriticalValue = async (order, criticalResults) => {
   try {
@@ -20,7 +21,7 @@ const notifyCriticalValue = async (order, criticalResults) => {
       .map((r) => `${r.biomarker_name}: ${r.value_result} ${r.unit} (${r.critical_note})`)
       .join("; ");
 
-    await Promise.allSettled(
+    const sent = await Promise.allSettled(
       recipients.map((u) =>
         createNotificationInternal({
           hospitalId: order.hospitalId,
@@ -34,7 +35,12 @@ const notifyCriticalValue = async (order, criticalResults) => {
       )
     );
 
-    order.criticalNotifiedAt = new Date();
+    // Chỉ coi là đã báo khi có ít nhất một thông báo lưu được; nếu không, lần duyệt sau sẽ báo lại.
+    if (sent.some((r) => r.status === "fulfilled" && r.value)) {
+      order.criticalNotifiedAt = new Date();
+    } else {
+      console.warn(`[LIS] Không lưu được cảnh báo critical value nào cho phiếu ${order.barcode}.`);
+    }
   } catch (err) {
     console.warn("[LIS] Không gửi được cảnh báo critical value:", err.message);
   }
@@ -66,19 +72,26 @@ export const receiveLisResults = async (req, res) => {
 
     const gender = order.patient_gender; // 'Nam' hoặc 'Nữ'
     const processedResults = [];
+    // Nạp danh mục chỉ số một lần cho cả phiếu (trước đây mỗi dòng một truy vấn: 5000 dòng ≈ 5000 lượt đọc DB)
+    const codes = [...new Set(rawResults.map((r) => (typeof r?.code === "string" ? r.code.trim().toUpperCase() : null)).filter(Boolean))];
+    const biomarkerByCode = new Map((await Biomarker.find({ code: { $in: codes } }).lean()).map((b) => [b.code, b]));
 
     for (const item of rawResults) {
       const { code, value } = item;
       if (!code || value === undefined || value === null) continue;
+      // Giá trị phải là số thật: chuỗi rỗng, chữ, mảng hay object không được hiểu thành 0 hoặc lưu sai
+      if (typeof code !== "string") return errorResponse(res, "Mã chỉ số xét nghiệm không hợp lệ.", 400);
+      const num = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+      if (!Number.isFinite(num)) return errorResponse(res, `Giá trị xét nghiệm của ${code} phải là số.`, 400);
 
-      const biomarker = await Biomarker.findOne({ code: code.toUpperCase() });
+      const biomarker = biomarkerByCode.get(code.trim().toUpperCase()) || null;
 
-      const evaluation = evaluateLabValue({ value, gender, biomarker });
+      const evaluation = evaluateLabValue({ value: num, gender, biomarker });
 
       processedResults.push({
         biomarker_code: code.toUpperCase(),
         biomarker_name: biomarker?.name || code,
-        value_result: Number(value),
+        value_result: num,
         unit: biomarker?.unit || "N/A",
         ...evaluation,
       });
@@ -88,17 +101,32 @@ export const receiveLisResults = async (req, res) => {
       return errorResponse(res, "Không có kết quả hợp lệ nào để lưu.", 400);
     }
 
+    // Gửi lại khi phiếu chưa duyệt: giữ kết quả cũ và cờ nguy kịch để bác sĩ vẫn thấy
+    const previousCritical = order.hasCriticalValue ? [...(order.criticalValues || [])] : [];
+    if (order.results?.length) {
+      order.resultHistory = [...(order.resultHistory || []), {
+        results: order.results.map((r) => (typeof r.toObject === "function" ? r.toObject() : r)),
+        resulted_at: order.resulted_at || null,
+        criticalValues: previousCritical,
+        replacedAt: new Date(),
+        replacedBy: String(req.user?.id || req.user?._id || "lis"),
+      }];
+    }
     order.results = processedResults;
     order.status = "RESULTED";
     order.specimenStatus = "RESULTED";
     order.resulted_at = new Date();
+    const fromMachine = req.user?.role === "system";
+    order.resulted_by = fromMachine ? null : (req.user.id || req.user._id);
+    order.resulted_source = fromMachine ? "lis_machine" : "manual";
     if (!order.received_at) order.received_at = new Date();
 
     const criticalResults = processedResults.filter((r) => r.is_critical);
-    order.hasCriticalValue = criticalResults.length > 0;
-    order.criticalValues = criticalResults.map(
-      (r) => `${r.biomarker_name}: ${r.value_result} ${r.unit} (${r.critical_note})`
-    );
+    order.hasCriticalValue = criticalResults.length > 0 || previousCritical.length > 0;
+    order.criticalValues = [
+      ...criticalResults.map((r) => `${r.biomarker_name}: ${r.value_result} ${r.unit} (${r.critical_note})`),
+      ...previousCritical.map((v) => (v.startsWith("Lần gửi trước: ") ? v : `Lần gửi trước: ${v}`)),
+    ];
 
     if (criticalResults.length > 0) {
       await notifyCriticalValue(order, criticalResults);
@@ -135,7 +163,7 @@ export const receiveLisResults = async (req, res) => {
     );
   } catch (error) {
     console.error("Lỗi tiếp nhận kết quả LIS:", error);
-    return errorResponse(res, "Đã xảy ra lỗi hệ thống khi tiếp nhận kết quả xét nghiệm.", 500);
+    return errorResponse(res, "Đã xảy ra lỗi hệ thống khi tiếp nhận kết quả xét nghiệm.", inputErrorStatus(res, error));
   }
 };
 
@@ -143,6 +171,7 @@ export const receiveLisResults = async (req, res) => {
 // @route POST /api/lis/orders/:id/collect
 export const collectLabSpecimen = async (req, res) => {
   try {
+    if (!req.user?.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
     const order = await LabOrder.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
     if (!order) return errorResponse(res, "Không tìm thấy phiếu xét nghiệm.", 404);
     if (order.status !== "PENDING") {
@@ -170,7 +199,7 @@ export const collectLabSpecimen = async (req, res) => {
     return successResponse(res, order, "Đã ghi nhận lấy mẫu xét nghiệm.");
   } catch (error) {
     console.error("Lỗi ghi nhận lấy mẫu:", error);
-    return errorResponse(res, "Không thể ghi nhận lấy mẫu xét nghiệm.", 500);
+    return errorResponse(res, "Không thể ghi nhận lấy mẫu xét nghiệm.", inputErrorStatus(res, error));
   }
 };
 
@@ -178,7 +207,8 @@ export const collectLabSpecimen = async (req, res) => {
 // @route POST /api/lis/orders/:id/verify
 export const verifyLisResults = async (req, res) => {
   try {
-    const order = await LabOrder.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
+    if (!req.user?.hospitalId) return errorResponse(res, "Tài khoản chưa được gán vào bệnh viện nào.", 403);
+    let order = await LabOrder.findOne({ _id: req.params.id, hospitalId: req.user.hospitalId });
     if (!order) return errorResponse(res, "Không tìm thấy phiếu xét nghiệm.", 404);
     if (order.status === "VERIFIED" || order.status === "COMPLETED") {
       return successResponse(res, order, "Kết quả xét nghiệm đã được duyệt trước đó.");
@@ -189,16 +219,25 @@ export const verifyLisResults = async (req, res) => {
     if (!order.results || order.results.length === 0) {
       return errorResponse(res, "Phiếu xét nghiệm chưa có kết quả để duyệt.", 400);
     }
-
-    if (order.hasCriticalValue && !order.criticalNotifiedAt) {
-      await notifyCriticalValue(order, order.results.filter((r) => r.is_critical));
+    // Người nhập kết quả (nhập tay) không tự duyệt kết quả của mình
+    const verifierId = String(req.user.id || req.user._id);
+    if (order.resulted_by && String(order.resulted_by) === verifierId) {
+      return errorResponse(res, "Bạn đã nhập kết quả phiếu này nên không tự duyệt được. Cần bác sĩ khác duyệt.", 403);
     }
 
-    order.status = "VERIFIED";
-    order.specimenStatus = "VERIFIED";
-    order.verified_at = new Date();
-    order.verified_by = req.user.id || req.user._id;
-    await order.save();
+    // Giành trạng thái nguyên tử: nhiều người duyệt cùng lúc chỉ một người thành công;
+    // điều kiện resulted_by chặn cả trường hợp kết quả vừa được chính người duyệt nhập lại
+    const claimed = await LabOrder.findOneAndUpdate(
+      { _id: order._id, hospitalId: order.hospitalId, status: "RESULTED", ...(/^[a-f0-9]{24}$/i.test(verifierId) ? { resulted_by: { $ne: verifierId } } : {}) },
+      { $set: { status: "VERIFIED", specimenStatus: "VERIFIED", verified_at: new Date(), verified_by: req.user.id || req.user._id } },
+      { new: true }
+    );
+    if (!claimed) return errorResponse(res, "Phiếu xét nghiệm vừa được người khác duyệt hoặc thay đổi. Vui lòng tải lại.", 409);
+    order = claimed;
+    if (order.hasCriticalValue && !order.criticalNotifiedAt) {
+      await notifyCriticalValue(order, order.results.filter((r) => r.is_critical));
+      await order.save();
+    }
 
     try {
       await recordAuditLog({
@@ -218,6 +257,6 @@ export const verifyLisResults = async (req, res) => {
     return successResponse(res, order, "Đã duyệt và hoàn tất kết quả xét nghiệm.");
   } catch (error) {
     console.error("Lỗi duyệt kết quả LIS:", error);
-    return errorResponse(res, "Không thể duyệt kết quả xét nghiệm.", 500);
+    return errorResponse(res, "Không thể duyệt kết quả xét nghiệm.", inputErrorStatus(res, error));
   }
 };

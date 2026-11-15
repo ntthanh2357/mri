@@ -16,6 +16,8 @@ const getTargetPatientId = async (req) => {
       if (!authorizedPatient) {
         throw { status: 403, message: "Không tìm thấy bệnh nhân hoặc không có quyền truy cập hồ sơ." };
       }
+      // Gọi bằng mã y tế (BN...) như màn bệnh án: dùng _id thật, không tạo/tra hồ sơ theo mã y tế (trước đây 400)
+      return String(authorizedPatient._id);
     }
     return patientId;
   }

@@ -1,6 +1,8 @@
 # BÁO CÁO ĐỒ ÁN TỐT NGHIỆP KỸ SƯ CÔNG NGHỆ THÔNG TIN
 # CHƯƠNG 5: ĐẶC TẢ KỸ THUẬT API RESTFUL VÀ CƠ CHẾ TÍCH HỢP
 
+> **Đề tài:** NeuroScan AI – Nền tảng hỗ trợ sàng lọc u não trên ảnh MRI và quản lý hồ sơ bệnh án điện tử
+
 ---
 
 ## 5.1. QUY CHUẨN THIẾT KẾ VÀ XÁC THỰC BẢO MẬT (API STANDARDS & SECURITY)
@@ -71,7 +73,9 @@ Toàn bộ hệ thống API của **NeuroScan AI** được thiết kế tuân t
 #### 2. Nộp Bảng kiểm An toàn buồng chụp MRI (Submit Safety Checklist)
 - **Endpoint:** `POST /api/v1/visits/:id/mri-safety-check`
 - **Quyền hạn:** `technician`, `doctor`
-- **Mô tả:** Thẩm định 4 tiêu chí an toàn trước buồng máy. Nếu có kim loại hoặc máy tạo nhịp tim, hệ thống từ chối ngay lập tức với cảnh báo chống chỉ định tuyệt đối.
+- **Mô tả:** Thẩm định 4 tiêu chí an toàn trước buồng máy; cả 4 câu bắt buộc trả lời Có/Không. Nếu có kim loại hoặc máy tạo nhịp tim, hệ thống từ chối với cảnh báo chống chỉ định.
+- **Ngoại lệ thiết bị MR-conditional:** chỉ Bác sĩ CĐHA (`radiologist`) được ghi đè, bắt buộc có lý do (tối thiểu 10 ký tự) và giấy xác nhận MR-conditional đã tải lên qua `POST /api/v1/visits/:id/mri-conditional-doc` (`mrConditionalDocFileId`). Hệ thống gửi thông báo trong ứng dụng tới mọi Trưởng khoa của viện và ghi nhật ký. Máy tạo nhịp do bệnh nhân tự khai không có ngoại lệ.
+- **Cần bác sĩ xác nhận:** thai kỳ, hoặc suy thận khi có cản quang. Bác sĩ, Trưởng khoa hoặc Bác sĩ CĐHA xác nhận kèm lý do tối thiểu 10 ký tự.
 - **Request Body mẫu:**
   ```json
   {
@@ -151,23 +155,18 @@ Toàn bộ hệ thống API của **NeuroScan AI** được thiết kế tuân t
 
 ---
 
-### 5.2.4. Nhóm API Quản lý Buồng Giường & Chuyển Viện (`/api/v1/hospital-beds` & `/api/v1/transfers`)
+### 5.2.4. Nhóm API Chuyển Viện (`/api/v1/transfers`)
 
-#### 1. Khóa Nguyên Tử Giữ Chỗ Giường Bệnh (Atomic Bed Reservation)
-- **Endpoint:** `POST /api/v1/hospital-beds/:id/reserve`
-- **Quyền hạn:** `doctor`, `nurse`, `admin`
-- **Payload:** `{ "patientId": "664033334444555566667777" }`
-- **Cơ chế:** Cập nhật nguyên tử với thời hạn giữ chỗ 4 giờ. Nếu giường đã có nhân viên khác giữ chỗ, trả về mã lỗi `409 Conflict`.
+> Nhóm API quản lý buồng giường (`/api/v1/hospital-beds`) còn trong mã nguồn nhưng nằm ngoài phạm vi đồ án (mục 1.4.3), nên không trình bày ở đây.
 
-#### 2. Tiếp Nhận Giường Bệnh Chống Cướp Giường (Occupy Bed with Anti-Hijacking)
-- **Endpoint:** `POST /api/v1/hospital-beds/:id/occupy`
-- **Payload:** `{ "patientId": "664033334444555566667777" }`
-- **Điều kiện:** Giường đang trống (`available`) HOẶC đang giữ chỗ nhưng `reservedForPatientId` phải trùng khớp với `patientId`.
+#### 1. Gửi Hồ Sơ Chuyển Viện Qua Email (Referral Package)
+- **Endpoint:** `POST /api/v1/transfers/:id/send-email`
+- **Quyền hạn:** `receptionist`, `doctor`, `department_head`, `hospital_admin`, `admin`, `system_admin`
+- **Payload (tùy chọn):** `{ "overrideEmail": "nguoinhan@benhvien.vn" }` — mặc định gửi tới email người nhận đã lưu trên phiếu, nếu không có thì tới email của người bệnh.
+- **Mô tả:** Gửi email "Hồ sơ chuyển viện <số phiếu> — <tên người bệnh>" kèm báo cáo AI dạng HTML và các tệp có sẵn trên máy chủ; tệp lớn (DICOM nén) gửi dưới dạng đường dẫn tải về. Phiếu được ghi nhận `recipientEmail` và `sentAt`.
 
-#### 3. Cấp Quyền Xem Bệnh Án Liên Viện Có Thời Hạn (Grant Cross-Hospital View)
-- **Endpoint:** `POST /api/v1/transfers/:id/grant-cross-view`
-- **Quyền hạn:** `doctor`, `admin`
-- **Mô tả:** Phát hành token mã hóa cho phép cơ sở tiếp nhận xem trọn vẹn bệnh án và ảnh MRI trong thời hạn 7 ngày (`crossViewExpiresAt`).
+#### 2. API xem bệnh án liên viện bằng token — đã ngừng
+- `POST /api/v1/transfers/:id/grant-cross-view`, `POST /api/v1/transfers/:id/revoke-cross-view` và `GET /api/v1/transfers/cross-view/:token` hiện trả **410 Gone**. Cơ chế cấp token xem chéo 7 ngày đã được thay bằng gửi hồ sơ chuyển viện qua email (mục 1).
 
 ---
 
@@ -176,7 +175,7 @@ Toàn bộ hệ thống API của **NeuroScan AI** được thiết kế tuân t
 #### 1. Khởi Tạo Giao Dịch Thanh Toán VietQR
 - **Endpoint:** `POST /api/v1/invoices/:id/create-payment-link`
 - **Quyền hạn:** `patient`, `nurse`, `admin`
-- **Mô tả:** Kết nối PayOS tạo mã thanh toán VietQR động chuẩn NAPAS 24/7 với số tiền viện phí đã trừ phần BHYT bảo lãnh.
+- **Mô tả:** Kết nối PayOS tạo mã thanh toán VietQR động chuẩn NAPAS 24/7 với số tiền viện phí người bệnh phải trả.
 
 #### 2. Xử Lý Webhook Đối Soát PayOS (PayOS HMAC Webhook Handler)
 - **Endpoint:** `POST /api/v1/invoices/payos-webhook` (Public - Thẩm định chữ ký)

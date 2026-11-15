@@ -23,6 +23,9 @@ updateDatasetPrice,
   getAiTrainingStats,
   getDashboardStats,
   updateHospitalPricing,
+  getHospitalPolicies,
+  updateHospitalPolicies,
+  updateStaffImagingSignPermission,
   createUser,
   fetchHospitals,
   provisionHospital,
@@ -102,6 +105,9 @@ router.get("/ai-training-stats", requireSystemAdmin, getAiTrainingStats);
 // ─── Hospital Operations Dashboard ───────────────────────────────────────────
 router.get("/dashboard", checkRole(["admin", "system_admin", "hospital_admin", "doctor", "technician", "nurse"]), getDashboardStats);
 router.put("/hospital-pricing", requireHospitalAdmin, updateHospitalPricing);
+router.get("/hospital-policies", checkRole(["hospital_admin"]), getHospitalPolicies);
+router.put("/hospital-policies", checkRole(["hospital_admin"]), updateHospitalPolicies);
+router.put("/staff/:id/imaging-sign-permission", checkRole(["hospital_admin"]), updateStaffImagingSignPermission);
 
 // ─── Custom monthly reports (Revenue and Drug reports) ──────────────────────
 router.post("/reports/revenue", checkRole(["admin", "hospital_admin", "doctor"]), createRevenueReport);
@@ -128,7 +134,7 @@ router.get("/announcements", getAnnouncements);
 router.get("/subscription-dashboard", requireHospitalAdmin, getSubscriptionDashboard);
 router.put("/hospitals/:hospitalId/upgrade-subscription", requireSystemAdmin, upgradeHospitalSubscription);
 
-// ─── Compliance & Audit Trail Verification (TT46/2018 & HIPAA §164.312) ─────
+// ─── Compliance & Audit Trail Verification (TT 13/2025 & HIPAA §164.312) ─────
 router.get("/compliance/audit-integrity", requireSystemAdmin, checkAuditIntegrity);
 router.post("/compliance/migrate-emr", requireSystemAdmin, runEmrMigration);
 

@@ -12,6 +12,8 @@ import {
   confirmVerbalOrderReadBack,
   confirmVerbalOrderOtp,
   countersignVerbalOrder,
+  rejectVerbalOrder,
+  getMyPendingVerbalOrders,
   requestMriOverride,
   requestIcuBed,
   closeEmergencyEvent,
@@ -27,6 +29,7 @@ import {
 const router = Router();
 router.use(protect);
 
+// Kíp lâm sàng cấp cứu của bệnh viện; tài khoản nền tảng (admin, system_admin) không xem/thao tác sự kiện cấp cứu.
 const CLINICAL_EMERGENCY_ROLES = [
   "doctor",
   "department_head",
@@ -34,24 +37,14 @@ const CLINICAL_EMERGENCY_ROLES = [
   "technician",
   "radiologist",
   "hospital_admin",
-  "admin",
-  "system_admin",
 ];
-const DOCTOR_LEAD_ROLES = [
-  "doctor",
-  "department_head",
-  "hospital_admin",
-  "admin",
-  "system_admin",
-];
-const NURSE_AND_DOCTOR_ROLES = [
-  "nurse",
-  "doctor",
-  "department_head",
-  "hospital_admin",
-  "admin",
-  "system_admin",
-];
+// Giải trừ báo động, đề xuất chèn lịch MRI/giữ giường, đóng sự kiện, đóng cảnh báo là quyết định chuyên môn:
+// chỉ Bác sĩ hoặc Trưởng khoa (khớp thông báo lỗi). Tài khoản quản trị không tham gia.
+const DOCTOR_LEAD_ROLES = ["doctor", "department_head"];
+// Y lệnh là thao tác chuyên môn của người hành nghề: tài khoản quản trị không tham gia.
+const VERBAL_ORDER_PRESCRIBER_ROLES = ["doctor", "department_head"];
+// Banner cấp cứu cho mọi nhân viên. Vai trò ngoài kíp lâm sàng chỉ nhận vị trí và mức độ (xem getActiveAlerts).
+const ALERT_BANNER_ROLES = [...CLINICAL_EMERGENCY_ROLES, "receptionist", "pharmacist", "lab_technician", "cleaner"];
 
 // ── 1. Báo động 1-Chạm Nội Trú & Bổ sung thông số lâm sàng ───────────────────
 router.post("/inpatient-trigger", checkRole(CLINICAL_EMERGENCY_ROLES), inpatientTrigger);
@@ -66,10 +59,12 @@ router.put("/ack/:id", checkRole(CLINICAL_EMERGENCY_ROLES), acknowledgeByRole);
 router.post("/cancel-stand-down/:id", checkRole(DOCTOR_LEAD_ROLES), cancelStandDown);
 
 // ── 4. Y lệnh miệng, Read-Back 2 bước, Ký số bổ sung, Đề xuất MRI & Giữ giường Neuro-ICU ──
-router.post("/verbal-order", checkRole(DOCTOR_LEAD_ROLES), createVerbalOrder);
-router.post("/verbal-order/:orderId/readback-confirm", checkRole(NURSE_AND_DOCTOR_ROLES), confirmVerbalOrderReadBack);
-router.post("/verbal-order/:orderId/readback-otp", checkRole(CLINICAL_EMERGENCY_ROLES), confirmVerbalOrderOtp);
-router.post("/verbal-order/:orderId/countersign", checkRole(["doctor", "department_head"]), countersignVerbalOrder);
+router.get("/verbal-orders/my-pending", checkRole([...VERBAL_ORDER_PRESCRIBER_ROLES, "nurse"]), getMyPendingVerbalOrders);
+router.post("/verbal-order", checkRole(VERBAL_ORDER_PRESCRIBER_ROLES), createVerbalOrder);
+router.post("/verbal-order/:orderId/readback-confirm", checkRole(["nurse"]), confirmVerbalOrderReadBack);
+router.post("/verbal-order/:orderId/readback-otp", checkRole(["nurse"]), confirmVerbalOrderOtp);
+router.post("/verbal-order/:orderId/reject", checkRole([...VERBAL_ORDER_PRESCRIBER_ROLES, "nurse"]), rejectVerbalOrder);
+router.post("/verbal-order/:orderId/countersign", checkRole(VERBAL_ORDER_PRESCRIBER_ROLES), countersignVerbalOrder);
 router.post("/request-mri-override", checkRole(DOCTOR_LEAD_ROLES), requestMriOverride);
 router.post("/request-icu-bed", checkRole(DOCTOR_LEAD_ROLES), requestIcuBed);
 
@@ -78,7 +73,7 @@ router.post("/close-event/:id", checkRole(DOCTOR_LEAD_ROLES), closeEmergencyEven
 
 // ── 6. Danh sách sự kiện Active & Lịch sử ─────────────────────────────────────
 router.get("/active-events", checkRole(CLINICAL_EMERGENCY_ROLES), getActiveEvents);
-router.get("/alerts", checkRole(CLINICAL_EMERGENCY_ROLES), getActiveAlerts);
+router.get("/alerts", checkRole(ALERT_BANNER_ROLES), getActiveAlerts);
 router.get("/alerts/history", checkRole(CLINICAL_EMERGENCY_ROLES), getAlertHistory);
 router.get("/history", checkRole(CLINICAL_EMERGENCY_ROLES), getAlertHistory);
 

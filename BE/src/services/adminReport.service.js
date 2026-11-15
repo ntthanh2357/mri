@@ -46,7 +46,8 @@ export const getAdminDashboardStatsService = async (hospitalId = null) => {
  * Thống kê các ca chụp MRI theo phân loại u não
  */
 export const getMriClassificationStatsService = async (hospitalId = null) => {
-  const matchStage = hospitalId ? { hospitalId } : {};
+  // Aggregate không tự ép kiểu như find: hospitalId dạng chuỗi sẽ không khớp bản ghi nào
+  const matchStage = hospitalId ? { hospitalId: new mongoose.Types.ObjectId(String(hospitalId)) } : {};
 
   const stats = await Visit.aggregate([
     { $match: { ...matchStage, "mriOrder.imagingResultId": { $ne: null } } },

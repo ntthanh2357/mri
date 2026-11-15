@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
 import { RefreshCw, UserPlus, Megaphone, Hourglass, Stethoscope, Siren, Volume2, Inbox, Timer, ScanLine, CalendarClock } from 'lucide-react';
 import { get, post } from '../../services/api.service';
+import { can } from '../../constants/clinicalPermissions';
 import { useAppDialog } from '../ui/AppDialog';
 import ClinicalStatusBadge from '../ClinicalStatusBadge';
 import { Reveal } from '../ui/Motion';
@@ -22,6 +23,10 @@ const CLOSED = ['hoàn tất', 'đã đóng', 'đã hủy'];
 // role: 'receptionist' (mặc định) | 'nurse' — chỉ khác nút chính trên banner
 const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
   const isNurse = role === 'nurse';
+  // Xếp lịch MRI cấp cứu: chỉ vai trò BE cho phép (điều dưỡng chỉ theo dõi — trước đây bấm vào bị 403)
+  const canScheduleMri = can(role, 'mriEmergencySchedule');
+  // BE (mriRoom.controller checkEmergencySchedulingAllowed): ngoài bác sĩ, chỉ xếp lịch cho ca cấp cứu ĐÃ có chỉ định MRI của bác sĩ
+  const needsMriOrder = (v) => !['doctor', 'department_head', 'radiologist'].includes(role) && !v.mriOrder?.orderedAt;
   const { width } = useWindowDimensions();
   const isWide = width > 1180;
   const [loading, setLoading] = useState(true);
@@ -223,15 +228,19 @@ const ReceptionQueueBoard = ({ navigation, role = 'receptionist' }) => {
                       <Text style={s.rowMeta} numberOfLines={1}>BS. {personName(v.doctorId)} · {v.reason || 'Cấp cứu'}</Text>
                     </View>
                     <ClinicalStatusBadge status={v.status} size="sm" />
-                    <TouchableOpacity
-                      style={[s.mriBtn, booked && s.mriBtnDone, scheduling === v._id && { opacity: 0.6 }]}
-                      onPress={() => scheduleEmergencyMri(v)}
-                      disabled={!!scheduling}
-                      dataSet={{ hover: 'glow' }}
-                    >
-                      {scheduling === v._id ? <ActivityIndicator size="small" color="#FFFFFF" /> : booked ? <CalendarClock size={14} color="#0369A1" /> : <ScanLine size={14} color="#FFFFFF" />}
-                      <Text style={[s.mriBtnText, booked && { color: '#0369A1' }]}>{booked ? 'Xem lịch chụp' : 'Xếp lịch chụp MRI'}</Text>
-                    </TouchableOpacity>
+                    {canScheduleMri && !needsMriOrder(v) ? (
+                      <TouchableOpacity
+                        style={[s.mriBtn, booked && s.mriBtnDone, scheduling === v._id && { opacity: 0.6 }]}
+                        onPress={() => scheduleEmergencyMri(v)}
+                        disabled={!!scheduling}
+                        dataSet={{ hover: 'glow' }}
+                      >
+                        {scheduling === v._id ? <ActivityIndicator size="small" color="#FFFFFF" /> : booked ? <CalendarClock size={14} color="#0369A1" /> : <ScanLine size={14} color="#FFFFFF" />}
+                        <Text style={[s.mriBtnText, booked && { color: '#0369A1' }]}>{booked ? 'Xem lịch chụp' : 'Xếp lịch chụp MRI'}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={s.rowMeta}>{needsMriOrder(v) ? 'Chờ bác sĩ chỉ định MRI' : booked ? 'Đã có lịch chụp' : 'Chờ xếp lịch chụp'}</Text>
+                    )}
                   </View>
                 );
               })}

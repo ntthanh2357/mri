@@ -11,10 +11,19 @@ export const generateRandomKey = () => {
 /**
  * Lấy khóa mã hóa 32-byte từ biến môi trường hoặc khóa ngẫu nhiên dự phòng
  */
+const DEV_ONLY_FILE_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+let warnedDevKey = false;
+
 export const getEncryptionKey = (customKey = null) => {
-  const hexKey = customKey || process.env.FILE_ENCRYPTION_KEY || "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  // Khóa dự phòng công khai chỉ dùng cho dev/test. Production thiếu khóa thì dừng (trước đây âm thầm mã hóa
+  // bản sao lưu Drive/PACS bằng khóa ai cũng biết).
+  const hexKey = customKey || process.env.FILE_ENCRYPTION_KEY || (process.env.NODE_ENV === "production" ? "" : DEV_ONLY_FILE_KEY);
   if (!hexKey) {
-    throw new Error("Chưa cấu hình FILE_ENCRYPTION_KEY trong .env");
+    throw new Error("FATAL BẢO MẬT: Thiếu FILE_ENCRYPTION_KEY (64 ký tự hex) để mã hóa tệp y tế và bản sao lưu.");
+  }
+  if (!customKey && !process.env.FILE_ENCRYPTION_KEY && !warnedDevKey) {
+    warnedDevKey = true;
+    console.warn("⚠️ FILE_ENCRYPTION_KEY chưa cấu hình: đang dùng khóa dev công khai (KHÔNG dùng cho dữ liệu thật).");
   }
   const keyBuffer = Buffer.from(hexKey, "hex");
   if (keyBuffer.length !== 32) {
@@ -29,9 +38,11 @@ export const getEncryptionKey = (customKey = null) => {
  * @param {string} [customKeyHex] - Khóa hex tùy chọn (nếu có)
  * @returns {{ encryptedBuffer: Buffer, ivHex: string, authTagHex: string }}
  */
-export const encryptBuffer = (buffer, customKeyHex = null) => {
+export const encryptBuffer = (buffer, customKeyHex = null, ivHex = null) => {
   const key = getEncryptionKey(customKeyHex);
-  const iv = crypto.randomBytes(12); // Chuẩn GCM dùng 12 bytes IV
+  // ivHex chỉ truyền khi mã hóa lại ĐÚNG nội dung đã mã hóa trước đó (di trú bản chính về đúng bản sao trên Drive):
+  // cùng khóa + IV + nội dung → cùng bản mã, không phải dùng lại IV cho nội dung khác.
+  const iv = ivHex ? Buffer.from(ivHex, "hex") : crypto.randomBytes(12); // Chuẩn GCM dùng 12 bytes IV
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
 
   const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
@@ -42,6 +53,26 @@ export const encryptBuffer = (buffer, customKeyHex = null) => {
     ivHex: iv.toString("hex"),
     authTagHex: authTag.toString("hex"),
   };
+};
+
+/**
+ * Bộ mã hóa dạng stream (AES-256-GCM) cho tệp lớn: không nạp cả tệp vào RAM.
+ * getAuthTagHex() chỉ gọi được SAU khi stream đã kết thúc.
+ */
+export const createEncryptionStream = (customKeyHex = null) => {
+  const key = getEncryptionKey(customKeyHex);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  return { cipher, ivHex: iv.toString("hex"), getAuthTagHex: () => cipher.getAuthTag().toString("hex") };
+};
+
+/**
+ * Bộ giải mã dạng stream. Thẻ xác thực được kiểm tra khi stream kết thúc: tệp bị sửa thì stream báo lỗi.
+ */
+export const createDecryptionStream = (ivHex, authTagHex, customKeyHex = null) => {
+  const decipher = crypto.createDecipheriv("aes-256-gcm", getEncryptionKey(customKeyHex), Buffer.from(ivHex, "hex"));
+  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+  return decipher;
 };
 
 /**

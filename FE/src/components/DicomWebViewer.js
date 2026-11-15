@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Activity,
+  Edit3,
 } from 'lucide-react';
 import { get } from '../services/api.service';
 import Config from '../constants/config';
@@ -37,8 +38,27 @@ const DEFAULT_PRESETS = [
 
 const resolveUrl = (raw) => {
   if (!raw) return '';
-  if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
+  if (raw.startsWith('http') || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
   return `${Config.API_URL}${raw}`;
+};
+
+const stripUrlQuery = (raw) => String(raw || '').split(/[?#]/)[0];
+
+const normalizeOverlayBox = (box) => {
+  if (!box || typeof box !== 'object') return null;
+  const x = Number(box.x);
+  const y = Number(box.y);
+  const width = Number(box.width !== undefined ? box.width : box.w);
+  const height = Number(box.height !== undefined ? box.height : box.h);
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return null;
+  }
+  return {
+    x: Math.max(0, Math.min(1, x)),
+    y: Math.max(0, Math.min(1, y)),
+    width: Math.max(0, Math.min(1 - Math.max(0, x), width)),
+    height: Math.max(0, Math.min(1 - Math.max(0, y), height)),
+  };
 };
 
 export const calculateRanoCategory = (d1Mm, d2Mm, priorCrossProductMm2, radiotherapyEndDate = null) => {
@@ -90,25 +110,41 @@ const DicomWebViewer = ({
   images = [],
   extraImages = [],
   aiResult = null,
+  externalManifest = null,
   initialMeasurements = null,
   priorStudyProp = null,
   canMeasure = false,
   onApplyMeasurement = null,
+  canEditAiRoi = false,
+  manifestRefreshKey = 0,
+  externalSliceIndex = null,
+  onActiveSliceChange = null,
+  onEditSliceRoi = null,
 }) => {
   const [manifest, setManifest] = useState(null);
   const [activeSeriesIdx, setActiveSeriesIdx] = useState(0);
   const [activeSliceIdx, setActiveSliceIdx] = useState(0);
+  const [canvasLayout, setCanvasLayout] = useState({ width: 0, height: 0 });
+  const [sliceNaturalSize, setSliceNaturalSize] = useState({ width: 512, height: 512 });
+  const prevExternalSliceRef = useRef(externalSliceIndex);
   const [selectedPreset, setSelectedPreset] = useState(DEFAULT_PRESETS[0]);
   const [invertColors, setInvertColors] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [showAiOverlay, setShowAiOverlay] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const [dualViewport, setDualViewport] = useState(false);
   const [caliperMode, setCaliperMode] = useState(false);
 
   // Caliper measurements in mm (d1 x d2 perpendicular diameters)
-  const [d1Mm, setD1Mm] = useState(String(initialMeasurements?.d1Mm || 32));
-  const [d2Mm, setD2Mm] = useState(String(initialMeasurements?.d2Mm || 26));
-  const [d3Mm, setD3Mm] = useState(String(initialMeasurements?.d3Mm || 24));
+  const [d1Mm, setD1Mm] = useState(
+    initialMeasurements?.d1Mm ? String(initialMeasurements.d1Mm) : ''
+  );
+  const [d2Mm, setD2Mm] = useState(
+    initialMeasurements?.d2Mm ? String(initialMeasurements.d2Mm) : ''
+  );
+  const [d3Mm, setD3Mm] = useState(
+    initialMeasurements?.d3Mm ? String(initialMeasurements.d3Mm) : ''
+  );
   const [priorCrossProduct, setPriorCrossProduct] = useState(
     initialMeasurements?.priorCrossProductMm2
       ? String(initialMeasurements.priorCrossProductMm2)
@@ -120,8 +156,20 @@ const DicomWebViewer = ({
   const [line2, setLine2] = useState({ x1: 50, y1: 52, x2: 68, y2: 34 });
 
   useEffect(() => {
+    if (externalManifest) {
+      setManifest(externalManifest);
+      setActiveSeriesIdx(0);
+      setActiveSliceIdx(0);
+      if (externalManifest.windowPresets?.[0]) {
+        setSelectedPreset(externalManifest.windowPresets[0]);
+      }
+      return undefined;
+    }
     const targetId = studyId || imagingResultId;
-    if (!targetId) return;
+    if (!targetId) {
+      setManifest(null);
+      return undefined;
+    }
     let mounted = true;
     get(`/api/v1/dicom/studies/${targetId}/viewer-manifest`)
       .then((res) => {
@@ -143,48 +191,167 @@ const DicomWebViewer = ({
     return () => {
       mounted = false;
     };
-  }, [studyId, imagingResultId]);
+  }, [studyId, imagingResultId, manifestRefreshKey, externalManifest]);
 
   const seriesList = useMemo(() => {
     if (manifest?.series?.length > 0) return manifest.series;
     const allUrls = Array.from(new Set([...(images || []), ...(extraImages || [])]));
-    return [
-      {
-        seriesId: 'local-t2-flair',
-        seriesType: 'T2_FLAIR',
-        seriesDescription: 'Ax T2 FLAIR 3mm (Phù quanh u & Thâm nhiễm)',
-        sliceCount: Math.max(allUrls.length, 1),
-        pixelSpacing: [0.5, 0.5],
-        sliceThickness: 3.0,
-        slices: allUrls.map((u, idx) => ({ sliceIndex: idx + 1, imageUrl: u })),
-      },
-      {
-        seriesId: 'local-t1c-post',
-        seriesType: 'T1C+',
-        seriesDescription: 'Ax T1W +Contrast Gadolinium (Đo lõi u ngấm thuốc RANO)',
-        sliceCount: Math.max(allUrls.length, 1),
-        pixelSpacing: [0.5, 0.5],
-        sliceThickness: 1.5,
-        slices: allUrls.map((u, idx) => ({ sliceIndex: idx + 1, imageUrl: u })),
-      },
-      {
-        seriesId: 'local-dwi',
-        seriesType: 'DWI',
-        seriesDescription: 'Ax DWI b1000 (Khuếch tán mật độ tế bào u)',
-        sliceCount: Math.max(allUrls.length, 1),
-        pixelSpacing: [0.5, 0.5],
-        sliceThickness: 4.0,
-        slices: allUrls.map((u, idx) => ({ sliceIndex: idx + 1, imageUrl: u })),
-      },
-    ];
+    if (allUrls.length > 0) {
+      return [
+        {
+          seriesId: 'local-series-1',
+          seriesType: 'T2_FLAIR',
+          seriesDescription: 'Ảnh MRI đã tải lên',
+          sliceCount: allUrls.length,
+          pixelSpacing: [0.5, 0.5],
+          sliceThickness: 3.0,
+          slices: allUrls.map((u, idx) => ({ sliceIndex: idx + 1, imageUrl: u })),
+        },
+      ];
+    }
+    return [];
   }, [manifest, images, extraImages]);
 
   const activeSeries = seriesList[activeSeriesIdx] || seriesList[0];
   const slices = activeSeries?.slices?.length
     ? activeSeries.slices
-    : (images || []).map((u, idx) => ({ sliceIndex: idx + 1, imageUrl: u }));
+    : (images || []).map((u, idx) => ({ sliceIndex: idx + 1, globalSliceIndex: idx, imageUrl: u }));
   const safeSliceIdx = Math.min(Math.max(0, activeSliceIdx), Math.max(0, slices.length - 1));
-  const currentSlice = slices[safeSliceIdx] || { sliceIndex: 1, imageUrl: images?.[0] || '' };
+  const currentSlice = slices[safeSliceIdx] || { sliceIndex: 1, globalSliceIndex: 0, imageUrl: images?.[0] || '' };
+
+  // Global slice index inside ImagingResult.images (0-based)
+  const currentGlobalSliceIdx = useMemo(() => {
+    if (typeof currentSlice?.globalSliceIndex === 'number' && currentSlice.globalSliceIndex >= 0) {
+      return currentSlice.globalSliceIndex;
+    }
+    const strippedCurrent = stripUrlQuery(currentSlice?.imageUrl);
+    if (strippedCurrent && Array.isArray(images)) {
+      const idx = images.findIndex((u) => stripUrlQuery(u) === strippedCurrent);
+      if (idx >= 0) return idx;
+    }
+    if (seriesList.length <= 1) return safeSliceIdx;
+    return safeSliceIdx;
+  }, [currentSlice, images, seriesList.length, safeSliceIdx]);
+
+  // Normalized per-slice overlays from manifest.aiOverlay.sliceOverlays or fallback aiResult.sliceResults
+  const allSliceOverlays = useMemo(() => {
+    if (Array.isArray(manifest?.aiOverlay?.sliceOverlays) && manifest.aiOverlay.sliceOverlays.length > 0) {
+      return manifest.aiOverlay.sliceOverlays;
+    }
+    if (Array.isArray(aiResult?.sliceResults) && aiResult.sliceResults.length > 0) {
+      return aiResult.sliceResults.map((sr, i) => {
+        const idx = typeof sr.sliceIndex === 'number' ? sr.sliceIndex : i;
+        const ov = sr.doctorOverride;
+        const hasDoctorClass = Boolean(ov && ov.correctedClass);
+        const hasDoctorBox = Boolean(ov && ov.correctedBoundingBox);
+        const effClass = hasDoctorClass ? ov.correctedClass : (sr.class_name || null);
+        const effBox = effClass === 'notumor'
+          ? null
+          : (hasDoctorBox ? ov.correctedBoundingBox : (hasDoctorClass ? null : (sr.bounding_box || null)));
+        return {
+          sliceIndex: idx,
+          imageUrl: sr.imageUrl || images?.[idx] || '',
+          seriesName: sr.seriesName || null,
+          sequenceType: sr.sequenceType || null,
+          plane: sr.plane || null,
+          sliceNumber: sr.sliceNumber ?? null,
+          className: effClass,
+          aiClassName: sr.class_name || null,
+          confidence: sr.confidence ?? null,
+          boundingBox: effBox,
+          aiBoundingBox: sr.class_name === 'notumor' ? null : (sr.bounding_box || null),
+          tumorLocation: sr.tumor_location || null,
+          heatmapStreamUrl: sr.heatmapStreamUrl || sr.annotated_image || null,
+          isDoctorEdited: Boolean(hasDoctorClass || hasDoctorBox),
+          doctorOverride: ov || null,
+          consensusMessage: sr.consensus_message || null,
+        };
+      });
+    }
+    return [];
+  }, [manifest, aiResult, images]);
+
+  const resolveOverlayForSlice = (sl, fallbackIdx) => {
+    if (!sl && fallbackIdx === undefined) return null;
+    const stripped = stripUrlQuery(sl?.imageUrl);
+    const isExtraHeatmap = extraImages?.some((ex) => stripUrlQuery(ex) && stripUrlQuery(ex) === stripped);
+    if (isExtraHeatmap) return null;
+
+    if (allSliceOverlays.length > 0) {
+      const byUrl = stripped
+        ? allSliceOverlays.find((ov) => stripUrlQuery(ov.imageUrl) === stripped)
+        : null;
+      if (byUrl) return byUrl;
+      const gIdx = typeof sl?.globalSliceIndex === 'number' ? sl.globalSliceIndex : fallbackIdx;
+      const byIdx = allSliceOverlays.find((ov) => ov.sliceIndex === gIdx);
+      if (byIdx) return byIdx;
+      return null;
+    }
+
+    // Legacy single-image study without sliceResults/sliceOverlays
+    const isPrimaryFallback = (typeof sl?.globalSliceIndex === 'number' ? sl.globalSliceIndex : fallbackIdx) === 0;
+    if (!isPrimaryFallback) return null;
+    const legacyClass = aiResult?.class_name || manifest?.aiOverlay?.className || null;
+    const legacyBox = legacyClass === 'notumor'
+      ? null
+      : (aiResult?.bounding_box || manifest?.aiOverlay?.boundingBox || null);
+    if (!legacyClass && !legacyBox && !manifest?.aiOverlay?.available) return null;
+    return {
+      sliceIndex: 0,
+      imageUrl: sl?.imageUrl || images?.[0] || '',
+      className: legacyClass,
+      aiClassName: legacyClass,
+      confidence: aiResult?.confidence ?? manifest?.aiOverlay?.confidence ?? null,
+      boundingBox: legacyBox,
+      aiBoundingBox: legacyBox,
+      heatmapStreamUrl: aiResult?.annotated_image || aiResult?.heatmapStreamUrl || null,
+      isDoctorEdited: Boolean(manifest?.aiOverlay?.doctorCorrection?.correctedClass || manifest?.aiOverlay?.doctorCorrection?.correctedBoundingBox),
+      doctorOverride: manifest?.aiOverlay?.doctorCorrection || null,
+    };
+  };
+
+  const activeOverlay = useMemo(
+    () => resolveOverlayForSlice(currentSlice, currentGlobalSliceIdx),
+    [currentSlice, currentGlobalSliceIdx, allSliceOverlays, aiResult, manifest, extraImages]
+  );
+
+  useEffect(() => {
+    if (externalSliceIndex === null || externalSliceIndex === undefined) return;
+    if (prevExternalSliceRef.current === externalSliceIndex) return;
+    prevExternalSliceRef.current = externalSliceIndex;
+    if (externalSliceIndex === currentGlobalSliceIdx) return;
+    const targetUrl = stripUrlQuery(images?.[externalSliceIndex]);
+    for (let sIdx = 0; sIdx < seriesList.length; sIdx++) {
+      const sls = seriesList[sIdx]?.slices || [];
+      const foundIdx = sls.findIndex(
+        (sl, lIdx) =>
+          (typeof sl.globalSliceIndex === 'number' && sl.globalSliceIndex === externalSliceIndex) ||
+          (targetUrl && stripUrlQuery(sl.imageUrl) === targetUrl) ||
+          (seriesList.length === 1 && lIdx === externalSliceIndex)
+      );
+      if (foundIdx >= 0) {
+        setActiveSeriesIdx(sIdx);
+        setActiveSliceIdx(foundIdx);
+        return;
+      }
+    }
+  }, [externalSliceIndex, seriesList, images, currentGlobalSliceIdx]);
+
+  useEffect(() => {
+    if (typeof onActiveSliceChange === 'function') {
+      onActiveSliceChange({
+        sliceIndex: currentGlobalSliceIdx,
+        seriesSliceIndex: safeSliceIdx,
+        totalSlices: images?.length || slices.length || 1,
+        imageUrl: currentSlice?.imageUrl || '',
+        seriesName: activeOverlay?.seriesName || currentSlice?.seriesName || activeSeries?.seriesDescription || activeSeries?.seriesType || '',
+        sequenceType: activeOverlay?.sequenceType || activeSeries?.seriesType || '',
+        sliceMeta: currentSlice?.metadata || null,
+        fileName: currentSlice?.fileName || null,
+        overlay: activeOverlay,
+      });
+    }
+  }, [currentGlobalSliceIdx, safeSliceIdx, currentSlice?.imageUrl, activeSeries?.seriesType, activeOverlay]);
 
   // Windowed Slice Prefetching: Chỉ tải trước các lát cắt lân cận [safeSliceIdx - 2 ... safeSliceIdx + 5]
   // để lăn chuột mượt mà mà không làm nghẽn băng thông mạng nội bộ bệnh viện
@@ -218,12 +385,19 @@ const DicomWebViewer = ({
     [d1Mm, d2Mm, effectivePriorCross, manifest]
   );
 
-  const webFilterStyle =
+  const webFilterOnlyStyle =
     Platform.OS === 'web'
       ? {
           filter: `brightness(${selectedPreset.brightness}%) contrast(${selectedPreset.contrast}%) ${
             invertColors ? 'invert(100%)' : ''
           }`,
+        }
+      : {};
+
+  const webFilterStyle =
+    Platform.OS === 'web'
+      ? {
+          ...webFilterOnlyStyle,
           transform: [{ scale: zoomLevel }],
         }
       : {
@@ -241,9 +415,12 @@ const DicomWebViewer = ({
 
   const handlePushMeasurement = () => {
     if (!onApplyMeasurement) return;
+    const numD1 = Number(d1Mm) || 0;
+    const numD2 = Number(d2Mm) || 0;
+    if (numD1 <= 0 || numD2 <= 0) return;
     onApplyMeasurement({
-      d1Mm: Number(d1Mm) || 0,
-      d2Mm: Number(d2Mm) || 0,
+      d1Mm: numD1,
+      d2Mm: numD2,
       d3Mm: Number(d3Mm) || 0,
       crossProductMm2: ranoEval.crossProductMm2,
       priorCrossProductMm2: effectivePriorCross,
@@ -255,12 +432,63 @@ const DicomWebViewer = ({
     });
   };
 
-  const aiBox = manifest?.aiOverlay?.boundingBox || { x: 0.54, y: 0.34, width: 0.24, height: 0.26 };
-  const aiClassName =
-    aiResult?.class_name || manifest?.aiOverlay?.className || null;
-  const aiConfidence =
-    aiResult?.confidence || manifest?.aiOverlay?.confidence || null;
-  const hasAiData = Boolean(aiClassName && aiClassName !== 'notumor') || Boolean(manifest?.aiOverlay?.available);
+  const aiClassName = activeOverlay?.className || null;
+  const aiRawClassName = activeOverlay?.aiClassName || aiClassName;
+  const aiConfidence = activeOverlay?.confidence ?? null;
+  const isDoctorEdited = Boolean(activeOverlay?.isDoctorEdited);
+  const aiBox = aiClassName === 'notumor' ? null : normalizeOverlayBox(activeOverlay?.boundingBox);
+  const aiGhostBox =
+    isDoctorEdited && aiRawClassName && aiRawClassName !== 'notumor'
+      ? normalizeOverlayBox(activeOverlay?.aiBoundingBox)
+      : null;
+  const effectiveHeatmapUrl = activeOverlay?.heatmapStreamUrl || null;
+  const hasAiData = Boolean(aiClassName && aiClassName !== 'notumor');
+  const displayedSliceUri = currentSlice?.imageUrl
+    ? resolveUrl(showHeatmap && effectiveHeatmapUrl ? effectiveHeatmapUrl : currentSlice.imageUrl)
+    : null;
+
+  useEffect(() => {
+    if (!displayedSliceUri || typeof Image?.getSize !== 'function') return;
+    let active = true;
+    Image.getSize(
+      displayedSliceUri,
+      (width, height) => {
+        if (active && width > 0 && height > 0) {
+          setSliceNaturalSize({ width, height });
+        }
+      },
+      () => {}
+    );
+    return () => {
+      active = false;
+    };
+  }, [displayedSliceUri]);
+
+  const overlayRenderRect = useMemo(() => {
+    const cW = canvasLayout.width;
+    const cH = canvasLayout.height;
+    const nW = sliceNaturalSize.width > 0 ? sliceNaturalSize.width : 512;
+    const nH = sliceNaturalSize.height > 0 ? sliceNaturalSize.height : 512;
+    if (!cW || !cH) {
+      return { left: 0, top: 0, width: '100%', height: '100%' };
+    }
+    const containerAspect = cW / cH;
+    const imageAspect = nW / nH;
+    let renderW = cW;
+    let renderH = cH;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (containerAspect > imageAspect) {
+      renderH = cH;
+      renderW = cH * imageAspect;
+      offsetX = (cW - renderW) / 2;
+    } else {
+      renderW = cW;
+      renderH = cW / imageAspect;
+      offsetY = (cH - renderH) / 2;
+    }
+    return { left: offsetX, top: offsetY, width: renderW, height: renderH };
+  }, [canvasLayout.width, canvasLayout.height, sliceNaturalSize.width, sliceNaturalSize.height]);
 
   const ranoBadge = RANO_BADGE_COLORS[ranoEval.category] || RANO_BADGE_COLORS['N/A'];
 
@@ -291,6 +519,38 @@ const DicomWebViewer = ({
               AI Overlay {showAiOverlay ? 'BẬT' : 'TẮT'}
             </Text>
           </TouchableOpacity>
+
+          {effectiveHeatmapUrl && (
+            <TouchableOpacity
+              style={[styles.toolBtn, showHeatmap && styles.toolBtnActiveHeatmap]}
+              onPress={() => setShowHeatmap(!showHeatmap)}
+            >
+              <Activity size={13} color={showHeatmap ? '#FFFFFF' : '#F472B6'} />
+              <Text style={[styles.toolBtnText, showHeatmap && { color: '#FFFFFF', fontWeight: '800' }]}>
+                {showHeatmap ? 'Đang bật Heatmap' : 'Xem Heatmap'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {canEditAiRoi && typeof onEditSliceRoi === 'function' && (
+            <TouchableOpacity
+              style={[styles.toolBtn, styles.toolBtnActiveEdit]}
+              onPress={() =>
+                onEditSliceRoi({
+                  sliceIndex: currentGlobalSliceIdx,
+                  seriesSliceIndex: safeSliceIdx,
+                  imageUrl: currentSlice?.imageUrl || '',
+                  seriesName: activeOverlay?.seriesName || currentSlice?.seriesName || activeSeries?.seriesType || '',
+                  overlay: activeOverlay,
+                })
+              }
+            >
+              <Edit3 size={13} color="#FDE68A" />
+              <Text style={[styles.toolBtnText, { color: '#FEF3C7', fontWeight: '800' }]}>
+                Hiệu chỉnh ROI lát này
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.toolBtn, caliperMode && styles.toolBtnActiveCyan]}
@@ -409,42 +669,108 @@ const DicomWebViewer = ({
           </View>
 
           {/* Slice Image */}
-          <View style={styles.canvasCenter}>
-            {currentSlice?.imageUrl ? (
-              <Image
-                source={{ uri: resolveUrl(currentSlice.imageUrl) }}
-                style={[styles.dicomImage, webFilterStyle]}
-                resizeMode="contain"
-              />
+          <View
+            style={styles.canvasCenter}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              if (width > 0 && height > 0) {
+                setCanvasLayout({ width, height });
+              }
+            }}
+          >
+            {displayedSliceUri ? (
+              <View style={[styles.canvasZoomWrap, { transform: [{ scale: zoomLevel }] }]}>
+                <Image
+                  source={{ uri: displayedSliceUri }}
+                  style={[styles.dicomImage, webFilterOnlyStyle]}
+                  resizeMode="contain"
+                  onLoad={(e) => {
+                    const w = e?.nativeEvent?.source?.width;
+                    const h = e?.nativeEvent?.source?.height;
+                    if (w > 0 && h > 0) {
+                      setSliceNaturalSize({ width: w, height: h });
+                    }
+                  }}
+                />
+                <View pointerEvents="none" style={[styles.overlayRenderBox, overlayRenderRect]}>
+                  {/* Original AI Ghost Box when Doctor has overridden the box */}
+                  {showAiOverlay && isDoctorEdited && aiGhostBox && (
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        styles.aiGhostBoundingBox,
+                        {
+                          left: `${(aiGhostBox.x * 100).toFixed(1)}%`,
+                          top: `${(aiGhostBox.y * 100).toFixed(1)}%`,
+                          width: `${(aiGhostBox.width * 100).toFixed(1)}%`,
+                          height: `${(aiGhostBox.height * 100).toFixed(1)}%`,
+                        },
+                      ]}
+                    >
+                      <View style={styles.aiGhostTag}>
+                        <Text style={styles.aiGhostTagText}>
+                          AI gốc: {(aiRawClassName || 'TUMOR').toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Effective Tumor Bounding Box Overlay (Doctor-corrected or AI) */}
+                  {showAiOverlay && hasAiData && aiBox && (
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        isDoctorEdited ? styles.doctorBoundingBox : styles.aiBoundingBox,
+                        {
+                          left: `${(aiBox.x * 100).toFixed(1)}%`,
+                          top: `${(aiBox.y * 100).toFixed(1)}%`,
+                          width: `${(aiBox.width * 100).toFixed(1)}%`,
+                          height: `${(aiBox.height * 100).toFixed(1)}%`,
+                        },
+                      ]}
+                    >
+                      <View style={isDoctorEdited ? styles.doctorBoxTag : styles.aiBoxTag}>
+                        {isDoctorEdited ? (
+                          <Edit3 size={10} color="#FFFFFF" />
+                        ) : (
+                          <Activity size={10} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.aiBoxTagText}>
+                          {isDoctorEdited ? 'BS HIỆU CHỈNH: ' : 'AI: '}
+                          {(aiClassName || 'TUMOR').toUpperCase()}
+                          {!isDoctorEdited && aiConfidence ? ` (${aiConfidence}%)` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
             ) : (
-              <Text style={{ color: '#64748B', fontSize: 13 }}>Chưa có ảnh lát cắt</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>
+                {currentSlice?.unreadPixelReason || 'Chưa có ảnh lát cắt'}
+              </Text>
             )}
 
-            {/* AI Tumor Bounding Box Overlay */}
-            {showAiOverlay && hasAiData && (
+            {/* Status badge when active slice AI is notumor or no box */}
+            {showAiOverlay && activeOverlay?.className === 'notumor' && (
               <View
                 pointerEvents="none"
                 style={[
-                  styles.aiBoundingBox,
-                  {
-                    left: `${Math.round((aiBox.x || 0.54) * 100)}%`,
-                    top: `${Math.round((aiBox.y || 0.34) * 100)}%`,
-                    width: `${Math.round((aiBox.width || 0.22) * 100)}%`,
-                    height: `${Math.round((aiBox.height || 0.24) * 100)}%`,
-                  },
+                  styles.sliceStatusPill,
+                  isDoctorEdited && { borderColor: '#F59E0B', backgroundColor: 'rgba(120, 53, 15, 0.85)' },
                 ]}
               >
-                <View style={styles.aiBoxTag}>
-                  <Activity size={10} color="#FFFFFF" />
-                  <Text style={styles.aiBoxTagText}>
-                    AI: {(aiClassName || 'TUMOR').toUpperCase()} {aiConfidence ? `(${aiConfidence}%)` : ''}
-                  </Text>
-                </View>
+                <CheckCircle2 size={11} color={isDoctorEdited ? '#FDE68A' : '#6EE7B7'} />
+                <Text style={styles.sliceStatusPillText}>
+                  {isDoctorEdited
+                    ? `BS hiệu chỉnh: KHÔNG THẤY U${aiRawClassName && aiRawClassName !== 'notumor' ? ` (AI cũ: ${aiRawClassName.toUpperCase()})` : ''}`
+                    : `AI lát #${currentGlobalSliceIdx + 1}: Bình thường${aiConfidence ? ` (${aiConfidence}%)` : ''}`}
+                </Text>
               </View>
             )}
 
             {/* 2D RANO Caliper Perpendicular Crosshair Overlay */}
-            {caliperMode && (
+            {caliperMode && Boolean(Number(d1Mm) && Number(d2Mm)) && (
               <View pointerEvents="none" style={styles.caliperOverlay}>
                 <View style={styles.caliperTargetBox}>
                   <View style={styles.caliperLineHorizontal} />
@@ -462,6 +788,8 @@ const DicomWebViewer = ({
           <View style={styles.hudBottomLeft}>
             <Text style={styles.hudSliceBadge}>
               Lát cắt (Slice): {safeSliceIdx + 1} / {slices.length}
+              {seriesList.length > 1 ? ` (Tổng #${currentGlobalSliceIdx + 1})` : ''}
+              {activeOverlay?.seriesName ? ` • ${activeOverlay.seriesName}` : ''}
             </Text>
           </View>
 
@@ -543,15 +871,28 @@ const DicomWebViewer = ({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliceDotsRow}>
           {slices.map((sl, idx) => {
             const active = idx === safeSliceIdx;
+            const slOverlay = resolveOverlayForSlice(sl, idx);
+            const hasTumor = Boolean(slOverlay?.className && slOverlay.className !== 'notumor');
+            const edited = Boolean(slOverlay?.isDoctorEdited);
             return (
               <TouchableOpacity
                 key={idx}
                 style={[styles.slicePill, active && styles.slicePillActive]}
                 onPress={() => setActiveSliceIdx(idx)}
               >
-                <Text style={[styles.slicePillText, active && styles.slicePillTextActive]}>
-                  #{idx + 1}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {(hasTumor || edited) && (
+                    <View
+                      style={[
+                        styles.sliceTumorDot,
+                        { backgroundColor: edited ? '#F59E0B' : '#EF4444' },
+                      ]}
+                    />
+                  )}
+                  <Text style={[styles.slicePillText, active && styles.slicePillTextActive]}>
+                    #{idx + 1}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -673,7 +1014,7 @@ const DicomWebViewer = ({
             </View>
           )}
 
-          {canMeasure && onApplyMeasurement && (
+          {canMeasure && onApplyMeasurement && Boolean(Number(d1Mm) && Number(d2Mm)) && (
             <TouchableOpacity style={styles.pushReportBtn} onPress={handlePushMeasurement}>
               <CheckCircle2 size={15} color="#0F172A" />
               <Text style={styles.pushReportBtnText}>
@@ -751,6 +1092,14 @@ const styles = StyleSheet.create({
   toolBtnActivePurple: {
     backgroundColor: '#4C1D95',
     borderColor: '#8B5CF6',
+  },
+  toolBtnActiveHeatmap: {
+    backgroundColor: '#9D174D',
+    borderColor: '#F472B6',
+  },
+  toolBtnActiveEdit: {
+    backgroundColor: '#78350F',
+    borderColor: '#F59E0B',
   },
   toolBtnActiveCyan: {
     backgroundColor: '#38BDF8',
@@ -862,6 +1211,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  canvasZoomWrap: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  overlayRenderBox: {
+    position: 'absolute',
   },
   dicomImage: {
     width: '100%',
@@ -922,6 +1282,66 @@ const styles = StyleSheet.create({
     borderColor: '#EF4444',
     backgroundColor: 'rgba(239, 68, 68, 0.14)',
     borderRadius: 4,
+  },
+  doctorBoundingBox: {
+    position: 'absolute',
+    borderWidth: 2.5,
+    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderRadius: 4,
+  },
+  aiGhostBoundingBox: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(239, 68, 68, 0.75)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    borderRadius: 4,
+  },
+  aiGhostTag: {
+    position: 'absolute',
+    bottom: -18,
+    left: 0,
+    backgroundColor: 'rgba(127, 29, 29, 0.85)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  aiGhostTagText: {
+    color: '#FECACA',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  doctorBoxTag: {
+    position: 'absolute',
+    top: -20,
+    left: 0,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sliceStatusPill: {
+    position: 'absolute',
+    top: 48,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(6, 78, 59, 0.85)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  sliceStatusPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   aiBoxTag: {
     position: 'absolute',
@@ -1030,6 +1450,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     borderRadius: 4,
     backgroundColor: '#1E293B',
+  },
+  sliceTumorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   slicePillActive: {
     backgroundColor: '#38BDF8',
