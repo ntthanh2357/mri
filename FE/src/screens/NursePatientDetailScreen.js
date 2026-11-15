@@ -199,17 +199,21 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (patient.visitId) {
       setEffectiveVisitId(patient.visitId);
-    } else if (patient._id) {
+    } else if (safetyPatientId || patient._id) {
+      const targetId = String(safetyPatientId || patient._id);
       get('/api/v1/visits/my-queue')
         .then(res => {
-          const v = (res.visits || []).find(it => 
-            (it.patientId?._id === patient._id || it.patientId === patient._id)
+          const matches = (res.visits || []).filter(it =>
+            it.patientId?._id === targetId ||
+            it.patientId === targetId ||
+            it.patientId?.profile?.medicalId === targetId
           );
+          const v = matches.find(it => !['đã đóng', 'đã hủy'].includes(it.status)) || matches[0];
           if (v?._id) setEffectiveVisitId(v._id);
         })
         .catch(e => console.log("Không tìm thấy queue visit:", e));
     }
-  }, [patient._id, patient.visitId]);
+  }, [patient._id, patient.visitId, safetyPatientId]);
 
   // 1. Fetch logged in user to show nurse name on signatures
   useEffect(() => {

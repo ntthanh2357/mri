@@ -75,9 +75,10 @@ export const createPatientAtDesk = async (req, res) => {
     if (cccd && (await User.exists({ "profile.cccdHash": hashCccd(cccd) }))) {
       return errorResponse(res, "Số CCCD này đã có hồ sơ. Hãy tìm kiếm bệnh nhân thay vì tạo mới.", 409);
     }
-    if (email && (await User.exists({ email }))) {
-      return errorResponse(res, "Email này đã được sử dụng cho một tài khoản khác.", 409);
-    }
+    // Email nhận thông báo có thể trùng với một tài khoản khác đã tồn tại (VD: email người nhà hoặc tài khoản test).
+    // Nếu email chưa thuộc tài khoản nào → dùng luôn làm email đăng nhập; nếu đã có tài khoản khác dùng → chỉ lưu vào profile.notificationEmail
+    // và giữ email đăng nhập dạng *.local duy nhất theo mã y tế để tránh lỗi trùng khóa unique.
+    const emailTaken = email ? Boolean(await User.exists({ email })) : false;
 
     // Cấp mã y tế tiếp theo dạng BN### trong bệnh viện
     const lastWithId = await User.find({ hospitalId, role: "patient", "profile.medicalId": /^BN\d+$/ })
@@ -85,8 +86,9 @@ export const createPatientAtDesk = async (req, res) => {
     const maxNo = lastWithId.reduce((m, u) => Math.max(m, Number(u.profile.medicalId.slice(2)) || 0), 0);
     const medicalId = `BN${String(maxNo + 1).padStart(3, "0")}`;
 
-    // Tài khoản cổng bệnh nhân: email thật nếu có, nếu không dùng email nội bộ theo mã y tế
-    const loginEmail = email || `${medicalId.toLowerCase()}.${String(hospitalId).slice(-6)}@benhnhan.neuroscan.local`;
+    // Tài khoản cổng bệnh nhân: email thật nếu chưa ai dùng, ngược lại dùng email nội bộ theo mã y tế
+    const internalEmail = `${medicalId.toLowerCase()}.${String(hospitalId).slice(-6)}@benhnhan.neuroscan.local`;
+    const loginEmail = email && !emailTaken ? email : internalEmail;
     const passwordHash = await bcrypt.hash(crypto.randomBytes(12).toString("hex"), 10);
 
     const patient = await User.create({
@@ -95,13 +97,14 @@ export const createPatientAtDesk = async (req, res) => {
       passwordHash,
       role: "patient",
       hospitalId,
-      isVerified: !!email,
+      isVerified: Boolean(email && !emailTaken),
       profile: {
         name,
         medicalId,
         gender: ["Nam", "Nữ", "Khác"].includes(gender) ? gender : "",
         birthYear,
         address: String(address).trim(),
+        notificationEmail: email || "",
         cccdHash: cccd ? hashCccd(cccd) : null,
         cccdLast4: cccd ? cccd.slice(-4) : "",
         phoneLast4: phone ? phone.slice(-4) : "",
@@ -131,12 +134,23 @@ export const updatePatientEmail = async (req, res) => {
     if (!["admin", "system_admin"].includes(req.user.role) && String(patient.hospitalId) !== String(req.user.hospitalId)) {
       return errorResponse(res, "Không có quyền cập nhật bệnh nhân của bệnh viện khác.", 403);
     }
-    if (await User.exists({ email, _id: { $ne: patient._id } })) {
-      return errorResponse(res, "Email này đã được dùng cho một tài khoản khác.", 409);
+    const emailTakenByOther = Boolean(await User.exists({ email, _id: { $ne: patient._id } }));
+    patient.profile = patient.profile || {};
+    patient.profile.notificationEmail = email;
+    if (!emailTakenByOther) {
+      patient.email = email; // email chưa ai đăng ký → đồng bộ làm tên đăng nhập cổng bệnh nhân
     }
-    patient.email = email; // email cũng là tên đăng nhập cổng bệnh nhân
     await patient.save();
-    return successResponse(res, { _id: patient._id, email: patient.email }, "Đã cập nhật email nhận thông báo.");
+    return successResponse(
+      res,
+      {
+        _id: patient._id,
+        email: patient.email,
+        notificationEmail: patient.profile.notificationEmail,
+        profile: patient.profile,
+      },
+      "Đã cập nhật email nhận thông báo."
+    );
   } catch (error) {
     return errorResponse(res, "Không thể cập nhật email: " + error.message, inputErrorStatus(res, error));
   }
@@ -215,6 +229,7 @@ export const getPatients = async (req, res) => {
       const searchConditions = [
         { "profile.medicalId": searchRegex },
         { email: searchRegex },
+        { "profile.notificationEmail": searchRegex },
         { "profile.phone": searchRegex },
         { "profile.name": searchRegex },
         { "profile.fullName": searchRegex }

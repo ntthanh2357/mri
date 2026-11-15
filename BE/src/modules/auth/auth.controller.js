@@ -1434,38 +1434,138 @@ export const phoneLoginVerify = async (req, res) => {
   }
 };
 
+const ALLOWED_GENDERS = ["Nam", "Nữ", "Khác", ""];
+
+const parseProfileDob = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  let y;
+  let m;
+  let d;
+  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (dmy) {
+    d = Number(dmy[1]);
+    m = Number(dmy[2]);
+    y = Number(dmy[3]);
+  } else if (ymd) {
+    y = Number(ymd[1]);
+    m = Number(ymd[2]);
+    d = Number(ymd[3]);
+  } else {
+    const parsed = new Date(s);
+    if (Number.isNaN(parsed.getTime())) return undefined;
+    y = parsed.getUTCFullYear();
+    m = parsed.getUTCMonth() + 1;
+    d = parsed.getUTCDate();
+  }
+  const now = new Date();
+  if (y < 1900 || y > now.getFullYear() || m < 1 || m > 12 || d < 1 || d > 31) return undefined;
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return undefined;
+  if (dt.getTime() > Date.now()) return undefined;
+  return dt;
+};
+
+const ageFromDob = (dobDate) => {
+  if (!dobDate) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dobDate.getUTCFullYear();
+  const monthDiff = (now.getMonth() + 1) - (dobDate.getUTCMonth() + 1);
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dobDate.getUTCDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : 0;
+};
+
 // @desc    Update user profile (Self edit)
 // @route   PUT /api/v1/auth/profile
 // @access  Private
 export const updateProfile = async (req, res) => {
   try {
-    const { name, phone, address } = req.body;
+    const { name, fullName, phone, address, gender, dob, dateOfBirth, birthYear, specialty } = req.body;
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: "Không tìm thấy người dùng." });
     }
 
-    if (name && name.trim()) {
-      user.profile = user.profile || {};
-      user.profile.name = name.trim();
+    user.profile = user.profile || {};
+
+    if (name !== undefined) {
+      const cleanName = String(name || "").trim();
+      if (!cleanName) {
+        return res.status(400).json({ success: false, message: "Họ và tên không được để trống." });
+      }
+      user.profile.name = cleanName;
+    }
+
+    if (fullName !== undefined) {
+      user.profile.fullName = String(fullName || "").trim();
+    }
+
+    if (gender !== undefined) {
+      const cleanGender = String(gender || "").trim();
+      if (!ALLOWED_GENDERS.includes(cleanGender)) {
+        return res.status(400).json({ success: false, message: "Giới tính không hợp lệ (chọn Nam, Nữ hoặc Khác)." });
+      }
+      user.profile.gender = cleanGender;
+    }
+
+    const dobInput = dob !== undefined ? dob : dateOfBirth;
+    if (dobInput !== undefined) {
+      if (dobInput === null || String(dobInput).trim() === "") {
+        user.profile.dob = null;
+        user.profile.birthYear = null;
+        user.profile.age = null;
+      } else {
+        const parsedDob = parseProfileDob(dobInput);
+        if (!parsedDob) {
+          return res.status(400).json({ success: false, message: "Ngày sinh không hợp lệ (định dạng DD/MM/YYYY hoặc YYYY-MM-DD, không vượt quá ngày hiện tại)." });
+        }
+        user.profile.dob = parsedDob;
+        user.profile.birthYear = parsedDob.getUTCFullYear();
+        user.profile.age = ageFromDob(parsedDob);
+      }
+    } else if (birthYear !== undefined) {
+      if (birthYear === null || String(birthYear).trim() === "") {
+        user.profile.birthYear = null;
+        user.profile.age = null;
+      } else {
+        const yr = Number(birthYear);
+        const curYear = new Date().getFullYear();
+        if (!Number.isInteger(yr) || yr < 1900 || yr > curYear) {
+          return res.status(400).json({ success: false, message: "Năm sinh không hợp lệ." });
+        }
+        user.profile.birthYear = yr;
+        user.profile.age = curYear - yr;
+      }
     }
 
     if (address !== undefined) {
-      user.profile = user.profile || {};
-      user.profile.address = address.trim();
+      user.profile.address = String(address || "").trim();
     }
 
-    if (phone && phone.trim()) {
-      const hashed = hashPhone(phone.trim());
+    if (specialty !== undefined && user.role !== "patient") {
+      user.profile.specialty = String(specialty || "").trim();
+    }
+
+    if (phone && String(phone).trim()) {
+      const cleanPhone = String(phone).trim();
+      const hashed = hashPhone(cleanPhone);
       const phoneExists = await User.findOne({ phone: hashed, _id: { $ne: user._id } });
       if (phoneExists) {
         return res.status(400).json({ success: false, message: "Số điện thoại này đã được sử dụng bởi tài khoản khác." });
       }
       user.phone = hashed;
+      const digits = cleanPhone.replace(/\D/g, "");
+      if (digits.length >= 4) {
+        user.profile.phoneLast4 = digits.slice(-4);
+      }
     }
 
     user.markModified("profile");
     await user.save();
+    authCache.invalidateUser(user._id.toString());
 
     res.status(200).json({
       success: true,
@@ -1476,6 +1576,7 @@ export const updateProfile = async (req, res) => {
         email: user.email,
         role: user.role,
         hospitalId: user.hospitalId,
+        departmentId: user.departmentId,
         isVerified: user.isVerified,
         profile: user.profile,
       }

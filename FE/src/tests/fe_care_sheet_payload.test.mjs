@@ -102,5 +102,27 @@ test('thông tin hỗ trợ: không còn hotline mẫu 1800 1234, không còn k�
   assert.doesNotMatch(adminMenu, /route: 'Financials'/);
 });
 
+test('điều dưỡng: menu gọn, không phân công bác sĩ/điều dưỡng, có nút điều chỉnh sàng lọc trong bệnh án', () => {
+  const layout = read('components/ResponsiveLayout.js');
+  const nurseMenu = layout.slice(layout.indexOf("case 'nurse':"), layout.indexOf('];', layout.indexOf("case 'nurse':")));
+  for (const excluded of ['NurseReception', 'DoctorWorkQueue', 'TaskBoard', 'EmergencyHistory', 'ScanRecordQr']) {
+    assert.doesNotMatch(nurseMenu, new RegExp(`route: '${excluded}'`), excluded);
+  }
+  assert.match(nurseMenu, /label: 'Gọi đo sinh hiệu', route: 'NurseTriage'/);
+  assert.match(nurseMenu, /label: 'Nhập sinh hiệu', route: 'EMRDashboard', params: \{ tab: 'nurseQueue' \}/);
+
+  const reception = read('screens/NurseReceptionScreen.js');
+  assert.match(reception, /isNurseRole = user\?\.role === 'nurse'/);
+  assert.match(reception, /\.filter\(\(t\) => !isNurseRole \|\| t\.key === 'myQueue'\)/);
+  assert.match(reception, /\{activeTab === 'createVisit' && !isNurseRole && \(/);
+  assert.match(reception, /\{!isNurseRole && \([\s\S]*Phân công bác sĩ[\s\S]*Phân công điều dưỡng/);
+
+  const safetyStrip = read('components/staff/PatientSafetyStrip.js');
+  assert.match(safetyStrip, /const canEdit = role === 'nurse'/);
+  assert.match(safetyStrip, /Điều chỉnh sàng lọc/);
+  assert.match(safetyStrip, /Sàng lọc ngay/);
+  assert.match(safetyStrip, /<PreScreeningModal/);
+});
+
 console.log(`\nSUMMARY: ${passed}/${passed + failed} CARE SHEET & CLICK-AUDIT TESTS ${failed ? 'FAILED' : 'PASSED'}`);
 if (failed) process.exit(1);

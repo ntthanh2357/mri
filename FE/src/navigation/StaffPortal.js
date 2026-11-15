@@ -19,8 +19,9 @@ import { Platform, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { navigationRef, resetTo } from '../utils/navigationRef';
-import { get, setAuthToken } from '../services/api.service';
+import { get, setAuthToken, getToken } from '../services/api.service';
 import performLogout from '../utils/logout';
+import { installInactivityGuard, SESSION_IDLE_TIMEOUT_MS } from '../utils/inactivityGuard';
 
 import StaffLoginScreen from '../screens/StaffLoginScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -173,32 +174,19 @@ const StaffPortalNavigator = () => {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    let timeoutId;
-    const TIMEOUT_MS = 15 * 60 * 1000;
-
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleSessionTimeout, TIMEOUT_MS);
-    };
-
-    const handleSessionTimeout = async () => {
-      try { await performLogout(); } catch (e) { /* bỏ qua */ }
-      resetTo('StaffLogin');
-      Alert.alert(
-        'Phiên nội bộ đã đóng',
-        'Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật dữ liệu bệnh án.',
-        [{ text: 'Đăng nhập lại' }]
-      );
-    };
-
-    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'popstate'];
-    events.forEach((e) => window.addEventListener(e, resetTimer));
-    resetTimer();
-
-    return () => {
-      clearTimeout(timeoutId);
-      events.forEach((e) => window.removeEventListener(e, resetTimer));
-    };
+    return installInactivityGuard({
+      timeoutMs: SESSION_IDLE_TIMEOUT_MS,
+      hasActiveSession: async () => Boolean(await getToken()),
+      onTimeout: async () => {
+        try { await performLogout(); } catch (e) { /* bỏ qua */ }
+        resetTo('StaffLogin');
+        Alert.alert(
+          'Phiên nội bộ đã đóng',
+          'Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật dữ liệu bệnh án.',
+          [{ text: 'Đăng nhập lại' }]
+        );
+      },
+    });
   }, []);
 
   return (

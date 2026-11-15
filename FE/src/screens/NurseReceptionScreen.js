@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -81,8 +81,9 @@ const formatDateDigits = (text) => {
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
 };
 
-// Email liên hệ thật (tài khoản tạo tại quầy trước đây dùng địa chỉ nội bộ *.local)
+// Email liên hệ thật (tài khoản tạo tại quầy trước đây hoặc tài khoản dùng chung email thông báo dùng địa chỉ nội bộ *.local để đăng nhập)
 const hasRealEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '')) && !String(email).toLowerCase().endsWith('.local');
+const patientNotifyEmail = (p) => [p?.profile?.notificationEmail, p?.email, p?.profile?.email].find(hasRealEmail) || '';
 
 const normName = (s) => String(s || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 // Đặt thông tin in trên thẻ cạnh hồ sơ → 'ok' | 'mismatch' | 'na' (một bên chưa có dữ liệu)
@@ -98,18 +99,32 @@ const compareHolderRows = (profile = {}, holder = {}) => {
 
 const NurseReceptionScreen = ({ route, navigation }) => {
   const { dialog, confirm: confirmDialog, notify } = useAppDialog();
-  const [activeTab, setActiveTab] = useState(route.params?.tab || 'createVisit'); // 'createVisit' | 'callQueue' | 'myQueue' | 'billing'
+  const [activeTab, setActiveTab] = useState(
+    route.params?.user?.role === 'nurse' ? 'myQueue' : (route.params?.tab || 'createVisit')
+  ); // 'createVisit' | 'callQueue' | 'myQueue' | 'billing'
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const fetchVisitsRef = useRef(null);
+  const handleQueueSync = useCallback(() => {
+    if (activeTabRef.current === 'myQueue') fetchVisitsRef.current?.(true);
+  }, []);
   // UC-PAT-03: số thứ tự bệnh nhân lấy online
-  const queueDesk = useQueueDesk();
+  const queueDesk = useQueueDesk({ onSync: handleQueueSync });
   const queueWaiting = queueDesk.tickets.filter((t) => ['waiting', 'arrived', 'missed'].includes(t.status)).length;
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(route.params?.user || null);
 
+  const isNurseRole = user?.role === 'nurse';
+
   useEffect(() => {
+    if (isNurseRole) {
+      if (activeTab !== 'myQueue') setActiveTab('myQueue');
+      return;
+    }
     if (route.params?.tab) {
       setActiveTab(route.params.tab);
     }
-  }, [route.params?.tab]);
+  }, [route.params?.tab, isNurseRole, activeTab]);
 
   // createVisit Tab State
   const [patients, setPatients] = useState([]);
@@ -120,7 +135,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const [selectedPatientId, setSelectedPatientId] = useState('');
   // Tiếp nhận số → sang form tạo lượt khám, chọn sẵn bệnh nhân (kể cả khi danh sách bệnh nhân chưa có người này)
   const serveFromQueue = (patient) => {
-    if (!patient?._id) return;
+    if (!patient?._id || isNurseRole) return;
     setPatients((prev) => (prev.some((p) => p._id === patient._id) ? prev : [patient, ...prev]));
     setSelectedPatientId(patient._id);
     setActiveTab('createVisit');
@@ -324,22 +339,26 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   }, [user]);
 
   useEffect(() => {
-    if (route.params?.tab) {
-      setActiveTab(route.params.tab);
-    }
-  }, [route.params?.tab]);
-
-  useEffect(() => {
     let isMounted = true;
     if (activeTab === 'createVisit') {
       fetchStaffAndPatients();
+    } else if (activeTab === 'callQueue') {
+      queueDesk.reload();
     } else if (activeTab === 'myQueue') {
       fetchVisits();
     } else if (activeTab === 'billing') {
       fetchInvoices();
     }
     return () => { isMounted = false; };
-  }, [activeTab]);
+  }, [activeTab, queueDesk.reload]);
+
+  useEffect(() => {
+    if (!navigation?.addListener) return undefined;
+    return navigation.addListener('focus', () => {
+      queueDesk.reload();
+      if (activeTabRef.current === 'myQueue') fetchVisitsRef.current?.(true);
+    });
+  }, [navigation, queueDesk.reload]);
 
   // ── UC-REC-01: tra cứu bệnh nhân (tên / email / mã y tế lọc tại chỗ; SĐT / CCCD tra trên máy chủ) ──
   const [serverMatchIds, setServerMatchIds] = useState([]);
@@ -385,17 +404,18 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     }
   };
 
-  const fetchVisits = async () => {
-    setLoading(true);
+  const fetchVisits = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await get('/api/v1/visits/my-queue');
       setVisits(res.visits || []);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+  fetchVisitsRef.current = fetchVisits;
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -469,8 +489,19 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     setSavingEmail(true);
     try {
       const res = await put(`/api/patients/${selectedPatientId}/email`, { email: emailDraft });
-      setPatients((prev) => prev.map((p) => (p._id === selectedPatientId ? { ...p, email: res?.data?.email || emailDraft } : p)));
-      notify('Đã lưu email', `Bệnh nhân sẽ nhận thông báo lịch khám, dời lịch chụp và hoàn tiền qua ${emailDraft}.`);
+      const savedNotifyEmail = res?.data?.notificationEmail || emailDraft;
+      setPatients((prev) =>
+        prev.map((p) =>
+          p._id === selectedPatientId
+            ? {
+                ...p,
+                email: res?.data?.email || p.email,
+                profile: { ...(p.profile || {}), notificationEmail: savedNotifyEmail },
+              }
+            : p
+        )
+      );
+      notify('Đã lưu email', `Bệnh nhân sẽ nhận thông báo lịch khám, dời lịch chụp và hoàn tiền qua ${savedNotifyEmail}.`);
     } catch (err) {
       notify('Lỗi', err.message || 'Không thể cập nhật email.');
     } finally {
@@ -851,7 +882,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const canApplyBhyt = isFeatureEnabled('bhyt') && (!user?.role || ['receptionist', 'admin', 'hospital_admin'].includes(user.role));
   const canDeclareBhyt = canApplyBhyt; // UC-REC-02: khai báo / xác minh thẻ cũng chỉ lễ tân
   const headerTitle = user?.role === 'receptionist' ? 'Bàn Lễ tân & Thu ngân BHYT' :
-                      user?.role === 'nurse' ? 'Bàn Tiếp nhận & Đo Sinh hiệu Điều dưỡng' : 'Tiếp nhận & Thu ngân';
+                      user?.role === 'nurse' ? 'Theo dõi lượt khám hôm nay' : 'Tiếp nhận & Thu ngân';
 
   const isPaidStatus = (st) => st === 'đã thanh toán';
   const owedOf = (inv) => inv.patientPayAmount ?? ((inv.totalAmount || 0) - (inv.bhytInfo?.bhytAmount || 0));
@@ -872,7 +903,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
   const doneCount = stepsDone.filter(Boolean).length;
   // Phải hoàn thành đủ 4 bước (kể cả lý do khám) mới được tạo lượt khám
   // UC-REC-04: bệnh nhân phải có email để nhận thông báo (ca cấp cứu được bổ sung sau)
-  const patientEmailOk = !selectedPatient || hasRealEmail(selectedPatient.email) || visitPriority === 'khẩn cấp';
+  const patientEmailOk = !selectedPatient || hasRealEmail(patientNotifyEmail(selectedPatient)) || visitPriority === 'khẩn cấp';
   const canSubmit = stepsDone.every(Boolean) && patientEmailOk;
   const missingSteps = [...['bệnh nhân', 'bác sĩ', 'điều dưỡng', 'lý do khám'].filter((_, i) => !stepsDone[i]), ...(patientEmailOk ? [] : ['email bệnh nhân'])];
   const REASON_CHIPS = ['Đau đầu kéo dài', 'Tái khám u não', 'Chụp MRI theo hẹn', 'Co giật', 'Mờ mắt, chóng mặt', 'Khám tổng quát'];
@@ -933,7 +964,9 @@ const NurseReceptionScreen = ({ route, navigation }) => {
     { key: 'callQueue', label: 'Gọi số', icon: Ticket, count: queueWaiting, warn: true },
     { key: 'myQueue', label: 'Lượt khám hôm nay', icon: ClipboardList, count: visits.length },
     { key: 'billing', label: isFeatureEnabled('bhyt') ? 'Thu ngân & BHYT' : 'Thu ngân', icon: Wallet, count: pendingInvoicesCount, warn: true },
-  ].filter((t) => t.key !== 'billing' || !user?.role || can(user.role, 'invoicePay')); // BE chỉ cho lễ tân, BGĐ thu tiền
+  ]
+    .filter((t) => t.key !== 'billing' || !user?.role || can(user.role, 'invoicePay')) // BE chỉ cho lễ tân, BGĐ thu tiền
+    .filter((t) => !isNurseRole || t.key === 'myQueue'); // Điều dưỡng chỉ xem lượt khám hôm nay, không tiếp nhận/phân công bác sĩ & điều dưỡng
 
   const banner = activeTab === 'createVisit' ? (
     <ReceptionBanner
@@ -1042,7 +1075,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
             {activeTab === 'callQueue' && <QueueDesk desk={queueDesk} onServe={serveFromQueue} />}
 
             {/* ═════════════ TAB 1: TIẾP NHẬN (WIZARD) ═════════════ */}
-            {activeTab === 'createVisit' && (
+            {activeTab === 'createVisit' && !isNurseRole && (
               <View style={[st.wizard, isWide && { flexDirection: 'row' }]}>
                 <View style={[{ gap: 18 }, isWide && { flex: 1.65 }]}>
                   {/* Bước 1 */}
@@ -1123,7 +1156,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                           </TouchableOpacity>
                         );
                       })}
-                      {selectedPatient && !hasRealEmail(selectedPatient.email) && (
+                      {selectedPatient && !hasRealEmail(patientNotifyEmail(selectedPatient)) && (
                         <View style={st.emailBox}>
                           <Text style={st.emailBoxTitle}>Bệnh nhân chưa có email nhận thông báo{visitPriority === 'khẩn cấp' ? ' (ca cấp cứu: có thể bổ sung sau)' : ''}</Text>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1146,64 +1179,69 @@ const NurseReceptionScreen = ({ route, navigation }) => {
                     </View>
                   </Reveal>
 
-                  {/* Bước 2 */}
-                  <Reveal delay={80} style={st.stepCard}>
-                    <StepHead n={2} done={stepsDone[1]} title="Phân công bác sĩ" hint="Thanh tải thể hiện số bệnh nhân đang chờ của từng bác sĩ" />
-                    <View style={st.doctorGrid}>
-                      {doctors.map(d => {
-                        const q = d.queueSize || 0;
-                        const active = selectedDoctorId === d._id;
-                        const isLeastBusy = d._id === leastBusyDoctorId;
-                        const loadColor = q === 0 ? '#0F9D6B' : q >= 5 ? '#DC2626' : '#D97706';
-                        return (
-                          <TouchableOpacity
-                            key={d._id}
-                            style={[st.doctorCard, active && st.doctorCardActive, { width: isWide ? '48.8%' : '100%' }]}
-                            onPress={() => setSelectedDoctorId(d._id)}
-                            dataSet={active ? undefined : { hover: 'lift' }}
-                          >
-                            <Avatar name={personName(d)} size={44} />
-                            <View style={{ flex: 1 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={[st.doctorName, active && { color: '#FFFFFF' }]} numberOfLines={1}>{personName(d)}</Text>
-                              </View>
-                              <View style={st.loadTrack}>
-                                <View style={[st.loadFill, { width: `${Math.min(q / 6, 1) * 100}%`, backgroundColor: active ? '#FFFFFF' : loadColor }]} />
-                              </View>
-                              <Text style={[st.loadText, active && { color: '#DBEAFE' }]}>{q} bệnh nhân đang chờ</Text>
-                            </View>
-                            {isLeastBusy && (
-                              <View style={[st.suggest, active && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                                <Sparkles size={12} color={active ? '#FFFFFF' : '#0F9D6B'} />
-                                <Text style={[st.suggestText, active && { color: '#FFFFFF' }]}>Gợi ý</Text>
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </Reveal>
+                  {/* Bước 2 & Bước 3: Điều dưỡng không có phân công bác sĩ/điều dưỡng */}
+                  {!isNurseRole && (
+                    <>
+                      {/* Bước 2 */}
+                      <Reveal delay={80} style={st.stepCard}>
+                        <StepHead n={2} done={stepsDone[1]} title="Phân công bác sĩ" hint="Thanh tải thể hiện số bệnh nhân đang chờ của từng bác sĩ" />
+                        <View style={st.doctorGrid}>
+                          {doctors.map(d => {
+                            const q = d.queueSize || 0;
+                            const active = selectedDoctorId === d._id;
+                            const isLeastBusy = d._id === leastBusyDoctorId;
+                            const loadColor = q === 0 ? '#0F9D6B' : q >= 5 ? '#DC2626' : '#D97706';
+                            return (
+                              <TouchableOpacity
+                                key={d._id}
+                                style={[st.doctorCard, active && st.doctorCardActive, { width: isWide ? '48.8%' : '100%' }]}
+                                onPress={() => setSelectedDoctorId(d._id)}
+                                dataSet={active ? undefined : { hover: 'lift' }}
+                              >
+                                <Avatar name={personName(d)} size={44} />
+                                <View style={{ flex: 1 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={[st.doctorName, active && { color: '#FFFFFF' }]} numberOfLines={1}>{personName(d)}</Text>
+                                  </View>
+                                  <View style={st.loadTrack}>
+                                    <View style={[st.loadFill, { width: `${Math.min(q / 6, 1) * 100}%`, backgroundColor: active ? '#FFFFFF' : loadColor }]} />
+                                  </View>
+                                  <Text style={[st.loadText, active && { color: '#DBEAFE' }]}>{q} bệnh nhân đang chờ</Text>
+                                </View>
+                                {isLeastBusy && (
+                                  <View style={[st.suggest, active && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                                    <Sparkles size={12} color={active ? '#FFFFFF' : '#0F9D6B'} />
+                                    <Text style={[st.suggestText, active && { color: '#FFFFFF' }]}>Gợi ý</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </Reveal>
 
-                  {/* Bước 3 */}
-                  <Reveal delay={140} style={st.stepCard}>
-                    <StepHead n={3} done={stepsDone[2]} title="Phân công điều dưỡng" hint="Điều dưỡng sẽ đo sinh hiệu trước khi bác sĩ khám" />
-                    <View style={st.chipWrap}>
-                      {nurses.map(n => {
-                        const active = selectedNurseId === n._id;
-                        return (
-                          <TouchableOpacity
-                            key={n._id}
-                            style={[st.nurseChip, active && st.nurseChipActive]}
-                            onPress={() => setSelectedNurseId(n._id)}
-                            dataSet={active ? undefined : { hover: 'lift' }}
-                          >
-                            <Avatar name={personName(n)} size={30} />
-                            <Text style={[st.nurseText, active && { color: '#FFFFFF' }]} numberOfLines={1}>{personName(n)}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </Reveal>
+                      {/* Bước 3 */}
+                      <Reveal delay={140} style={st.stepCard}>
+                        <StepHead n={3} done={stepsDone[2]} title="Phân công điều dưỡng" hint="Điều dưỡng sẽ đo sinh hiệu trước khi bác sĩ khám" />
+                        <View style={st.chipWrap}>
+                          {nurses.map(n => {
+                            const active = selectedNurseId === n._id;
+                            return (
+                              <TouchableOpacity
+                                key={n._id}
+                                style={[st.nurseChip, active && st.nurseChipActive]}
+                                onPress={() => setSelectedNurseId(n._id)}
+                                dataSet={active ? undefined : { hover: 'lift' }}
+                              >
+                                <Avatar name={personName(n)} size={30} />
+                                <Text style={[st.nurseText, active && { color: '#FFFFFF' }]} numberOfLines={1}>{personName(n)}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </Reveal>
+                    </>
+                  )}
 
                   {/* Bước 4 */}
                   <Reveal delay={200} style={st.stepCard}>
@@ -1886,7 +1924,7 @@ const NurseReceptionScreen = ({ route, navigation }) => {
               <Text style={st.fieldLabel}>Địa chỉ</Text>
               <TextInput style={st.modalInput} value={newPatient.address} onChangeText={(v) => setNewPatient({ ...newPatient, address: v })} placeholder="Số nhà, phường/xã, tỉnh/thành" placeholderTextColor="#94A3B8" />
               <Text style={st.fieldLabel}>Email nhận thông báo {newPatient.priority === 'khẩn cấp' ? '(bổ sung sau nếu chưa có)' : '*'}</Text>
-              <TextInput style={st.modalInput} value={newPatient.email} onChangeText={(v) => setNewPatient({ ...newPatient, email: v.trim() })} placeholder="VD: nguyenvanan@gmail.com — nhận lịch khám, dời lịch, hoàn tiền" placeholderTextColor="#94A3B8" autoCapitalize="none" keyboardType="email-address" />
+              <TextInput style={st.modalInput} value={newPatient.email} onChangeText={(v) => setNewPatient({ ...newPatient, email: v.trim() })} placeholder="VD: nguyenvanan@gmail.com (có thể dùng email đang có tài khoản)" placeholderTextColor="#94A3B8" autoCapitalize="none" keyboardType="email-address" />
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                 <TouchableOpacity style={st.btnGhost} onPress={() => setShowNewPatient(false)}>

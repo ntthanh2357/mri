@@ -205,9 +205,15 @@ export const sendMriRescheduleEmail = async ({ toEmail, patientName, oldTime, ne
 };
 
 // ─── UC-REC: email thông báo cho bệnh nhân (tạo lượt khám, hoàn tiền) ─────────────────────
-/** Email liên hệ thật của bệnh nhân (tài khoản tạo tại quầy không có email dùng địa chỉ nội bộ *.local) */
+/** Email liên hệ thật của bệnh nhân (tài khoản tạo tại quầy không có email hoặc dùng chung email thông báo dùng địa chỉ nội bộ *.local để đăng nhập) */
 export const hasRealEmail = (email) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "")) && !String(email).toLowerCase().endsWith(".local");
+
+/** Lấy email nhận thông báo của bệnh nhân (ưu tiên profile.notificationEmail để không vướng unique email đăng nhập) */
+export const resolvePatientNotificationEmail = (patient) => {
+  const candidates = [patient?.profile?.notificationEmail, patient?.email, patient?.profile?.email];
+  return candidates.find((e) => hasRealEmail(e)) || "";
+};
 
 const fmtVNTime = (d) => (d ? new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—");
 const formatMoney = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;

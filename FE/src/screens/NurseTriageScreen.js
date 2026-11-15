@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, ActivityIndicator, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -14,7 +14,7 @@ import { RISK_META } from '../utils/preScreening';
 // UC-NUR-01 — Tiếp nhận & gọi bệnh nhân đo sinh hiệu (chỉ role điều dưỡng).
 // Xem danh sách bệnh nhân đã tiếp đón trong ngày → gọi người bệnh vào phòng đo sinh hiệu ban đầu.
 
-const POLL_MS = 20000;
+const POLL_MS = 5000;
 const ROOMS = ['Phòng đo sinh hiệu 01', 'Phòng đo sinh hiệu 02', 'Phòng đo sinh hiệu 03'];
 const pad = (n) => String(n).padStart(3, '0');
 const nameOf = (p) => p?.profile?.name || p?.profile?.fullName || p?.email || 'Bệnh nhân';
@@ -60,7 +60,11 @@ const NurseTriageScreen = ({ navigation }) => {
   const [now, setNow] = useState(Date.now());
   const [tab, setTab] = useState('pending');
   // UC-PAT-03: số thứ tự bệnh nhân lấy online — gộp chung với bảng gọi sinh hiệu
-  const queueDesk = useQueueDesk();
+  const loadVisitsRef = useRef(null);
+  const handleQueueSync = useCallback(() => {
+    loadVisitsRef.current?.(true);
+  }, []);
+  const queueDesk = useQueueDesk({ onSync: handleQueueSync });
   const [search, setSearch] = useState('');
   const [room, setRoom] = useState(ROOMS[0]);
   const [roomOpen, setRoomOpen] = useState(false);
@@ -91,15 +95,19 @@ const NurseTriageScreen = ({ navigation }) => {
       setLoading(false);
     }
   }, []);
+  loadVisitsRef.current = load;
 
   useEffect(() => {
     if (!isNurse) return undefined;
     load();
     const poll = setInterval(() => load(true), POLL_MS);
     const clock = setInterval(() => setNow(Date.now()), 30000);
-    const unsub = navigation?.addListener ? navigation.addListener('focus', () => load(true)) : null;
+    const unsub = navigation?.addListener ? navigation.addListener('focus', () => {
+      load(true);
+      queueDesk.reload();
+    }) : null;
     return () => { clearInterval(poll); clearInterval(clock); if (unsub) unsub(); };
-  }, [isNurse, load, navigation]);
+  }, [isNurse, load, navigation, queueDesk.reload]);
 
   const data = useMemo(() => {
     const ordered = [...visits].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -263,8 +271,8 @@ const NurseTriageScreen = ({ navigation }) => {
           {st === 'called' ? (
             <>
               <Btn label="Vắng" disabled={busy} onPress={() => runTicket(() => queueDesk.markMissed(t._id))} />
-              <Btn label="Tiếp nhận" icon="user-plus" variant="primary" disabled={busy}
-                onPress={() => runTicket(() => queueDesk.markServed(t._id), (tk2) => navigation.navigate('NurseReception', { tab: 'createVisit', queuePatient: tk2?.patientId || t.patientId }))} />
+              <Btn label="Đã tiếp nhận" icon="check" variant="primary" disabled={busy}
+                onPress={() => runTicket(() => queueDesk.markServed(t._id))} />
             </>
           ) : st === 'waiting' || st === 'missed' ? (
             <Btn label="Đã tới" disabled={busy} onPress={() => runTicket(() => queueDesk.markArrived(t._id))} />
@@ -302,7 +310,7 @@ const NurseTriageScreen = ({ navigation }) => {
             image={RECEPTION_IMAGES.waiting}
             tone="teal"
             eyebrow="Phòng đo sinh hiệu"
-            title="Tiếp nhận & gọi đo sinh hiệu"
+            title="Gọi đo sinh hiệu & sàng lọc"
             subtitle="Gọi lần lượt bệnh nhân lễ tân đã tiếp nhận (và số lấy online) vào phòng đo sinh hiệu ban đầu."
             right={(
               <BannerStats items={[

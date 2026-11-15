@@ -2,6 +2,7 @@ import { QueueTicket } from "../models/queueTicket.model.js";
 import { QueueCounter } from "../models/queueCounter.model.js";
 import "../models/user.model.js"; // đăng ký model User cho populate
 import { Hospital } from "../models/hospital.model.js";
+import { publishQueueEvent } from "./queueEvents.service.js";
 
 /**
  * UC-PAT-03 — Lấy số tiếp đón online.
@@ -68,6 +69,7 @@ export const saveQueueSettings = async (hospitalId, body) => {
   const { settings, error } = normalizeQueueSettings(body);
   if (error) throw httpError(400, error);
   await Hospital.updateOne({ _id: hospitalId }, { $set: { "queueSettings.avgServeMinutes": settings.avgServeMinutes } });
+  publishQueueEvent(hospitalId, { type: "settings.updated" });
   return settings;
 };
 
@@ -89,7 +91,9 @@ export const takeTicket = async (patientId, hospitalId, now = new Date()) => {
     { $inc: { lastNumber: 1 }, $setOnInsert: { cursor: 0 } },
     { upsert: true, new: true }
   );
-  return QueueTicket.create({ hospitalId, patientId, dateKey, number: counter.lastNumber });
+  const ticket = await QueueTicket.create({ hospitalId, patientId, dateKey, number: counter.lastNumber });
+  publishQueueEvent(hospitalId, { type: "ticket.taken", number: ticket.number, dateKey });
+  return ticket;
 };
 
 export const getMyTicket = async (patientId, hospitalId, now = new Date()) => {
@@ -107,6 +111,7 @@ export const cancelMyTicket = async (patientId, hospitalId, now = new Date()) =>
     { new: true }
   );
   if (!ticket) throw httpError(404, "Bạn không có số nào đang chờ.");
+  publishQueueEvent(hospitalId, { type: "ticket.cancelled", number: ticket.number, dateKey: ticket.dateKey });
   return ticket;
 };
 
@@ -140,26 +145,28 @@ export const callNext = async (hospitalId, now = new Date()) => {
     ).populate("patientId", PATIENT_FIELDS);
     if (!called) continue;
     if (called.number > cursor) await QueueCounter.updateOne({ hospitalId, dateKey }, { $max: { cursor: called.number } });
+    publishQueueEvent(hospitalId, { type: "ticket.called", number: called.number, dateKey });
     return called;
   }
   throw httpError(409, "Số vừa được quầy khác gọi, vui lòng bấm gọi lại.");
 };
 
-const transition = async (hospitalId, id, from, set, message) => {
+const transition = async (hospitalId, id, from, set, message, eventType) => {
   const ticket = await QueueTicket.findOneAndUpdate(
     { _id: id, hospitalId, status: { $in: from } },
     { $set: set },
     { new: true }
   ).populate("patientId", PATIENT_FIELDS);
   if (!ticket) throw httpError(409, message);
+  publishQueueEvent(hospitalId, { type: eventType, number: ticket.number, dateKey: ticket.dateKey });
   return ticket;
 };
 
 export const markMissed = (hospitalId, id, now = new Date()) =>
-  transition(hospitalId, id, ["called"], { status: "missed", missedAt: now }, "Chỉ đánh dấu vắng được số đang gọi.");
+  transition(hospitalId, id, ["called"], { status: "missed", missedAt: now }, "Chỉ đánh dấu vắng được số đang gọi.", "ticket.missed");
 
 export const markArrived = (hospitalId, id, now = new Date()) =>
-  transition(hospitalId, id, ["waiting", "missed"], { status: "arrived", arrivedAt: now }, "Số này không ở trạng thái chờ hoặc vắng.");
+  transition(hospitalId, id, ["waiting", "missed"], { status: "arrived", arrivedAt: now }, "Số này không ở trạng thái chờ hoặc vắng.", "ticket.arrived");
 
 export const markServed = (hospitalId, id, now = new Date()) =>
-  transition(hospitalId, id, ["called", "arrived"], { status: "served", servedAt: now }, "Chỉ tiếp nhận được số đang gọi hoặc đã có mặt.");
+  transition(hospitalId, id, ["called", "arrived"], { status: "served", servedAt: now }, "Chỉ tiếp nhận được số đang gọi hoặc đã có mặt.", "ticket.served");

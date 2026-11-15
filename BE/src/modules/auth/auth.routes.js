@@ -27,7 +27,7 @@ const router = Router();
 
 // Các trường định danh/xác thực luôn là chuỗi; kiểu khác (số, mảng, object) bị chặn 400 trước controller
 // để không rơi vào `email.trim is not a function` → 500.
-const AUTH_STRING_FIELDS = ["email", "password", "otp", "phone", "idToken", "roleType", "currentPassword", "newPassword", "newEmail", "name", "hospitalName"];
+const AUTH_STRING_FIELDS = ["email", "password", "otp", "phone", "idToken", "roleType", "currentPassword", "newPassword", "newEmail", "name", "fullName", "hospitalName", "gender", "dob", "dateOfBirth", "address", "specialty"];
 router.use((req, res, next) => {
   const body = req.body;
   if (!body || typeof body !== "object" || Array.isArray(body)) return next();

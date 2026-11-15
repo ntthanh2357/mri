@@ -63,6 +63,8 @@ import {
   Edit3,
   Save,
 } from 'lucide-react';
+import ProfileFormFields from './ProfileFormFields';
+import { formatDobDisplay, formatDobSummary, buildProfilePayload } from '../utils/profileFields';
 
 const DEPARTMENT_LABELS = {
   'KUTN-SURG': 'Phẫu thuật & Hồi tỉnh Mở Sọ (KUTN-SURG)',
@@ -116,6 +118,8 @@ const ResponsiveLayout = ({
   const [profileLoading, setProfileLoading] = React.useState(false);
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [editName, setEditName] = React.useState('');
+  const [editGender, setEditGender] = React.useState('');
+  const [editDob, setEditDob] = React.useState('');
   const [editPhone, setEditPhone] = React.useState('');
   const [editAddress, setEditAddress] = React.useState('');
   const [savingProfile, setSavingProfile] = React.useState(false);
@@ -220,25 +224,30 @@ const ResponsiveLayout = ({
   const startEditProfile = () => {
     setProfileFeedback(null);
     setEditName(localUser?.profile?.name || localUser?.profile?.fullName || '');
+    setEditGender(localUser?.profile?.gender || '');
+    setEditDob(formatDobDisplay(localUser?.profile?.dob));
     setEditPhone('');
     setEditAddress(localUser?.profile?.address || '');
     setIsEditingProfile(true);
   };
 
   const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      setProfileFeedback({ type: 'error', text: 'Vui lòng nhập họ và tên.' });
+    const built = buildProfilePayload({
+      name: editName,
+      phone: editPhone,
+      address: editAddress,
+      gender: editGender,
+      dobText: editDob,
+    });
+    if (!built.ok) {
+      setProfileFeedback({ type: 'error', text: built.error });
       return;
     }
     setSavingProfile(true);
     setProfileFeedback(null);
     try {
       const { put } = require('../services/api.service');
-      const res = await put('/auth/profile', {
-        name: editName.trim(),
-        phone: editPhone.trim() || undefined,
-        address: editAddress.trim() || undefined,
-      });
+      const res = await put('/auth/profile', built.payload);
       if (res && res.success) {
         const updatedUser = { ...localUser, ...res.user };
         setLocalUser(updatedUser);
@@ -401,13 +410,9 @@ const ResponsiveLayout = ({
       case 'nurse':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
-          { label: 'Tiếp nhận', route: 'NurseTriage', icon: Users },
-          { label: 'Nhập sinh hiệu', route: 'NurseReception', params: { tab: 'myQueue' }, icon: ClipboardList },
-          { label: 'Hàng chờ ca khám', route: 'DoctorWorkQueue', params: { tab: 'examQueue' }, icon: Activity },
-          { label: 'Y lệnh miệng chờ đọc lại', route: 'VerbalOrders', icon: ClipboardCheck },
-          { label: 'Công việc ca trực', route: 'TaskBoard', icon: ClipboardList },
-          { label: 'Lịch sử cấp cứu', route: 'EmergencyHistory', icon: AlertTriangle },
-          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
+          { label: 'Gọi đo sinh hiệu', route: 'NurseTriage', icon: Activity },
+          { label: 'Nhập sinh hiệu', route: 'EMRDashboard', params: { tab: 'nurseQueue' }, icon: ClipboardList },
+          { label: 'Y lệnh miệng', route: 'VerbalOrders', icon: ClipboardCheck },
           { label: 'Sơ đồ giường bệnh', route: 'EMRDashboard', params: { tab: 'beds' }, icon: Building2 },
           { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
           { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
@@ -541,6 +546,16 @@ const ResponsiveLayout = ({
         ? { icon: User, label: isPatient ? 'Mã bệnh nhân' : 'Mã nhân sự / Y tế', value: localUser.profile.medicalId }
         : null,
       {
+        icon: Users,
+        label: 'Giới tính',
+        value: localUser?.profile?.gender || 'Chưa cập nhật',
+      },
+      {
+        icon: Calendar,
+        label: 'Ngày tháng năm sinh',
+        value: formatDobSummary(localUser?.profile),
+      },
+      {
         icon: Phone,
         label: 'Số điện thoại',
         value: localUser?.profile?.phoneLast4
@@ -614,38 +629,21 @@ const ResponsiveLayout = ({
                 <Text style={[styles.modalSub, { marginTop: 8 }]}>Đang tải thông tin tài khoản…</Text>
               </View>
             ) : isEditingProfile ? (
-              <ScrollView style={{ maxHeight: 360, marginTop: 8 }}>
-                <View style={styles.profileField}>
-                  <Text style={styles.profileFieldLabel}>Họ và tên *</Text>
-                  <TextInput
-                    style={styles.profileInput}
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Nhập họ và tên"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-                <View style={styles.profileField}>
-                  <Text style={styles.profileFieldLabel}>Số điện thoại mới (để trống nếu giữ nguyên)</Text>
-                  <TextInput
-                    style={styles.profileInput}
-                    value={editPhone}
-                    onChangeText={setEditPhone}
-                    placeholder="Ví dụ: 0912345678"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="phone-pad"
-                  />
-                </View>
-                <View style={styles.profileField}>
-                  <Text style={styles.profileFieldLabel}>Địa chỉ liên hệ</Text>
-                  <TextInput
-                    style={styles.profileInput}
-                    value={editAddress}
-                    onChangeText={setEditAddress}
-                    placeholder="Nhập địa chỉ"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
+              <ScrollView style={{ maxHeight: 400, marginTop: 8 }}>
+                <ProfileFormFields
+                  name={editName}
+                  onChangeName={setEditName}
+                  gender={editGender}
+                  onChangeGender={setEditGender}
+                  dobText={editDob}
+                  onChangeDobText={setEditDob}
+                  phone={editPhone}
+                  onChangePhone={setEditPhone}
+                  phoneLast4={localUser?.profile?.phoneLast4}
+                  address={editAddress}
+                  onChangeAddress={setEditAddress}
+                  accentColor={theme.accent}
+                />
               </ScrollView>
             ) : (
               <ScrollView style={{ maxHeight: 360, marginTop: 8 }}>

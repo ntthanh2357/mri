@@ -13,7 +13,7 @@ import { executeWithTransaction } from "../../utils/transaction.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 import { hasFreshStepUp } from "../../services/stepUp.service.js";
 import { buildServiceItems, hasVitals } from "./servicePricing.util.js";
-import { sendRefundEmail } from "../../services/email.service.js";
+import { resolvePatientNotificationEmail, sendRefundEmail } from "../../services/email.service.js";
 import { autoApplyBhytIfEligible, reconcileBhytAfterTotalChange } from "./bhytApply.service.js";
 import { syncPrescriptionDrugs, dispenseAndCloseVisit, finalizeReceivedPayment } from "./prescriptionBilling.service.js";
 import { BhytInfo } from "./models/bhytInfo.model.js";
@@ -1544,9 +1544,11 @@ const performRefund = async (req, res, invoice, { refundReason, itemsToRefund })
     // UC-REC-04/09: gửi email thông báo hoàn tiền cho bệnh nhân
     let emailSent = false;
     try {
-      const patientDoc = await User.findById(invoice.patientId).select("email profile.name profile.fullName").lean();
+      const patientDoc = await User.findById(invoice.patientId)
+        .select("email profile.notificationEmail profile.email profile.name profile.fullName")
+        .lean();
       emailSent = await sendRefundEmail({
-        toEmail: patientDoc?.email,
+        toEmail: resolvePatientNotificationEmail(patientDoc),
         patientName: patientDoc?.profile?.name || patientDoc?.profile?.fullName || "Quý bệnh nhân",
         amount: refundedAmount,
         reason: refundReason,

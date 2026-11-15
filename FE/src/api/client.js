@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goToPortalLogin } from '../utils/navigationRef.js';
 import { cancelScheduled } from '../services/localNotifications';
 import { clearLocalClinicalData } from '../utils/localClinicalData.js';
+import { recordSessionActivity } from '../utils/inactivityGuard.js';
 
 // Helper functions for cross-platform token persistence (Web & Native Mobile)
 export const getToken = async () => {
@@ -70,7 +71,10 @@ export const setRefreshToken = async (refreshToken) => {
 
 export const setAuthToken = async (token, refreshToken = null) => {
   await setToken(token);
-  if (!token) {
+  if (token) {
+    // Đăng nhập / cấp token mới → đặt lại đồng hồ phiên từ lúc này
+    recordSessionActivity({ force: true });
+  } else {
     // hết phiên trên máy này: huỷ thông báo nhắc thuốc / lịch khám đã hẹn (máy dùng chung không lộ thông tin người trước)
     await cancelScheduled().catch((err) => console.warn('[client.js] Lỗi huỷ thông báo đã hẹn:', err?.message));
   }
@@ -146,6 +150,10 @@ export const refreshAccessToken = async () => {
 };
 
 export const request = async (endpoint, options = {}, isRetry = false) => {
+  const method = String(options?.method || 'GET').toUpperCase();
+  if (method !== 'GET' && endpoint !== '/auth/logout' && endpoint !== '/auth/refresh') {
+    recordSessionActivity();
+  }
   const url = `${Config.API_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
@@ -243,6 +251,7 @@ export const put = (endpoint, body) => request(endpoint, { method: 'PUT', body: 
 export const del = (endpoint) => request(endpoint, { method: 'DELETE' });
 
 export const postFormData = async (endpoint, formData, isRetry = false) => {
+  recordSessionActivity();
   const url = `${Config.API_URL}${endpoint}`;
   const headers = {};
   const token = await getToken();

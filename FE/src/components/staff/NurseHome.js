@@ -76,7 +76,7 @@ const NurseHome = ({ user, navigation, onEditProfile }) => {
 
   const actions = [
     { icon: Megaphone, title: 'Gọi đo sinh hiệu', desc: stats.waiting.length ? `${stats.waiting.length} người đang chờ gọi` : 'Chưa có bệnh nhân chờ', bg: '#067A5E', shade: '#05634D', go: () => navigation.navigate('NurseTriage') },
-    { icon: ClipboardList, title: 'Nhập sinh hiệu', desc: 'Phiếu khám, chỉ định & lập phiếu thu', bg: '#0F9D6B', shade: '#0B7A53', go: () => navigation.navigate('NurseReception', { tab: 'myQueue' }) },
+    { icon: ClipboardList, title: 'Nhập sinh hiệu', desc: 'Đo 5 chỉ số sinh hiệu cho bệnh nhân chờ khám', bg: '#0F9D6B', shade: '#0B7A53', go: () => navigation.navigate('EMRDashboard', { tab: 'nurseQueue' }) },
     { icon: NotebookPen, title: 'Phiếu chăm sóc', desc: 'Theo dõi người bệnh nội trú trong ca', bg: '#7C3AED', shade: '#6D28D9', go: () => navigation.navigate('EMRDashboard', { tab: 'care' }) },
     { icon: BedDouble, title: 'Sơ đồ giường bệnh', desc: beds ? `${beds.availableCount}/${beds.totalBeds} giường đang trống` : 'Phân bổ buồng giường nội trú', bg: '#4F46E5', shade: '#3730A3', go: () => navigation.navigate('EMRDashboard', { tab: 'beds' }) },
   ].filter((a) => isFeatureEnabled('beds') || a.icon !== BedDouble);

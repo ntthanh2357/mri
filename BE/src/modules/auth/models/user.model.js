@@ -207,6 +207,7 @@ const userSchema = new Schema(
         default: "",
         trim: true,
       },
+      dob: { type: Date, default: null },
       birthYear: { type: Number, default: null },
       gender: { type: String, enum: ['Nam', 'Nữ', 'Khác', ''], default: '' },
       age: { type: Number, default: null },
@@ -215,6 +216,8 @@ const userSchema = new Schema(
       cccdHash: { type: String, default: null, index: true },
       cccdLast4: { type: String, default: '' },
       phoneLast4: { type: String, default: '' },
+      // Email nhận thông báo (lịch khám, dời lịch MRI, hoàn tiền) — tách riêng khỏi email đăng nhập duy nhất để có thể dùng email của tài khoản/người nhà đã tồn tại
+      notificationEmail: { type: String, default: '', lowercase: true, trim: true },
       registeredAtDeskBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       // Module O — bổ sung cho nhân viên y tế
       specialty: { type: String, default: '' }, // neuroradiologist | neurosurgeon | general

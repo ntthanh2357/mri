@@ -4,8 +4,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Platform } from 'react-native';
 import { navigationRef, navigateTo, resetTo } from '../utils/navigationRef';
 import { isStaffPortalPath } from '../utils/portalPath';
-import { setAuthToken } from '../services/api.service';
+import { setAuthToken, getToken } from '../services/api.service';
 import performLogout from '../utils/logout';
+import { installInactivityGuard, SESSION_IDLE_TIMEOUT_MS } from '../utils/inactivityGuard';
 import StaffPortalNavigator from './StaffPortal';
 import LandingScreen from '../screens/LandingScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
@@ -81,34 +82,16 @@ const isNativeMobile = Platform.OS !== 'web';
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    let timeoutId;
-    const TIMEOUT_MS = 15 * 60 * 1000; // 15 phút
-
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleSessionTimeout, TIMEOUT_MS);
-    };
-
-    const handleSessionTimeout = async () => {
-      console.log('Session timed out due to inactivity.');
-      await performLogout();
-      resetTo('Welcome');
-      alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
-    };
-
-    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'popstate'];
-    events.forEach(event => {
-      window.addEventListener(event, resetTimer);
+    return installInactivityGuard({
+      timeoutMs: SESSION_IDLE_TIMEOUT_MS,
+      hasActiveSession: async () => Boolean(await getToken()),
+      onTimeout: async () => {
+        console.log('Session timed out due to inactivity.');
+        await performLogout();
+        resetTo('Welcome');
+        alert('Phiên làm việc của bạn đã tự động đóng sau 15 phút không tương tác để bảo mật thông tin bệnh án.');
+      },
     });
-
-    resetTimer();
-
-    return () => {
-      clearTimeout(timeoutId);
-      events.forEach(event => {
-        window.removeEventListener(event, resetTimer);
-      });
-    };
   }, []);
 
   return (

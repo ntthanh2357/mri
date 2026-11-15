@@ -34,7 +34,7 @@
     "ios": "npm run build:css && node update-ip.js && expo start --ios",
     "web": "npm run build:css && node update-ip.js && expo start --web --port 8083",
     "build:css": "npx @tailwindcss/cli -i src/index.css -o src/tailwind-built.css",
-    "test": "node src/tests/fe_models_utils.test.mjs && node src/tests/fe_navigation_linking.test.mjs && node src/tests/fe_transfer_package.test.mjs && node src/tests/fe_auth_cookie.test.mjs && node src/tests/fe_feature_scope.test.mjs && node src/tests/fe_paper_fields.test.mjs && node src/tests/fe_medical_record_payload.test.mjs && node src/tests/fe_clinical_permissions.test.mjs && node src/tests/fe_undefined_identifiers.test.mjs && node src/tests/fe_audit_fixes.test.mjs && node src/tests/fe_task_permission.test.mjs && node src/tests/fe_care_sheet_payload.test.mjs && node src/tests/fe_password_policy.test.mjs && node src/tests/fe_triage_and_roi_viewer.test.mjs"
+    "test": "node src/tests/fe_models_utils.test.mjs && node src/tests/fe_navigation_linking.test.mjs && node src/tests/fe_transfer_package.test.mjs && node src/tests/fe_auth_cookie.test.mjs && node src/tests/fe_feature_scope.test.mjs && node src/tests/fe_paper_fields.test.mjs && node src/tests/fe_medical_record_payload.test.mjs && node src/tests/fe_clinical_permissions.test.mjs && node src/tests/fe_undefined_identifiers.test.mjs && node src/tests/fe_audit_fixes.test.mjs && node src/tests/fe_task_permission.test.mjs && node src/tests/fe_care_sheet_payload.test.mjs && node src/tests/fe_password_policy.test.mjs && node src/tests/fe_triage_and_roi_viewer.test.mjs && node src/tests/fe_queue_realtime_sync.test.mjs"
   },
   "private": true,
   "devDependencies": {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { get, post, put } from '../services/api.service';
+import { notifyQueueChanged, subscribeQueueSync } from '../utils/queueSync';
 
-const POLL_MS = 30000; // dự án chưa có WebSocket: tự tải lại mỗi 30 giây
+const POLL_MS = 8000; // đồng bộ dự phòng (kết hợp SSE + focus + tab sync)
 
 /** UC-PAT-03 — số thứ tự tiếp đón hôm nay của bệnh nhân. */
 export function useQueueTicket() {
@@ -9,8 +10,23 @@ export function useQueueTicket() {
   const [hospitalId, setHospitalId] = useState(null); // chỉ dùng khi tài khoản chưa gắn bệnh viện
   const hospitalRef = useRef(null);
   hospitalRef.current = hospitalId;
+  const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
     try {
       const q = hospitalRef.current ? `?hospitalId=${hospitalRef.current}` : '';
       const res = await get(`/api/v1/queue-tickets/me${q}`);
@@ -19,24 +35,38 @@ export function useQueueTicket() {
         const h = await get('/api/v1/queue-tickets/hospitals');
         hospitals = h?.data?.hospitals || [];
       }
+      if (!mountedRef.current) return;
       setState((s) => ({ loading: false, data: res?.data || null, hospitals: hospitals.length ? hospitals : s.hospitals, error: null }));
     } catch (err) {
       console.error('Lỗi tải số thứ tự:', err);
+      if (!mountedRef.current) return;
       setState((s) => ({ ...s, loading: false, error: 'Không tải được thông tin lấy số. Vui lòng thử lại.' }));
+    } finally {
+      inFlightRef.current = false;
+      if (queuedRef.current && mountedRef.current) {
+        queuedRef.current = false;
+        load();
+      }
     }
   }, []);
 
+  const needHospital = Boolean(state.data?.needHospital && !hospitalId);
+
   useEffect(() => {
     load();
-    const timer = setInterval(load, POLL_MS);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  useEffect(() => { if (hospitalId) load(); }, [hospitalId, load]);
+    const q = hospitalId ? `?hospitalId=${hospitalId}` : '';
+    return subscribeQueueSync({
+      query: q,
+      pollMs: POLL_MS,
+      streamEnabled: !needHospital,
+      onSync: load,
+    });
+  }, [load, hospitalId, needHospital]);
 
   const act = useCallback(async (fn) => {
     try {
       const res = await fn();
+      notifyQueueChanged('ticket.updated');
       await load();
       return { ok: true, message: res?.message };
     } catch (err) {

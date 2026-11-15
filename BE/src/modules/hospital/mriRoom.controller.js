@@ -5,7 +5,7 @@ import { User } from "../auth/models/user.model.js";
 import { createNotificationInternal } from "../../controllers/notification.controller.js";
 import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { getDayRangeVN } from "../../utils/date.util.js";
-import { sendMriRescheduleEmail } from "../../services/email.service.js";
+import { resolvePatientNotificationEmail, sendMriRescheduleEmail } from "../../services/email.service.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 
 const fmtVN = (d) => new Date(d).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -609,7 +609,8 @@ export const confirmReschedule = async (req, res) => {
     let emailSent = false;
     if (originalVisitId) {
       try {
-        const originalVisit = await Visit.findById(originalVisitId).populate("patientId", "email profile.name profile.fullName");
+        const originalVisit = await Visit.findById(originalVisitId)
+          .populate("patientId", "email profile.notificationEmail profile.email profile.name profile.fullName");
         const { endOfDay: todayEnd } = getDayRangeVN(new Date());
         const win = await findFreeWindow(req.user.hospitalId, new Date(todayEnd.getTime() + 1), 7, { dayStartMin: 7 * 60, dayEndMin: 20 * 60 });
         if (win && originalVisit) {
@@ -640,7 +641,7 @@ export const confirmReschedule = async (req, res) => {
             relatedId: originalVisitId,
           });
           emailSent = await sendMriRescheduleEmail({
-            toEmail: originalVisit.patientId.email,
+            toEmail: resolvePatientNotificationEmail(originalVisit.patientId),
             patientName,
             oldTime: originalStartTime,
             newTime: newSlot?.startTime || null,

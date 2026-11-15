@@ -9,13 +9,15 @@ import {
   SafeAreaView,
   useWindowDimensions,
   Modal,
-  TextInput,
 } from 'react-native';
 import { get, put } from '../services/api.service';
 import { portalLoginRoute } from '../utils/navigationRef';
 import { isRateLimitError } from '../utils/apiErrors';
 import performLogout from '../utils/logout';
+import { safeStorage } from '../utils/safeStorage';
+import { formatDobDisplay, buildProfilePayload } from '../utils/profileFields';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import ProfileFormFields from '../components/ProfileFormFields';
 import PatientHome from '../components/patient/PatientHome';
 import StaffHome from '../components/staff/StaffHome';
 import NurseHome from '../components/staff/NurseHome';
@@ -45,40 +47,59 @@ const HomeScreen = ({ route, navigation }) => {
   // Profile edit states
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editGender, setEditGender] = useState('');
+  const [editDob, setEditDob] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState('');
+  const [profileError, setProfileError] = useState('');
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   const handleOpenEditProfile = () => {
-    setEditName(user?.profile?.name || '');
-    setEditPhone(user?.phone || ''); // hashed in DB, but users can re-type it
+    setProfileError('');
+    setEditName(user?.profile?.name || user?.profile?.fullName || '');
+    setEditGender(user?.profile?.gender || '');
+    setEditDob(formatDobDisplay(user?.profile?.dob));
+    setEditPhone('');
     setEditAddress(user?.profile?.address || '');
     setShowEditProfileModal(true);
   };
 
   const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Yêu cầu', 'Vui lòng nhập Họ và tên.');
+    const built = buildProfilePayload({
+      name: editName,
+      phone: editPhone,
+      address: editAddress,
+      gender: editGender,
+      dobText: editDob,
+    });
+    if (!built.ok) {
+      setProfileError(built.error);
+      Alert.alert('Yêu cầu', built.error);
       return;
     }
+    setProfileError('');
     setUpdatingProfile(true);
     try {
-      const res = await put('/auth/profile', {
-        name: editName.trim(),
-        phone: editPhone.trim() || undefined,
-        address: editAddress.trim() || undefined,
-      });
+      const res = await put('/auth/profile', built.payload);
 
       if (res && res.success) {
+        const mergedUser = { ...user, ...res.user };
+        try {
+          safeStorage.setItem('user', JSON.stringify(mergedUser));
+        } catch { /* bỏ qua lỗi storage */ }
         Alert.alert('Thành công', 'Đã cập nhật thông tin cá nhân thành công!');
-        setUser(res.user);
+        setUser(mergedUser);
         setShowEditProfileModal(false);
       } else {
-        Alert.alert('Lỗi', res.message || 'Cập nhật thất bại.');
+        const msg = res?.message || 'Cập nhật thất bại.';
+        setProfileError(msg);
+        Alert.alert('Lỗi', msg);
       }
     } catch (err) {
       console.error('Lỗi lưu thông tin cá nhân:', err);
-      Alert.alert('Lỗi', err.message || 'Không thể lưu thông tin cá nhân.');
+      const msg = err.message || 'Không thể lưu thông tin cá nhân.';
+      setProfileError(msg);
+      Alert.alert('Lỗi', msg);
     } finally {
       setUpdatingProfile(false);
     }
@@ -222,41 +243,29 @@ const HomeScreen = ({ route, navigation }) => {
               <Edit3 size={18} color={Colors.brandGreen} />
               <Text style={styles.modalTitle}>Chỉnh sửa thông tin cá nhân</Text>
             </View>
-            <Text style={styles.modalSub}>Cập nhật họ tên, số điện thoại và địa chỉ liên hệ của bạn.</Text>
+            <Text style={styles.modalSub}>Cập nhật họ tên, giới tính, ngày sinh, số điện thoại và địa chỉ liên hệ.</Text>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Họ và tên *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập họ và tên đầy đủ"
-                placeholderTextColor="#94A3B8"
-                value={editName}
-                onChangeText={setEditName}
-              />
-            </View>
+            {profileError ? (
+              <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#B91C1C' }}>{profileError}</Text>
+              </View>
+            ) : null}
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Số điện thoại</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số điện thoại mới"
-                placeholderTextColor="#94A3B8"
-                value={editPhone}
-                onChangeText={setEditPhone}
-                keyboardType="phone-pad"
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              <ProfileFormFields
+                name={editName}
+                onChangeName={setEditName}
+                gender={editGender}
+                onChangeGender={setEditGender}
+                dobText={editDob}
+                onChangeDobText={setEditDob}
+                phone={editPhone}
+                onChangePhone={setEditPhone}
+                phoneLast4={user?.profile?.phoneLast4}
+                address={editAddress}
+                onChangeAddress={setEditAddress}
               />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Địa chỉ</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập địa chỉ của bạn"
-                placeholderTextColor="#94A3B8"
-                value={editAddress}
-                onChangeText={setEditAddress}
-              />
-            </View>
+            </ScrollView>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity

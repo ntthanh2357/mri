@@ -1,4 +1,5 @@
 import * as service from "../services/queueTicket.service.js";
+import { formatSseEvent, subscribeQueueEvents } from "../services/queueEvents.service.js";
 import { Hospital } from "../models/hospital.model.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 
@@ -71,3 +72,46 @@ export const updateSettings = wrap(async (req, res) =>
 
 export const markServed = wrap(async (req, res) =>
   successResponse(res, await service.markServed(req.user.hospitalId, req.params.id), "Đã tiếp nhận."));
+
+// GET /api/v1/queue-tickets/stream — SSE đẩy tín hiệu cập nhật hàng đợi theo thời gian thực
+export const streamEvents = wrap(async (req, res) => {
+  const hospitalId = req.user.role === "patient" ? await patientHospitalId(req) : req.user.hospitalId;
+  if (!hospitalId) return errorResponse(res, "Vui lòng chọn bệnh viện.", 400);
+
+  req.setTimeout?.(0);
+  res.setTimeout?.(0);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  res.write(formatSseEvent("connected", { ok: true, timestamp: Date.now() }));
+
+  let closed = false;
+  const writeChunk = (chunk) => {
+    if (closed || res.writableEnded || res.destroyed) return;
+    res.write(chunk);
+  };
+
+  const isStaff = req.user.role !== "patient";
+  const unsubscribe = subscribeQueueEvents(hospitalId, (event) => {
+    if (!isStaff && !String(event?.type || "").startsWith("ticket.") && event?.type !== "settings.updated") return;
+    writeChunk(formatSseEvent("queue", event));
+  });
+
+  const heartbeat = setInterval(() => {
+    writeChunk(": ping\n\n");
+  }, 25000);
+  heartbeat.unref?.();
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+  };
+
+  req.on("close", cleanup);
+  res.on("close", cleanup);
+});

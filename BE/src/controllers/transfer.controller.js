@@ -8,7 +8,7 @@ import { ImagingResult } from "../models/imagingResult.model.js";
 import { createNotificationInternal } from "./notification.controller.js";
 import { successResponse, errorResponse } from "../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
-import { sendReferralPackageEmail } from "../services/email.service.js";
+import { resolvePatientNotificationEmail, sendReferralPackageEmail } from "../services/email.service.js";
 import { actorDisplayName } from "../utils/actorName.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
 
@@ -99,7 +99,7 @@ export const createTransferRequest = async (req, res) => {
       if (String(targetHospitalId) === String(hospitalId)) return errorResponse(res, "Bệnh viện nhận phải khác bệnh viện gửi.", 400);
       if (!(await Hospital.exists({ _id: targetHospitalId }))) return errorResponse(res, "Không tìm thấy bệnh viện nhận.", 400);
     }
-    const finalRecipientEmail = (recipientEmail || patient.email || patient.profile?.email || "").trim();
+    const finalRecipientEmail = (recipientEmail || resolvePatientNotificationEmail(patient) || "").trim();
 
     // 2. Tìm hoặc tự động phát hiện ca chụp MRI / CT mới nhất của bệnh nhân
     // Chỉ nhận phim CỦA ĐÚNG bệnh nhân này (theo mã bệnh nhân / mã y tế). Trước đây: phim theo id do client gửi
@@ -244,7 +244,7 @@ export const sendTransferEmail = async (req, res) => {
     const patientName = patient?.profile?.fullName || patient?.profile?.name || patient?.email || "Quý bệnh nhân";
     const hospitalName = transfer.hospitalId?.name || "Bệnh viện Chuyên Khoa Ung Thư Não NeuroScan";
 
-    const targetEmail = (overrideEmail || transfer.recipientEmail || patient?.email || patient?.profile?.email || "").trim();
+    const targetEmail = (overrideEmail || transfer.recipientEmail || resolvePatientNotificationEmail(patient) || "").trim();
     if (!targetEmail || !targetEmail.includes("@")) {
       return errorResponse(res, "Chưa có địa chỉ email hợp lệ của bệnh nhân. Vui lòng nhập email người nhận.", 400);
     }

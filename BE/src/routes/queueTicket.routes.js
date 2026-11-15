@@ -8,6 +8,10 @@ router.use(protect);
 
 const patientOnly = checkRole(["patient"]);
 const frontDesk = checkRole(["receptionist", "nurse", "hospital_admin"]);
+const queueParticipants = checkRole(["patient", "receptionist", "nurse", "hospital_admin"]);
+
+// Luồng SSE cập nhật hàng đợi theo thời gian thực (bệnh nhân & quầy tiếp đón)
+router.get("/stream", queueParticipants, ctrl.streamEvents);
 
 // Bệnh nhân
 router.get("/hospitals", patientOnly, ctrl.listHospitals);

@@ -11,7 +11,7 @@ import { ensureContrastConsentForVisit, CONTRAST_PROCEDURE, contrastConsentPendi
 import { getDayRangeVN } from "../utils/date.util.js";
 import { checkPatientTenancy } from "../utils/tenancy.util.js";
 import { buildVisitPrescriptionFilter } from "../utils/prescriptionScope.util.js";
-import { hasRealEmail, sendVisitCreatedEmail } from "../services/email.service.js";
+import { resolvePatientNotificationEmail, sendVisitCreatedEmail } from "../services/email.service.js";
 import {
   submitMriSafetyCheckService,
   requestMriRescanService,
@@ -27,6 +27,7 @@ import { recordAuditLog, AUDIT_ACTIONS } from "../services/auditLog.service.js";
 import { putFile } from "../services/storage/storageService.js";
 import { getMriRoomBlockMessage } from "../services/mriRoomGuard.service.js";
 import { MriSlot } from "../modules/hospital/models/mriSlot.model.js";
+import { publishQueueEvent } from "../services/queueEvents.service.js";
 
 
 // @desc    Lấy danh sách nhân viên (Bác sĩ, Điều dưỡng) cho bệnh viện hiện tại
@@ -108,9 +109,12 @@ export const createVisit = async (req, res) => {
     }
 
     // UC-REC-04: bệnh nhân phải có email để nhận thông báo lượt khám / dời lịch chụp / hoàn tiền (ca cấp cứu bổ sung sau)
-    const patientDoc = await User.findOne({ _id: patientId, role: "patient" }).select("email profile.name profile.fullName").lean();
+    const patientDoc = await User.findOne({ _id: patientId, role: "patient" })
+      .select("email profile.notificationEmail profile.email profile.name profile.fullName")
+      .lean();
     if (!patientDoc) return res.status(404).json({ message: "Không tìm thấy bệnh nhân." });
-    if (priority !== "khẩn cấp" && !hasRealEmail(patientDoc.email)) {
+    const notifyEmail = resolvePatientNotificationEmail(patientDoc);
+    if (priority !== "khẩn cấp" && !notifyEmail) {
       return res.status(400).json({
         code: "PATIENT_EMAIL_REQUIRED",
         message: "Bệnh nhân chưa có email nhận thông báo. Vui lòng cập nhật email ở bước 1 trước khi tạo lượt khám.",
@@ -227,7 +231,7 @@ export const createVisit = async (req, res) => {
     // Email xác nhận số thứ tự (không chặn phản hồi nếu gửi lỗi / chưa cấu hình SMTP)
     const doctorDoc = await User.findById(doctorId).select("profile.name").lean().catch(() => null);
     const emailSent = await sendVisitCreatedEmail({
-      toEmail: patientDoc.email,
+      toEmail: notifyEmail,
       patientName: patientDoc.profile?.name || patientDoc.profile?.fullName || "Quý bệnh nhân",
       queueNumber: visit.queueNumber,
       priority: visit.priority,
@@ -236,6 +240,7 @@ export const createVisit = async (req, res) => {
       createdAt: visit.createdAt,
     }).catch(() => false);
 
+    publishQueueEvent(hospitalId, { type: "visit.created" });
     res.status(201).json({ message: "Tạo lượt khám thành công", visit, emailSent });
   } catch (error) {
     res.status(500).json({ message: "Lỗi máy chủ", error: error.message });
@@ -407,6 +412,7 @@ export const callPatientForVitals = async (req, res) => {
       .populate("patientId", "email profile")
       .populate("doctorId", "profile.name")
       .lean();
+    publishQueueEvent(visit.hospitalId, { type: "visit.updated" });
     res.status(200).json({
       message: action === "call" ? "Đã gọi bệnh nhân vào đo sinh hiệu." : "Đã đánh dấu bệnh nhân vắng mặt.",
       visit: populated,
@@ -567,6 +573,7 @@ export const updateVitals = async (req, res) => {
       console.warn("⚠️ Không đồng bộ được sinh hiệu sang VitalSign:", syncErr.message);
     }
 
+    publishQueueEvent(visit.hospitalId, { type: "visit.updated" });
     res.status(200).json({
       message: evaluation.isAbnormal
         ? "Cập nhật sinh hiệu thành công. CẢNH BÁO: Phát hiện chỉ số vượt ngưỡng an toàn!"
