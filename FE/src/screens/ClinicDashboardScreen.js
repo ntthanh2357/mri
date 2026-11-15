@@ -59,6 +59,14 @@ import { Stethoscope, HeartPulse, Microscope, Briefcase, UserPlus, List, Save, X
 
 const getRoleBadgeStyle = (role) => {
   switch (role) {
+    case 'department_head':
+      return { bg: '#FEF3C7', text: '#92400E', label: 'Trưởng khoa' };
+    case 'radiologist':
+      return { bg: '#E0E7FF', text: '#3730A3', label: 'BS CĐHA' };
+    case 'lab_technician':
+      return { bg: '#ECFDF5', text: '#065F46', label: 'KTV XN' };
+    case 'pharmacist':
+      return { bg: '#F0FDFA', text: '#0F766E', label: 'Dược sĩ' };
     case 'doctor':
       return { bg: '#EFF6FF', text: '#1E40AF', label: 'Bác sĩ' };
     case 'nurse':
@@ -84,7 +92,11 @@ const ClinicDashboardScreen = ({ navigation }) => {
   const [loadingStaff, setLoadingStaff] = useState(false);
 
   const ROLE_LABELS = {
+    department_head: 'Trưởng khoa',
     doctor: 'Bác sĩ',
+    radiologist: 'BS CĐHA',
+    pharmacist: 'Dược sĩ',
+    lab_technician: 'KTV Xét nghiệm',
     nurse: 'Điều dưỡng',
     technician: 'Kỹ thuật viên',
     receptionist: 'Lễ tân'

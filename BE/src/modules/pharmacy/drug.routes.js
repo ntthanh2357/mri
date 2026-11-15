@@ -29,7 +29,7 @@ router.use(protect);
 // không hợp lệ", cả Queue lẫn Audit bị chết hoàn toàn).
 
 // ── Check Prescription ────────────────────────────────────────────────────────
-router.post("/check-prescription", checkRole(["doctor", "admin"]), checkPrescription);
+router.post("/check-prescription", checkRole(["doctor", "department_head", "pharmacist", "admin"]), checkPrescription);
 
 // ── Low Stock Alerts ──────────────────────────────────────────────────────────
 // [P0-Pharmacist] Dược sĩ trực tiếp theo dõi tồn kho & cảnh báo hết hạn (UC-PHA-07)
@@ -47,12 +47,12 @@ router.post("/prescriptions/:id/dispense", checkRole(["pharmacist", "hospital_ad
 router.post("/prescriptions/:id/post-hoc-review", checkRole(["pharmacist", "hospital_admin", "admin"]), postHocReviewPrescription);
 
 // ── Pharmacy Audit & Analytics ────────────────────────────────────────────────
-router.get("/audit/override-stats", checkRole(["hospital_admin", "admin", "pharmacist", "doctor"]), getDoctorOverrideStats);
+router.get("/audit/override-stats", checkRole(["hospital_admin", "admin", "pharmacist", "doctor", "department_head"]), getDoctorOverrideStats);
 
 // ── Drug CRUD (generic /:id ĐỨNG CUỐI) ───────────────────────────────────────
 // [P0-Pharmacist] Dược sĩ được tra cứu danh mục thuốc (kèm tồn kho, hạn dùng)
-router.get("/", checkRole(["doctor", "nurse", "receptionist", "technician", "pharmacist", "hospital_admin", "admin"]), getDrugs);
-router.get("/:id", checkRole(["doctor", "nurse", "receptionist", "technician", "pharmacist", "hospital_admin", "admin"]), getDrugById);
+router.get("/", checkRole(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "hospital_admin", "admin"]), getDrugs);
+router.get("/:id", checkRole(["doctor", "department_head", "radiologist", "nurse", "receptionist", "technician", "lab_technician", "pharmacist", "hospital_admin", "admin"]), getDrugById);
 router.post("/", checkRole(["hospital_admin"]), createDrug);
 router.put("/:id", checkRole(["hospital_admin"]), updateDrug);
 router.delete("/:id", checkRole(["hospital_admin"]), deleteDrug);

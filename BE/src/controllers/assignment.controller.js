@@ -13,7 +13,7 @@ import { successResponse, errorResponse } from "../utils/response.util.js";
 // @access Private (System/Admin)
 export const autoAssignDoctor = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin", "technician"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head", "technician"].includes(req.user.role)) {
       return errorResponse(res, "Không có quyền phân công bác sĩ.", 403);
     }
 
@@ -51,7 +51,7 @@ export const autoAssignDoctor = async (req, res) => {
       const visitDoctor = await User.findOne({
         _id: visit.doctorId,
         hospitalId,
-        role: "doctor",
+        role: { $in: ["doctor", "radiologist", "department_head"] },
         isLocked: false,
       }).lean();
       if (visitDoctor) {
@@ -63,7 +63,7 @@ export const autoAssignDoctor = async (req, res) => {
     if (!candidates.length) {
       const candidateQuery = {
         hospitalId,
-        role: "doctor",
+        role: { $in: ["doctor", "radiologist", "department_head"] },
         isLocked: false,
         "profile.isOnCall": true,
       };
@@ -75,7 +75,7 @@ export const autoAssignDoctor = async (req, res) => {
       // Fallback: lấy bất kỳ bác sĩ nào trong bệnh viện đang hoạt động
       const fallbackCandidates = await User.find({
         hospitalId,
-        role: "doctor",
+        role: { $in: ["doctor", "radiologist", "department_head"] },
         isLocked: false,
       }).lean();
 
@@ -154,7 +154,7 @@ export const autoAssignDoctor = async (req, res) => {
 // @access Private (Admin, Hospital_admin)
 export const overrideAssignment = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ trưởng khoa hoặc admin mới có quyền thay đổi phân công.", 403);
     }
 
@@ -191,7 +191,7 @@ export const overrideAssignment = async (req, res) => {
       return errorResponse(res, "Lý do điều chuyển cần cụ thể (tối thiểu 10 ký tự).", 400);
     }
 
-    const newDoctor = await User.findOne({ _id: newDoctorId, hospitalId: req.user.hospitalId, role: "doctor" });
+    const newDoctor = await User.findOne({ _id: newDoctorId, hospitalId: req.user.hospitalId, role: { $in: ["doctor", "radiologist", "department_head"] } });
     if (!newDoctor) return errorResponse(res, "Không tìm thấy bác sĩ mới.", 404);
     if (String(newDoctor._id) === String(assignment.doctorId)) {
       return errorResponse(res, "Bác sĩ mới trùng với bác sĩ đang phụ trách ca này.", 400);
@@ -261,7 +261,7 @@ export const overrideAssignment = async (req, res) => {
 // @access Private (Admin, Hospital_admin)
 export const getCaseloadDashboard = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin mới xem được dashboard caseload.", 403);
     }
 
@@ -270,7 +270,7 @@ export const getCaseloadDashboard = async (req, res) => {
     // Lấy tất cả bác sĩ trong bệnh viện
     const doctors = await User.find({
       hospitalId,
-      role: "doctor",
+      role: { $in: ["doctor", "radiologist", "department_head"] },
       isLocked: false
     }, "profile email").lean();
 
@@ -368,7 +368,7 @@ export const getMyAssignments = async (req, res) => {
 // @access Private (Admin)
 export const getAllAssignments = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin xem được tất cả phân công.", 403);
     }
     const { status, doctorId, limit = 20, page = 1, overridden } = req.query;

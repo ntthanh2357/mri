@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import {
   autoAssignDoctor,
   overrideAssignment,
@@ -12,11 +12,11 @@ import {
 const router = Router();
 router.use(protect);
 
-router.get("/", getAllAssignments);
-router.get("/my", getMyAssignments);
-router.get("/caseload-dashboard", getCaseloadDashboard);
-router.post("/auto-assign", autoAssignDoctor);
-router.put("/:id/override", overrideAssignment);
-router.put("/:id/acknowledge", acknowledgeAssignment);
+router.get("/", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), getAllAssignments);
+router.get("/my", checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), getMyAssignments);
+router.get("/caseload-dashboard", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), getCaseloadDashboard);
+router.post("/auto-assign", checkRole(["admin", "system_admin", "hospital_admin", "department_head", "technician"]), autoAssignDoctor);
+router.put("/:id/override", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), overrideAssignment);
+router.put("/:id/acknowledge", checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), acknowledgeAssignment);
 
 export default router;

@@ -17,6 +17,7 @@ import {
   getPrivacyConsents,
   createPrivacyConsent,
   revokePrivacyConsent,
+  approveTumorBoard,
 } from "./emr.controller.js";
 import { protect, checkRole } from "../../middlewares/auth.middleware.js";
 
@@ -25,44 +26,72 @@ const router = Router();
 // Secure all EMR routes
 router.use(protect);
 
+const EMR_READ_ROLES = [
+  "doctor",
+  "radiologist",
+  "department_head",
+  "nurse",
+  "technician",
+  "lab_technician",
+  "pharmacist",
+  "receptionist",
+  "admin",
+  "system_admin",
+  "hospital_admin",
+];
+
 router.route("/records")
-  .get(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getRecords)
-  .post(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), createRecord);
+  .get(checkRole(EMR_READ_ROLES), getRecords)
+  .post(checkRole(["doctor", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), createRecord);
 
 router.route("/records/:id")
-  .get(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getRecordById)
-  .put(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), updateRecord);
+  .get(checkRole(EMR_READ_ROLES), getRecordById)
+  .put(checkRole(["doctor", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), updateRecord);
 
 router.route("/records/:id/care-sheets")
-  .get(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), getCareSheets)
-  .post(checkRole(["doctor", "nurse", "receptionist", "admin", "hospital_admin"]), createCareSheet);
+  .get(checkRole(["doctor", "radiologist", "department_head", "nurse", "receptionist", "admin", "system_admin", "hospital_admin"]), getCareSheets)
+  .post(checkRole(["doctor", "department_head", "nurse", "admin", "system_admin", "hospital_admin"]), createCareSheet);
 
 router.route("/records/:id/consultations")
-  .get(checkRole(["doctor", "admin", "hospital_admin"]), getConsultations)
-  .post(checkRole(["doctor", "admin", "hospital_admin"]), createConsultation);
+  .get(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), getConsultations)
+  .post(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), createConsultation);
+
+router.post("/consultations/:id/approve-tumor-board", checkRole(["department_head", "hospital_admin", "admin", "system_admin"]), approveTumorBoard);
 
 router.route("/records/:id/consents")
-  .get(checkRole(["doctor", "patient", "admin", "hospital_admin"]), getConsents)
-  .post(checkRole(["doctor", "admin", "hospital_admin"]), createConsent);
+  .get(checkRole(["doctor", "department_head", "patient", "admin", "system_admin", "hospital_admin"]), getConsents)
+  .post(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), createConsent);
 
 router.route("/consents/:consentId/sign")
-  .put(checkRole(["doctor", "patient", "admin", "hospital_admin"]), signConsent);
+  .put(checkRole(["doctor", "department_head", "patient", "admin", "system_admin", "hospital_admin"]), signConsent);
 
 router.route("/records/:id/versions")
-  .get(checkRole(["doctor", "admin", "hospital_admin"]), getRecordVersions);
+  .get(checkRole(["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"]), getRecordVersions);
 
 router.route("/records/:id/addendum")
-  .post(checkRole(["doctor", "admin", "hospital_admin"]), createRecordAddendum);
+  .post(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), createRecordAddendum);
 
 router.route("/records/:id/sign")
-  .put(checkRole(["doctor", "admin", "hospital_admin"]), signMedicalRecord);
+  .put(checkRole(["doctor", "department_head", "admin", "system_admin", "hospital_admin"]), signMedicalRecord);
 
 // Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 & NĐ 13/2023: Thu thập và thu hồi sự đồng thuận
+const PRIVACY_CONSENT_ROLES = [
+  "patient",
+  "doctor",
+  "radiologist",
+  "department_head",
+  "nurse",
+  "receptionist",
+  "admin",
+  "system_admin",
+  "hospital_admin",
+];
+
 router.route("/privacy-consents")
-  .get(getPrivacyConsents)
-  .post(createPrivacyConsent);
+  .get(checkRole(PRIVACY_CONSENT_ROLES), getPrivacyConsents)
+  .post(checkRole(PRIVACY_CONSENT_ROLES), createPrivacyConsent);
 
 router.route("/privacy-consents/:id/revoke")
-  .post(revokePrivacyConsent);
+  .post(checkRole(PRIVACY_CONSENT_ROLES), revokePrivacyConsent);
 
 export default router;

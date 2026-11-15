@@ -14,6 +14,12 @@ const medicalRecordSchema = new Schema(
       required: true,
       trim: true,
     },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
     patientName: {
       type: String,
       required: true,
@@ -204,7 +210,7 @@ const medicalRecordSchema = new Schema(
       },
     ],
 
-    // [Y LỆNH MIỆNG CẤP CỨU & KÝ BỔ SUNG 24H]: Quy chế quản lý hồ sơ bệnh án
+    // [Y LỆNH MIỆNG CẤP CỨU & KÝ BỔ SUNG 24H]: Quy chế quản lý hồ sơ bệnh án & JCI IPSG.2 Read-Back
     verbalOrders: [
       {
         emergencyEventId: { type: Schema.Types.ObjectId, ref: "EmergencyAlert" },
@@ -216,13 +222,34 @@ const medicalRecordSchema = new Schema(
         nurseReceivedId: { type: Schema.Types.ObjectId, ref: "User" },
         nurseReceivedName: { type: String, default: "" },
         isReadBackConfirmed: { type: Boolean, default: true },
+        readBackConfirmedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        readBackConfirmedAt: { type: Date, default: null },
+        readBackMethod: {
+          type: String,
+          enum: ["app_confirm", "otp", "witness", "bedside_immediate"],
+          default: "bedside_immediate",
+        },
+        readBackOtpCode: { type: String, default: null },
+        readBackOtpExpires: { type: Date, default: null },
+        witnessUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        witnessUserName: { type: String, default: "" },
         countersignDeadline: { type: Date }, // Mặc định 24h từ lúc ra lệnh
         countersignedBy: { type: Schema.Types.ObjectId, ref: "User" },
         countersignedByName: { type: String, default: "" },
         countersignedAt: { type: Date, default: null },
+        signatureHash: { type: String, default: "" },
+        escalatedReadBackAt: { type: Date, default: null },
         status: {
           type: String,
-          enum: ["pending_countersign", "countersigned", "rejected"],
+          enum: [
+            "pending_readback",
+            "readback_confirmed",
+            "pending_countersign",
+            "countersigned",
+            "fully_signed",
+            "overdue_warning",
+            "rejected",
+          ],
           default: "pending_countersign",
         },
         rejectionReason: { type: String, default: "" },

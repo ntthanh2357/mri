@@ -124,6 +124,11 @@ export const loginUserService = async ({ email, password }) => {
     throw { status: 401, message: "Email hoặc mật khẩu không chính xác." };
   }
 
+  // [SINGLE DEVICE ENFORCEMENT]: Tăng tokenVersion hủy phiên cũ ở các máy khác
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+  authCache.invalidateUser(user._id);
+
   const accessToken = generateAccessToken(user._id, user.role, user.tokenVersion || 0, user.hospitalId);
   const refreshToken = generateRefreshToken(user._id, user.role, user.tokenVersion || 0, user.hospitalId);
 

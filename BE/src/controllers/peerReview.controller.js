@@ -12,7 +12,7 @@ import { getDayRangeVN } from "../utils/date.util.js";
 // @access Private (Doctor, Admin)
 export const flagForPeerReview = async (req, res) => {
   try {
-    if (!["doctor", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["doctor", "radiologist", "department_head", "admin", "system_admin", "hospital_admin"].includes(req.user.role)) {
       return errorResponse(res, "Không có quyền yêu cầu bình duyệt.", 403);
     }
 
@@ -49,7 +49,7 @@ export const flagForPeerReview = async (req, res) => {
     // Chọn reviewer thứ 2 — bác sĩ khác người đọc/khám đầu
     const reviewer2 = await User.findOne({
       hospitalId,
-      role: 'doctor',
+      role: { $in: ['doctor', 'radiologist', 'department_head'] },
       _id: { $ne: firstReaderId },
       isLocked: false,
     }).lean();
@@ -100,7 +100,7 @@ export const flagForPeerReview = async (req, res) => {
 // @access Private (Doctor)
 export const submitReview = async (req, res) => {
   try {
-    if (req.user.role !== 'doctor') {
+    if (!['doctor', 'radiologist', 'department_head'].includes(req.user.role)) {
       return errorResponse(res, "Chỉ bác sĩ mới có thể nộp kết quả bình duyệt.", 403);
     }
 
@@ -171,7 +171,7 @@ export const submitReview = async (req, res) => {
 // @access Private (Admin, Hospital_admin, Doctor with head_of_dept)
 export const finalizePeerReview = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin", "doctor"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head", "doctor", "radiologist"].includes(req.user.role)) {
       return errorResponse(res, "Không có quyền kết luận bình duyệt.", 403);
     }
 
@@ -202,7 +202,7 @@ export const finalizePeerReview = async (req, res) => {
 // @access Private (Admin, Hospital_admin)
 export const runRandomQaSampling = async (req, res) => {
   try {
-    if (!["admin", "hospital_admin"].includes(req.user.role)) {
+    if (!["admin", "system_admin", "hospital_admin", "department_head"].includes(req.user.role)) {
       return errorResponse(res, "Chỉ admin mới có thể chạy QA sampling.", 403);
     }
 
@@ -285,7 +285,7 @@ export const getPeerReviews = async (req, res) => {
     if (requestType) filter.requestType = requestType;
 
     // Bác sĩ chỉ xem review được phân công cho mình
-    if (req.user.role === 'doctor') {
+    if (['doctor', 'radiologist'].includes(req.user.role)) {
       filter.reviewerIds = req.user.id;
     }
 

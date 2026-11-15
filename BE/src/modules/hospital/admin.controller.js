@@ -11,7 +11,8 @@ import { RevenueReport } from "../../models/revenueReport.model.js";
 import { DrugReport } from "../../models/drugReport.model.js";
 import { Announcement } from "../../models/announcement.model.js";
 import bcrypt from "bcryptjs";
-import { setupHospitalDriveStructure } from "../../config/googleDrive.js";
+import { setupHospitalDriveStructure, uploadMetadataBackup } from "../../config/googleDrive.js";
+import storageService from "../../services/storage/storageService.js";
 import { getDayRangeVN } from "../../utils/date.util.js";
 
 import {
@@ -42,6 +43,72 @@ const getAiServerBase = () =>
     : "http://localhost:8000";
 const AI_SERVER_UNREACHABLE = (server) =>
   `Không kết nối được máy chủ AI (${server}). Vui lòng kiểm tra AI Server đang hoạt động rồi thử lại.`;
+
+// [BUG-MLOPS-004] Giải quyết đường dẫn tương đối tới thư mục MRIteam_team5/MRIteam (ưu tiên cấu trúc repo thực tế)
+export const resolveMriTeamFile = (relativePath) => {
+  const candidatePrimary = path.resolve(__dirname, "../../../../MRIteam_team5/MRIteam", relativePath);
+  const candidateLegacy = path.resolve(__dirname, "../../../MRIteam", relativePath);
+  if (fs.existsSync(candidatePrimary)) return candidatePrimary;
+  if (fs.existsSync(candidateLegacy)) return candidateLegacy;
+  const primaryDir = path.dirname(candidatePrimary);
+  if (fs.existsSync(path.resolve(__dirname, "../../../../MRIteam_team5/MRIteam"))) {
+    return candidatePrimary;
+  }
+  return candidateLegacy;
+};
+
+// [BUG-MLOPS-004] Tự động đính kèm X-Internal-Api-Key khi gọi các endpoint quản trị MLOps của FastAPI
+export const getInternalAiHeaders = (extraHeaders = {}) => {
+  const headers = { ...extraHeaders };
+  if (process.env.INTERNAL_AI_API_KEY) {
+    headers["X-Internal-Api-Key"] = process.env.INTERNAL_AI_API_KEY;
+  }
+  return headers;
+};
+
+// [BUG-MLOPS-002] Sao lưu phiên bản mô hình AI & bảng đối sánh (Bản cũ vs Bản mới) lên Hybrid Storage + Google Drive + AuditLog
+export const backupAiModelSnapshotToStorage = async ({ eventType, snapshot, user }) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `ai_model_${eventType}_${timestamp}.json`;
+  const payloadObj = {
+    eventType,
+    recordedAt: new Date().toISOString(),
+    performedBy: user?.id || null,
+    hospitalId: user?.hospitalId || null,
+    snapshot,
+  };
+  const buffer = Buffer.from(JSON.stringify(payloadObj, null, 2), "utf8");
+
+  let storageRecord = null;
+  try {
+    storageRecord = await storageService.put({
+      category: "backup",
+      studyId: `mlops_${eventType}_${Date.now()}`,
+      fileName,
+      buffer,
+      mimeType: "application/json",
+      uploadedBy: user?.id || null,
+      hospitalId: user?.hospitalId || null,
+    });
+  } catch (err) {
+    console.warn(`⚠️ [MLOps Backup] Không thể lưu snapshot vào Hybrid Storage: ${err.message}`);
+  }
+
+  try {
+    if (user?.hospitalId) {
+      await uploadMetadataBackup(payloadObj, user.hospitalId, `mlops_${eventType}`);
+    }
+  } catch (driveErr) {
+    console.warn(`⚠️ [MLOps Backup] Không thể đồng bộ snapshot lên Google Drive: ${driveErr.message}`);
+  }
+
+  return {
+    backedUp: Boolean(storageRecord),
+    backupFileId: storageRecord?.fileId || null,
+    backupSha256: storageRecord?.sha256 || null,
+    fileName,
+  };
+};
 
 export const fetchUsers = async (req, res) => {
   try {
@@ -228,6 +295,15 @@ export const unlockUserById = async (req, res) => {
 };
 
 // ─── 3.3b deleteUser ─────────────────────────────────────────────────────────
+const CLOSED_VISIT_STATUSES = ["hoàn tất", "đã đóng", "đã hủy", "no_show"];
+
+/**
+ * [P2-4] Xóa mềm + ẩn danh hóa theo Luật 91/2025/QH15.
+ * - Không xóa cứng: giữ ObjectId để Visit/Invoice/Prescription/ImagingResult/EMR
+ *   không bị mồ côi và còn dấu vết pháp lý.
+ * - Chặn khi còn hồ sơ đang hoạt động (lượt khám chưa đóng, hóa đơn chưa thu).
+ * - Ẩn danh PII, vô hiệu hóa đăng nhập (isLocked + tokenVersion).
+ */
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -240,13 +316,80 @@ export const deleteUser = async (req, res) => {
       res.status(404).json({ success: false, message: "Không tìm thấy người dùng" });
       return;
     }
+    if (user.isDeleted) {
+      res.status(409).json({ success: false, message: "Tài khoản này đã được xóa trước đó." });
+      return;
+    }
+    if (String(req.user.id) === String(id)) {
+      res.status(400).json({ success: false, message: "Không thể tự xóa tài khoản đang đăng nhập." });
+      return;
+    }
     if (user.role === "admin" && user.email === "admin@neuroscan.com") {
       res.status(403).json({ success: false, message: "Không thể xóa tài khoản Quản trị viên hệ thống cấp cao." });
       return;
     }
-    await User.findByIdAndDelete(id);
+    if (user.role === "system_admin") {
+      res.status(403).json({ success: false, message: "Không thể xóa tài khoản quản trị nền tảng (system_admin)." });
+      return;
+    }
+
+    // Chặn xóa khi còn hồ sơ đang hoạt động → tránh mất người chịu trách nhiệm pháp lý
+    const [activeVisits, unpaidInvoices] = await Promise.all([
+      Visit.countDocuments({
+        $or: [{ patientId: id }, { doctorId: id }, { nurseId: id }, { technicianId: id }],
+        status: { $nin: CLOSED_VISIT_STATUSES },
+      }),
+      Invoice.countDocuments({ patientId: id, status: { $in: ["chờ thanh toán", "đang xử lý"] } }),
+    ]);
+    if (activeVisits > 0 || unpaidInvoices > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Không thể xóa: người dùng còn ${activeVisits} lượt khám đang hoạt động và ${unpaidInvoices} hóa đơn chưa tất toán. Vui lòng đóng hồ sơ trước.`,
+        activeVisits,
+        unpaidInvoices,
+      });
+    }
+
+    const anonymizedEmail = `deleted_${id}@anonymized.local`;
+    await User.findByIdAndUpdate(id, {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id || req.user._id || null,
+        isLocked: true,
+        email: anonymizedEmail,
+        passwordHash: "!deleted-account-no-login!",
+        "profile.name": "Người dùng đã xóa",
+        "profile.fullName": "",
+        "profile.photoUrl": "",
+        "profile.licenseUrl": "",
+        "profile.address": "",
+        "profile.medicalId": "",
+        "profile.cccdHash": null,
+        "profile.cccdLast4": "",
+        "profile.phoneLast4": "",
+        "profile.fcmToken": null,
+        "profile.specialty": "",
+        "profile.isOnCall": false,
+        lastLoginIp: "",
+        lastLoginLocation: {},
+        loginHistory: [],
+      },
+      $unset: { phone: 1, otpCode: 1, otpExpires: 1, otp2FACode: 1, otp2FAExpires: 1 },
+      $inc: { tokenVersion: 1 },
+    });
     authCache.invalidateUser(id);
-    res.status(200).json({ success: true, message: `Đã xóa người dùng ${user.email} thành công.` });
+
+    await AuditLog.create({
+      action: "soft-delete-user",
+      entity: "User",
+      entityId: id,
+      performedBy: req.user.id || req.user._id || null,
+      hospitalId: user.hospitalId || null,
+      details: `Xóa mềm & ẩn danh tài khoản ${user.role} (${user.email}). Giữ ObjectId để bảo toàn hồ sơ liên quan.`,
+    });
+
+    res.status(200).json({ success: true, message: `Đã xóa mềm và ẩn danh người dùng ${user.email}.` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -279,6 +422,7 @@ export const verifyAdminUser = async (req, res) => {
     }
     const adminId = req.user.id;
     const user = await verifyAdminById(id, verified, adminId);
+    authCache.invalidateUser(id);
     res.status(200).json({ success: true, user });
   } catch (error) {
     if (error.message === "Admin not found") {
@@ -338,7 +482,9 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ các trường bắt buộc (email, mật khẩu, họ tên, vai trò)." });
     }
 
-    const rolesAvailable = ["patient", "doctor", "admin", "hospital_admin", "technician", "nurse", "receptionist"];
+    // [P2-17] Bổ sung pharmacist — trước đây backoffice không tạo được dược sĩ.
+    // system_admin không cho tạo từ màn hình bệnh viện (tránh tự nâng quyền nền tảng).
+    const rolesAvailable = ["patient", "doctor", "radiologist", "department_head", "admin", "hospital_admin", "technician", "lab_technician", "nurse", "receptionist", "pharmacist", "cleaner"];
     if (!rolesAvailable.includes(role)) {
       return res.status(400).json({ success: false, message: "Vai trò không hợp lệ." });
     }
@@ -350,7 +496,7 @@ export const createUser = async (req, res) => {
 
     // Process hospital reference on the fly if role requires it
     let resolvedHospitalId = undefined;
-    if (["hospital_admin", "doctor", "nurse", "technician", "receptionist"].includes(role)) {
+    if (["hospital_admin", "department_head", "doctor", "radiologist", "nurse", "technician", "lab_technician", "receptionist", "pharmacist", "cleaner"].includes(role)) {
       if (!hospitalName || !hospitalName.trim()) {
         return res.status(400).json({ success: false, message: "Vui lòng nhập tên bệnh viện/cơ sở." });
       }
@@ -487,7 +633,7 @@ export const getAiFeedback = async (req, res) => {
   try {
     const feedbackPath = process.env.AI_FEEDBACK_PATH
       ? path.resolve(process.env.AI_FEEDBACK_PATH)
-      : path.resolve(__dirname, "../../../MRIteam/hard_examples/feedback_log.csv");
+      : resolveMriTeamFile("hard_examples/feedback_log.csv");
 
     // Ngưỡng số mẫu feedback tối thiểu để có thể retrain
     const RETRAIN_THRESHOLD = parseInt(process.env.AI_RETRAIN_THRESHOLD || "50");
@@ -572,7 +718,7 @@ export const retrainAiModel = async (req, res) => {
   try {
     const feedbackPath = process.env.AI_FEEDBACK_PATH
       ? path.resolve(process.env.AI_FEEDBACK_PATH)
-      : path.resolve(__dirname, "../../../MRIteam/hard_examples/feedback_log.csv");
+      : resolveMriTeamFile("hard_examples/feedback_log.csv");
 
     const RETRAIN_THRESHOLD = parseInt(process.env.AI_RETRAIN_THRESHOLD || "50");
     const isForce = req.query?.force === "true" || req.body?.force === true;
@@ -601,7 +747,7 @@ export const retrainAiModel = async (req, res) => {
 
     const aiRes = await fetch(`${AI_SERVER}/retrain/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" }
+      headers: getInternalAiHeaders({ "Content-Type": "application/json" })
     });
 
     if (!aiRes.ok) {
@@ -627,20 +773,43 @@ export const retrainAiModel = async (req, res) => {
   }
 };
 
-// @desc    Get AI Retrain job status & benchmark metrics
+// Helper đọc kết quả retrain_result.json & model_registry.json cục bộ khi cần đối chiếu hoặc khi AI Server tạm nghỉ
+const readLocalMlopsArtifacts = () => {
+  let localResult = null;
+  let localRegistry = null;
+  try {
+    const resPath = resolveMriTeamFile("hard_examples/retrain_result.json");
+    if (fs.existsSync(resPath)) {
+      localResult = JSON.parse(fs.readFileSync(resPath, "utf8"));
+    }
+  } catch (_) {}
+  try {
+    const regPath = resolveMriTeamFile("models/model_registry.json");
+    if (fs.existsSync(regPath)) {
+      localRegistry = JSON.parse(fs.readFileSync(regPath, "utf8"));
+    }
+  } catch (_) {}
+  return { localResult, localRegistry };
+};
+
+// @desc    Get AI Retrain job status & benchmark metrics (Old vs New model comparison + backup status)
 // @route   GET /api/v1/admin/ai-retrain-status
 // @access  Private (Admin only)
 export const getAiRetrainStatus = async (req, res) => {
+  const { localResult, localRegistry } = readLocalMlopsArtifacts();
   try {
     const AI_SERVER = process.env.AI_SERVER_URL
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
-    const aiRes = await fetch(`${AI_SERVER}/retrain/status`);
+    const aiRes = await fetch(`${AI_SERVER}/retrain/status`, { headers: getInternalAiHeaders() });
     if (!aiRes.ok) {
       return res.status(200).json({
         success: false,
         status: "offline",
+        current_active_model: localRegistry?.active_model || "models/resnet_risk_calibrated.keras",
+        result: localResult,
+        registry: localRegistry,
         message: "Không thể kết nối đến máy chủ AI."
       });
     }
@@ -648,41 +817,87 @@ export const getAiRetrainStatus = async (req, res) => {
     const data = await aiRes.json();
     res.status(200).json({
       success: true,
-      ...data
+      ...data,
+      result: data.result || localResult,
+      registry: data.registry || localRegistry,
     });
   } catch (error) {
-    // [FIX 0022] AI Server offline → trạng thái offline + thông báo thân thiện
+    // [FIX 0022] AI Server offline → trạng thái offline + vẫn trả về bản lưu kết quả kiểm chuẩn gần nhất trên đĩa
     res.status(200).json({
       success: false,
       status: "offline",
+      current_active_model: localRegistry?.active_model || "models/resnet_risk_calibrated.keras",
+      result: localResult,
+      registry: localRegistry,
       message: AI_SERVER_UNREACHABLE(getAiServerBase())
     });
   }
 };
 
-// @desc    Hot-Reload deploy retrained candidate model
+// @desc    Hot-Reload deploy retrained candidate model (with Clinical Quality Gate + Hybrid Storage Backup + AuditLog)
 // @route   POST /api/v1/admin/ai-retrain-deploy
 // @access  Private (Admin only)
 export const deployAiRetrainedModel = async (req, res) => {
   try {
+    const { localResult } = readLocalMlopsArtifacts();
+    const forceDeploy = Boolean(req.body?.forceDeploy || req.query?.forceDeploy === "true");
+
+    // [BUG-MLOPS-001] Chặn triển khai nếu mô hình mới suy giảm chất lượng lâm sàng (trừ khi forceDeploy có lý do)
+    if (localResult && localResult.gate_passed === false && !forceDeploy) {
+      return res.status(400).json({
+        success: false,
+        code: "MLOPS_QUALITY_GATE_FAILED",
+        message: "Mô hình ứng viên không đạt ngưỡng Kiểm chuẩn Lâm sàng (Clinical Quality Gate: Độ chính xác hoặc Glioma Recall bị suy giảm). Không thể triển khai tự động.",
+        comparison: localResult.comparison || null,
+      });
+    }
+
     const AI_SERVER = process.env.AI_SERVER_URL
       ? process.env.AI_SERVER_URL.replace("/predict", "")
       : "http://localhost:8000";
 
     const aiRes = await fetch(`${AI_SERVER}/retrain/deploy`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" }
+      headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(req.body || {}),
     });
 
     const data = await aiRes.json();
-    res.status(aiRes.ok ? 200 : 500).json(data);
+    if (!aiRes.ok || !data.success) {
+      return res.status(aiRes.ok ? 400 : 500).json(data);
+    }
+
+    // [BUG-MLOPS-002] Sao lưu biên bản triển khai + bảng so sánh Bản cũ vs Bản mới vào Hybrid Storage & Google Drive
+    const backupMeta = await backupAiModelSnapshotToStorage({
+      eventType: "deploy",
+      snapshot: {
+        previousModel: data.previous_model || localResult?.base_model_path || "models/resnet_risk_calibrated.keras",
+        activeModel: data.active_model,
+        retrainResult: data.result || localResult,
+      },
+      user: req.user,
+    });
+
+    await AuditLog.create({
+      action: "AI_MODEL_DEPLOYED",
+      entity: "AIModel",
+      entityId: data.active_model || "candidate_model",
+      performedBy: req.user?.id,
+      hospitalId: req.user?.hospitalId || null,
+      details: `Triển khai mô hình AI mới (${data.active_model}). Backup Hybrid Storage: ${backupMeta.fileName}. Độ chính xác: ${localResult?.baseline_accuracy ?? "N/A"}% -> ${localResult?.retrained_accuracy ?? "N/A"}%.`,
+    });
+
+    res.status(200).json({
+      ...data,
+      backup: backupMeta,
+    });
   } catch (error) {
     // [FIX 0022] lỗi mạng tới AI Server → thông báo thân thiện (trước đây lộ "fetch failed")
     res.status(502).json({ success: false, message: AI_SERVER_UNREACHABLE(getAiServerBase()) });
   }
 };
 
-// @desc    Rollback to baseline production model
+// @desc    Rollback to checkpoint backup or baseline production model
 // @route   POST /api/v1/admin/ai-retrain-rollback
 // @access  Private (Admin only)
 export const rollbackAiRetrainedModel = async (req, res) => {
@@ -693,11 +908,39 @@ export const rollbackAiRetrainedModel = async (req, res) => {
 
     const aiRes = await fetch(`${AI_SERVER}/retrain/rollback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" }
+      headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(req.body || {}),
     });
 
     const data = await aiRes.json();
-    res.status(aiRes.ok ? 200 : 500).json(data);
+    if (!aiRes.ok || !data.success) {
+      return res.status(aiRes.ok ? 400 : 500).json(data);
+    }
+
+    // [BUG-MLOPS-002] Sao lưu biên bản hoàn tác (Rollback) vào Hybrid Storage & Google Drive
+    const backupMeta = await backupAiModelSnapshotToStorage({
+      eventType: "rollback",
+      snapshot: {
+        rolledBackFrom: data.rolled_back_from || null,
+        restoredModel: data.active_model,
+        requestedTarget: req.body?.target_model_path || req.body?.version || "latest_checkpoint",
+      },
+      user: req.user,
+    });
+
+    await AuditLog.create({
+      action: "AI_MODEL_ROLLED_BACK",
+      entity: "AIModel",
+      entityId: data.active_model || "baseline_model",
+      performedBy: req.user?.id,
+      hospitalId: req.user?.hospitalId || null,
+      details: `Hoàn tác (Rollback) mô hình AI từ (${data.rolled_back_from || "current"}) về bản sao lưu (${data.active_model}). Backup log: ${backupMeta.fileName}.`,
+    });
+
+    res.status(200).json({
+      ...data,
+      backup: backupMeta,
+    });
   } catch (error) {
     // [FIX 0022] lỗi mạng tới AI Server → thông báo thân thiện (trước đây lộ "fetch failed")
     res.status(502).json({ success: false, message: AI_SERVER_UNREACHABLE(getAiServerBase()) });
@@ -712,7 +955,7 @@ export const getChatbotConfig = async (req, res) => {
     // Use env variable for portability; fallback to a sensible relative path
     const configPath = process.env.CHATBOT_CONFIG_PATH
       ? path.resolve(process.env.CHATBOT_CONFIG_PATH)
-      : path.resolve(__dirname, "../../../MRIteam/chatbot_config.json");
+      : resolveMriTeamFile("chatbot_config.json");
     const defaultPrompt = `Bạn là một người bạn thân thiết, am hiểu y tế, đang hỗ trợ bệnh nhân và bác sĩ qua hệ thống NeuroAttention AI.
 
 VAI TRÒ CỦA BẠN:
@@ -770,7 +1013,7 @@ export const saveChatbotConfig = async (req, res) => {
   try {
     const configPath = process.env.CHATBOT_CONFIG_PATH
       ? path.resolve(process.env.CHATBOT_CONFIG_PATH)
-      : path.resolve(__dirname, "../../../MRIteam/chatbot_config.json");
+      : resolveMriTeamFile("chatbot_config.json");
 
     let currentConfig = {};
     if (fs.existsSync(configPath)) {
@@ -1234,6 +1477,7 @@ export const deleteHospital = async (req, res) => {
 
     // Delete hospital record
     await Hospital.findByIdAndDelete(id);
+    authCache.invalidateHospital(id);
 
     // Log action to AuditLog
     await AuditLog.create({
@@ -1964,15 +2208,34 @@ export const restoreHospitalData = async (req, res) => {
 };
 
 
-// ─── 5. AI Model Versioning & Rollback ──────────────────────────────────────────
+// ─── 5. AI Model Versioning & Rollback (BUG-MLOPS-003 & BUG-MLOPS-005) ──────────
 export const getAiModels = async (req, res) => {
   try {
-    // Đọc danh sách phiên bản AI từ biến môi trường (có thể cập nhật mà không cần deploy lại)
-    // Định dạng env: AI_MODEL_VERSIONS=neuroscan-v2.1.0:96.8:active,neuroscan-v2.0.4:95.4:rollback_target
+    const { localResult, localRegistry } = readLocalMlopsArtifacts();
     let versions = [];
-    let source = "env";
+    let source = "default";
 
-    if (process.env.AI_MODEL_VERSIONS) {
+    // 1. Ưu tiên đọc từ Model Registry thực tế của hệ thống MLOps (models/model_registry.json)
+    if (localRegistry && Array.isArray(localRegistry.versions) && localRegistry.versions.length > 0) {
+      source = "model_registry";
+      versions = localRegistry.versions.map((v) => ({
+        version: v.version_id || path.basename(v.candidate_model_path || "resnet_active.keras"),
+        accuracy: v.retrained_accuracy ?? 0,
+        baselineAccuracy: v.baseline_accuracy ?? 0,
+        accuracyDiff: v.accuracy_diff || "0%",
+        macroF1: v.retrained_macro_f1 ?? null,
+        baselineMacroF1: v.baseline_macro_f1 ?? null,
+        gliomaRecall: v.retrained_glioma_recall ?? null,
+        baselineGliomaRecall: v.baseline_glioma_recall ?? null,
+        gatePassed: v.gate_passed ?? true,
+        candidateModelPath: v.candidate_model_path || null,
+        checkpointBackupPath: v.checkpoint_backup_path || null,
+        comparison: v.comparison || null,
+        status: v.status || (localRegistry.active_model === v.candidate_model_path ? "active" : "rollback_target"),
+        deployedAt: v.deployed_at || v.created_at || new Date(),
+      }));
+    } else if (process.env.AI_MODEL_VERSIONS) {
+      source = "env";
       try {
         versions = process.env.AI_MODEL_VERSIONS.split(",").map((entry) => {
           const parts = entry.trim().split(":");
@@ -1989,7 +2252,7 @@ export const getAiModels = async (req, res) => {
       }
     }
 
-    // Fallback về danh sách mặc định nếu không có env config
+    // Fallback về danh sách mặc định nếu chưa có bản retrain nào trong registry hoặc env
     if (versions.length === 0) {
       source = "default";
       versions = [
@@ -2014,7 +2277,14 @@ export const getAiModels = async (req, res) => {
       ];
     }
 
-    res.status(200).json({ success: true, versions, source });
+    res.status(200).json({
+      success: true,
+      versions,
+      source,
+      activeModel: localRegistry?.active_model || "models/resnet_risk_calibrated.keras",
+      baselineModel: localRegistry?.baseline_model || "models/resnet_risk_calibrated.keras",
+      latestComparison: localResult?.comparison || null,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });
   }
@@ -2022,24 +2292,63 @@ export const getAiModels = async (req, res) => {
 
 export const rollbackAiModel = async (req, res) => {
   try {
-    const { version } = req.body;
-    if (!version) {
+    const { version, target_model_path } = req.body;
+    const requestedVersion = version || target_model_path;
+    if (!requestedVersion) {
       return res.status(400).json({ success: false, message: "Vui lòng chọn phiên bản AI để khôi phục." });
     }
 
-    // Process rollback logic
+    // Thử đồng bộ với AI Server nếu đang online
+    let aiServerRollbackData = null;
+    try {
+      const AI_SERVER = getAiServerBase();
+      const aiRes = await fetch(`${AI_SERVER}/retrain/rollback`, {
+        method: "POST",
+        headers: getInternalAiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ version: requestedVersion, target_model_path: requestedVersion }),
+      });
+      if (aiRes.ok) {
+        aiServerRollbackData = await aiRes.json();
+      }
+    } catch (_) {
+      // Nếu AI server offline, vẫn cập nhật Model Registry cục bộ để áp dụng ngay khi khởi động lại
+    }
+
+    // Cập nhật Model Registry trên đĩa nếu có
+    try {
+      const regPath = resolveMriTeamFile("models/model_registry.json");
+      if (fs.existsSync(regPath)) {
+        const reg = JSON.parse(fs.readFileSync(regPath, "utf8"));
+        reg.previous_active_model = reg.active_model;
+        reg.active_model = aiServerRollbackData?.active_model || requestedVersion;
+        reg.last_rolled_back_at = new Date().toISOString();
+        fs.writeFileSync(regPath, JSON.stringify(reg, null, 2), "utf8");
+      }
+    } catch (_) {}
+
+    const backupMeta = await backupAiModelSnapshotToStorage({
+      eventType: "rollback_version",
+      snapshot: {
+        requestedVersion,
+        aiServerResponse: aiServerRollbackData,
+      },
+      user: req.user,
+    });
+
     await AuditLog.create({
       action: "rollback-ai-model",
       entity: "AIModel",
-      entityId: version,
+      entityId: requestedVersion,
       performedBy: req.user.id,
-      details: `Đã thực hiện rollback mô hình AI hệ thống về phiên bản: ${version}`,
+      hospitalId: req.user.hospitalId || null,
+      details: `Đã thực hiện rollback mô hình AI hệ thống về phiên bản: ${requestedVersion} (Backup: ${backupMeta.fileName})`,
     });
 
     res.status(200).json({
       success: true,
-      message: `Khôi phục mô hình AI về phiên bản ${version} thành công!`,
-      currentVersion: version
+      message: `Khôi phục mô hình AI về phiên bản ${requestedVersion} thành công!`,
+      currentVersion: requestedVersion,
+      backup: backupMeta,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Lỗi máy chủ: " + error.message });

@@ -109,15 +109,18 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
 
   const totalFee = feeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-  // Đánh giá các chỉ số sinh tồn và ngưỡng an toàn theo thời gian thực (UC-NUR-02)
-  const vitalEval = evaluateVitalSigns({
-    pulse: examPulse,
-    bloodPressure: examBP,
-    temperature: examTemp,
-    spo2: examSpo2,
-    respiratoryRate: examBreath,
-    breath: examBreath
-  });
+  // Đánh giá các chỉ số sinh tồn và ngưỡng an toàn theo thời gian thực (UC-NUR-02) có phân tầng độ tuổi & giới tính
+  const vitalEval = evaluateVitalSigns(
+    {
+      pulse: examPulse,
+      bloodPressure: examBP,
+      temperature: examTemp,
+      spo2: examSpo2,
+      respiratoryRate: examBreath,
+      breath: examBreath
+    },
+    { age, gender }
+  );
 
   // ── UC-NUR-04: Phiếu Chăm sóc Điều dưỡng (Care Sheet) ──
   const [careSheets, setCareSheets] = useState([]);
@@ -175,14 +178,17 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
     ? "Hôn mê nhẹ / Lú lẫn"
     : "Tỉnh táo / Tri giác tốt";
 
-  // Care sheet vitals evaluation
-  const csVitalEval = evaluateVitalSigns({
-    pulse: csPulse,
-    bloodPressure: csBP,
-    temperature: csTemp,
-    spo2: csSpo2,
-    respiratoryRate: csBreath
-  });
+  // Care sheet vitals evaluation có phân tầng độ tuổi & giới tính
+  const csVitalEval = evaluateVitalSigns(
+    {
+      pulse: csPulse,
+      bloodPressure: csBP,
+      temperature: csTemp,
+      spo2: csSpo2,
+      respiratoryRate: csBreath
+    },
+    { age, gender }
+  );
 
   // Tự động tìm visitId nếu chưa được truyền từ route params
   useEffect(() => {
@@ -902,6 +908,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   </View>
                   
                   <Text style={s.docSectionHeader}>SINH HIỆU LÂM SÀNG (VITAL SIGNS)</Text>
+                  {vitalEval.patientContext?.ageGroupLabel && (
+                    <Text style={{ fontSize: 12, color: '#475569', marginBottom: 8, fontStyle: 'italic' }}>
+                      Chuẩn tham chiếu: <Text style={{ fontWeight: '600', color: '#1E40AF' }}>{vitalEval.patientContext.ageGroupLabel}</Text>
+                      {vitalEval.patientContext.gender !== 'Khác/Không rõ' && <Text style={{ fontWeight: '600', color: '#1E40AF' }}> • Giới tính: {vitalEval.patientContext.gender}</Text>}
+                    </Text>
+                  )}
 
                   {vitalEval.isAbnormal && (
                     <View style={s.vitalsAlertCard}>
@@ -1001,6 +1013,12 @@ const NursePatientDetailScreen = ({ navigation, route }) => {
                   <Text style={s.sectionSubtitle}>Nhập thông tin sinh hiệu lâm sàng ban đầu cho bệnh nhân.</Text>
                   <View style={s.card}>
                     <Text style={s.groupLabel}>Sinh hiệu lâm sàng (Vital Signs)</Text>
+                    {vitalEval.patientContext?.ageGroupLabel && (
+                      <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>
+                        Phân tầng đánh giá: <Text style={{ fontWeight: '600', color: '#2563EB' }}>{vitalEval.patientContext.ageGroupLabel}</Text>
+                        {vitalEval.patientContext.gender !== 'Khác/Không rõ' && <Text style={{ fontWeight: '600', color: '#2563EB' }}> • Giới tính: {vitalEval.patientContext.gender}</Text>}
+                      </Text>
+                    )}
 
                     {vitalEval.isAbnormal && (
                       <View style={s.vitalsAlertCard}>

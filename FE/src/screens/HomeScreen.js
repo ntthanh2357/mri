@@ -194,10 +194,10 @@ const HomeScreen = ({ route, navigation }) => {
         ) : user.role === 'pharmacist' ? (
           // Dược sĩ: cùng bố cục trang chủ nhân viên, tông xanh ngọc Khoa Dược
           <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} variant="pharmacist" />
-        ) : user.role === 'technician' ? (
+        ) : user.role === 'lab_technician' ? (<DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} variant="lab_technician" />) : user.role === 'technician' ? (
           // Kỹ thuật viên MRI: cùng bố cục trang chủ bác sĩ, tông xanh biển
           <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} variant="technician" />
-        ) : user.role === 'doctor' ? (
+        ) : ['doctor', 'department_head', 'radiologist'].includes(user.role) ? (
           // Bác sĩ: bàn làm việc cùng phong cách các trang nhân viên, tông chàm riêng
           <DoctorHome user={user} navigation={navigation} onEditProfile={handleOpenEditProfile} />
         ) : user.role === 'nurse' ? (

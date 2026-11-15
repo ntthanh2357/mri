@@ -24,6 +24,7 @@ import ClinicalDisclaimerBanner from '../components/ClinicalDisclaimerBanner';
 import FormattedConsensusMessage from '../components/FormattedConsensusMessage';
 import InteractiveRoiDrawer from '../components/InteractiveRoiDrawer';
 import AiResultPatientCard from '../components/patient/AiResultPatientCard';
+import DicomWebViewer from '../components/DicomWebViewer';
 import styles from './ImagingResultScreen.styles';
 import PressableScale from '../components/PressableScale';
 import FadeIn from '../components/FadeIn';
@@ -47,13 +48,37 @@ const ImagingResultScreen = ({ route, navigation }) => {
   const [explaining, setExplaining] = useState(false);
   const dots = useLoop(1200);
 
-  // Doctor Report Editing States
+  // Doctor / Radiologist Report Editing States
   const [localUser, setLocalUser] = useState(null);
-  // Duyệt/hiệu chỉnh AI chỉ cho bác sĩ/KTV/admin — khớp kiểm tra quyền ở BE approve-ai/feedback-ai
-  const canReviewAI = ['doctor', 'technician', 'admin'].includes(localUser?.role);
+  // Duyệt/hiệu chỉnh AI & ký báo cáo CĐHA cho bác sĩ lâm sàng, BS CĐHA (radiologist), Trưởng khoa (department_head)
+  const canReviewAI = ['doctor', 'radiologist', 'department_head', 'technician', 'admin'].includes(localUser?.role);
+  const canSignReport = ['doctor', 'radiologist', 'department_head'].includes(localUser?.role);
   const [findingsText, setFindingsText] = useState('');
   const [conclusionText, setConclusionText] = useState('');
   const [completingVisit, setCompletingVisit] = useState(false);
+
+  // Structured Brain Tumor Report + RANO + Critical Finding + Addendum States
+  const [structuredReport, setStructuredReport] = useState({
+    hemisphere: 'right',
+    lobe: 'frontal',
+    axialLocation: 'intra_axial',
+    measurements: { d1Mm: 32, d2Mm: 26, d3Mm: 24, crossProductMm2: 832, sliceIndex: 1, seriesType: 'T1C+' },
+    enhancement: 'ring_enhancing',
+    peritumoralEdema: 'moderate',
+    necrosis: false,
+    hemorrhage: false,
+    midlineShiftMm: 0,
+    herniation: 'none',
+    hydrocephalus: false,
+    rano: { priorCrossProductMm2: null, changePercent: null, category: 'N/A', isPseudoprogressionSuspected: false }
+  });
+  const [aiAgreementStatus, setAiAgreementStatus] = useState('agreed');
+  const [isCriticalFlag, setIsCriticalFlag] = useState(false);
+  const [criticalReason, setCriticalReason] = useState('');
+  const [acknowledgingCritical, setAcknowledgingCritical] = useState(false);
+  const [addendumContent, setAddendumContent] = useState('');
+  const [addendumReason, setAddendumReason] = useState('');
+  const [submittingAddendum, setSubmittingAddendum] = useState(false);
 
   // AI Analysis States
   const [analyzing, setAnalyzing] = useState(false);
@@ -126,7 +151,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     // [FIX] Prevent AI re-running: clear visitStatus param after auto-navigate
-    if (result && localUser && localUser.role === 'doctor' && route.params?.visitStatus === 'chờ kết quả AI' && !hasAutoNavigated.current) {
+    if (result && localUser && ['doctor', 'radiologist', 'department_head'].includes(localUser.role) && route.params?.visitStatus === 'chờ kết quả AI' && !hasAutoNavigated.current) {
       if (result.images && result.images.length > 0) {
         hasAutoNavigated.current = true;
         const firstImage = result.images[0];
@@ -160,6 +185,27 @@ const ImagingResultScreen = ({ route, navigation }) => {
           setResult(response.data);
           setFindingsText(response.data.findings || '');
           setConclusionText(response.data.conclusion || '');
+          if (response.data.structuredReport) {
+            setStructuredReport(prev => ({
+              ...prev,
+              ...response.data.structuredReport,
+              measurements: {
+                ...prev.measurements,
+                ...(response.data.structuredReport.measurements || {})
+              },
+              rano: {
+                ...prev.rano,
+                ...(response.data.structuredReport.rano || {})
+              }
+            }));
+          }
+          if (response.data.aiAgreement?.status) {
+            setAiAgreementStatus(response.data.aiAgreement.status);
+          }
+          if (response.data.criticalFinding?.isCritical) {
+            setIsCriticalFlag(true);
+            setCriticalReason(response.data.criticalFinding.reason || '');
+          }
         } else {
           setError(response.message || 'Không thể tải chi tiết kết quả.');
         }
@@ -298,23 +344,33 @@ const ImagingResultScreen = ({ route, navigation }) => {
     try {
       const docName = localUser?.profile?.fullName || localUser?.profile?.name || localUser?.email || 'Bác sĩ chuyên khoa';
       const updatedImages = Array.from(new Set([...result.images, ...extraImages]));
-      await put(`/api/v1/imaging/${resultId}`, {
+      const updateRes = await put(`/api/v1/imaging/${resultId}`, {
         findings: findingsText.trim(),
         conclusion: conclusionText.trim(),
         radiologist: docName,
-        images: updatedImages
+        images: updatedImages,
+        structuredReport,
+        aiAgreement: { status: aiAgreementStatus },
+        criticalFinding: {
+          isCritical: isCriticalFlag || Number(structuredReport.midlineShiftMm) >= 5 || structuredReport.herniation !== 'none',
+          reason: criticalReason
+        }
       });
+      if (updateRes?.data) {
+        setResult(updateRes.data);
+      }
 
       if (visitId) {
-        await put(`/api/v1/visits/${visitId}/status`, { status: 'hoàn tất' });
+        const isPdOrCritical = updateRes?.data?.structuredReport?.rano?.category === 'PD' || updateRes?.data?.criticalFinding?.isCritical || route.params?.visitStatus === 'chờ hội chẩn';
+        const nextVisitStatus = isPdOrCritical ? 'chờ hội chẩn' : 'chờ bác sĩ đọc';
+        try { await put(`/api/v1/visits/${visitId}/status`, { status: nextVisitStatus }); } catch (_) {}
       }
 
       if (Platform.OS === 'web') {
-        alert('Đã lưu chẩn đoán và hoàn tất ca khám.');
-        // [FIX] Navigate back to DoctorWorkQueue with refresh flag so queue re-fetches
+        alert('Đã ký số báo cáo CĐHA có cấu trúc (kèm RANO) và hoàn tất ca đọc phim.');
         navigation.navigate('DoctorWorkQueue', { refresh: Date.now() });
       } else {
-        Alert.alert('Thành công', 'Đã lưu chẩn đoán và hoàn tất ca khám.', [
+        Alert.alert('Thành công', 'Đã ký số báo cáo CĐHA có cấu trúc và hoàn tất ca khám.', [
           { text: 'OK', onPress: () => navigation.navigate('DoctorWorkQueue', { refresh: Date.now() }) }
         ]);
       }
@@ -324,6 +380,46 @@ const ImagingResultScreen = ({ route, navigation }) => {
       else Alert.alert('Lỗi', err.message || 'Không thể hoàn tất ca khám.');
     } finally {
       setCompletingVisit(false);
+    }
+  };
+
+  const handleAcknowledgeCritical = async () => {
+    if (!resultId) return;
+    setAcknowledgingCritical(true);
+    try {
+      const res = await post(`/api/v1/imaging/${resultId}/acknowledge-critical`, {});
+      if (res?.success && res?.data) {
+        setResult(res.data);
+        if (Platform.OS === 'web') alert('Đã xác nhận tiếp nhận Cảnh báo Đỏ CĐHA (Critical Finding).');
+      }
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi xác nhận cảnh báo: ' + (err.message || ''));
+    } finally {
+      setAcknowledgingCritical(false);
+    }
+  };
+
+  const handleCreateAddendum = async () => {
+    if (!addendumContent.trim()) {
+      if (Platform.OS === 'web') alert('Vui lòng nhập nội dung bản bổ sung / đính chính (Addendum).');
+      return;
+    }
+    setSubmittingAddendum(true);
+    try {
+      const res = await post(`/api/v1/imaging/${resultId}/addendum`, {
+        content: addendumContent.trim(),
+        reason: addendumReason.trim() || 'Bổ sung nhận định chuyên môn sau hội chẩn'
+      });
+      if (res?.success && res?.data) {
+        setResult(res.data);
+        setAddendumContent('');
+        setAddendumReason('');
+        if (Platform.OS === 'web') alert('Đã phát hành bản bổ sung (Addendum) thành công.');
+      }
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi tạo Addendum: ' + (err.message || ''));
+    } finally {
+      setSubmittingAddendum(false);
     }
   };
 
@@ -489,6 +585,75 @@ const ImagingResultScreen = ({ route, navigation }) => {
             </View>
 
             <View style={styles.sectionDivider} />
+
+            {/* 🚨 Cảnh báo Đỏ CĐHA (Critical Finding Banner - ACR Standard) */}
+            {Boolean(result.criticalFinding?.isCritical) && (
+              <View style={{ backgroundColor: '#FEF2F2', borderWidth: 2, borderColor: '#DC2626', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <AlertTriangle size={20} color="#DC2626" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#991B1B', fontWeight: '800', fontSize: 14 }}>
+                        🚨 CẢNH BÁO ĐỎ CĐHA (CRITICAL IMAGING FINDING): {result.criticalFinding.reason}
+                      </Text>
+                      <Text style={{ color: '#7F1D1D', fontSize: 12, marginTop: 2 }}>
+                        {result.criticalFinding.acknowledgedAt
+                          ? `Đã xác nhận tiếp nhận bởi ${result.criticalFinding.acknowledgedByName} lúc ${formatDate(result.criticalFinding.acknowledgedAt)}`
+                          : 'Chưa được bác sĩ lâm sàng xác nhận! Yêu cầu xử trí chống phù não / hội chẩn Ngoại Thần kinh khẩn cấp.'}
+                      </Text>
+                    </View>
+                  </View>
+                  {!result.criticalFinding.acknowledgedAt && canSignReport && (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#DC2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                      onPress={handleAcknowledgeCritical}
+                      disabled={acknowledgingCritical}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                        {acknowledgingCritical ? 'Đang xác nhận...' : '✓ Xác nhận đã đọc Cảnh báo Đỏ'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* 🖥️ Trình xem Web Mini-PACS DICOM tích hợp (Series Switcher, WW/WL, 2D Caliper RANO, Dual-Viewport) */}
+            {Boolean(result.images && result.images.length > 0) && (
+              <DicomWebViewer
+                imagingResultId={result._id || resultId}
+                studyId={result.studyId}
+                images={result.images}
+                extraImages={extraImages}
+                aiResult={aiResult || result.aiReport}
+                initialMeasurements={structuredReport.measurements}
+                canMeasure={canSignReport && !result.isSigned}
+                onApplyMeasurement={(m) => {
+                  setStructuredReport((prev) => ({
+                    ...prev,
+                    measurements: {
+                      d1Mm: m.d1Mm,
+                      d2Mm: m.d2Mm,
+                      d3Mm: m.d3Mm,
+                      crossProductMm2: m.crossProductMm2,
+                      sliceIndex: m.sliceIndex,
+                      seriesType: m.seriesType,
+                    },
+                    rano: {
+                      ...prev.rano,
+                      priorCrossProductMm2: m.priorCrossProductMm2,
+                      changePercent: m.changePercent,
+                      category: m.category,
+                      isPseudoprogressionSuspected: m.isPseudoprogressionSuspected,
+                    },
+                  }));
+                  const ranoLine = `[Đo lường Mini-PACS RANO trên chuỗi ${m.seriesType} - Lát #${m.sliceIndex}]: Kích thước hai đường kính vuông góc lớn nhất d₁ × d₂ = ${m.d1Mm} × ${m.d2Mm} mm (Tích diện tích = ${m.crossProductMm2} mm²). Phân류 đáp ứng RANO: ${m.category}${m.changePercent !== null ? ` (${m.changePercent > 0 ? '+' : ''}${m.changePercent}%)` : ''}.`;
+                  if (!findingsText.includes('[Đo lường Mini-PACS RANO')) {
+                    setFindingsText((prev) => (prev ? `${prev}\n${ranoLine}` : ranoLine));
+                  }
+                }}
+              />
+            )}
 
             {Boolean(result.images && result.images.length > 0) && (
               <View style={styles.gallerySection}>
@@ -728,8 +893,128 @@ const ImagingResultScreen = ({ route, navigation }) => {
             <View style={styles.sectionDivider} />
 
             <View style={styles.findingsSection}>
+              {/* 🧠 Biểu mẫu Báo cáo CĐHA U não có cấu trúc (Structured Brain Tumor Report + RANO) */}
+              <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 14, marginBottom: 18 }}>
+                <Text style={[styles.sectionHeading, { marginBottom: 10, color: '#0F172A' }]}>
+                  BẢNG THÔNG SỐ ĐỊNH LƯỢNG U NÃO & TIÊU CHUẨN RANO (NEURO-ONCOLOGY STRUCTURED REPORT)
+                </Text>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+                  <View style={{ flex: 1, minWidth: 150 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>Bán cầu não:</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                      {[
+                        { k: 'right', l: 'Bán cầu Phải' },
+                        { k: 'left', l: 'Bán cầu Trái' },
+                        { k: 'bilateral', l: 'Hai bên' },
+                        { k: 'midline', l: 'Đường giữa' }
+                      ].map((opt) => (
+                        <TouchableOpacity
+                          key={opt.k}
+                          disabled={!canSignReport || result.isSigned}
+                          onPress={() => setStructuredReport(p => ({ ...p, hemisphere: opt.k }))}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 5,
+                            backgroundColor: structuredReport.hemisphere === opt.k ? '#0284C7' : '#E2E8F0'
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: structuredReport.hemisphere === opt.k ? '#FFF' : '#334155' }}>{opt.l}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 180 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>Thùy não / Vị trí giải phẫu:</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                      {[
+                        { k: 'frontal', l: 'Thùy Trán' },
+                        { k: 'temporal', l: 'Thùy Thái dương' },
+                        { k: 'parietal', l: 'Thùy Đỉnh' },
+                        { k: 'occipital', l: 'Thùy Chẩm' },
+                        { k: 'sellar_pituitary', l: 'Hố yên / Tuyến yên' },
+                        { k: 'cerebellar', l: 'Tiểu não / Hố sau' }
+                      ].map((opt) => (
+                        <TouchableOpacity
+                          key={opt.k}
+                          disabled={!canSignReport || result.isSigned}
+                          onPress={() => setStructuredReport(p => ({ ...p, lobe: opt.k }))}
+                          style={{
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            borderRadius: 5,
+                            backgroundColor: structuredReport.lobe === opt.k ? '#0F766E' : '#E2E8F0'
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: structuredReport.lobe === opt.k ? '#FFF' : '#334155' }}>{opt.l}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginTop: 4 }}>
+                  <View style={{ backgroundColor: '#FFFFFF', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', minWidth: 150 }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>Kích thước u (d₁ × d₂):</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                      {structuredReport.measurements?.d1Mm || 0} × {structuredReport.measurements?.d2Mm || 0} mm ({structuredReport.measurements?.crossProductMm2 || 0} mm²)
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: '#FFFFFF', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', minWidth: 140 }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>Đáp ứng điều trị RANO:</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0284C7' }}>
+                      {structuredReport.rano?.category || 'N/A'}
+                      {structuredReport.rano?.changePercent !== null && structuredReport.rano?.changePercent !== undefined
+                        ? ` (${structuredReport.rano.changePercent > 0 ? '+' : ''}${structuredReport.rano.changePercent}%)`
+                        : ''}
+                    </Text>
+                  </View>
+
+                  <View style={{ minWidth: 150 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 2 }}>Đẩy lệch đường giữa (mm):</Text>
+                    {canSignReport && !result.isSigned ? (
+                      <TextInput
+                        style={{ backgroundColor: '#FFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 13, fontWeight: '700' }}
+                        keyboardType="numeric"
+                        value={String(structuredReport.midlineShiftMm ?? 0)}
+                        onChangeText={(v) => {
+                          const num = Number(v) || 0;
+                          setStructuredReport(p => ({ ...p, midlineShiftMm: num }));
+                          if (num >= 5) setIsCriticalFlag(true);
+                        }}
+                      />
+                    ) : (
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: Number(structuredReport.midlineShiftMm) >= 5 ? '#DC2626' : '#0F172A' }}>
+                        {structuredReport.midlineShiftMm || 0} mm {Number(structuredReport.midlineShiftMm) >= 5 ? '(NGUY KỊCH ≥ 5mm)' : ''}
+                      </Text>
+                    )}
+                  </View>
+
+                  {canSignReport && !result.isSigned && (
+                    <TouchableOpacity
+                      onPress={() => setIsCriticalFlag(!isCriticalFlag)}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 6,
+                        backgroundColor: isCriticalFlag ? '#DC2626' : '#FEE2E2',
+                        borderWidth: 1,
+                        borderColor: '#DC2626'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: isCriticalFlag ? '#FFFFFF' : '#991B1B' }}>
+                        {isCriticalFlag ? '🚨 ĐÃ BẬT CẢNH BÁO ĐỎ (CRITICAL ALERT)' : '⚠️ Gắn cờ Cảnh báo Đỏ (Critical Finding)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               <Text style={styles.sectionHeading}>MÔ TẢ HÌNH ẢNH Y KHOA</Text>
-              {localUser?.role === 'doctor' ? (
+              {canSignReport && !result.isSigned ? (
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline, { marginBottom: 16 }]}
                   placeholder="Nhập mô tả hình ảnh phim chụp..."
@@ -741,9 +1026,9 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 <Text style={styles.findingsBody}>{result.findings}</Text>
               )}
 
-              <View style={localUser?.role === 'doctor' ? null : styles.conclusionBox}>
-                <Text style={localUser?.role === 'doctor' ? styles.sectionHeading : styles.conclusionHeading}>KẾT LUẬN CHẨN ĐOÁN</Text>
-                {localUser?.role === 'doctor' ? (
+              <View style={canSignReport && !result.isSigned ? null : styles.conclusionBox}>
+                <Text style={canSignReport && !result.isSigned ? styles.sectionHeading : styles.conclusionHeading}>KẾT LUẬN CHẨN ĐOÁN</Text>
+                {canSignReport && !result.isSigned ? (
                   <TextInput
                     style={[styles.textInput, { minHeight: 48, marginBottom: 16 }]}
                     placeholder="Nhập kết luận chẩn đoán..."
@@ -755,7 +1040,7 @@ const ImagingResultScreen = ({ route, navigation }) => {
                 )}
               </View>
 
-              {localUser?.role === 'doctor' && (
+              {canSignReport && !result.isSigned && (
                 <TouchableOpacity
                   style={{
                     backgroundColor: '#059669',
@@ -776,10 +1061,50 @@ const ImagingResultScreen = ({ route, navigation }) => {
                   ) : (
                     <>
                       <Save size={16} color="#FFFFFF" />
-                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Lưu kết quả và hoàn tất khám</Text>
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Ký số Báo cáo CĐHA (kèm RANO) & Hoàn tất</Text>
                     </>
                   )}
                 </TouchableOpacity>
+              )}
+
+              {/* 📝 Danh sách Bản bổ sung / Đính chính sau ký số (Addenda - TT46/2018/TT-BYT) */}
+              {Boolean(result.addenda && result.addenda.length > 0) && (
+                <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#F59E0B', borderRadius: 8, padding: 12, marginTop: 12, marginBottom: 16 }}>
+                  <Text style={{ fontWeight: '800', fontSize: 13, color: '#92400E', marginBottom: 8 }}>
+                    📌 PHỤ LỤC ĐÍNH CHÍNH / BỔ SUNG SAU KÝ SỐ (ADDENDUM):
+                  </Text>
+                  {result.addenda.map((ad, i) => (
+                    <View key={i} style={{ borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#FDE68A', paddingTop: i > 0 ? 8 : 0, marginTop: i > 0 ? 8 : 0 }}>
+                      <Text style={{ fontSize: 13, color: '#1E293B', fontWeight: '600' }}>{ad.content}</Text>
+                      <Text style={{ fontSize: 11, color: '#78350F', marginTop: 2 }}>
+                        Lý do: {ad.reason || 'Bổ sung chuyên môn'} • Bác sĩ: {ad.addedByName} • {formatDate(ad.addedAt)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {result.isSigned && canSignReport && (
+                <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
+                    + Thêm Bản đính chính / Bổ sung sau ký số (Addendum — giữ nguyên bản gốc):
+                  </Text>
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 42, marginBottom: 8 }]}
+                    placeholder="Nhập nội dung bổ sung / đính chính kết quả đọc phim..."
+                    value={addendumContent}
+                    onChangeText={setAddendumContent}
+                  />
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, alignSelf: 'flex-start' }}
+                    onPress={handleCreateAddendum}
+                    disabled={submittingAddendum}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                      {submittingAddendum ? 'Đang ký Addendum...' : 'Phát hành Bản bổ sung (Addendum)'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
               <View style={styles.explainCard}>

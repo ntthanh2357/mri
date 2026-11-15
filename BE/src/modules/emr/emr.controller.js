@@ -11,6 +11,7 @@ import { FEATURES } from "../../config/features.config.js";
 import { recordAuditLog } from "../../services/auditLog.service.js";
 import { calculateRetentionExpiry } from "../../utils/retention.util.js";
 import { segregateMedicalRecord } from "../../utils/dataSegregation.util.js";
+import { encryptField } from "../../services/fieldCrypto.service.js";
 import { evaluateVitalSigns } from "../../services/vitalsSafety.service.js";
 
 // --- Medical Record (HSBA) Controllers ---
@@ -194,7 +195,7 @@ const canAccessMedicalRecord = async (record, user, breakGlassReason = "") => {
 
   // 3. [HIPAA §164.312(a)(2)(ii)]: Cơ chế truy cập khẩn cấp Cấp cứu (Emergency Break-Glass Protocol)
   // Chỉ cấp cho Bác sĩ điều trị có chứng chỉ hành nghề, áp dụng Rate Limiting (3 lần/ngày) và giới hạn 24h
-  if (["doctor", "hospital_admin"].includes(user.role) && breakGlassReason && breakGlassReason.trim().length >= 10) {
+  if (["doctor", "department_head", "hospital_admin"].includes(user.role) && breakGlassReason && breakGlassReason.trim().length >= 10) {
     const rateCheck = checkBreakGlassRateLimit((user.id || user._id || "doctor").toString());
     if (!rateCheck.allowed) {
       console.warn(`[BREAK-GLASS CHẶN LẠM DỤNG] Bác sĩ ${user.id} đã vượt quá giới hạn 3 lần Break-Glass/ngày.`);
@@ -481,14 +482,20 @@ export const createCareSheet = async (req, res) => {
       };
     }
 
-    // Đánh giá ngưỡng an toàn sinh hiệu
-    const vitalsEvaluation = evaluateVitalSigns({
-      pulse,
-      bloodPressure,
-      temperature,
-      spo2,
-      respiratoryRate
-    });
+    // Đánh giá ngưỡng an toàn sinh hiệu theo phân tầng tuổi & giới tính của hồ sơ bệnh án
+    const vitalsEvaluation = evaluateVitalSigns(
+      {
+        pulse,
+        bloodPressure,
+        temperature,
+        spo2,
+        respiratoryRate
+      },
+      {
+        age: record.age,
+        gender: record.gender
+      }
+    );
 
     const newCareSheet = new CareSheet({
       hospitalId: record.hospitalId || req.user?.hospitalId,
@@ -603,7 +610,15 @@ export const createConsultation = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền truy cập hồ sơ bệnh án này." });
     }
 
-    const { meetingDate, participants, clinicalSummary, diagnosis, treatmentConclusion } = req.body;
+    const {
+      meetingDate,
+      participants,
+      clinicalSummary,
+      diagnosis,
+      treatmentConclusion,
+      consultationType,
+      tumorBoardDetails
+    } = req.body;
 
     if (!participants || participants.length === 0 || !clinicalSummary || !diagnosis || !treatmentConclusion) {
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin hội chẩn." });
@@ -617,6 +632,8 @@ export const createConsultation = async (req, res) => {
       clinicalSummary,
       diagnosis,
       treatmentConclusion,
+      consultationType: consultationType === "tumor_board" ? "tumor_board" : "ordinary",
+      tumorBoardDetails: tumorBoardDetails && typeof tumorBoardDetails === "object" ? tumorBoardDetails : undefined,
     });
 
     await newConsultation.save();
@@ -884,8 +901,13 @@ export const getPrivacyConsents = async (req, res) => {
     }
 
     const { DataPrivacyConsent } = await import("./models/dataPrivacyConsent.model.js");
-    const consents = await DataPrivacyConsent.find(filter).sort({ createdAt: -1 });
-    res.status(200).json({ status: "success", data: consents });
+    const consents = await DataPrivacyConsent.find(filter).sort({ createdAt: -1 }).lean();
+    // [P1-9] Không trả bản mã CCCD người ký ra API — chỉ 4 số cuối
+    const safeConsents = consents.map(({ signerNationalId, signerNationalIdLast4, ...rest }) => ({
+      ...rest,
+      signerNationalIdMasked: signerNationalIdLast4 ? `****${signerNationalIdLast4}` : "",
+    }));
+    res.status(200).json({ status: "success", data: safeConsents });
   } catch (error) {
     console.error("Lỗi lấy danh sách cam kết bảo vệ dữ liệu:", error);
     res.status(500).json({ message: "Không thể lấy danh sách cam kết bảo vệ dữ liệu." });
@@ -904,7 +926,16 @@ export const createPrivacyConsent = async (req, res) => {
       return res.status(400).json({ message: "Thiếu thông tin người bệnh hoặc người ký cam kết." });
     }
 
+    // Nhân viên chỉ được lập cam kết cho bệnh nhân thuộc phạm vi được phép truy cập
+    if (req.user.role !== "patient") {
+      const patient = await checkPatientTenancy(patientId, req.user);
+      if (!patient) {
+        return res.status(403).json({ message: "Bạn không có quyền lập cam kết cho bệnh nhân này." });
+      }
+    }
+
     const { DataPrivacyConsent } = await import("./models/dataPrivacyConsent.model.js");
+    const nationalId = String(signerNationalId || "").trim();
     const consent = await DataPrivacyConsent.create({
       hospitalId,
       patientId,
@@ -917,7 +948,8 @@ export const createPrivacyConsent = async (req, res) => {
       },
       consentStatus: "granted",
       signerName,
-      signerNationalId: signerNationalId || "",
+      signerNationalId: nationalId ? encryptField(nationalId) : "",
+      signerNationalIdLast4: nationalId ? nationalId.slice(-4) : "",
       signerRelationship: signerRelationship || "Bản thân",
       signedAt: new Date(),
       ipAddress: req.ip || "",
@@ -957,9 +989,13 @@ export const revokePrivacyConsent = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy bản cam kết bảo vệ dữ liệu." });
     }
 
-    // Kiểm tra quyền: chỉ chính bệnh nhân hoặc admin viện mới được thu hồi
+    // Kiểm tra quyền: chỉ chính bệnh nhân hoặc nhân sự cùng bệnh viện mới được thu hồi
     if (req.user.role === 'patient' && consent.patientId.toString() !== (req.user.id || req.user._id).toString()) {
       return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết này." });
+    }
+    if (!["admin", "system_admin"].includes(req.user.role)
+      && String(consent.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Bạn không có quyền thu hồi cam kết của bệnh viện khác." });
     }
 
     consent.consentStatus = revokeType === 'partially' ? 'partially_revoked' : 'fully_revoked';
@@ -980,9 +1016,122 @@ export const revokePrivacyConsent = async (req, res) => {
       console.warn("Lỗi ghi audit log thu hồi consent:", auditErr.message);
     }
 
-    res.status(200).json({ status: "success", message: "Đã thu hồi quyền xử lý dữ liệu thành công.", data: consent });
+    res.status(200).json({
+      status: "success",
+      message: "Đã thu hồi quyền xử lý dữ liệu thành công.",
+      data: {
+        ...consent.toObject(),
+        signerNationalId: undefined,
+        signerNationalIdMasked: consent.signerNationalIdLast4 ? `****${consent.signerNationalIdLast4}` : "",
+      },
+    });
   } catch (error) {
     console.error("Lỗi thu hồi cam kết bảo vệ dữ liệu:", error);
     res.status(500).json({ message: "Không thể thu hồi bản cam kết bảo vệ dữ liệu." });
+  }
+};
+
+// @desc    Trưởng khoa (Chủ tọa Hội đồng U não - MTB Chair) ký duyệt kết luận Tumor Board & tự động lên lịch MRI hậu phẫu <= 72h
+// @route   POST /api/v1/emr/consultations/:id/approve-tumor-board
+// @access  Private (Department Head, Hospital Admin, Admin)
+export const approveTumorBoard = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      consensusDecision,
+      surgicalPlan,
+      radiotherapyPlan,
+      chemotherapyPlan,
+      scheduledSurgeryDate,
+      radiotherapyEndDate,
+      nextSurveillanceDate,
+      visitId
+    } = req.body || {};
+
+    const consultation = await Consultation.findById(id);
+    if (!consultation) {
+      return res.status(404).json({ message: "Không tìm thấy biên bản hội chẩn." });
+    }
+
+    if (!["admin", "system_admin"].includes(req.user.role) && String(consultation.hospitalId) !== String(req.user.hospitalId)) {
+      return res.status(403).json({ message: "Không có quyền phê duyệt hội chẩn của bệnh viện khác." });
+    }
+
+    if (consultation.tumorBoardDetails?.isLocked) {
+      return res.status(409).json({ message: "Biên bản Hội đồng U não (Tumor Board) này đã được Chủ tọa phê duyệt và khóa." });
+    }
+
+    const chairName = req.user.profile?.fullName || req.user.profile?.name || req.user.email || "Trưởng khoa Ung thư Não";
+    const tb = consultation.tumorBoardDetails || {};
+
+    const effectiveSurgeryDate = scheduledSurgeryDate ? new Date(scheduledSurgeryDate) : (tb.scheduledSurgeryDate || null);
+    const postOpMriDueAt = effectiveSurgeryDate && !isNaN(new Date(effectiveSurgeryDate).getTime())
+      ? new Date(new Date(effectiveSurgeryDate).getTime() + 72 * 60 * 60 * 1000)
+      : null;
+
+    // Tự động chuyển hoặc khởi tạo chỉ định chụp MRI hậu phẫu 72h trên lượt khám liên kết
+    let linkedVisitId = visitId || tb.postOpMriVisitId || null;
+    if (effectiveSurgeryDate) {
+      try {
+        const { Visit } = await import("../../models/visit.model.js");
+        let targetVisit = linkedVisitId ? await Visit.findById(linkedVisitId) : null;
+        if (!targetVisit) {
+          const record = await MedicalRecord.findById(consultation.medicalRecordId).lean();
+          if (record?.patientId) {
+            targetVisit = await Visit.findOne({
+              hospitalId: consultation.hospitalId,
+              patientId: record.patientId,
+              status: { $nin: ["đã đóng", "đã hủy", "no_show"] }
+            }).sort({ createdAt: -1 });
+          }
+        }
+        if (targetVisit) {
+          targetVisit.status = "chờ chụp sau phẫu thuật";
+          targetVisit.mriOrder = {
+            ...(targetVisit.mriOrder?.toObject ? targetVisit.mriOrder.toObject() : (targetVisit.mriOrder || {})),
+            region: targetVisit.mriOrder?.region || "Sọ não (Đánh giá tồn dư u hậu phẫu <= 72h)",
+            clinicalScenario: "post_op_72h",
+            protocolCode: "POST_OP_72H",
+            withContrast: true,
+            mriStatus: "ordered",
+            instructions: `Chụp MRI đánh giá mức độ lấy u (EOR) trong cửa sổ vàng <= 72h sau mổ (Hạn chót: ${postOpMriDueAt ? postOpMriDueAt.toISOString() : "72h"}).`,
+            orderedAt: new Date()
+          };
+          await targetVisit.save();
+          linkedVisitId = targetVisit._id;
+        }
+      } catch (visitErr) {
+        console.warn("⚠️ Không thể tự động cập nhật y lệnh MRI hậu phẫu 72h:", visitErr.message);
+      }
+    }
+
+    consultation.consultationType = "tumor_board";
+    consultation.tumorBoardDetails = {
+      ...(tb.toObject ? tb.toObject() : tb),
+      surgicalPlan: surgicalPlan !== undefined ? surgicalPlan : (tb.surgicalPlan || ""),
+      radiotherapyPlan: radiotherapyPlan !== undefined ? radiotherapyPlan : (tb.radiotherapyPlan || ""),
+      chemotherapyPlan: chemotherapyPlan !== undefined ? chemotherapyPlan : (tb.chemotherapyPlan || ""),
+      consensusDecision: consensusDecision !== undefined ? consensusDecision : (tb.consensusDecision || consultation.treatmentConclusion || ""),
+      chairApprovedBy: req.user.id,
+      chairApprovedByName: chairName,
+      chairApprovedAt: new Date(),
+      isLocked: true,
+      scheduledSurgeryDate: effectiveSurgeryDate,
+      radiotherapyEndDate: radiotherapyEndDate ? new Date(radiotherapyEndDate) : (tb.radiotherapyEndDate || null),
+      postOpMriDueAt,
+      postOpMriVisitId: linkedVisitId,
+      nextSurveillanceDate: nextSurveillanceDate ? new Date(nextSurveillanceDate) : (tb.nextSurveillanceDate || null),
+    };
+
+    await consultation.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Trưởng khoa đã phê duyệt phác đồ Hội đồng U não (Tumor Board)." + (postOpMriDueAt ? " Đã tự động kích hoạt lịch chụp MRI hậu phẫu <= 72h." : ""),
+      data: consultation
+    });
+  } catch (error) {
+    console.error("Lỗi phê duyệt Tumor Board:", error);
+    return res.status(500).json({ message: "Không thể phê duyệt biên bản Tumor Board.", error: error.message });
   }
 };

@@ -524,53 +524,83 @@ export default function AdminAIConfigView() {
             </div>
           )}
 
-          {/* ── QUALITY GATE BENCHMARK CARD ──────────────────────────── */}
+          {/* ── QUALITY GATE BENCHMARK CARD (OLD VS NEW MODEL COMPARISON & BACKUP) ──── */}
           {retrainStatus.result && (
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-xl p-5 border border-indigo-800/50 shadow-md">
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-xl p-5 border border-indigo-800/50 shadow-md space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-indigo-800/40 gap-2">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  <span className="font-bold text-sm">Kết quả Kiểm chuẩn tự động (Validation Gate)</span>
+                  <span className="font-bold text-sm">Đối sánh Kiểm chuẩn Lâm sàng (Bản cũ vs Bản mới) & Sao lưu</span>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold self-start sm:self-auto ${
                   retrainStatus.result.gate_passed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}>
-                  {retrainStatus.result.gate_passed ? 'ĐẠT CHUẨN LÂM SÀNG' : 'CẢNH BÁO SUY GIẢM'}
+                  {retrainStatus.result.gate_passed ? 'ĐẠT CHUẨN LÂM SÀNG (DUAL GATE PASSED)' : 'CẢNH BÁO SUY GIẢM (GATE BLOCKED)'}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 text-center">
-                <div>
-                  <p className="text-slate-400 text-[10px] uppercase">Mẫu huấn luyện</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-2 text-center">
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/60">
+                  <p className="text-slate-400 text-[10px] uppercase">Mẫu Fine-Tune</p>
                   <p className="text-xl font-bold font-mono text-cyan-300">{retrainStatus.result.samples_trained} ca</p>
                 </div>
-                <div>
-                  <p className="text-slate-400 text-[10px] uppercase">Độ chính xác gốc</p>
-                  <p className="text-xl font-bold font-mono text-slate-300">{retrainStatus.result.baseline_accuracy}%</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-[10px] uppercase">Độ chính xác mới</p>
-                  <p className="text-xl font-bold font-mono text-emerald-400">{retrainStatus.result.retrained_accuracy}%</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-[10px] uppercase">Biến thiên</p>
-                  <p className={`text-xl font-bold font-mono ${retrainStatus.result.retrained_accuracy >= retrainStatus.result.baseline_accuracy ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {retrainStatus.result.accuracy_diff}
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/60">
+                  <p className="text-slate-400 text-[10px] uppercase">Accuracy (Cũ → Mới)</p>
+                  <p className="text-base font-bold font-mono text-emerald-400">
+                    {retrainStatus.result.baseline_accuracy}% → {retrainStatus.result.retrained_accuracy}%
                   </p>
+                  <p className="text-[11px] font-mono text-slate-300">{retrainStatus.result.accuracy_diff}</p>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/60">
+                  <p className="text-slate-400 text-[10px] uppercase">Macro F1-Score</p>
+                  <p className="text-base font-bold font-mono text-indigo-300">
+                    {retrainStatus.result.baseline_macro_f1 ?? retrainStatus.result.baseline_accuracy}% → {retrainStatus.result.retrained_macro_f1 ?? retrainStatus.result.retrained_accuracy}%
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-300">{retrainStatus.result.macro_f1_diff || retrainStatus.result.accuracy_diff}</p>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/60">
+                  <p className="text-slate-400 text-[10px] uppercase">Glioma Recall (U ác tính)</p>
+                  <p className="text-base font-bold font-mono text-amber-300">
+                    {retrainStatus.result.baseline_glioma_recall ?? retrainStatus.result.baseline_accuracy}% → {retrainStatus.result.retrained_glioma_recall ?? retrainStatus.result.retrained_accuracy}%
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-300">{retrainStatus.result.glioma_recall_diff || 'Đạt ngưỡng an toàn'}</p>
                 </div>
               </div>
 
+              {retrainStatus.result.comparison && (
+                <div className="bg-slate-950/60 rounded-lg p-3 border border-indigo-900/50 text-[11px] space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-300">
+                    <span>
+                      📦 <strong>Bản sao lưu (Backup Checkpoint):</strong>{' '}
+                      <code className="text-amber-300">{retrainStatus.result.checkpoint_backup_path || retrainStatus.result.comparison?.old_model?.backup_checkpoint_path}</code>
+                    </span>
+                    {retrainStatus.result.comparison?.old_model?.sha256 && (
+                      <span className="font-mono text-slate-400">
+                        SHA256 Cũ: {retrainStatus.result.comparison.old_model.sha256.slice(0, 12)}... | Mới: {retrainStatus.result.comparison?.new_model?.sha256?.slice(0, 12)}...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="pt-3 border-t border-indigo-800/40 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <p className="text-[11px] text-slate-300">
-                  Mô hình ứng viên: <span className="font-mono text-cyan-300">{retrainStatus.result.candidate_model_path?.split('/').pop()}</span>
-                </p>
+                <div className="text-[11px] text-slate-300 space-y-0.5">
+                  <p>
+                    Mô hình ứng viên (Bản mới): <span className="font-mono text-cyan-300">{retrainStatus.result.candidate_model_path?.split('/').pop()}</span>
+                  </p>
+                  {retrainStatus.result.checkpoint_backup_path && (
+                    <p className="text-slate-400">
+                      Bản cũ đã sao lưu an toàn: <span className="font-mono text-amber-300">{retrainStatus.result.checkpoint_backup_path.split('/').pop()}</span>
+                    </p>
+                  )}
+                </div>
                 <button
                   onClick={handleDeployModel}
                   disabled={deploying || !retrainStatus.result.gate_passed}
                   className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
                 >
                   {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                  <span>Phê duyệt & Áp dụng ngay (Hot-Reload)</span>
+                  <span>Phê duyệt & Áp dụng ngay (Hot-Reload + Cloud Backup)</span>
                 </button>
               </div>
             </div>

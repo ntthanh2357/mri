@@ -35,7 +35,11 @@ const biomarkerSchema = new Schema({
       max: { type: Number, default: null } 
     },
     text: { type: String, default: "" }
-  }
+  },
+  // [P2-7] Ngưỡng giá trị nguy kịch (critical value) — vượt ngưỡng phải báo bác sĩ ngay.
+  // null = chưa cấu hình, không cảnh báo tự động.
+  critical_low: { type: Number, default: null },
+  critical_high: { type: Number, default: null }
 }, {
   timestamps: true
 });

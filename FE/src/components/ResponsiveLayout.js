@@ -185,7 +185,10 @@ const ResponsiveLayout = ({
   const theme = SHELL_THEME;
   const roleLabel = !localUser ? 'Đang tải…' : (localUser?.role === 'admin' || localUser?.role === 'system_admin') ? 'Quản trị viên hệ thống' : 
                     localUser?.role === 'hospital_admin' ? 'Quản lý Bệnh viện' : 
+                    localUser?.role === 'department_head' ? 'Trưởng khoa Ung thư Não' :
+                    localUser?.role === 'radiologist' ? 'Bác sĩ Chẩn đoán Hình ảnh' :
                     localUser?.role === 'doctor' ? 'Bác sĩ Chuyên khoa' : 
+                    localUser?.role === 'lab_technician' ? 'KTV Xét nghiệm' :
                     localUser?.role === 'technician' ? 'KTV Chẩn đoán Hình ảnh' : 
                     localUser?.role === 'nurse' ? 'Điều dưỡng' : 
                     localUser?.role === 'receptionist' ? 'Nhân viên Tiếp đón & Thu ngân' : 
@@ -222,6 +225,7 @@ const ResponsiveLayout = ({
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'doctor':
+      case 'department_head':
         return [
           { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
           { label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
@@ -235,6 +239,27 @@ const ResponsiveLayout = ({
           { label: 'Chuyển viện liên viện', route: 'EMRDashboard', params: { tab: 'transfers' }, icon: ArrowRightLeft },
           { label: 'Danh mục thuốc', route: 'DrugManagement', params: { tab: 'list' }, icon: Package },
           { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'radiologist':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Phân công của tôi', route: 'MyAssignments', icon: ClipboardCheck },
+          { label: 'Trạm đọc phim MRI / PACS', route: 'DoctorWorkQueue', params: { tab: 'mriQueue' }, icon: Brain },
+          { label: 'Tất cả ca khám & Hội chẩn', route: 'DoctorWorkQueue', params: { tab: 'all' }, icon: Stethoscope },
+          { label: 'Tải phim MRI/PACS (AI)', route: 'CreateImagingResult', icon: UploadCloud },
+          { label: 'Bệnh nhân', route: 'DoctorPatientList', icon: Users },
+          { label: 'Bệnh án điện tử', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Lịch trực', route: 'StaffScheduling', icon: Calendar },
+          { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
+        ];
+      case 'lab_technician':
+        return [
+          { label: 'Tổng quan', route: 'Home', icon: LayoutDashboard },
+          { label: 'Danh sách Bệnh nhân (LIS)', route: 'DoctorPatientList', icon: Users },
+          { label: 'Bệnh án & Xét nghiệm', route: 'EMRDashboard', params: { tab: 'records' }, group: true, icon: FolderOpen },
+          { label: 'Quét mã bệnh án', route: 'ScanRecordQr', icon: ScanLine },
+          { label: 'Lịch làm việc', route: 'StaffScheduling', icon: Calendar },
           { label: 'Hỗ trợ kỹ thuật', route: 'Support', icon: PhoneCall },
         ];
       case 'technician':

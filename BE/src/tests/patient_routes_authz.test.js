@@ -44,4 +44,12 @@ describe('Phân quyền route dữ liệu lâm sàng bệnh nhân (/api/patients
       expect(await run(authzOf('post', path), { id: 'p1', role: 'patient' }, 'p1')).toBe(403);
     }
   });
+
+  it('trưởng khoa (department_head), BS CĐHA (radiologist), dược sĩ (pharmacist) và KTV xét nghiệm (lab_technician) được phép truy cập đúng hồ sơ bệnh nhân', async () => {
+    expect(await run(authzOf('get', '/:patientId'), { id: 'dh1', role: 'department_head' }, 'p1')).toBe('next');
+    expect(await run(authzOf('get', '/:patientId'), { id: 'rad1', role: 'radiologist' }, 'p1')).toBe('next');
+    expect(await run(authzOf('get', '/:patientId'), { id: 'ph1', role: 'pharmacist' }, 'p1')).toBe('next');
+    expect(await run(authzOf('get', '/:patientId'), { id: 'lt1', role: 'lab_technician' }, 'p1')).toBe('next');
+    expect(await run(authzOf('post', '/:patientId/prescriptions'), { id: 'dh1', role: 'department_head' }, 'p1')).toBe('next');
+  });
 });

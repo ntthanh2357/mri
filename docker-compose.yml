@@ -48,8 +48,10 @@ services:
       - AI_SERVER_URL=http://ai-service:8000/predict
     volumes:
       - uploads_data:/app/uploads
-    ports:
-      - "5000:5000"
+    # An ninh: backend chỉ lắng nghe trong mạng nội bộ Docker, KHÔNG publish ra host.
+    # Mọi truy cập phải đi qua Nginx (cổng 80/443) để có rate-limit, TLS và log tập trung.
+    expose:
+      - "5000"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -71,8 +73,10 @@ services:
       - AUDIT_DB_PATH=/app/data/audit_logs.db
     volumes:
       - ai_data:/app/data
-    ports:
-      - "8000:8000"
+    # An ninh: AI service không có xác thực nên tuyệt đối không publish ra host.
+    # Chỉ backend và Nginx trong mạng nội bộ được gọi.
+    expose:
+      - "8000"
     networks:
       - neuroscan-network
 

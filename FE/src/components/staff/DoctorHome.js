@@ -46,6 +46,7 @@ const VARIANTS = {
     image: 'tabletScan', tone: 'teal', label: 'Dược sĩ', kpis: ['verify', 'ready', 'dispense'],
     primary: { icon: Package, label: 'Mở hàng đợi Khoa Dược', route: 'PharmacyQueue' },
   },
+  lab_technician: { image: 'tabletScan', tone: 'ocean', label: 'KTV Xét nghiệm (LIS)', kpis: ['scan', 'upload'], primary: { icon: Activity, label: 'Danh sách Bệnh nhân (LIS)', route: 'DoctorPatientList' } },
   technician: {
     image: 'mriFilms', tone: 'ocean', label: 'Kỹ thuật viên MRI', kpis: ['scan', 'upload'],
     primary: { icon: UploadCloud, label: 'Nhập kết quả chụp', route: 'CreateImagingResult' },
@@ -55,7 +56,7 @@ const VARIANTS = {
 /** Bàn làm việc Bác sĩ — cùng phong cách trang chủ Lễ tân / Điều dưỡng, tông chàm riêng. */
 const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => {
   const cfg = VARIANTS[variant] || VARIANTS.doctor;
-  const isTech = variant === 'technician';
+  const isTech = variant === 'technician'; const isLabTech = variant === 'lab_technician';
   const isPharm = variant === 'pharmacist';
   const { width } = useWindowDimensions();
   const isWide = width > 1100;
@@ -73,6 +74,10 @@ const DoctorHome = ({ user, navigation, onEditProfile, variant = 'doctor' }) => 
     { icon: Package, title: 'Hàng đợi Khoa Dược', desc: `${(byKey.verify?.count || 0) + (byKey.ready?.count || 0) + (byKey.dispense?.count || 0)} đơn cần xử lý`, bg: '#0F766E', shade: '#115E59', go: () => navigation.navigate('PharmacyQueue') },
     { icon: Pill, title: 'Danh mục thuốc', desc: 'Tồn kho theo lô (FEFO)', bg: '#0369A1', shade: '#075985', go: () => navigation.navigate('DrugManagement', { tab: 'list' }) },
     { icon: CalendarX, title: 'Thuốc hết hạn', desc: 'Lô sắp & đã hết hạn', bg: '#B45309', shade: '#92400E', go: () => navigation.navigate('DrugManagement', { tab: 'expiry' }) },
+  ] : isLabTech ? [
+    { icon: Activity, title: 'Xét nghiệm (LIS)', desc: 'Lấy mẫu & nhập kết quả xét nghiệm', bg: '#0369A1', shade: '#075985', go: () => navigation.navigate('DoctorPatientList') },
+    { icon: FileSignature, title: 'Hồ sơ Bệnh án', desc: 'Tra cứu bệnh án & chỉ số eGFR', bg: '#0F766E', shade: '#115E59', go: () => navigation.navigate('EMRDashboard', { tab: 'records' }) },
+    { icon: CalendarDays, title: 'Lịch làm việc', desc: schedule ? 'Xem ca trực hôm nay' : 'Đăng ký ca trực', bg: '#4F46E5', shade: '#3730A3', go: () => navigation.navigate('StaffScheduling') },
   ] : isTech ? [
     { icon: Brain, title: 'Phòng chụp MRI', desc: `${byKey.scan?.count || 0} ca chờ chụp`, bg: '#0369A1', shade: '#075985', go: () => navigation.navigate('DoctorWorkQueue', { tab: 'mriQueue' }) },
     { icon: UploadCloud, title: 'Tải phim MRI/PACS', desc: `${byKey.upload?.count || 0} ca chưa nộp phim`, bg: '#0F766E', shade: '#115E59', go: () => navigation.navigate('CreateImagingResult') },

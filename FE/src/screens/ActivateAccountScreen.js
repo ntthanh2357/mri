@@ -18,14 +18,24 @@ import { put, setAuthToken, get } from '../services/api.service';
 import { Lock, Shield, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const ROLE_LABELS = {
+  department_head: 'Trưởng khoa Ung thư Não',
+  radiologist: 'Bác sĩ Chẩn đoán Hình ảnh',
   doctor: 'Bác sĩ chuyên khoa',
+  pharmacist: 'Dược sĩ Bệnh viện',
+  receptionist: 'Nhân viên Tiếp đón & Thu ngân',
+  lab_technician: 'Kỹ thuật viên Xét nghiệm',
   nurse: 'Điều dưỡng & Y tá',
   technician: 'Kỹ thuật viên phòng MRI',
   hospital_admin: 'Quản trị viên Bệnh viện',
 };
 
 const ROLE_COLORS = {
+  department_head: { bg: '#FEF3C7', text: '#B45309', label: 'Trưởng khoa Ung thư Não' },
+  radiologist: { bg: '#E0E7FF', text: '#4338CA', label: 'Bác sĩ Chẩn đoán Hình ảnh' },
   doctor: { bg: '#EEF2FF', text: '#4F46E5', label: 'Bác sĩ chuyên khoa' },
+  pharmacist: { bg: '#F0FDFA', text: '#0F766E', label: 'Dược sĩ Bệnh viện' },
+  receptionist: { bg: '#FFF7ED', text: '#C2410C', label: 'Nhân viên Tiếp đón & Thu ngân' },
+  lab_technician: { bg: '#ECFDF5', text: '#047857', label: 'Kỹ thuật viên Xét nghiệm' },
   nurse: { bg: '#F0FDFA', text: '#0D9488', label: 'Điều dưỡng & Y tá' },
   technician: { bg: '#FEF3C7', text: '#D97706', label: 'Kỹ thuật viên phòng MRI' },
   hospital_admin: { bg: '#E6F4EA', text: '#047857', label: 'Quản trị viên Bệnh viện' },

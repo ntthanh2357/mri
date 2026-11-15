@@ -13,9 +13,13 @@ const dicomSeriesSchema = new Schema(
     seriesType: {
       type: String,
       enum: [
-        'T2_FLAIR',       // Chuỗi chính phát hiện u
+        'T2_FLAIR',       // Chuỗi chính phát hiện phù quanh u & thâm nhiễm
+        'T1C+',           // Chuỗi T1 sau tiêm đối quang từ Gadolinium (đo kích thước lõi u ngấm thuốc RANO)
+        'T1W',            // T1 Weighted trước tiêm
+        'T2W',            // T2 Weighted
         'DWI',            // Diffusion Weighted Imaging
         'ADC',            // Apparent Diffusion Coefficient
+        'SWI',            // Susceptibility Weighted Imaging (xuất huyết / vôi hóa)
         'TOF_MRA',        // Time-of-Flight MRA (mạch máu)
         'T1_FLAIR',       // T1 FLAIR
         'T2_CORONAL',     // T2 Coronal

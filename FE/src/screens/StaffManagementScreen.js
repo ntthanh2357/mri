@@ -21,7 +21,10 @@ import { get, post, put } from '../services/api.service';
 import { Plus, Save, Users, Search, Lock, Unlock } from 'lucide-react';
 
 const ROLE_LABELS = {
+  department_head: 'Trưởng khoa Ung Thư Não',
   doctor: 'Bác sĩ Ung Thư Não',
+  radiologist: 'Bác sĩ Chẩn đoán Hình ảnh (CĐHA)',
+  lab_technician: 'Kỹ thuật viên Xét nghiệm (LIS)',
   nurse: 'Điều dưỡng Hồi sức & Chăm sóc',
   technician: 'Kỹ thuật viên CĐHA & MRI',
   receptionist: 'Nhân viên Tiếp đón & Thu ngân',

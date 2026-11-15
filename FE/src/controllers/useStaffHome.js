@@ -14,7 +14,7 @@ const useStaffHome = (user) => {
     if (!user) return;
     setData(d => ({ ...d, loading: true }));
     const isPharmacist = user.role === 'pharmacist';
-    const isDoctor = user.role === 'doctor';
+    const isDoctor = ['doctor', 'department_head', 'radiologist'].includes(user.role);
     const [queueRes, pharmRes, emrRes, schedRes, invRes, assignRes] = await Promise.all([
       isPharmacist ? null : get('/api/v1/visits/my-queue').catch(() => null),
       isPharmacist ? get('/api/drugs/queue').catch(() => null) : null,

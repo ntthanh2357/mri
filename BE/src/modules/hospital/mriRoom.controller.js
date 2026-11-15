@@ -498,9 +498,21 @@ export const confirmReschedule = async (req, res) => {
 // ─── A.5 — Giải phóng phòng sau khi chụp xong ────────────────────────────────
 export const releaseRoom = async (req, res) => {
   try {
+    if (!["technician", "radiologist", "doctor", "department_head", "hospital_admin", "admin", "system_admin"].includes(req.user?.role)) {
+      return errorResponse(res, "Chỉ nhân viên phòng chụp MRI hoặc bác sĩ mới có quyền giải phóng buồng chụp.", 403);
+    }
+
     const { slotId } = req.params;
-    const slot = await MriSlot.findOne({ _id: slotId, hospitalId: req.user.hospitalId });
+    const isSysAdmin = ["admin", "system_admin"].includes(req.user.role);
+    if (!isSysAdmin && !req.user.hospitalId) {
+      return errorResponse(res, "Không có quyền thao tác trên phòng chụp của bệnh viện.", 403);
+    }
+
+    const slot = await MriSlot.findById(slotId);
     if (!slot) return errorResponse(res, "Không tìm thấy slot.", 404);
+    if (!isSysAdmin && String(slot.hospitalId) !== String(req.user.hospitalId)) {
+      return errorResponse(res, "Không có quyền thao tác trên phòng chụp của bệnh viện khác.", 403);
+    }
 
     slot.status = 'completed';
     await slot.save();

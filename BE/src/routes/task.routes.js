@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, checkRole } from "../middlewares/auth.middleware.js";
 import {
   getKanbanBoard,
   updateTaskStatus,
@@ -10,9 +10,23 @@ import {
 const router = Router();
 router.use(protect);
 
-router.get("/kanban", getKanbanBoard);
-router.get("/shift-overview", getShiftOverviewDashboard);
-router.put("/:id/status", updateTaskStatus);
-router.post("/check-deadlines", checkTaskDeadlines);
+const STAFF_ROLES = [
+  "admin",
+  "system_admin",
+  "hospital_admin",
+  "department_head",
+  "doctor",
+  "radiologist",
+  "nurse",
+  "technician",
+  "lab_technician",
+  "pharmacist",
+  "receptionist",
+];
+
+router.get("/kanban", checkRole(STAFF_ROLES), getKanbanBoard);
+router.get("/shift-overview", checkRole(STAFF_ROLES), getShiftOverviewDashboard);
+router.put("/:id/status", checkRole(STAFF_ROLES), updateTaskStatus);
+router.post("/check-deadlines", checkRole(["admin", "system_admin", "hospital_admin", "department_head"]), checkTaskDeadlines);
 
 export default router;

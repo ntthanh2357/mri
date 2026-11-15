@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from "../../utils/response.util.js";
 import { recordAuditLog, AUDIT_ACTIONS } from "../../services/auditLog.service.js";
 import { parseBhytCard, compareHolder, isCardExpired, fmtDateVN, isRealDate } from "./bhytCard.util.js";
 import { applyBhytCore } from "./bhytApply.service.js";
+import { encryptBhytCardNumber, decryptBhytCardNumber, bhytCardLast4, maskBhytCardNumber } from "./bhytCrypto.util.js";
 
 // ─── R.1 — Lưu / Cập nhật thông tin thẻ BHYT cho bệnh nhân ─────────────────
 // @route POST /api/v1/bhyt/:patientId
@@ -13,9 +14,9 @@ import { applyBhytCore } from "./bhytApply.service.js";
 export const saveBhytInfo = async (req, res) => {
   try {
     // UC-REC-02: khai báo & xác minh thẻ BHYT là nghiệp vụ của lễ tân (quản trị được phép hỗ trợ)
-    const allowedRoles = ["receptionist", "admin", "hospital_admin"];
+    const allowedRoles = ["receptionist", "nurse", "admin", "hospital_admin"];
     if (!allowedRoles.includes(req.user.role)) {
-      return errorResponse(res, "Chỉ lễ tân / quầy tiếp đón được khai báo và xác minh thẻ BHYT.", 403);
+      return errorResponse(res, "Chỉ lễ tân / điều dưỡng tiếp đón được khai báo và xác minh thẻ BHYT.", 403);
     }
 
     const { patientId } = req.params;
@@ -70,14 +71,23 @@ export const saveBhytInfo = async (req, res) => {
       return errorResponse(res, "Vui lòng đối chiếu thẻ BHYT gốc với giấy tờ tùy thân và tick xác nhận trước khi lưu.", 400);
     }
 
-    // 4. Mỗi bệnh nhân chỉ 1 thẻ đang dùng: lưu thẻ (theo mã thẻ) rồi chuyển các thẻ khác thành lịch sử
+    // 4. Mỗi bệnh nhân chỉ 1 thẻ đang dùng: lưu thẻ (theo hash mã thẻ) rồi chuyển các thẻ khác thành lịch sử
+    // [P1-9] Không lưu plaintext: cardNumber = AES-256-GCM, cardNumberHash = HMAC để tra cứu.
+    const cardEnc = encryptBhytCardNumber(card.cardNumber);
     const bhyt = await BhytInfo.findOneAndUpdate(
-      { hospitalId: req.user.hospitalId, patientId, cardNumber: card.cardNumber },
+      {
+        hospitalId: req.user.hospitalId,
+        patientId,
+        $or: [
+          { cardNumberHash: cardEnc.cardNumberHash },
+          { cardNumber: card.cardNumber }, // dữ liệu cũ chưa mã hoá (trước migration)
+        ],
+      },
       {
         hospitalId: req.user.hospitalId,
         patientId,
         visitId: visitId || null,
-        cardNumber: card.cardNumber, // R.1 — Trong thực tế cần mã hóa AES-256 trước khi lưu
+        ...cardEnc,
         objectCode: card.objectCode,
         benefitLevel: card.benefitLevel,
         coverageRate: card.coverageRate,
@@ -112,7 +122,7 @@ export const saveBhytInfo = async (req, res) => {
     return successResponse(res, {
       bhytId: bhyt._id,
       patientId: bhyt.patientId,
-      cardNumber: `****${bhyt.cardNumber.slice(-4)}`,
+      cardNumber: `****${bhytCardLast4(bhyt)}`,
       objectCode: bhyt.objectCode,
       benefitLevel: bhyt.benefitLevel,
       coverageRate: bhyt.coverageRate,
@@ -158,25 +168,28 @@ export const getActiveCards = async (req, res) => {
 };
 
 // Thông tin thẻ an toàn để hiển thị (che số thẻ, tính trạng thái hết hạn theo thời điểm hiện tại)
-const toCardSummary = (b) => ({
-  bhytId: b._id,
-  patientId: b.patientId,
-  cardMasked: `${b.cardNumber.slice(0, 3)}••••••••${b.cardNumber.slice(-4)}`,
-  objectCode: b.objectCode || b.cardNumber.slice(0, 2),
-  benefitLevel: b.benefitLevel || Number(b.cardNumber[2]) || null,
-  coverageRate: b.coverageRate,
-  expiresAt: b.expiresAt,
-  expired: isCardExpired(b.expiresAt),
-  registrationPlace: b.registrationPlace,
-  isOutOfNetwork: b.isOutOfNetwork,
-  hasTransferForm: b.hasTransferForm,
-  treatmentType: b.treatmentType,
-  mismatches: b.mismatches || [],
-  mismatchNote: b.mismatchNote || "",
-  verifiedAt: b.verifiedAt,
-  verifiedByName: b.verifiedBy?.profile?.name || b.verifiedBy?.email || null,
-  manuallyVerified: b.manuallyVerified === true,
-});
+const toCardSummary = (b) => {
+  const plainCard = decryptBhytCardNumber(b.cardNumber);
+  return {
+    bhytId: b._id,
+    patientId: b.patientId,
+    cardMasked: maskBhytCardNumber(b),
+    objectCode: b.objectCode || plainCard.slice(0, 2),
+    benefitLevel: b.benefitLevel || Number(plainCard[2]) || null,
+    coverageRate: b.coverageRate,
+    expiresAt: b.expiresAt,
+    expired: isCardExpired(b.expiresAt),
+    registrationPlace: b.registrationPlace,
+    isOutOfNetwork: b.isOutOfNetwork,
+    hasTransferForm: b.hasTransferForm,
+    treatmentType: b.treatmentType,
+    mismatches: b.mismatches || [],
+    mismatchNote: b.mismatchNote || "",
+    verifiedAt: b.verifiedAt,
+    verifiedByName: b.verifiedBy?.profile?.name || b.verifiedBy?.email || null,
+    manuallyVerified: b.manuallyVerified === true,
+  };
+};
 
 // ─── R.1 — Xem thông tin BHYT của bệnh nhân ──────────────────────────────────
 // @route GET /api/v1/bhyt/:patientId
@@ -192,10 +205,14 @@ export const getBhytInfo = async (req, res) => {
 
     const bhytList = await BhytInfo.find(filter).sort({ createdAt: -1 }).lean();
 
-    const safeList = bhytList.map((b) => ({
-      ...b,
-      cardNumber: `****${b.cardNumber?.slice(-4) || "xxxx"}`, // Che số thẻ
-    }));
+    const safeList = bhytList.map((b) => {
+      const { cardNumberHash, ...rest } = b; // không trả hash nội bộ
+      return {
+        ...rest,
+        cardNumber: `****${bhytCardLast4(b) || "xxxx"}`, // Che số thẻ
+        cardMasked: maskBhytCardNumber(b),
+      };
+    });
 
     return successResponse(res, safeList, "Lấy thông tin BHYT thành công.");
   } catch (err) {
@@ -343,7 +360,7 @@ export const calculateCopay = async (req, res) => {
     return successResponse(res, {
       hasBhyt: true,
       bhytId: bhyt._id,
-      cardNumber: `****${bhyt.cardNumber?.slice(-4)}`,
+      cardNumber: `****${bhytCardLast4(bhyt)}`,
       coverageRate: effectiveRate,
       baseCoverageRate: bhyt.coverageRate,
       isOutOfNetwork: effectiveOutOfNetwork,
@@ -373,7 +390,7 @@ export const calculateCopay = async (req, res) => {
 // @access Private (Receptionist, Admin)
 export const applyBhytToInvoice = async (req, res) => {
   try {
-    const allowedRoles = ["receptionist", "admin", "hospital_admin"];
+    const allowedRoles = ["receptionist", "nurse", "admin", "hospital_admin"];
     if (!allowedRoles.includes(req.user.role)) {
       return errorResponse(res, "Bạn không có quyền áp dụng BHYT vào hóa đơn.", 403);
     }
@@ -442,7 +459,7 @@ export const exportBhytClaims = async (req, res) => {
     // Trong thực tế cần dùng thư viện XML builder và đúng chuẩn của BHXH
     const claimsData = bhytRecords.map((r, idx) => ({
       stt: idx + 1,
-      soThe: `****${r.cardNumber?.slice(-4)}`,
+      soThe: `****${bhytCardLast4(r)}`,
       hoTen: r.patientId?.profile?.name || r.patientName,
       maYTe: r.patientId?.profile?.medicalId,
       ngayKham: r.visitId?.date,

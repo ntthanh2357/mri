@@ -19,7 +19,8 @@ import { isStaffPortalPath } from '../utils/portalPath.js';
 import { isRateLimitError } from '../utils/apiErrors.js';
 import { buildStaffTasks, nextUpVisits } from '../utils/staffTasks.js';
 import { daysLeftOf, expiryStatus, expiryStatusText, batchCountOf, earliestActiveBatch, displayExpiry } from '../utils/batchUtils.js';
-import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS } from '../utils/myHealth.js';
+import { bpStatus, pulseStatus, spo2Status, labResultFlag, drugSchedule, isReminderDue, temperatureStatus, vitalSeries, chartRange, VITAL_METRICS, getVitalMetricsForPatient } from '../utils/myHealth.js';
+import { evaluateVitalSigns, getVitalThresholds, resolvePatientAge, normalizeGender, VITAL_THRESHOLDS } from '../utils/vitalSignsSafety.js';
 import { strokesToPath, consentStatus } from '../utils/signature.js';
 import { buildShareUrl, secondsLeft, fmtCountdown, webOriginFrom, shareOrigin, assetUrl, SHARE_SECTIONS, ALL_SECTION_KEYS, sectionsSummary, SCAN_DOC_TYPES, docTypeLabel, parseShareQr, staffRoleLabel, hasStructuredInfo, fitsKnownForm, clampHeight, lineOf, locateCheck, applyCheck } from '../utils/recordShare.js';
 import { foldText, prepareItems, filterItems, isFiltering, NO_FILTER, initialSelection, isItemOn, sectionState, toggleSectionAll, toggleItem, setItemsOn, sharePayload, countsOf, flattenSharedRecord, countBySection } from '../utils/shareCatalog.js';
@@ -318,6 +319,12 @@ it('buildStaffTasks counts pending assignments for doctor and routes to MyAssign
   assert.strictEqual(withAssign.find(t => t.key === 'assign').count, 2);
   // Việc còn tồn lên trước: assign (2 ca chờ ACK) đứng đầu danh sách
   assert.strictEqual(withAssign[0].key, 'assign');
+  // Trưởng khoa (department_head) và BS CĐHA (radiologist) đều có danh sách việc làm riêng
+  const headTasks = buildStaffTasks('department_head', { visits: [{ status: 'chờ chụp sau phẫu thuật' }] });
+  assert.strictEqual(headTasks.find(t => t.key === 'scan').count, 1);
+  const radTasks = buildStaffTasks('radiologist', { visits: [{ status: 'chờ bác sĩ đọc' }, { status: 'chờ hội chẩn' }] });
+  assert.strictEqual(radTasks.find(t => t.key === 'read').count, 1);
+  assert.strictEqual(radTasks.find(t => t.key === 'tumor_board').count, 1);
   assert.deepStrictEqual(withAssign[0].params, { tab: 'pending' });
   // Role khác không có task assign
   assert.strictEqual(buildStaffTasks('nurse', { assignments: [{ status: 'pending' }] }).find(t => t.key === 'assign'), undefined);
@@ -477,6 +484,59 @@ it('temperatureStatus: bình thường, hơi cao, sốt, thấp; thiếu dữ li
   assert.strictEqual(temperatureStatus(38.5).level, 'high');
   assert.strictEqual(temperatureStatus(34.8).level, 'low');
   assert.strictEqual(temperatureStatus(null), null);
+});
+
+it('vitalSignsSafety & myHealth: phân tầng chuẩn theo nhóm tuổi & giới tính trên FE (UC-NUR-02)', () => {
+  // 1. Sơ sinh (Newborn)
+  const newborn = evaluateVitalSigns(
+    { pulse: 125, bloodPressure: '75/45', temperature: 36.8, spo2: 97, respiratoryRate: 35 },
+    { ageMonths: 0.5 }
+  );
+  assert.strictEqual(newborn.isAbnormal, false);
+  assert.strictEqual(newborn.patientContext.ageGroup, 'NEWBORN');
+
+  // 2. Trẻ nhỏ (Toddler 3 tuổi)
+  const toddler = evaluateVitalSigns(
+    { pulse: 110, bloodPressure: '95/60', temperature: 36.6, spo2: 99, respiratoryRate: 22 },
+    { age: 3 }
+  );
+  assert.strictEqual(toddler.isAbnormal, false);
+  assert.strictEqual(toddler.patientContext.ageGroup, 'TODDLER');
+
+  // 3. Người cao tuổi (Elderly 75 tuổi)
+  const elderly = evaluateVitalSigns(
+    { pulse: 58, bloodPressure: '142/85', temperature: 36.2, spo2: 94, respiratoryRate: 18 },
+    { age: 75, gender: 'Nam' }
+  );
+  assert.strictEqual(elderly.isAbnormal, false);
+  assert.strictEqual(elderly.patientContext.ageGroup, 'ELDERLY');
+
+  // 4. Phân tầng Giới tính ở Người lớn
+  // Nữ giới trẻ (25 tuổi): huyết áp 88/58 không bị báo tụt
+  const femaleAdult = evaluateVitalSigns(
+    { bloodPressure: '88/58' },
+    { age: 25, gender: 'Nữ' }
+  );
+  assert.strictEqual(femaleAdult.isAbnormal, false);
+  assert.strictEqual(femaleAdult.patientContext.gender, 'Nữ');
+
+  // Nam giới trẻ (25 tuổi): huyết áp 88/58 bị cảnh báo tụt huyết áp
+  const maleAdult = evaluateVitalSigns(
+    { bloodPressure: '88/58' },
+    { age: 25, gender: 'Nam' }
+  );
+  assert.strictEqual(maleAdult.isAbnormal, true);
+  assert.strictEqual(maleAdult.flags.bloodPressure, true);
+
+  // 5. myHealth bpStatus, pulseStatus, spo2Status thích ứng theo patientContext
+  assert.strictEqual(pulseStatus(115, { age: 3 }).level, 'normal'); // Bé 3 tuổi nhịp 115 là bình thường
+  assert.strictEqual(pulseStatus(115, { age: 30 }).level, 'high'); // Người lớn 30 tuổi nhịp 115 là nhanh
+  assert.strictEqual(bpStatus({ systolic: 142, diastolic: 85 }, { age: 75 }).level, 'normal'); // Người già 142/85 chấp nhận được
+
+  // 6. Tương thích ngược toàn diện: fallback về ngưỡng người lớn chuẩn
+  const def = evaluateVitalSigns({ pulse: 80, bloodPressure: '120/80', temperature: 37.0, spo2: 98, respiratoryRate: 16 });
+  assert.strictEqual(def.isAbnormal, false);
+  assert.strictEqual(def.patientContext.ageGroup, 'ADULT');
 });
 
 it('vitalSeries sorts old → new, skips records missing the metric, keeps the latest N', () => {

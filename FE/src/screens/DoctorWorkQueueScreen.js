@@ -109,6 +109,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [technicianId, setTechnicianId] = useState('');
   const [region, setRegion] = useState('');
+  const [clinicalScenario, setClinicalScenario] = useState('initial_diagnosis');
+  const [protocolCode, setProtocolCode] = useState('BRAIN_TUMOR_STANDARD');
   const [instructions, setInstructions] = useState('');
   const [requestAi, setRequestAi] = useState(true);
   const [withContrast, setWithContrast] = useState(false);
@@ -254,6 +256,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     setSelectedVisit(visit);
     setTechnicianId('');
     setRegion('Não bộ');
+    setClinicalScenario('initial_diagnosis');
+    setProtocolCode('BRAIN_TUMOR_STANDARD');
     setInstructions('');
     setRequestAi(true);
     setWithContrast(false);
@@ -262,9 +266,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   const handleIssueMriOrder = async () => {
     // If roles are merged, the doctor is the technician.
-    const assignedTechnicianId = user?._id || technicianId;
+    const assignedTechnicianId = technicianId || null;
     
-    if (!assignedTechnicianId) {
+    if (!user?._id && !assignedTechnicianId) {
       Alert.alert('Thông báo', 'Không thể xác định người thực hiện (Lỗi phiên đăng nhập).');
       return;
     }
@@ -277,6 +281,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
       await put(`/api/v1/visits/${selectedVisit._id}/mri-order`, {
         technicianId: assignedTechnicianId,
         region,
+        clinicalScenario,
+        protocolCode,
         instructions,
         requestAiAnalysis: requestAi,
         withContrast,
@@ -300,7 +306,9 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     setSafetyVisit(visit);
     setHasPacemakerOrMetal(pre.hasPacemakerOrMetal);
     setHasClaustrophobia(pre.hasClaustrophobia);
-    setHasKidneyDisease(false);
+    // [P2-3 FIX] Giữ tiền sử suy thận đã lưu của ca (mở lại bảng kiểm không được xóa trắng);
+    // đây là yếu tố quyết định có được tiêm cản quang hay không.
+    setHasKidneyDisease(Boolean(visit.mriSafetyChecklist?.hasKidneyDisease));
     setIsPregnant(pre.isPregnant);
     setMetalDetails('');
     setSafetyNotes(pre.safetyNotes);
@@ -328,12 +336,18 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         metalDetails,
         notes: safetyNotes,
         passed: true,
+        enforcePaymentGate: true,
         screeningDeclaredAt: safetyVisit.patientMriScreening?.declaredAt || null, // lời khai KTV đang xem
       });
 
       if (res && res.success && res.contrastConsentPending) {
         const msg = 'Đã lưu bảng kiểm an toàn MRI. Bệnh nhân chưa ký phiếu đồng thuận tiêm cản quang nên chưa thể bắt đầu chụp.';
         if (Platform.OS === 'web') alert(msg); else Alert.alert('Đã lưu bảng kiểm', msg);
+        setSafetyModal(false);
+        fetchData();
+      } else if (res && res.success && res.requiresDoctorReview) {
+        const msg = res.message || 'Đã lưu bảng kiểm. Trường hợp này cần Bác sĩ xác nhận trước khi vào buồng chụp (thai kỳ hoặc suy thận eGFR < 30 có cản quang).';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('Cần Bác sĩ duyệt', msg);
         setSafetyModal(false);
         fetchData();
       } else if (res && res.success) {
@@ -403,9 +417,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     try {
       const res = await post(`/api/v1/visits/${cancelVisit._id}/mri-cancel`, {
         reason: cancelReason.trim(),
+        returnToDoctor: true,
       });
       if (res && res.success) {
-        Alert.alert('Thành công', 'Đã hủy ca chụp MRI. Thông báo đã gửi tới bác sĩ chỉ định.');
+        Alert.alert('Thành công', 'Đã hủy chỉ định chụp MRI, tự động gỡ phí MRI tạm tính và trả bệnh nhân về buồng khám bác sĩ.');
         setCancelModal(false);
         fetchData();
       } else {
@@ -694,10 +709,10 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   const activeVisits = visits.filter(v => {
     if (['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status)) return false;
     if (currentMode === 'all') {
-      return ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
+      return ['đang chờ', 'chờ khám bệnh', 'đang khám', 'chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status);
     }
     if (currentMode === 'mriQueue') {
-      return ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status);
+      return ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status);
     } else {
       return ['đang chờ', 'chờ khám bệnh', 'đang khám'].includes(v.status);
     }
@@ -716,7 +731,8 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
     }
   });
 
-  const isDoctor = user?.role === 'doctor';
+  const isDoctor = user?.role === 'doctor' || user?.role === 'department_head';
+  const isRadiologist = user?.role === 'radiologist';
   const isTechnician = user?.role === 'technician';
   const isNurse = user?.role === 'nurse';
   const isReceptionist = user?.role === 'receptionist';
@@ -818,17 +834,18 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
   // Thao tác theo role — 1 nguồn dùng chung cho thẻ (điện thoại) và dòng bảng (desktop).
   const actionsOf = (v) => {
     const canOrderMri = v.status === 'đang khám';
-    const canStartMri = v.status === 'chờ chụp' || v.status === 'chờ chụp lại';
+    const canStartMri = v.status === 'chờ chụp' || v.status === 'chờ chụp lại' || v.status === 'chờ chụp sau phẫu thuật';
     const canUploadMri = v.status === 'đang chụp';
     const hasReadResult = v.status === 'chờ bác sĩ đọc' || v.status === 'chờ kết quả AI' || Boolean(v.mriOrder?.imagingResultId);
     const list = [];
-    if (!isNurse && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh')) list.push({ key: 'start', variant: 'primary', icon: Stethoscope, label: 'Bắt đầu khám', onPress: () => startExam(v) });
-    if (!isNurse && v.status === 'đang khám') list.push({ key: 'exam', variant: 'primary', icon: Pill, label: 'Khám & kê đơn', onPress: () => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id }) });
+    if ((isDoctor || isAdmin) && (v.status === 'đang chờ' || v.status === 'chờ khám bệnh')) list.push({ key: 'start', variant: 'primary', icon: Stethoscope, label: 'Bắt đầu khám', onPress: () => startExam(v) });
+    if ((isDoctor || isAdmin) && ['đang khám', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status)) list.push({ key: 'exam', variant: 'primary', icon: Pill, label: 'Khám & kê đơn', onPress: () => navigation.navigate('PatientDetail', { patientId: v.patientId?._id || v.patientId, visitId: v._id, defaultTab: 'prescription' }) });
+
     if ((isDoctor || isAdmin) && canOrderMri) list.push({ key: 'mri', variant: 'secondary', icon: Scan, label: 'Ra y lệnh MRI', onPress: () => openMriModal(v) });
-    if (!isNurse && v.status === 'đang khám') list.push({ key: 'finish', variant: 'secondary', icon: CheckCircle2, label: 'Kết thúc khám', onPress: () => finishExam(v) });
+    if ((isDoctor || isAdmin) && ['đang khám', 'chờ bác sĩ đọc', 'chờ hội chẩn', 'chờ nhập viện'].includes(v.status)) list.push({ key: 'finish', variant: 'secondary', icon: CheckCircle2, label: 'Kết thúc khám', onPress: () => finishExam(v) });
     if ((isTechnician || isAdmin) && canStartMri) list.push({ key: 'scan', variant: 'primary', icon: Camera, label: v.mriOrder?.withContrast && !v.contrastConsent?.patientSigned ? 'Chờ BN ký phiếu' : v.mriSafetyChecklist?.passed ? 'Vào buồng chụp' : 'Kiểm tra an toàn & chụp', onPress: () => handleStartScan(v) });
     if ((isTechnician || isAdmin) && canUploadMri) list.push({ key: 'upload', variant: 'primary', icon: Upload, label: 'Nộp ảnh phim', onPress: () => openUploadModal(v) });
-    if (!isNurse && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
+    if ((isDoctor || isRadiologist || isTechnician || isAdmin) && hasReadResult) list.push({ key: 'read', variant: 'primary', icon: Eye, label: 'Đọc kết quả phim', onPress: () => openReadResult(v) });
     if (isNurse && v.status === 'đang chờ') list.push({ key: 'vitals', variant: 'primary', icon: Activity, label: 'Nhập sinh hiệu', onPress: () => navigation.navigate('NursePatientDetail', { patient: { ...v.patientId, visitId: v._id } }) });
     if ((isTechnician || isAdmin) && (canStartMri || canUploadMri)) {
       list.push({ key: 'rescan', variant: 'secondary', icon: RotateCcw, label: 'Chụp lại', onPress: () => openRescanModal(v) });
@@ -1086,7 +1103,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
 
   const mriActiveCount = visits.filter(v => 
     !['hoàn tất', 'đã đóng', 'đã hủy'].includes(v.status) &&
-    ['chờ chụp', 'chờ chụp lại', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc'].includes(v.status)
+    ['chờ chụp', 'chờ chụp lại', 'chờ chụp sau phẫu thuật', 'đang chụp', 'chờ kết quả AI', 'chờ bác sĩ đọc', 'chờ hội chẩn'].includes(v.status)
   ).length;
 
   // Lễ tân & điều dưỡng: cùng một bảng gọi số ca khám (giao diện nhất quán giữa 2 vai trò)
@@ -1219,7 +1236,33 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
               ))}
             </View>
 
+            {/* Kịch bản lâm sàng & Protocol chụp U não */}
+            <Text style={styles.fieldLabel}>Kịch bản Lâm sàng & Protocol Chuỗi xung U não *</Text>
+            <View style={[styles.chipRow, { flexWrap: 'wrap' }]}>
+              {[
+                { sc: 'initial_diagnosis', pr: 'BRAIN_TUMOR_STANDARD', label: 'Chẩn đoán mới (T1/T2/FLAIR/DWI)' },
+                { sc: 'pre_op', pr: 'PRE_OP_NAVIGATION', label: 'Định vị Tiền phẫu (3D T1C+ 1mm)' },
+                { sc: 'post_op_72h', pr: 'POST_OP_72H', label: 'Hậu phẫu sớm ≤ 72h (Đánh giá EOR)' },
+                { sc: 'surveillance_rano', pr: 'RANO_FOLLOWUP', label: 'Tái khám đối chiếu RANO' },
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.sc}
+                  style={[styles.chip, clinicalScenario === item.sc && styles.chipActive]}
+                  onPress={() => {
+                    setClinicalScenario(item.sc);
+                    setProtocolCode(item.pr);
+                    if (['pre_op', 'post_op_72h', 'surveillance_rano'].includes(item.sc)) {
+                      setWithContrast(true);
+                    }
+                  }}
+                >
+                  <Text style={[styles.chipText, clinicalScenario === item.sc && styles.chipTextActive]}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             {/* Ghi chú */}
+            {technicians.length > 0 && (<><Text style={styles.fieldLabel}>Kỹ thuật viên chụp (Tùy chọn)</Text><View style={[styles.chipRow, { flexWrap: 'wrap' }]}><TouchableOpacity style={[styles.chip, !technicianId && styles.chipActive]} onPress={() => setTechnicianId('')}><Text style={[styles.chipText, !technicianId && styles.chipTextActive]}>Tự động phân bổ</Text></TouchableOpacity>{technicians.map(t => (<TouchableOpacity key={t._id} style={[styles.chip, technicianId === t._id && styles.chipActive]} onPress={() => setTechnicianId(t._id)}><Text style={[styles.chipText, technicianId === t._id && styles.chipTextActive]}>{t.profile?.name || t.profile?.fullName || t.email}</Text></TouchableOpacity>))}</View></>)}
             <Text style={styles.fieldLabel}>Dặn thêm (KTV và bệnh nhân đều thấy)</Text>
             <TextInput
               style={styles.textArea}
@@ -1569,7 +1612,7 @@ const DoctorWorkQueueScreen = ({ navigation, route }) => {
         onClose={() => setConsentVisit(null)}
         consent={consentVisit?.contrastConsent || null}
         patientName={consentVisit?.patientId?.profile?.name || 'Bệnh nhân'}
-        canOverride={user?.role === 'doctor' || user?.role === 'admin'}
+        canOverride={isDoctor || isAdmin}
         onChanged={fetchData}
       />
 

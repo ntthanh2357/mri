@@ -8,6 +8,12 @@ import { createNotificationInternal } from "../../controllers/notification.contr
 
 // ─── DICOM Series Type Classification (B.2) ───────────────────────────────────
 const SERIES_TYPE_MAP = {
+  't1c': 'T1C+',
+  't1+c': 'T1C+',
+  't1_ce': 'T1C+',
+  't1 ce': 'T1C+',
+  'contrast': 'T1C+',
+  'gad': 'T1C+',
   't2_flair': 'T2_FLAIR',
   't2 flair': 'T2_FLAIR',
   'flair': 'T2_FLAIR',
@@ -15,6 +21,7 @@ const SERIES_TYPE_MAP = {
   'diffusion': 'DWI',
   'adc': 'ADC',
   'apparent diffusion': 'ADC',
+  'swi': 'SWI',
   'tof': 'TOF_MRA',
   'mra': 'TOF_MRA',
   'time of flight': 'TOF_MRA',
@@ -25,6 +32,35 @@ const SERIES_TYPE_MAP = {
   'coronal': 'T2_CORONAL',
   'ax_t1': 'AX_T1_FLAIR',
   'ax t1': 'AX_T1_FLAIR',
+  't1w': 'T1W',
+  't2w': 'T2W',
+};
+
+export const MRI_BRAIN_TUMOR_PROTOCOLS = {
+  BRAIN_TUMOR_STANDARD: {
+    code: 'BRAIN_TUMOR_STANDARD',
+    name: 'Protocol U não Tiêu chuẩn (T1W, T2W, T2-FLAIR, DWI/ADC, T1C+)',
+    requiredSeries: ['T2_FLAIR'],
+    recommendedSeries: ['T1W', 'T2_FLAIR', 'DWI', 'ADC', 'T1C+']
+  },
+  PRE_OP_NAVIGATION: {
+    code: 'PRE_OP_NAVIGATION',
+    name: 'Protocol Định vị Phẫu thuật Thần kinh (3D T1C+ mỏng 1mm, T2-FLAIR, TOF-MRA)',
+    requiredSeries: ['T2_FLAIR'],
+    recommendedSeries: ['T2_FLAIR', 'T1C+', 'TOF_MRA']
+  },
+  POST_OP_72H: {
+    code: 'POST_OP_72H',
+    name: 'Protocol Đánh giá Tồn dư U Hậu phẫu sớm <= 72h (T1W, T1C+, DWI/ADC, T2-FLAIR)',
+    requiredSeries: ['T2_FLAIR'],
+    recommendedSeries: ['T1W', 'T1C+', 'DWI', 'ADC', 'T2_FLAIR']
+  },
+  RANO_FOLLOWUP: {
+    code: 'RANO_FOLLOWUP',
+    name: 'Protocol Theo dõi Đáp ứng Điều trị RANO (T2-FLAIR, T1C+, DWI)',
+    requiredSeries: ['T2_FLAIR'],
+    recommendedSeries: ['T2_FLAIR', 'T1C+', 'DWI']
+  }
 };
 
 /**
@@ -295,5 +331,144 @@ export const getAllStudies = async (req, res) => {
     return successResponse(res, { studies, total, page: parseInt(page), limit: parseInt(limit) }, "Lấy danh sách DICOM Studies thành công.");
   } catch (err) {
     return errorResponse(res, "Lỗi máy chủ: " + err.message, 500);
+  }
+};
+
+// ─── Manifest Trình xem Web Mini-PACS (Web DICOM Viewer Manifest) ──────────────
+// @route GET /api/v1/dicom/studies/:id/viewer-manifest
+// @access Private
+export const getViewerManifest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const hospitalId = req.user.hospitalId;
+
+    // Cho phép truyền studyId hoặc imagingResultId
+    let study = await DicomStudy.findById(id).lean();
+    let imagingResult = null;
+
+    if (!study) {
+      imagingResult = await ImagingResult.findById(id).lean();
+      if (imagingResult?.studyId) {
+        study = await DicomStudy.findById(imagingResult.studyId).lean();
+      }
+    } else {
+      imagingResult = study.imagingResultId
+        ? await ImagingResult.findById(study.imagingResultId).lean()
+        : await ImagingResult.findOne({ studyId: study._id }).lean();
+    }
+
+    if (!study && !imagingResult) {
+      return errorResponse(res, "Không tìm thấy hồ sơ DICOM Study hoặc kết quả phim chụp.", 404);
+    }
+
+    const targetHospitalId = study?.hospitalId || imagingResult?.hospitalId;
+    if (req.user.role !== "admin" && hospitalId && targetHospitalId && String(hospitalId) !== String(targetHospitalId)) {
+      return errorResponse(res, "Không có quyền truy cập phim chụp của bệnh viện khác.", 403);
+    }
+
+    const dbSeries = study ? await DicomSeries.find({ studyId: study._id }).lean() : [];
+    const fallbackImages = imagingResult?.images?.length ? imagingResult.images : [];
+    const top5Slices = imagingResult?.top5SlicesUrls?.length ? imagingResult.top5SlicesUrls : [];
+
+    // Chuẩn hóa danh sách chuỗi xung cho Web Viewer (nếu chưa có DicomSeries riêng thì dựng từ ImagingResult)
+    const viewerSeries = dbSeries.length > 0
+      ? dbSeries.map((s, idx) => ({
+          seriesId: String(s._id),
+          seriesType: s.seriesType || (idx === 0 ? "T2_FLAIR" : "T1C+"),
+          seriesDescription: s.seriesDescription || s.seriesType,
+          sliceCount: s.sliceCount || (s.dicomFileUrls?.length || fallbackImages.length || 1),
+          pixelSpacing: s.metadata?.pixelSpacing?.length === 2 ? s.metadata.pixelSpacing : [0.5, 0.5],
+          sliceThickness: s.metadata?.sliceThickness || 3.0,
+          slices: (s.dicomFileUrls?.length ? s.dicomFileUrls : fallbackImages).map((url, sIdx) => ({
+            sliceIndex: sIdx + 1,
+            imageUrl: url,
+            isRepresentative: url === imagingResult?.representativeSliceUrl
+          }))
+        }))
+      : [
+          {
+            seriesId: "series-t2-flair",
+            seriesType: "T2_FLAIR",
+            seriesDescription: "Ax T2 FLAIR 3mm (Phù quanh u & Thâm nhiễm)",
+            sliceCount: Math.max(fallbackImages.length, top5Slices.length, 1),
+            pixelSpacing: [0.5, 0.5],
+            sliceThickness: 3.0,
+            slices: (fallbackImages.length ? fallbackImages : top5Slices).map((url, sIdx) => ({
+              sliceIndex: sIdx + 1,
+              imageUrl: url,
+              isRepresentative: sIdx === 0
+            }))
+          },
+          {
+            seriesId: "series-t1c-post",
+            seriesType: "T1C+",
+            seriesDescription: "Ax T1W +Contrast Gadolinium (Đo lõi u ngấm thuốc RANO)",
+            sliceCount: Math.max(fallbackImages.length, 1),
+            pixelSpacing: [0.5, 0.5],
+            sliceThickness: 1.5,
+            slices: fallbackImages.map((url, sIdx) => ({
+              sliceIndex: sIdx + 1,
+              imageUrl: url,
+              isRepresentative: sIdx === 0
+            }))
+          }
+        ];
+
+    // Tìm phim chụp kỳ trước (Prior Study) của cùng bệnh nhân để bật chế độ So sánh dọc thời gian (Dual Viewport)
+    let priorResult = null;
+    if (imagingResult?.medicalId) {
+      priorResult = await ImagingResult.findOne({
+        _id: { $ne: imagingResult._id },
+        hospitalId: targetHospitalId,
+        medicalId: imagingResult.medicalId,
+        isSigned: true
+      })
+        .sort({ reportDate: -1, createdAt: -1 })
+        .select("_id reportDate procedure images representativeSliceUrl structuredReport findings conclusion")
+        .lean();
+    }
+
+    const manifest = {
+      studyId: study?._id || null,
+      imagingResultId: imagingResult?._id || null,
+      medicalId: imagingResult?.medicalId || "",
+      patientName: imagingResult?.patientName || "",
+      studyDate: study?.studyDate || imagingResult?.orderDate || imagingResult?.reportDate || new Date(),
+      modality: "MR",
+      protocols: Object.values(MRI_BRAIN_TUMOR_PROTOCOLS),
+      windowPresets: [
+        { id: "brain_standard", label: "Não chuẩn (W:80 L:40)", ww: 80, wl: 40, brightness: 100, contrast: 100 },
+        { id: "tumor_flair", label: "U não / Phù FLAIR (W:140 L:50)", ww: 140, wl: 50, brightness: 108, contrast: 125 },
+        { id: "t1_contrast", label: "T1C+ Ngấm thuốc (W:120 L:60)", ww: 120, wl: 60, brightness: 96, contrast: 140 },
+        { id: "stroke_dwi", label: "DWI Khuếch tán (W:60 L:30)", ww: 60, wl: 30, brightness: 112, contrast: 150 }
+      ],
+      series: viewerSeries,
+      aiOverlay: {
+        available: Boolean(imagingResult?.aiReport || imagingResult?.representativeSliceUrl || imagingResult?.segmentationUrl),
+        representativeSliceUrl: imagingResult?.representativeSliceUrl || null,
+        segmentationUrl: imagingResult?.segmentationUrl || null,
+        top5SlicesUrls: top5Slices,
+        className: imagingResult?.aiReport?.class_name || null,
+        confidence: imagingResult?.aiReport?.confidence || null,
+        boundingBox: imagingResult?.aiReport?.bounding_box || { x: 0.56, y: 0.38, width: 0.22, height: 0.24 }
+      },
+      structuredReport: imagingResult?.structuredReport || null,
+      priorStudy: priorResult
+        ? {
+            imagingResultId: priorResult._id,
+            reportDate: priorResult.reportDate,
+            procedure: priorResult.procedure,
+            images: priorResult.images || [],
+            representativeSliceUrl: priorResult.representativeSliceUrl || (priorResult.images?.[0] || null),
+            measurements: priorResult.structuredReport?.measurements || null,
+            rano: priorResult.structuredReport?.rano || null,
+            conclusion: priorResult.conclusion || ""
+          }
+        : null
+    };
+
+    return successResponse(res, manifest, "Lấy manifest trình xem DICOM Web thành công.");
+  } catch (err) {
+    return errorResponse(res, "Lỗi máy chủ khi tạo viewer manifest: " + err.message, 500);
   }
 };

@@ -53,6 +53,15 @@ const consultationSchema = new Schema(
       molecularReview: { type: String, default: "" }, // Đánh giá IDH, MGMT, 1p/19q
       imagingReview: { type: String, default: "" }, // So sánh MRI đa thời điểm (RANO criteria)
       consensusDecision: { type: String, default: "" }, // Kết luận đồng thuận của Hội đồng
+      chairApprovedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      chairApprovedByName: { type: String, default: "" },
+      chairApprovedAt: { type: Date, default: null },
+      isLocked: { type: Boolean, default: false },
+      scheduledSurgeryDate: { type: Date, default: null },
+      radiotherapyEndDate: { type: Date, default: null },
+      postOpMriDueAt: { type: Date, default: null },
+      postOpMriVisitId: { type: Schema.Types.ObjectId, ref: "Visit", default: null },
+      nextSurveillanceDate: { type: Date, default: null },
     },
   },
   {

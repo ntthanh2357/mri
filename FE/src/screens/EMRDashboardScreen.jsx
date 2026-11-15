@@ -955,13 +955,16 @@ const NursePatientDetailTab = ({ patient, localUser, onBack }) => {
 
   const totalFee = feeItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
 
-  const tabVitalEval = evaluateVitalSigns({
-    pulse: examPulse,
-    bloodPressure: examBP,
-    temperature: examTemp,
-    spo2: examSpo2,
-    respiratoryRate: examBreath
-  });
+  const tabVitalEval = evaluateVitalSigns(
+    {
+      pulse: examPulse,
+      bloodPressure: examBP,
+      temperature: examTemp,
+      spo2: examSpo2,
+      respiratoryRate: examBreath
+    },
+    { age, gender }
+  );
 
   const addOrderService = () => {
     const s = orderNewService.trim();
@@ -1639,49 +1642,109 @@ const CareTab = ({ careSheets, selectedRecord, onNewCare }) => (
   </View>
 );
 
-const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => (
-  <View style={styles.tabContainer}>
-    <View style={styles.tabHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Brain size={18} color={Colors.brandGreen} />
-        <Text style={styles.tabTitle}>Hội chẩn chuyên khoa</Text>
-      </View>
-      <TouchableOpacity style={styles.actionButton} onPress={onNewConsult}>
-        <Text style={styles.actionButtonText}>+ Tạo hội chẩn</Text>
-      </TouchableOpacity>
-    </View>
+const ConsultationTab = ({ consultations, selectedRecord, onNewConsult }) => {
+  const [approvingId, setApprovingId] = useState(null);
+  const [approvedMap, setApprovedMap] = useState({});
 
-    {!selectedRecord ? (
-      <View style={styles.emptyState}>
-        <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
-        <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
+  const handleApproveTumorBoard = async (consult) => {
+    const cId = consult._id || consult.id;
+    if (!cId) return;
+    setApprovingId(cId);
+    try {
+      const res = await post(`/api/v1/emr/consultations/${cId}/approve-tumor-board`, {
+        consensusDecision: consult.treatmentConclusion || 'Phác đồ đồng thuận Hội đồng U não (MTB)',
+        scheduledSurgeryDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      });
+      if (res?.data) {
+        setApprovedMap((prev) => ({ ...prev, [cId]: res.data.tumorBoardDetails }));
+        if (Platform.OS === 'web') {
+          alert(res.message || 'Trưởng khoa đã phê duyệt phác đồ Hội đồng U não & kích hoạt lịch chụp MRI hậu phẫu <= 72h.');
+        } else {
+          Alert.alert('Thành công', res.message || 'Đã phê duyệt phác đồ Tumor Board.');
+        }
+      }
+    } catch (err) {
+      if (Platform.OS === 'web') alert('Lỗi phê duyệt Tumor Board: ' + (err.message || 'Chỉ Trưởng khoa / Quản trị viên mới có quyền phê duyệt.'));
+      else Alert.alert('Lỗi', err.message || 'Không thể phê duyệt Tumor Board.');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Brain size={18} color={Colors.brandGreen} />
+          <Text style={styles.tabTitle}>Hội chẩn Đa chuyên khoa Ung thư Não (Tumor Board — MTB)</Text>
+        </View>
+        <TouchableOpacity style={styles.actionButton} onPress={onNewConsult}>
+          <Text style={styles.actionButtonText}>+ Tạo hội chẩn</Text>
+        </TouchableOpacity>
       </View>
-    ) : (
-      <View style={styles.listContainer}>
-        {consultations.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Inbox size={32} color={Colors.secondary} style={{ marginBottom: 8 }} />
-            <Text style={styles.emptyText}>Chưa có biên bản hội chẩn nào</Text>
-          </View>
-        ) : (
-          consultations.map(c => (
-            <View key={c._id || c.id} style={styles.itemCard}>
-              <Text style={styles.itemTitle}>{`Hội chẩn ${new Date(c.meetingDate).toLocaleDateString('vi-VN')}`}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
-                <Calendar size={12} color="#64748B" />
-                <Text style={styles.itemSubtitle}>
-                  {new Date(c.meetingDate).toLocaleDateString('vi-VN')}
-                </Text>
-              </View>
-              <Text style={styles.itemDescription}>Tham gia: {c.participants?.join(', ')}</Text>
-              <Text style={styles.itemDescription}>Kết luận: {c.treatmentConclusion}</Text>
+
+      {!selectedRecord ? (
+        <View style={styles.emptyState}>
+          <FileText size={32} color={Colors.brandGreen} style={{ marginBottom: 8 }} />
+          <Text style={styles.emptyText}>Chưa chọn hồ sơ. Mở tab "Hồ sơ bệnh án" và bấm vào một bệnh nhân.</Text>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          {consultations.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Inbox size={32} color={Colors.secondary} style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyText}>Chưa có biên bản hội chẩn nào</Text>
             </View>
-          ))
-        )}
-      </View>
-    )}
-  </View>
-);
+          ) : (
+            consultations.map(c => {
+              const cId = c._id || c.id;
+              const tb = approvedMap[cId] || c.tumorBoardDetails || {};
+              const isApproved = Boolean(tb.isLocked || tb.chairApprovedAt);
+              return (
+                <View key={cId} style={styles.itemCard}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <Text style={styles.itemTitle}>{`Hội chẩn ${new Date(c.meetingDate).toLocaleDateString('vi-VN')}`}</Text>
+                    <View style={{ backgroundColor: isApproved ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: isApproved ? '#166534' : '#92400E' }}>
+                        {isApproved ? `✓ Đã duyệt bởi Chủ tọa (${tb.chairApprovedByName || 'Trưởng khoa'})` : '⏳ Chờ Trưởng khoa (MTB Chair) phê duyệt'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 }}>
+                    <Calendar size={12} color="#64748B" />
+                    <Text style={styles.itemSubtitle}>
+                      {new Date(c.meetingDate).toLocaleDateString('vi-VN')}
+                    </Text>
+                  </View>
+                  <Text style={styles.itemDescription}>Tham gia: {c.participants?.join(', ')}</Text>
+                  <Text style={styles.itemDescription}>Kết luận: {c.treatmentConclusion}</Text>
+                  {tb.postOpMriDueAt && (
+                    <View style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 6, padding: 8, marginTop: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E40AF' }}>
+                        🔬 Đã kích hoạt tự động Y lệnh chụp MRI Hậu phẫu sớm ≤ 72h (Đánh giá tồn dư u EOR): Hạn chụp trước {new Date(tb.postOpMriDueAt).toLocaleString('vi-VN')}
+                      </Text>
+                    </View>
+                  )}
+                  {!isApproved && (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#0F766E', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, marginTop: 10, alignSelf: 'flex-start' }}
+                      onPress={() => handleApproveTumorBoard(c)}
+                      disabled={approvingId === cId}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                        {approvingId === cId ? 'Đang phê duyệt...' : '✓ Trưởng khoa Phê duyệt Phác đồ Tumor Board & Lên lịch MRI Hậu phẫu 72h'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
 
 const ConsentTab = ({ consents, selectedRecord, onNewConsent }) => (
   <View style={styles.tabContainer}>

@@ -117,6 +117,142 @@ export const writeLocalFile = async (logicalSubPath, buffer) => {
 };
 
 /**
+ * Sao chép hoặc di chuyển tệp trực tiếp ở tầng OS (Zero-RAM-Spike)
+ * Không đọc tệp vào Buffer trong V8 Heap.
+ * @param {string} logicalSubPath - Đường dẫn tương đối đích
+ * @param {string} sourceFilePath - Đường dẫn tệp nguồn trên đĩa (ví dụ từ Multer)
+ * @param {object} [options]
+ * @param {boolean} [options.moveFile=false] - Nếu true sẽ di chuyển tệp thay vì copy
+ * @returns {Promise<{ localPath: string, sizeBytes: number }>}
+ */
+export const writeLocalFileFromPath = async (logicalSubPath, sourceFilePath, { moveFile = false } = {}) => {
+  if (!sourceFilePath || !fs.existsSync(sourceFilePath)) {
+    throw new Error(`Tệp nguồn không tồn tại: ${sourceFilePath}`);
+  }
+  const root = getLocalRoot();
+  const fullPath = path.join(root, logicalSubPath);
+  const dirName = path.dirname(fullPath);
+
+  ensureDirectory(dirName);
+
+  const stat = await fs.promises.stat(sourceFilePath);
+  if (path.resolve(sourceFilePath) !== path.resolve(fullPath)) {
+    if (moveFile) {
+      try {
+        await fs.promises.rename(sourceFilePath, fullPath);
+      } catch {
+        // Fallback nếu khác phân vùng ổ đĩa (EXDEV)
+        await fs.promises.copyFile(sourceFilePath, fullPath);
+        await fs.promises.unlink(sourceFilePath).catch(() => {});
+      }
+    } else {
+      await fs.promises.copyFile(sourceFilePath, fullPath);
+    }
+  }
+
+  return {
+    localPath: fullPath,
+    sizeBytes: stat.size,
+  };
+};
+
+/**
+ * Lưu 1 mảnh (Chunk) của tệp lớn vào vùng đệm đĩa cục bộ
+ * @param {string} uploadSessionId
+ * @param {number} chunkIndex
+ * @param {Buffer} chunkBuffer
+ * @returns {Promise<{ chunkPath: string, sizeBytes: number }>}
+ */
+export const writeLocalChunk = async (uploadSessionId, chunkIndex, chunkBuffer) => {
+  const safeSessionId = String(uploadSessionId).replace(/[^a-zA-Z0-9_-]/g, "");
+  const idx = Number(chunkIndex);
+  if (!safeSessionId || isNaN(idx) || idx < 0) {
+    throw new Error("Thông tin phiên tải lên phân mảnh (uploadSessionId / chunkIndex) không hợp lệ.");
+  }
+
+  const root = getLocalRoot();
+  const chunkDir = path.join(root, "chunks_staging", safeSessionId);
+  ensureDirectory(chunkDir);
+
+  const chunkPath = path.join(chunkDir, `part_${String(idx).padStart(6, "0")}`);
+  await fs.promises.writeFile(chunkPath, chunkBuffer);
+
+  return {
+    chunkPath,
+    sizeBytes: chunkBuffer.length,
+  };
+};
+
+/**
+ * Ghép các mảnh (Chunks) theo thứ tự bằng Stream (Zero-RAM-Spike) thành tệp hoàn chỉnh
+ * @param {string} uploadSessionId
+ * @param {number} totalChunks
+ * @param {string} logicalSubPath
+ * @returns {Promise<{ localPath: string, sizeBytes: number }>}
+ */
+export const assembleLocalChunks = async (uploadSessionId, totalChunks, logicalSubPath) => {
+  const safeSessionId = String(uploadSessionId).replace(/[^a-zA-Z0-9_-]/g, "");
+  const count = Number(totalChunks);
+  if (!safeSessionId || isNaN(count) || count <= 0) {
+    throw new Error("Số lượng mảnh ghép (totalChunks) không hợp lệ.");
+  }
+
+  const root = getLocalRoot();
+  const chunkDir = path.join(root, "chunks_staging", safeSessionId);
+  if (!fs.existsSync(chunkDir)) {
+    throw new Error(`Không tìm thấy thư mục chứa mảnh ghép cho phiên ${safeSessionId}`);
+  }
+
+  // Kiểm tra đủ tất cả các mảnh trước khi ghép
+  const partPaths = [];
+  for (let i = 0; i < count; i++) {
+    const p = path.join(chunkDir, `part_${String(i).padStart(6, "0")}`);
+    if (!fs.existsSync(p)) {
+      throw new Error(`Thiếu mảnh ghép thứ ${i}/${count} của phiên tải lên ${safeSessionId}`);
+    }
+    partPaths.push(p);
+  }
+
+  const fullPath = path.join(root, logicalSubPath);
+  ensureDirectory(path.dirname(fullPath));
+
+  const writeStream = fs.createWriteStream(fullPath);
+  let totalSizeBytes = 0;
+
+  try {
+    for (const partPath of partPaths) {
+      await new Promise((resolve, reject) => {
+        const readStream = fs.createReadStream(partPath, { highWaterMark: 64 * 1024 });
+        readStream.on("data", (chunk) => {
+          totalSizeBytes += chunk.length;
+        });
+        readStream.on("error", reject);
+        readStream.on("end", resolve);
+        readStream.pipe(writeStream, { end: false });
+      });
+    }
+
+    await new Promise((resolve, reject) => {
+      writeStream.on("finish", resolve);
+      writeStream.on("error", reject);
+      writeStream.end();
+    });
+  } finally {
+    // Dọn dẹp thư mục mảnh tạm sau khi ghép xong
+    try {
+      await fs.promises.rm(chunkDir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup error
+    }
+  }
+
+  return {
+    localPath: fullPath,
+    sizeBytes: totalSizeBytes,
+  };
+};
+
+/**
  * Đọc stream tệp tin từ Local Storage
  * @param {string} localPath
  * @param {object} [options]
