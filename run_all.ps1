@@ -26,7 +26,7 @@ Start-Process cmd.exe -ArgumentList "/k cd /d `"$ROOT_DIR\MRIteam_team5\MRIteam`
 # 3. Khoi dong Backend Node.js
 Write-Host ""
 Write-Host "[3/3] Dang khoi dong Core Backend (Node.js Express - Port 3000)..." -ForegroundColor Green
-Start-Process cmd.exe -ArgumentList "/k cd /d `"$ROOT_DIR\BE`" && set ENABLE_DEBUG_OTP=true&& set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& npm run dev"
+Start-Process cmd.exe -ArgumentList "/k cd /d `"$ROOT_DIR\BE`" && set NODE_ENV=development&& set ENABLE_DEBUG_OTP=true&& set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& npm run dev"
 
 # 4. Khoi dong Frontend Expo Web
 Write-Host ""

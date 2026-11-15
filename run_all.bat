@@ -27,7 +27,7 @@ start "NeuroScan - AI Engine (FastAPI YOLOv8)" cmd /k "cd /d "%ROOT_DIR%MRIteam_
 :: 3. Khoi dong Backend Node.js
 echo.
 echo [3/3] Dang khoi dong Core Backend (Node.js Express - Port 3000)...
-start "NeuroScan - Core Backend (Node.js)" cmd /k "cd /d "%ROOT_DIR%BE" && set ENABLE_DEBUG_OTP=true&& set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& npm run dev"
+start "NeuroScan - Core Backend (Node.js)" cmd /k "cd /d "%ROOT_DIR%BE" && set NODE_ENV=development&& set ENABLE_DEBUG_OTP=true&& set INTERNAL_AI_API_KEY=neuroscan-dev-local-key-8000&& npm run dev"
 
 :: 4. Khoi dong Frontend Expo Web
 echo.

@@ -285,6 +285,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
   useEffect(() => {
     // Chờ biết vai trò (đọc từ bộ nhớ đệm ngay khi mở màn) để tài khoản nền tảng không gọi API bệnh án
     if (!localUser || isPlatformAdmin(localUser)) return;
+    if (localUser.role === 'doctor' && activeTab !== 'records' && !selectedRecord) return;
     if (activeTab === 'records') {
       fetchRecords();
     } else if (activeTab === 'care') {
@@ -438,7 +439,7 @@ const EMRDashboardScreen = ({ navigation, route }) => {
     (isDoctorLike || role === 'radiologist') && { key: 'imaging', label: 'Phim MRI & CT' },
     isFeatureEnabled('beds') && { key: 'beds', label: 'Giường bệnh' },
     can(role, 'transfersRead') && { key: 'transfers', label: 'Chuyển viện' },
-  ].filter(Boolean);
+  ].filter(Boolean).filter((tab) => role !== 'doctor' || selectedRecord || tab.key === 'records');
   const allowedTabKeys = emrTabs.map((t) => t.key).join(',');
   useEffect(() => {
     // mở bằng đường dẫn tới tab vai trò không được dùng → chuyển về tab đầu tiên được phép
@@ -489,6 +490,17 @@ const EMRDashboardScreen = ({ navigation, route }) => {
             value={activeTab}
             onChange={setActiveTab}
           />
+          {localUser?.role === 'doctor' && !selectedRecord ? (
+            <View
+              accessibilityRole="alert"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}
+            >
+              <AlertTriangle size={16} color="#92400E" />
+              <Text style={{ flex: 1, fontSize: 13, color: '#92400E' }}>
+                Bấm “Xem chi tiết” trên một hồ sơ bệnh án để mở các chức năng liên quan.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Main Content */}
           <View style={styles.mainContent}>

@@ -22,9 +22,8 @@ const hashPhone = (phone) => {
   return crypto.createHmac("sha256", salt).update(phone).digest("hex");
 };
 
-// Cửa sau cho môi trường phát triển (mã 123456, trả OTP trong response): chỉ bật khi đặt rõ
-// ENABLE_DEBUG_OTP=true. Không dựa vào NODE_ENV!==production: staging cấu hình sai sẽ bị chiếm tài khoản.
-const isDevOtpEnabled = () => process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true";
+// Chỉ trả OTP thử nghiệm trong môi trường development khi được bật rõ ràng.
+const isDevOtpEnabled = () => process.env.NODE_ENV === "development" && process.env.ENABLE_DEBUG_OTP === "true";
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -44,8 +43,6 @@ const stampNewOtp = (user, otpCode) => {
 
 // Kiểm tra otpCode có giới hạn số lần thử. Đếm atomic trước khi so khớp để request song song không lách được.
 const verifyAccountOtp = async (user, otp) => {
-  if (isDevOtpEnabled() && otp === "123456") return { ok: true };
-
   const counted = await User.findOneAndUpdate(
     { _id: user._id, otpAttempts: { $not: { $gte: OTP_MAX_ATTEMPTS } } },
     { $inc: { otpAttempts: 1 } },
@@ -387,8 +384,7 @@ export const login = async (req, res) => {
 
     // If patient requires verification and has provided the OTP code, verify it right here!
     if (requiresVerification && req.body.otp) {
-      const isMasterOtp = isDevOtpEnabled() && req.body.otp === "123456";
-      if (isMasterOtp || (accountOtpMatches(user.otpCode, user._id, req.body.otp) && user.otpExpires >= new Date())) {
+      if (accountOtpMatches(user.otpCode, user._id, req.body.otp) && user.otpExpires >= new Date()) {
         user.isVerified = true;
         user.otpCode = undefined;
         user.otpExpires = undefined;
@@ -471,7 +467,7 @@ export const login = async (req, res) => {
       });
     }
 
-    const debugOtpEnabled = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true";
+    const debugOtpEnabled = isDevOtpEnabled();
 
     if (requires2FA) {
       // Chưa hoàn tất 2FA — KHÔNG trả về token lẫn thông tin người dùng
@@ -547,8 +543,7 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    const isMasterOtp = isDevOtpEnabled() && otp === "123456";
-    if (!isMasterOtp && !accountOtpMatches(user.otp2FACode, user._id, otp, "2fa")) {
+    if (!accountOtpMatches(user.otp2FACode, user._id, otp, "2fa")) {
       user.otp2FAAttempts = (user.otp2FAAttempts || 0) + 1;
       await user.save({ validateBeforeSave: false });
       const remaining = 5 - user.otp2FAAttempts;
@@ -558,7 +553,7 @@ export const verify2FA = async (req, res) => {
       return;
     }
 
-    if (!isMasterOtp && (!user.otp2FAExpires || user.otp2FAExpires < new Date())) {
+    if (!user.otp2FAExpires || user.otp2FAExpires < new Date()) {
       res.status(400).json({ message: "Mã OTP đã hết hạn (hiệu lực 5 phút). Vui lòng yêu cầu gửi lại mã mới." });
       return;
     }
@@ -644,7 +639,7 @@ export const resend2FA = async (req, res) => {
 
     res.status(200).json({
       message: "Mã OTP mới đã được gửi tới email của bạn.",
-      otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+      otp2FA: isDevOtpEnabled() ? otp2FaCode : undefined,
     });
   } catch (error) {
     console.error("Lỗi gửi lại mã OTP 2 lớp:", error);
@@ -753,7 +748,7 @@ const issue2FAChallenge = async (user, res, message) => {
     message,
     requires2FA: true,
     twoFactorEmail: user.email,
-    otp2FA: (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEBUG_OTP === "true") ? otp2FaCode : undefined,
+    otp2FA: isDevOtpEnabled() ? otp2FaCode : undefined,
   });
 };
 

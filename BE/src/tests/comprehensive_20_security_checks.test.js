@@ -149,7 +149,8 @@ console.log("\n▶ [MỤC 4] Xóa debug thừa (Kiểm tra mã nguồn auth.cont
   const authCode = fs.readFileSync(authControllerPath, "utf8");
   // Đảm bảo không còn dòng 'otp2FA: otp2FaCode,' để hở mà đã được guard an toàn
   assert(!authCode.includes("otp2FA: otp2FaCode,"), "Đã loại bỏ hoàn toàn việc để lộ mã OTP 2FA trong login response");
-  assert(authCode.includes("ENABLE_DEBUG_OTP"), "OTP debug đã được khóa chặt sau cờ ENABLE_DEBUG_OTP");
+  assert(authCode.includes('process.env.NODE_ENV === "development" && process.env.ENABLE_DEBUG_OTP === "true"'), "OTP debug chỉ bật rõ ràng trong development");
+  assert(!authCode.includes('otp === "123456"'), "Không chấp nhận mã OTP dùng chung cố định");
 }
 
 // ── 5. Secret không để ở frontend ──
